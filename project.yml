@@ -1,0 +1,93 @@
+name: Folino
+
+options:
+  bundleIdPrefix: com.KeyNumber.Folino
+  deploymentTarget:
+    iOS: 26.0
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  defaultConfig: Debug
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: 6.3
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+    DEVELOPMENT_LANGUAGE: en
+    KNOWN_REGIONS: en ja Base
+
+configs:
+  Debug: debug
+  Release: release
+
+configFiles:
+  Debug: Config/Folino.xcconfig
+  Release: Config/Folino.xcconfig
+
+packages:
+  Utility:
+    path: Packages/Utility
+  Domain:
+    path: Packages/Domain
+  Infrastructure:
+    path: Packages/Infrastructure
+  Library:
+    path: Packages/Features/Library
+  Reader:
+    path: Packages/Features/Reader
+  Editor:
+    path: Packages/Features/Editor
+  ImportExport:
+    path: Packages/Features/ImportExport
+  Settings:
+    path: Packages/Features/Settings
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: 7.0.0
+  swift-sheet-music:
+    url: "git@github.com:jiyimeta/swift-sheet-music.git"
+    branch: main
+  SwiftLintPlugins:
+    url: https://github.com/SimplyDanny/SwiftLintPlugins
+    from: 0.63.2
+  LicenseList:
+    url: https://github.com/cybozu/LicenseList
+    from: 2.5.0
+
+targets:
+  Folino:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes:
+          - Info.plist
+          - Folino.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino
+        PRODUCT_NAME: Folino
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Folino.entitlements
+        TARGETED_DEVICE_FAMILY: 1,2
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SUPPORTS_MACCATALYST: NO
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: Utility
+        products: [UtilityCore, UtilityUI, Navigation]
+      - package: Domain
+      - package: Infrastructure
+        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles]
+      - package: Library
+      - package: Reader
+      - package: Editor
+      - package: ImportExport
+      - package: Settings
+      - package: LicenseList
+        product: LicenseList
