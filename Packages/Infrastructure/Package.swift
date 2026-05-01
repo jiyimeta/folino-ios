@@ -1,0 +1,56 @@
+// swift-tools-version: 6.3
+import PackageDescription
+
+let swiftLintPlugins: [Target.PluginUsage] = [
+    .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
+]
+
+let package = Package(
+    name: "Infrastructure",
+    platforms: [.iOS(.v26), .macOS(.v15)],
+    products: [
+        .library(name: "Persistence", targets: ["Persistence"]),
+        .library(name: "CloudSync", targets: ["CloudSync"]),
+        .library(name: "Soundfonts", targets: ["Soundfonts"]),
+        .library(name: "Audio", targets: ["Audio"]),
+        .library(name: "ScoreFiles", targets: ["ScoreFiles"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+        .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
+        .package(url: "git@github.com:jiyimeta/swift-sheet-music.git", branch: "main"),
+        .package(path: "../Domain"),
+    ],
+    targets: [
+        .target(
+            name: "Persistence",
+            dependencies: [
+                "Domain",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+            plugins: swiftLintPlugins
+        ),
+        .target(name: "CloudSync", dependencies: ["Domain"], plugins: swiftLintPlugins),
+        .target(name: "Soundfonts", dependencies: ["Domain"], plugins: swiftLintPlugins),
+        .target(
+            name: "Audio",
+            dependencies: [
+                "Domain",
+                .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
+            ],
+            plugins: swiftLintPlugins
+        ),
+        .target(
+            name: "ScoreFiles",
+            dependencies: [
+                "Domain",
+                .product(name: "SheetMusic", package: "swift-sheet-music"),
+            ],
+            plugins: swiftLintPlugins
+        ),
+        .testTarget(
+            name: "InfrastructureTests",
+            dependencies: ["Persistence", "CloudSync", "Soundfonts", "Audio", "ScoreFiles"]
+        ),
+    ]
+)
