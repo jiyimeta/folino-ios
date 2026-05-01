@@ -1,0 +1,13 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Folino" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Folino" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
