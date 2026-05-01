@@ -881,7 +881,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
-        .package(url: "https://github.com/jiyimeta/swift-sheet-music", branch: "main"),
+        .package(url: "git@github.com:jiyimeta/swift-sheet-music.git", branch: "main"),
     ],
     targets: [
         .target(
@@ -980,7 +980,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
-        .package(url: "https://github.com/jiyimeta/swift-sheet-music", branch: "main"),
+        .package(url: "git@github.com:jiyimeta/swift-sheet-music.git", branch: "main"),
         .package(path: "../Domain"),
     ],
     targets: [
@@ -1247,7 +1247,7 @@ packages:
     url: https://github.com/groue/GRDB.swift
     from: 7.0.0
   swift-sheet-music:
-    url: https://github.com/jiyimeta/swift-sheet-music
+    url: "git@github.com:jiyimeta/swift-sheet-music.git"
     branch: main
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
