@@ -1,0 +1,8 @@
+// Folino base xcconfig.
+// Loaded for all configurations via project.yml `configFiles`.
+//
+// Local-only settings (DEVELOPMENT_TEAM などの個人情報) は
+// Local.xcconfig に書く。Local.xcconfig は .gitignore 対象。
+// 存在しなくてもビルドが落ちないよう `?` 付きで include する。
+
+#include? "Local.xcconfig"
