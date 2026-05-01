@@ -1,0 +1,11 @@
+--allman false
+--disable andOperator
+--disable unusedArguments
+--disable opaqueGenericParameters
+--lineaftermarks false
+--swiftversion 6.3
+--wraparguments before-first
+--wrapcollections before-first
+--wrapparameters before-first
+--xcodeindentation enabled
+--extensionacl on-declarations
