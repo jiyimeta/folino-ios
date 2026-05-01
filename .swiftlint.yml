@@ -11,6 +11,7 @@ disabled_rules:
 
 opt_in_rules:
   - array_init
+  - async_without_await
   - closure_body_length
   - closure_end_indentation
   - closure_spacing
@@ -49,6 +50,7 @@ opt_in_rules:
   - static_operator
   - toggle_bool
   - unavailable_function
+  - unhandled_throwing_task
   - unneeded_parentheses_in_closure_argument
   - untyped_error_in_catch
   - vertical_whitespace_closing_braces
@@ -56,6 +58,9 @@ opt_in_rules:
   - xct_specific_matcher
   - yoda_condition
 
+# analyzer_rules require `swiftlint analyze` (with a compilation database
+# or xcodebuild log) and do NOT fire from `swiftlint lint`. They run via
+# SwiftLintBuildToolPlugin at Xcode build time, not via the pre-commit hook.
 analyzer_rules:
   - unused_declaration
   - unused_import
