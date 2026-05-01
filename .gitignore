@@ -1,0 +1,35 @@
+# Claude Code
+# Per-user local overrides; settings.json (shared) and
+# commands/agents/skills/ (team-shared) should be committed.
+.claude/settings.local.json
+.claude/*.local.*
+
+# Superpowers brainstorming session artefacts (mockups, viewer state)
+.superpowers/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local signing / per-developer overrides
+Config/Local.xcconfig
+
+# Git worktrees
+.worktrees/
+
+# Xcode / SwiftPM build artefacts
+*.xcodeproj
+.build/
+.swiftpm/
+DerivedData/
+Packages/*/.build/
+Packages/*/.swiftpm/
+Packages/Features/*/.build/
+Packages/Features/*/.swiftpm/
+Packages/**/Package.resolved
+xcuserdata/
+*.xcuserstate
