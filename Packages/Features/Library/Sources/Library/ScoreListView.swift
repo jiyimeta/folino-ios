@@ -21,28 +21,34 @@ struct ScoreListView: View {
 
     @ToolbarContentBuilder
     private var sortToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                if case .playlist = viewModel.source {
-                    Button {
-                        viewModel.selectManualOrder()
-                    } label: {
-                        Label("Manual Order", systemImage: viewModel.isManualOrderActive ? "checkmark" : "")
-                    }
-                    Divider()
+        #if os(iOS)
+            ToolbarItem(placement: .topBarTrailing) { sortMenu }
+        #else
+            ToolbarItem(placement: .automatic) { sortMenu }
+        #endif
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            if case .playlist = viewModel.source {
+                Button {
+                    viewModel.selectManualOrder()
+                } label: {
+                    Label("Manual Order", systemImage: viewModel.isManualOrderActive ? "checkmark" : "")
                 }
-                ForEach(ScoreItemSort.allCases) { option in
-                    Button {
-                        viewModel.selectSort(option)
-                    } label: {
-                        let isSelected = !viewModel.isManualOrderActive && viewModel.sort == option
-                        Label(option.labelKey, systemImage: isSelected ? "checkmark" : "")
-                    }
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .accessibilityLabel("Sort")
+                Divider()
             }
+            ForEach(ScoreItemSort.allCases) { option in
+                Button {
+                    viewModel.selectSort(option)
+                } label: {
+                    let isSelected = !viewModel.isManualOrderActive && viewModel.sort == option
+                    Label(option.labelKey, systemImage: isSelected ? "checkmark" : "")
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .accessibilityLabel("Sort")
         }
     }
 }
