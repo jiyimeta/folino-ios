@@ -16,6 +16,7 @@ struct AppShellView: View {
                bootstrap.isReady
             {
                 ReadyShell(
+                    bootstrap: bootstrap,
                     repository: repository,
                     importer: importer,
                     gateway: gateway,
@@ -35,6 +36,7 @@ struct AppShellView: View {
 }
 
 private struct ReadyShell: View {
+    let bootstrap: AppBootstrap
     let repository: any ScoreLibraryRepository
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
@@ -49,11 +51,13 @@ private struct ReadyShell: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     init(
+        bootstrap: AppBootstrap,
         repository: any ScoreLibraryRepository,
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
         scoresDirectory: URL
     ) {
+        self.bootstrap = bootstrap
         self.repository = repository
         self.importer = importer
         self.gateway = gateway
@@ -117,6 +121,10 @@ private struct ReadyShell: View {
             } else {
                 compactPath.append(item)
             }
+        }
+        .task(id: bootstrap.pendingIncomingURL) {
+            guard let url = bootstrap.consumePendingIncomingURL() else { return }
+            await libraryVM.startImport(from: url)
         }
     }
 
