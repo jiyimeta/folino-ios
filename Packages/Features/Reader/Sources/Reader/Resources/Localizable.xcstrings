@@ -1,0 +1,36 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "Could not open this score": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Could not open this score" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "この楽譜を開けませんでした" } }
+      }
+    },
+    "The score file is missing or unreadable.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The score file is missing or unreadable." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "楽譜ファイルが見つからないか読み込めません。" } }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Retry" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再試行" } }
+      }
+    },
+    "Folino can't open this file type.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Folino can't open this file type." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このファイル形式は対応していません。" } }
+      }
+    },
+    "This file looks corrupted or isn't a valid score.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This file looks corrupted or isn't a valid score." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ファイルが破損しているか、有効な楽譜ではありません。" } }
+      }
+    }
+  }
+}

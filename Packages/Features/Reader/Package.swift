@@ -26,6 +26,7 @@ let package = Package(
                 .product(name: "UtilityUI", package: "Utility"),
                 .product(name: "SheetMusicUI", package: "swift-sheet-music"),
             ],
+            resources: [.process("Resources")],
             plugins: swiftLintPlugins
         ),
         .testTarget(name: "ReaderTests", dependencies: ["Reader"]),
