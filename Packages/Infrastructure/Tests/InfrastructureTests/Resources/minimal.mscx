@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.20">
+  <Score>
+    <Division>480</Division>
+    <metaTag name="workTitle">Minimal</metaTag>
+    <metaTag name="composer">Folino Test</metaTag>
+    <Part id="P1">
+      <Staff id="1"></Staff>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
+        <trackName>Piano</trackName>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+      </VBox>
+      <Measure>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <Chord>
+            <durationType>quarter</durationType>
+            <Note>
+              <pitch>60</pitch>
+              <tpc>14</tpc>
+            </Note>
+          </Chord>
+          <Rest>
+            <durationType>quarter</durationType>
+          </Rest>
+          <Rest>
+            <durationType>quarter</durationType>
+          </Rest>
+          <Rest>
+            <durationType>quarter</durationType>
+          </Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

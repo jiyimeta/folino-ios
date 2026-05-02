@@ -1,27 +1,57 @@
 @testable import Domain
 import Foundation
+import Observation
 import Testing
 
 /// In-memory fake conforming to `ScoreLibraryRepository`. Living inside the
 /// test target ensures the protocol's shape compiles for at least one
-/// concrete implementor.
-private actor FakeScoreLibraryRepository: ScoreLibraryRepository {
-    var items: [ScoreItemID: ScoreItem] = [:]
-    var tags: [TagID: Domain.Tag] = [:]
-    var playlists: [PlaylistID: Playlist] = [:]
+/// concrete implementor and exercises the observable surface.
+@MainActor
+@Observable
+private final class FakeScoreLibraryRepository: ScoreLibraryRepository {
+    var scoreItems: [ScoreItem] = []
+    var tags: [Domain.Tag] = []
+    var playlists: [Playlist] = []
 
-    func allScoreItems() throws -> [ScoreItem] { Array(items.values) }
-    func scoreItem(id: ScoreItemID) throws -> ScoreItem? { items[id] }
-    func saveScoreItem(_ item: ScoreItem) throws { items[item.id] = item }
-    func deleteScoreItem(id: ScoreItemID) throws { items.removeValue(forKey: id) }
+    func refresh() throws { /* no-op */ }
 
-    func allTags() throws -> [Domain.Tag] { Array(tags.values) }
-    func saveTag(_ tag: Domain.Tag) throws { tags[tag.id] = tag }
-    func deleteTag(id: TagID) throws { tags.removeValue(forKey: id) }
+    func saveScoreItem(_ item: ScoreItem) throws {
+        if let idx = scoreItems.firstIndex(where: { $0.id == item.id }) {
+            scoreItems[idx] = item
+        } else {
+            scoreItems.append(item)
+        }
+    }
 
-    func allPlaylists() throws -> [Playlist] { Array(playlists.values) }
-    func savePlaylist(_ playlist: Playlist) throws { playlists[playlist.id] = playlist }
-    func deletePlaylist(id: PlaylistID) throws { playlists.removeValue(forKey: id) }
+    func deleteScoreItem(id: ScoreItemID) throws {
+        scoreItems.removeAll { $0.id == id }
+    }
+
+    func saveTag(_ tag: Domain.Tag) throws {
+        if let idx = tags.firstIndex(where: { $0.id == tag.id }) {
+            tags[idx] = tag
+        } else {
+            tags.append(tag)
+        }
+    }
+
+    func deleteTag(id: TagID) throws { tags.removeAll { $0.id == id } }
+
+    func savePlaylist(_ playlist: Playlist) throws {
+        if let idx = playlists.firstIndex(where: { $0.id == playlist.id }) {
+            playlists[idx] = playlist
+        } else {
+            playlists.append(playlist)
+        }
+    }
+
+    func deletePlaylist(id: PlaylistID) throws {
+        playlists.removeAll { $0.id == id }
+    }
+
+    func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] {
+        scoreItems.filter { $0.contentHash == contentHash }
+    }
 }
 
 private actor FakeAnnotationStore: AnnotationStore {
@@ -40,23 +70,37 @@ private actor FakeAnnotationStore: AnnotationStore {
     }
 }
 
-@Suite struct StorageProtocolsTests {
-    @Test func libraryRepositoryRoundTripsItems() async throws {
-        let repo: any ScoreLibraryRepository = FakeScoreLibraryRepository()
-        let item = ScoreItem(
+@Suite @MainActor struct StorageProtocolsTests {
+    private func sampleItem(hash: String = String(repeating: "0", count: 64)) -> ScoreItem {
+        ScoreItem(
             title: "x", composer: nil, instrumentationSummary: nil,
-            format: .midi, localFileName: "x.mid", sizeBytes: 0,
+            localFileName: "x.mid", contentHash: hash, sizeBytes: 0,
             lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
         )
-        try await repo.saveScoreItem(item)
-        let fetched = try await repo.scoreItem(id: item.id)
-        #expect(fetched == item)
-        try await repo.deleteScoreItem(id: item.id)
-        let removed = try await repo.scoreItem(id: item.id)
-        #expect(removed == nil)
     }
 
+    @Test func libraryRepositoryRoundTripsItems() async throws {
+        let repo: any ScoreLibraryRepository = FakeScoreLibraryRepository()
+        let item = sampleItem()
+        try await repo.saveScoreItem(item)
+        #expect(repo.scoreItems.contains { $0.id == item.id })
+        try await repo.deleteScoreItem(id: item.id)
+        #expect(repo.scoreItems.isEmpty)
+    }
+
+    @Test func contentHashLookupReturnsAllMatches() async throws {
+        let repo: any ScoreLibraryRepository = FakeScoreLibraryRepository()
+        let h = "abc123"
+        try await repo.saveScoreItem(sampleItem(hash: h))
+        try await repo.saveScoreItem(sampleItem(hash: h))
+        try await repo.saveScoreItem(sampleItem(hash: "other"))
+        let dups = try await repo.scoreItems(matchingContentHash: h)
+        #expect(dups.count == 2)
+    }
+}
+
+@Suite struct AnnotationStoreProtocolTests {
     @Test func annotationStoreRoundTripsLayers() async throws {
         let store: any AnnotationStore = FakeAnnotationStore()
         let scoreID = ScoreItemID()

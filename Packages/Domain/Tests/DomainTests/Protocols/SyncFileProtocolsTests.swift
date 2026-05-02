@@ -25,6 +25,10 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
         ScoreFormat.detect(filename: fileName)
     }
 
+    func loadFileMetadata(fileURL: URL) throws -> ScoreFileSummary {
+        throw DomainError.unsupportedFormat("fake")
+    }
+
     func loadScore(fileURL: URL) throws -> (score: Score, summary: ScoreFileSummary) {
         // Cannot construct a real `Score` without SheetMusicCore knowledge; throw to prove
         // the throwing signature compiles.
@@ -73,6 +77,20 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
             if case .scoreParseFailed = error {
                 // Expected.
             } else {
+                Issue.record("unexpected DomainError: \(error)")
+            }
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
+    @Test func loadFileMetadataThrowsOnFakeFiles() async {
+        let gateway = FakeScoreFileGateway()
+        do {
+            _ = try await gateway.loadFileMetadata(fileURL: URL(fileURLWithPath: "/dev/null"))
+            Issue.record("expected throw")
+        } catch let error as DomainError {
+            if case .unsupportedFormat = error { /* expected */ } else {
                 Issue.record("unexpected DomainError: \(error)")
             }
         } catch {

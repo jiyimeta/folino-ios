@@ -9,8 +9,8 @@ import Testing
             title: "Prelude in C",
             composer: "J. S. Bach",
             instrumentationSummary: "Piano",
-            format: .mscz,
             localFileName: "prelude.mscz",
+            contentHash: "0000000000000000000000000000000000000000000000000000000000000000",
             sizeBytes: 8192,
             lengthBeats: 56,
             defaultTempoBpm: 72,
@@ -35,8 +35,8 @@ import Testing
             title: "Untitled",
             composer: nil,
             instrumentationSummary: nil,
-            format: .midi,
             localFileName: "x.mid",
+            contentHash: "deadbeef",
             sizeBytes: 0,
             lengthBeats: 0,
             defaultTempoBpm: 120,
@@ -61,8 +61,14 @@ import Testing
         let base = sample()
         let a = base.with(tagIDs: [t1, t2])
         let b = base.with(tagIDs: [t2, t1])
-        // Same id (since `with` keeps id), same tag set → equal.
         #expect(a == b)
+    }
+
+    @Test func contentHashIsCarriedThroughCodable() throws {
+        let item = sample()
+        let data = try JSONEncoder().encode(item)
+        let decoded = try JSONDecoder().decode(ScoreItem.self, from: data)
+        #expect(decoded.contentHash == item.contentHash)
     }
 }
 
@@ -73,8 +79,8 @@ extension ScoreItem {
             title: title,
             composer: composer,
             instrumentationSummary: instrumentationSummary,
-            format: format,
             localFileName: localFileName,
+            contentHash: contentHash,
             sizeBytes: sizeBytes,
             lengthBeats: lengthBeats,
             defaultTempoBpm: defaultTempoBpm,
