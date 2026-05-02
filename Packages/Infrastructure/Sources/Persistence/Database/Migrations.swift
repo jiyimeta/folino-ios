@@ -4,9 +4,6 @@ public enum AppMigrations {
     /// The v1 migrator. Idempotent — `migrate` can be called repeatedly.
     public static let v1: DatabaseMigrator = {
         var m = DatabaseMigrator()
-        #if DEBUG
-            m.eraseDatabaseOnSchemaChange = false
-        #endif
         m.registerMigration("v1", migrate: migrateV1)
         return m
     }()
