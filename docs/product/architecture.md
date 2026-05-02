@@ -57,6 +57,6 @@ Folino composes `swift-sheet-music` modules:
 | `SheetMusicLayout` | Layout calculation that drives Folino's Reader. |
 | `SheetMusicAudio` | Wrapped by Folino's `PlaybackController` (handles cursor, A–B repeat, mixer state, persistence). |
 | `SheetMusicPDF` | Used for the v1 PDF export path. |
-| `SheetMusicUI` | Reference; the Folino reader has its own iPad / iPhone view code in `Packages/Features/Reader` because `SheetMusicUI` is currently macOS 15+. Some of the reader work may upstream into a new iOS-capable target inside `swift-sheet-music`. |
+| `SheetMusicUI` | Score rendering on iPad / iPhone. Folino's Reader composes `ScoreView`, `PagedScoreView`, and `PlaybackCursorView` inside its own iOS shell (toolbar, gestures, navigation) in `Packages/Features/Reader`. `SheetMusicUI` itself is iOS 16+ / macOS 13+; the upstream `Example/SheetMusicExample` iOS target shows the integration pattern. |
 
 When Folino needs an engine capability that does not exist yet (mscz export, MusicXML export, interactive cursor API, free-text mutation API), the work goes upstream to `swift-sheet-music` first and Folino consumes the next tagged version.
