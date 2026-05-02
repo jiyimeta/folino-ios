@@ -13,7 +13,11 @@ import Testing
         #expect(ScoreFormat.detect(filename: "song.mid") == .midi)
         #expect(ScoreFormat.detect(filename: "song.midi") == .midi)
         #expect(ScoreFormat.detect(filename: "song.smf") == .midi)
-        #expect(ScoreFormat.detect(filename: "song.pdf") == .pdf)
+    }
+
+    @Test func returnsNilForPDFInV1() {
+        #expect(ScoreFormat.detect(filename: "song.pdf") == nil)
+        #expect(ScoreFormat.detect(filename: "song.PDF") == nil)
     }
 
     @Test func returnsNilForUnknownExtension() {
