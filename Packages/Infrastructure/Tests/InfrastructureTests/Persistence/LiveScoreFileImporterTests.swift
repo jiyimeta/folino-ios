@@ -79,4 +79,76 @@ import Testing
             Issue.record("unexpected: \(error)")
         }
     }
+
+    @Test func commitImportAsNewCopiesFileAndPersistsRow() async throws {
+        let rig = try await makeRig()
+        defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
+
+        let mscxURL = try Fixtures.writeToTempFile(
+            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp
+        )
+        let plan = try await rig.importer.prepareImport(sourceURL: mscxURL)
+        let item = try await rig.importer.commitImport(plan, decision: .importAsNew)
+
+        // localFileName follows <id>.<canonicalExtension>
+        #expect(item.localFileName == "\(item.id.rawValue.uuidString).mscx")
+
+        let dest = rig.scoresDir.appending(path: item.localFileName)
+        #expect(FileManager.default.fileExists(atPath: dest.path))
+
+        try await waitFor { rig.repo.scoreItems.contains { $0.id == item.id } }
+    }
+
+    @Test func reimportSameBytesYieldsOneDuplicate() async throws {
+        let rig = try await makeRig()
+        defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
+
+        let mscxURL = try Fixtures.writeToTempFile(
+            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp
+        )
+        let firstPlan = try await rig.importer.prepareImport(sourceURL: mscxURL)
+        _ = try await rig.importer.commitImport(firstPlan, decision: .importAsNew)
+        try await waitFor { rig.repo.scoreItems.count == 1 }
+
+        let secondPlan = try await rig.importer.prepareImport(sourceURL: mscxURL)
+        #expect(secondPlan.duplicates.count == 1)
+    }
+
+    @Test func openExistingDoesNotWriteNewRowOrFile() async throws {
+        let rig = try await makeRig()
+        defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
+
+        let mscxURL = try Fixtures.writeToTempFile(
+            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp
+        )
+        let firstPlan = try await rig.importer.prepareImport(sourceURL: mscxURL)
+        let original = try await rig.importer.commitImport(firstPlan, decision: .importAsNew)
+        try await waitFor { rig.repo.scoreItems.count == 1 }
+
+        let secondPlan = try await rig.importer.prepareImport(sourceURL: mscxURL)
+        let resolved = try await rig.importer.commitImport(
+            secondPlan, decision: .openExisting(original.id)
+        )
+        #expect(resolved.id == original.id)
+
+        let filesBefore = try FileManager.default.contentsOfDirectory(
+            at: rig.scoresDir, includingPropertiesForKeys: nil
+        ).count
+        #expect(filesBefore == 1)
+        #expect(rig.repo.scoreItems.count == 1)
+    }
+
+    /// Polls a predicate up to ~2s.
+    @MainActor
+    private func waitFor(
+        timeout: Duration = .seconds(2),
+        _ predicate: @MainActor () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if predicate() { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        Issue.record("predicate never satisfied within \(timeout)")
+    }
 }

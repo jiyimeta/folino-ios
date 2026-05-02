@@ -43,9 +43,64 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
         )
     }
 
-    public func commitImport(_ plan: ImportPlan, decision: ImportDecision) throws -> ScoreItem {
-        // Implemented in Task 17.
-        throw DomainError.persistenceFailed(reason: "commitImport not yet implemented")
+    public func commitImport(_ plan: ImportPlan, decision: ImportDecision) async throws -> ScoreItem {
+        switch decision {
+        case let .openExisting(existingID):
+            if let existing = plan.duplicates.first(where: { $0.id == existingID }) {
+                return existing
+            }
+            // Fall back to a repository lookup if the duplicates list was stale.
+            if let item = try await repository.scoreItems(matchingContentHash: plan.contentHash)
+                .first(where: { $0.id == existingID })
+            {
+                return item
+            }
+            throw DomainError.persistenceFailed(reason: "openExisting target \(existingID.rawValue) not found")
+
+        case .importAsNew:
+            let id = ScoreItemID()
+            let localFileName = "\(id.rawValue.uuidString).\(plan.format.canonicalExtension)"
+            let destinationURL = scoresDirectory.appending(path: localFileName)
+
+            // Copy first, with scoped access for share-sheet URLs.
+            let scoped = plan.sourceURL.startAccessingSecurityScopedResource()
+            defer { if scoped { plan.sourceURL.stopAccessingSecurityScopedResource() } }
+
+            do {
+                try FileManager.default.copyItem(at: plan.sourceURL, to: destinationURL)
+            } catch {
+                throw DomainError.persistenceFailed(reason: "copy failed: \(error)")
+            }
+
+            // Best-effort cleanup if the row save fails. We re-throw the original error.
+            var copiedFileShouldBeRemoved = true
+            defer {
+                if copiedFileShouldBeRemoved {
+                    try? FileManager.default.removeItem(at: destinationURL)
+                }
+            }
+
+            let item = ScoreItem(
+                id: id,
+                title: plan.summary.title ?? plan.sourceURL.deletingPathExtension().lastPathComponent,
+                composer: plan.summary.composer,
+                instrumentationSummary: plan.summary.instrumentationSummary,
+                localFileName: localFileName,
+                contentHash: plan.contentHash,
+                sizeBytes: plan.sizeBytes,
+                lengthBeats: plan.summary.lengthBeats,
+                defaultTempoBpm: plan.summary.defaultTempoBpm,
+                primaryKey: plan.summary.primaryKey,
+                addedAt: Date(),
+                lastOpenedAt: nil,
+                tagIDs: [],
+                isFavorite: false
+            )
+
+            try await repository.saveScoreItem(item)
+            copiedFileShouldBeRemoved = false
+            return item
+        }
     }
 
     /// SHA-256 the file in a single pass. Off-main via `Task.detached` so
