@@ -67,3 +67,50 @@ struct LibraryViewModelTests {
         #expect(vm.errorAlertMessage?.contains("io error") == true)
     }
 }
+
+extension LibraryViewModelTests {
+    fileprivate static func makePlan(duplicates: [ScoreItem] = []) -> ImportPlan {
+        ImportPlan(
+            sourceURL: URL(filePath: "/tmp/x.mscx"),
+            format: .mscx,
+            summary: ScoreFileSummary(
+                title: "Imported", composer: nil,
+                instrumentationSummary: "", lengthBeats: 0,
+                defaultTempoBpm: 120, primaryKey: nil
+            ),
+            contentHash: "hash",
+            sizeBytes: 100,
+            duplicates: duplicates
+        )
+    }
+
+    @Test func happyPathImportPushesPendingOpen() async {
+        let (vm, _, importer, _) = Self.makeVM()
+        let plan = Self.makePlan()
+        importer.preparedPlans = [plan]
+        let imported = Self.makeItem(title: "Imported")
+        importer.commitFactory = { _, _ in imported }
+
+        await vm.startImport(from: plan.sourceURL)
+        #expect(importer.committed.count == 1)
+        if case .importAsNew = importer.committed.first?.decision {} else {
+            Issue.record("expected .importAsNew")
+        }
+        #expect(vm.pendingScoreToOpen?.id == imported.id)
+        #expect(vm.duplicatePrompt == nil)
+        #expect(vm.errorAlertMessage == nil)
+    }
+
+    @Test func duplicateStagesPromptInsteadOfCommitting() async {
+        let (vm, _, importer, _) = Self.makeVM()
+        let existing = Self.makeItem(title: "Existing")
+        let plan = Self.makePlan(duplicates: [existing])
+        importer.preparedPlans = [plan]
+        importer.commitFactory = { _, _ in existing }
+
+        await vm.startImport(from: plan.sourceURL)
+        #expect(importer.committed.isEmpty)
+        #expect(vm.duplicatePrompt?.existing.id == existing.id)
+        #expect(vm.pendingScoreToOpen == nil)
+    }
+}

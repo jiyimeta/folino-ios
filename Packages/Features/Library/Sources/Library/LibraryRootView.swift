@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 public struct LibraryRootView<LicenseContent: View>: View {
@@ -30,6 +31,20 @@ public struct LibraryRootView<LicenseContent: View>: View {
         NavigationStack {
             rootList
                 .navigationTitle("Library")
+                .toolbar { importToolbar }
+                .fileImporter(
+                    isPresented: $viewModel.isFileImporterPresented,
+                    allowedContentTypes: ScoreFileTypes.allowed,
+                    allowsMultipleSelection: false
+                ) { result in
+                    switch result {
+                    case let .success(urls):
+                        guard let url = urls.first else { return }
+                        Task { await viewModel.startImport(from: url) }
+                    case let .failure(error):
+                        viewModel.errorAlertMessage = error.localizedDescription
+                    }
+                }
                 .navigationDestination(for: LibraryRoute.self) { route in
                     destination(for: route)
                 }
@@ -48,6 +63,23 @@ public struct LibraryRootView<LicenseContent: View>: View {
             Button("OK") { viewModel.errorAlertMessage = nil }
         } message: { msg in
             Text(msg)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var importToolbar: some ToolbarContent {
+        #if os(iOS)
+            ToolbarItem(placement: .topBarTrailing) { importButton }
+        #else
+            ToolbarItem(placement: .automatic) { importButton }
+        #endif
+    }
+
+    private var importButton: some View {
+        Button {
+            viewModel.isFileImporterPresented = true
+        } label: {
+            Image(systemName: "plus").accessibilityLabel("Import Score")
         }
     }
 
@@ -193,6 +225,20 @@ public struct LibraryRootView<LicenseContent: View>: View {
             get: { viewModel.errorAlertMessage != nil },
             set: { isPresented in if !isPresented { viewModel.errorAlertMessage = nil } }
         )
+    }
+}
+
+enum ScoreFileTypes {
+    /// Content types that the `.fileImporter` accepts. Each is a reasonable
+    /// approximation; precise UTType registration is the v1-followup work
+    /// (`UTImportedTypeDeclarations` in `App/Info.plist`).
+    static var allowed: [UTType] {
+        var types: [UTType] = [.xml, .midi]
+        // .mscz / .mxl appear as `.zip` to UTType today. Filter post-pick by
+        // extension on `prepareImport` (the importer routes by canonical ext).
+        types.append(.zip)
+        // Plain `.mscx` is XML; explicit `.xml` already covers it.
+        return types
     }
 }
 
