@@ -68,6 +68,69 @@ import Testing
         try await waitFor { !repo.scoreItems.contains { $0.id == item.id } }
     }
 
+    @Test func saveTagAppearsInObservedArray() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        let tag = Domain.Tag(name: "Romantic", colorHex: "#00FFAA")
+        try await repo.saveTag(tag)
+        try await waitFor { repo.tags.contains { $0.id == tag.id } }
+    }
+
+    @Test func deleteTagCascadesToItemTagIDs() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        let tag = Domain.Tag(name: "x", colorHex: "#000000")
+        try await repo.saveTag(tag)
+        let item = ScoreItem(
+            title: "x", composer: nil, instrumentationSummary: nil,
+            localFileName: "x.mid", contentHash: "h", sizeBytes: 0,
+            lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [tag.id], isFavorite: false
+        )
+        try await repo.saveScoreItem(item)
+        try await waitFor { repo.scoreItems.first { $0.id == item.id }?.tagIDs == [tag.id] }
+
+        try await repo.deleteTag(id: tag.id)
+        try await waitFor { repo.scoreItems.first { $0.id == item.id }?.tagIDs.isEmpty == true }
+    }
+
+    @Test func contentHashLookupReturnsAllMatches() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        let h = "shared-hash"
+        func make() -> ScoreItem {
+            ScoreItem(
+                title: "x", composer: nil, instrumentationSummary: nil,
+                localFileName: "\(UUID().uuidString).mid", contentHash: h, sizeBytes: 0,
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            )
+        }
+        try await repo.saveScoreItem(make())
+        try await repo.saveScoreItem(make())
+        let unique = make()
+        let renamed = ScoreItem(
+            id: unique.id, title: unique.title, composer: nil,
+            instrumentationSummary: nil, localFileName: unique.localFileName,
+            contentHash: "different", sizeBytes: 0, lengthBeats: 0,
+            defaultTempoBpm: 120, primaryKey: nil,
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+        )
+        try await repo.saveScoreItem(renamed)
+
+        let dups = try await repo.scoreItems(matchingContentHash: h)
+        #expect(dups.count == 2)
+    }
+
     /// Polls a predicate up to ~2s, yielding to the runtime between checks so
     /// the ValueObservation task can run.
     @MainActor

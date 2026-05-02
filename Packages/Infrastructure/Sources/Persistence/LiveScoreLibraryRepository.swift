@@ -166,12 +166,24 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         }
     }
 
-    public func saveTag(_ tag: Domain.Tag) throws {
-        throw DomainError.persistenceFailed(reason: "saveTag not yet implemented")
+    public func saveTag(_ tag: Domain.Tag) async throws {
+        do {
+            try await database.pool.write { db in
+                try TagRecord(domain: tag).save(db)
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
-    public func deleteTag(id: TagID) throws {
-        throw DomainError.persistenceFailed(reason: "deleteTag not yet implemented")
+    public func deleteTag(id: TagID) async throws {
+        do {
+            try await database.pool.write { db in
+                _ = try TagRecord.deleteOne(db, key: id.rawValue.uuidString)
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
     public func savePlaylist(_ playlist: Playlist) throws {
@@ -182,7 +194,24 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         throw DomainError.persistenceFailed(reason: "deletePlaylist not yet implemented")
     }
 
-    public func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] {
-        throw DomainError.persistenceFailed(reason: "scoreItems(matchingContentHash:) not yet implemented")
+    public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {
+        do {
+            return try await database.pool.read { db in
+                let records = try ScoreItemRecord
+                    .filter(Column("content_hash") == contentHash)
+                    .fetchAll(db)
+                return try records.map { rec -> ScoreItem in
+                    let tagRows = try ScoreItemTagRecord
+                        .filter(Column("score_item_id") == rec.id)
+                        .fetchAll(db)
+                    let tagIDs = Set(tagRows.compactMap {
+                        UUID(uuidString: $0.tagID).map(TagID.init(rawValue:))
+                    })
+                    return try rec.toDomain(tagIDs: tagIDs)
+                }
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 }
