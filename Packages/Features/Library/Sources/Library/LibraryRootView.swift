@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 @MainActor
 public struct LibraryRootView<LicenseContent: View>: View {
-    @State private var viewModel: LibraryViewModel
+    @Bindable var viewModel: LibraryViewModel
     private let onOpenScore: (ScoreItem) -> Void
     private let licenseContent: () -> LicenseContent
 
@@ -12,17 +12,11 @@ public struct LibraryRootView<LicenseContent: View>: View {
     @State private var addToPlaylistTarget: ScoreItem?
 
     public init(
-        repository: any ScoreLibraryRepository,
-        importer: any ScoreFileImporter,
-        gateway: any ScoreFileGateway,
+        viewModel: LibraryViewModel,
         onOpenScore: @escaping (ScoreItem) -> Void,
         @ViewBuilder licenseContent: @escaping () -> LicenseContent
     ) {
-        _viewModel = State(
-            wrappedValue: LibraryViewModel(
-                repository: repository, importer: importer, gateway: gateway
-            )
-        )
+        self.viewModel = viewModel
         self.onOpenScore = onOpenScore
         self.licenseContent = licenseContent
     }
