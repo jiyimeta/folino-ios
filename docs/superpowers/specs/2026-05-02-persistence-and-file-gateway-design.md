@@ -25,7 +25,7 @@ It does **not** include: Annotations persistence, Soundfont cache, Playback pref
 
 ### D2. PDF is rejected at the import boundary in v1
 
-The `ScoreFormat.pdf` enum case stays for forward compatibility (v2+ OCR will need it), but every `ScoreFileGateway` entry point (`loadFileMetadata`, `loadScore`, `saveScore`) throws `DomainError.unsupportedFormat` for PDF. The Reader, when built, will not have a PDF code path either. PDF support is deferred to a later plan that includes OCR.
+`ScoreFormat.pdf` is removed from the enum entirely (along with its `canonicalExtension` and `detect(filename:)` arms). `ScoreFormat.detect(filename: "x.pdf")` returns `nil`; the importer maps `nil` to `DomainError.unsupportedFormat`. PDF support — both the enum case and any reader path — is deferred to a later plan that introduces OCR (v2+); reintroducing the case is a few-line change and is more cohesive when added together with the feature that uses it.
 
 ### D3. Duplicates allowed; user-confirmed via two-stage import API
 
@@ -108,10 +108,11 @@ Removed: `allScoreItems()`, `scoreItem(id:)`, `allTags()`, `allPlaylists()`. Sin
 public protocol ScoreFileGateway: Sendable {
     func detectFormat(fileName: String) -> ScoreFormat?
 
-    /// Throws `DomainError.unsupportedFormat` for `.pdf` / unknown extensions.
+    /// Throws `DomainError.unsupportedFormat` for unknown extensions (PDF included
+    /// — `.pdf` is not a `ScoreFormat` case in v1).
     func loadFileMetadata(fileURL: URL) async throws -> ScoreFileSummary
 
-    /// Throws `DomainError.unsupportedFormat` for `.pdf` / unknown extensions.
+    /// Throws `DomainError.unsupportedFormat` for unknown extensions.
     func loadScore(fileURL: URL) async throws -> (score: Score, summary: ScoreFileSummary)
 
     /// v1 supports `.mscx` / `.mscz` writes. Other formats throw `.unsupportedFormat`.
@@ -145,6 +146,10 @@ public protocol ScoreFileImporter: Sendable {
 ### `ScoreItem`
 
 `format: ScoreFormat` is removed. `localFileName` remains; consumers call `ScoreFormat.detect(filename: item.localFileName)` when format is needed.
+
+### `ScoreFormat`
+
+The `.pdf` case is removed (along with its `canonicalExtension` and `detect(filename:)` arms). The enum's v1 cases are: `.mscx`, `.mscz`, `.musicXML`, `.mxl`, `.midi`. `ScoreFormat.detect(filename:)` returns `nil` for `.pdf` and every other unknown extension. Plan #2 tests that exercised `.pdf` are updated.
 
 ## Database schema (v1 migration)
 
@@ -218,7 +223,7 @@ CREATE INDEX idx_playlist_items_playlist_id_position ON playlist_items(playlist_
 1. Feature/ImportExport receives a source URL (Files.app, share sheet, drag-drop).
 2. `importer.prepareImport(sourceURL:)`:
    - Hash the file with CryptoKit `SHA256` while reading it (single pass).
-   - Detect format from filename. `nil` or `.pdf` → throw `unsupportedFormat`.
+   - Detect format from filename. `nil` → throw `unsupportedFormat` (PDFs and other unknown extensions all map to `nil`).
    - Call `gateway.loadFileMetadata(fileURL: sourceURL)` for summary.
    - Call `repository.scoreItems(matchingContentHash:)` for duplicates.
    - Return `ImportPlan`.
@@ -298,7 +303,7 @@ GRDB tests use `DatabaseQueue.makeShared` against an in-memory database (`":memo
   - `.openExisting(id)`: no new file, no new row.
   - localFileName follows `<id>.<canonicalExtension>` exactly.
   - Save failure rollback: stub repository to throw; copied file is removed by `defer`.
-  - `.pdf` source URL → `prepareImport` throws `unsupportedFormat`.
+  - `.pdf` source URL → `prepareImport` throws `unsupportedFormat` (via `nil` from `detect`).
   - Extension-less file → `prepareImport` throws `unsupportedFormat`.
 
 ### ScoreFiles
@@ -307,7 +312,7 @@ Fixtures in `Packages/Infrastructure/Tests/InfrastructureTests/Resources/`: mini
 
 - `loadFileMetadata`: returns a `ScoreFileSummary` with non-empty `instrumentationSummary` and positive `lengthBeats` for each fixture.
 - `loadScore`: returns a non-empty `Score` (`parts.isEmpty == false`) for each.
-- `.pdf` URL → `loadFileMetadata` and `loadScore` throw `unsupportedFormat`.
+- `.pdf` URL → `loadFileMetadata` and `loadScore` throw `unsupportedFormat` (the gateway uses `ScoreFormat.detect` which returns `nil` for `.pdf`).
 - Corrupt MSCX → throws `fileCorrupt`.
 - `saveScore(_, fileURL:, format: .mscz)` round-trip: write a Score, read it back, parts/staves match.
 
