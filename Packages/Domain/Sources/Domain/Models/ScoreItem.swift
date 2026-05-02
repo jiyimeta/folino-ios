@@ -3,14 +3,20 @@ import Foundation
 /// A persisted entry in Folino's library. The actual score bytes live on disk
 /// at `AppPaths.scoresDirectory/localFileName` (the resolution to absolute URL
 /// happens in Infrastructure, not Domain).
+///
+/// `format` is intentionally NOT stored: callers derive it via
+/// `ScoreFormat.detect(filename: item.localFileName)`. The convention
+/// `localFileName == "<id>.<canonical-extension>"` is enforced at import time.
 public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public let id: ScoreItemID
     public var title: String
     public var composer: String?
     public var instrumentationSummary: String?
-    public var format: ScoreFormat
     /// Filename relative to the scores directory. Convention: `<id>.<canonical-extension>`.
     public var localFileName: String
+    /// SHA-256 hex digest of the on-disk file bytes, computed at import time. Used for
+    /// duplicate detection. Never edited after import.
+    public var contentHash: String
     public var sizeBytes: Int64
     public var lengthBeats: Int
     public var defaultTempoBpm: Int
@@ -25,8 +31,8 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         title: String,
         composer: String?,
         instrumentationSummary: String?,
-        format: ScoreFormat,
         localFileName: String,
+        contentHash: String,
         sizeBytes: Int64,
         lengthBeats: Int,
         defaultTempoBpm: Int,
@@ -40,8 +46,8 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         self.title = title
         self.composer = composer
         self.instrumentationSummary = instrumentationSummary
-        self.format = format
         self.localFileName = localFileName
+        self.contentHash = contentHash
         self.sizeBytes = sizeBytes
         self.lengthBeats = lengthBeats
         self.defaultTempoBpm = defaultTempoBpm
