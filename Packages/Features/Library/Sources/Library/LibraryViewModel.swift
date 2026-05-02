@@ -100,7 +100,17 @@ public final class LibraryViewModel {
 
     private func describe(_ error: Error) -> String {
         if let domain = error as? DomainError {
-            return domain.errorDescription ?? "\(domain)"
+            switch domain {
+            case .unsupportedFormat:
+                return String(localized: "Folino can't open this file type.")
+            case .scoreParseFailed:
+                return String(localized: "This file looks corrupted or isn't a valid score.")
+            case .persistenceFailed:
+                return String(localized: "There was a problem saving the score. Check available storage.")
+            case .scoreFileNotFound, .scoreWriteFailed,
+                 .soundfontDownloadFailed, .syncFailed, .audioEngineFailed:
+                return domain.errorDescription ?? "\(domain)"
+            }
         }
         return (error as NSError).localizedDescription
     }

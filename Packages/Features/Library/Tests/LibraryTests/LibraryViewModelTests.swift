@@ -56,7 +56,7 @@ struct LibraryViewModelTests {
         let (vm, repo, _, _) = Self.makeVM(scoreItems: [item])
         repo.saveScoreItemError = .persistenceFailed(reason: "disk full")
         await vm.toggleFavorite(item)
-        #expect(vm.errorAlertMessage?.contains("disk full") == true)
+        #expect(vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
 
     @Test func deleteSurfacesPersistenceErrorOnAlert() async {
@@ -64,7 +64,7 @@ struct LibraryViewModelTests {
         let (vm, repo, _, _) = Self.makeVM(scoreItems: [item])
         repo.deleteScoreItemError = .persistenceFailed(reason: "io error")
         await vm.delete(item)
-        #expect(vm.errorAlertMessage?.contains("io error") == true)
+        #expect(vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
 }
 
@@ -142,5 +142,29 @@ extension LibraryViewModelTests {
 
         await vm.commit(plan: plan, decision: .importAsNew)
         #expect(vm.pendingScoreToOpen?.id == new.id)
+    }
+}
+
+extension LibraryViewModelTests {
+    @Test func unsupportedFormatErrorMessage() async {
+        let (vm, _, importer, _) = Self.makeVM()
+        importer.prepareImportErrors = [.unsupportedFormat("xyz")]
+        await vm.startImport(from: URL(filePath: "/tmp/x.xyz"))
+        #expect(vm.errorAlertMessage == "Folino can't open this file type.")
+    }
+
+    @Test func parseErrorMessage() async {
+        let (vm, _, importer, _) = Self.makeVM()
+        importer.prepareImportErrors = [.scoreParseFailed(reason: "bad bytes")]
+        await vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
+        #expect(vm.errorAlertMessage == "This file looks corrupted or isn't a valid score.")
+    }
+
+    @Test func persistenceErrorMessage() async {
+        let (vm, _, importer, _) = Self.makeVM()
+        importer.preparedPlans = [Self.makePlan()]
+        importer.commitImportError = .persistenceFailed(reason: "disk full")
+        await vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
+        #expect(vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
 }
