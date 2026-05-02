@@ -153,7 +153,7 @@ private final class FailingRepository: ScoreLibraryRepository {
 
         let filesBefore = try FileManager.default.contentsOfDirectory(
             at: rig.scoresDir, includingPropertiesForKeys: nil
-        ).count
+        ).filter { $0.lastPathComponent != ".staging" }.count
         #expect(filesBefore == 1)
         #expect(rig.repo.scoreItems.count == 1)
     }
@@ -185,7 +185,7 @@ private final class FailingRepository: ScoreLibraryRepository {
 
         let leftovers = try FileManager.default.contentsOfDirectory(
             at: scoresDir, includingPropertiesForKeys: nil
-        )
+        ).filter { $0.lastPathComponent != ".staging" }
         #expect(leftovers.isEmpty)
     }
 }

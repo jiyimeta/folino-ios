@@ -72,6 +72,7 @@ extension LibraryViewModelTests {
     fileprivate static func makePlan(duplicates: [ScoreItem] = []) -> ImportPlan {
         ImportPlan(
             sourceURL: URL(filePath: "/tmp/x.mscx"),
+            stagedURL: URL(filePath: "/tmp/staged-x.mscx"),
             format: .mscx,
             summary: ScoreFileSummary(
                 title: "Imported", composer: nil,
