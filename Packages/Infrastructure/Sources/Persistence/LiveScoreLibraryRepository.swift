@@ -159,6 +159,8 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
             }
             if let filename {
                 let url = scoresDirectory.appending(path: filename)
+                // Best-effort: file may already be missing. TODO: log orphaned-file events
+                // to telemetry once logging infrastructure exists.
                 try? FileManager.default.removeItem(at: url)
             }
         } catch {

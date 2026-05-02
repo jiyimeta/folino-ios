@@ -158,20 +158,6 @@ private final class FailingRepository: ScoreLibraryRepository {
         #expect(rig.repo.scoreItems.count == 1)
     }
 
-    /// Polls a predicate up to ~2s.
-    @MainActor
-    private func waitFor(
-        timeout: Duration = .seconds(2),
-        _ predicate: @MainActor () -> Bool
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while ContinuousClock.now < deadline {
-            if predicate() { return }
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        Issue.record("predicate never satisfied within \(timeout)")
-    }
-
     @Test func saveFailureRollsBackCopiedFile() async throws {
         let tmp = try TempDirectory()
         let scoresDir = tmp.url.appending(path: "Scores")
