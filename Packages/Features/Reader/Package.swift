@@ -15,6 +15,7 @@ let package = Package(
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
+        .package(url: "git@github.com:jiyimeta/swift-sheet-music.git", branch: "main"),
     ],
     targets: [
         .target(
@@ -23,6 +24,7 @@ let package = Package(
                 "Domain",
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
+                .product(name: "SheetMusicUI", package: "swift-sheet-music"),
             ],
             plugins: swiftLintPlugins
         ),
