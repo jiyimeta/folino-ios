@@ -42,7 +42,8 @@ private struct ReadyShell: View {
 
     @State private var libraryVM: LibraryViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var path = NavigationPath()
+    @State private var compactPath = NavigationPath()
+    @State private var sidebarPath = NavigationPath()
     @State private var detailScoreItem: ScoreItem?
     @State private var isSettingsPresented = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
@@ -85,22 +86,21 @@ private struct ReadyShell: View {
                     }
                 }
             } else {
-                NavigationStack(path: $path) {
-                    LibraryRootView(
-                        viewModel: libraryVM,
-                        onOpenScore: { path.append($0) },
-                        licenseContent: { LicenseListView() }
-                    )
-                    .toolbar { settingsToolbarItem }
-                    .navigationDestination(for: ScoreItem.self) { item in
+                LibraryRootView(
+                    viewModel: libraryVM,
+                    path: $compactPath,
+                    onOpenScore: { compactPath.append($0) },
+                    readerDestination: { item in
                         ReaderView(
                             scoreItem: item,
                             repository: repository,
                             gateway: gateway,
                             scoresDirectory: scoresDirectory
                         )
-                    }
-                }
+                    },
+                    licenseContent: { LicenseListView() },
+                    leadingToolbarItem: { settingsButton }
+                )
             }
         }
         .sheet(isPresented: $isSettingsPresented) {
@@ -115,7 +115,7 @@ private struct ReadyShell: View {
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             } else {
-                path.append(item)
+                compactPath.append(item)
             }
         }
     }
@@ -124,23 +124,29 @@ private struct ReadyShell: View {
     private var sidebar: some View {
         LibraryRootView(
             viewModel: libraryVM,
+            path: $sidebarPath,
             onOpenScore: { item in
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             },
-            licenseContent: { LicenseListView() }
+            readerDestination: { item in
+                ReaderView(
+                    scoreItem: item,
+                    repository: repository,
+                    gateway: gateway,
+                    scoresDirectory: scoresDirectory
+                )
+            },
+            licenseContent: { LicenseListView() },
+            leadingToolbarItem: { settingsButton }
         )
-        .toolbar { settingsToolbarItem }
     }
 
-    @ToolbarContentBuilder
-    private var settingsToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button {
-                isSettingsPresented = true
-            } label: {
-                Image(systemName: "gear").accessibilityLabel("Settings")
-            }
+    private var settingsButton: some View {
+        Button {
+            isSettingsPresented = true
+        } label: {
+            Image(systemName: "gear").accessibilityLabel("Settings")
         }
     }
 }

@@ -3,28 +3,38 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-public struct LibraryRootView<LicenseContent: View>: View {
+public struct LibraryRootView<LicenseContent: View, ReaderContent: View, LeadingToolbar: View>: View {
     @Bindable var viewModel: LibraryViewModel
+    @Binding private var path: NavigationPath
     private let onOpenScore: (ScoreItem) -> Void
+    private let readerDestination: (ScoreItem) -> ReaderContent
     private let licenseContent: () -> LicenseContent
+    private let leadingToolbarItem: () -> LeadingToolbar
 
     @State private var editTagsTarget: ScoreItem?
     @State private var addToPlaylistTarget: ScoreItem?
 
     public init(
         viewModel: LibraryViewModel,
+        path: Binding<NavigationPath>,
         onOpenScore: @escaping (ScoreItem) -> Void,
-        @ViewBuilder licenseContent: @escaping () -> LicenseContent
+        @ViewBuilder readerDestination: @escaping (ScoreItem) -> ReaderContent,
+        @ViewBuilder licenseContent: @escaping () -> LicenseContent,
+        @ViewBuilder leadingToolbarItem: @escaping () -> LeadingToolbar = { EmptyView() }
     ) {
         self.viewModel = viewModel
+        _path = path
         self.onOpenScore = onOpenScore
+        self.readerDestination = readerDestination
         self.licenseContent = licenseContent
+        self.leadingToolbarItem = leadingToolbarItem
     }
 
     public var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             rootList
                 .navigationTitle("Library")
+                .toolbar { leadingToolbar }
                 .toolbar { importToolbar }
                 .fileImporter(
                     isPresented: $viewModel.isFileImporterPresented,
@@ -41,6 +51,9 @@ public struct LibraryRootView<LicenseContent: View>: View {
                 }
                 .navigationDestination(for: LibraryRoute.self) { route in
                     destination(for: route)
+                }
+                .navigationDestination(for: ScoreItem.self) { item in
+                    readerDestination(item)
                 }
         }
         .sheet(item: $editTagsTarget) { item in
@@ -85,6 +98,15 @@ public struct LibraryRootView<LicenseContent: View>: View {
             ToolbarItem(placement: .topBarTrailing) { importButton }
         #else
             ToolbarItem(placement: .automatic) { importButton }
+        #endif
+    }
+
+    @ToolbarContentBuilder
+    private var leadingToolbar: some ToolbarContent {
+        #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) { leadingToolbarItem() }
+        #else
+            ToolbarItem(placement: .automatic) { leadingToolbarItem() }
         #endif
     }
 
