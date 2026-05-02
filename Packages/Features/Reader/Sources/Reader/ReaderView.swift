@@ -33,10 +33,17 @@ public struct ReaderView: View {
                     ScoreView(score: score)
                         .padding()
                 }
-            case .failed:
-                // Real implementation lands in Task 21.
-                ProgressView()
-                    .controlSize(.large)
+            case let .failed(message):
+                ContentUnavailableView {
+                    Label("Could not open this score", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Retry") {
+                        Task { await viewModel.load() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
         }
         .navigationTitle(viewModel.scoreItem.title)
