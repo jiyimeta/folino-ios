@@ -16,16 +16,17 @@ import Testing
 
     @Test func refreshOnEmptyDatabaseProducesEmptyArrays() async throws {
         let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
         try await repo.refresh()
         #expect(repo.scoreItems.isEmpty)
         #expect(repo.tags.isEmpty)
         #expect(repo.playlists.isEmpty)
-        withExtendedLifetime(lifetime) {}
     }
 
     @Test func saveScoreItemRoundTripsViaObservation() async throws {
         let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
         try await repo.refresh()
 
@@ -45,12 +46,12 @@ import Testing
         let stored = try #require(repo.scoreItems.first { $0.id == item.id })
         #expect(stored.tagIDs == [tag.id])
         #expect(stored.title == "Prelude")
-        withExtendedLifetime(lifetime) {}
     }
 
     @Test func deleteScoreItemRemovesFromArray() async throws {
         let (db, lifetime) = try makeDatabase()
         let scoresDir = try TempDirectory()
+        defer { withExtendedLifetime((lifetime, scoresDir)) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: scoresDir.url)
         try await repo.refresh()
 
@@ -65,7 +66,6 @@ import Testing
 
         try await repo.deleteScoreItem(id: item.id)
         try await waitFor { !repo.scoreItems.contains { $0.id == item.id } }
-        withExtendedLifetime(lifetime) {}
     }
 
     /// Polls a predicate up to ~2s, yielding to the runtime between checks so
