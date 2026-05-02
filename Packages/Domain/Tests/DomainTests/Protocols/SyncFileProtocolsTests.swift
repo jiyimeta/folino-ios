@@ -26,7 +26,7 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
     }
 
     func loadFileMetadata(fileURL: URL) throws -> ScoreFileSummary {
-        throw DomainError.scoreParseFailed(reason: "fake")
+        throw DomainError.unsupportedFormat("fake")
     }
 
     func loadScore(fileURL: URL) throws -> (score: Score, summary: ScoreFileSummary) {
@@ -90,7 +90,7 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
             _ = try await gateway.loadFileMetadata(fileURL: URL(fileURLWithPath: "/dev/null"))
             Issue.record("expected throw")
         } catch let error as DomainError {
-            if case .scoreParseFailed = error { /* expected */ } else {
+            if case .unsupportedFormat = error { /* expected */ } else {
                 Issue.record("unexpected DomainError: \(error)")
             }
         } catch {
