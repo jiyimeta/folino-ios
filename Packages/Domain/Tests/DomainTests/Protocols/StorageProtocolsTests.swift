@@ -71,7 +71,7 @@ private actor FakeAnnotationStore: AnnotationStore {
 }
 
 @Suite @MainActor struct StorageProtocolsTests {
-    private func sampleItem(hash: String = "0".repeated(64)) -> ScoreItem {
+    private func sampleItem(hash: String = String(repeating: "0", count: 64)) -> ScoreItem {
         ScoreItem(
             title: "x", composer: nil, instrumentationSummary: nil,
             localFileName: "x.mid", contentHash: hash, sizeBytes: 0,
@@ -115,8 +115,4 @@ private actor FakeAnnotationStore: AnnotationStore {
         let removed = try await store.annotationLayer(forScoreItem: scoreID)
         #expect(removed == nil)
     }
-}
-
-extension String {
-    fileprivate func repeated(_ count: Int) -> String { String(repeating: self, count: count) }
 }

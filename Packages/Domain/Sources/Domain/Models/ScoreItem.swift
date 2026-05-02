@@ -16,7 +16,7 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public var localFileName: String
     /// SHA-256 hex digest of the on-disk file bytes, computed at import time. Used for
     /// duplicate detection. Never edited after import.
-    public var contentHash: String
+    public let contentHash: String
     public var sizeBytes: Int64
     public var lengthBeats: Int
     public var defaultTempoBpm: Int

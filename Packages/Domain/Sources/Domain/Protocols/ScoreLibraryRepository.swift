@@ -28,5 +28,7 @@ public protocol ScoreLibraryRepository: AnyObject, Observable {
 
     /// Used by the importer for duplicate detection. Returns every item whose
     /// `contentHash` equals the argument; the caller decides whether to merge.
+    /// Implementations may filter the in-memory observed array or issue a focused
+    /// DB query — both are acceptable.
     func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem]
 }
