@@ -6,7 +6,7 @@ import GRDB
 /// thread safety lets background tasks read while writes happen on the
 /// writer queue.
 public final class AppDatabase: Sendable {
-    public let pool: DatabasePool
+    let pool: DatabasePool
 
     /// Build an on-disk database at the given URL. The parent directory
     /// must already exist (the App bootstrap creates it). Foreign-key

@@ -19,40 +19,42 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
         return summary
     }
 
-    public func loadScore(fileURL: URL) throws -> (score: Score, summary: ScoreFileSummary) {
+    public func loadScore(fileURL: URL) async throws -> (score: Score, summary: ScoreFileSummary) {
         guard let format = detectFormat(fileName: fileURL.lastPathComponent) else {
             let ext = fileURL.pathExtension.lowercased()
             throw DomainError.unsupportedFormat(ext)
         }
-        let data: Data
-        do {
-            data = try Data(contentsOf: fileURL)
-        } catch {
-            throw DomainError.scoreFileNotFound(name: fileURL.lastPathComponent)
-        }
-        do {
-            let score: Score
-            switch format {
-            case .mscx:
-                score = try SheetMusic.loadScore(mscxData: data)
-            case .mscz:
-                score = try SheetMusic.loadScore(msczData: data)
-            case .musicXML:
-                score = try SheetMusic.loadScore(musicXMLData: data)
-            case .mxl:
-                score = try SheetMusic.loadScore(mxlData: data)
-            case .midi:
-                // swift-sheet-music does not yet expose SMF → Score parsing;
-                // surface that as `scoreParseFailed` so the importer can show
-                // a clear error.
-                throw DomainError.scoreParseFailed(reason: "MIDI parsing not yet supported")
+        return try await Task.detached(priority: .userInitiated) {
+            let data: Data
+            do {
+                data = try Data(contentsOf: fileURL)
+            } catch {
+                throw DomainError.scoreFileNotFound(name: fileURL.lastPathComponent)
             }
-            return (score, ScoreFileSummary(score: score))
-        } catch let error as DomainError {
-            throw error
-        } catch {
-            throw DomainError.scoreParseFailed(reason: "\(error)")
-        }
+            do {
+                let score: Score
+                switch format {
+                case .mscx:
+                    score = try SheetMusic.loadScore(mscxData: data)
+                case .mscz:
+                    score = try SheetMusic.loadScore(msczData: data)
+                case .musicXML:
+                    score = try SheetMusic.loadScore(musicXMLData: data)
+                case .mxl:
+                    score = try SheetMusic.loadScore(mxlData: data)
+                case .midi:
+                    // swift-sheet-music does not yet expose SMF → Score parsing;
+                    // surface that as `scoreParseFailed` so the importer can show
+                    // a clear error.
+                    throw DomainError.scoreParseFailed(reason: "MIDI parsing not yet supported")
+                }
+                return (score, ScoreFileSummary(score: score))
+            } catch let error as DomainError {
+                throw error
+            } catch {
+                throw DomainError.scoreParseFailed(reason: "\(error)")
+            }
+        }.value
     }
 
     public func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {

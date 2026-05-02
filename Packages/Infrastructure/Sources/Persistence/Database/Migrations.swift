@@ -1,8 +1,8 @@
 import GRDB
 
-public enum AppMigrations {
+enum AppMigrations {
     /// The v1 migrator. Idempotent — `migrate` can be called repeatedly.
-    public static let v1: DatabaseMigrator = {
+    static let v1: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
         return m
