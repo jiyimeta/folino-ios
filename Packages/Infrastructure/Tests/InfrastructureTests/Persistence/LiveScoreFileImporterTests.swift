@@ -5,6 +5,26 @@ import Foundation
 import Testing
 
 @MainActor
+@Observable
+private final class FailingRepository: ScoreLibraryRepository {
+    var scoreItems: [ScoreItem] = []
+    var tags: [Domain.Tag] = []
+    var playlists: [Playlist] = []
+
+    func refresh() throws {}
+    func saveScoreItem(_ item: ScoreItem) throws {
+        throw DomainError.persistenceFailed(reason: "stub failure")
+    }
+
+    func deleteScoreItem(id: ScoreItemID) throws {}
+    func saveTag(_ tag: Domain.Tag) throws {}
+    func deleteTag(id: TagID) throws {}
+    func savePlaylist(_ playlist: Playlist) throws {}
+    func deletePlaylist(id: PlaylistID) throws {}
+    func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] { [] }
+}
+
+@MainActor
 @Suite struct LiveScoreFileImporterTests {
     private struct Rig {
         let db: AppDatabase
@@ -150,5 +170,36 @@ import Testing
             try await Task.sleep(for: .milliseconds(20))
         }
         Issue.record("predicate never satisfied within \(timeout)")
+    }
+
+    @Test func saveFailureRollsBackCopiedFile() async throws {
+        let tmp = try TempDirectory()
+        let scoresDir = tmp.url.appending(path: "Scores")
+        try FileManager.default.createDirectory(at: scoresDir, withIntermediateDirectories: true)
+        defer { withExtendedLifetime(tmp) {} }
+
+        let importer = LiveScoreFileImporter(
+            gateway: LiveScoreFileGateway(),
+            repository: FailingRepository(),
+            scoresDirectory: scoresDir
+        )
+        let mscxURL = try Fixtures.writeToTempFile(
+            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url
+        )
+        let plan = try await importer.prepareImport(sourceURL: mscxURL)
+
+        do {
+            _ = try await importer.commitImport(plan, decision: .importAsNew)
+            Issue.record("expected throw")
+        } catch DomainError.persistenceFailed {
+            // Expected.
+        } catch {
+            Issue.record("unexpected: \(error)")
+        }
+
+        let leftovers = try FileManager.default.contentsOfDirectory(
+            at: scoresDir, includingPropertiesForKeys: nil
+        )
+        #expect(leftovers.isEmpty)
     }
 }
