@@ -15,6 +15,11 @@ final class AppBootstrap {
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var importer: LiveScoreFileImporter?
 
+    /// Single-slot queue for an incoming URL received via `.onOpenURL`.
+    /// Last-wins: a second URL arriving before the first is consumed
+    /// overwrites it. v1 only opens one file at a time.
+    private(set) var pendingIncomingURL: URL?
+
     func start() {
         do {
             try FileManager.default.createDirectory(
@@ -51,5 +56,15 @@ final class AppBootstrap {
         } catch {
             failure = error
         }
+    }
+
+    func acceptIncomingURL(_ url: URL) {
+        pendingIncomingURL = url
+    }
+
+    func consumePendingIncomingURL() -> URL? {
+        let url = pendingIncomingURL
+        pendingIncomingURL = nil
+        return url
     }
 }
