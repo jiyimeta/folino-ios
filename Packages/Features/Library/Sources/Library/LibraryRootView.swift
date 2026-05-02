@@ -64,6 +64,25 @@ public struct LibraryRootView<LicenseContent: View>: View {
         } message: { msg in
             Text(msg)
         }
+        .alert(
+            "Already in Your Library",
+            isPresented: duplicateAlertBinding,
+            presenting: viewModel.duplicatePrompt
+        ) { prompt in
+            Button("Open") {
+                viewModel.duplicatePrompt = nil
+                Task { await viewModel.commit(plan: prompt.plan, decision: .openExisting(prompt.existing.id)) }
+            }
+            Button("Import as Duplicate") {
+                viewModel.duplicatePrompt = nil
+                Task { await viewModel.commit(plan: prompt.plan, decision: .importAsNew) }
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.duplicatePrompt = nil
+            }
+        } message: { prompt in
+            Text("\"\(prompt.existing.title)\" is already imported. What do you want to do?")
+        }
     }
 
     @ToolbarContentBuilder
@@ -224,6 +243,13 @@ public struct LibraryRootView<LicenseContent: View>: View {
         Binding(
             get: { viewModel.errorAlertMessage != nil },
             set: { isPresented in if !isPresented { viewModel.errorAlertMessage = nil } }
+        )
+    }
+
+    private var duplicateAlertBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.duplicatePrompt != nil },
+            set: { isPresented in if !isPresented { viewModel.duplicatePrompt = nil } }
         )
     }
 }

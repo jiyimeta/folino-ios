@@ -114,3 +114,33 @@ extension LibraryViewModelTests {
         #expect(vm.pendingScoreToOpen == nil)
     }
 }
+
+extension LibraryViewModelTests {
+    @Test func commitOpenExistingReturnsExistingItem() async {
+        let (vm, _, importer, _) = Self.makeVM()
+        let existing = Self.makeItem(title: "Existing")
+        let plan = Self.makePlan(duplicates: [existing])
+        let differentItem = Self.makeItem(title: "DifferentItem")
+        importer.commitFactory = { _, decision in
+            if case .openExisting = decision { return existing }
+            return differentItem
+        }
+
+        await vm.commit(plan: plan, decision: .openExisting(existing.id))
+        #expect(vm.pendingScoreToOpen?.id == existing.id)
+    }
+
+    @Test func commitImportAsNewProducesNewItem() async {
+        let (vm, _, importer, _) = Self.makeVM()
+        let existing = Self.makeItem(title: "Existing")
+        let plan = Self.makePlan(duplicates: [existing])
+        let new = Self.makeItem(title: "New")
+        importer.commitFactory = { _, decision in
+            if case .importAsNew = decision { return new }
+            return existing
+        }
+
+        await vm.commit(plan: plan, decision: .importAsNew)
+        #expect(vm.pendingScoreToOpen?.id == new.id)
+    }
+}
