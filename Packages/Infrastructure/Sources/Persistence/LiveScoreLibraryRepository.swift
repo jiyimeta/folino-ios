@@ -1,0 +1,156 @@
+import Domain
+import Foundation
+import GRDB
+import Observation
+
+/// Live, GRDB-backed implementation of `ScoreLibraryRepository`. Holds the
+/// library snapshot in `@Observable` properties refreshed by a single
+/// `ValueObservation` task started on the first `refresh()`.
+@MainActor
+@Observable
+public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
+    public private(set) var scoreItems: [ScoreItem] = []
+    public private(set) var tags: [Domain.Tag] = []
+    public private(set) var playlists: [Playlist] = []
+
+    @ObservationIgnored
+    private let database: AppDatabase
+    @ObservationIgnored
+    private let scoresDirectory: URL
+    @ObservationIgnored
+    private var observationTask: Task<Void, Never>?
+
+    public init(database: AppDatabase, scoresDirectory: URL) {
+        self.database = database
+        self.scoresDirectory = scoresDirectory
+    }
+
+    deinit {
+        observationTask?.cancel()
+    }
+
+    public func refresh() async throws {
+        guard observationTask == nil else { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            startObservation(firstSnapshotContinuation: cont)
+        }
+    }
+
+    // MARK: - Observation
+
+    /// Starts the observation task, capturing `firstSnapshotContinuation` so it
+    /// is available the moment the first snapshot arrives — no race window.
+    private func startObservation(firstSnapshotContinuation cont: CheckedContinuation<Void, Never>) {
+        let observation = ValueObservation.tracking { db -> Snapshot in
+            let items = try ScoreItemRecord.fetchAll(db)
+            let tagsRows = try TagRecord.fetchAll(db)
+            let playlistsRows = try PlaylistRecord.fetchAll(db)
+            let itemTagRows = try ScoreItemTagRecord.fetchAll(db)
+            let playlistItemRows = try PlaylistItemRecord
+                .order(Column("playlist_id"), Column("position"))
+                .fetchAll(db)
+            return Snapshot(
+                items: items, tags: tagsRows, playlists: playlistsRows,
+                itemTags: itemTagRows, playlistItems: playlistItemRows
+            )
+        }
+
+        let pool = database.pool
+        // Task.detached so this is NOT @MainActor-isolated — GRDB delivers
+        // values on the cooperative thread pool (.task scheduler), and a
+        // non-isolated task can freely hop on and off the main actor without
+        // being gated on the MainActor queue that refresh() is awaiting on.
+        observationTask = Task.detached { [weak self] in
+            var resumedOnce = false
+            do {
+                for try await snap in observation.values(in: pool) {
+                    let mapped = Self.materialize(snap)
+                    await MainActor.run {
+                        guard let self else { return }
+                        self.scoreItems = mapped.items
+                        self.tags = mapped.tags
+                        self.playlists = mapped.playlists
+                    }
+                    if !resumedOnce {
+                        resumedOnce = true
+                        cont.resume()
+                    }
+                }
+            } catch {
+                // Observation cancelled or DB closed; drop silently.
+                if !resumedOnce {
+                    resumedOnce = true
+                    cont.resume()
+                }
+            }
+        }
+    }
+
+    // MARK: - Snapshot translation
+
+    private struct Snapshot: Sendable {
+        var items: [ScoreItemRecord]
+        var tags: [TagRecord]
+        var playlists: [PlaylistRecord]
+        var itemTags: [ScoreItemTagRecord]
+        var playlistItems: [PlaylistItemRecord]
+    }
+
+    private struct Materialized: Sendable {
+        var items: [ScoreItem]
+        var tags: [Domain.Tag]
+        var playlists: [Playlist]
+    }
+
+    private nonisolated static func materialize(_ snap: Snapshot) -> Materialized {
+        var tagIDsByItem: [String: Set<TagID>] = [:]
+        for row in snap.itemTags {
+            guard let uuid = UUID(uuidString: row.tagID) else { continue }
+            tagIDsByItem[row.scoreItemID, default: []].insert(TagID(rawValue: uuid))
+        }
+        let items: [ScoreItem] = snap.items.compactMap { rec in
+            try? rec.toDomain(tagIDs: tagIDsByItem[rec.id] ?? [])
+        }
+        let tags: [Domain.Tag] = snap.tags.compactMap { try? $0.toDomain() }
+
+        var orderedByPlaylist: [String: [ScoreItemID]] = [:]
+        for row in snap.playlistItems {
+            guard let uuid = UUID(uuidString: row.scoreItemID) else { continue }
+            orderedByPlaylist[row.playlistID, default: []].append(ScoreItemID(rawValue: uuid))
+        }
+        let playlists: [Playlist] = snap.playlists.compactMap { rec in
+            try? rec.toDomain(orderedScoreItemIDs: orderedByPlaylist[rec.id] ?? [])
+        }
+        return Materialized(items: items, tags: tags, playlists: playlists)
+    }
+
+    // MARK: - Stubs (filled in by Tasks 11–13)
+
+    public func saveScoreItem(_ item: ScoreItem) throws {
+        throw DomainError.persistenceFailed(reason: "saveScoreItem not yet implemented")
+    }
+
+    public func deleteScoreItem(id: ScoreItemID) throws {
+        throw DomainError.persistenceFailed(reason: "deleteScoreItem not yet implemented")
+    }
+
+    public func saveTag(_ tag: Domain.Tag) throws {
+        throw DomainError.persistenceFailed(reason: "saveTag not yet implemented")
+    }
+
+    public func deleteTag(id: TagID) throws {
+        throw DomainError.persistenceFailed(reason: "deleteTag not yet implemented")
+    }
+
+    public func savePlaylist(_ playlist: Playlist) throws {
+        throw DomainError.persistenceFailed(reason: "savePlaylist not yet implemented")
+    }
+
+    public func deletePlaylist(id: PlaylistID) throws {
+        throw DomainError.persistenceFailed(reason: "deletePlaylist not yet implemented")
+    }
+
+    public func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] {
+        throw DomainError.persistenceFailed(reason: "scoreItems(matchingContentHash:) not yet implemented")
+    }
+}
