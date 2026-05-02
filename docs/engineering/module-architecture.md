@@ -22,7 +22,14 @@ App ──▶ Features ──▶ Domain ◀── swift-sheet-music
 
 - Feature → Feature (lift shared code into Domain, or compose at App).
 - Feature → Infrastructure (always go through a Domain protocol).
-- Feature → `swift-sheet-music` directly (go through Domain re-exports).
+- Feature → `swift-sheet-music` model / I/O modules directly (go through Domain re-exports for `SheetMusicCore`; route format I/O through `ScoreFileGateway`).
+
+  *Carve-out:* Feature packages **may** depend directly on `SheetMusicUI`
+  (and, when wired up later, `SheetMusicAudio`). These are view- and runtime-
+  layer libraries whose entire purpose is to be composed inside an iOS shell.
+  Wrapping them behind a Domain protocol would add a layer with no testable
+  benefit. The Reader package consumes `ScoreView`, `PagedScoreView`, and
+  `PlaybackCursorView` from `SheetMusicUI` directly.
 - Domain → Infrastructure / Features / App.
 - Utility → anything else in this repo.
 

@@ -1,0 +1,30 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "Settings": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Settings" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "設定" } }
+      }
+    },
+    "About": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "About" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "情報" } }
+      }
+    },
+    "Licenses": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Licenses" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ライセンス" } }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Done" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "完了" } }
+      }
+    }
+  }
+}
