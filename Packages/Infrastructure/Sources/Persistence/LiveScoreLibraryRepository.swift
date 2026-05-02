@@ -126,12 +126,44 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
 
     // MARK: - Stubs (filled in by Tasks 11–13)
 
-    public func saveScoreItem(_ item: ScoreItem) throws {
-        throw DomainError.persistenceFailed(reason: "saveScoreItem not yet implemented")
+    public func saveScoreItem(_ item: ScoreItem) async throws {
+        let pool = database.pool
+        do {
+            try await pool.write { db in
+                try ScoreItemRecord(domain: item).save(db)
+                // Resync tag relations: drop existing, re-insert.
+                try ScoreItemTagRecord
+                    .filter(Column("score_item_id") == item.id.rawValue.uuidString)
+                    .deleteAll(db)
+                for tagID in item.tagIDs {
+                    try ScoreItemTagRecord(
+                        scoreItemID: item.id.rawValue.uuidString,
+                        tagID: tagID.rawValue.uuidString
+                    ).insert(db)
+                }
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
-    public func deleteScoreItem(id: ScoreItemID) throws {
-        throw DomainError.persistenceFailed(reason: "deleteScoreItem not yet implemented")
+    public func deleteScoreItem(id: ScoreItemID) async throws {
+        let pool = database.pool
+        do {
+            // Capture filename for disk cleanup BEFORE the row goes away.
+            let filename: String? = try await pool.read { db in
+                try ScoreItemRecord.fetchOne(db, key: id.rawValue.uuidString)?.localFileName
+            }
+            try await pool.write { db in
+                _ = try ScoreItemRecord.deleteOne(db, key: id.rawValue.uuidString)
+            }
+            if let filename {
+                let url = scoresDirectory.appending(path: filename)
+                try? FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
     public func saveTag(_ tag: Domain.Tag) throws {
