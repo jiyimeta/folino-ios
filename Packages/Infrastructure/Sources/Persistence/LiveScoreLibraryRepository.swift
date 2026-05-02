@@ -186,12 +186,35 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         }
     }
 
-    public func savePlaylist(_ playlist: Playlist) throws {
-        throw DomainError.persistenceFailed(reason: "savePlaylist not yet implemented")
+    public func savePlaylist(_ playlist: Playlist) async throws {
+        do {
+            try await database.pool.write { db in
+                try PlaylistRecord(domain: playlist).save(db)
+                // Resync the items: drop and reinsert with explicit positions.
+                try PlaylistItemRecord
+                    .filter(Column("playlist_id") == playlist.id.rawValue.uuidString)
+                    .deleteAll(db)
+                for (position, scoreItemID) in playlist.orderedScoreItemIDs.enumerated() {
+                    try PlaylistItemRecord(
+                        playlistID: playlist.id.rawValue.uuidString,
+                        scoreItemID: scoreItemID.rawValue.uuidString,
+                        position: position
+                    ).insert(db)
+                }
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
-    public func deletePlaylist(id: PlaylistID) throws {
-        throw DomainError.persistenceFailed(reason: "deletePlaylist not yet implemented")
+    public func deletePlaylist(id: PlaylistID) async throws {
+        do {
+            try await database.pool.write { db in
+                _ = try PlaylistRecord.deleteOne(db, key: id.rawValue.uuidString)
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
     public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {

@@ -131,6 +131,51 @@ import Testing
         #expect(dups.count == 2)
     }
 
+    @Test func playlistOrderingRoundTripsThroughObservation() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        func make() -> ScoreItem {
+            ScoreItem(
+                title: "x", composer: nil, instrumentationSummary: nil,
+                localFileName: "\(UUID().uuidString).mid", contentHash: "h", sizeBytes: 0,
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            )
+        }
+        let a = make(); let b = make(); let c = make()
+        try await repo.saveScoreItem(a)
+        try await repo.saveScoreItem(b)
+        try await repo.saveScoreItem(c)
+        try await waitFor { repo.scoreItems.count == 3 }
+
+        let pl = Playlist(
+            name: "Practice",
+            orderedScoreItemIDs: [c.id, a.id, b.id],
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        try await repo.savePlaylist(pl)
+        try await waitFor {
+            repo.playlists.first?.orderedScoreItemIDs == [c.id, a.id, b.id]
+        }
+        #expect(repo.playlists.count == 1)
+    }
+
+    @Test func deletePlaylistRemovesIt() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        let pl = Playlist(name: "x", orderedScoreItemIDs: [], createdAt: Date())
+        try await repo.savePlaylist(pl)
+        try await waitFor { repo.playlists.contains { $0.id == pl.id } }
+        try await repo.deletePlaylist(id: pl.id)
+        try await waitFor { !repo.playlists.contains { $0.id == pl.id } }
+    }
+
     /// Polls a predicate up to ~2s, yielding to the runtime between checks so
     /// the ValueObservation task can run.
     @MainActor
