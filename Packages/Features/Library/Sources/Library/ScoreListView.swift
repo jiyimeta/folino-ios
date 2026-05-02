@@ -21,13 +21,7 @@ struct ScoreListView: View {
 
     @ToolbarContentBuilder
     private var sortToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: {
-            #if os(iOS)
-                ToolbarItemPlacement.topBarTrailing
-            #else
-                ToolbarItemPlacement.automatic
-            #endif
-        }()) {
+        ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 if case .playlist = viewModel.source {
                     Button {
