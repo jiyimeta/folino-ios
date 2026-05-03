@@ -19,7 +19,7 @@ public struct ReaderView: View {
     ) {
         // Seed the device-class default at construction time. The view
         // model only uses this if no persisted record exists.
-        let initialDefault: CGFloat = 14 // overridden via .onAppear below
+        let initialDefault: CGFloat = 14 // TBD: device-class override (follow-up)
         _viewModel = State(
             wrappedValue: ReaderViewModel(
                 scoreItem: scoreItem,
@@ -78,7 +78,7 @@ public struct ReaderView: View {
                 viewModel: viewModel,
                 isPageMode: layoutMode.wrappedValue == .page,
                 onPrevPage: { pageIndex = max(0, pageIndex - 1) },
-                onNextPage: { pageIndex = min(totalPages - 1, pageIndex + 1) }
+                onNextPage: { pageIndex = max(0, min(totalPages - 1, pageIndex + 1)) }
             ) {
                 switch layoutMode.wrappedValue {
                 case .vertical:
