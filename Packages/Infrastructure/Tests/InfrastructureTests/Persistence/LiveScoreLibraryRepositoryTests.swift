@@ -175,4 +175,68 @@ import Testing
         try await repo.deletePlaylist(id: pl.id)
         try await waitFor { !repo.playlists.contains { $0.id == pl.id } }
     }
+
+    // MARK: - Reader preferences
+
+    @Test func loadReaderPreferencesReturnsNilWhenAbsent() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        let result = try await repo.loadReaderPreferences(for: ScoreItemID())
+        #expect(result == nil)
+    }
+
+    @Test func saveThenLoadRoundTripsReaderPreferences() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        let item = ScoreItem(
+            title: "Prelude", composer: "Bach", instrumentationSummary: "Piano",
+            localFileName: "x.mscz", contentHash: "h1", sizeBytes: 100,
+            lengthBeats: 16, defaultTempoBpm: 80, primaryKey: "C",
+            addedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+        )
+        try await repo.refresh()
+        try await repo.saveScoreItem(item)
+
+        let prefs = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 18, hiddenStaffIDs: [1, 4]
+        )
+        try await repo.saveReaderPreferences(prefs)
+
+        let loaded = try await repo.loadReaderPreferences(for: item.id)
+        #expect(loaded?.staffSize == 18)
+        #expect(loaded?.hiddenStaffIDs == [1, 4])
+        #expect(loaded?.scoreItemID == item.id)
+    }
+
+    @Test func saveReaderPreferencesUpsertsExisting() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        let item = ScoreItem(
+            title: "Prelude", composer: "Bach", instrumentationSummary: "Piano",
+            localFileName: "x.mscz", contentHash: "h1", sizeBytes: 100,
+            lengthBeats: 16, defaultTempoBpm: 80, primaryKey: "C",
+            addedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+        )
+        try await repo.refresh()
+        try await repo.saveScoreItem(item)
+
+        let first = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: []
+        )
+        try await repo.saveReaderPreferences(first)
+
+        var second = first
+        second.staffSize = 20
+        second.hiddenStaffIDs = [2]
+        try await repo.saveReaderPreferences(second)
+
+        let loaded = try await repo.loadReaderPreferences(for: item.id)
+        #expect(loaded?.staffSize == 20)
+        #expect(loaded?.hiddenStaffIDs == [2])
+    }
 }

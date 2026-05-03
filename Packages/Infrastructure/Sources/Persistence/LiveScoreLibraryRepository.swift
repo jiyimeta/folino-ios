@@ -219,14 +219,30 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         }
     }
 
-    // MARK: - Reader preferences (TEMPORARY STUBS — Task 8 implements for real)
+    // MARK: - Reader preferences
 
-    public func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
-        throw DomainError.persistenceFailed(reason: "loadReaderPreferences not implemented (Task 8)")
+    public func loadReaderPreferences(for scoreItemID: ScoreItemID) async throws -> ReaderPreferences? {
+        do {
+            let key = scoreItemID.rawValue.uuidString
+            let record: ReaderPreferencesRecord? = try await database.pool.read { db in
+                try ReaderPreferencesRecord
+                    .filter(Column("score_item_id") == key)
+                    .fetchOne(db)
+            }
+            return try record?.toDomain()
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
-    public func saveReaderPreferences(_ preferences: ReaderPreferences) throws {
-        throw DomainError.persistenceFailed(reason: "saveReaderPreferences not implemented (Task 8)")
+    public func saveReaderPreferences(_ preferences: ReaderPreferences) async throws {
+        do {
+            try await database.pool.write { db in
+                try ReaderPreferencesRecord(domain: preferences).save(db)
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
     }
 
     public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {
