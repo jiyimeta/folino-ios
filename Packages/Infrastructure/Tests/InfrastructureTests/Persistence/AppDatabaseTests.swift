@@ -36,6 +36,7 @@ import Testing
         let db = try AppDatabase(databaseURL: tmp.url.appending(path: "f.sqlite"))
         try db.pool.read { db in
             try #expect(db.tableExists("score_items"))
+            try #expect(db.tableExists("reader_preferences"))
         }
     }
 
