@@ -12,9 +12,7 @@ struct StaffVisibilityInspector: View {
             StaffVisibilitySection(
                 score: score,
                 hiddenStaffIDs: viewModel.preferences.hiddenStaffIDs,
-                onToggle: { await viewModel.toggleStaff(id: $0) },
-                onShowAll: { await viewModel.showAllStaves() },
-                onHideAll: { await viewModel.hideAllStaves(allStaffIDs: $0) }
+                onToggle: { await viewModel.toggleStaff(id: $0) }
             )
         }
         .navigationTitle("Reader")

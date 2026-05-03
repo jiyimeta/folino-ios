@@ -188,26 +188,6 @@ struct ReaderViewModelTests {
         #expect(vm.preferences.hiddenStaffIDs.isEmpty)
     }
 
-    @Test func showAllAndHideAllAreBulkOperations() async {
-        let item = Self.makeItem()
-        let repo = FakeScoreLibraryRepository()
-        repo.scoreItems = [item]
-        repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: [0, 2]
-        )
-        let vm = ReaderViewModel(
-            scoreItem: item, repository: repo,
-            gateway: FakeScoreFileGateway(),
-            scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
-        )
-        await vm.load()
-        await vm.showAllStaves()
-        #expect(vm.preferences.hiddenStaffIDs.isEmpty)
-        await vm.hideAllStaves(allStaffIDs: [0, 1, 2])
-        #expect(vm.preferences.hiddenStaffIDs == [0, 1, 2])
-    }
-
     @Test func resetZoomReturnsToUnitAndZeroPan() {
         let vm = makeVMNoLoad()
         vm.viewportZoom = 2.5

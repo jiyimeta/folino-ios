@@ -8,8 +8,6 @@ struct StaffVisibilitySection: View {
     let score: Score
     let hiddenStaffIDs: Set<Int>
     let onToggle: (Int) async -> Void
-    let onShowAll: () async -> Void
-    let onHideAll: ([Int]) async -> Void
 
     var body: some View {
         Section("Staves") {
@@ -19,13 +17,6 @@ struct StaffVisibilitySection: View {
                     set: { _ in Task { await onToggle(row.id) } }
                 )) {
                     Text(row.label)
-                }
-            }
-            HStack {
-                Button("Show All") { Task { await onShowAll() } }
-                Spacer()
-                Button("Hide All") {
-                    Task { await onHideAll(staffRows.map(\.id)) }
                 }
             }
         }

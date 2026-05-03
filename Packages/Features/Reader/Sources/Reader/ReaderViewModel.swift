@@ -91,14 +91,6 @@ public final class ReaderViewModel {
         }
     }
 
-    public func showAllStaves() async {
-        await mutatePreferences { $0.hiddenStaffIDs = [] }
-    }
-
-    public func hideAllStaves(allStaffIDs: [Int]) async {
-        await mutatePreferences { $0.hiddenStaffIDs = Set(allStaffIDs) }
-    }
-
     public func resetZoom() {
         viewportZoom = 1.0
         viewportPan = .zero
