@@ -25,8 +25,6 @@ let package = Package(
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
                 .product(name: "SheetMusicUI", package: "swift-sheet-music"),
-                // Spike-only: MSCXParser for `_Spike_StaffFilter.swift`. Removed in Task 10.
-                .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
             ],
             resources: [.process("Resources")],
             plugins: swiftLintPlugins
