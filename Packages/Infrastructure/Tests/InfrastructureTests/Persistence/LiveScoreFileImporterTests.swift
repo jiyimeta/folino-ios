@@ -22,6 +22,10 @@ private final class FailingRepository: ScoreLibraryRepository {
     func savePlaylist(_ playlist: Playlist) throws {}
     func deletePlaylist(id: PlaylistID) throws {}
     func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] { [] }
+    // Reader preferences: no-op stubs — this fake exists to fail score-item
+    // saves; reader-pref methods aren't exercised by these tests.
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? { nil }
+    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
 }
 
 @MainActor

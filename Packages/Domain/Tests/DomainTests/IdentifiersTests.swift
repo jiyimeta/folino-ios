@@ -45,3 +45,18 @@ import Testing
         #expect(set.count == 2)
     }
 }
+
+@Suite struct ReaderPreferencesIDTests {
+    @Test func defaultRawValueIsAFreshUUID() {
+        let a = ReaderPreferencesID()
+        let b = ReaderPreferencesID()
+        #expect(a != b)
+    }
+
+    @Test func roundTripsThroughCodable() throws {
+        let id = ReaderPreferencesID()
+        let data = try JSONEncoder().encode(id)
+        let decoded = try JSONDecoder().decode(ReaderPreferencesID.self, from: data)
+        #expect(decoded == id)
+    }
+}

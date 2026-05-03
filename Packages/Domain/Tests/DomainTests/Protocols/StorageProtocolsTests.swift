@@ -52,6 +52,9 @@ private final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] {
         scoreItems.filter { $0.contentHash == contentHash }
     }
+
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? { nil }
+    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
 }
 
 private actor FakeAnnotationStore: AnnotationStore {

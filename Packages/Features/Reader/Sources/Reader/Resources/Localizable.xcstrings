@@ -8,10 +8,40 @@
         "ja": { "stringUnit": { "state": "translated", "value": "この楽譜を開けませんでした" } }
       }
     },
-    "The score file is missing or unreadable.": {
+    "Done": {
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "The score file is missing or unreadable." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "楽譜ファイルが見つからないか読み込めません。" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Done" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "完了" } }
+      }
+    },
+    "Folino can't open this file type.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Folino can't open this file type." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このファイル形式は対応していません。" } }
+      }
+    },
+    "Hide All": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Hide All" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "すべて非表示" } }
+      }
+    },
+    "Layout": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Layout" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "レイアウト" } }
+      }
+    },
+    "Reader": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Reader" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "リーダー" } }
+      }
+    },
+    "Reset zoom": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Reset zoom" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ズームをリセット" } }
       }
     },
     "Retry": {
@@ -20,10 +50,28 @@
         "ja": { "stringUnit": { "state": "translated", "value": "再試行" } }
       }
     },
-    "Folino can't open this file type.": {
+    "Show All": {
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Folino can't open this file type." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "このファイル形式は対応していません。" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Show All" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "すべて表示" } }
+      }
+    },
+    "Show staves panel": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Show staves panel" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "譜表パネルを表示" } }
+      }
+    },
+    "Staves": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Staves" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "譜表" } }
+      }
+    },
+    "The score file is missing or unreadable.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The score file is missing or unreadable." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "楽譜ファイルが見つからないか読み込めません。" } }
       }
     },
     "This file looks corrupted or isn't a valid score.": {

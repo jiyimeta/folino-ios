@@ -28,4 +28,16 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     func savePlaylist(_ playlist: Playlist) throws {}
     func deletePlaylist(id: PlaylistID) throws {}
     func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] { [] }
+
+    var storedReaderPreferences: [ScoreItemID: ReaderPreferences] = [:]
+    var savedReaderPreferences: [ReaderPreferences] = []
+
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
+        storedReaderPreferences[scoreItemID]
+    }
+
+    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {
+        savedReaderPreferences.append(preferences)
+        storedReaderPreferences[preferences.scoreItemID] = preferences
+    }
 }

@@ -219,6 +219,32 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         }
     }
 
+    // MARK: - Reader preferences
+
+    public func loadReaderPreferences(for scoreItemID: ScoreItemID) async throws -> ReaderPreferences? {
+        do {
+            let key = scoreItemID.rawValue.uuidString
+            let record: ReaderPreferencesRecord? = try await database.pool.read { db in
+                try ReaderPreferencesRecord
+                    .filter(Column("score_item_id") == key)
+                    .fetchOne(db)
+            }
+            return try record?.toDomain()
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
+    }
+
+    public func saveReaderPreferences(_ preferences: ReaderPreferences) async throws {
+        do {
+            try await database.pool.write { db in
+                try ReaderPreferencesRecord(domain: preferences).save(db)
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
+    }
+
     public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {
         do {
             return try await database.pool.read { db in

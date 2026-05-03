@@ -31,4 +31,17 @@ public protocol ScoreLibraryRepository: AnyObject, Observable {
     /// Implementations may filter the in-memory observed array or issue a focused
     /// DB query — both are acceptable.
     func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem]
+
+    // MARK: - Reader preferences
+
+    /// Returns the persisted Reader display settings for a score, or `nil`
+    /// when the score has never been opened. Callers fall back to
+    /// device-class defaults on `nil` and persist the chosen defaults via
+    /// `saveReaderPreferences(_:)`.
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) async throws -> ReaderPreferences?
+
+    /// Persist (insert or update) the Reader display settings for a score.
+    /// Errors are mapped to `DomainError.persistenceFailed` by the live
+    /// implementation; callers may surface or swallow them.
+    func saveReaderPreferences(_ preferences: ReaderPreferences) async throws
 }

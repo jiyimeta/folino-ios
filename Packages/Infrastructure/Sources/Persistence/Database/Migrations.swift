@@ -1,6 +1,17 @@
 import GRDB
 
 enum AppMigrations {
+    /// Aggregate migrator that runs every registered version in order.
+    /// Use this from production code (`AppDatabase`) and from tests that
+    /// want a fully-migrated DB. The per-version migrators (`v1`, `v2`)
+    /// remain available for migration-step-specific tests.
+    static let all: DatabaseMigrator = {
+        var m = DatabaseMigrator()
+        m.registerMigration("v1", migrate: migrateV1)
+        m.registerMigration("v2", migrate: migrateV2)
+        return m
+    }()
+
     /// The v1 migrator. Idempotent — `migrate` can be called repeatedly.
     static let v1: DatabaseMigrator = {
         var m = DatabaseMigrator()
@@ -8,7 +19,7 @@ enum AppMigrations {
         return m
     }()
 
-    // MARK: - Private helpers
+    // MARK: - v1
 
     private static func migrateV1(_ db: Database) throws {
         try createScoreItemsTable(db)
@@ -83,5 +94,18 @@ enum AppMigrations {
         """)
         let posIdx = "CREATE INDEX idx_playlist_items_playlist_id_position ON playlist_items(playlist_id, position)"
         try db.execute(sql: posIdx)
+    }
+
+    // MARK: - v2
+
+    private static func migrateV2(_ db: Database) throws {
+        try db.execute(sql: """
+        CREATE TABLE reader_preferences (
+            id                TEXT NOT NULL,
+            score_item_id     TEXT NOT NULL PRIMARY KEY REFERENCES score_items(id) ON DELETE CASCADE,
+            staff_size        REAL NOT NULL,
+            hidden_staff_ids  TEXT NOT NULL
+        )
+        """)
     }
 }
