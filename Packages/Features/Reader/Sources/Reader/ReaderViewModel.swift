@@ -15,6 +15,11 @@ public final class ReaderViewModel {
     public private(set) var loadState: LoadState = .loading
     public private(set) var scoreItem: ScoreItem
     public private(set) var preferences: ReaderPreferences
+    public var viewportZoom: CGFloat = 1.0
+    public var viewportPan: CGSize = .zero
+    public var lastNonUnitZoom: CGFloat = 1.0
+    public var isChromeVisible: Bool = true
+    public var isInspectorPresented: Bool = false
 
     @ObservationIgnored
     private let repository: any ScoreLibraryRepository
@@ -92,6 +97,31 @@ public final class ReaderViewModel {
 
     public func hideAllStaves(allStaffIDs: [Int]) async {
         await mutatePreferences { $0.hiddenStaffIDs = Set(allStaffIDs) }
+    }
+
+    public func resetZoom() {
+        viewportZoom = 1.0
+        viewportPan = .zero
+    }
+
+    /// Records the current zoom as the value to restore on the next
+    /// `toggleZoom`. Called from the gesture layer at the end of a pinch.
+    public func captureCurrentZoomAsLast() {
+        if viewportZoom > 1.0 {
+            lastNonUnitZoom = viewportZoom
+        }
+    }
+
+    public func toggleZoom(targetIfZoomedOut: CGFloat) {
+        if viewportZoom > 1.0 {
+            resetZoom()
+        } else {
+            viewportZoom = lastNonUnitZoom > 1.0 ? lastNonUnitZoom : targetIfZoomedOut
+        }
+    }
+
+    public func toggleChrome() {
+        isChromeVisible.toggle()
     }
 
     // MARK: - Private

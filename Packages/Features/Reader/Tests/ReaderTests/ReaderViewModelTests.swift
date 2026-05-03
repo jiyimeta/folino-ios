@@ -207,4 +207,56 @@ struct ReaderViewModelTests {
         await vm.hideAllStaves(allStaffIDs: [0, 1, 2])
         #expect(vm.preferences.hiddenStaffIDs == [0, 1, 2])
     }
+
+    @Test func resetZoomReturnsToUnitAndZeroPan() {
+        let vm = makeVMNoLoad()
+        vm.viewportZoom = 2.5
+        vm.viewportPan = .init(width: 100, height: -50)
+        vm.resetZoom()
+        #expect(vm.viewportZoom == 1.0)
+        #expect(vm.viewportPan == .zero)
+    }
+
+    @Test func toggleZoomGoesFromUnitToTargetThenBack() {
+        let vm = makeVMNoLoad()
+        #expect(vm.viewportZoom == 1.0)
+        vm.toggleZoom(targetIfZoomedOut: 2.0)
+        #expect(vm.viewportZoom == 2.0)
+        vm.toggleZoom(targetIfZoomedOut: 2.0)
+        #expect(vm.viewportZoom == 1.0)
+    }
+
+    @Test func toggleZoomRestoresLastNonUnitZoom() {
+        let vm = makeVMNoLoad()
+        vm.viewportZoom = 3.5
+        vm.captureCurrentZoomAsLast()
+        vm.resetZoom()
+        vm.toggleZoom(targetIfZoomedOut: 2.0)
+        #expect(vm.viewportZoom == 3.5) // last remembered, not the default arg
+    }
+
+    @Test func chromeAndInspectorAreToggleable() {
+        let vm = makeVMNoLoad()
+        #expect(vm.isChromeVisible)
+        vm.toggleChrome()
+        #expect(!vm.isChromeVisible)
+        vm.toggleChrome()
+        #expect(vm.isChromeVisible)
+
+        #expect(!vm.isInspectorPresented)
+        vm.isInspectorPresented = true
+        #expect(vm.isInspectorPresented)
+    }
+
+    private func makeVMNoLoad() -> ReaderViewModel {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        return ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+    }
 }
