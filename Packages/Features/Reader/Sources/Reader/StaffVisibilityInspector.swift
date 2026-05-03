@@ -18,13 +18,6 @@ struct StaffVisibilityInspector: View {
             )
         }
         .navigationTitle("Reader")
-        #if os(iOS)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { viewModel.isInspectorPresented = false }
-                }
-            }
-        #endif
     }
 }
 
