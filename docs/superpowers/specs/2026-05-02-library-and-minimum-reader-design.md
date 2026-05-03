@@ -347,6 +347,7 @@ Tracked as v1 follow-ups (still on the v1 roadmap):
 - **Multi-file import** — `allowsMultipleSelection: true` plus a progress UI for batch operations.
 - **Search kana-folding** — ひらがな ⇄ カタカナ normalization in title/composer search.
 - **Tag color UI** — picker on tag create/rename, color chip on rows.
+- **MIDI parsing** — `swift-sheet-music` has no SMF → `Score` reader yet, so Folino registers `.mid` as a Document Type but currently surfaces "This file looks corrupted" when one is opened. Wire `LiveScoreFileGateway.loadScore`'s `.midi` case once upstream lands a reader.
 
 Tracked as post-v1:
 
