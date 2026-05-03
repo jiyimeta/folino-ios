@@ -373,3 +373,27 @@ Iterate via `mcp__xcode__RenderPreview`.
 - **CloudKit sync of `ReaderPreferences`**: device-local in v1.
   Mentioned here so a future plan can address it without surprise.
 - **External-keyboard page turning**: deferred follow-up.
+
+### Spike outcome 2026-05-03 (Hidden-Staff Filtering)
+
+**PASS.** Spike file `Packages/Features/Reader/Sources/Reader/_Spike_StaffFilter.swift`
+loaded a 6-staff `.mscx` (parts `Lead / Top / 2nd / 3rd / Bass / V.P.`),
+removed `score.staves[1]` (the `Top` staff content), and rendered
+both before / after via `SheetMusicUI.ScoreView` in horizontal mode.
+The post-drop snapshot contained 5 staves stacked without
+misalignment, no crash, no ghost-staff line. Remaining staff
+contents shifted up cleanly into the new index order.
+
+The expected secondary artifact appeared: because the spike only
+mutated `score.staves` and intentionally left `Part.staffDeclarations`
+untouched (per spike scope — declarations carry no `id` so a precise
+prune isn't a 30-minute job), the part labels and per-staff default
+clefs no longer matched the content they bordered (e.g. the label
+`3rd` ended up beside what was the `Bass` staff, drawn in bass clef).
+Production filter (Task 10) must also prune the matching
+`StaffDeclaration` entry from the owning `Part` — likely by tracking
+the (partID, declarationIndex) pair that produced each
+`score.staves[i]` during decode, or by rebuilding both lists in
+lock-step.
+
+Approved: filter approach proceeds for the rest of the plan.
