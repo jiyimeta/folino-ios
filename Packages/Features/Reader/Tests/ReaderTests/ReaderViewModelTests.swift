@@ -86,4 +86,125 @@ struct ReaderViewModelTests {
             Issue.record("expected .loaded after retry, got \(vm.loadState)")
         }
     }
+
+    @Test func firstOpenPopulatesDeviceClassDefaultStaffSize() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let gateway = FakeScoreFileGateway()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: gateway,
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 11 // simulates iPhone compact
+        )
+
+        await vm.load()
+        #expect(vm.preferences.staffSize == 11)
+        #expect(vm.preferences.hiddenStaffIDs.isEmpty)
+        #expect(repo.savedReaderPreferences.count == 1)
+    }
+
+    @Test func loadUsesPersistedPreferencesWhenPresent() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 18, hiddenStaffIDs: [2]
+        )
+        let gateway = FakeScoreFileGateway()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: gateway,
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+
+        await vm.load()
+        #expect(vm.preferences.staffSize == 18)
+        #expect(vm.preferences.hiddenStaffIDs == [2])
+        // No new save because the persisted record is reused as-is.
+        #expect(repo.savedReaderPreferences.isEmpty)
+    }
+
+    @Test func incrementAndDecrementStaffSizePersist() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: []
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+        await vm.load()
+        await vm.incrementStaffSize()
+        #expect(vm.preferences.staffSize == 15)
+        await vm.decrementStaffSize()
+        await vm.decrementStaffSize()
+        #expect(vm.preferences.staffSize == 13)
+        // 1 save from each mutator.
+        #expect(repo.savedReaderPreferences.count == 3)
+    }
+
+    @Test func staffSizeIsClampedToMinAndMax() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 8, hiddenStaffIDs: []
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+        await vm.load()
+        await vm.decrementStaffSize()
+        #expect(vm.preferences.staffSize == 8) // already at min, stays at min
+        for _ in 0 ..< 25 { await vm.incrementStaffSize() }
+        #expect(vm.preferences.staffSize == 28) // capped
+    }
+
+    @Test func toggleStaffFlipsMembership() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: []
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+        await vm.load()
+        await vm.toggleStaff(id: 2)
+        #expect(vm.preferences.hiddenStaffIDs == [2])
+        await vm.toggleStaff(id: 2)
+        #expect(vm.preferences.hiddenStaffIDs.isEmpty)
+    }
+
+    @Test func showAllAndHideAllAreBulkOperations() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: [0, 2]
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+        await vm.load()
+        await vm.showAllStaves()
+        #expect(vm.preferences.hiddenStaffIDs.isEmpty)
+        await vm.hideAllStaves(allStaffIDs: [0, 1, 2])
+        #expect(vm.preferences.hiddenStaffIDs == [0, 1, 2])
+    }
 }
