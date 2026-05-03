@@ -122,9 +122,20 @@ private struct ReadyShell: View {
                 compactPath.append(item)
             }
         }
-        .task(id: bootstrap.pendingIncomingURL) {
-            guard let url = bootstrap.consumePendingIncomingURL() else { return }
-            await libraryVM.startImport(from: url)
+        .task {
+            // Cold-launch: drain a URL that .onOpenURL queued before this view appeared.
+            if let url = bootstrap.consumePendingIncomingURL() {
+                await libraryVM.startImport(from: url)
+            }
+        }
+        .onChange(of: bootstrap.pendingIncomingURL) { _, newValue in
+            // Warm re-entry: a URL arrived while the app was already running.
+            // Fire-and-forget so the import isn't tied to the view's task
+            // lifecycle — `.task(id:)` would cancel its current body when the
+            // slot is cleared, surfacing as a persistenceFailed alert.
+            guard newValue != nil,
+                  let url = bootstrap.consumePendingIncomingURL() else { return }
+            Task { await libraryVM.startImport(from: url) }
         }
     }
 
