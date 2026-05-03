@@ -51,6 +51,14 @@ public struct PlaybackPreferencesID: Hashable, Sendable, Codable {
     }
 }
 
+public struct ReaderPreferencesID: Hashable, Sendable, Codable {
+    public let rawValue: UUID
+
+    public init(rawValue: UUID = UUID()) {
+        self.rawValue = rawValue
+    }
+}
+
 /// Identity of a SoundFont 2 patch. Two patches with the same (bank, program)
 /// are interchangeable — the cache records use this as the primary key.
 public struct SoundfontPatchKey: Hashable, Sendable, Codable {
