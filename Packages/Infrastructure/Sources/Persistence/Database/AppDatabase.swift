@@ -15,7 +15,7 @@ public final class AppDatabase: Sendable {
         var config = Configuration()
         config.foreignKeysEnabled = true
         let pool = try DatabasePool(path: databaseURL.path, configuration: config)
-        try AppMigrations.v1.migrate(pool)
+        try AppMigrations.all.migrate(pool)
         self.pool = pool
     }
 }

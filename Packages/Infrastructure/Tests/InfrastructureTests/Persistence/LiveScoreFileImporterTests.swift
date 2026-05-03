@@ -22,6 +22,10 @@ private final class FailingRepository: ScoreLibraryRepository {
     func savePlaylist(_ playlist: Playlist) throws {}
     func deletePlaylist(id: PlaylistID) throws {}
     func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] { [] }
+    // TEMPORARY STUBS — Task 8 cleanup: repurpose or remove alongside the
+    // LiveScoreLibraryRepository stubs.
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? { nil }
+    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
 }
 
 @MainActor

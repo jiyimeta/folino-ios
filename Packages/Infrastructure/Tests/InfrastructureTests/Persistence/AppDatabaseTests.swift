@@ -38,4 +38,28 @@ import Testing
             try #expect(db.tableExists("score_items"))
         }
     }
+
+    @Test func migratesEmptyDatabaseThroughV2() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+
+        try queue.read { db in
+            try #expect(db.tableExists("reader_preferences"))
+
+            let cols = try db.columns(in: "reader_preferences").map(\.name)
+            #expect(cols.contains("id"))
+            #expect(cols.contains("score_item_id"))
+            #expect(cols.contains("staff_size"))
+            #expect(cols.contains("hidden_staff_ids"))
+        }
+    }
+
+    @Test func v2MigrationIsIdempotent() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+        try AppMigrations.all.migrate(queue)
+        try queue.read { db in
+            try #expect(db.tableExists("reader_preferences"))
+        }
+    }
 }
