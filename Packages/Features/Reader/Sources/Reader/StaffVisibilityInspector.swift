@@ -27,3 +27,28 @@ struct StaffVisibilityInspector: View {
         #endif
     }
 }
+
+#if DEBUG
+    #Preview {
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Violin",
+                    instrument: .previewEmpty,
+                    staffDeclarations: [.previewPlaceholder(forStaffID: 0)]
+                ),
+            ],
+            staves: [StaffContent(id: 0, measures: [])],
+            metaTags: [:]
+        )
+        let repo = PreviewFakeRepository()
+        let vm = ReaderViewModel(
+            scoreItem: PreviewFakeRepository.sampleItem,
+            repository: repo,
+            gateway: PreviewFakeGateway(),
+            scoresDirectory: URL(filePath: "/tmp")
+        )
+        return StaffVisibilityInspector(viewModel: vm, score: score)
+    }
+#endif
