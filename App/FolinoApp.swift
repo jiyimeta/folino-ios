@@ -8,6 +8,7 @@ struct FolinoApp: App {
         WindowGroup {
             AppShellView(bootstrap: bootstrap)
                 .task { bootstrap.start() }
+                .onOpenURL { bootstrap.acceptIncomingURL($0) }
         }
     }
 }

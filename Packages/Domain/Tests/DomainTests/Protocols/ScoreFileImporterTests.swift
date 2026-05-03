@@ -6,6 +6,7 @@ private final class FakeImporter: ScoreFileImporter {
     func prepareImport(sourceURL: URL) throws -> ImportPlan {
         ImportPlan(
             sourceURL: sourceURL,
+            stagedURL: URL(fileURLWithPath: "/tmp/staged.mid"),
             format: .midi,
             summary: ScoreFileSummary(
                 title: "x", composer: nil, instrumentationSummary: "Piano",
@@ -40,6 +41,7 @@ private final class FakeImporter: ScoreFileImporter {
     @Test func importPlanIsHashableAndSendable() {
         let plan = ImportPlan(
             sourceURL: URL(fileURLWithPath: "/tmp/x.mid"),
+            stagedURL: URL(fileURLWithPath: "/tmp/staged-x.mid"),
             format: .midi,
             summary: ScoreFileSummary(
                 title: nil, composer: nil, instrumentationSummary: "",

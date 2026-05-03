@@ -33,8 +33,31 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
         let summary = try await gateway.loadFileMetadata(fileURL: sourceURL)
         let duplicates = try await repository.scoreItems(matchingContentHash: hash)
 
+        // Copy the bytes into our own sandbox while the source's security
+        // scope is still open. URLs delivered via `.onOpenURL` are one-shot:
+        // releasing scope here and re-acquiring it later in `commitImport`
+        // does not grant access on a real device. Staging decouples the
+        // commit step from scope entirely.
+        //
+        // We stage inside a `.staging` subdirectory of the managed scores
+        // directory (rather than `URL.temporaryDirectory`). That keeps
+        // staging files co-located with the destination — `moveItem` is
+        // a fast intra-directory rename — and ensures abandoned staged
+        // files are cleaned up when the user uninstalls the app.
+        let stagingDir = scoresDirectory.appending(path: ".staging", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+        let stagedURL = stagingDir.appending(
+            path: "\(UUID().uuidString).\(format.canonicalExtension)"
+        )
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: stagedURL)
+        } catch {
+            throw DomainError.persistenceFailed(reason: "stage copy failed: \(error)")
+        }
+
         return ImportPlan(
             sourceURL: sourceURL,
+            stagedURL: stagedURL,
             format: format,
             summary: summary,
             contentHash: hash,
@@ -46,6 +69,9 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
     public func commitImport(_ plan: ImportPlan, decision: ImportDecision) async throws -> ScoreItem {
         switch decision {
         case let .openExisting(existingID):
+            // The existing item already lives in scoresDirectory; staged copy is unused.
+            try? FileManager.default.removeItem(at: plan.stagedURL)
+
             if let existing = plan.duplicates.first(where: { $0.id == existingID }) {
                 return existing
             }
@@ -62,14 +88,12 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
             let localFileName = "\(id.rawValue.uuidString).\(plan.format.canonicalExtension)"
             let destinationURL = scoresDirectory.appending(path: localFileName)
 
-            // Copy first, with scoped access for share-sheet URLs.
-            let scoped = plan.sourceURL.startAccessingSecurityScopedResource()
-            defer { if scoped { plan.sourceURL.stopAccessingSecurityScopedResource() } }
-
+            // Move the staged copy into the managed location. No security
+            // scope needed — staging lives in our own tmp directory.
             do {
-                try FileManager.default.copyItem(at: plan.sourceURL, to: destinationURL)
+                try FileManager.default.moveItem(at: plan.stagedURL, to: destinationURL)
             } catch {
-                throw DomainError.persistenceFailed(reason: "copy failed: \(error)")
+                throw DomainError.persistenceFailed(reason: "move failed: \(error)")
             }
 
             // Best-effort cleanup if the row save fails. We re-throw the original error.

@@ -16,6 +16,7 @@ struct AppShellView: View {
                bootstrap.isReady
             {
                 ReadyShell(
+                    bootstrap: bootstrap,
                     repository: repository,
                     importer: importer,
                     gateway: gateway,
@@ -35,6 +36,7 @@ struct AppShellView: View {
 }
 
 private struct ReadyShell: View {
+    let bootstrap: AppBootstrap
     let repository: any ScoreLibraryRepository
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
@@ -49,11 +51,13 @@ private struct ReadyShell: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     init(
+        bootstrap: AppBootstrap,
         repository: any ScoreLibraryRepository,
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
         scoresDirectory: URL
     ) {
+        self.bootstrap = bootstrap
         self.repository = repository
         self.importer = importer
         self.gateway = gateway
@@ -117,6 +121,21 @@ private struct ReadyShell: View {
             } else {
                 compactPath.append(item)
             }
+        }
+        .task {
+            // Cold-launch: drain a URL that .onOpenURL queued before this view appeared.
+            if let url = bootstrap.consumePendingIncomingURL() {
+                await libraryVM.startImport(from: url)
+            }
+        }
+        .onChange(of: bootstrap.pendingIncomingURL) { _, newValue in
+            // Warm re-entry: a URL arrived while the app was already running.
+            // Fire-and-forget so the import isn't tied to the view's task
+            // lifecycle — `.task(id:)` would cancel its current body when the
+            // slot is cleared, surfacing as a persistenceFailed alert.
+            guard newValue != nil,
+                  let url = bootstrap.consumePendingIncomingURL() else { return }
+            Task { await libraryVM.startImport(from: url) }
         }
     }
 

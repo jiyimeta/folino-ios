@@ -344,7 +344,6 @@ Translations are written by hand to start; the catalog format supports a follow-
 
 Tracked as v1 follow-ups (still on the v1 roadmap):
 
-- **Document Types / `onOpenURL`** — "Open in Folino" from Files.app, AirDrop targets. Requires `CFBundleDocumentTypes`, `UTImportedTypeDeclarations`, and an `.onOpenURL` handler that calls `commitImport(at:as: .importAsNew)` with the same duplicate flow.
 - **Multi-file import** — `allowsMultipleSelection: true` plus a progress UI for batch operations.
 - **Search kana-folding** — ひらがな ⇄ カタカナ normalization in title/composer search.
 - **Tag color UI** — picker on tag create/rename, color chip on rows.
