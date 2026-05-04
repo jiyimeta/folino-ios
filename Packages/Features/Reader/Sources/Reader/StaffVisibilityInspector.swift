@@ -11,8 +11,8 @@ struct StaffVisibilityInspector: View {
         Form {
             StaffVisibilitySection(
                 score: score,
-                hiddenStaffIDs: viewModel.preferences.hiddenStaffIDs,
-                onToggle: { await viewModel.toggleStaff(id: $0) }
+                hiddenStaves: viewModel.preferences.hiddenStaves,
+                onToggle: { await viewModel.toggleStaff(address: $0) }
             )
         }
         .navigationTitle("Reader")
@@ -27,10 +27,9 @@ struct StaffVisibilityInspector: View {
                 Part(
                     id: "P0", trackName: "Violin",
                     instrument: .previewEmpty,
-                    staffDeclarations: [.previewPlaceholder(forStaffID: 0)]
+                    staves: [Staff(staffType: "stdNormal", group: "pitched")]
                 ),
             ],
-            staves: [StaffContent(id: 0, measures: [])],
             metaTags: [:]
         )
         let repo = PreviewFakeRepository()

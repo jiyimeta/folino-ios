@@ -66,7 +66,7 @@
         }
 
         func loadScore(fileURL _: URL) throws -> (score: Score, summary: ScoreFileSummary) {
-            let score = Score(division: 480, parts: [], staves: [], metaTags: [:])
+            let score = Score(division: 480, parts: [], metaTags: [:])
             let summary = ScoreFileSummary(
                 title: "Preview", composer: nil, instrumentationSummary: "",
                 lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
@@ -84,12 +84,4 @@
         static var previewEmpty: Instrument { Instrument(id: "") }
     }
 
-    extension StaffDeclaration {
-        /// Synthetic placeholder. The `forStaffID` argument is for readability
-        /// only — `StaffDeclaration` carries no staff ID; matching to
-        /// `StaffContent` is positional inside the parent `Part`.
-        static func previewPlaceholder(forStaffID _: Int) -> StaffDeclaration {
-            StaffDeclaration(staffType: "stdNormal", group: "pitched")
-        }
-    }
 #endif

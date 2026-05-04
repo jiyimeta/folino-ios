@@ -6,15 +6,15 @@ import SwiftUI
 /// Mixer section beside it inside the same inspector container.
 struct StaffVisibilitySection: View {
     let score: Score
-    let hiddenStaffIDs: Set<Int>
-    let onToggle: (Int) async -> Void
+    let hiddenStaves: Set<StaffAddress>
+    let onToggle: (StaffAddress) async -> Void
 
     var body: some View {
         Section("Staves") {
-            ForEach(staffRows, id: \.id) { row in
+            ForEach(staffRows, id: \.address) { row in
                 Toggle(isOn: Binding(
-                    get: { !hiddenStaffIDs.contains(row.id) },
-                    set: { _ in Task { await onToggle(row.id) } }
+                    get: { !hiddenStaves.contains(row.address) },
+                    set: { _ in Task { await onToggle(row.address) } }
                 )) {
                     Text(row.label)
                 }
@@ -23,32 +23,30 @@ struct StaffVisibilitySection: View {
     }
 
     private var staffRows: [StaffRow] {
-        // Walk parts in order, advancing through their staff declarations
-        // and pairing each with the corresponding `StaffContent.id`.
         var rows: [StaffRow] = []
-        var staffCursor = 0
-        for part in score.parts {
-            for declIndex in 0 ..< part.staffDeclarations.count {
-                guard staffCursor < score.staves.count else { break }
-                let id = score.staves[staffCursor].id
-                let label = makeLabel(part: part, declIndex: declIndex)
-                rows.append(StaffRow(id: id, label: label))
-                staffCursor += 1
+        for (partIndex, part) in score.parts.enumerated() {
+            for staffIndex in part.staves.indices {
+                let address = StaffAddress(
+                    partIndex: partIndex,
+                    staffIndexInPart: staffIndex
+                )
+                let label = makeLabel(part: part, staffIndex: staffIndex)
+                rows.append(StaffRow(address: address, label: label))
             }
         }
         return rows
     }
 
-    private func makeLabel(part: Part, declIndex: Int) -> String {
+    private func makeLabel(part: Part, staffIndex: Int) -> String {
         let base = part.trackName ?? "Staff"
-        if part.staffDeclarations.count > 1 {
-            return "\(base) \(declIndex + 1)"
+        if part.staves.count > 1 {
+            return "\(base) \(staffIndex + 1)"
         }
         return base
     }
 
     private struct StaffRow {
-        let id: Int
+        let address: StaffAddress
         let label: String
     }
 }

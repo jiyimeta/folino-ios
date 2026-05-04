@@ -6,7 +6,7 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
 
     init(loadScoreResult: Result<(score: Score, summary: ScoreFileSummary), DomainError> =
         .success((
-            score: Score(division: 480, parts: [], staves: [], metaTags: [:]),
+            score: Score(division: 480, parts: [], metaTags: [:]),
             summary: ScoreFileSummary(
                 title: "Test", composer: nil, instrumentationSummary: "",
                 lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil

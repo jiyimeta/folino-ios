@@ -53,11 +53,11 @@ struct VerticalScoreContainer: View {
 
         init(score: Score, size: CGFloat, width: CGFloat) {
             // `Score` is Equatable but not Hashable. Use a cheap
-            // identity proxy: parts.count + staves.count + division.
+            // identity proxy: parts.count + total staves + division.
             // That's enough to detect "different score loaded"
             // without paying for a full hash.
             scoreSignature = score.parts.count
-                ^ (score.staves.count << 8)
+                ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)
             self.size = size
             self.width = width

@@ -200,14 +200,18 @@ import Testing
         try await repo.refresh()
         try await repo.saveScoreItem(item)
 
+        let hidden: Set<StaffAddress> = [
+            StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            StaffAddress(partIndex: 2, staffIndexInPart: 0),
+        ]
         let prefs = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 18, hiddenStaffIDs: [1, 4]
+            scoreItemID: item.id, staffSize: 18, hiddenStaves: hidden
         )
         try await repo.saveReaderPreferences(prefs)
 
         let loaded = try await repo.loadReaderPreferences(for: item.id)
         #expect(loaded?.staffSize == 18)
-        #expect(loaded?.hiddenStaffIDs == [1, 4])
+        #expect(loaded?.hiddenStaves == hidden)
         #expect(loaded?.scoreItemID == item.id)
     }
 
@@ -226,17 +230,17 @@ import Testing
         try await repo.saveScoreItem(item)
 
         let first = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: []
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
         )
         try await repo.saveReaderPreferences(first)
 
         var second = first
         second.staffSize = 20
-        second.hiddenStaffIDs = [2]
+        second.hiddenStaves = [StaffAddress(partIndex: 1, staffIndexInPart: 0)]
         try await repo.saveReaderPreferences(second)
 
         let loaded = try await repo.loadReaderPreferences(for: item.id)
         #expect(loaded?.staffSize == 20)
-        #expect(loaded?.hiddenStaffIDs == [2])
+        #expect(loaded?.hiddenStaves == [StaffAddress(partIndex: 1, staffIndexInPart: 0)])
     }
 }

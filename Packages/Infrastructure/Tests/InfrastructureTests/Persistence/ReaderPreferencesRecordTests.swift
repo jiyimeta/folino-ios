@@ -1,13 +1,19 @@
 import Domain
 import GRDB
 @testable import Persistence
+import SheetMusicCore
 import Testing
 
 @Suite struct ReaderPreferencesRecordTests {
     @Test func roundTripsThroughDomain() throws {
         let scoreID = ScoreItemID()
         let prefs = ReaderPreferences(
-            scoreItemID: scoreID, staffSize: 12, hiddenStaffIDs: [0, 2]
+            scoreItemID: scoreID,
+            staffSize: 12,
+            hiddenStaves: [
+                StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                StaffAddress(partIndex: 1, staffIndexInPart: 1),
+            ]
         )
         let record = ReaderPreferencesRecord(domain: prefs)
         let restored = try record.toDomain()
@@ -29,8 +35,9 @@ import Testing
                 arguments: [scoreID.rawValue.uuidString]
             )
         }
+        let hidden: Set<StaffAddress> = [StaffAddress(partIndex: 1, staffIndexInPart: 0)]
         let prefs = ReaderPreferences(
-            scoreItemID: scoreID, staffSize: 16, hiddenStaffIDs: [3]
+            scoreItemID: scoreID, staffSize: 16, hiddenStaves: hidden
         )
         try queue.write { try ReaderPreferencesRecord(domain: prefs).save($0) }
         let fetched = try queue.read {
@@ -41,12 +48,12 @@ import Testing
         let unwrapped = try #require(fetched)
         let restored = try unwrapped.toDomain()
         #expect(restored.staffSize == 16)
-        #expect(restored.hiddenStaffIDs == [3])
+        #expect(restored.hiddenStaves == hidden)
     }
 
     @Test func emptyHiddenSetEncodesAsEmptyJSON() throws {
         let prefs = ReaderPreferences(
-            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaffIDs: []
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: []
         )
         let record = ReaderPreferencesRecord(domain: prefs)
         #expect(record.hiddenStaffIds == "[]")

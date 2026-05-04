@@ -21,10 +21,10 @@ extension ScoreFileSummary {
         }
         let instrumentationSummary = names.joined(separator: ", ")
 
-        // Length: count measures on staff 0 and assume 4/4. A precise port
-        // would inspect each measure's TimeSig — out of scope for Plan #3,
-        // refined when the Reader plan needs it.
-        let measureCount = score.staves.first?.measures.count ?? 0
+        // Length: count measures on the first staff and assume 4/4. A precise
+        // port would inspect each measure's TimeSig — out of scope for Plan
+        // #3, refined when the Reader plan needs it.
+        let measureCount = score.allStaves.first?.staff.measures.count ?? 0
         let lengthBeats = measureCount * 4
 
         // Default tempo: not exposed by Score.metaTags reliably; v1 default

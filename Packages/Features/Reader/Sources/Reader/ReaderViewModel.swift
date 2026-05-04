@@ -2,6 +2,7 @@ import CoreGraphics
 import Domain
 import Foundation
 import Observation
+import SheetMusicCore
 
 @MainActor
 @Observable
@@ -47,7 +48,7 @@ public final class ReaderViewModel {
         preferences = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
-            hiddenStaffIDs: []
+            hiddenStaves: []
         )
     }
 
@@ -81,12 +82,12 @@ public final class ReaderViewModel {
         await mutatePreferences { $0.staffSize = next }
     }
 
-    public func toggleStaff(id: Int) async {
+    public func toggleStaff(address: StaffAddress) async {
         await mutatePreferences { prefs in
-            if prefs.hiddenStaffIDs.contains(id) {
-                prefs.hiddenStaffIDs.remove(id)
+            if prefs.hiddenStaves.contains(address) {
+                prefs.hiddenStaves.remove(address)
             } else {
-                prefs.hiddenStaffIDs.insert(id)
+                prefs.hiddenStaves.insert(address)
             }
         }
     }
@@ -130,7 +131,7 @@ public final class ReaderViewModel {
         let seeded = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
-            hiddenStaffIDs: []
+            hiddenStaves: []
         )
         preferences = seeded
         try? await repository.saveReaderPreferences(seeded)
@@ -145,7 +146,7 @@ public final class ReaderViewModel {
             id: copy.id,
             scoreItemID: copy.scoreItemID,
             staffSize: copy.staffSize,
-            hiddenStaffIDs: copy.hiddenStaffIDs
+            hiddenStaves: copy.hiddenStaves
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)

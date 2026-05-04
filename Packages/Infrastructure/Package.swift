@@ -18,7 +18,10 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
-        .package(url: "git@github.com:jiyimeta/swift-sheet-music.git", branch: "main"),
+        .package(
+            url: "git@github.com:jiyimeta/swift-sheet-music.git",
+            revision: "3d8b3894e93dc55ad205b939cfc82d52bf22831e"
+        ),
         .package(path: "../Domain"),
     ],
     targets: [

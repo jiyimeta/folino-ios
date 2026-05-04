@@ -73,7 +73,7 @@ public struct ReaderView: View {
         case .loading:
             ProgressView().controlSize(.large)
         case let .loaded(score):
-            let visible = score.filtered(hidingStaffIDs: viewModel.preferences.hiddenStaffIDs)
+            let visible = score.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
             ReaderGestureLayer(
                 viewModel: viewModel,
                 isPageMode: layoutMode.wrappedValue == .page,
@@ -122,7 +122,6 @@ public struct ReaderView: View {
         Score(
             division: 480,
             parts: [],
-            staves: [],
             metaTags: ["workTitle": "Sample"]
         )
     }

@@ -3,8 +3,9 @@ import Foundation
 import GRDB
 
 /// Row mirror for the `reader_preferences` table. `hidden_staff_ids` is
-/// stored as a JSON-encoded `[Int]` so that GRDB doesn't need a custom
-/// column type for the set.
+/// stored as a JSON-encoded `[StaffAddress]` (each address serialized as
+/// the two-element array `[partIndex, staffIndexInPart]`) so GRDB doesn't
+/// need a custom column type for the set.
 struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     static let databaseTableName = "reader_preferences"
 
@@ -24,8 +25,8 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         id = prefs.id.rawValue.uuidString
         scoreItemId = prefs.scoreItemID.rawValue.uuidString
         staffSize = Double(prefs.staffSize)
-        let sortedIDs = prefs.hiddenStaffIDs.sorted()
-        let data = try? JSONEncoder().encode(sortedIDs)
+        let sortedAddresses = prefs.hiddenStaves.sorted()
+        let data = try? JSONEncoder().encode(sortedAddresses)
         hiddenStaffIds = data.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
     }
 
@@ -38,15 +39,15 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             throw DomainError.persistenceFailed(
                 reason: "reader_preferences.score_item_id is not a valid UUID: \(scoreItemId)")
         }
-        let decoded: [Int] = (try? JSONDecoder().decode(
-            [Int].self,
+        let decoded: [StaffAddress] = (try? JSONDecoder().decode(
+            [StaffAddress].self,
             from: Data(hiddenStaffIds.utf8)
         )) ?? []
         return ReaderPreferences(
             id: ReaderPreferencesID(rawValue: idUUID),
             scoreItemID: ScoreItemID(rawValue: scoreUUID),
             staffSize: CGFloat(staffSize),
-            hiddenStaffIDs: Set(decoded)
+            hiddenStaves: Set(decoded)
         )
     }
 }

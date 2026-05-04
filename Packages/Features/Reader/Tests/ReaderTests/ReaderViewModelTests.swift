@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 @testable import Reader
+import SheetMusicCore
 import Testing
 
 @Suite @MainActor
@@ -75,7 +76,7 @@ struct ReaderViewModelTests {
         }
 
         gateway.loadScoreResult = .success((
-            score: Score(division: 480, parts: [], staves: [], metaTags: [:]),
+            score: Score(division: 480, parts: [], metaTags: [:]),
             summary: ScoreFileSummary(
                 title: "Test", composer: nil, instrumentationSummary: "",
                 lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
@@ -100,7 +101,7 @@ struct ReaderViewModelTests {
 
         await vm.load()
         #expect(vm.preferences.staffSize == 11)
-        #expect(vm.preferences.hiddenStaffIDs.isEmpty)
+        #expect(vm.preferences.hiddenStaves.isEmpty)
         #expect(repo.savedReaderPreferences.count == 1)
     }
 
@@ -108,8 +109,9 @@ struct ReaderViewModelTests {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
+        let hidden: Set<StaffAddress> = [StaffAddress(partIndex: 1, staffIndexInPart: 0)]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 18, hiddenStaffIDs: [2]
+            scoreItemID: item.id, staffSize: 18, hiddenStaves: hidden
         )
         let gateway = FakeScoreFileGateway()
         let vm = ReaderViewModel(
@@ -120,7 +122,7 @@ struct ReaderViewModelTests {
 
         await vm.load()
         #expect(vm.preferences.staffSize == 18)
-        #expect(vm.preferences.hiddenStaffIDs == [2])
+        #expect(vm.preferences.hiddenStaves == hidden)
         // No new save because the persisted record is reused as-is.
         #expect(repo.savedReaderPreferences.isEmpty)
     }
@@ -130,7 +132,7 @@ struct ReaderViewModelTests {
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: []
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -153,7 +155,7 @@ struct ReaderViewModelTests {
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 8, hiddenStaffIDs: []
+            scoreItemID: item.id, staffSize: 8, hiddenStaves: []
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -173,7 +175,7 @@ struct ReaderViewModelTests {
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaffIDs: []
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -182,10 +184,11 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14
         )
         await vm.load()
-        await vm.toggleStaff(id: 2)
-        #expect(vm.preferences.hiddenStaffIDs == [2])
-        await vm.toggleStaff(id: 2)
-        #expect(vm.preferences.hiddenStaffIDs.isEmpty)
+        let address = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        await vm.toggleStaff(address: address)
+        #expect(vm.preferences.hiddenStaves == [address])
+        await vm.toggleStaff(address: address)
+        #expect(vm.preferences.hiddenStaves.isEmpty)
     }
 
     @Test func resetZoomReturnsToUnitAndZeroPan() {
