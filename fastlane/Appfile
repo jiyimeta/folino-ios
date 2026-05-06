@@ -1,0 +1,3 @@
+app_identifier "com.KeyNumber.Folino"
+team_id "944L8NCGUH"
+itc_team_id ENV["ASC_ITC_TEAM_ID"]   # optional; only needed if your Apple ID belongs to multiple App Store Connect teams

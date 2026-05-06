@@ -1,0 +1,1 @@
+A score viewer and player for performers. Supports `.mscz`, `.mscx`, MusicXML, and MIDI, with MIDI playback, A-B repeat, a metronome, and tempo control for score reading and practice.
