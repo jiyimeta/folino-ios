@@ -112,7 +112,12 @@ private struct ReadyShell: View {
             }
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet { LicenseListView() }
+            SettingsSheet(
+                soundfontResolver: bootstrap.soundfontResolver,
+                presetCatalog: bootstrap.presetCatalog
+            ) {
+                LicenseListView()
+            }
         }
         .onChange(of: libraryVM.pendingScoreToOpen?.id) { _, newID in
             guard let newID,
