@@ -206,13 +206,11 @@ struct ReaderViewModelTests {
         #expect(vm.volume(for: address) == 1.0)
     }
 
-    @Test func resetZoomReturnsToUnitAndZeroPan() {
+    @Test func resetZoomReturnsToUnit() {
         let vm = makeVMNoLoad()
         vm.viewportZoom = 2.5
-        vm.viewportPan = .init(width: 100, height: -50)
         vm.resetZoom()
         #expect(vm.viewportZoom == 1.0)
-        #expect(vm.viewportPan == .zero)
     }
 
     @Test func toggleZoomGoesFromUnitToTargetThenBack() {

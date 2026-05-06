@@ -72,14 +72,12 @@ public struct ReaderView: View {
             ProgressView().controlSize(.large)
         case let .loaded(score):
             let visible = score.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
-            ReaderGestureLayer(viewModel: viewModel) {
-                VerticalScoreContainer(
-                    score: visible,
-                    staffSize: viewModel.preferences.staffSize,
-                    playbackCursor: viewModel.playbackCursor,
-                    viewModel: viewModel
-                )
-            }
+            VerticalScoreContainer(
+                score: visible,
+                staffSize: viewModel.preferences.staffSize,
+                playbackCursor: viewModel.playbackCursor,
+                viewModel: viewModel
+            )
         case let .failed(message):
             ContentUnavailableView {
                 Label("Could not open this score", systemImage: "exclamationmark.triangle")

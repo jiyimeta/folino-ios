@@ -24,7 +24,6 @@ public final class ReaderViewModel {
     public private(set) var isLoadingSoundfonts: Bool = false
     public private(set) var playbackCursor: ScoreCursor?
     public var viewportZoom: CGFloat = 1.0
-    public var viewportPan: CGSize = .zero
     public var lastNonUnitZoom: CGFloat = 1.0
     public var isInspectorPresented: Bool = false
 
@@ -199,7 +198,6 @@ public final class ReaderViewModel {
 
     public func resetZoom() {
         viewportZoom = 1.0
-        viewportPan = .zero
     }
 
     /// Records the current zoom as the value to restore on the next
