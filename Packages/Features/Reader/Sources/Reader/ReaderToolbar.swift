@@ -1,4 +1,3 @@
-import Domain
 import SwiftUI
 
 /// Trailing toolbar contents and the bottom reset-zoom pill for the
