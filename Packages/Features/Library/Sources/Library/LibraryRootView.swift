@@ -1,6 +1,7 @@
 import Domain
 import SwiftUI
 import UniformTypeIdentifiers
+import UtilityUI
 
 @MainActor
 public struct LibraryRootView<LicenseContent: View, ReaderContent: View, LeadingToolbar: View>: View {
@@ -90,6 +91,18 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
         } message: { prompt in
             Text("\"\(prompt.existing.title)\" is already imported. What do you want to do?")
         }
+        .overlay {
+            if viewModel.isPreparingShare {
+                ProgressView("Preparing…")
+                    .padding()
+                    .background(.regularMaterial, in: .rect(cornerRadius: 12))
+            }
+        }
+        #if os(iOS)
+        .sheet(item: $viewModel.shareTarget) { target in
+            ActivityViewControllerRepresentable(items: [target.url])
+        }
+        #endif
     }
 
     @ToolbarContentBuilder
@@ -144,10 +157,7 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
         if !favorites.isEmpty {
             Section("Favorites") {
                 ForEach(favorites) { item in
-                    ScoreRow(scoreItem: item)
-                        .contentShape(Rectangle())
-                        .onTapGesture { onOpenScore(item) }
-                        .contextMenu { rowContextMenu(for: item) }
+                    sectionRow(for: item)
                 }
             }
         }
@@ -177,12 +187,45 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
         if !recents.isEmpty {
             Section("Recently Opened") {
                 ForEach(recents) { item in
-                    ScoreRow(scoreItem: item)
-                        .contentShape(Rectangle())
-                        .onTapGesture { onOpenScore(item) }
-                        .contextMenu { rowContextMenu(for: item) }
+                    sectionRow(for: item)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func sectionRow(for item: ScoreItem) -> some View {
+        HStack(spacing: 0) {
+            ScoreRow(scoreItem: item)
+                .contentShape(Rectangle())
+                .onTapGesture { onOpenScore(item) }
+            Menu {
+                scoreRowMenu(
+                    item: item,
+                    library: viewModel,
+                    onOpen: onOpenScore,
+                    onEditTags: { editTagsTarget = $0 },
+                    onAddToPlaylist: { addToPlaylistTarget = $0 },
+                    onRequestDelete: nil
+                )
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("More"))
+        }
+        .contextMenu {
+            scoreRowMenu(
+                item: item,
+                library: viewModel,
+                onOpen: onOpenScore,
+                onEditTags: { editTagsTarget = $0 },
+                onAddToPlaylist: { addToPlaylistTarget = $0 },
+                onRequestDelete: nil
+            )
         }
     }
 
@@ -192,25 +235,6 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
             Spacer()
             Text(count, format: .number)
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private func rowContextMenu(for item: ScoreItem) -> some View {
-        Button { onOpenScore(item) } label: {
-            Label("Open", systemImage: "music.note")
-        }
-        Button { Task { await viewModel.toggleFavorite(item) } } label: {
-            Label(
-                item.isFavorite ? "Unfavorite" : "Favorite",
-                systemImage: item.isFavorite ? "star.slash" : "star"
-            )
-        }
-        Button { editTagsTarget = item } label: {
-            Label("Edit Tags…", systemImage: "tag")
-        }
-        Button { addToPlaylistTarget = item } label: {
-            Label("Add to Playlist…", systemImage: "music.note.list")
         }
     }
 

@@ -20,7 +20,7 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
         .package(
             url: "git@github.com:jiyimeta/swift-sheet-music.git",
-            revision: "d16665385bc38c3d3efc11752a8079a84a5e91d6"
+            revision: "bab32982dafbc44516e0491b1420d67b6ce7b0d0"
         ),
         .package(path: "../Domain"),
     ],
@@ -55,6 +55,7 @@ let package = Package(
             dependencies: [
                 "Domain",
                 .product(name: "SheetMusic", package: "swift-sheet-music"),
+                .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
             ],
             plugins: swiftLintPlugins
         ),

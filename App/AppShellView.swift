@@ -3,16 +3,20 @@ import Library
 import LicenseList
 import Reader
 import Settings
+import StoreKit
 import SwiftUI
 
 struct AppShellView: View {
     let bootstrap: AppBootstrap
+    @Bindable var reviewPrompt: ReviewPromptCoordinator
+    @Environment(\.requestReview) private var requestReview
 
     var body: some View {
         Group {
             if let repository = bootstrap.repository,
                let importer = bootstrap.importer,
                let gateway = bootstrap.gateway,
+               let shareService = bootstrap.shareService,
                bootstrap.isReady
             {
                 ReadyShell(
@@ -20,6 +24,7 @@ struct AppShellView: View {
                     repository: repository,
                     importer: importer,
                     gateway: gateway,
+                    shareService: shareService,
                     scoresDirectory: AppPaths.scoresDirectory
                 )
             } else if let failure = bootstrap.failure {
@@ -32,6 +37,12 @@ struct AppShellView: View {
                 ProgressView().controlSize(.large)
             }
         }
+        .alert("Enjoying Folino?", isPresented: $reviewPrompt.isPrePromptPresented) {
+            Button("Rate Folino") { requestReview() }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("Would you mind taking a moment to leave a review on the App Store?")
+        }
     }
 }
 
@@ -40,6 +51,7 @@ private struct ReadyShell: View {
     let repository: any ScoreLibraryRepository
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
+    let shareService: any ScoreShareService
     let scoresDirectory: URL
 
     @State private var libraryVM: LibraryViewModel
@@ -55,16 +67,21 @@ private struct ReadyShell: View {
         repository: any ScoreLibraryRepository,
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
+        shareService: any ScoreShareService,
         scoresDirectory: URL
     ) {
         self.bootstrap = bootstrap
         self.repository = repository
         self.importer = importer
         self.gateway = gateway
+        self.shareService = shareService
         self.scoresDirectory = scoresDirectory
         _libraryVM = State(
             wrappedValue: LibraryViewModel(
-                repository: repository, importer: importer, gateway: gateway
+                repository: repository,
+                importer: importer,
+                gateway: gateway,
+                shareService: shareService
             )
         )
     }

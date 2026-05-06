@@ -82,4 +82,83 @@ import Testing
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded.staffProgramOverrides == prefs.staffProgramOverrides)
     }
+
+    @Test func tempoMultiplierDefaultsToNil() {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: []
+        )
+        #expect(prefs.tempoMultiplier == nil)
+    }
+
+    @Test func tempoMultiplierIsClampedToHalfThroughDouble() {
+        let tooSlow = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            tempoMultiplier: 0.1
+        )
+        #expect(tooSlow.tempoMultiplier == 0.5)
+
+        let tooFast = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            tempoMultiplier: 5.0
+        )
+        #expect(tooFast.tempoMultiplier == 2.0)
+
+        let inRange = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            tempoMultiplier: 0.75
+        )
+        #expect(inRange.tempoMultiplier == 0.75)
+    }
+
+    @Test func tempoMultiplierNilRoundTripsThroughCodable() throws {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: []
+        )
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
+        #expect(decoded.tempoMultiplier == nil)
+    }
+
+    @Test func tempoMultiplierRoundTripsThroughCodable() throws {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            tempoMultiplier: 1.25
+        )
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
+        #expect(decoded.tempoMultiplier == 1.25)
+    }
+
+    @Test func legacyJSONWithoutTempoMultiplierKeyDecodesAsNil() throws {
+        // Ensures additive-only schema change: rows persisted before
+        // tempoMultiplier landed must still load. We synthesize the
+        // "legacy" shape by encoding the current struct and stripping
+        // the new key, so we don't have to hand-write IDs whose
+        // encoded form is implementation-defined.
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: []
+        )
+        let encoded = try JSONEncoder().encode(prefs)
+        let jsonObject = try JSONSerialization.jsonObject(with: encoded)
+        var dict = try #require(jsonObject as? [String: Any])
+        dict.removeValue(forKey: "tempoMultiplier")
+        let stripped = try JSONSerialization.data(withJSONObject: dict)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: stripped)
+        #expect(decoded.tempoMultiplier == nil)
+        #expect(decoded.staffSize == 14)
+    }
 }

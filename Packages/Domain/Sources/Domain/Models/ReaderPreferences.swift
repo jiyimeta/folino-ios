@@ -9,6 +9,8 @@ import SheetMusicCore
 public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let minStaffSize: CGFloat = 8
     public static let maxStaffSize: CGFloat = 28
+    public static let minTempoMultiplier: Double = 0.5
+    public static let maxTempoMultiplier: Double = 2.0
 
     public let id: ReaderPreferencesID
     public let scoreItemID: ScoreItemID
@@ -19,18 +21,28 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// channel program. Bank stays at 0 — the picker only swaps melodic
     /// programs (matches `swift-sheet-music`'s `ProgramMenu`).
     public var staffProgramOverrides: [StaffAddress: Int]
+    /// Per-score playback rate override. `nil` means "no override" — the
+    /// engine plays at the score's native tempo. Set values are clamped to
+    /// `[minTempoMultiplier, maxTempoMultiplier]`. The Reader's view model
+    /// normalizes a saved value of exactly 1.0 back to `nil` so the
+    /// override doesn't outlive the user's intent.
+    public var tempoMultiplier: Double?
 
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
         scoreItemID: ScoreItemID,
         staffSize: CGFloat,
         hiddenStaves: Set<StaffAddress>,
-        staffProgramOverrides: [StaffAddress: Int] = [:]
+        staffProgramOverrides: [StaffAddress: Int] = [:],
+        tempoMultiplier: Double? = nil
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
         self.staffSize = min(max(staffSize, Self.minStaffSize), Self.maxStaffSize)
         self.hiddenStaves = hiddenStaves
         self.staffProgramOverrides = staffProgramOverrides.mapValues { min(max($0, 0), 127) }
+        self.tempoMultiplier = tempoMultiplier.map {
+            min(max($0, Self.minTempoMultiplier), Self.maxTempoMultiplier)
+        }
     }
 }

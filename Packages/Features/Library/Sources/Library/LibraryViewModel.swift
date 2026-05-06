@@ -8,6 +8,19 @@ public final class LibraryViewModel {
     public let repository: any ScoreLibraryRepository
     public let importer: any ScoreFileImporter
     public let gateway: any ScoreFileGateway
+    public let shareService: any ScoreShareService
+
+    public var shareTarget: ShareTarget?
+    public var isPreparingShare: Bool = false
+
+    public struct ShareTarget: Identifiable, Equatable, Sendable {
+        public let id: UUID
+        public let url: URL
+        public init(url: URL) {
+            id = UUID()
+            self.url = url
+        }
+    }
 
     public var errorAlertMessage: String?
 
@@ -32,11 +45,13 @@ public final class LibraryViewModel {
     public init(
         repository: any ScoreLibraryRepository,
         importer: any ScoreFileImporter,
-        gateway: any ScoreFileGateway
+        gateway: any ScoreFileGateway,
+        shareService: any ScoreShareService
     ) {
         self.repository = repository
         self.importer = importer
         self.gateway = gateway
+        self.shareService = shareService
     }
 
     public func toggleFavorite(_ scoreItem: ScoreItem) async {
@@ -48,6 +63,17 @@ public final class LibraryViewModel {
     public func delete(_ scoreItem: ScoreItem) async {
         do {
             try await repository.deleteScoreItem(id: scoreItem.id)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
+    public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+        do {
+            let url = try await shareService.prepareShare(item: item, format: format)
+            shareTarget = ShareTarget(url: url)
         } catch {
             errorAlertMessage = describe(error)
         }

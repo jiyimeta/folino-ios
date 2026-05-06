@@ -17,7 +17,7 @@ let package = Package(
         .package(path: "../../Utility"),
         .package(
             url: "git@github.com:jiyimeta/swift-sheet-music.git",
-            revision: "d16665385bc38c3d3efc11752a8079a84a5e91d6"
+            revision: "bab32982dafbc44516e0491b1420d67b6ce7b0d0"
         ),
     ],
     targets: [

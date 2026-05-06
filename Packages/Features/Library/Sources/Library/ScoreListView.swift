@@ -34,60 +34,56 @@ struct ScoreListView: View {
 
     @ViewBuilder
     private func row(for item: ScoreItem) -> some View {
-        ScoreRow(scoreItem: item)
-            .contentShape(Rectangle())
-            .onTapGesture { onOpen(item) }
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                Button {
-                    Task { await library.toggleFavorite(item) }
-                } label: {
-                    Label(
-                        item.isFavorite ? "Unfavorite" : "Favorite",
-                        systemImage: item.isFavorite ? "star.slash.fill" : "star.fill"
-                    )
-                }
-                .tint(.yellow)
+        HStack(spacing: 0) {
+            ScoreRow(scoreItem: item)
+                .contentShape(Rectangle())
+                .onTapGesture { onOpen(item) }
+            Menu {
+                scoreRowMenu(
+                    item: item,
+                    library: library,
+                    onOpen: onOpen,
+                    onEditTags: onEditTags,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onRequestDelete: { pendingDelete = $0 }
+                )
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) {
-                    pendingDelete = item
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
-            .contextMenu { contextMenuButtons(for: item) }
-    }
-
-    @ViewBuilder
-    private func contextMenuButtons(for item: ScoreItem) -> some View {
-        Button {
-            onOpen(item)
-        } label: {
-            Label("Open", systemImage: "music.note")
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("More"))
         }
-        Button {
-            Task { await library.toggleFavorite(item) }
-        } label: {
-            Label(
-                item.isFavorite ? "Unfavorite" : "Favorite",
-                systemImage: item.isFavorite ? "star.slash" : "star"
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                Task { await library.toggleFavorite(item) }
+            } label: {
+                Label(
+                    item.isFavorite ? "Unfavorite" : "Favorite",
+                    systemImage: item.isFavorite ? "star.slash.fill" : "star.fill"
+                )
+            }
+            .tint(.yellow)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                pendingDelete = item
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            scoreRowMenu(
+                item: item,
+                library: library,
+                onOpen: onOpen,
+                onEditTags: onEditTags,
+                onAddToPlaylist: onAddToPlaylist,
+                onRequestDelete: { pendingDelete = $0 }
             )
-        }
-        Button {
-            onEditTags(item)
-        } label: {
-            Label("Edit Tags…", systemImage: "tag")
-        }
-        Button {
-            onAddToPlaylist(item)
-        } label: {
-            Label("Add to Playlist…", systemImage: "music.note.list")
-        }
-        Divider()
-        Button(role: .destructive) {
-            pendingDelete = item
-        } label: {
-            Label("Delete", systemImage: "trash")
         }
     }
 
