@@ -100,4 +100,44 @@ import Testing
             #expect(row?["staff_program_overrides"] == "[]")
         }
     }
+
+    @Test func migratingToV4DefaultsHonorLayoutBreaksToTrue() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.upToV3.migrate(queue)
+
+        // Insert a parent score row, then a v3-shape reader_preferences row
+        // (no honor_layout_breaks column yet).
+        let scoreID = "00000000-0000-0000-0000-000000000001"
+        let prefsID = "11111111-1111-1111-1111-111111111111"
+        try queue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO score_items (id, title, local_file_name, content_hash,
+                    size_bytes, length_beats, default_tempo_bpm, added_at)
+                VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+                """,
+                arguments: [scoreID]
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO reader_preferences
+                    (id, score_item_id, staff_size, hidden_staff_ids, staff_program_overrides)
+                VALUES (?, ?, 14, '[]', '[]')
+                """,
+                arguments: [prefsID, scoreID]
+            )
+        }
+
+        // Run v4.
+        try AppMigrations.all.migrate(queue)
+
+        let value = try queue.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT honor_layout_breaks FROM reader_preferences WHERE id = ?",
+                arguments: [prefsID]
+            )
+        }
+        #expect(value == 1)
+    }
 }
