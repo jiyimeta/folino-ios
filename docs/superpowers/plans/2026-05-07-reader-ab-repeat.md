@@ -10,13 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-05-07-reader-ab-repeat-design.md`
 
-**Scope deviation surfaced upfront:** the spec includes a translucent
-accent-color band on the score visualizing the loop region. v1 ships the
-loop range as a "m.12 → m.16" text indicator on the A/B pill instead. The
-score-overlay band requires an upstream measure-rect API in
-`swift-sheet-music` that doesn't exist today, and adding that is a separate
-concern from the loop feature itself. Confirm the deferral before starting
-implementation.
+**Note on layout-doc reuse:** `HorizontalScoreContainer.swift` and
+`VerticalScoreContainer.swift` already pre-compute a `LayoutDocument` via
+`LayoutEngine.layout(...)` and pass it to `ScoreView(document:score:...)`.
+The loop-region band added in Task 13 reads measure rects from the same
+document — no upstream `swift-sheet-music` change is required.
 
 ---
 
@@ -30,6 +28,7 @@ implementation.
 | `Packages/Features/Reader/Sources/Reader/RepeatLoop.swift` | VM-internal loop helpers: cursor → measureIndex, snap to measure head/end, score-wide range, effective range. Pure functions, easy to unit-test. |
 | `Packages/Features/Reader/Sources/Reader/RepeatModeButton.swift` | The 3-state cycle button view used in `InspectorView`. |
 | `Packages/Features/Reader/Sources/Reader/ABPill.swift` | The bottom-right A/B liquid-glass pill view. |
+| `Packages/Features/Reader/Sources/Reader/LoopRegionOverlay.swift` | Translucent accent band drawn over the looped measures. Reads measure rects from the existing `LayoutDocument`. |
 | `Packages/Domain/Tests/DomainTests/Models/RepeatModeTests.swift` | Round-trip Codable tests. |
 | `Packages/Domain/Tests/DomainTests/Models/ReaderPreferencesRepeatTests.swift` | Tests for the new fields' defaults, init, decoding legacy JSON. |
 | `Packages/Features/Reader/Tests/ReaderTests/RepeatLoopHelpersTests.swift` | Tests for the pure helpers in `RepeatLoop.swift`. |
@@ -43,6 +42,8 @@ implementation.
 | `Packages/Features/Reader/Sources/Reader/ReaderViewModel.swift` | Add accessors + mutators (`advanceRepeatMode`, `setRepeatA`, `setRepeatB`, `clearRepeatA`, `clearRepeatB`). Wire the cursor observer to evaluate loop wraps. Pass `abRepeat` into `initialPlaybackPreferences`. Pre-seek to A on `togglePlayback` when cursor > B. |
 | `Packages/Features/Reader/Sources/Reader/InspectorView.swift` | Insert `RepeatModeButton` next to the tempo / metronome controls. |
 | `Packages/Features/Reader/Sources/Reader/ReaderToolbar.swift` (`ReaderBottomOverlay`) | Host the `ABPill` to the right of the existing reset-zoom pill, gated on `repeatMode == .abLoop`. |
+| `Packages/Features/Reader/Sources/Reader/HorizontalScoreContainer.swift` | Add `LoopRegionOverlay` next to `HorizontalMeasureAnchors` inside the existing ZStack. |
+| `Packages/Features/Reader/Sources/Reader/VerticalScoreContainer.swift` | Add `LoopRegionOverlay` inside the existing `scoreSurface(document:)` ZStack alongside the existing children. |
 | `Packages/Features/Reader/Tests/ReaderTests/Fakes/FakePlaybackController.swift` | Record `setLoopRange` calls so tests can verify the forwarding. |
 
 ---
@@ -1678,7 +1679,158 @@ git commit -m "feat(reader): add A/B pill overlay for section repeat"
 
 ---
 
-## Task 13: Manual verification
+## Task 13: `LoopRegionOverlay` — translucent band over looped measures
+
+A SwiftUI overlay that consumes the same `LayoutDocument` the score
+containers already pre-compute, walks `doc.systems[].measures[]`, and
+draws a translucent accent-color rectangle over each measure whose
+`measureIndex` falls in `[range.start.measureIndex, range.end.measureIndex]`.
+Visible only when `repeatMode == .abLoop` and both A/B are set.
+
+**Files:**
+- Create: `Packages/Features/Reader/Sources/Reader/LoopRegionOverlay.swift`
+- Modify: `Packages/Features/Reader/Sources/Reader/HorizontalScoreContainer.swift`
+- Modify: `Packages/Features/Reader/Sources/Reader/VerticalScoreContainer.swift`
+
+- [ ] **Step 1: Create the overlay**
+
+```swift
+// Packages/Features/Reader/Sources/Reader/LoopRegionOverlay.swift
+import Domain
+import SheetMusicLayout
+import SwiftUI
+
+/// Translucent accent-color band drawn over the measures inside the
+/// active A–B loop. Sized to the same `LayoutDocument` that
+/// `ScoreView(document:score:...)` consumes — drop into the same
+/// `ZStack` and the rectangles align with the rendered staves.
+struct LoopRegionOverlay: View {
+    let document: LayoutDocument
+    let range: ABRepeatRange?
+
+    var body: some View {
+        Canvas { context, _ in
+            guard let range else { return }
+            let lower = range.start.measureIndex
+            let upper = range.end.measureIndex
+            for system in document.systems {
+                for measure in system.measures
+                where measure.measureIndex >= lower
+                    && measure.measureIndex <= upper {
+                    let rect = CGRect(
+                        x: system.origin.x + measure.origin.x,
+                        y: system.origin.y,
+                        width: measure.width,
+                        height: system.size.height
+                    )
+                    context.fill(
+                        Path(rect),
+                        with: .color(.accentColor.opacity(0.15))
+                    )
+                }
+            }
+        }
+        .frame(
+            width: document.size.width,
+            height: document.size.height,
+            alignment: .topLeading
+        )
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+```
+
+(15% opacity is the starting value — tune at preview time. The
+`Canvas`-based draw is cheap because it touches a small, bounded set
+of rectangles per frame and re-renders only when the inputs change.)
+
+- [ ] **Step 2: Wire into `HorizontalScoreContainer`**
+
+Open `HorizontalScoreContainer.swift` and find the existing `ZStack`
+inside `body` (lines around `if let doc = document { ZStack(...) {`).
+Insert the overlay **between** `ScoreView(...)` and the
+`HorizontalMeasureAnchors(document: doc)` call so the band sits below
+the measure anchors but above the staves:
+
+```swift
+ZStack(alignment: .topLeading) {
+    ScoreView(
+        document: doc, score: score,
+        playbackCursor: playbackCursor,
+        playbackCursorColor: .accentColor
+    )
+    .coordinateSpace(name: "scoreSurface")
+    .gesture(tapSeekGesture(document: doc))
+    .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
+
+    if viewModel.repeatMode == .abLoop {
+        LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
+    }
+
+    HorizontalMeasureAnchors(document: doc)
+}
+```
+
+- [ ] **Step 3: Wire into `VerticalScoreContainer`**
+
+Open `VerticalScoreContainer.swift` and find `scoreSurface(document:)`
+(line ~175). Inside its `ScoreView(document:...)` call site there is a
+ZStack-shaped scope; add the overlay there. The exact insertion point
+mirrors the horizontal case — sibling to `ScoreView`. If the current
+shape isn't already a `ZStack`, wrap the `ScoreView` in one and append
+the overlay:
+
+```swift
+@ViewBuilder
+private func scoreSurface(document doc: LayoutDocument) -> some View {
+    ZStack(alignment: .topLeading) {
+        ScoreView(
+            document: doc, score: score,
+            playbackCursor: playbackCursor,
+            playbackCursorColor: .accentColor
+        )
+        // (preserve any existing modifiers attached to ScoreView here)
+
+        if viewModel.repeatMode == .abLoop {
+            LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
+        }
+    }
+}
+```
+
+(If the existing function applies modifiers to `ScoreView` — e.g.
+`.coordinateSpace`, `.gesture` — keep them on `ScoreView` itself,
+not on the wrapping `ZStack`. The overlay must NOT inherit them.)
+
+- [ ] **Step 4: Build**
+
+```bash
+cd Packages/Features/Reader && swift build
+```
+
+Expected: build succeeds.
+
+- [ ] **Step 5: Verify the test suite is still green**
+
+```bash
+cd Packages/Features/Reader && swift test
+```
+
+Expected: All Reader tests green.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Packages/Features/Reader/Sources/Reader/LoopRegionOverlay.swift \
+        Packages/Features/Reader/Sources/Reader/HorizontalScoreContainer.swift \
+        Packages/Features/Reader/Sources/Reader/VerticalScoreContainer.swift
+git commit -m "feat(reader): draw translucent band over looped measures"
+```
+
+---
+
+## Task 14: Manual verification
 
 Build the app and exercise the feature end-to-end. Previews handle the
 chrome; the simulator handles cursor wrapping during real playback.
@@ -1706,11 +1858,11 @@ Open a multi-measure score. For each step verify by eye:
 1. Open Inspector. The repeat cycle button is in the Playback section near tempo / metronome. It starts in `.off` state (secondary tint).
 2. Tap the cycle button — accent tint, "Loop all" announced. The A/B pill is **not** yet visible.
 3. Tap once more — accent tint with the A·B treatment. The A/B pill appears bottom-right.
-4. Place the cursor in measure 4 (tap a chord there). Tap `A`. Pill subtitle shows `m. 4`.
-5. Place the cursor in measure 8. Tap `B`. Pill subtitle shows `m. 8`.
-6. Press play. Verify the cursor reaches measure 8 then jumps back to measure 4 and continues looping.
-7. While playing, tap `A` while the cursor is in measure 6. The pill updates to `m. 6`; loop now plays measures 6–8.
-8. Long-press `A`. Pill shows blank under `A`; loop becomes inactive (cursor plays through).
+4. Place the cursor in measure 4 (tap a chord there). Tap `A`. Pill subtitle shows `m. 4`. (Band is not yet drawn — B unset.)
+5. Place the cursor in measure 8. Tap `B`. Pill subtitle shows `m. 8`. **A translucent accent band now spans measures 4–8 on the score**, including across system breaks.
+6. Press play. Verify the cursor reaches measure 8 then jumps back to measure 4 and continues looping. The band stays put.
+7. While playing, tap `A` while the cursor is in measure 6. The pill updates to `m. 6`; band shrinks to measures 6–8; loop now plays 6–8.
+8. Long-press `A`. Pill shows blank under `A`; band disappears; loop becomes inactive (cursor plays through).
 9. Cycle the mode back to `.off` via the inspector. Pill disappears. Markers persist (cycle back to `.abLoop` and confirm the previously-set A is still present).
 10. Close and reopen the score. Confirm `repeatMode` and the A marker survived.
 
@@ -1730,10 +1882,6 @@ git status
 
 ## Out of scope for v1 (follow-up work)
 
-- **Score-overlay loop band** (the translucent accent band over measures).
-  Requires either an upstream `swift-sheet-music` API exposing measure
-  rects, or a SwiftUI overlay built on a published `LayoutDocument`
-  surface. Track as a separate plan.
 - **Engine-level loop primitive** in `swift-sheet-music`. The VM-layer
   wrap is precise enough for practice (sub-measure latency dominated by
   the engine's `play(from:in:)` start-up), but a dedicated loop primitive

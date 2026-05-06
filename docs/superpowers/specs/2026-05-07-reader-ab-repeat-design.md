@@ -62,8 +62,13 @@ A short haptic confirms each set / clear. Set state is conveyed by:
 
 Visible **only when mode == A-B** and both endpoints are set. The looped span
 is shaded on the score with a translucent accent-color band spanning the
-affected measures. Suppressed in off / loop-all so the score stays uncluttered
-when the band would not correspond to the active loop.
+affected measures, drawn as a SwiftUI overlay sibling to `ScoreView` inside
+each container's existing `ZStack`. The overlay reads measure rects from the
+same `LayoutDocument` the containers already pre-compute (see
+`HorizontalScoreContainer.swift` / `VerticalScoreContainer.swift`), so no
+upstream `swift-sheet-music` changes are required. Suppressed in off /
+loop-all so the score stays uncluttered when the band would not correspond
+to the active loop.
 
 ### Playback semantics
 
