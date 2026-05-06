@@ -14,6 +14,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     var staffSize: Double
     var hiddenStaffIds: String
     var staffProgramOverrides: String
+    var honorLayoutBreaks: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -21,6 +22,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         case staffSize = "staff_size"
         case hiddenStaffIds = "hidden_staff_ids"
         case staffProgramOverrides = "staff_program_overrides"
+        case honorLayoutBreaks = "honor_layout_breaks"
     }
 
     init(domain prefs: ReaderPreferences) {
@@ -37,6 +39,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         staffProgramOverrides = overridesData.flatMap {
             String(data: $0, encoding: .utf8)
         } ?? "[]"
+        honorLayoutBreaks = prefs.honorLayoutBreaks
     }
 
     func toDomain() throws -> ReaderPreferences {
@@ -66,7 +69,8 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             scoreItemID: ScoreItemID(rawValue: scoreUUID),
             staffSize: CGFloat(staffSize),
             hiddenStaves: Set(decodedHidden),
-            staffProgramOverrides: overrides
+            staffProgramOverrides: overrides,
+            honorLayoutBreaks: honorLayoutBreaks
         )
     }
 

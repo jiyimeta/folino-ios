@@ -80,4 +80,28 @@ import Testing
         let restored = try record.toDomain()
         #expect(restored.staffProgramOverrides == [address1: 6, address2: 40])
     }
+
+    @Test func honorLayoutBreaksRoundTripsThroughDomain() throws {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            honorLayoutBreaks: false
+        )
+        let record = ReaderPreferencesRecord(domain: prefs)
+        let restored = try record.toDomain()
+        #expect(restored.honorLayoutBreaks == false)
+    }
+
+    @Test func honorLayoutBreaksDefaultsToTrueOnDomainConstruction() throws {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: []
+        )
+        #expect(prefs.honorLayoutBreaks == true)
+        let record = ReaderPreferencesRecord(domain: prefs)
+        let restored = try record.toDomain()
+        #expect(restored.honorLayoutBreaks == true)
+    }
 }
