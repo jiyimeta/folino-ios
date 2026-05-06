@@ -123,7 +123,9 @@ struct SoundfontCacheView: View {
     private func deletePatches(at offsets: IndexSet) async {
         let targets = offsets.map { patches[$0] }
         for patch in targets {
-            try? await resolver.deletePatch(bank: patch.bank, program: patch.program)
+            try? await resolver.deletePatch(
+                bank: patch.bank, program: patch.program, isDrums: patch.isDrums
+            )
         }
         await reload()
     }
@@ -153,7 +155,7 @@ private struct PreviewPresetCatalog: SoundfontPresetCatalog {
 }
 
 private struct PreviewSoundfontResolver: SoundfontResolver {
-    func resolveSoundfont(bank _: Int, program _: Int) throws -> URL {
+    func resolveSoundfont(bank _: Int, program _: Int, isDrums _: Bool) throws -> URL {
         URL(fileURLWithPath: "/dev/null")
     }
 
@@ -180,6 +182,6 @@ private struct PreviewSoundfontResolver: SoundfontResolver {
     }
 
     func totalCacheSizeBytes() throws -> Int64 { 12_738_935 }
-    func deletePatch(bank _: Int, program _: Int) throws {}
+    func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
     func clearCache() throws {}
 }

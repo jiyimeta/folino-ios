@@ -2,28 +2,28 @@
 
 ## Privacy Posture
 
-Folino is built to be unremarkable from a privacy perspective: it does very little, so there is very little to leak.
+folino is built to be unremarkable from a privacy perspective: it does very little, so there is very little to leak.
 
-### Data Folino holds
+### Data folino holds
 
 - The score files the user imports.
 - Annotations (PencilKit drawings, text boxes), playlists, tags, per-score playback preferences.
 - A cache of downloaded SoundFont patches.
 
-### Data Folino does not hold
+### Data folino does not hold
 
-- No user account. No email, no name, no identifier collected by Folino.
+- No user account. No email, no name, no identifier collected by folino.
 - No microphone, location, contacts, photos, calendar.
 - No analytics, no telemetry, no crash reporting beyond Apple's opt-in `MetricKit`.
 - No third-party SDKs in the v1 binary.
 
 ### Network use
 
-The only network traffic Folino originates is HTTPS GET requests to `github.com` and its release CDN to download SoundFont patches from the public release set at `jiyimeta/musescore-general-sf2-split`. CloudKit traffic flows through Apple's infrastructure under the user's Apple ID; Folino's developer never sees the data.
+The only network traffic folino originates is HTTPS GET requests to `github.com` and its release CDN to download SoundFont patches from the public release set at `jiyimeta/musescore-general-sf2-split`. CloudKit traffic flows through Apple's infrastructure under the user's Apple ID; folino's developer never sees the data.
 
 ### Sync
 
-CloudKit **Private** Database only. All synced records (score assets, annotations, playlists) live in the user's iCloud account. Folino's developer cannot read them. Disabling iCloud for Folino in Settings stops sync; the local copy is unaffected.
+CloudKit **Private** Database only. All synced records (score assets, annotations, playlists) live in the user's iCloud account. folino's developer cannot read them. Disabling iCloud for folino in Settings stops sync; the local copy is unaffected.
 
 ### Deletion
 
@@ -51,4 +51,4 @@ The engraved score itself is rendered as a vector view, not as accessible text. 
 
 ## Telemetry & Updates
 
-Folino does not phone home. The only signal a developer receives is App Store sales counts and any user-submitted crash reports via Apple's standard channel. Future analytics, if added, will be opt-in, on-device-only by default, and disclosed in this document.
+folino does not phone home. The only signal a developer receives is App Store sales counts and any user-submitted crash reports via Apple's standard channel. Future analytics, if added, will be opt-in, on-device-only by default, and disclosed in this document.

@@ -5,7 +5,9 @@ import Foundation
 /// `isBundled` flag distinguishes them so the cache management UI can prevent
 /// deletion of bundled patches.
 public struct SoundfontPatch: Hashable, Sendable, Codable, Identifiable {
-    public var id: SoundfontPatchKey { SoundfontPatchKey(bank: bank, program: program) }
+    public var id: SoundfontPatchKey {
+        SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
+    }
 
     public let bank: Int
     public let program: Int
@@ -14,6 +16,7 @@ public struct SoundfontPatch: Hashable, Sendable, Codable, Identifiable {
     public let downloadedAt: Date
     public var lastUsedAt: Date
     public var isBundled: Bool
+    public var isDrums: Bool
 
     public init(
         bank: Int,
@@ -22,7 +25,8 @@ public struct SoundfontPatch: Hashable, Sendable, Codable, Identifiable {
         sizeBytes: Int64,
         downloadedAt: Date,
         lastUsedAt: Date,
-        isBundled: Bool = false
+        isBundled: Bool = false,
+        isDrums: Bool = false
     ) {
         self.bank = bank
         self.program = program
@@ -31,5 +35,6 @@ public struct SoundfontPatch: Hashable, Sendable, Codable, Identifiable {
         self.downloadedAt = downloadedAt
         self.lastUsedAt = lastUsedAt
         self.isBundled = isBundled
+        self.isDrums = isDrums
     }
 }

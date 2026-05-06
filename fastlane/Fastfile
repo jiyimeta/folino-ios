@@ -1,0 +1,114 @@
+default_platform(:ios)
+
+platform :ios do
+  before_all do
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_PATH"),
+      duration: 1200,
+      in_house: false
+    )
+  end
+
+  desc "Archive Release build and upload IPA to App Store Connect (no submit)"
+  lane :archive_and_upload do |options|
+    version = options.fetch(:version)
+    build = options.fetch(:build)
+
+    gym(
+      scheme: "Folino",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build/fastlane",
+      output_name: "Folino-#{version}-#{build}.ipa",
+      clean: true,
+      include_symbols: true,
+      include_bitcode: false,
+      xcargs: "-skipPackagePluginValidation -skipMacroValidation",
+      export_options: {
+        method: "app-store",
+        signingStyle: "automatic",
+        teamID: CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
+      },
+      export_xcargs: "-allowProvisioningUpdates"
+    )
+
+    # build_number is read from the IPA itself by upload_to_app_store, so do
+    # NOT pass it explicitly when ipa: is set - fastlane treats them as
+    # mutually exclusive.
+    upload_to_app_store(
+      app_identifier: "com.KeyNumber.Folino",
+      app_version: version,
+      ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
+      skip_screenshots: true,
+      skip_metadata: true,
+      submit_for_review: false,
+      force: true,
+      precheck_include_in_app_purchases: false,
+      run_precheck_before_submit: false
+    )
+  end
+
+  desc "Poll App Store Connect until the uploaded build finishes processing"
+  lane :wait_for_build do |options|
+    require "spaceship"
+
+    version = options.fetch(:version)
+    build = options.fetch(:build).to_s
+    timeout = 1800
+    interval = 30
+
+    app = Spaceship::ConnectAPI::App.find("com.KeyNumber.Folino") \
+      || UI.user_error!("App not found in App Store Connect")
+
+    started_at = Time.now
+    loop do
+      builds = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id,
+        version: version,
+        build_number: build,
+        includes: "preReleaseVersion"
+      )
+      target = builds.find { |b| b.version == build && b.pre_release_version&.version == version }
+
+      state = target&.processing_state
+      case state
+      when "VALID"
+        UI.success("Build #{version} (#{build}) is processed and ready to submit.")
+        break
+      when "INVALID", "FAILED"
+        UI.user_error!("Build processing failed (state=#{state}).")
+      end
+
+      if Time.now - started_at > timeout
+        UI.user_error!("Timed out after #{timeout}s waiting for build #{version} (#{build}).")
+      end
+
+      UI.message("Waiting for processing... (state=#{state || 'not yet visible'})")
+      sleep interval
+    end
+  end
+
+  desc "Push metadata + release notes (+ optional screenshots). Does NOT submit for review."
+  lane :push_metadata do |options|
+    version = options.fetch(:version)
+    build = options.fetch(:build)
+    screenshots_path = options[:screenshots_path]   # may be nil
+
+    upload_to_app_store(
+      app_identifier: "com.KeyNumber.Folino",
+      app_version: version,
+      build_number: build.to_s,
+      skip_binary_upload: true,
+      skip_screenshots: screenshots_path.nil?,
+      screenshots_path: screenshots_path,
+      overwrite_screenshots: !screenshots_path.nil?,
+      skip_metadata: false,
+      metadata_path: "./fastlane/metadata",
+      submit_for_review: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end

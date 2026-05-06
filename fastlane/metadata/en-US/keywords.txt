@@ -1,0 +1,1 @@
+music,score reading,practice,MIDI playback,vocal,piano,guitar,bass,drums,violin,flute,saxophone,sheet music,karaoke,a cappella,rehearsal,choir,concert band,orchestra,finale,vocal training

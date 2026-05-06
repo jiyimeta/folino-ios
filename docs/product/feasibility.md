@@ -6,16 +6,16 @@ This is the living list of decisions where the cost / risk warrants written just
 
 ### D1. Engine is `swift-sheet-music`, no third-party notation library
 
-The notation engine, format I/O, layout, audio, and PDF export are all owned by `swift-sheet-music` (jiyimeta/swift-sheet-music). No web-based renderer, no C++ notation engine, no GPL dependency. This keeps Folino fully native (Liquid Glass, Apple Pencil, Core Animation) and the licensing model simple.
+The notation engine, format I/O, layout, audio, and PDF export are all owned by `swift-sheet-music` (jiyimeta/swift-sheet-music). No web-based renderer, no C++ notation engine, no GPL dependency. This keeps folino fully native (Liquid Glass, Apple Pencil, Core Animation) and the licensing model simple.
 
-The cost of this decision is that anything missing in `swift-sheet-music` becomes Folino's responsibility too. See **D2**.
+The cost of this decision is that anything missing in `swift-sheet-music` becomes folino's responsibility too. See **D2**.
 
-### D2. "Generic in `swift-sheet-music`, specific in Folino"
+### D2. "Generic in `swift-sheet-music`, specific in folino"
 
 The boundary rule for new work:
 
 - **Upstream to `swift-sheet-music`** — anything any score app would want: format read / write, layout math, audio engine features, score model mutation primitives, an iOS-capable view target.
-- **Inside Folino** — anything bound to Folino's UX, sync model, library, settings: page-turn gestures, PencilKit overlay, library DB, CloudKit sync, SoundFont cache UI, settings screen.
+- **Inside folino** — anything bound to folino's UX, sync model, library, settings: page-turn gestures, PencilKit overlay, library DB, CloudKit sync, SoundFont cache UI, settings screen.
 
 In practice that means the v1 implementation will likely require upstream PRs for at least: `.mscz` write, MusicXML write, an interactive cursor + A–B-repeat API on `PlaybackEngine`, and a `Score` mutation API for system-text / staff-text edits.
 
@@ -27,7 +27,7 @@ PencilKit strokes and text boxes are stored as `(systemIndex, relativeRect)` in 
 
 Scores live in `Documents/Scores/`, never in `~/iCloud Drive/`. Sync is via CloudKit Private DB with `CKAsset` and a per-record metadata blob. The local copy is the source of truth and the OS cannot evict it.
 
-The cost: Folino does not appear in the Files app sidebar. Import / export is via the file picker and share sheet, which is acceptable for v1 and matches the "library lives inside Folino" mental model.
+The cost: folino does not appear in the Files app sidebar. Import / export is via the file picker and share sheet, which is acceptable for v1 and matches the "library lives inside folino" mental model.
 
 A v2 setting may let users opt into iCloud Drive-style eviction for storage-constrained devices; that flow is not specified yet.
 
@@ -40,7 +40,7 @@ A v2 setting may let users opt into iCloud Drive-style eviction for storage-cons
 
 ### D6. SoundFont licensing
 
-`musescore-general-sf2-split` is MIT, derived from MuseScore_General which is also MIT (Frank Wen, Michael Cowgill, S. Christian Collins, et al.). No copyleft viral concern; Folino must surface the MIT notice in the in-app license screen (`LicenseListView` from `LicenseList`, with a manually-added entry for the bundled and downloaded SoundFonts).
+`musescore-general-sf2-split` is MIT, derived from MuseScore_General which is also MIT (Frank Wen, Michael Cowgill, S. Christian Collins, et al.). No copyleft viral concern; folino must surface the MIT notice in the in-app license screen (`LicenseListView` from `LicenseList`, with a manually-added entry for the bundled and downloaded SoundFonts).
 
 ### D7. iPad and iPhone, iOS 26+
 
@@ -50,11 +50,11 @@ Universal app, `TARGETED_DEVICE_FAMILY: 1,2`. iOS 26+ deployment target unlocks 
 
 ### O1. `AVAudioUnitSampler` default behavior on iOS
 
-If a score uses an instrument whose patch has not been downloaded and the bundled fallback path fails, Folino currently shows silence + a notice. **To verify** whether `AVAudioUnitSampler` initialized without an explicit sound bank still emits audio on iOS 26 (legacy `DLSMusicDevice` fallback). If it does, we can soften the failure mode for missing patches; if not, the bundled Electric Piano fallback is the floor.
+If a score uses an instrument whose patch has not been downloaded and the bundled fallback path fails, folino currently shows silence + a notice. **To verify** whether `AVAudioUnitSampler` initialized without an explicit sound bank still emits audio on iOS 26 (legacy `DLSMusicDevice` fallback). If it does, we can soften the failure mode for missing patches; if not, the bundled Electric Piano fallback is the floor.
 
 ### O2. mscz round-trip fidelity
 
-`SheetMusicMSCX` currently parses `.mscx` and reads `.mscz` (zipped). Round-tripping a `.mscz` (read → mutate text → write) must preserve all elements Folino did not touch. The upstream PR for `.mscz` write needs a regression suite of round-trip tests on a corpus of public-domain scores.
+`SheetMusicMSCX` currently parses `.mscx` and reads `.mscz` (zipped). Round-tripping a `.mscz` (read → mutate text → write) must preserve all elements folino did not touch. The upstream PR for `.mscz` write needs a regression suite of round-trip tests on a corpus of public-domain scores.
 
 ### O3. PencilKit + score reflow performance
 
@@ -66,10 +66,10 @@ When a user changes content zoom on a score with hundreds of strokes, every stro
 
 ### O5. swift-sheet-music iOS view target
 
-`SheetMusicUI` is currently macOS 15+. Folino needs an iOS-capable equivalent. Two paths:
+`SheetMusicUI` is currently macOS 15+. folino needs an iOS-capable equivalent. Two paths:
 
-- **A.** Folino implements its own reader views directly on `SheetMusicLayout`.
-- **B.** Folino contributes a new `SheetMusicUIiOS` (or platform-conditionalized `SheetMusicUI`) target upstream.
+- **A.** folino implements its own reader views directly on `SheetMusicLayout`.
+- **B.** folino contributes a new `SheetMusicUIiOS` (or platform-conditionalized `SheetMusicUI`) target upstream.
 
 **A** is faster to ship. **B** is the long-term-correct shape. Plan to start with **A** and refactor to **B** once the reader's iPad behavior is stable.
 

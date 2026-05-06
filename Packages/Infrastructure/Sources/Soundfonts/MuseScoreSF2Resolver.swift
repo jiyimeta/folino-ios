@@ -1,48 +1,119 @@
 import Domain
 import Foundation
+import SheetMusicAudio
 
-/// Downloads per-(bank, program) `.sf2` files from
-/// `jiyimeta/musescore-general-sf2-split` GitHub releases the first
-/// time they're needed, then serves them out of `cacheDirectory` on
-/// subsequent calls. Files use the release naming `BBB_PPP.sf2`
-/// (zero-padded decimal bank / program).
+/// Single resolver that covers both Folino's async download path
+/// (`Domain.SoundfontResolver`) and `swift-sheet-music`'s synchronous
+/// per-(bank, program, isDrums) lookup (`SheetMusicAudio.SoundfontResolver`).
 ///
-/// Patterned after the reference `SoundFontFileManager` in the
-/// MIDIPlayer companion app — same release URL, same naming, but
-/// adapted to Folino's `Domain.SoundfontResolver` protocol.
-public struct MuseScoreSF2Resolver: SoundfontResolver {
-    /// Default base URL for the SF2 split release. Files live at
-    /// `<baseURL>/BBB_PPP.sf2`.
+/// Lookup order, sync path:
+///   1. Cache hit at `cacheDirectory/<name>` — return.
+///   2. Bundle hit at `Bundle.main/Soundfonts/<name>` — return.
+///   3. Drum lookup with no precise hit — return bundled
+///      `Soundfonts/128_000.sf2` (Standard Drum Kit fallback).
+///   4. Pitched lookup with no precise hit — return bundled
+///      `Soundfonts/000_073.sf2` (Flute fallback).
+///   5. Even the fallback bundle is missing (only happens in
+///      misbuilt apps) — return `nil`.
+///
+/// Async path (`resolveSoundfont`):
+///   1. Cache hit — return.
+///   2. Bundle hit — return (no copy; bundle URL is fine).
+///   3. Download `<baseURL>/<name>` to cache atomically — return.
+///   4. Download fails — throw `DomainError.soundfontDownloadFailed`.
+///
+/// File naming follows `jiyimeta/musescore-general-sf2-split`:
+///   - melodic: `BBB_PPP.sf2` (zero-padded decimal `bank`, `program`)
+///   - drums:   `128_PPP.sf2` (drum bank prefix is `128`, ignoring `bank`)
+public struct MuseScoreSF2Resolver:
+    Domain.SoundfontResolver,
+    Domain.PrecisePatchProbe,
+    SheetMusicAudio.SoundfontResolver
+{
     public static let defaultBaseURL = URL(
         string: "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/1.0.0"
     )! // swiftlint:disable:this force_unwrapping
 
+    /// Subdirectory inside `Bundle.main` that hosts committed
+    /// fallback SF2 files. Matches the folder reference set up in
+    /// `project.yml`.
+    static let bundleSubdirectory = "Soundfonts"
+    /// Pitched fallback (GM Flute, ~624 KB).
+    static let pitchedFallbackName = "000_073.sf2"
+    /// Drum fallback (Standard Drum Kit, ~6.15 MB).
+    static let drumFallbackName = "128_000.sf2"
+
     private let cacheDirectory: URL
     private let baseURL: URL
     private let session: URLSession
+    private let bundle: Bundle
 
     public init(
         cacheDirectory: URL,
         baseURL: URL = MuseScoreSF2Resolver.defaultBaseURL,
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        bundle: Bundle = .main
     ) {
         self.cacheDirectory = cacheDirectory
         self.baseURL = baseURL
         self.session = session
+        self.bundle = bundle
     }
 
-    public func resolveSoundfont(bank: Int, program: Int) async throws -> URL {
-        let fileName = Self.fileName(bank: bank, program: program)
-        let local = cacheDirectory.appending(path: fileName)
-        if FileManager.default.fileExists(atPath: local.path) {
-            return local
+    // MARK: - SheetMusicAudio.SoundfontResolver (sync)
+
+    public func soundfontURL(forBank bank: UInt8, program: UInt8, isDrums: Bool) -> URL? {
+        let name = Self.fileName(bank: Int(bank), program: Int(program), isDrums: isDrums)
+        if let precise = precisePath(name: name) {
+            return precise
+        }
+        let fallbackName = isDrums ? Self.drumFallbackName : Self.pitchedFallbackName
+        return bundleURL(name: fallbackName)
+    }
+
+    public var defaultGMSoundfontURL: URL? { nil }
+
+    /// Sync resolver path that returns `nil` if neither cache nor
+    /// bundle has a precise file — used by `LivePlaybackController`
+    /// to decide whether a staff needs a fallback channel rewrite.
+    public func precisePath(forBank bank: Int, program: Int, isDrums: Bool) -> URL? {
+        precisePath(name: Self.fileName(bank: bank, program: program, isDrums: isDrums))
+    }
+
+    private func precisePath(name: String) -> URL? {
+        let cached = cacheDirectory.appending(path: name)
+        if FileManager.default.fileExists(atPath: cached.path) {
+            return cached
+        }
+        return bundleURL(name: name)
+    }
+
+    private func bundleURL(name: String) -> URL? {
+        // `Bundle.url(forResource:withExtension:subdirectory:)`
+        // wants the components split. Strip the `.sf2` suffix.
+        guard name.hasSuffix(".sf2") else { return nil }
+        let stem = String(name.dropLast(".sf2".count))
+        return bundle.url(
+            forResource: stem,
+            withExtension: "sf2",
+            subdirectory: Self.bundleSubdirectory
+        )
+    }
+
+    // MARK: - Domain.SoundfontResolver (async)
+
+    public func resolveSoundfont(bank: Int, program: Int, isDrums: Bool) async throws -> URL {
+        let name = Self.fileName(bank: bank, program: program, isDrums: isDrums)
+        if let precise = precisePath(name: name) {
+            return precise
         }
         try createCacheDirectoryIfNeeded()
-        let remote = baseURL.appending(path: fileName)
+        let local = cacheDirectory.appending(path: name)
+        let remote = baseURL.appending(path: name)
         let (data, response) = try await session.data(from: remote)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DomainError.soundfontDownloadFailed(
-                SoundfontPatchKey(bank: bank, program: program)
+                SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
             )
         }
         try data.write(to: local, options: .atomic)
@@ -69,7 +140,8 @@ public struct MuseScoreSF2Resolver: SoundfontResolver {
                 sizeBytes: size,
                 downloadedAt: modified,
                 lastUsedAt: modified,
-                isBundled: false
+                isBundled: false,
+                isDrums: parsed.isDrums
             )
         }
     }
@@ -78,8 +150,9 @@ public struct MuseScoreSF2Resolver: SoundfontResolver {
         try cachedPatches().reduce(0) { $0 + $1.sizeBytes }
     }
 
-    public func deletePatch(bank: Int, program: Int) throws {
-        let url = cacheDirectory.appending(path: Self.fileName(bank: bank, program: program))
+    public func deletePatch(bank: Int, program: Int, isDrums: Bool) throws {
+        let name = Self.fileName(bank: bank, program: program, isDrums: isDrums)
+        let url = cacheDirectory.appending(path: name)
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
@@ -97,19 +170,31 @@ public struct MuseScoreSF2Resolver: SoundfontResolver {
 
     // MARK: - Helpers
 
-    static func fileName(bank: Int, program: Int) -> String {
-        String(format: "%03d_%03d.sf2", bank, program)
+    static func fileName(bank: Int, program: Int, isDrums: Bool) -> String {
+        let prefix = isDrums ? 128 : bank
+        return String(format: "%03d_%03d.sf2", prefix, program)
     }
 
-    static func parseFileName(_ name: String) -> (bank: Int, program: Int)? {
+    /// Parses a `BBB_PPP.sf2` cache filename into its canonical
+    /// `(bank, program, isDrums)` form.
+    ///
+    /// SF2 / GS / GM convention: bank 128 is the percussion bank, so any
+    /// `128_PPP.sf2` filename describes a drum kit, not a melodic patch
+    /// in bank 128. The returned `bank` is the canonical zero-prefixed
+    /// form for drums, ensuring
+    /// `SoundfontPatch.id == SoundfontPatchKey(bank: 0, program: P, isDrums: true)`
+    /// and disambiguating `(0, 0)` Acoustic Grand Piano from
+    /// `(0, 0)` Standard Drum Kit in the cache index and Settings UI.
+    static func parseFileName(_ name: String) -> (bank: Int, program: Int, isDrums: Bool)? {
         // Expected shape: "BBB_PPP.sf2" with three-digit decimals.
         let stem = name.split(separator: ".").first.map(String.init) ?? name
         let parts = stem.split(separator: "_")
         guard parts.count == 2,
-              let bank = Int(parts[0]),
+              let rawBank = Int(parts[0]),
               let program = Int(parts[1])
         else { return nil }
-        return (bank, program)
+        let isDrums = rawBank == 128
+        return (bank: isDrums ? 0 : rawBank, program: program, isDrums: isDrums)
     }
 
     private func createCacheDirectoryIfNeeded() throws {
