@@ -33,6 +33,7 @@ public final class ReaderViewModel {
     public private(set) var preferences: ReaderPreferences
     public private(set) var staffVolumes: [StaffAddress: Double] = [:]
     public private(set) var mutedStaves: Set<StaffAddress> = []
+    public private(set) var soloStaves: Set<StaffAddress> = []
     public private(set) var isPlaying: Bool = false
     public private(set) var soundfontAlertKind: SoundfontAlertKind?
     public private(set) var playbackCursor: ScoreCursor?
@@ -157,6 +158,67 @@ public final class ReaderViewModel {
         Task {
             await playbackController?.setStaffMute(staff: flatIndex, isMuted: mutedStaves.contains(address))
         }
+    }
+
+    public func toggleStaffSolo(address: StaffAddress) {
+        if soloStaves.contains(address) {
+            soloStaves.remove(address)
+        } else {
+            soloStaves.insert(address)
+        }
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        Task {
+            await playbackController?.setStaffSolo(staff: flatIndex, isSolo: soloStaves.contains(address))
+        }
+    }
+
+    /// Returns the GM program (0…127) currently driving the staff: the user's
+    /// override if one is set, otherwise the score's declared instrument program.
+    public func effectiveProgram(for address: StaffAddress) -> Int {
+        if let override = preferences.staffProgramOverrides[address] {
+            return override
+        }
+        return scoreDefaultProgram(for: address) ?? 0
+    }
+
+    public func hasProgramOverride(for address: StaffAddress) -> Bool {
+        preferences.staffProgramOverrides[address] != nil
+    }
+
+    public func setStaffProgram(_ program: Int, for address: StaffAddress) async {
+        await mutatePreferences { $0.staffProgramOverrides[address] = program }
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        await playbackController?.setStaffInstrument(
+            staff: flatIndex,
+            bank: scoreDefaultBank(for: address) ?? 0,
+            program: program
+        )
+    }
+
+    public func clearStaffProgramOverride(for address: StaffAddress) async {
+        await mutatePreferences { $0.staffProgramOverrides.removeValue(forKey: address) }
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        await playbackController?.setStaffInstrument(
+            staff: flatIndex,
+            bank: scoreDefaultBank(for: address) ?? 0,
+            program: scoreDefaultProgram(for: address) ?? 0
+        )
+    }
+
+    private func scoreDefaultProgram(for address: StaffAddress) -> Int? {
+        guard
+            case let .loaded(score) = loadState,
+            score.parts.indices.contains(address.partIndex)
+        else { return nil }
+        return score.parts[address.partIndex].instrument.channel.program
+    }
+
+    private func scoreDefaultBank(for address: StaffAddress) -> Int? {
+        guard
+            case let .loaded(score) = loadState,
+            score.parts.indices.contains(address.partIndex)
+        else { return nil }
+        return score.parts[address.partIndex].instrument.channel.bank
     }
 
     private func flattenedStaffIndex(for address: StaffAddress) -> Int? {
@@ -294,13 +356,20 @@ public final class ReaderViewModel {
 
     private func initialPlaybackPreferences(for score: Score) -> PlaybackPreferences {
         let states = score.allStaves.enumerated().map { idx, entry in
-            StaffMixerState(
+            let bank = score.parts.indices.contains(entry.address.partIndex)
+                ? score.parts[entry.address.partIndex].instrument.channel.bank
+                : 0
+            let program = preferences.staffProgramOverrides[entry.address]
+                ?? (score.parts.indices.contains(entry.address.partIndex)
+                    ? score.parts[entry.address.partIndex].instrument.channel.program
+                    : 0)
+            return StaffMixerState(
                 staffIndex: idx,
                 volume: staffVolumes[entry.address] ?? Self.defaultStaffVolume,
                 isMuted: false,
                 isSolo: false,
-                gmBank: 0,
-                gmProgram: 0
+                gmBank: bank,
+                gmProgram: program
             )
         }
         return PlaybackPreferences(
@@ -338,7 +407,8 @@ public final class ReaderViewModel {
             id: copy.id,
             scoreItemID: copy.scoreItemID,
             staffSize: copy.staffSize,
-            hiddenStaves: copy.hiddenStaves
+            hiddenStaves: copy.hiddenStaves,
+            staffProgramOverrides: copy.staffProgramOverrides
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)

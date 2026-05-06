@@ -40,4 +40,46 @@ import Testing
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded == prefs)
     }
+
+    @Test func programOverridesDefaultToEmpty() {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: []
+        )
+        #expect(prefs.staffProgramOverrides.isEmpty)
+    }
+
+    @Test func programOverridesAreClampedTo0Through127() {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let belowRange = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffProgramOverrides: [address: -5]
+        )
+        #expect(belowRange.staffProgramOverrides[address] == 0)
+
+        let aboveRange = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffProgramOverrides: [address: 999]
+        )
+        #expect(aboveRange.staffProgramOverrides[address] == 127)
+    }
+
+    @Test func programOverridesRoundTripThroughCodable() throws {
+        let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffProgramOverrides: [address1: 6, address2: 40]
+        )
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
+        #expect(decoded.staffProgramOverrides == prefs.staffProgramOverrides)
+    }
 }

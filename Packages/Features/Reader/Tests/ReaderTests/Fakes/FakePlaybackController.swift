@@ -9,6 +9,8 @@ final class FakePlaybackController: PlaybackController {
     private(set) var pauseCount = 0
     private(set) var lastLoadedPreferences: PlaybackPreferences?
     private(set) var staffVolumes: [Int: Double] = [:]
+    private(set) var staffSoloStates: [Int: Bool] = [:]
+    private(set) var staffInstrumentCalls: [(staff: Int, bank: Int, program: Int)] = []
     private(set) var recordedSetCursorCalls: [ScoreCursor] = []
 
     var loadError: Error?
@@ -66,6 +68,11 @@ final class FakePlaybackController: PlaybackController {
     func setMetronomeEnabled(_: Bool) {}
     func setTempoMultiplier(_: Double) {}
     func setStaffMute(staff _: Int, isMuted _: Bool) {}
-    func setStaffSolo(staff _: Int, isSolo _: Bool) {}
-    func setStaffInstrument(staff _: Int, bank _: Int, program _: Int) {}
+    func setStaffSolo(staff: Int, isSolo: Bool) {
+        staffSoloStates[staff] = isSolo
+    }
+
+    func setStaffInstrument(staff: Int, bank: Int, program: Int) {
+        staffInstrumentCalls.append((staff: staff, bank: bank, program: program))
+    }
 }

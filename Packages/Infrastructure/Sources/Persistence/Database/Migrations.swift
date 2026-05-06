@@ -9,6 +9,7 @@ enum AppMigrations {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
         m.registerMigration("v2", migrate: migrateV2)
+        m.registerMigration("v3", migrate: migrateV3)
         return m
     }()
 
@@ -16,6 +17,16 @@ enum AppMigrations {
     static let v1: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
+        return m
+    }()
+
+    /// Migrator that registers v1 + v2 only — useful for tests that want to
+    /// exercise a v3 upgrade against rows already inserted at the previous
+    /// schema.
+    static let upToV2: DatabaseMigrator = {
+        var m = DatabaseMigrator()
+        m.registerMigration("v1", migrate: migrateV1)
+        m.registerMigration("v2", migrate: migrateV2)
         return m
     }()
 
@@ -107,6 +118,15 @@ enum AppMigrations {
             staff_size        REAL NOT NULL,
             hidden_staff_ids  TEXT NOT NULL
         )
+        """)
+    }
+
+    // MARK: - v3
+
+    private static func migrateV3(_ db: Database) throws {
+        try db.execute(sql: """
+        ALTER TABLE reader_preferences
+        ADD COLUMN staff_program_overrides TEXT NOT NULL DEFAULT '[]'
         """)
     }
 }

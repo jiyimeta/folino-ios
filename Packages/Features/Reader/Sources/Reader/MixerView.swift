@@ -1,3 +1,4 @@
+import SheetMusicAudio
 import SheetMusicCore
 import SwiftUI
 
@@ -16,7 +17,7 @@ struct MixerView: View {
                 } header: {
                     Text(part.instrument.longName ?? part.trackName ?? "-")
                         .font(.headline)
-                        .padding(.bottom, -4)
+                        .padding(.bottom, -8)
                 }
                 .headerProminence(.increased)
                 .padding(.bottom, -8)
@@ -34,27 +35,90 @@ struct MixerView: View {
             get: { viewModel.volume(for: address) },
             set: { viewModel.setVolume($0, for: address) }
         )
-        HStack(spacing: 12) {
-            Slider(value: volumeBinding, in: 0 ... 1)
-                .disabled(viewModel.mutedStaves.contains(address))
-                .padding(.vertical, -8)
+        let isMuted = viewModel.mutedStaves.contains(address)
+        let isSolo = viewModel.soloStaves.contains(address)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Slider(value: volumeBinding, in: 0 ... 1)
+                    .disabled(isMuted || !viewModel.soloStaves.isEmpty && !isSolo)
+                    .padding(.vertical, -8)
 
-            Button {
-                viewModel.toggleStaffMute(address: address)
-            } label: {
-                Image(systemName: speakerIconSystemName(for: address))
-                    .font(viewModel.mutedStaves.contains(address) ? .title2 : .headline)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(
-                        width: 24,
-                        height: 24,
-                        alignment: viewModel.mutedStaves.contains(address) ? .center : .leading
-                    )
+                Button {
+                    viewModel.toggleStaffSolo(address: address)
+                } label: {
+                    Image(systemName: isSolo ? "s.circle.fill" : "s.circle")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 24, height: 24)
+                        .padding(.horizontal, 4)
+                }
+
+                Button {
+                    viewModel.toggleStaffMute(address: address)
+                } label: {
+                    Image(systemName: isMuted ? "m.circle.fill" : "m.circle")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 24, height: 24)
+                        .padding(.horizontal, 4)
+                }
+                visibilityButton(address: address)
             }
-            visibilityButton(address: address)
+            programPicker(address: address)
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+    }
+
+    @ViewBuilder
+    private func programPicker(address: StaffAddress) -> some View {
+        let program = viewModel.effectiveProgram(for: address)
+        let hasOverride = viewModel.hasProgramOverride(for: address)
+        HStack(spacing: 6) {
+            Image(systemName: "music.note.list")
+                .foregroundStyle(.secondary)
+            Menu {
+                if hasOverride {
+                    Button {
+                        Task { await viewModel.clearStaffProgramOverride(for: address) }
+                    } label: {
+                        Label("Reset to default", systemImage: "arrow.uturn.backward")
+                    }
+                    Divider()
+                }
+                ForEach(GMInstrument.Family.allCases, id: \.self) { family in
+                    Section(family.rawValue) {
+                        ForEach(family.programs) { instrument in
+                            Button {
+                                Task {
+                                    await viewModel.setStaffProgram(
+                                        Int(instrument.program), for: address
+                                    )
+                                }
+                            } label: {
+                                Text(instrument.name)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(GMInstrument.instrument(for: UInt8(clamping: program)).name)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .menuIndicator(.hidden)
+        }
+        .font(.caption)
+        .padding(.top, 2)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -66,28 +130,10 @@ struct MixerView: View {
         } label: {
             EyeIcon(isOpen: isVisible, lineWidth: 2)
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 28, height: 18)
+                .frame(width: 28, height: 24)
         }
         .contentShape(.rect)
         .animation(.spring(duration: 0.18), value: isVisible)
-    }
-
-    private func speakerIconSystemName(for address: StaffAddress) -> String {
-        if viewModel.mutedStaves.contains(address) {
-            return "speaker.slash.fill"
-        }
-
-        let value = viewModel.volume(for: address)
-
-        return if value < 0.01 {
-            "speaker.fill"
-        } else if value < 0.34 {
-            "speaker.wave.1.fill"
-        } else if value < 0.67 {
-            "speaker.wave.2.fill"
-        } else {
-            "speaker.wave.3.fill"
-        }
     }
 }
 
@@ -98,13 +144,19 @@ struct MixerView: View {
             Part(
                 id: "P0",
                 trackName: "Violin",
-                instrument: Instrument(id: "violin"),
+                instrument: Instrument(
+                    id: "violin",
+                    channels: [InstrumentChannel(program: 40)] // GM 40 = Violin
+                ),
                 staves: [Staff()]
             ),
             Part(
                 id: "P1",
                 trackName: "Piano",
-                instrument: Instrument(id: "piano"),
+                instrument: Instrument(
+                    id: "piano",
+                    channels: [InstrumentChannel(program: 0)] // GM 0 = Acoustic Grand Piano
+                ),
                 staves: [Staff(), Staff()]
             ),
         ],
@@ -114,10 +166,11 @@ struct MixerView: View {
     let vm = ReaderViewModel(
         scoreItem: PreviewFakeRepository.sampleItem,
         repository: repo,
-        gateway: PreviewFakeGateway(),
+        gateway: PreviewFakeGateway(score: score),
         scoresDirectory: URL(filePath: "/tmp")
     )
     Text("Contents")
+        .task { await vm.load() }
         .sheet(isPresented: .constant(true)) {
             MixerView(viewModel: vm, score: score)
                 .presentationDetents([.medium, .large])
