@@ -23,6 +23,8 @@ struct InspectorView: View {
         .padding(.top, 16)
         .environment(\.defaultMinListRowHeight, 28)
         .task(id: viewModel.effectiveTempoMultiplier) {
+            // Pull the persisted value into the slider whenever the model
+            // changes from outside the gesture (initial load, % tap reset).
             if !isEditingTempo {
                 sliderValue = viewModel.effectiveTempoMultiplier
             }
