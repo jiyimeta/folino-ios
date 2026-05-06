@@ -8,6 +8,15 @@ struct MixerView: View {
 
     var body: some View {
         List {
+            Section {
+                Picker("Layout", selection: $viewModel.layoutMode) {
+                    Text("Vertical").tag(ReaderViewModel.LayoutMode.vertical)
+                    Text("Horizontal").tag(ReaderViewModel.LayoutMode.horizontal)
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
             ForEach(score.parts.indices, id: \.self) { partIndex in
                 let part = score.parts[partIndex]
                 Section {
