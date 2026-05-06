@@ -14,7 +14,7 @@ struct InspectorView: View {
     @State private var sliderValue: Double = 1.0
     @State private var isEditingTempo: Bool = false
     @Environment(\.horizontalSizeClass) private var hsc
-    @State private var selectedTab: InspectorTab = .playback
+    @State private var selectedTab: InspectorTab = .visual
 
     var body: some View {
         Group {
@@ -101,40 +101,18 @@ struct InspectorView: View {
 
     @ViewBuilder
     private var layoutRow: some View {
-        HStack(spacing: 16) {
-            layoutButton(
-                .vertical,
-                systemImage: "rectangle.split.1x2",
-                accessibilityLabel: "Vertical layout"
-            )
-            layoutButton(
-                .horizontal,
-                systemImage: "rectangle.split.2x1",
-                accessibilityLabel: "Horizontal layout"
-            )
+        HStack {
+            Text("Layout direction")
+            Spacer()
+            Picker("Layout direction", selection: $viewModel.layoutMode) {
+                Image(systemName: "arrow.up.and.down").tag(ReaderViewModel.LayoutMode.vertical)
+                Image(systemName: "arrow.left.and.right").tag(ReaderViewModel.LayoutMode.horizontal)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 92)
+            .fixedSize()
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private func layoutButton(
-        _ mode: ReaderViewModel.LayoutMode,
-        systemImage: String,
-        accessibilityLabel: String
-    ) -> some View {
-        let isSelected = viewModel.layoutMode == mode
-        Button {
-            viewModel.layoutMode = mode
-        } label: {
-            Image(systemName: isSelected ? "\(systemImage).fill" : systemImage)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 32, height: 32)
-                .padding(.horizontal, 8)
-        }
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     @ViewBuilder
@@ -151,7 +129,7 @@ struct InspectorView: View {
             }
         )
         Stepper(
-            "Staff size \(Int(viewModel.preferences.staffSize))",
+            "Staff size: \(Int(viewModel.preferences.staffSize)) pt",
             value: staffSize,
             in: ReaderPreferences.minStaffSize ... ReaderPreferences.maxStaffSize,
             step: 1
