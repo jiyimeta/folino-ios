@@ -1,12 +1,10 @@
 import Domain
 import SwiftUI
 
-/// Trailing toolbar contents and the optional bottom page indicator for
-/// the Reader. Hosted from `ReaderView`'s `.toolbar { … }` modifier and
-/// hidden via `isChromeVisible`.
+/// Trailing toolbar contents and the bottom reset-zoom pill for the
+/// Reader. Hosted from `ReaderView`'s `.toolbar { … }` modifier.
 struct ReaderToolbar: ToolbarContent {
     @Bindable var viewModel: ReaderViewModel
-    @Binding var layoutMode: ReaderLayoutMode
 
     private var trailingPlacement: ToolbarItemPlacement {
         #if os(iOS)
@@ -18,12 +16,6 @@ struct ReaderToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: trailingPlacement) {
-            Picker("Layout", selection: $layoutMode) {
-                Image(systemName: "list.bullet").tag(ReaderLayoutMode.vertical)
-                Image(systemName: "book.closed").tag(ReaderLayoutMode.page)
-            }
-            .pickerStyle(.segmented)
-
             Button {
                 Task { await viewModel.togglePlayback() }
             } label: {
@@ -55,14 +47,10 @@ struct ReaderToolbar: ToolbarContent {
     }
 }
 
-/// Bottom page indicator + reset-zoom pill. Lives outside the toolbar so
-/// it can sit on top of the score content rather than in the navigation
-/// bar.
+/// Bottom reset-zoom pill. Lives outside the toolbar so it can sit on
+/// top of the score content rather than in the navigation bar.
 struct ReaderBottomOverlay: View {
     @Bindable var viewModel: ReaderViewModel
-    let layoutMode: ReaderLayoutMode
-    let pageIndex: Int
-    let totalPages: Int
 
     var body: some View {
         HStack {
@@ -76,15 +64,7 @@ struct ReaderBottomOverlay: View {
                 }
             }
             Spacer()
-            if layoutMode == .page, totalPages > 0 {
-                Text("\(pageIndex + 1) / \(totalPages)")
-                    .font(.footnote.monospacedDigit())
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-            }
         }
         .padding()
-        .opacity(viewModel.isChromeVisible ? 1 : 0)
-        .animation(.easeInOut(duration: 0.2), value: viewModel.isChromeVisible)
     }
 }

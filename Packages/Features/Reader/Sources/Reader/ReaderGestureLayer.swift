@@ -1,32 +1,22 @@
 import SwiftUI
 
-/// Wraps Reader content in pinch / pan / tap gestures. Owns no state of
-/// its own — all gesture state is bound to `ReaderViewModel` so the
-/// chrome and toolbar can react in lock-step.
+/// Wraps Reader content in pinch / pan / double-tap zoom gestures.
+/// Single-tap is intentionally left to the inner score surface so it can
+/// drive cursor seeking without conflicting with `ScrollView`.
 ///
 /// Gesture rules per the spec:
 ///   - Pinch: drives `viewportZoom`. Snap to 1.0 when ending below 1.05.
 ///   - One-finger drag: pans only when `viewportZoom > 1.0`.
-///   - Tap: in page mode, routes to prev / chrome / next via
-///     `tapZone(forX:width:)` — but only when zoom == 1.0; while zoomed,
-///     center taps still toggle chrome and edge taps are inert (the user
-///     uses pan).
 ///   - Double tap: toggles 1.0 ⇄ last non-unit zoom.
-///   - Edge swipe: page-mode only, when zoom == 1.0.
 struct ReaderGestureLayer<Content: View>: View {
     @Bindable var viewModel: ReaderViewModel
-    let isPageMode: Bool
-    let onPrevPage: () -> Void
-    let onNextPage: () -> Void
     @ViewBuilder let content: () -> Content
 
     @GestureState private var liveMagnification: CGFloat = 1.0
     @GestureState private var liveDragTranslation: CGSize = .zero
 
     var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-
+        GeometryReader { _ in
             content()
                 .scaleEffect(viewModel.viewportZoom * liveMagnification, anchor: .center)
                 .offset(
@@ -35,10 +25,8 @@ struct ReaderGestureLayer<Content: View>: View {
                 )
                 .contentShape(Rectangle())
                 .gesture(magnifyGesture)
-                .simultaneousGesture(panGesture(width: width))
-                .simultaneousGesture(tapGesture(width: width))
+                .simultaneousGesture(panGesture)
                 .simultaneousGesture(doubleTapGesture)
-                .simultaneousGesture(edgeSwipeGesture(width: width))
         }
     }
 
@@ -58,7 +46,7 @@ struct ReaderGestureLayer<Content: View>: View {
             }
     }
 
-    private func panGesture(width: CGFloat) -> some Gesture {
+    private var panGesture: some Gesture {
         DragGesture(minimumDistance: 1)
             .updating($liveDragTranslation) { value, state, _ in
                 guard viewModel.viewportZoom > 1.0 else { return }
@@ -73,40 +61,10 @@ struct ReaderGestureLayer<Content: View>: View {
             }
     }
 
-    private func tapGesture(width: CGFloat) -> some Gesture {
-        SpatialTapGesture(count: 1)
-            .onEnded { value in
-                if viewModel.shouldSuppressChromeToggleTap() { return }
-                if !isPageMode || viewModel.viewportZoom > 1.0 {
-                    viewModel.toggleChrome()
-                    return
-                }
-                switch tapZone(forX: value.location.x, width: width) {
-                case .prev: onPrevPage()
-                case .chrome: viewModel.toggleChrome()
-                case .next: onNextPage()
-                }
-            }
-    }
-
     private var doubleTapGesture: some Gesture {
         SpatialTapGesture(count: 2)
             .onEnded { _ in
                 viewModel.toggleZoom(targetIfZoomedOut: 2.0)
-            }
-    }
-
-    private func edgeSwipeGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onEnded { value in
-                guard isPageMode, viewModel.viewportZoom == 1.0 else { return }
-                let edgeBand = max(width * 0.1, 40)
-                let startedAtLeftEdge = value.startLocation.x < edgeBand
-                let startedAtRightEdge = value.startLocation.x > width - edgeBand
-                let movedRight = value.translation.width > 60
-                let movedLeft = value.translation.width < -60
-                if startedAtLeftEdge, movedRight { onPrevPage() }
-                if startedAtRightEdge, movedLeft { onNextPage() }
             }
     }
 }

@@ -233,14 +233,8 @@ struct ReaderViewModelTests {
         #expect(vm.viewportZoom == 3.5) // last remembered, not the default arg
     }
 
-    @Test func chromeAndInspectorAreToggleable() {
+    @Test func inspectorIsToggleable() {
         let vm = makeVMNoLoad()
-        #expect(vm.isChromeVisible)
-        vm.toggleChrome()
-        #expect(!vm.isChromeVisible)
-        vm.toggleChrome()
-        #expect(vm.isChromeVisible)
-
         #expect(!vm.isInspectorPresented)
         vm.isInspectorPresented = true
         #expect(vm.isInspectorPresented)

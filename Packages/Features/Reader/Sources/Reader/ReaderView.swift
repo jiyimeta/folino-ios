@@ -1,14 +1,10 @@
 import Domain
 import SheetMusicCore
-import SheetMusicUI
 import SwiftUI
 
 @MainActor
 public struct ReaderView: View {
     @State private var viewModel: ReaderViewModel
-    @AppStorage(ReaderLayoutMode.appStorageKey) private var rawLayoutMode = ReaderLayoutMode.appStorageDefault
-    @State private var pageIndex = 0
-    @State private var totalPages = 1
     @Environment(\.horizontalSizeClass) private var _horizontalSizeClass
 
     public init(
@@ -33,31 +29,17 @@ public struct ReaderView: View {
         )
     }
 
-    private var layoutMode: Binding<ReaderLayoutMode> {
-        Binding(
-            get: { ReaderLayoutMode(rawValue: rawLayoutMode) ?? .vertical },
-            set: { rawLayoutMode = $0.rawValue }
-        )
-    }
-
     public var body: some View {
         ZStack(alignment: .bottom) {
             content
-            ReaderBottomOverlay(
-                viewModel: viewModel,
-                layoutMode: layoutMode.wrappedValue,
-                pageIndex: pageIndex,
-                totalPages: totalPages
-            )
+            ReaderBottomOverlay(viewModel: viewModel)
         }
         .navigationTitle(viewModel.scoreItem.title)
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(viewModel.isChromeVisible ? .visible : .hidden, for: .navigationBar)
-            .statusBarHidden(!viewModel.isChromeVisible)
         #endif
             .toolbar {
-                ReaderToolbar(viewModel: viewModel, layoutMode: layoutMode)
+                ReaderToolbar(viewModel: viewModel)
             }
             .inspector(isPresented: $viewModel.isInspectorPresented) {
                 if case let .loaded(score) = viewModel.loadState {
@@ -90,32 +72,13 @@ public struct ReaderView: View {
             ProgressView().controlSize(.large)
         case let .loaded(score):
             let visible = score.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
-            ReaderGestureLayer(
-                viewModel: viewModel,
-                isPageMode: layoutMode.wrappedValue == .page,
-                onPrevPage: { pageIndex = max(0, pageIndex - 1) },
-                onNextPage: { pageIndex = max(0, min(totalPages - 1, pageIndex + 1)) }
-            ) {
-                switch layoutMode.wrappedValue {
-                case .vertical:
-                    VerticalScoreContainer(
-                        score: visible,
-                        staffSize: viewModel.preferences.staffSize,
-                        playbackCursor: viewModel.playbackCursor,
-                        viewModel: viewModel
-                    )
-                case .page:
-                    PagedScoreView(
-                        score: visible,
-                        options: ScoreViewOptions(
-                            staffSize: viewModel.preferences.staffSize,
-                            systemGap: viewModel.preferences.staffSize * 1.25,
-                            wrapToViewWidth: true
-                        ),
-                        pageIndex: $pageIndex,
-                        totalPages: $totalPages
-                    )
-                }
+            ReaderGestureLayer(viewModel: viewModel) {
+                VerticalScoreContainer(
+                    score: visible,
+                    staffSize: viewModel.preferences.staffSize,
+                    playbackCursor: viewModel.playbackCursor,
+                    viewModel: viewModel
+                )
             }
         case let .failed(message):
             ContentUnavailableView {
