@@ -67,6 +67,19 @@ public struct ReaderView: View {
                     Color.clear
                 }
             }
+            .alert(
+                "Loading playback sounds…",
+                isPresented: Binding(
+                    get: { viewModel.isLoadingSoundfonts },
+                    set: { newValue in
+                        if !newValue { viewModel.cancelLoadingSoundfonts() }
+                    }
+                )
+            ) {
+                Button("Cancel", role: .cancel) {
+                    viewModel.cancelLoadingSoundfonts()
+                }
+            }
             .task { await viewModel.load() }
     }
 

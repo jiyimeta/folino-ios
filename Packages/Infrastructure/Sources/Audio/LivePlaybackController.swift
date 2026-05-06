@@ -42,6 +42,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
         if let domainResolver {
             await Self.prefetchSoundfonts(score: score, resolver: domainResolver)
         }
+        // Prefetch's URLSession calls honor cancellation but the TaskGroup
+        // returns regardless. Bail before the engine prepare so a cancel
+        // mid-load doesn't end up with a primed engine the user expects to
+        // be silent.
+        try Task.checkCancellation()
         try engine.prepare(score: score)
         loadedScore = score
         for state in preferences.perStaff {

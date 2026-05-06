@@ -20,6 +20,7 @@ public final class ReaderViewModel {
     public private(set) var preferences: ReaderPreferences
     public private(set) var staffVolumes: [StaffAddress: Double] = [:]
     public private(set) var isPlaying: Bool = false
+    public private(set) var isLoadingSoundfonts: Bool = false
     public private(set) var playbackCursor: ScoreCursor?
     public var viewportZoom: CGFloat = 1.0
     public var viewportPan: CGSize = .zero
@@ -43,6 +44,8 @@ public final class ReaderViewModel {
     private var hasLoadedIntoPlayback = false
     @ObservationIgnored
     private var cursorTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var loadingTask: Task<Void, Error>?
 
     public init(
         scoreItem: ScoreItem,
@@ -126,16 +129,26 @@ public final class ReaderViewModel {
 
     public func togglePlayback() async {
         guard let controller = playbackController,
-              case let .loaded(score) = loadState else { return }
+              case let .loaded(score) = loadState,
+              !isLoadingSoundfonts
+        else { return }
         if !hasLoadedIntoPlayback {
+            let prefs = initialPlaybackPreferences(for: score)
+            isLoadingSoundfonts = true
+            let task = Task<Void, Error> {
+                try await controller.load(score: score, preferences: prefs)
+            }
+            loadingTask = task
             do {
-                try await controller.load(
-                    score: score, preferences: initialPlaybackPreferences(for: score)
-                )
+                try await task.value
                 hasLoadedIntoPlayback = true
             } catch {
+                isLoadingSoundfonts = false
+                loadingTask = nil
                 return
             }
+            isLoadingSoundfonts = false
+            loadingTask = nil
         }
         if isPlaying {
             await controller.pause()
@@ -148,6 +161,12 @@ public final class ReaderViewModel {
                 isPlaying = false
             }
         }
+    }
+
+    /// Cancels an in-flight `load` on the playback controller. Safe to call
+    /// when no load is in flight — the cancel is a no-op.
+    public func cancelLoadingSoundfonts() {
+        loadingTask?.cancel()
     }
 
     public func toggleStaff(address: StaffAddress) async {

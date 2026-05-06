@@ -2,10 +2,22 @@
   "sourceLanguage": "en",
   "version": "1.0",
   "strings": {
+    "Cancel": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cancel" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "キャンセル" } }
+      }
+    },
     "Could not open this score": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Could not open this score" } },
         "ja": { "stringUnit": { "state": "translated", "value": "この楽譜を開けませんでした" } }
+      }
+    },
+    "Loading playback sounds…": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Loading playback sounds…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再生音源をロード中" } }
       }
     },
     "Done": {
