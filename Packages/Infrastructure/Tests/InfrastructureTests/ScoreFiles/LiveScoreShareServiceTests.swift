@@ -129,4 +129,48 @@ import Testing
         let head = try Data(contentsOf: url).prefix(4)
         #expect(head == Data([0x25, 0x50, 0x44, 0x46])) // %PDF
     }
+
+    @Test func prepareShareMIDIStartsWithMThdMagic() async throws {
+        let tmp = try TempDirectory()
+        let scores = tmp.url.appending(path: "Scores")
+        let shareTmp = tmp.url.appending(path: "Share")
+        try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
+
+        let mscz = try Fixtures.minimalMSCZData()
+        let local = "abc.mscz"
+        try mscz.write(to: scores.appending(path: local))
+
+        let svc = LiveScoreShareService(
+            scoresDirectory: scores,
+            shareTempDirectory: shareTmp,
+            gateway: LiveScoreFileGateway()
+        )
+        let item = Self.makeItem(localFileName: local)
+
+        let url = try await svc.prepareShare(item: item, format: .midi)
+        #expect(url.pathExtension == "mid")
+        let head = try Data(contentsOf: url).prefix(4)
+        #expect(head == Data([0x4D, 0x54, 0x68, 0x64])) // "MThd"
+    }
+
+    @Test func prepareShareTwiceOverwrites() async throws {
+        let tmp = try TempDirectory()
+        let scores = tmp.url.appending(path: "Scores")
+        let shareTmp = tmp.url.appending(path: "Share")
+        try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
+
+        try Fixtures.minimalMSCZData().write(to: scores.appending(path: "abc.mscz"))
+        let svc = LiveScoreShareService(
+            scoresDirectory: scores,
+            shareTempDirectory: shareTmp,
+            gateway: LiveScoreFileGateway()
+        )
+        let item = Self.makeItem(localFileName: "abc.mscz")
+
+        let first = try await svc.prepareShare(item: item, format: .midi)
+        let second = try await svc.prepareShare(item: item, format: .midi)
+        #expect(first == second)
+    }
 }

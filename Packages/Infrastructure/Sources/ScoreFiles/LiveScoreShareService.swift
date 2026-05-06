@@ -63,8 +63,30 @@ public struct LiveScoreShareService: ScoreShareService {
         case .pdf:
             return try await preparePDF(item: item, sanitizedTitle: title)
         case .midi:
-            throw DomainError.unsupportedFormat("share")
+            return try await prepareMIDI(item: item, sanitizedTitle: title)
         }
+    }
+
+    private func prepareMIDI(
+        item: ScoreItem,
+        sanitizedTitle: String
+    ) async throws -> URL {
+        let sourceURL = scoresDirectory.appending(path: item.localFileName)
+        let (score, _) = try await gateway.loadScore(fileURL: sourceURL)
+        let midiData: Data
+        do {
+            midiData = try SheetMusic.exportMIDI(score: score)
+        } catch {
+            throw DomainError.scoreWriteFailed(reason: "\(error)")
+        }
+        let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).mid")
+        try? FileManager.default.removeItem(at: destination)
+        do {
+            try midiData.write(to: destination)
+        } catch {
+            throw DomainError.scoreWriteFailed(reason: "\(error)")
+        }
+        return destination
     }
 
     private func preparePDF(
