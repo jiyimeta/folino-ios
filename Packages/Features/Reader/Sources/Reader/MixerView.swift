@@ -6,8 +6,16 @@ struct MixerView: View {
     @Bindable var viewModel: ReaderViewModel
     let score: Score
 
+    @AppStorage("readerMetronomeEnabled") private var isMetronomeEnabled: Bool = false
+    /// Slider's local edit value. Syncs from `viewModel.effectiveTempoMultiplier`
+    /// when the user is not dragging — keeps the UI consistent after a reset
+    /// from outside the slider (e.g. the % label tap).
+    @State private var sliderValue: Double = 1.0
+    @State private var isEditingTempo: Bool = false
+
     var body: some View {
         List {
+            tempoRow
             Section {
                 Picker("Layout", selection: $viewModel.layoutMode) {
                     Text("Vertical").tag(ReaderViewModel.LayoutMode.vertical)
@@ -36,6 +44,68 @@ struct MixerView: View {
         .buttonStyle(.plain)
         .padding(.top, 16)
         .environment(\.defaultMinListRowHeight, 28)
+        .task(id: viewModel.effectiveTempoMultiplier) {
+            // Pull the persisted value into the slider whenever the model
+            // changes from outside the gesture (initial load, % tap reset).
+            if !isEditingTempo {
+                sliderValue = viewModel.effectiveTempoMultiplier
+            }
+        }
+        .task {
+            await viewModel.setMetronomeEnabled(isMetronomeEnabled)
+        }
+    }
+
+    @ViewBuilder
+    private var tempoRow: some View {
+        Section {
+            tempoControls
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+    }
+
+    @ViewBuilder
+    private var tempoControls: some View {
+        HStack(spacing: 8) {
+            Button {
+                isMetronomeEnabled.toggle()
+                Task { await viewModel.setMetronomeEnabled(isMetronomeEnabled) }
+            } label: {
+                Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 24, height: 24)
+                    .padding(.horizontal, 4)
+            }
+
+            Button {
+                Task { await viewModel.resetTempoMultiplier() }
+            } label: {
+                Text("\(Int((sliderValue * 100).rounded()))%")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .frame(minWidth: 44, alignment: .trailing)
+            }
+
+            Slider(
+                value: $sliderValue,
+                in: 0.5 ... 2.0,
+                onEditingChanged: { editing in
+                    isEditingTempo = editing
+                    if !editing {
+                        Task { await viewModel.commitTempoMultiplier(sliderValue) }
+                    }
+                }
+            )
+            .onChange(of: sliderValue) { _, newValue in
+                if isEditingTempo {
+                    viewModel.setTempoMultiplier(newValue)
+                }
+            }
+            .padding(.vertical, -8)
+        }
     }
 
     @ViewBuilder

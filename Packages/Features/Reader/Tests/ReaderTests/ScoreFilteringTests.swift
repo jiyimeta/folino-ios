@@ -164,6 +164,6 @@ extension Instrument {
         #expect(result.parts[0].staves[0].brackets.map(\.span) == [1])
         // Part 1 still has its two staves and no brackets leaked in.
         #expect(result.parts[1].staves.count == 2)
-        #expect(result.parts[1].staves.allSatisfy(\.brackets.isEmpty))
+        #expect(result.parts[1].staves.flatMap(\.brackets).isEmpty)
     }
 }
