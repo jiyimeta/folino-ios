@@ -19,25 +19,20 @@ struct InspectorView: View {
         Group {
             if hsc == .compact {
                 VStack(spacing: 0) {
-                    Picker("", selection: $selectedTab) {
+                    Picker("Inspector tab", selection: $selectedTab) {
                         Text("Playback").tag(InspectorTab.playback)
                         Text("Visual").tag(InspectorTab.visual)
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
                     .padding(.horizontal)
                     .padding(.top, 16)
 
                     switch selectedTab {
                     case .playback:
-                        List { playbackContent }
-                            .listStyle(.plain)
-                            .buttonStyle(.plain)
-                            .environment(\.defaultMinListRowHeight, 28)
+                        tabList { playbackContent }
                     case .visual:
-                        List { visualContent }
-                            .listStyle(.plain)
-                            .buttonStyle(.plain)
-                            .environment(\.defaultMinListRowHeight, 28)
+                        tabList { visualContent }
                     }
                 }
             } else {
@@ -61,6 +56,14 @@ struct InspectorView: View {
         .task {
             await viewModel.setMetronomeEnabled(isMetronomeEnabled)
         }
+    }
+
+    @ViewBuilder
+    private func tabList<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        List { content() }
+            .listStyle(.plain)
+            .buttonStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 28)
     }
 
     @ViewBuilder
