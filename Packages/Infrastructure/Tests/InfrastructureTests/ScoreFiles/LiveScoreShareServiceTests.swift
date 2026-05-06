@@ -105,4 +105,28 @@ import Testing
         let bytes = try Data(contentsOf: url)
         _ = try SheetMusic.loadScore(msczData: bytes)
     }
+
+    @Test func prepareSharePDFStartsWithPDFMagic() async throws {
+        let tmp = try TempDirectory()
+        let scores = tmp.url.appending(path: "Scores")
+        let shareTmp = tmp.url.appending(path: "Share")
+        try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
+
+        let mscz = try Fixtures.minimalMSCZData()
+        let local = "abc.mscz"
+        try mscz.write(to: scores.appending(path: local))
+
+        let svc = LiveScoreShareService(
+            scoresDirectory: scores,
+            shareTempDirectory: shareTmp,
+            gateway: LiveScoreFileGateway()
+        )
+        let item = Self.makeItem(localFileName: local)
+
+        let url = try await svc.prepareShare(item: item, format: .pdf)
+        #expect(url.pathExtension == "pdf")
+        let head = try Data(contentsOf: url).prefix(4)
+        #expect(head == Data([0x25, 0x50, 0x44, 0x46])) // %PDF
+    }
 }

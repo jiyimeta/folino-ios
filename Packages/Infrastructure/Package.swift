@@ -55,6 +55,7 @@ let package = Package(
             dependencies: [
                 "Domain",
                 .product(name: "SheetMusic", package: "swift-sheet-music"),
+                .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
             ],
             plugins: swiftLintPlugins
         ),

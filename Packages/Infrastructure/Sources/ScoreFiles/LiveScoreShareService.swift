@@ -2,6 +2,7 @@ import Domain
 import Foundation
 import SheetMusic
 import SheetMusicMSCX
+import SheetMusicPDF
 
 /// Live `ScoreShareService` backed by `swift-sheet-music`. Companion to
 /// `LiveScoreFileGateway` in the same module.
@@ -55,14 +56,34 @@ public struct LiveScoreShareService: ScoreShareService {
         item: ScoreItem,
         format: ScoreShareFormat
     ) async throws -> URL {
-        await Task.yield()
         let title = Self.sanitize(title: item.title)
         switch format {
         case .sourceFormat:
             return try prepareSourceFormat(item: item, sanitizedTitle: title)
-        case .pdf, .midi:
+        case .pdf:
+            return try await preparePDF(item: item, sanitizedTitle: title)
+        case .midi:
             throw DomainError.unsupportedFormat("share")
         }
+    }
+
+    private func preparePDF(
+        item: ScoreItem,
+        sanitizedTitle: String
+    ) async throws -> URL {
+        let sourceURL = scoresDirectory.appending(path: item.localFileName)
+        let (score, _) = try await gateway.loadScore(fileURL: sourceURL)
+        let pdfData = try await MainActor.run {
+            try PDFExporter.export(score: score, options: PDFExporter.Options(title: item.title))
+        }
+        let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).pdf")
+        try? FileManager.default.removeItem(at: destination)
+        do {
+            try pdfData.write(to: destination)
+        } catch {
+            throw DomainError.scoreWriteFailed(reason: "\(error)")
+        }
+        return destination
     }
 
     private func prepareSourceFormat(
