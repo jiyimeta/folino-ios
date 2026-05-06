@@ -130,19 +130,14 @@ public struct MuseScoreSF2Resolver: Domain.SoundfontResolver, SheetMusicAudio.So
             let attrs = (try? FileManager.default.attributesOfItem(atPath: url.path)) ?? [:]
             let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
             let modified = (attrs[.modificationDate] as? Date) ?? .distantPast
-            // The file naming convention encodes drum banks as `128_PPP`.
-            // Surface that into the cache record so `id` and the Settings
-            // UI can disambiguate `(0, 0)` Acoustic Grand from `(0, 0)` Std Kit.
-            let isDrums = parsed.bank == 128
-            let recordedBank = isDrums ? 0 : parsed.bank
             return SoundfontPatch(
-                bank: recordedBank, program: parsed.program,
+                bank: parsed.bank, program: parsed.program,
                 localFileName: url.lastPathComponent,
                 sizeBytes: size,
                 downloadedAt: modified,
                 lastUsedAt: modified,
                 isBundled: false,
-                isDrums: isDrums
+                isDrums: parsed.isDrums
             )
         }
     }
@@ -176,15 +171,26 @@ public struct MuseScoreSF2Resolver: Domain.SoundfontResolver, SheetMusicAudio.So
         return String(format: "%03d_%03d.sf2", prefix, program)
     }
 
-    static func parseFileName(_ name: String) -> (bank: Int, program: Int)? {
+    /// Parses a `BBB_PPP.sf2` cache filename into its canonical
+    /// `(bank, program, isDrums)` form.
+    ///
+    /// SF2 / GS / GM convention: bank 128 is the percussion bank, so any
+    /// `128_PPP.sf2` filename describes a drum kit, not a melodic patch
+    /// in bank 128. The returned `bank` is the canonical zero-prefixed
+    /// form for drums, ensuring
+    /// `SoundfontPatch.id == SoundfontPatchKey(bank: 0, program: P, isDrums: true)`
+    /// and disambiguating `(0, 0)` Acoustic Grand Piano from
+    /// `(0, 0)` Standard Drum Kit in the cache index and Settings UI.
+    static func parseFileName(_ name: String) -> (bank: Int, program: Int, isDrums: Bool)? {
         // Expected shape: "BBB_PPP.sf2" with three-digit decimals.
         let stem = name.split(separator: ".").first.map(String.init) ?? name
         let parts = stem.split(separator: "_")
         guard parts.count == 2,
-              let bank = Int(parts[0]),
+              let rawBank = Int(parts[0]),
               let program = Int(parts[1])
         else { return nil }
-        return (bank, program)
+        let isDrums = rawBank == 128
+        return (bank: isDrums ? 0 : rawBank, program: program, isDrums: isDrums)
     }
 
     private func createCacheDirectoryIfNeeded() throws {
