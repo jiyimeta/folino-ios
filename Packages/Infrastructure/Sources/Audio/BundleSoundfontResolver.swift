@@ -26,7 +26,7 @@ public struct BundleSoundfontResolver: SheetMusicAudio.SoundfontResolver {
         self.bundle = bundle
     }
 
-    public func soundfontURL(forBank _: UInt8, program _: UInt8) -> URL? {
+    public func soundfontURL(forBank _: UInt8, program _: UInt8, isDrums _: Bool) -> URL? {
         nil
     }
 
