@@ -9,65 +9,34 @@ struct ReaderToolbar: ToolbarContent {
     @Binding var layoutMode: ReaderLayoutMode
 
     var body: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Picker("Layout", selection: $layoutMode) {
-                    Image(systemName: "list.bullet").tag(ReaderLayoutMode.vertical)
-                    Image(systemName: "book.closed").tag(ReaderLayoutMode.page)
-                }
-                .pickerStyle(.segmented)
-
-                Button {
-                    Task { await viewModel.decrementStaffSize() }
-                } label: {
-                    Image(systemName: "minus.magnifyingglass")
-                }
-                .disabled(viewModel.preferences.staffSize <= ReaderPreferences.minStaffSize)
-
-                Button {
-                    Task { await viewModel.incrementStaffSize() }
-                } label: {
-                    Image(systemName: "plus.magnifyingglass")
-                }
-                .disabled(viewModel.preferences.staffSize >= ReaderPreferences.maxStaffSize)
-
-                Button {
-                    viewModel.isInspectorPresented.toggle()
-                } label: {
-                    Image(systemName: "sidebar.right")
-                }
-                .accessibilityLabel("Show staves panel")
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Picker("Layout", selection: $layoutMode) {
+                Image(systemName: "list.bullet").tag(ReaderLayoutMode.vertical)
+                Image(systemName: "book.closed").tag(ReaderLayoutMode.page)
             }
-        #else
-            ToolbarItemGroup(placement: .automatic) {
-                Picker("Layout", selection: $layoutMode) {
-                    Image(systemName: "list.bullet").tag(ReaderLayoutMode.vertical)
-                    Image(systemName: "book.closed").tag(ReaderLayoutMode.page)
-                }
-                .pickerStyle(.segmented)
+            .pickerStyle(.segmented)
 
-                Button {
-                    Task { await viewModel.decrementStaffSize() }
-                } label: {
-                    Image(systemName: "minus.magnifyingglass")
-                }
-                .disabled(viewModel.preferences.staffSize <= ReaderPreferences.minStaffSize)
-
-                Button {
-                    Task { await viewModel.incrementStaffSize() }
-                } label: {
-                    Image(systemName: "plus.magnifyingglass")
-                }
-                .disabled(viewModel.preferences.staffSize >= ReaderPreferences.maxStaffSize)
-
-                Button {
-                    viewModel.isInspectorPresented.toggle()
-                } label: {
-                    Image(systemName: "sidebar.right")
-                }
-                .accessibilityLabel("Show staves panel")
+            Button {
+                Task { await viewModel.decrementStaffSize() }
+            } label: {
+                Image(systemName: "minus.magnifyingglass")
             }
-        #endif
+            .disabled(viewModel.preferences.staffSize <= ReaderPreferences.minStaffSize)
+
+            Button {
+                Task { await viewModel.incrementStaffSize() }
+            } label: {
+                Image(systemName: "plus.magnifyingglass")
+            }
+            .disabled(viewModel.preferences.staffSize >= ReaderPreferences.maxStaffSize)
+
+            Button {
+                viewModel.isInspectorPresented.toggle()
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+            }
+            .accessibilityLabel("Show staves panel")
+        }
     }
 }
 
