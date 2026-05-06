@@ -17,6 +17,13 @@ struct ReaderToolbar: ToolbarContent {
             .pickerStyle(.segmented)
 
             Button {
+                Task { await viewModel.togglePlayback() }
+            } label: {
+                Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+            }
+            .accessibilityLabel(viewModel.isPlaying ? "Pause" : "Play")
+
+            Button {
                 Task { await viewModel.decrementStaffSize() }
             } label: {
                 Image(systemName: "minus.magnifyingglass")

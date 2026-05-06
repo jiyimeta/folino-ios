@@ -15,7 +15,8 @@ public struct ReaderView: View {
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
         gateway: any ScoreFileGateway,
-        scoresDirectory: URL
+        scoresDirectory: URL,
+        playbackController: (any PlaybackController)? = nil
     ) {
         // Seed the device-class default at construction time. The view
         // model only uses this if no persisted record exists.
@@ -26,7 +27,8 @@ public struct ReaderView: View {
                 repository: repository,
                 gateway: gateway,
                 scoresDirectory: scoresDirectory,
-                defaultStaffSize: initialDefault
+                defaultStaffSize: initialDefault,
+                playbackController: playbackController
             )
         )
     }

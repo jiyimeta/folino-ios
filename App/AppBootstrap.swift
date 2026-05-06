@@ -1,3 +1,4 @@
+import Audio
 import Domain
 import Foundation
 import Observation
@@ -14,6 +15,7 @@ final class AppBootstrap {
     private(set) var repository: LiveScoreLibraryRepository?
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var importer: LiveScoreFileImporter?
+    private(set) var playbackController: LivePlaybackController?
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`.
     /// Last-wins: a second URL arriving before the first is consumed
@@ -44,6 +46,9 @@ final class AppBootstrap {
             self.repository = repository
             self.gateway = gateway
             self.importer = importer
+            playbackController = LivePlaybackController(
+                soundfontResolver: BundleSoundfontResolver()
+            )
 
             Task { [weak self] in
                 do {

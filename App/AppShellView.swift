@@ -80,7 +80,8 @@ private struct ReadyShell: View {
                             scoreItem: item,
                             repository: repository,
                             gateway: gateway,
-                            scoresDirectory: scoresDirectory
+                            scoresDirectory: scoresDirectory,
+                            playbackController: bootstrap.playbackController
                         )
                     } else {
                         ContentUnavailableView(
@@ -99,7 +100,8 @@ private struct ReadyShell: View {
                             scoreItem: item,
                             repository: repository,
                             gateway: gateway,
-                            scoresDirectory: scoresDirectory
+                            scoresDirectory: scoresDirectory,
+                            playbackController: bootstrap.playbackController
                         )
                     },
                     licenseContent: { LicenseListView() },

@@ -11,29 +11,11 @@ struct MixerView: View {
                 let part = score.parts[partIndex]
                 Section {
                     ForEach(part.staves.indices, id: \.self) { staffIndex in
-                        let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
-
-                        HStack(spacing: 12) {
-                            Slider(
-                                value: Binding(
-                                    get: { viewModel.volume(for: address) },
-                                    set: { viewModel.setVolume($0, for: address) }
-                                ),
-                                in: 0 ... 1
+                        staffRow(
+                            address: StaffAddress(
+                                partIndex: partIndex, staffIndexInPart: staffIndex
                             )
-                            .padding(.vertical, -8)
-                            Button {
-                                // TODO: Implement mute
-                            } label: {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 24, height: 24)
-                            }
-                            visibilityButton(address: address)
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+                        )
                     }
                 } header: {
                     Text(part.instrument.longName ?? part.trackName ?? "-")
@@ -48,6 +30,29 @@ struct MixerView: View {
         .buttonStyle(.plain)
         .padding(.top, 16)
         .environment(\.defaultMinListRowHeight, 28)
+    }
+
+    @ViewBuilder
+    private func staffRow(address: StaffAddress) -> some View {
+        let volumeBinding = Binding<Double>(
+            get: { viewModel.volume(for: address) },
+            set: { viewModel.setVolume($0, for: address) }
+        )
+        HStack(spacing: 12) {
+            Slider(value: volumeBinding, in: 0 ... 1)
+                .padding(.vertical, -8)
+            Button {
+                // TODO: Implement mute
+            } label: {
+                Image(systemName: "speaker.wave.2.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+            }
+            visibilityButton(address: address)
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     @ViewBuilder

@@ -191,6 +191,96 @@ struct ReaderViewModelTests {
         #expect(vm.preferences.hiddenStaves.isEmpty)
     }
 
+    @Test func togglePlaybackLoadsPlaysThenPauses() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
+            metaTags: [:]
+        )
+        let gateway = FakeScoreFileGateway(loadScoreResult: .success((
+            score: score,
+            summary: ScoreFileSummary(
+                title: "Test", composer: nil, instrumentationSummary: "",
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
+            )
+        )))
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: gateway,
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        await vm.togglePlayback()
+        #expect(controller.loadCount == 1)
+        #expect(controller.playCount == 1)
+        #expect(vm.isPlaying)
+
+        await vm.togglePlayback()
+        #expect(controller.pauseCount == 1)
+        #expect(controller.loadCount == 1) // load only happens once
+        #expect(!vm.isPlaying)
+    }
+
+    @Test func togglePlaybackIsNoOpWhenScoreNotLoaded() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        // No `await vm.load()`.
+        await vm.togglePlayback()
+        #expect(controller.loadCount == 0)
+        #expect(controller.playCount == 0)
+        #expect(!vm.isPlaying)
+    }
+
+    @Test func setVolumeForwardsToControllerByFlatStaffIndex() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()]),
+                Part(id: "P1", trackName: "Pno", instrument: Instrument(id: "p"), staves: [Staff(), Staff()]),
+            ],
+            metaTags: [:]
+        )
+        let gateway = FakeScoreFileGateway(loadScoreResult: .success((
+            score: score,
+            summary: ScoreFileSummary(
+                title: "Test", composer: nil, instrumentationSummary: "",
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
+            )
+        )))
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: gateway,
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        // Piano's lower staff is at (partIndex: 1, staffIndexInPart: 1)
+        // → flat staff index 2 (Vn=0, Pno-top=1, Pno-bottom=2).
+        let pianoBottom = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        vm.setVolume(0.3, for: pianoBottom)
+        // Allow the dispatched `Task { await controller.setStaffVolume(...) }` to run.
+        await Task.yield()
+        await Task.yield()
+        #expect(controller.staffVolumes[2] == 0.3)
+    }
+
     @Test func staffVolumeDefaultsToOneAndIsClampedOnSet() {
         let vm = makeVMNoLoad()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)

@@ -19,6 +19,7 @@ public final class ReaderViewModel {
     public private(set) var scoreItem: ScoreItem
     public private(set) var preferences: ReaderPreferences
     public private(set) var staffVolumes: [StaffAddress: Double] = [:]
+    public private(set) var isPlaying: Bool = false
     public var viewportZoom: CGFloat = 1.0
     public var viewportPan: CGSize = .zero
     public var lastNonUnitZoom: CGFloat = 1.0
@@ -34,20 +35,26 @@ public final class ReaderViewModel {
     @ObservationIgnored
     private let defaultStaffSize: CGFloat
     @ObservationIgnored
+    private let playbackController: (any PlaybackController)?
+    @ObservationIgnored
     private var hasUpdatedLastOpened = false
+    @ObservationIgnored
+    private var hasLoadedIntoPlayback = false
 
     public init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
-        defaultStaffSize: CGFloat = 14
+        defaultStaffSize: CGFloat = 14,
+        playbackController: (any PlaybackController)? = nil
     ) {
         self.scoreItem = scoreItem
         self.repository = repository
         self.gateway = gateway
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
+        self.playbackController = playbackController
         preferences = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
@@ -90,7 +97,39 @@ public final class ReaderViewModel {
     }
 
     public func setVolume(_ value: Double, for address: StaffAddress) {
-        staffVolumes[address] = min(max(value, 0), 1)
+        let clamped = min(max(value, 0), 1)
+        staffVolumes[address] = clamped
+        guard let controller = playbackController,
+              case let .loaded(score) = loadState,
+              let flatIndex = score.allStaves.firstIndex(where: { $0.address == address })
+        else { return }
+        Task { await controller.setStaffVolume(staff: flatIndex, volume: clamped) }
+    }
+
+    public func togglePlayback() async {
+        guard let controller = playbackController,
+              case let .loaded(score) = loadState else { return }
+        if !hasLoadedIntoPlayback {
+            do {
+                try await controller.load(
+                    score: score, preferences: initialPlaybackPreferences(for: score)
+                )
+                hasLoadedIntoPlayback = true
+            } catch {
+                return
+            }
+        }
+        if isPlaying {
+            await controller.pause()
+            isPlaying = false
+        } else {
+            do {
+                try await controller.play()
+                isPlaying = true
+            } catch {
+                isPlaying = false
+            }
+        }
     }
 
     public func toggleStaff(address: StaffAddress) async {
@@ -129,6 +168,25 @@ public final class ReaderViewModel {
     }
 
     // MARK: - Private
+
+    private func initialPlaybackPreferences(for score: Score) -> PlaybackPreferences {
+        let states = score.allStaves.enumerated().map { idx, entry in
+            StaffMixerState(
+                staffIndex: idx,
+                volume: staffVolumes[entry.address] ?? Self.defaultStaffVolume,
+                isMuted: false,
+                isSolo: false,
+                gmBank: 0,
+                gmProgram: 0
+            )
+        }
+        return PlaybackPreferences(
+            scoreItemID: scoreItem.id,
+            perStaff: states,
+            tempoMultiplier: 1.0,
+            abRepeat: nil
+        )
+    }
 
     private func loadOrSeedPreferences() async {
         do {
