@@ -1,5 +1,3 @@
-import Foundation
-
 /// Three-state cycle for the Reader's repeat / loop feature.
 /// `.off` plays through, `.loopAll` loops the whole score, `.abLoop`
 /// loops the user-selected A–B section (measures).
