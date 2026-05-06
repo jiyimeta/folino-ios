@@ -12,6 +12,7 @@ final class FakePlaybackController: PlaybackController {
     private(set) var staffSoloStates: [Int: Bool] = [:]
     private(set) var staffInstrumentCalls: [(staff: Int, bank: Int, program: Int)] = []
     private(set) var recordedSetCursorCalls: [ScoreCursor] = []
+    private(set) var loopRangeCalls: [ABRepeatRange?] = []
     private(set) var tempoMultiplierCalls: [Double] = []
     private(set) var metronomeEnabledCalls: [Bool] = []
 
@@ -66,7 +67,10 @@ final class FakePlaybackController: PlaybackController {
         recordedSetCursorCalls.append(cursor)
     }
 
-    func setLoopRange(_: ABRepeatRange?) {}
+    func setLoopRange(_ range: ABRepeatRange?) {
+        loopRangeCalls.append(range)
+    }
+
     func setMetronomeEnabled(_ enabled: Bool) {
         metronomeEnabledCalls.append(enabled)
     }
