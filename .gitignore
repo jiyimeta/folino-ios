@@ -18,6 +18,10 @@ Thumbs.db
 # Local signing / per-developer overrides
 Config/Local.xcconfig
 
+# Bundled SoundFonts (too large for git; copy from
+# swift-sheet-music's Example/SheetMusicExample/Sounds/)
+App/Resources/Sounds/
+
 # Git worktrees
 .worktrees/
 

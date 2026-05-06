@@ -67,6 +67,10 @@ targets:
         excludes:
           - Info.plist
           - Folino.entitlements
+          - Resources/Sounds
+      - path: App/Resources/Sounds
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino

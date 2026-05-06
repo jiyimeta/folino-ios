@@ -11,6 +11,14 @@ Folino is a universal iOS app (iPad + iPhone, Swift 6.3, iOS 26+, bundle id `com
 ```sh
 cp Config/Local.xcconfig.sample Config/Local.xcconfig
 # edit Local.xcconfig to set your Apple Developer Team ID
+
+# Drop the GM SoundFont fallback in place (gitignored, ~206 MB). Without
+# it the metronome and drum staves fall back to AVAudioUnitSampler's
+# default melodic patch instead of the percussion bank.
+mkdir -p App/Resources/Sounds
+cp ../../swift-packages/swift-sheet-music/Example/SheetMusicExample/Sounds/MuseScore_General.sf2 \
+   App/Resources/Sounds/
+
 xcodegen generate
 open Folino.xcodeproj
 
