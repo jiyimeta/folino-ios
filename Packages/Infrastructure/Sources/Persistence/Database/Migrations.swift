@@ -34,6 +34,7 @@ enum AppMigrations {
         CREATE TABLE score_items (
             id                       TEXT    PRIMARY KEY,
             title                    TEXT    NOT NULL,
+            subtitle                 TEXT,
             composer                 TEXT,
             instrumentation_summary  TEXT,
             local_file_name          TEXT    NOT NULL,

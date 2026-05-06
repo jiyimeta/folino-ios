@@ -10,6 +10,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
 
     var id: String
     var title: String
+    var subtitle: String?
     var composer: String?
     var instrumentationSummary: String?
     var localFileName: String
@@ -25,6 +26,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
     enum CodingKeys: String, CodingKey {
         case id
         case title
+        case subtitle
         case composer
         case instrumentationSummary = "instrumentation_summary"
         case localFileName = "local_file_name"
@@ -41,6 +43,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
     init(domain item: ScoreItem) {
         id = item.id.rawValue.uuidString
         title = item.title
+        subtitle = item.subtitle
         composer = item.composer
         instrumentationSummary = item.instrumentationSummary
         localFileName = item.localFileName
@@ -61,6 +64,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         return ScoreItem(
             id: ScoreItemID(rawValue: uuid),
             title: title,
+            subtitle: subtitle,
             composer: composer,
             instrumentationSummary: instrumentationSummary,
             localFileName: localFileName,

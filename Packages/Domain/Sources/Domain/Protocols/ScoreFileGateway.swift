@@ -5,6 +5,7 @@ import Foundation
 /// library and therefore has no `ScoreItemID` or persistent state yet.
 public struct ScoreFileSummary: Hashable, Sendable {
     public var title: String?
+    public var subtitle: String?
     public var composer: String?
     public var instrumentationSummary: String
     public var lengthBeats: Int
@@ -13,6 +14,7 @@ public struct ScoreFileSummary: Hashable, Sendable {
 
     public init(
         title: String?,
+        subtitle: String? = nil,
         composer: String?,
         instrumentationSummary: String,
         lengthBeats: Int,
@@ -20,6 +22,7 @@ public struct ScoreFileSummary: Hashable, Sendable {
         primaryKey: String?
     ) {
         self.title = title
+        self.subtitle = subtitle
         self.composer = composer
         self.instrumentationSummary = instrumentationSummary
         self.lengthBeats = lengthBeats

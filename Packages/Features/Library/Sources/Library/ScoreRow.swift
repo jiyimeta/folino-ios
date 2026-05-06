@@ -7,9 +7,17 @@ struct ScoreRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(scoreItem.title)
-                    .font(.body)
-                    .lineLimit(1)
+                HStack(spacing: 2) {
+                    Text(scoreItem.title)
+                        .font(.body)
+                        .lineLimit(1)
+                    if let subtitle = scoreItem.subtitle, !subtitle.isEmpty {
+                        Text("- \(subtitle)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
                 if let composer = scoreItem.composer, !composer.isEmpty {
                     Text(composer)
                         .font(.subheadline)
@@ -30,7 +38,9 @@ struct ScoreRow: View {
 
 #Preview {
     let withComposer = ScoreItem(
-        title: "Sonata in C major", composer: "W. A. Mozart",
+        title: "Sonata in C major",
+        subtitle: "Subtitle",
+        composer: "W. A. Mozart",
         instrumentationSummary: "Piano",
         localFileName: "x.mscx", contentHash: "x", sizeBytes: 0,
         lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,

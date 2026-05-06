@@ -7,8 +7,16 @@ extension ScoreFileSummary {
     /// fall back to safe defaults that make the summary usable as a library-
     /// row payload. The Reader plan will sharpen these as needed.
     init(score: Score) {
-        // Title and composer come from MuseScore's metaTag dictionary.
-        let title = score.metaTags["workTitle"]?.nonEmpty
+        // Title / subtitle: prefer the first matching text in the title
+        // frame (MuseScore's `<VBox>` `<Text><style>Title</style>…`),
+        // falling back to the workTitle metaTag for title. There is no
+        // standard subtitle metaTag, so subtitle stays nil when the
+        // title frame doesn't carry one.
+        let frameTexts = score.titleFrame?.texts ?? []
+        let frameTitle = frameTexts.first(where: { $0.style == .title })?.text.nonEmpty
+        let frameSubtitle = frameTexts.first(where: { $0.style == .subtitle })?.text.nonEmpty
+        let title = frameTitle ?? score.metaTags["workTitle"]?.nonEmpty
+        let subtitle = frameSubtitle
         let composer = score.metaTags["composer"]?.nonEmpty
 
         // Instrumentation: collect non-empty track names from parts; fall
@@ -33,6 +41,7 @@ extension ScoreFileSummary {
 
         self.init(
             title: title,
+            subtitle: subtitle,
             composer: composer,
             instrumentationSummary: instrumentationSummary,
             lengthBeats: lengthBeats,
