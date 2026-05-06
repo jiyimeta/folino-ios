@@ -24,4 +24,8 @@ enum AppPaths {
         }
         return url.appending(path: "Soundfonts")
     }
+
+    static var shareTempDirectory: URL {
+        documentsRoot.appending(path: "ShareTmp")
+    }
 }
