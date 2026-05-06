@@ -153,9 +153,8 @@ import Testing
             hiddenStaves: []
         )
         let encoded = try JSONEncoder().encode(prefs)
-        guard var dict = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
-            Issue.record("Encoded JSON was not a dictionary"); return
-        }
+        let jsonObject = try JSONSerialization.jsonObject(with: encoded)
+        var dict = try #require(jsonObject as? [String: Any])
         dict.removeValue(forKey: "tempoMultiplier")
         let stripped = try JSONSerialization.data(withJSONObject: dict)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: stripped)
