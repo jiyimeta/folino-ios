@@ -82,7 +82,7 @@ struct HorizontalScoreContainer: View {
             systemGap: staffSize * 1.25,
             wrapToViewWidth: false,
             includeTitleFrame: false,
-            breakPolicy: .ignoreAll
+            showBreakIndicators: false
         )
         let natural = LayoutEngine.naturalContentWidth(
             score: score, options: opts

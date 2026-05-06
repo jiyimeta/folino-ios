@@ -202,7 +202,7 @@ struct VerticalScoreContainer: View {
             systemGap: staffSize * 1.25,
             wrapToViewWidth: true,
             includeTitleFrame: true,
-            breakPolicy: .ignoreAll
+            showBreakIndicators: false
         )
         document = LayoutEngine.layout(
             score: score, options: opts, availableWidth: width
