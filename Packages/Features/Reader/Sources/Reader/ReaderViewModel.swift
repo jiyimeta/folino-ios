@@ -46,6 +46,8 @@ public final class ReaderViewModel {
     private var cursorTask: Task<Void, Never>?
     @ObservationIgnored
     private var loadingTask: Task<Void, Error>?
+    @ObservationIgnored
+    private var manualSeekRecognizedAt: Date?
 
     public init(
         scoreItem: ScoreItem,
@@ -206,8 +208,18 @@ public final class ReaderViewModel {
 
     public func setManualCursor(_ cursor: ScoreCursor) {
         playbackCursor = cursor
+        manualSeekRecognizedAt = Date()
         guard let controller = playbackController else { return }
         Task { await controller.setCursor(to: cursor) }
+    }
+
+    /// Long-press seek and the chrome-toggle tap share the same touch; on
+    /// finger lift the outer `SpatialTapGesture` would otherwise fire and
+    /// flicker the toolbar. The score container stamps a timestamp when
+    /// long-press is recognized; the tap handler checks it here.
+    public func shouldSuppressChromeToggleTap() -> Bool {
+        guard let at = manualSeekRecognizedAt else { return false }
+        return Date().timeIntervalSince(at) < 0.6
     }
 
     // MARK: - Private
