@@ -41,5 +41,5 @@ The minimum credible product for performing musicians. A scope that fits in a si
 
 - iPhone-only convenience features (lock-screen Now Playing, mini-player widget).
 - Mac Catalyst.
-- Cross-device session: live-share a reader view with another Folino device for ensemble rehearsal.
+- Cross-device session: live-share a reader view with another folino device for ensemble rehearsal.
 - Note add / delete / duration changes — only after the underlying engine has a stable mutation API and undo model.
