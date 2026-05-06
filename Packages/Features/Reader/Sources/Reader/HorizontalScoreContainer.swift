@@ -17,6 +17,7 @@ import SwiftUI
 struct HorizontalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
+    let honorLayoutBreaks: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -58,7 +59,10 @@ struct HorizontalScoreContainer: View {
                     )
                 }
             }
-            .task(id: TaskKey(score: score, size: staffSize)) {
+            .task(id: TaskKey(
+                score: score, size: staffSize,
+                honorLayoutBreaks: honorLayoutBreaks
+            )) {
                 rebuildLayout()
             }
         }
@@ -82,6 +86,7 @@ struct HorizontalScoreContainer: View {
             systemGap: staffSize * 1.25,
             wrapToViewWidth: false,
             includeTitleFrame: false,
+            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
             showBreakIndicators: false
         )
         let natural = LayoutEngine.naturalContentWidth(
@@ -132,12 +137,14 @@ struct HorizontalScoreContainer: View {
     private struct TaskKey: Hashable {
         let scoreSignature: Int
         let size: CGFloat
+        let honorLayoutBreaks: Bool
 
-        init(score: Score, size: CGFloat) {
+        init(score: Score, size: CGFloat, honorLayoutBreaks: Bool) {
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)
             self.size = size
+            self.honorLayoutBreaks = honorLayoutBreaks
         }
     }
 }

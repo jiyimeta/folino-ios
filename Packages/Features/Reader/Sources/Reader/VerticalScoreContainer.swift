@@ -35,6 +35,7 @@ import SwiftUI
 struct VerticalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
+    let honorLayoutBreaks: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -94,7 +95,8 @@ struct VerticalScoreContainer: View {
             let layoutWidth = max(proxy.size.width, staffSize * 4)
             scrollContent(viewport: proxy.size)
                 .task(id: TaskKey(
-                    score: score, size: staffSize, width: layoutWidth
+                    score: score, size: staffSize, width: layoutWidth,
+                    honorLayoutBreaks: honorLayoutBreaks
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }
@@ -290,6 +292,7 @@ struct VerticalScoreContainer: View {
             systemGap: staffSize * 1.25,
             wrapToViewWidth: true,
             includeTitleFrame: true,
+            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
             showBreakIndicators: false
         )
         document = LayoutEngine.layout(
@@ -371,8 +374,9 @@ struct VerticalScoreContainer: View {
         let scoreSignature: Int
         let size: CGFloat
         let width: CGFloat
+        let honorLayoutBreaks: Bool
 
-        init(score: Score, size: CGFloat, width: CGFloat) {
+        init(score: Score, size: CGFloat, width: CGFloat, honorLayoutBreaks: Bool) {
             // `Score` is Equatable but not Hashable. Use a cheap
             // identity proxy: parts.count + total staves + division.
             scoreSignature = score.parts.count
@@ -380,6 +384,7 @@ struct VerticalScoreContainer: View {
                 ^ (score.division << 16)
             self.size = size
             self.width = width
+            self.honorLayoutBreaks = honorLayoutBreaks
         }
     }
 }

@@ -94,6 +94,7 @@ public struct ReaderView: View {
                 VerticalScoreContainer(
                     score: visible,
                     staffSize: viewModel.preferences.staffSize,
+                    honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel
                 )
@@ -101,6 +102,7 @@ public struct ReaderView: View {
                 HorizontalScoreContainer(
                     score: visible,
                     staffSize: viewModel.preferences.staffSize,
+                    honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel
                 )
