@@ -44,14 +44,37 @@ struct VerticalScoreContainer: View {
     @State private var scrollPosition = ScrollPosition()
     @State private var liveScrollOffset: CGPoint = .zero
     @State private var pinchSession: PinchSession?
+    /// Scroll target queued in `onEnded` to be applied once
+    /// `viewportZoom`'s state change has propagated to a new
+    /// `ScrollView` `contentSize`. Applying `scrollTo` in the same
+    /// transaction as a `viewportZoom` change clamps the offset to the
+    /// *old* `maxScroll`, so for zoom-in the anchor lands ~`(framedHeight_pre - framedHeight_post)/2`
+    /// below the user's pinch — visible as a "1-staff drift down."
+    @State private var pendingPinchScroll: CGPoint?
+    /// `ScrollView` top inset (safe area + nav chrome). Needed because
+    /// `scrollPosition.scrollTo(point: P)` with `anchor: .topLeading`
+    /// places content y = P at the *visible* (inset-adjusted) top —
+    /// i.e. the resulting `contentOffset = P − topInset`. Our pinch
+    /// formula computes the target in `contentOffset` units, so we
+    /// add `topInset` back when we hand the value to `scrollTo`.
+    @State private var contentInsetTop: CGFloat = 0
 
-    @GestureState private var liveMagnification: CGFloat = 1.0
-    @GestureState private var liveMagAnchor: UnitPoint = .center
+    // Tracked as `@State` (not `@GestureState`) so they don't auto-reset
+    // before `onEnded` runs — that auto-reset would visibly snap the
+    // inner `scaleEffect` back to identity at the moment of release,
+    // expanding content away from the pinch anchor by `1 - mag`.
+    // Manually resetting in `onEnded` (alongside the `viewportZoom`
+    // commit and the scroll shift) lets the visual transition happen
+    // atomically in a single render pass.
+    @State private var liveMagnification: CGFloat = 1.0
+    @State private var liveMagAnchor: UnitPoint = .center
 
-    /// Padding that lives inside the scaled content so it scales with
-    /// the score. Held as an explicit constant (rather than `.padding()`'s
-    /// platform default) because the outer `.frame` math needs to know it.
-    private let scorePadding: CGFloat = 16
+    /// Vertical padding that lives inside the scaled content so the
+    /// first / last system don't butt up against the viewport edges.
+    /// Scales with the score because it's applied inside the
+    /// `scaleEffect`. No horizontal counterpart: at zoom 1.0 we want the
+    /// score to span the full viewport width edge-to-edge.
+    private let scoreVerticalPadding: CGFloat = 16
 
     /// Captured at the first `onChanged` of a pinch so the gesture-end
     /// commit can shift `ScrollPosition` by `start * (mag - 1)` without
@@ -63,12 +86,17 @@ struct VerticalScoreContainer: View {
 
     var body: some View {
         GeometryReader { proxy in
+            // Hand the full viewport width to layout. Any horizontal
+            // overflow in the resulting `doc.size.width` (engine right
+            // margin, spanners, ties) is absorbed by `effectiveZoom`'s
+            // fit-to-width factor below — so the user always sees the
+            // entire system at user-zoom 1.0 with no side margin.
+            let layoutWidth = max(proxy.size.width, staffSize * 4)
             scrollContent(viewport: proxy.size)
                 .task(id: TaskKey(
-                    score: score, size: staffSize,
-                    width: max(proxy.size.width, staffSize * 4)
+                    score: score, size: staffSize, width: layoutWidth
                 )) {
-                    await rebuildLayout(width: max(proxy.size.width, staffSize * 4))
+                    await rebuildLayout(width: layoutWidth)
                 }
         }
     }
@@ -76,24 +104,30 @@ struct VerticalScoreContainer: View {
     @ViewBuilder
     private func scrollContent(viewport: CGSize) -> some View {
         ScrollView([.vertical, .horizontal]) {
-            zoomedSurface
-                .background(
-                    GeometryReader { g in
-                        Color.clear.preference(
-                            key: ScrollOffsetKey.self,
-                            value: CGPoint(
-                                x: -g.frame(in: .named("vScroll")).origin.x,
-                                y: -g.frame(in: .named("vScroll")).origin.y
-                            )
-                        )
-                    }
-                )
+            zoomedSurface(viewport: viewport)
         }
-        .coordinateSpace(name: "vScroll")
         .scrollPosition($scrollPosition, anchor: .topLeading)
         .simultaneousGesture(doubleTapGesture)
-        .onPreferenceChange(ScrollOffsetKey.self) { offset in
-            liveScrollOffset = offset
+        .onScrollGeometryChange(for: CGPoint.self) { geometry in
+            geometry.contentOffset
+        } action: { _, newOffset in
+            liveScrollOffset = newOffset
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentInsets.top
+        } action: { _, newTop in
+            contentInsetTop = newTop
+        }
+        .onChange(of: viewModel.viewportZoom) { _, _ in
+            // After a pinch zoom commit, apply the queued scroll once
+            // the new `viewportZoom` has produced a new `contentSize`
+            // — calling `scrollTo` in the same transaction as the
+            // `viewportZoom` change clamps the offset to the old
+            // `maxScroll`.
+            if let target = pendingPinchScroll {
+                pendingPinchScroll = nil
+                scrollPosition.scrollTo(point: target)
+            }
         }
         .onChange(of: playbackCursor) { _, newCursor in
             autoScroll(cursor: newCursor, viewport: viewport)
@@ -101,13 +135,13 @@ struct VerticalScoreContainer: View {
     }
 
     @ViewBuilder
-    private var zoomedSurface: some View {
+    private func zoomedSurface(viewport: CGSize) -> some View {
         if let doc = document {
-            let zoom = viewModel.viewportZoom
-            let framedWidth = (doc.size.width + 2 * scorePadding) * zoom
-            let framedHeight = (doc.size.height + 2 * scorePadding) * zoom
+            let zoom = effectiveZoom(for: doc, viewport: viewport)
+            let framedWidth = doc.size.width * zoom
+            let framedHeight = (doc.size.height + 2 * scoreVerticalPadding) * zoom
             scoreSurface(document: doc)
-                .padding(scorePadding)
+                .padding(.vertical, scoreVerticalPadding)
                 .scaleEffect(liveMagnification, anchor: liveMagAnchor)
                 .scaleEffect(zoom, anchor: .topLeading)
                 .frame(
@@ -119,6 +153,22 @@ struct VerticalScoreContainer: View {
         } else {
             Color.clear
         }
+    }
+
+    /// User zoom scaled by a fit-to-width factor so the rendered content
+    /// never exceeds the viewport horizontally at user-zoom 1.0.
+    /// `LayoutEngine.layout` reports `doc.size.width = totalSystemExtent
+    /// + 2*sp`; spanners / ties / playback chrome can also extend slightly
+    /// past that. Rather than chase every contribution, we measure the
+    /// actual `doc.size.width` and shrink to fit when it exceeds the
+    /// viewport — the user-visible behaviour is "zoom 1.0 = fit width".
+    private func effectiveZoom(
+        for doc: LayoutDocument, viewport: CGSize
+    ) -> CGFloat {
+        let fit = doc.size.width > 0
+            ? min(1.0, viewport.width / doc.size.width)
+            : 1.0
+        return viewModel.viewportZoom * fit
     }
 
     @ViewBuilder
@@ -144,19 +194,15 @@ struct VerticalScoreContainer: View {
 
     private var magnifyGesture: some Gesture {
         MagnifyGesture()
-            .updating($liveMagnification) { value, state, _ in
-                state = value.magnification
-            }
-            .updating($liveMagAnchor) { value, state, _ in
-                state = value.startAnchor
-            }
-            .onChanged { _ in
+            .onChanged { value in
                 if pinchSession == nil {
                     pinchSession = PinchSession(
                         initialScrollOffset: liveScrollOffset,
                         baseZoom: viewModel.viewportZoom
                     )
                 }
+                liveMagnification = value.magnification
+                liveMagAnchor = value.startAnchor
             }
             .onEnded { value in
                 let session = pinchSession ?? PinchSession(
@@ -165,26 +211,68 @@ struct VerticalScoreContainer: View {
                 )
                 pinchSession = nil
 
-                let mag = value.magnification
-                let combined = session.baseZoom * mag
+                let combined = session.baseZoom * value.magnification
+                let targetZoom: CGFloat = combined < 1.05 ? 1.0 : combined
+                let ratio = targetZoom / session.baseZoom
 
-                if combined < 1.05 {
-                    viewModel.resetZoom()
-                    scrollPosition.scrollTo(point: .zero)
+                // Shift scroll so the framed pinch point at
+                // `startLocation` (in the gesture view's local coords,
+                // i.e. pre-commit framed coords) stays at the same
+                // viewport coord. Frame scales from top-leading by
+                // `ratio`, so the offset shift is `startLocation *
+                // (ratio - 1)`.
+                // `scrollTo` with `anchor: .topLeading` aligns content
+                // y = target to the *visible* (inset-adjusted) top, so
+                // the resulting `contentOffset.y = target − topInset`.
+                // Compute the desired `contentOffset` for visual
+                // continuity, then add `contentInsetTop` for the call.
+                let p = value.startLocation
+                let scrollToTarget = CGPoint(
+                    x: max(0, session.initialScrollOffset.x + p.x * (ratio - 1)),
+                    y: max(0, session.initialScrollOffset.y + p.y * (ratio - 1)) + contentInsetTop
+                )
+
+                let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
+                if isBounceBack {
+                    // Rubber-band release: user pinched below 1.0 from
+                    // a baseline of 1.0. No actual zoom or scroll
+                    // commit — just animate the inner `liveMagnification`
+                    // back to identity so the visual snap from compressed
+                    // back to layout is a smooth motion (matches
+                    // `UIScrollView`'s bounce feel) instead of an abrupt
+                    // jump that pulls content away from the anchor.
+                    //
+                    // Important: keep `liveMagAnchor` at the gesture's
+                    // start anchor for the duration of the animation.
+                    // Animating it toward `.center` would interpolate
+                    // the scale pivot mid-bounce, sliding the content
+                    // visibly toward the frame center — visible as
+                    // "judder". At `mag = 1.0` the anchor is irrelevant
+                    // so we just leave the stale value behind; the next
+                    // pinch's `onChanged` overwrites it.
+                    withAnimation(.smooth(duration: 0.15)) {
+                        liveMagnification = 1.0
+                    }
                 } else {
-                    viewModel.viewportZoom = combined
-                    viewModel.captureCurrentZoomAsLast()
-                    // Shift scroll offset so the framed pinch point at
-                    // `startLocation * baseZoom` (pre-commit) becomes
-                    // `startLocation * combined` (post-commit) while
-                    // staying at the same viewport coord. Net delta:
-                    // `startLocation * (mag - 1)`.
-                    let p = value.startLocation
-                    let shifted = CGPoint(
-                        x: session.initialScrollOffset.x + p.x * (mag - 1),
-                        y: session.initialScrollOffset.y + p.y * (mag - 1)
-                    )
-                    scrollPosition.scrollTo(point: shifted)
+                    // Real zoom commit (in or out from a non-unit base).
+                    // Queue the scroll target — the `onChange(of:
+                    // viewportZoom)` handler applies it once
+                    // `ScrollView`'s `contentSize` is updated, so the
+                    // offset isn't clamped to the pre-zoom `maxScroll`.
+                    // `viewportZoom`, `liveMagnification`, and
+                    // `liveMagAnchor` still commit atomically here so
+                    // outer-scale grows by `ratio` while inner-scale
+                    // drops to identity in the same render — no
+                    // visible flicker around the pinch anchor.
+                    pendingPinchScroll = scrollToTarget
+                    if targetZoom <= 1.0 {
+                        viewModel.resetZoom()
+                    } else {
+                        viewModel.viewportZoom = targetZoom
+                        viewModel.captureCurrentZoomAsLast()
+                    }
+                    liveMagnification = 1.0
+                    liveMagAnchor = .center
                 }
             }
     }
@@ -201,7 +289,8 @@ struct VerticalScoreContainer: View {
             staffSize: staffSize,
             systemGap: staffSize * 1.25,
             wrapToViewWidth: true,
-            includeTitleFrame: true
+            includeTitleFrame: true,
+            showBreakIndicators: false
         )
         document = LayoutEngine.layout(
             score: score, options: opts, availableWidth: width
@@ -217,15 +306,18 @@ struct VerticalScoreContainer: View {
               let rect = doc.cursorFrame(for: cursor, in: score)
         else { return }
 
-        let zoom = viewModel.viewportZoom
+        // Mirror `zoomedSurface`'s effective scale (user zoom × fit-to-width)
+        // so cursor-frame coordinates match the rendered scroll-content size.
+        let zoom = effectiveZoom(for: doc, viewport: viewport)
         let pad = 8 * doc.metrics.sp * zoom
 
-        // Cursor frame in scroll-content coords: padded then scaled from
-        // top-leading. Mirrors `zoomedSurface`'s composition.
-        let minX = (rect.minX + scorePadding) * zoom
-        let maxX = (rect.maxX + scorePadding) * zoom
-        let minY = (rect.minY + scorePadding) * zoom
-        let maxY = (rect.maxY + scorePadding) * zoom
+        // Cursor frame in scroll-content coords: vertical padding only,
+        // then scaled from top-leading. Mirrors `zoomedSurface`'s
+        // composition (no horizontal padding).
+        let minX = rect.minX * zoom
+        let maxX = rect.maxX * zoom
+        let minY = (rect.minY + scoreVerticalPadding) * zoom
+        let maxY = (rect.maxY + scoreVerticalPadding) * zoom
 
         let curX = liveScrollOffset.x
         let curY = liveScrollOffset.y
@@ -289,12 +381,5 @@ struct VerticalScoreContainer: View {
             self.size = size
             self.width = width
         }
-    }
-}
-
-private struct ScrollOffsetKey: PreferenceKey {
-    static let defaultValue: CGPoint = .zero
-    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
-        value = nextValue()
     }
 }

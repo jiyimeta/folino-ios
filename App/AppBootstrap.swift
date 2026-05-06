@@ -20,6 +20,7 @@ final class AppBootstrap {
     private(set) var reachability: LiveNetworkReachability?
     private(set) var soundfontResolver: MuseScoreSF2Resolver?
     private(set) var presetCatalog: BundledSF2PresetCatalog?
+    private(set) var shareService: LiveScoreShareService?
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`.
     /// Last-wins: a second URL arriving before the first is consumed
@@ -33,6 +34,10 @@ final class AppBootstrap {
             )
             try FileManager.default.createDirectory(
                 at: AppPaths.soundfontCacheDirectory, withIntermediateDirectories: true
+            )
+            try? FileManager.default.removeItem(at: AppPaths.shareTempDirectory)
+            try FileManager.default.createDirectory(
+                at: AppPaths.shareTempDirectory, withIntermediateDirectories: true
             )
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
             let repository = LiveScoreLibraryRepository(
@@ -50,6 +55,11 @@ final class AppBootstrap {
             self.repository = repository
             self.gateway = gateway
             self.importer = importer
+            shareService = LiveScoreShareService(
+                scoresDirectory: AppPaths.scoresDirectory,
+                shareTempDirectory: AppPaths.shareTempDirectory,
+                gateway: gateway
+            )
             // `MuseScoreSF2Resolver` conforms to all three protocols
             // (`SheetMusicAudio.SoundfontResolver`, `Domain.SoundfontResolver`,
             // `Domain.PrecisePatchProbe`); one instance satisfies every slot.
