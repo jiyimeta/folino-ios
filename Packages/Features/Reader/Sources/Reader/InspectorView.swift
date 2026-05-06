@@ -1,3 +1,4 @@
+import Domain
 import SheetMusicAudio
 import SheetMusicCore
 import SwiftUI
@@ -95,7 +96,32 @@ struct InspectorView: View {
             .pickerStyle(.segmented)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+
+            staffSizeRow
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
+    }
+
+    @ViewBuilder
+    private var staffSizeRow: some View {
+        let staffSize = Binding<CGFloat>(
+            get: { viewModel.preferences.staffSize },
+            set: { newValue in
+                let current = viewModel.preferences.staffSize
+                if newValue > current {
+                    Task { await viewModel.incrementStaffSize() }
+                } else if newValue < current {
+                    Task { await viewModel.decrementStaffSize() }
+                }
+            }
+        )
+        Stepper(
+            "Staff size \(Int(viewModel.preferences.staffSize))",
+            value: staffSize,
+            in: ReaderPreferences.minStaffSize ... ReaderPreferences.maxStaffSize,
+            step: 1
+        )
     }
 
     @ViewBuilder
