@@ -10,10 +10,11 @@ import SwiftUI
 /// keeps re-layout cost confined to real input changes — and makes the
 /// document available to a future `ScoreHitTester` without rebuilding.
 ///
-/// Drives playback auto-scroll: when `playbackCursor` moves into a
-/// system that isn't fully visible in the named scroll-view coord space
-/// (`"vScroll"`), `ScrollViewReader.scrollTo(_, anchor:)` snaps the
-/// system to the nearest viewport edge with a small padding inset.
+/// Drives playback auto-scroll: when `playbackCursor` moves outside the
+/// viewport in either axis, `ScrollPosition.scrollTo(point:)` brings the
+/// cursor's frame back inside with a small padding inset. Horizontal
+/// follow only kicks in once `viewportZoom` makes the content wider than
+/// the viewport — at zoom 1.0 the score wraps to fit and X never moves.
 ///
 /// Owns the pinch / double-tap zoom gestures. The score content is
 /// `scaleEffect`-ed *inside* the `ScrollView` (with an explicit scaled
@@ -39,7 +40,6 @@ struct VerticalScoreContainer: View {
 
     @State private var document: LayoutDocument?
     @State private var lastWidth: CGFloat = 0
-    @State private var systemFrames: [Int: CGRect] = [:]
     @State private var lastManualCursor: ScoreCursor?
     @State private var scrollPosition = ScrollPosition()
     @State private var liveScrollOffset: CGPoint = .zero
@@ -75,35 +75,28 @@ struct VerticalScoreContainer: View {
 
     @ViewBuilder
     private func scrollContent(viewport: CGSize) -> some View {
-        ScrollViewReader { scrollProxy in
-            ScrollView([.vertical, .horizontal]) {
-                zoomedSurface
-                    .background(
-                        GeometryReader { g in
-                            Color.clear.preference(
-                                key: ScrollOffsetKey.self,
-                                value: CGPoint(
-                                    x: -g.frame(in: .named("vScroll")).origin.x,
-                                    y: -g.frame(in: .named("vScroll")).origin.y
-                                )
+        ScrollView([.vertical, .horizontal]) {
+            zoomedSurface
+                .background(
+                    GeometryReader { g in
+                        Color.clear.preference(
+                            key: ScrollOffsetKey.self,
+                            value: CGPoint(
+                                x: -g.frame(in: .named("vScroll")).origin.x,
+                                y: -g.frame(in: .named("vScroll")).origin.y
                             )
-                        }
-                    )
-            }
-            .coordinateSpace(name: "vScroll")
-            .scrollPosition($scrollPosition, anchor: .topLeading)
-            .simultaneousGesture(doubleTapGesture)
-            .onPreferenceChange(VerticalSystemFramesKey.self) { frames in
-                systemFrames = frames
-            }
-            .onPreferenceChange(ScrollOffsetKey.self) { offset in
-                liveScrollOffset = offset
-            }
-            .onChange(of: playbackCursor) { _, newCursor in
-                autoScroll(
-                    cursor: newCursor, viewport: viewport, proxy: scrollProxy
+                        )
+                    }
                 )
-            }
+        }
+        .coordinateSpace(name: "vScroll")
+        .scrollPosition($scrollPosition, anchor: .topLeading)
+        .simultaneousGesture(doubleTapGesture)
+        .onPreferenceChange(ScrollOffsetKey.self) { offset in
+            liveScrollOffset = offset
+        }
+        .onChange(of: playbackCursor) { _, newCursor in
+            autoScroll(cursor: newCursor, viewport: viewport)
         }
     }
 
@@ -130,14 +123,11 @@ struct VerticalScoreContainer: View {
 
     @ViewBuilder
     private func scoreSurface(document doc: LayoutDocument) -> some View {
-        ZStack(alignment: .topLeading) {
-            ScoreView(
-                document: doc, score: score,
-                playbackCursor: playbackCursor,
-                playbackCursorColor: .accentColor
-            )
-            VerticalSystemAnchors(document: doc)
-        }
+        ScoreView(
+            document: doc, score: score,
+            playbackCursor: playbackCursor,
+            playbackCursorColor: .accentColor
+        )
         .coordinateSpace(name: "scoreSurface")
         .gesture(tapSeekGesture(document: doc))
         .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
@@ -221,27 +211,66 @@ struct VerticalScoreContainer: View {
 
     private func autoScroll(
         cursor: ScoreCursor?,
-        viewport: CGSize,
-        proxy: ScrollViewProxy
+        viewport: CGSize
     ) {
         guard let cursor, let doc = document,
-              let sys = doc.systemIndex(forMeasureIndex: cursor.measureIndex),
-              let frame = systemFrames[sys]
+              let rect = doc.cursorFrame(for: cursor, in: score)
         else { return }
-        if isAnchorFullyVisible(
-            anchorMin: frame.minY, anchorMax: frame.maxY,
-            anchorSize: frame.height, viewportSize: viewport.height
-        ) { return }
-        let pad: CGFloat = 8 * doc.metrics.sp
-        let unit = paddedScrollAnchor(
-            aboveViewport: frame.minY < 0,
-            anchorSize: frame.height,
-            viewportSize: viewport.height,
-            pad: pad
+
+        let zoom = viewModel.viewportZoom
+        let pad = 8 * doc.metrics.sp * zoom
+
+        // Cursor frame in scroll-content coords: padded then scaled from
+        // top-leading. Mirrors `zoomedSurface`'s composition.
+        let minX = (rect.minX + scorePadding) * zoom
+        let maxX = (rect.maxX + scorePadding) * zoom
+        let minY = (rect.minY + scorePadding) * zoom
+        let maxY = (rect.maxY + scorePadding) * zoom
+
+        let curX = liveScrollOffset.x
+        let curY = liveScrollOffset.y
+
+        let newX = adjustedScrollOffset(
+            currentOffset: curX,
+            targetMin: minX, targetMax: maxX,
+            viewportSize: viewport.width, pad: pad
         )
+        let newY = adjustedScrollOffset(
+            currentOffset: curY,
+            targetMin: minY, targetMax: maxY,
+            viewportSize: viewport.height, pad: pad
+        )
+
+        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 { return }
+
         withAnimation(.easeInOut(duration: 0.25)) {
-            proxy.scrollTo(VerticalSystemAnchorID(systemIndex: sys), anchor: unit)
+            scrollPosition.scrollTo(point: CGPoint(x: newX, y: newY))
         }
+    }
+
+    /// Smallest scroll offset that keeps `[targetMin, targetMax]` inside
+    /// the viewport with `pad` margin. Returns `currentOffset` unchanged
+    /// when the target is already fully visible — preserves manual
+    /// horizontal panning while playback advances within the visible row.
+    private func adjustedScrollOffset(
+        currentOffset cur: CGFloat,
+        targetMin: CGFloat,
+        targetMax: CGFloat,
+        viewportSize: CGFloat,
+        pad: CGFloat
+    ) -> CGFloat {
+        let viewMin = cur
+        let viewMax = cur + viewportSize
+        if targetMax - targetMin > viewportSize {
+            return max(0, targetMin)
+        }
+        if targetMin >= viewMin, targetMax <= viewMax {
+            return cur
+        }
+        if targetMin < viewMin {
+            return max(0, targetMin - pad)
+        }
+        return targetMax - viewportSize + pad
     }
 
     /// Hashable composite key so `.task(id:)` re-runs only when one of
