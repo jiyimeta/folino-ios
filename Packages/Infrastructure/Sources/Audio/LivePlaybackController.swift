@@ -4,6 +4,11 @@ import Foundation
 import MediaPlayer
 import SheetMusicAudio
 import SheetMusicCore
+#if canImport(UIKit)
+    import UIKit
+#elseif canImport(AppKit)
+    import AppKit
+#endif
 
 /// Bridges Folino's `Domain.PlaybackController` onto
 /// `SheetMusicAudio.PlaybackEngine`. The engine is `@MainActor` so this
@@ -227,9 +232,33 @@ public final class LivePlaybackController: Domain.PlaybackController {
             meta[MPMediaItemPropertyArtist] = composer
         }
         meta[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        if let artwork = Self.appIconArtwork {
+            meta[MPMediaItemPropertyArtwork] = artwork
+        }
         nowPlayingMetadata = meta
         publishNowPlayingInfo()
     }
+
+    /// App icon as `MPMediaItemArtwork`, used as the lock-screen /
+    /// Control Center artwork. Looked up once via the canonical
+    /// `CFBundleIcons` → `CFBundlePrimaryIcon` → `CFBundleIconFiles`
+    /// path; `UIImage(named: "AppIcon")` doesn't resolve the processed
+    /// icon at runtime. `nil` on platforms / hosts that don't ship one.
+    private static let appIconArtwork: MPMediaItemArtwork? = {
+        #if canImport(UIKit) && !os(watchOS)
+            guard
+                let icons = Bundle.main.infoDictionary?["CFBundleIcons"]
+                as? [String: Any],
+                let primary = icons["CFBundlePrimaryIcon"] as? [String: Any],
+                let files = primary["CFBundleIconFiles"] as? [String],
+                let name = files.last,
+                let image = UIImage(named: name)
+            else { return nil }
+            return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        #else
+            return nil
+        #endif
+    }()
 
     /// Rebuild `nowPlayingInfo` from cached metadata + the engine's current
     /// state, and set the canonical `playbackState`. Always publishes a
