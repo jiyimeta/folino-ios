@@ -24,20 +24,6 @@ struct ReaderToolbar: ToolbarContent {
             .accessibilityLabel(viewModel.isPlaying ? "Pause" : "Play")
 
             Button {
-                Task { await viewModel.decrementStaffSize() }
-            } label: {
-                Image(systemName: "minus.magnifyingglass")
-            }
-            .disabled(viewModel.preferences.staffSize <= ReaderPreferences.minStaffSize)
-
-            Button {
-                Task { await viewModel.incrementStaffSize() }
-            } label: {
-                Image(systemName: "plus.magnifyingglass")
-            }
-            .disabled(viewModel.preferences.staffSize >= ReaderPreferences.maxStaffSize)
-
-            Button {
                 viewModel.isInspectorPresented.toggle()
             } label: {
                 Image(systemName: "slider.horizontal.3")
