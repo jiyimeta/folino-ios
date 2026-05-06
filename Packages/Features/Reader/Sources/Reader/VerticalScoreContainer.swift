@@ -9,38 +9,101 @@ import SwiftUI
 /// of letting `ScoreView`'s convenience init re-run layout each pass)
 /// keeps re-layout cost confined to real input changes — and makes the
 /// document available to a future `ScoreHitTester` without rebuilding.
+///
+/// Also drives playback auto-scroll: when `playbackCursor` moves into a
+/// system that isn't fully visible in the named scroll-view coord space
+/// (`"vScroll"`), `ScrollViewReader.scrollTo(_, anchor:)` snaps the
+/// system to the nearest viewport edge with a small padding inset.
 struct VerticalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
+    let playbackCursor: ScoreCursor?
 
     @State private var document: LayoutDocument?
     @State private var lastWidth: CGFloat = 0
+    @State private var systemFrames: [Int: CGRect] = [:]
 
     var body: some View {
         GeometryReader { proxy in
-            let width = max(proxy.size.width, staffSize * 4)
-            ScrollView([.vertical, .horizontal]) {
-                Group {
-                    if let doc = document {
-                        ScoreView(document: doc, score: score)
-                    } else {
-                        Color.clear
-                    }
+            scrollContent(viewport: proxy.size)
+                .task(id: TaskKey(
+                    score: score, size: staffSize,
+                    width: max(proxy.size.width, staffSize * 4)
+                )) {
+                    await rebuildLayout(width: max(proxy.size.width, staffSize * 4))
                 }
-                .padding()
+        }
+    }
+
+    @ViewBuilder
+    private func scrollContent(viewport: CGSize) -> some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView([.vertical, .horizontal]) {
+                scoreSurface
+                    .padding()
             }
-            .task(id: TaskKey(score: score, size: staffSize, width: width)) {
-                let opts = ScoreViewOptions(
-                    staffSize: staffSize,
-                    systemGap: staffSize * 1.25,
-                    wrapToViewWidth: true,
-                    includeTitleFrame: true
-                )
-                document = LayoutEngine.layout(
-                    score: score, options: opts, availableWidth: width
-                )
-                lastWidth = width
+            .coordinateSpace(name: "vScroll")
+            .onPreferenceChange(VerticalSystemFramesKey.self) { frames in
+                systemFrames = frames
             }
+            .onChange(of: playbackCursor) { _, newCursor in
+                autoScroll(
+                    cursor: newCursor, viewport: viewport, proxy: scrollProxy
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var scoreSurface: some View {
+        if let doc = document {
+            ZStack(alignment: .topLeading) {
+                ScoreView(
+                    document: doc, score: score,
+                    playbackCursor: playbackCursor
+                )
+                VerticalSystemAnchors(document: doc)
+            }
+        } else {
+            Color.clear
+        }
+    }
+
+    private func rebuildLayout(width: CGFloat) {
+        let opts = ScoreViewOptions(
+            staffSize: staffSize,
+            systemGap: staffSize * 1.25,
+            wrapToViewWidth: true,
+            includeTitleFrame: true
+        )
+        document = LayoutEngine.layout(
+            score: score, options: opts, availableWidth: width
+        )
+        lastWidth = width
+    }
+
+    private func autoScroll(
+        cursor: ScoreCursor?,
+        viewport: CGSize,
+        proxy: ScrollViewProxy
+    ) {
+        guard let cursor, let doc = document,
+              let sys = doc.systemIndex(forMeasureIndex: cursor.measureIndex),
+              let frame = systemFrames[sys]
+        else { return }
+        if isAnchorFullyVisible(
+            anchorMin: frame.minY, anchorMax: frame.maxY,
+            anchorSize: frame.height, viewportSize: viewport.height
+        ) { return }
+        let pad: CGFloat = 8 * doc.metrics.sp
+        let unit = paddedScrollAnchor(
+            aboveViewport: frame.minY < 0,
+            anchorSize: frame.height,
+            viewportSize: viewport.height,
+            pad: pad
+        )
+        withAnimation(.easeInOut(duration: 0.25)) {
+            proxy.scrollTo(VerticalSystemAnchorID(systemIndex: sys), anchor: unit)
         }
     }
 
@@ -54,8 +117,6 @@ struct VerticalScoreContainer: View {
         init(score: Score, size: CGFloat, width: CGFloat) {
             // `Score` is Equatable but not Hashable. Use a cheap
             // identity proxy: parts.count + total staves + division.
-            // That's enough to detect "different score loaded"
-            // without paying for a full hash.
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)

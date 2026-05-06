@@ -20,6 +20,7 @@ public final class ReaderViewModel {
     public private(set) var preferences: ReaderPreferences
     public private(set) var staffVolumes: [StaffAddress: Double] = [:]
     public private(set) var isPlaying: Bool = false
+    public private(set) var playbackCursor: ScoreCursor?
     public var viewportZoom: CGFloat = 1.0
     public var viewportPan: CGSize = .zero
     public var lastNonUnitZoom: CGFloat = 1.0
@@ -40,6 +41,8 @@ public final class ReaderViewModel {
     private var hasUpdatedLastOpened = false
     @ObservationIgnored
     private var hasLoadedIntoPlayback = false
+    @ObservationIgnored
+    private var cursorTask: Task<Void, Never>?
 
     public init(
         scoreItem: ScoreItem,
@@ -60,6 +63,21 @@ public final class ReaderViewModel {
             staffSize: defaultStaffSize,
             hiddenStaves: []
         )
+        startObservingCursor()
+    }
+
+    deinit {
+        cursorTask?.cancel()
+    }
+
+    private func startObservingCursor() {
+        guard let controller = playbackController else { return }
+        cursorTask = Task { [weak self] in
+            for await value in controller.cursor {
+                guard let self else { return }
+                playbackCursor = value
+            }
+        }
     }
 
     public func load() async {

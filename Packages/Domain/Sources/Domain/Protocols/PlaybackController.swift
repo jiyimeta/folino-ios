@@ -21,6 +21,7 @@ public protocol PlaybackController: Sendable {
     func setStaffInstrument(staff: Int, bank: Int, program: Int) async
 
     /// Cursor positions emitted by the engine while playing. Yields `nil` when
-    /// playback stops.
-    var cursor: AsyncStream<ChordPath?> { get }
+    /// playback stops. `ScoreCursor` is re-exported from `SheetMusicCore` so
+    /// Features can subscribe without depending on the audio package directly.
+    var cursor: AsyncStream<ScoreCursor?> { get }
 }

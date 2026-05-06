@@ -6,11 +6,11 @@ private final class FakePlaybackController: PlaybackController, @unchecked Senda
     var loadedScores = 0
     var lastTempo: Double = 1.0
     var lastCursor: ChordPath?
-    let cursorContinuation: AsyncStream<ChordPath?>.Continuation
-    let cursor: AsyncStream<ChordPath?>
+    let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
+    let cursor: AsyncStream<ScoreCursor?>
 
     init() {
-        var c: AsyncStream<ChordPath?>.Continuation!
+        var c: AsyncStream<ScoreCursor?>.Continuation!
         cursor = AsyncStream { c = $0 }
         cursorContinuation = c
     }

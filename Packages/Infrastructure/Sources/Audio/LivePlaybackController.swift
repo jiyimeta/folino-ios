@@ -1,3 +1,4 @@
+import Combine
 import Domain
 import Foundation
 import SheetMusicAudio
@@ -16,14 +17,20 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private let engine: PlaybackEngine
     private var loadedScore: Score?
 
-    private let cursorContinuation: AsyncStream<ChordPath?>.Continuation
-    public nonisolated let cursor: AsyncStream<ChordPath?>
+    private let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
+    public nonisolated let cursor: AsyncStream<ScoreCursor?>
+    private var cancellables: Set<AnyCancellable> = []
 
     public init(soundfontResolver: any SheetMusicAudio.SoundfontResolver) {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
-        var continuation: AsyncStream<ChordPath?>.Continuation!
+        var continuation: AsyncStream<ScoreCursor?>.Continuation!
         cursor = AsyncStream { continuation = $0 }
         cursorContinuation = continuation
+        engine.$currentCursor
+            .sink { [continuation] value in
+                continuation.yield(value)
+            }
+            .store(in: &cancellables)
     }
 
     public func load(score: Score, preferences: PlaybackPreferences) throws {

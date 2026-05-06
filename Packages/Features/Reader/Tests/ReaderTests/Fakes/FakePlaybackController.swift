@@ -13,11 +13,11 @@ final class FakePlaybackController: PlaybackController {
     var loadError: Error?
     var playError: Error?
 
-    private let cursorContinuation: AsyncStream<ChordPath?>.Continuation
-    nonisolated let cursor: AsyncStream<ChordPath?>
+    let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
+    nonisolated let cursor: AsyncStream<ScoreCursor?>
 
     init() {
-        var c: AsyncStream<ChordPath?>.Continuation!
+        var c: AsyncStream<ScoreCursor?>.Continuation!
         cursor = AsyncStream { c = $0 }
         cursorContinuation = c
     }

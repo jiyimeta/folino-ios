@@ -191,6 +191,28 @@ struct ReaderViewModelTests {
         #expect(vm.preferences.hiddenStaves.isEmpty)
     }
 
+    @Test func playbackCursorMirrorsControllerStream() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        let target = ScoreCursor.beat(measureIndex: 4, tickInMeasure: 240)
+        controller.cursorContinuation.yield(target)
+        // Allow the AsyncStream consumer Task to schedule.
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(vm.playbackCursor == target)
+
+        controller.cursorContinuation.yield(nil)
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(vm.playbackCursor == nil)
+    }
+
     @Test func togglePlaybackLoadsPlaysThenPauses() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()

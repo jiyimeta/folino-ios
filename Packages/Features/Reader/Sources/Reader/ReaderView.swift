@@ -87,7 +87,8 @@ public struct ReaderView: View {
                 case .vertical:
                     VerticalScoreContainer(
                         score: visible,
-                        staffSize: viewModel.preferences.staffSize
+                        staffSize: viewModel.preferences.staffSize,
+                        playbackCursor: viewModel.playbackCursor
                     )
                 case .page:
                     PagedScoreView(
