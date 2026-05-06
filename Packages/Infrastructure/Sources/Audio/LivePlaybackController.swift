@@ -119,8 +119,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine.setMuted(forChannel: .metronome, to: !enabled)
     }
 
+    public func setCursor(to cursor: ScoreCursor) {
+        engine.seek(to: cursor)
+    }
+
     // Stubs — engine doesn't expose these yet; keep the protocol whole.
-    public func setCursor(to _: ChordPath) {}
     public func setLoopRange(_: ABRepeatRange?) {}
     public func setTempoMultiplier(_: Double) {}
 }
