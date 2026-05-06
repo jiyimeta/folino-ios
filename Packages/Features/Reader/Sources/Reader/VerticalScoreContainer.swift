@@ -133,7 +133,8 @@ struct VerticalScoreContainer: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score,
-                playbackCursor: playbackCursor
+                playbackCursor: playbackCursor,
+                playbackCursorColor: .accentColor
             )
             VerticalSystemAnchors(document: doc)
         }
