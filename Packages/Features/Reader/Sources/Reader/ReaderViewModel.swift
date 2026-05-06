@@ -19,6 +19,7 @@ public final class ReaderViewModel {
     public private(set) var scoreItem: ScoreItem
     public private(set) var preferences: ReaderPreferences
     public private(set) var staffVolumes: [StaffAddress: Double] = [:]
+    public private(set) var mutedStaves: Set<StaffAddress> = []
     public private(set) var isPlaying: Bool = false
     public private(set) var isLoadingSoundfonts: Bool = false
     public private(set) var playbackCursor: ScoreCursor?
@@ -120,11 +121,29 @@ public final class ReaderViewModel {
     public func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
         staffVolumes[address] = clamped
-        guard let controller = playbackController,
-              case let .loaded(score) = loadState,
-              let flatIndex = score.allStaves.firstIndex(where: { $0.address == address })
-        else { return }
-        Task { await controller.setStaffVolume(staff: flatIndex, volume: clamped) }
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        Task { await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped) }
+    }
+
+    public func toggleStaffMute(address: StaffAddress) {
+        if mutedStaves.contains(address) {
+            mutedStaves.remove(address)
+        } else {
+            mutedStaves.insert(address)
+        }
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        Task {
+            await playbackController?.setStaffMute(staff: flatIndex, isMuted: mutedStaves.contains(address))
+        }
+    }
+
+    private func flattenedStaffIndex(for address: StaffAddress) -> Int? {
+        guard
+            case let .loaded(score) = loadState,
+            let flatIndex = score.allStaves.firstIndex(where: { $0.address == address })
+        else { return nil }
+
+        return flatIndex
     }
 
     public func togglePlayback() async {
