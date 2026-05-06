@@ -51,8 +51,9 @@ final class AppBootstrap {
                 cacheDirectory: AppPaths.soundfontCacheDirectory
             )
             playbackController = LivePlaybackController(
-                soundfontResolver: BundleSoundfontResolver(),
-                domainResolver: soundfontResolver
+                soundfontResolver: soundfontResolver,
+                domainResolver: soundfontResolver,
+                precisionProbe: soundfontResolver
             )
 
             Task { [weak self] in
