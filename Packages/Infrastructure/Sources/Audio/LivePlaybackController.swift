@@ -160,6 +160,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
         let center = MPRemoteCommandCenter.shared()
         center.playCommand.removeTarget(nil)
         center.pauseCommand.removeTarget(nil)
+        center.skipForwardCommand.removeTarget(nil)
+        center.skipBackwardCommand.removeTarget(nil)
         // Disable togglePlayPause: with all three registered, iOS 17+
         // sometimes follows a Control Center pause tap with a synthesised
         // toggle event, which our handler would interpret as "state is
@@ -182,6 +184,31 @@ public final class LivePlaybackController: Domain.PlaybackController {
         center.pauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             MainActor.assumeIsolated { self.pause() }
+            return .success
+        }
+
+        // 10-second skip on lock screen / Control Center. The interval
+        // also drives the glyph iOS draws on the buttons (the "10" badge).
+        center.skipForwardCommand.preferredIntervals = [10]
+        center.skipBackwardCommand.preferredIntervals = [10]
+        center.skipForwardCommand.addTarget { [weak self] event in
+            guard let self,
+                  let skip = event as? MPSkipIntervalCommandEvent
+            else { return .commandFailed }
+            MainActor.assumeIsolated {
+                self.engine.skip(by: skip.interval)
+                self.publishNowPlayingInfo()
+            }
+            return .success
+        }
+        center.skipBackwardCommand.addTarget { [weak self] event in
+            guard let self,
+                  let skip = event as? MPSkipIntervalCommandEvent
+            else { return .commandFailed }
+            MainActor.assumeIsolated {
+                self.engine.skip(by: -skip.interval)
+                self.publishNowPlayingInfo()
+            }
             return .success
         }
     }
@@ -213,6 +240,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
         let isPlaying = engine.state == .playing
         var info = nowPlayingMetadata
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        // Duration + elapsed time drive the lock-screen scrubber. iOS
+        // interpolates between the elapsed snapshot and the rate, so a
+        // single publish on each state / skip change is enough — no
+        // per-tick republish needed.
+        info[MPMediaItemPropertyPlaybackDuration] = engine.totalTimeSeconds
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = engine.currentTimeSeconds
         let center = MPNowPlayingInfoCenter.default()
         center.nowPlayingInfo = info
         center.playbackState = isPlaying ? .playing : .paused
