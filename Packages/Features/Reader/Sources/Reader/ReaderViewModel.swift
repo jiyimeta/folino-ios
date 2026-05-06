@@ -20,6 +20,7 @@ public final class ReaderViewModel {
     public private(set) var preferences: ReaderPreferences
     public private(set) var staffVolumes: [StaffAddress: Double] = [:]
     public private(set) var mutedStaves: Set<StaffAddress> = []
+    public private(set) var soloStaves: Set<StaffAddress> = []
     public private(set) var isPlaying: Bool = false
     public private(set) var isLoadingSoundfonts: Bool = false
     public private(set) var playbackCursor: ScoreCursor?
@@ -132,6 +133,18 @@ public final class ReaderViewModel {
         guard let flatIndex = flattenedStaffIndex(for: address) else { return }
         Task {
             await playbackController?.setStaffMute(staff: flatIndex, isMuted: mutedStaves.contains(address))
+        }
+    }
+
+    public func toggleStaffSolo(address: StaffAddress) {
+        if soloStaves.contains(address) {
+            soloStaves.remove(address)
+        } else {
+            soloStaves.insert(address)
+        }
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        Task {
+            await playbackController?.setStaffSolo(staff: flatIndex, isSolo: soloStaves.contains(address))
         }
     }
 

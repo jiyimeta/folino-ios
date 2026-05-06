@@ -16,7 +16,7 @@ struct MixerView: View {
                 } header: {
                     Text(part.instrument.longName ?? part.trackName ?? "-")
                         .font(.headline)
-                        .padding(.bottom, -4)
+                        .padding(.bottom, -8)
                 }
                 .headerProminence(.increased)
                 .padding(.bottom, -8)
@@ -34,22 +34,33 @@ struct MixerView: View {
             get: { viewModel.volume(for: address) },
             set: { viewModel.setVolume($0, for: address) }
         )
-        HStack(spacing: 12) {
+        let isMuted = viewModel.mutedStaves.contains(address)
+        let isSolo = viewModel.soloStaves.contains(address)
+        HStack(spacing: 8) {
             Slider(value: volumeBinding, in: 0 ... 1)
-                .disabled(viewModel.mutedStaves.contains(address))
+                .disabled(isMuted || !viewModel.soloStaves.isEmpty && !isSolo)
                 .padding(.vertical, -8)
+
+            Button {
+                viewModel.toggleStaffSolo(address: address)
+            } label: {
+                Image(systemName: isSolo ? "s.circle.fill" : "s.circle")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 24, height: 24)
+                    .padding(.horizontal, 4)
+            }
 
             Button {
                 viewModel.toggleStaffMute(address: address)
             } label: {
-                Image(systemName: speakerIconSystemName(for: address))
-                    .font(viewModel.mutedStaves.contains(address) ? .title2 : .headline)
+                Image(systemName: isMuted ? "m.circle.fill" : "m.circle")
+                    .resizable()
+                    .scaledToFit()
                     .foregroundStyle(Color.accentColor)
-                    .frame(
-                        width: 24,
-                        height: 24,
-                        alignment: viewModel.mutedStaves.contains(address) ? .center : .leading
-                    )
+                    .frame(width: 24, height: 24)
+                    .padding(.horizontal, 4)
             }
             visibilityButton(address: address)
         }
@@ -66,28 +77,10 @@ struct MixerView: View {
         } label: {
             EyeIcon(isOpen: isVisible, lineWidth: 2)
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 28, height: 18)
+                .frame(width: 28, height: 24)
         }
         .contentShape(.rect)
         .animation(.spring(duration: 0.18), value: isVisible)
-    }
-
-    private func speakerIconSystemName(for address: StaffAddress) -> String {
-        if viewModel.mutedStaves.contains(address) {
-            return "speaker.slash.fill"
-        }
-
-        let value = viewModel.volume(for: address)
-
-        return if value < 0.01 {
-            "speaker.fill"
-        } else if value < 0.34 {
-            "speaker.wave.1.fill"
-        } else if value < 0.67 {
-            "speaker.wave.2.fill"
-        } else {
-            "speaker.wave.3.fill"
-        }
     }
 }
 

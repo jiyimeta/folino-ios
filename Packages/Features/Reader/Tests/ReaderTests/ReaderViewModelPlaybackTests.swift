@@ -124,6 +124,59 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.isPlaying)
     }
 
+    @Test func toggleStaffSoloFlipsMembershipAndForwardsToController() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()]),
+                Part(id: "P1", trackName: "Pno", instrument: Instrument(id: "p"), staves: [Staff(), Staff()]),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        // Piano top staff → flat index 1 (Vn=0, Pno-top=1, Pno-bottom=2).
+        let pianoTop = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        vm.toggleStaffSolo(address: pianoTop)
+        #expect(vm.soloStaves == [pianoTop])
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(controller.staffSoloStates[1] == true)
+
+        vm.toggleStaffSolo(address: pianoTop)
+        #expect(vm.soloStaves.isEmpty)
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(controller.staffSoloStates[1] == false)
+    }
+
+    @Test func toggleStaffSoloIsNoOpWhenScoreNotLoaded() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        // No load: flat index lookup fails, controller is never called,
+        // but the in-memory set still tracks the user's intent.
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        vm.toggleStaffSolo(address: address)
+        #expect(vm.soloStaves == [address])
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(controller.staffSoloStates.isEmpty)
+    }
+
     @Test func setVolumeForwardsToControllerByFlatStaffIndex() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
