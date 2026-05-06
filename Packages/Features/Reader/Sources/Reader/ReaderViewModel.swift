@@ -204,6 +204,12 @@ public final class ReaderViewModel {
         isChromeVisible.toggle()
     }
 
+    public func setManualCursor(_ cursor: ScoreCursor) {
+        playbackCursor = cursor
+        guard let controller = playbackController else { return }
+        Task { await controller.setCursor(to: cursor) }
+    }
+
     // MARK: - Private
 
     private func initialPlaybackPreferences(for score: Score) -> PlaybackPreferences {
