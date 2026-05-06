@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import CoreGraphics
 import Domain
 import Foundation
@@ -352,6 +353,42 @@ public final class ReaderViewModel {
         Task { await controller.setCursor(to: cursor) }
     }
 
+    // MARK: - Tempo & metronome
+
+    /// Effective playback rate multiplier — falls back to 1.0 when no
+    /// override is set. The MixerView slider uses this to seed its
+    /// local edit state.
+    public var effectiveTempoMultiplier: Double { preferences.tempoMultiplier ?? 1.0 }
+
+    /// While the user is dragging the slider: forward the new rate to
+    /// the engine immediately for audible feedback. Does NOT persist —
+    /// the View calls `commitTempoMultiplier` on slider release.
+    public func setTempoMultiplier(_ value: Double) {
+        Task { await playbackController?.setTempoMultiplier(value) }
+    }
+
+    /// On slider release: persist the override (normalizing 1.0 → nil)
+    /// and forward to the engine.
+    public func commitTempoMultiplier(_ value: Double) async {
+        let normalized: Double? = value == 1.0 ? nil : value
+        await mutatePreferences { $0.tempoMultiplier = normalized }
+        let effective = preferences.tempoMultiplier ?? 1.0
+        await playbackController?.setTempoMultiplier(effective)
+    }
+
+    /// Reset to native tempo. Clears the saved override and forwards 1.0.
+    public func resetTempoMultiplier() async {
+        await mutatePreferences { $0.tempoMultiplier = nil }
+        await playbackController?.setTempoMultiplier(1.0)
+    }
+
+    /// Forward metronome on/off to the engine. Persistence is owned by
+    /// the View layer via @AppStorage("readerMetronomeEnabled") so it
+    /// survives across scores.
+    public func setMetronomeEnabled(_ enabled: Bool) async {
+        await playbackController?.setMetronomeEnabled(enabled)
+    }
+
     // MARK: - Private
 
     private func initialPlaybackPreferences(for score: Score) -> PlaybackPreferences {
@@ -408,7 +445,8 @@ public final class ReaderViewModel {
             scoreItemID: copy.scoreItemID,
             staffSize: copy.staffSize,
             hiddenStaves: copy.hiddenStaves,
-            staffProgramOverrides: copy.staffProgramOverrides
+            staffProgramOverrides: copy.staffProgramOverrides,
+            tempoMultiplier: copy.tempoMultiplier
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)
