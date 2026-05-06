@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import SheetMusic
+import SheetMusicMSCX
 
 /// Live `ScoreShareService` backed by `swift-sheet-music`. Companion to
 /// `LiveScoreFileGateway` in the same module.
@@ -79,8 +80,24 @@ public struct LiveScoreShareService: ScoreShareService {
             throw DomainError.unsupportedFormat(sourceURL.pathExtension)
         }
         if onDisk == .mscx {
-            // Filled in by Task 5.
-            throw DomainError.unsupportedFormat("mscx")
+            let mscxData: Data
+            do {
+                mscxData = try Data(contentsOf: sourceURL)
+            } catch {
+                throw DomainError.scoreFileNotFound(name: item.localFileName)
+            }
+            let msczData: Data
+            do {
+                msczData = try MSCZWriter.write(mscxData: mscxData)
+            } catch {
+                throw DomainError.scoreWriteFailed(reason: "\(error)")
+            }
+            do {
+                try msczData.write(to: destination)
+            } catch {
+                throw DomainError.scoreWriteFailed(reason: "\(error)")
+            }
+            return destination
         }
         do {
             try FileManager.default.copyItem(at: sourceURL, to: destination)

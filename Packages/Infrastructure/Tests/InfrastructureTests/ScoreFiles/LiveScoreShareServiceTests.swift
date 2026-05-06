@@ -80,4 +80,29 @@ import Testing
         let onDisk = try Data(contentsOf: url)
         #expect(onDisk == mscz)
     }
+
+    @Test func prepareShareWrapsMSCXAsMSCZ() async throws {
+        let tmp = try TempDirectory()
+        let scores = tmp.url.appending(path: "Scores")
+        let shareTmp = tmp.url.appending(path: "Share")
+        try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
+
+        let mscx = try Fixtures.minimalMSCXData()
+        let local = "abc.mscx"
+        try mscx.write(to: scores.appending(path: local))
+
+        let svc = LiveScoreShareService(
+            scoresDirectory: scores,
+            shareTempDirectory: shareTmp,
+            gateway: LiveScoreFileGateway()
+        )
+        let item = Self.makeItem(localFileName: local)
+
+        let url = try await svc.prepareShare(item: item, format: .sourceFormat)
+        #expect(url.pathExtension == "mscz")
+        // Round-trip: produced bytes load via SheetMusic's .mscz parser.
+        let bytes = try Data(contentsOf: url)
+        _ = try SheetMusic.loadScore(msczData: bytes)
+    }
 }
