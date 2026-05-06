@@ -12,16 +12,45 @@ struct InspectorView: View {
     /// from outside the slider (e.g. the % label tap).
     @State private var sliderValue: Double = 1.0
     @State private var isEditingTempo: Bool = false
+    @Environment(\.horizontalSizeClass) private var hsc
+    @State private var selectedTab: InspectorTab = .playback
 
     var body: some View {
-        List {
-            playbackContent
-            visualContent
+        Group {
+            if hsc == .compact {
+                VStack(spacing: 0) {
+                    Picker("", selection: $selectedTab) {
+                        Text("Playback").tag(InspectorTab.playback)
+                        Text("Visual").tag(InspectorTab.visual)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+
+                    switch selectedTab {
+                    case .playback:
+                        List { playbackContent }
+                            .listStyle(.plain)
+                            .buttonStyle(.plain)
+                            .environment(\.defaultMinListRowHeight, 28)
+                    case .visual:
+                        List { visualContent }
+                            .listStyle(.plain)
+                            .buttonStyle(.plain)
+                            .environment(\.defaultMinListRowHeight, 28)
+                    }
+                }
+            } else {
+                List {
+                    Section("Playback") { playbackContent }
+                    Section("Visual") { visualContent }
+                }
+                .listStyle(.plain)
+                .buttonStyle(.plain)
+                .padding(.top, 16)
+                .environment(\.defaultMinListRowHeight, 28)
+            }
         }
-        .listStyle(.plain)
-        .buttonStyle(.plain)
-        .padding(.top, 16)
-        .environment(\.defaultMinListRowHeight, 28)
         .task(id: viewModel.effectiveTempoMultiplier) {
             // Pull the persisted value into the slider whenever the model
             // changes from outside the gesture (initial load, % tap reset).
@@ -224,6 +253,11 @@ struct InspectorView: View {
         .contentShape(.rect)
         .animation(.spring(duration: 0.18), value: isVisible)
     }
+}
+
+private enum InspectorTab: Hashable {
+    case playback
+    case visual
 }
 
 #Preview {
