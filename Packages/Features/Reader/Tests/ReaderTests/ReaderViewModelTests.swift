@@ -238,6 +238,31 @@ struct ReaderViewModelTests {
         #expect(vm.isInspectorPresented)
     }
 
+    @Test func setHonorLayoutBreaksPersistsAndUpdatesPreferences() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+        await vm.load()
+        #expect(vm.preferences.honorLayoutBreaks == true)
+
+        await vm.setHonorLayoutBreaks(false)
+        #expect(vm.preferences.honorLayoutBreaks == false)
+        #expect(repo.savedReaderPreferences.last?.honorLayoutBreaks == false)
+
+        await vm.setHonorLayoutBreaks(true)
+        #expect(vm.preferences.honorLayoutBreaks == true)
+        #expect(repo.savedReaderPreferences.last?.honorLayoutBreaks == true)
+    }
+
     private func makeVMNoLoad() -> ReaderViewModel {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
