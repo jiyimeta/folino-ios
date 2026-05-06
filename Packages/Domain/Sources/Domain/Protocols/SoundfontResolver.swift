@@ -5,9 +5,11 @@ import Foundation
 /// resolve to `Caches/Soundfonts/`. The Settings UI uses this protocol's cache
 /// management methods to display sizes and delete entries.
 public protocol SoundfontResolver: Sendable {
-    /// Resolve a (bank, program) to a local `.sf2` file URL, downloading and
-    /// caching if necessary.
-    func resolveSoundfont(bank: Int, program: Int) async throws -> URL
+    /// Resolve a `(bank, program, isDrums)` to a local `.sf2` file
+    /// URL, downloading and caching if necessary. `isDrums: true`
+    /// requests the percussion file (e.g. `128_000.sf2`); `false`
+    /// requests the melodic file (e.g. `000_073.sf2`).
+    func resolveSoundfont(bank: Int, program: Int, isDrums: Bool) async throws -> URL
 
     /// All patches currently cached on disk. Includes bundled patches with
     /// `isBundled = true`.
@@ -18,7 +20,7 @@ public protocol SoundfontResolver: Sendable {
 
     /// Remove a single cached (non-bundled) patch. No-op if the patch was
     /// bundled or missing.
-    func deletePatch(bank: Int, program: Int) async throws
+    func deletePatch(bank: Int, program: Int, isDrums: Bool) async throws
 
     /// Remove every non-bundled cached patch.
     func clearCache() async throws

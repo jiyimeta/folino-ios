@@ -34,7 +34,14 @@ let package = Package(
             plugins: swiftLintPlugins
         ),
         .target(name: "CloudSync", dependencies: ["Domain"], plugins: swiftLintPlugins),
-        .target(name: "Soundfonts", dependencies: ["Domain"], plugins: swiftLintPlugins),
+        .target(
+            name: "Soundfonts",
+            dependencies: [
+                "Domain",
+                .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
+            ],
+            plugins: swiftLintPlugins
+        ),
         .target(
             name: "Audio",
             dependencies: [

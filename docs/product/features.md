@@ -29,7 +29,7 @@ Audio engine is `SheetMusicAudio` (`AVAudioEngine` + per-staff `AVAudioUnitSampl
 
 Two layers, both anchored to musical coordinates (system index + relative offset within the system) so they survive reflow, staff toggling, and content zoom.
 
-- **Free-hand drawing** via `PKCanvasView`. Apple Pencil on iPad is the primary input; finger drawing is supported on both iPad and iPhone with reduced precision. Standard PencilKit tool palette — Folino does not skin or replace it.
+- **Free-hand drawing** via `PKCanvasView`. Apple Pencil on iPad is the primary input; finger drawing is supported on both iPad and iPhone with reduced precision. Standard PencilKit tool palette — folino does not skin or replace it.
 - **Text boxes** using the system text input (software / hardware keyboard). Tap-and-hold to place, drag to move. Standard iOS text editing menu.
 
 Annotations are erased / edited per stroke or per box. They are independent of the score data: deleting a score file deletes its annotations; opening a score on another device shows the same annotations in the same musical positions.
@@ -58,17 +58,17 @@ The v1 edit surface is intentionally narrow: **System Text** and **Staff Text** 
 | MIDI (SMF) | ✓ | ✓ |
 | PDF | post-v1 | ✓ |
 
-Import goes through the system file picker (`UIDocumentPickerViewController`) and the share-sheet "Open in Folino" handler. Export goes through the share sheet.
+Import goes through the system file picker (`UIDocumentPickerViewController`) and the share-sheet "Open in folino" handler. Export goes through the share sheet.
 
 ## SoundFont Management
 
-Audio for any (bank, program) is supplied by SoundFont 2 files. Folino's `SoundfontResolver` looks up patches in this order:
+Audio for any (bank, program) is supplied by SoundFont 2 files. folino's `SoundfontResolver` looks up patches in this order:
 
 1. **Bundled** — Electric Piano 1 (bank 0, program 4) and a downsampled Standard Drum Kit (bank 128, program 0). Combined size target ~3–4 MB. Used as the offline melodic / drum fallback.
 2. **Cached download** — `.sf2` files previously downloaded into the app's `Caches/Soundfonts/`.
 3. **Remote download** — fetched on demand from the public release set at `jiyimeta/musescore-general-sf2-split` and stored into the cache. Only the (bank, program) actually required by an open score are fetched.
 
-If a download fails (offline, missing patch), Folino falls back to the bundled patch and shows a non-blocking notice — the score still plays.
+If a download fails (offline, missing patch), folino falls back to the bundled patch and shows a non-blocking notice — the score still plays.
 
 A **SoundFont** screen in Settings shows:
 

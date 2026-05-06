@@ -41,6 +41,7 @@ public final class ReaderViewModel {
     public var viewportZoom: CGFloat = 1.0
     public var lastNonUnitZoom: CGFloat = 1.0
     public var isInspectorPresented: Bool = false
+    public var layoutMode: LayoutMode = .vertical
 
     /// Convenience for tests and previews — true while the "loading
     /// playback sounds…" copy is showing.

@@ -89,12 +89,22 @@ public struct ReaderView: View {
             ProgressView().controlSize(.large)
         case let .loaded(score):
             let visible = score.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
-            VerticalScoreContainer(
-                score: visible,
-                staffSize: viewModel.preferences.staffSize,
-                playbackCursor: viewModel.playbackCursor,
-                viewModel: viewModel
-            )
+            switch viewModel.layoutMode {
+            case .vertical:
+                VerticalScoreContainer(
+                    score: visible,
+                    staffSize: viewModel.preferences.staffSize,
+                    playbackCursor: viewModel.playbackCursor,
+                    viewModel: viewModel
+                )
+            case .horizontal:
+                HorizontalScoreContainer(
+                    score: visible,
+                    staffSize: viewModel.preferences.staffSize,
+                    playbackCursor: viewModel.playbackCursor,
+                    viewModel: viewModel
+                )
+            }
         case let .failed(message):
             ContentUnavailableView {
                 Label("Could not open this score", systemImage: "exclamationmark.triangle")

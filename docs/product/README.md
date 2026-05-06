@@ -1,8 +1,8 @@
-# Folino — Product Docs
+# folino — Product Docs
 
-Folino is a score viewer / player / light annotator for performing musicians, built native to iPad and iPhone (iOS 26+).
+folino is a score viewer / player / light annotator for performing musicians, built native to iPad and iPhone (iOS 26+).
 
-These documents describe **what** Folino is and **why**. Implementation-level decisions live in [`../engineering/`](../engineering/) and in per-feature plans created when each piece of work begins.
+These documents describe **what** folino is and **why**. Implementation-level decisions live in [`../engineering/`](../engineering/) and in per-feature plans created when each piece of work begins.
 
 | Document | Purpose |
 | --- | --- |
@@ -19,9 +19,9 @@ The companion engineering doc:
 
 ## Engine Dependency
 
-Folino is the application layer. The notation, layout, audio, and file-format work lives in [`swift-sheet-music`](https://github.com/jiyimeta/swift-sheet-music). When Folino needs an engine capability that does not yet exist there, the rule of thumb is:
+folino is the application layer. The notation, layout, audio, and file-format work lives in [`swift-sheet-music`](https://github.com/jiyimeta/swift-sheet-music). When folino needs an engine capability that does not yet exist there, the rule of thumb is:
 
 - Generic to any score app → upstream PR to `swift-sheet-music`.
-- Specific to Folino's UX, library, or sync → inside Folino's own packages.
+- Specific to folino's UX, library, or sync → inside folino's own packages.
 
 That boundary is restated in `feasibility.md` and `module-architecture.md`.

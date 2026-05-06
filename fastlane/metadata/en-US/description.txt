@@ -1,0 +1,30 @@
+folino is a score viewer and player for performers.
+It is designed to make score reading, playback, and part practice quick and accessible on iPhone and iPad.
+Once you open a score, it stays easy to use offline, whether you are in rehearsal, on stage, or reviewing music on the go.
+
+[Supported Formats]
+Import MuseScore `.mscz` and `.mscx` files, MusicXML, and MIDI, then play them back while reading the score.
+
+[Readable by Design]
+Switch between vertical scrolling and page mode, then use zoom and cursor movement to quickly check the passage you need.
+Show or hide individual parts so you can focus on the staff you need, even on the smaller iPhone screen.
+
+[Practice Features]
+Adjust volume per part, mute or solo individual staves, and change instruments for each part so you can focus on the line you want to hear.
+Use A-B repeat, a metronome, and tempo control to work through difficult phrases with repetition.
+Background playback is also supported, so you can keep listening while doing other things on your device.
+
+[Stay Organized]
+Use playlists and tags to organize your scores by ensemble, event, rehearsal set, or any other workflow that fits your music life.
+Group the pieces you need and open them quickly for rehearsal, performance, or review.
+
+[Key Features]
+- Score display: vertical scroll / page mode
+- Zoom and playback cursor movement
+- MIDI playback
+- Per-part volume, mute, and solo
+- Per-part instrument selection
+- A-B repeat
+- Metronome
+- Tempo control
+- Import `.mscz`, `.mscx`, MusicXML, and MIDI

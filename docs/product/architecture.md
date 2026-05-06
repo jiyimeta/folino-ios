@@ -33,9 +33,9 @@ Scores live as their original files in `Documents/Scores/`. Annotations and pref
 
 ## Permissions
 
-Folino is intentionally permission-light:
+folino is intentionally permission-light:
 
-- **No microphone** — Folino plays audio, it does not record.
+- **No microphone** — folino plays audio, it does not record.
 - **No location.**
 - **No background audio entitlement in v1** — playback stops when the app is backgrounded. (This is a deliberate cut to keep the security review surface small; opt-in background audio is on the roadmap.)
 - **CloudKit private** — uses the user's existing Apple ID; no separate sign-in screen.
@@ -44,19 +44,19 @@ Folino is intentionally permission-light:
 
 ## Localization
 
-Folino ships with `en` and `ja` strings in v1. Development language is `en`. UI strings use Xcode 15+ string catalogs. The engraved score itself is locale-neutral; only chrome (toolbars, settings, library, error messages) is localized.
+folino ships with `en` and `ja` strings in v1. Development language is `en`. UI strings use Xcode 15+ string catalogs. The engraved score itself is locale-neutral; only chrome (toolbars, settings, library, error messages) is localized.
 
 ## Engine Boundary
 
-Folino composes `swift-sheet-music` modules:
+folino composes `swift-sheet-music` modules:
 
-| Library | Folino's use |
+| Library | folino's use |
 | --- | --- |
-| `SheetMusicCore` | The score data model, re-exported from Folino's Domain. |
+| `SheetMusicCore` | The score data model, re-exported from folino's Domain. |
 | `SheetMusicMSCX` / `SheetMusicMusicXML` / `SheetMusicMIDI` | Format I/O behind a single Domain `ScoreFileGateway` protocol. |
-| `SheetMusicLayout` | Layout calculation that drives Folino's Reader. |
-| `SheetMusicAudio` | Wrapped by Folino's `PlaybackController` (handles cursor, A–B repeat, mixer state, persistence). |
+| `SheetMusicLayout` | Layout calculation that drives folino's Reader. |
+| `SheetMusicAudio` | Wrapped by folino's `PlaybackController` (handles cursor, A–B repeat, mixer state, persistence). |
 | `SheetMusicPDF` | Used for the v1 PDF export path. |
-| `SheetMusicUI` | Score rendering on iPad / iPhone. Folino's Reader composes `ScoreView`, `PagedScoreView`, and `PlaybackCursorView` inside its own iOS shell (toolbar, gestures, navigation) in `Packages/Features/Reader`. `SheetMusicUI` itself is iOS 16+ / macOS 13+; the upstream `Example/SheetMusicExample` iOS target shows the integration pattern. |
+| `SheetMusicUI` | Score rendering on iPad / iPhone. folino's Reader composes `ScoreView`, `PagedScoreView`, and `PlaybackCursorView` inside its own iOS shell (toolbar, gestures, navigation) in `Packages/Features/Reader`. `SheetMusicUI` itself is iOS 16+ / macOS 13+; the upstream `Example/SheetMusicExample` iOS target shows the integration pattern. |
 
-When Folino needs an engine capability that does not exist yet (mscz export, MusicXML export, interactive cursor API, free-text mutation API), the work goes upstream to `swift-sheet-music` first and Folino consumes the next tagged version.
+When folino needs an engine capability that does not exist yet (mscz export, MusicXML export, interactive cursor API, free-text mutation API), the work goes upstream to `swift-sheet-music` first and folino consumes the next tagged version.

@@ -18,10 +18,6 @@ Thumbs.db
 # Local signing / per-developer overrides
 Config/Local.xcconfig
 
-# Bundled SoundFonts (too large for git; copy from
-# swift-sheet-music's Example/SheetMusicExample/Sounds/)
-App/Resources/Sounds/
-
 # Git worktrees
 .worktrees/
 
@@ -37,3 +33,22 @@ Packages/Features/*/.swiftpm/
 Packages/**/Package.resolved
 xcuserdata/
 *.xcuserstate
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+fastlane/logs/
+fastlane/README.md
+fastlane/metadata/review_information/
+fastlane/metadata/trade_representative_contact_information/
+vendor/bundle/
+.bundle/
+
+# Release automation
+build/
+.release-state/
+*.p8
+*.ipa
+*.dSYM.zip
