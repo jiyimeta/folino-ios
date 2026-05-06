@@ -120,7 +120,18 @@ public final class LivePlaybackController: Domain.PlaybackController {
     }
 
     public func setCursor(to cursor: ScoreCursor) {
-        engine.seek(to: cursor)
+        // `AVAudioSequencer` halts when `currentPositionInSeconds` is written
+        // during playback, which kills the engine's own cursor timer on its
+        // next tick (`tickCursor` early-outs on `!sequencer.isPlaying`). To
+        // preserve "playback continues from the seeked position", route
+        // through `play(from:in:)` while playing — that path writes the
+        // position AND calls `sequencer.start()` AND restarts the cursor
+        // timer in lockstep. Pure `seek` is fine while paused / stopped.
+        if engine.state == .playing, let score = loadedScore {
+            engine.play(from: cursor, in: score)
+        } else {
+            engine.seek(to: cursor)
+        }
     }
 
     // Stubs — engine doesn't expose these yet; keep the protocol whole.
