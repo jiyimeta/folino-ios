@@ -25,7 +25,11 @@ import SheetMusicAudio
 /// File naming follows `jiyimeta/musescore-general-sf2-split`:
 ///   - melodic: `BBB_PPP.sf2` (zero-padded decimal `bank`, `program`)
 ///   - drums:   `128_PPP.sf2` (drum bank prefix is `128`, ignoring `bank`)
-public struct MuseScoreSF2Resolver: Domain.SoundfontResolver, SheetMusicAudio.SoundfontResolver {
+public struct MuseScoreSF2Resolver:
+    Domain.SoundfontResolver,
+    Domain.PrecisePatchProbe,
+    SheetMusicAudio.SoundfontResolver
+{
     public static let defaultBaseURL = URL(
         string: "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/1.0.0"
     )! // swiftlint:disable:this force_unwrapping
