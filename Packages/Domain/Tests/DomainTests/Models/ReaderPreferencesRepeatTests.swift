@@ -1,10 +1,11 @@
 @testable import Domain
 import Foundation
+import SheetMusicCore
 import Testing
 
 @Suite
 struct ReaderPreferencesRepeatTests {
-    private static func sampleScoreItemID() -> ScoreItemID { ScoreItemID() }
+    private static func sampleScoreItemID() -> Domain.ScoreItemID { Domain.ScoreItemID() }
 
     @Test func defaultsRepeatModeOffAndAbRepeatNil() {
         let prefs = ReaderPreferences(
