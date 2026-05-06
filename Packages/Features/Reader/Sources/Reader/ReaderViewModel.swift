@@ -370,7 +370,10 @@ public final class ReaderViewModel {
     /// On slider release: persist the override (normalizing 1.0 → nil)
     /// and forward to the engine.
     public func commitTempoMultiplier(_ value: Double) async {
-        let normalized: Double? = value == 1.0 ? nil : value
+        // Snap "100% to display" back to the no-override state. Slider can stop
+        // at e.g. 0.9999999... when visually centred; without this, the override
+        // persists as a near-1.0 value the user thought they cleared.
+        let normalized: Double? = abs(value - 1.0) < 0.005 ? nil : value
         await mutatePreferences { $0.tempoMultiplier = normalized }
         let effective = preferences.tempoMultiplier ?? 1.0
         await playbackController?.setTempoMultiplier(effective)

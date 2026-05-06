@@ -126,6 +126,19 @@ struct ReaderViewModelTempoTests {
         #expect(controller.lastLoadedPreferences?.tempoMultiplier == 0.75)
     }
 
+    @Test func commitTempoMultiplierNormalizesNear1ToNil() async {
+        let (vm, controller, repo) = Self.makeVM()
+        await vm.load()
+
+        // Slider value that visually maps to 100% display
+        // (Int((value * 100).rounded()) == 100) but is not exactly 1.0.
+        await vm.commitTempoMultiplier(0.9999)
+
+        #expect(repo.savedReaderPreferences.last?.tempoMultiplier == nil)
+        #expect(controller.tempoMultiplierCalls.last == 1.0)
+        #expect(vm.effectiveTempoMultiplier == 1.0)
+    }
+
     @Test func setMetronomeEnabledForwardsWithoutPersisting() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()

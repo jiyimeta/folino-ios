@@ -85,9 +85,7 @@ struct MixerView: View {
                 in: 0.5 ... 2.0,
                 onEditingChanged: { editing in
                     isEditingTempo = editing
-                    if editing {
-                        viewModel.setTempoMultiplier(sliderValue)
-                    } else {
+                    if !editing {
                         Task { await viewModel.commitTempoMultiplier(sliderValue) }
                     }
                 }
