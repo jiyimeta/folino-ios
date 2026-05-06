@@ -55,4 +55,29 @@ import Testing
         #expect(LiveScoreShareService.sanitize(title: "") == "score")
         #expect(LiveScoreShareService.sanitize(title: "///") == "score")
     }
+
+    @Test func prepareShareSourceMSCZCopiesBytesIntoTemp() async throws {
+        let tmp = try TempDirectory()
+        let scores = tmp.url.appending(path: "Scores")
+        let shareTmp = tmp.url.appending(path: "Share")
+        try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
+
+        let mscz = try Fixtures.minimalMSCZData()
+        let local = "abc.mscz"
+        try mscz.write(to: scores.appending(path: local))
+
+        let svc = LiveScoreShareService(
+            scoresDirectory: scores,
+            shareTempDirectory: shareTmp,
+            gateway: LiveScoreFileGateway()
+        )
+        let item = Self.makeItem(localFileName: local)
+
+        let url = try await svc.prepareShare(item: item, format: .sourceFormat)
+        #expect(url.deletingLastPathComponent().path == shareTmp.path)
+        #expect(url.pathExtension == "mscz")
+        let onDisk = try Data(contentsOf: url)
+        #expect(onDisk == mscz)
+    }
 }

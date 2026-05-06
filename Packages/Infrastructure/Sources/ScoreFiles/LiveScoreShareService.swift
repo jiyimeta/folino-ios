@@ -51,13 +51,42 @@ public struct LiveScoreShareService: ScoreShareService {
     }
 
     public func prepareShare(
-        item _: ScoreItem,
-        format _: ScoreShareFormat
+        item: ScoreItem,
+        format: ScoreShareFormat
     ) async throws -> URL {
-        // Tasks 4-7 will replace this stub with real format conversion.
-        // `await Task.yield()` keeps the function genuinely async so the
-        // ScoreShareService protocol conformance compiles cleanly.
         await Task.yield()
-        throw DomainError.unsupportedFormat("share")
+        let title = Self.sanitize(title: item.title)
+        switch format {
+        case .sourceFormat:
+            return try prepareSourceFormat(item: item, sanitizedTitle: title)
+        case .pdf, .midi:
+            throw DomainError.unsupportedFormat("share")
+        }
+    }
+
+    private func prepareSourceFormat(
+        item: ScoreItem,
+        sanitizedTitle: String
+    ) throws -> URL {
+        let sourceURL = scoresDirectory.appending(path: item.localFileName)
+        let resolved = resolvedSourceFormat(for: item)
+        let destination = shareTempDirectory.appending(
+            path: "\(sanitizedTitle).\(resolved.canonicalExtension)"
+        )
+        try? FileManager.default.removeItem(at: destination)
+
+        guard let onDisk = ScoreFormat.detect(filename: item.localFileName) else {
+            throw DomainError.unsupportedFormat(sourceURL.pathExtension)
+        }
+        if onDisk == .mscx {
+            // Filled in by Task 5.
+            throw DomainError.unsupportedFormat("mscx")
+        }
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+        } catch {
+            throw DomainError.scoreFileNotFound(name: item.localFileName)
+        }
+        return destination
     }
 }
