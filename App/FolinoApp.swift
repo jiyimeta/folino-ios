@@ -3,11 +3,15 @@ import SwiftUI
 @main
 struct FolinoApp: App {
     @State private var bootstrap = AppBootstrap()
+    @State private var reviewPrompt = ReviewPromptCoordinator()
 
     var body: some Scene {
         WindowGroup {
-            AppShellView(bootstrap: bootstrap)
-                .task { bootstrap.start() }
+            AppShellView(bootstrap: bootstrap, reviewPrompt: reviewPrompt)
+                .task {
+                    bootstrap.start()
+                    reviewPrompt.registerColdLaunchIfNeeded()
+                }
                 .onOpenURL { bootstrap.acceptIncomingURL($0) }
         }
     }

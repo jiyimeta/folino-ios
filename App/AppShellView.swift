@@ -3,10 +3,13 @@ import Library
 import LicenseList
 import Reader
 import Settings
+import StoreKit
 import SwiftUI
 
 struct AppShellView: View {
     let bootstrap: AppBootstrap
+    @Bindable var reviewPrompt: ReviewPromptCoordinator
+    @Environment(\.requestReview) private var requestReview
 
     var body: some View {
         Group {
@@ -31,6 +34,12 @@ struct AppShellView: View {
             } else {
                 ProgressView().controlSize(.large)
             }
+        }
+        .alert("Enjoying Folino?", isPresented: $reviewPrompt.isPrePromptPresented) {
+            Button("Rate Folino") { requestReview() }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("Would you mind taking a moment to leave a review on the App Store?")
         }
     }
 }
