@@ -113,6 +113,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
         _ score: Score, probe: any Domain.PrecisePatchProbe
     ) -> Score {
         var rewritten = score
+        // Multi-staff parts (e.g. piano) yield multiple `allStaves` entries
+        // sharing one `partIndex`. The precise-path check on the (already
+        // rewritten) channel short-circuits subsequent visits — the rewrite
+        // is idempotent per part, so the redundant probe call is the only
+        // overhead.
         for entry in rewritten.allStaves {
             let partIndex = entry.address.partIndex
             guard rewritten.parts.indices.contains(partIndex) else { continue }
@@ -128,6 +133,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
             var newChannel = channel
             newChannel.bank = target.bank
             newChannel.program = target.program
+            // `Instrument.init` substitutes a default `[InstrumentChannel()]` when
+            // given an empty channels array, so this branch is defensive — it only
+            // fires if a caller mutates `channels = []` post-construction.
             if rewritten.parts[partIndex].instrument.channels.isEmpty {
                 rewritten.parts[partIndex].instrument.channels = [newChannel]
             } else {
