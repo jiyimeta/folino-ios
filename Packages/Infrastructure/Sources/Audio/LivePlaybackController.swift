@@ -15,9 +15,9 @@ import SheetMusicCore
 /// adapter is too — the protocol's `async` methods become hops onto the
 /// main actor.
 ///
-/// MVP scope: load → play / pause and per-staff volume forwarding. Cursor
-/// streaming, A–B repeat, tempo multiplier, mute / solo / instrument
-/// changes are stubbed pending UI demand.
+/// MVP scope today: every Domain.PlaybackController method forwards to
+/// the engine except `setLoopRange`, which remains a stub until the
+/// engine exposes the corresponding API.
 @MainActor
 public final class LivePlaybackController: Domain.PlaybackController {
     private let engine: PlaybackEngine
