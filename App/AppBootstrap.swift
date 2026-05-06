@@ -47,6 +47,9 @@ final class AppBootstrap {
             self.repository = repository
             self.gateway = gateway
             self.importer = importer
+            // `MuseScoreSF2Resolver` conforms to all three protocols
+            // (`SheetMusicAudio.SoundfontResolver`, `Domain.SoundfontResolver`,
+            // `Domain.PrecisePatchProbe`); one instance satisfies every slot.
             let soundfontResolver = MuseScoreSF2Resolver(
                 cacheDirectory: AppPaths.soundfontCacheDirectory
             )
