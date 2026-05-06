@@ -67,6 +67,10 @@ targets:
         excludes:
           - Info.plist
           - Folino.entitlements
+          - Resources/Soundfonts
+      - path: App/Resources/Soundfonts
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino
