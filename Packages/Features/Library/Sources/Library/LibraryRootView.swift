@@ -209,8 +209,7 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
                     onRequestDelete: nil
                 )
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3)
+                Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
