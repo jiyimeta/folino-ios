@@ -27,6 +27,6 @@ let package = Package(
             resources: [.process("Resources")],
             plugins: swiftLintPlugins
         ),
-        .testTarget(name: "SettingsTests", dependencies: ["Settings"]),
+        .testTarget(name: "SettingsTests", dependencies: ["Settings", "Domain"]),
     ]
 )

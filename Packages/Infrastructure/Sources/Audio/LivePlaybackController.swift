@@ -24,8 +24,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private let domainResolver: (any Domain.SoundfontResolver)?
     private var loadedScore: Score?
 
-    private let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
-    public nonisolated let cursor: AsyncStream<ScoreCursor?>
+    private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var cancellables: Set<AnyCancellable> = []
     /// Cached title / artist / default-rate for the loaded score. We
     /// rebuild the full `nowPlayingInfo` dictionary on every state
@@ -40,12 +39,19 @@ public final class LivePlaybackController: Domain.PlaybackController {
     ) {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
         self.domainResolver = domainResolver
-        var continuation: AsyncStream<ScoreCursor?>.Continuation!
-        cursor = AsyncStream { continuation = $0 }
-        cursorContinuation = continuation
         engine.$currentCursor
-            .sink { [continuation] value in
-                continuation.yield(value)
+            .sink { [weak self] value in
+                // Combine emits the engine's `@Published currentCursor` on
+                // willSet, synchronously on the MainActor where the timer
+                // task ran. Forward to the registered handler in the same
+                // work item so each cursor change reaches SwiftUI without
+                // an intervening Task hop. Routing through `AsyncStream` +
+                // `for-await` instead let the consumer drain a buffered
+                // burst in one work item, collapsing the intermediate
+                // cursor positions before SwiftUI got a render slot
+                // between them — visible as the cursor "skipping" past
+                // chord onsets that the example app shows.
+                self?.cursorHandler?(value)
             }
             .store(in: &cancellables)
         engine.$state
@@ -88,23 +94,44 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private static func prefetchSoundfonts(
         score: Score, resolver: any Domain.SoundfontResolver
     ) async {
-        var seen: Set<SoundfontPatchKey> = []
-        var pairs: [(bank: Int, program: Int)] = []
-        for entry in score.allStaves {
-            guard let part = score.part(at: entry.address) else { continue }
-            let channel = part.instrument.channels.first ?? InstrumentChannel()
-            let key = SoundfontPatchKey(bank: channel.bank, program: channel.program)
-            if seen.insert(key).inserted {
-                pairs.append((channel.bank, channel.program))
-            }
-        }
+        let keys = distinctPatchKeys(in: score)
         await withTaskGroup(of: Void.self) { group in
-            for (bank, program) in pairs {
+            for key in keys {
                 group.addTask {
-                    _ = try? await resolver.resolveSoundfont(bank: bank, program: program)
+                    _ = try? await resolver.resolveSoundfont(
+                        bank: key.bank, program: key.program
+                    )
                 }
             }
         }
+    }
+
+    public func areSoundfontsAvailableLocally(for score: Score) async -> Bool {
+        // Only the bundled GM fallback is in play — nothing to fetch.
+        guard let domainResolver else { return true }
+        let needed = Self.distinctPatchKeys(in: score)
+        if needed.isEmpty { return true }
+        let cachedKeys: Set<SoundfontPatchKey>
+        do {
+            let patches = try await domainResolver.cachedPatches()
+            cachedKeys = Set(patches.map { SoundfontPatchKey(bank: $0.bank, program: $0.program) })
+        } catch {
+            // If we can't enumerate the cache, fall back to "may need to
+            // fetch" so the user gets the loading affordance instead of
+            // a silent stall.
+            return false
+        }
+        return needed.isSubset(of: cachedKeys)
+    }
+
+    private static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
+        var keys: Set<SoundfontPatchKey> = []
+        for entry in score.allStaves {
+            guard let part = score.part(at: entry.address) else { continue }
+            let channel = part.instrument.channels.first ?? InstrumentChannel()
+            keys.insert(SoundfontPatchKey(bank: channel.bank, program: channel.program))
+        }
+        return keys
     }
 
     public func play() throws {
@@ -153,6 +180,10 @@ public final class LivePlaybackController: Domain.PlaybackController {
         } else {
             engine.seek(to: cursor)
         }
+    }
+
+    public func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
+        cursorHandler = handler
     }
 
     // Stubs — engine doesn't expose these yet; keep the protocol whole.

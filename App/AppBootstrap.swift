@@ -17,6 +17,9 @@ final class AppBootstrap {
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var importer: LiveScoreFileImporter?
     private(set) var playbackController: LivePlaybackController?
+    private(set) var reachability: LiveNetworkReachability?
+    private(set) var soundfontResolver: MuseScoreSF2Resolver?
+    private(set) var presetCatalog: BundledSF2PresetCatalog?
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`.
     /// Last-wins: a second URL arriving before the first is consumed
@@ -50,10 +53,17 @@ final class AppBootstrap {
             let soundfontResolver = MuseScoreSF2Resolver(
                 cacheDirectory: AppPaths.soundfontCacheDirectory
             )
+            self.soundfontResolver = soundfontResolver
+            if let bundleSF2URL = Bundle.main.url(
+                forResource: "MuseScore_General", withExtension: "sf2", subdirectory: "Sounds"
+            ) {
+                presetCatalog = try? BundledSF2PresetCatalog(sf2URL: bundleSF2URL)
+            }
             playbackController = LivePlaybackController(
                 soundfontResolver: BundleSoundfontResolver(),
                 domainResolver: soundfontResolver
             )
+            reachability = LiveNetworkReachability()
 
             Task { [weak self] in
                 do {

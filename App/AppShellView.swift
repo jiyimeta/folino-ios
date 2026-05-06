@@ -81,7 +81,8 @@ private struct ReadyShell: View {
                             repository: repository,
                             gateway: gateway,
                             scoresDirectory: scoresDirectory,
-                            playbackController: bootstrap.playbackController
+                            playbackController: bootstrap.playbackController,
+                            reachability: bootstrap.reachability
                         )
                     } else {
                         ContentUnavailableView(
@@ -101,7 +102,8 @@ private struct ReadyShell: View {
                             repository: repository,
                             gateway: gateway,
                             scoresDirectory: scoresDirectory,
-                            playbackController: bootstrap.playbackController
+                            playbackController: bootstrap.playbackController,
+                            reachability: bootstrap.reachability
                         )
                     },
                     licenseContent: { LicenseListView() },
@@ -110,7 +112,12 @@ private struct ReadyShell: View {
             }
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet { LicenseListView() }
+            SettingsSheet(
+                soundfontResolver: bootstrap.soundfontResolver,
+                presetCatalog: bootstrap.presetCatalog
+            ) {
+                LicenseListView()
+            }
         }
         .onChange(of: libraryVM.pendingScoreToOpen?.id) { _, newID in
             guard let newID,
