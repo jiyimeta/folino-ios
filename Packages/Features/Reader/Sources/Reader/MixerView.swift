@@ -11,11 +11,7 @@ struct MixerView: View {
                 let part = score.parts[partIndex]
                 Section {
                     ForEach(part.staves.indices, id: \.self) { staffIndex in
-                        staffRow(
-                            address: StaffAddress(
-                                partIndex: partIndex, staffIndexInPart: staffIndex
-                            )
-                        )
+                        staffRow(address: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex))
                     }
                 } header: {
                     Text(part.instrument.longName ?? part.trackName ?? "-")
@@ -40,14 +36,20 @@ struct MixerView: View {
         )
         HStack(spacing: 12) {
             Slider(value: volumeBinding, in: 0 ... 1)
+                .disabled(viewModel.mutedStaves.contains(address))
                 .padding(.vertical, -8)
+
             Button {
-                // TODO: Implement mute
+                viewModel.toggleStaffMute(address: address)
             } label: {
-                Image(systemName: "speaker.wave.2.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
+                Image(systemName: speakerIconSystemName(for: address))
+                    .font(viewModel.mutedStaves.contains(address) ? .title2 : .headline)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(
+                        width: 24,
+                        height: 24,
+                        alignment: viewModel.mutedStaves.contains(address) ? .center : .leading
+                    )
             }
             visibilityButton(address: address)
         }
@@ -68,6 +70,24 @@ struct MixerView: View {
         }
         .contentShape(.rect)
         .animation(.spring(duration: 0.18), value: isVisible)
+    }
+
+    private func speakerIconSystemName(for address: StaffAddress) -> String {
+        if viewModel.mutedStaves.contains(address) {
+            return "speaker.slash.fill"
+        }
+
+        let value = viewModel.volume(for: address)
+
+        return if value < 0.01 {
+            "speaker.fill"
+        } else if value < 0.34 {
+            "speaker.wave.1.fill"
+        } else if value < 0.67 {
+            "speaker.wave.2.fill"
+        } else {
+            "speaker.wave.3.fill"
+        }
     }
 }
 
