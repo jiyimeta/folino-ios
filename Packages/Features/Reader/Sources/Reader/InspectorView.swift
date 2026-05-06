@@ -96,6 +96,10 @@ struct InspectorView: View {
             staffSizeRow
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+
+            breakPolicyRow
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
     }
 
@@ -135,6 +139,17 @@ struct InspectorView: View {
         }
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    @ViewBuilder
+    private var breakPolicyRow: some View {
+        let binding = Binding<Bool>(
+            get: { viewModel.preferences.honorLayoutBreaks },
+            set: { newValue in
+                Task { await viewModel.setHonorLayoutBreaks(newValue) }
+            }
+        )
+        Toggle("Honor authored breaks", isOn: binding)
     }
 
     @ViewBuilder
