@@ -1,6 +1,7 @@
 import Combine
 import Domain
 import Foundation
+import MediaPlayer
 import SheetMusicAudio
 import SheetMusicCore
 
@@ -21,6 +22,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
     public nonisolated let cursor: AsyncStream<ScoreCursor?>
     private var cancellables: Set<AnyCancellable> = []
+    /// Cached title / artist / default-rate for the loaded score. We
+    /// rebuild the full `nowPlayingInfo` dictionary on every state
+    /// change rather than mutating the live one in place — reading
+    /// `MPNowPlayingInfoCenter.nowPlayingInfo` back can return a stale
+    /// or nil snapshot, which would silently drop the rate update.
+    private var nowPlayingMetadata: [String: Any] = [:]
 
     public init(
         soundfontResolver: any SheetMusicAudio.SoundfontResolver,
@@ -36,6 +43,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
                 continuation.yield(value)
             }
             .store(in: &cancellables)
+        engine.$state
+            .sink { [weak self] _ in
+                self?.publishNowPlayingInfo()
+            }
+            .store(in: &cancellables)
+        configureRemoteCommands()
     }
 
     public func load(score: Score, preferences: PlaybackPreferences) async throws {
@@ -49,6 +62,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         try Task.checkCancellation()
         try engine.prepare(score: score)
         loadedScore = score
+        updateNowPlayingMetadata(for: score)
         for state in preferences.perStaff {
             engine.setVolume(
                 forChannel: .staff(state.staffIndex), to: Float(state.volume)
@@ -91,10 +105,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
     public func play() throws {
         guard let score = loadedScore else { return }
         engine.play(in: score)
+        publishNowPlayingInfo()
     }
 
     public func pause() {
         engine.pause()
+        publishNowPlayingInfo()
     }
 
     public func setStaffVolume(staff: Int, volume: Double) {
@@ -137,4 +153,72 @@ public final class LivePlaybackController: Domain.PlaybackController {
     // Stubs — engine doesn't expose these yet; keep the protocol whole.
     public func setLoopRange(_: ABRepeatRange?) {}
     public func setTempoMultiplier(_: Double) {}
+
+    // MARK: - Now Playing / Remote Commands
+
+    private func configureRemoteCommands() {
+        let center = MPRemoteCommandCenter.shared()
+        center.playCommand.removeTarget(nil)
+        center.pauseCommand.removeTarget(nil)
+        // Disable togglePlayPause: with all three registered, iOS 17+
+        // sometimes follows a Control Center pause tap with a synthesised
+        // toggle event, which our handler would interpret as "state is
+        // paused → resume" and immediately flip back to playing. Letting
+        // play/pause be the only source of truth removes the race.
+        center.togglePlayPauseCommand.removeTarget(nil)
+        center.togglePlayPauseCommand.isEnabled = false
+
+        center.playCommand.addTarget { [weak self] _ in
+            guard let self else { return .commandFailed }
+            return MainActor.assumeIsolated {
+                do {
+                    try self.play()
+                    return .success
+                } catch {
+                    return .commandFailed
+                }
+            }
+        }
+        center.pauseCommand.addTarget { [weak self] _ in
+            guard let self else { return .commandFailed }
+            MainActor.assumeIsolated { self.pause() }
+            return .success
+        }
+    }
+
+    private func updateNowPlayingMetadata(for score: Score) {
+        let frameTexts = score.titleFrame?.texts ?? []
+        let title = frameTexts.first(where: { $0.style == .title })?.text.nonEmpty
+            ?? score.metaTags["workTitle"]?.nonEmpty
+            ?? "Untitled"
+        let composer = frameTexts.first(where: { $0.style == .composer })?.text.nonEmpty
+            ?? score.metaTags["composer"]?.nonEmpty
+
+        var meta: [String: Any] = [:]
+        meta[MPMediaItemPropertyTitle] = title
+        if let composer {
+            meta[MPMediaItemPropertyArtist] = composer
+        }
+        meta[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        nowPlayingMetadata = meta
+        publishNowPlayingInfo()
+    }
+
+    /// Rebuild `nowPlayingInfo` from cached metadata + the engine's current
+    /// state, and set the canonical `playbackState`. Always publishes a
+    /// complete dictionary — partial updates that read `nowPlayingInfo` back
+    /// have been observed to silently drop the rate change when the system
+    /// returns nil mid-transition.
+    private func publishNowPlayingInfo() {
+        let isPlaying = engine.state == .playing
+        var info = nowPlayingMetadata
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        let center = MPNowPlayingInfoCenter.default()
+        center.nowPlayingInfo = info
+        center.playbackState = isPlaying ? .playing : .paused
+    }
+}
+
+extension String {
+    fileprivate var nonEmpty: String? { isEmpty ? nil : self }
 }
