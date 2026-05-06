@@ -17,13 +17,17 @@ final class FakePlaybackController: PlaybackController {
     /// `CancellationError`. Lets tests exercise the "loading" alert flow.
     var blocksLoadUntilCancelled: Bool = false
 
-    let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
-    nonisolated let cursor: AsyncStream<ScoreCursor?>
+    private var cursorHandler: ((ScoreCursor?) -> Void)?
 
-    init() {
-        var c: AsyncStream<ScoreCursor?>.Continuation!
-        cursor = AsyncStream { c = $0 }
-        cursorContinuation = c
+    init() {}
+
+    func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
+        cursorHandler = handler
+    }
+
+    /// Test helper — drives the registered handler synchronously.
+    func emitCursor(_ value: ScoreCursor?) {
+        cursorHandler?(value)
     }
 
     func load(score _: Score, preferences: PlaybackPreferences) async throws {

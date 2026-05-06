@@ -2,17 +2,15 @@
 import Foundation
 import Testing
 
-private final class FakePlaybackController: PlaybackController, @unchecked Sendable {
+@MainActor
+private final class FakePlaybackController: PlaybackController {
     var loadedScores = 0
     var lastTempo: Double = 1.0
     var lastCursor: ScoreCursor?
-    let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
-    let cursor: AsyncStream<ScoreCursor?>
+    private var cursorHandler: ((ScoreCursor?) -> Void)?
 
-    init() {
-        var c: AsyncStream<ScoreCursor?>.Continuation!
-        cursor = AsyncStream { c = $0 }
-        cursorContinuation = c
+    func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
+        cursorHandler = handler
     }
 
     func load(score: Score, preferences: PlaybackPreferences) throws {
@@ -50,11 +48,11 @@ private actor FakeSoundfontResolver: SoundfontResolver {
 }
 
 @Suite struct AudioProtocolsTests {
-    @Test func playbackControllerSetsCursorAndTempo() async throws {
+    @MainActor @Test func playbackControllerSetsCursorAndTempo() throws {
         let controller = FakePlaybackController()
         let target = ScoreCursor.beat(measureIndex: 2, tickInMeasure: 240)
-        await controller.setCursor(to: target)
-        await controller.setTempoMultiplier(0.75)
+        controller.setCursor(to: target)
+        controller.setTempoMultiplier(0.75)
         #expect(controller.lastCursor == target)
         #expect(controller.lastTempo == 0.75)
     }

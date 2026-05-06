@@ -20,8 +20,16 @@ public protocol PlaybackController: Sendable {
     func setStaffSolo(staff: Int, isSolo: Bool) async
     func setStaffInstrument(staff: Int, bank: Int, program: Int) async
 
-    /// Cursor positions emitted by the engine while playing. Yields `nil` when
-    /// playback stops. `ScoreCursor` is re-exported from `SheetMusicCore` so
-    /// Features can subscribe without depending on the audio package directly.
-    var cursor: AsyncStream<ScoreCursor?> { get }
+    /// Register a handler invoked synchronously on every cursor change emitted
+    /// by the engine. Replaces any previously registered handler. Receives
+    /// `nil` when playback stops. `ScoreCursor` is re-exported from
+    /// `SheetMusicCore` so Features can subscribe without depending on the
+    /// audio package directly.
+    ///
+    /// Synchronous delivery (instead of `AsyncStream`) keeps each cursor
+    /// change on its own MainActor work item — mirroring the engine's
+    /// `@Published currentCursor` semantics — so SwiftUI gets a render
+    /// opportunity between every change instead of seeing only the last
+    /// value of a buffered burst.
+    @MainActor func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void)
 }

@@ -42,8 +42,6 @@ public final class ReaderViewModel {
     @ObservationIgnored
     private var hasLoadedIntoPlayback = false
     @ObservationIgnored
-    private var cursorTask: Task<Void, Never>?
-    @ObservationIgnored
     private var loadingTask: Task<Void, Error>?
 
     public init(
@@ -65,20 +63,22 @@ public final class ReaderViewModel {
             staffSize: defaultStaffSize,
             hiddenStaves: []
         )
-        startObservingCursor()
     }
 
-    deinit {
-        cursorTask?.cancel()
-    }
-
-    private func startObservingCursor() {
+    /// Subscribe to the controller's cursor stream. Must be called from a
+    /// view-lifecycle hook (`.task` / `.onAppear`) — NOT from `init` —
+    /// so only the VM that SwiftUI actually retains via `@State` registers
+    /// its handler. Calling from `init` regressed the playback cursor:
+    /// SwiftUI re-evaluates the `@State(wrappedValue:)` expression on
+    /// every parent body pass, constructing a fresh VM each time, but
+    /// keeps only the first as the persisted state. The subsequent
+    /// throwaway VMs all register handlers that capture themselves
+    /// weakly, the last one wins, and once it's deallocated the engine's
+    /// cursor changes land on a `[weak self]` that's already nil.
+    public func startObservingCursor() {
         guard let controller = playbackController else { return }
-        cursorTask = Task { [weak self] in
-            for await value in controller.cursor {
-                guard let self else { return }
-                playbackCursor = value
-            }
+        controller.observeCursor { [weak self] value in
+            self?.playbackCursor = value
         }
     }
 

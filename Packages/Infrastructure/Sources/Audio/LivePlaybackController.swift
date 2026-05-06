@@ -24,8 +24,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private let domainResolver: (any Domain.SoundfontResolver)?
     private var loadedScore: Score?
 
-    private let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
-    public nonisolated let cursor: AsyncStream<ScoreCursor?>
+    private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var cancellables: Set<AnyCancellable> = []
     /// Cached title / artist / default-rate for the loaded score. We
     /// rebuild the full `nowPlayingInfo` dictionary on every state
@@ -40,12 +39,19 @@ public final class LivePlaybackController: Domain.PlaybackController {
     ) {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
         self.domainResolver = domainResolver
-        var continuation: AsyncStream<ScoreCursor?>.Continuation!
-        cursor = AsyncStream { continuation = $0 }
-        cursorContinuation = continuation
         engine.$currentCursor
-            .sink { [continuation] value in
-                continuation.yield(value)
+            .sink { [weak self] value in
+                // Combine emits the engine's `@Published currentCursor` on
+                // willSet, synchronously on the MainActor where the timer
+                // task ran. Forward to the registered handler in the same
+                // work item so each cursor change reaches SwiftUI without
+                // an intervening Task hop. Routing through `AsyncStream` +
+                // `for-await` instead let the consumer drain a buffered
+                // burst in one work item, collapsing the intermediate
+                // cursor positions before SwiftUI got a render slot
+                // between them — visible as the cursor "skipping" past
+                // chord onsets that the example app shows.
+                self?.cursorHandler?(value)
             }
             .store(in: &cancellables)
         engine.$state
@@ -153,6 +159,10 @@ public final class LivePlaybackController: Domain.PlaybackController {
         } else {
             engine.seek(to: cursor)
         }
+    }
+
+    public func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
+        cursorHandler = handler
     }
 
     // Stubs — engine doesn't expose these yet; keep the protocol whole.

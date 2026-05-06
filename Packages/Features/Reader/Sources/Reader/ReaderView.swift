@@ -62,7 +62,10 @@ public struct ReaderView: View {
                     viewModel.cancelLoadingSoundfonts()
                 }
             }
-            .task { await viewModel.load() }
+            .task {
+                viewModel.startObservingCursor()
+                await viewModel.load()
+            }
     }
 
     @ViewBuilder
