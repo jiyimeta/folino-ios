@@ -10,7 +10,7 @@ public protocol PlaybackController: Sendable {
     func play() async throws
     func pause() async
 
-    func setCursor(to chord: ChordPath) async
+    func setCursor(to cursor: ScoreCursor) async
     func setLoopRange(_ range: ABRepeatRange?) async
     func setMetronomeEnabled(_ enabled: Bool) async
     func setTempoMultiplier(_ value: Double) async
