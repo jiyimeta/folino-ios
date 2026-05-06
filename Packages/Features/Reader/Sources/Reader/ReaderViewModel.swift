@@ -357,7 +357,7 @@ public final class ReaderViewModel {
     // MARK: - Tempo & metronome
 
     /// Effective playback rate multiplier — falls back to 1.0 when no
-    /// override is set. The MixerView slider uses this to seed its
+    /// override is set. The InspectorView slider uses this to seed its
     /// local edit state.
     public var effectiveTempoMultiplier: Double { preferences.tempoMultiplier ?? 1.0 }
 

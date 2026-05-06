@@ -2,7 +2,7 @@ import SheetMusicAudio
 import SheetMusicCore
 import SwiftUI
 
-struct MixerView: View {
+struct InspectorView: View {
     @Bindable var viewModel: ReaderViewModel
     let score: Score
 
@@ -251,7 +251,7 @@ struct MixerView: View {
     Text("Contents")
         .task { await vm.load() }
         .sheet(isPresented: .constant(true)) {
-            MixerView(viewModel: vm, score: score)
+            InspectorView(viewModel: vm, score: score)
                 .presentationDetents([.medium, .large])
         }
 }
