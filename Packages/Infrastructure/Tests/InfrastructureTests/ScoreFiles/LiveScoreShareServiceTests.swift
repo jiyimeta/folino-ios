@@ -38,4 +38,21 @@ import Testing
         #expect(svc.resolvedSourceFormat(for: Self.makeItem(localFileName: "x.musicxml")) == .musicXML)
         #expect(svc.resolvedSourceFormat(for: Self.makeItem(localFileName: "x.mxl")) == .mxl)
     }
+
+    @Test func sanitizeTitleReplacesPathAndNullBytes() {
+        #expect(LiveScoreShareService.sanitize(title: "a/b") == "a_b")
+        #expect(LiveScoreShareService.sanitize(title: "a:b") == "a_b")
+        #expect(LiveScoreShareService.sanitize(title: "a\\b") == "a_b")
+        #expect(LiveScoreShareService.sanitize(title: "a\u{0000}b") == "a_b")
+    }
+
+    @Test func sanitizeTitleTrimsTo100Chars() {
+        let input = String(repeating: "x", count: 250)
+        #expect(LiveScoreShareService.sanitize(title: input).count == 100)
+    }
+
+    @Test func sanitizeTitleFallsBackToScoreWhenEmpty() {
+        #expect(LiveScoreShareService.sanitize(title: "") == "score")
+        #expect(LiveScoreShareService.sanitize(title: "///") == "score")
+    }
 }

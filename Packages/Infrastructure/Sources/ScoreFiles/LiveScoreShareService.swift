@@ -19,6 +19,16 @@ public struct LiveScoreShareService: ScoreShareService {
         self.gateway = gateway
     }
 
+    /// Internal for tests. Replaces filesystem-hostile characters,
+    /// trims to ≤100 chars, falls back to `"score"` if empty.
+    static func sanitize(title: String) -> String {
+        let bad: Set<Character> = ["/", ":", "\\", "\u{0000}"]
+        let cleaned = String(title.map { bad.contains($0) ? "_" : $0 })
+        let stripped = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "_ "))
+        let candidate = stripped.isEmpty ? "score" : stripped
+        return String(candidate.prefix(100))
+    }
+
     public func availableFormats(for _: ScoreItem) -> [ScoreShareFormat] {
         // TODO: re-evaluate when LiveScoreFileGateway gains MIDI parsing —
         // PDF/MIDI for a `.midi` item would fail with `scoreParseFailed`
