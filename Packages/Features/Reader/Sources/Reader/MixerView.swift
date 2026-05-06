@@ -14,9 +14,14 @@ struct MixerView: View {
                         let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
 
                         HStack(spacing: 12) {
-                            // TODO: Implement volume
-                            Slider(value: .constant(0.5))
-                                .padding(.vertical, -8)
+                            Slider(
+                                value: Binding(
+                                    get: { viewModel.volume(for: address) },
+                                    set: { viewModel.setVolume($0, for: address) }
+                                ),
+                                in: 0 ... 1
+                            )
+                            .padding(.vertical, -8)
                             Button {
                                 // TODO: Implement mute
                             } label: {

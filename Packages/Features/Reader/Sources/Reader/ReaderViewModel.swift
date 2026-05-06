@@ -13,9 +13,12 @@ public final class ReaderViewModel {
         case failed(message: String)
     }
 
+    public static let defaultStaffVolume: Double = 1.0
+
     public private(set) var loadState: LoadState = .loading
     public private(set) var scoreItem: ScoreItem
     public private(set) var preferences: ReaderPreferences
+    public private(set) var staffVolumes: [StaffAddress: Double] = [:]
     public var viewportZoom: CGFloat = 1.0
     public var viewportPan: CGSize = .zero
     public var lastNonUnitZoom: CGFloat = 1.0
@@ -80,6 +83,14 @@ public final class ReaderViewModel {
             ReaderPreferences.minStaffSize
         )
         await mutatePreferences { $0.staffSize = next }
+    }
+
+    public func volume(for address: StaffAddress) -> Double {
+        staffVolumes[address] ?? Self.defaultStaffVolume
+    }
+
+    public func setVolume(_ value: Double, for address: StaffAddress) {
+        staffVolumes[address] = min(max(value, 0), 1)
     }
 
     public func toggleStaff(address: StaffAddress) async {

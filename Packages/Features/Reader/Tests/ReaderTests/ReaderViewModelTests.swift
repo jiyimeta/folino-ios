@@ -191,6 +191,21 @@ struct ReaderViewModelTests {
         #expect(vm.preferences.hiddenStaves.isEmpty)
     }
 
+    @Test func staffVolumeDefaultsToOneAndIsClampedOnSet() {
+        let vm = makeVMNoLoad()
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
+        #expect(vm.volume(for: address) == 1.0)
+
+        vm.setVolume(0.4, for: address)
+        #expect(vm.volume(for: address) == 0.4)
+        #expect(vm.staffVolumes[address] == 0.4)
+
+        vm.setVolume(-0.5, for: address)
+        #expect(vm.volume(for: address) == 0)
+        vm.setVolume(2.0, for: address)
+        #expect(vm.volume(for: address) == 1.0)
+    }
+
     @Test func resetZoomReturnsToUnitAndZeroPan() {
         let vm = makeVMNoLoad()
         vm.viewportZoom = 2.5
