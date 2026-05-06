@@ -77,13 +77,14 @@ struct ReaderViewModelTempoTests {
     }
 
     @Test func commitTempoMultiplierClampsOutOfRangeValues() async {
-        let (vm, _, repo) = Self.makeVM()
+        let (vm, controller, repo) = Self.makeVM()
         await vm.load()
 
         await vm.commitTempoMultiplier(3.0)
 
         #expect(repo.savedReaderPreferences.last?.tempoMultiplier == 2.0)
         #expect(vm.effectiveTempoMultiplier == 2.0)
+        #expect(controller.tempoMultiplierCalls.last == 2.0)
     }
 
     @Test func resetTempoMultiplierClearsOverrideAndForwardsOne() async {
@@ -96,6 +97,33 @@ struct ReaderViewModelTempoTests {
         #expect(repo.savedReaderPreferences.last?.tempoMultiplier == nil)
         #expect(controller.tempoMultiplierCalls.last == 1.0)
         #expect(vm.effectiveTempoMultiplier == 1.0)
+    }
+
+    @Test func persistedOverrideIsSeededIntoEngineOnPlaybackPrep() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        // Pre-seed the persisted preferences with a non-default override.
+        let stored = ReaderPreferences(
+            scoreItemID: item.id,
+            staffSize: 14,
+            hiddenStaves: [],
+            tempoMultiplier: 0.75
+        )
+        repo.storedReaderPreferences[item.id] = stored
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item,
+            repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+
+        await vm.load()
+        await vm.prepareForPlayback()
+
+        #expect(controller.lastLoadedPreferences?.tempoMultiplier == 0.75)
     }
 
     @Test func setMetronomeEnabledForwardsWithoutPersisting() async {

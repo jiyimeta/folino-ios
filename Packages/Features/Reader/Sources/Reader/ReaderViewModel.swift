@@ -412,7 +412,7 @@ public final class ReaderViewModel {
         return PlaybackPreferences(
             scoreItemID: scoreItem.id,
             perStaff: states,
-            tempoMultiplier: 1.0,
+            tempoMultiplier: preferences.tempoMultiplier ?? 1.0,
             abRepeat: nil
         )
     }
