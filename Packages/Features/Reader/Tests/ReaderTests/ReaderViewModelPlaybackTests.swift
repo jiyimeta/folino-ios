@@ -177,6 +177,152 @@ struct ReaderViewModelPlaybackTests {
         #expect(controller.staffSoloStates.isEmpty)
     }
 
+    @Test func effectiveProgramFallsBackToScoreInstrumentChannel() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let violinChannel = InstrumentChannel(program: 40) // GM 40 = Violin
+        let pianoChannel = InstrumentChannel(program: 0) // GM 0 = Piano
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [violinChannel]),
+                    staves: [Staff()]
+                ),
+                Part(
+                    id: "P1", trackName: "Pno",
+                    instrument: Instrument(id: "p", channels: [pianoChannel]),
+                    staves: [Staff(), Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp")
+        )
+        await vm.load()
+
+        let violinAddress = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let pianoTopAddress = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        #expect(vm.effectiveProgram(for: violinAddress) == 40)
+        #expect(vm.effectiveProgram(for: pianoTopAddress) == 0)
+        #expect(!vm.hasProgramOverride(for: violinAddress))
+    }
+
+    @Test func setStaffProgramPersistsOverrideAndForwardsToController() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        await vm.setStaffProgram(6, for: address) // Harpsichord
+        #expect(vm.effectiveProgram(for: address) == 6)
+        #expect(vm.hasProgramOverride(for: address))
+        #expect(vm.preferences.staffProgramOverrides[address] == 6)
+        // Saved to repository.
+        let saved = try? #require(repo.savedReaderPreferences.last)
+        #expect(saved?.staffProgramOverrides[address] == 6)
+        // Forwarded to the controller with bank 0.
+        let call = try? #require(controller.staffInstrumentCalls.last)
+        #expect(call?.staff == 0)
+        #expect(call?.bank == 0)
+        #expect(call?.program == 6)
+    }
+
+    @Test func clearStaffProgramOverrideRevertsToScoreDefault() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        await vm.setStaffProgram(6, for: address)
+        await vm.clearStaffProgramOverride(for: address)
+
+        #expect(!vm.hasProgramOverride(for: address))
+        #expect(vm.effectiveProgram(for: address) == 40)
+        #expect(vm.preferences.staffProgramOverrides[address] == nil)
+        let lastCall = try? #require(controller.staffInstrumentCalls.last)
+        #expect(lastCall?.program == 40) // reset call uses score default
+    }
+
+    @Test func initialPlaybackPreferencesUseOverridesAndScoreDefaults() async throws {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: [],
+            staffProgramOverrides: [address2: 24] // Acoustic Guitar
+        )
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+                Part(
+                    id: "P1", trackName: "Pno",
+                    instrument: Instrument(id: "p", channels: [InstrumentChannel(program: 0)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+        await vm.togglePlayback()
+
+        let prefs = try #require(controller.lastLoadedPreferences)
+        #expect(prefs.perStaff[0].gmProgram == 40) // violin uses score default
+        #expect(prefs.perStaff[1].gmProgram == 24) // piano uses override
+    }
+
     @Test func setVolumeForwardsToControllerByFlatStaffIndex() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()

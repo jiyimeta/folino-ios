@@ -52,6 +52,12 @@
     }
 
     final class PreviewFakeGateway: ScoreFileGateway, @unchecked Sendable {
+        let score: Score
+
+        init(score: Score = Score(division: 480, parts: [], metaTags: [:])) {
+            self.score = score
+        }
+
         func detectFormat(fileName _: String) -> ScoreFormat? { .mscx }
 
         func loadFileMetadata(fileURL _: URL) throws -> ScoreFileSummary {
@@ -66,7 +72,6 @@
         }
 
         func loadScore(fileURL _: URL) throws -> (score: Score, summary: ScoreFileSummary) {
-            let score = Score(division: 480, parts: [], metaTags: [:])
             let summary = ScoreFileSummary(
                 title: "Preview", composer: nil, instrumentationSummary: "",
                 lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil

@@ -13,12 +13,14 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     var scoreItemId: String
     var staffSize: Double
     var hiddenStaffIds: String
+    var staffProgramOverrides: String
 
     enum CodingKeys: String, CodingKey {
         case id
         case scoreItemId = "score_item_id"
         case staffSize = "staff_size"
         case hiddenStaffIds = "hidden_staff_ids"
+        case staffProgramOverrides = "staff_program_overrides"
     }
 
     init(domain prefs: ReaderPreferences) {
@@ -26,8 +28,15 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         scoreItemId = prefs.scoreItemID.rawValue.uuidString
         staffSize = Double(prefs.staffSize)
         let sortedAddresses = prefs.hiddenStaves.sorted()
-        let data = try? JSONEncoder().encode(sortedAddresses)
-        hiddenStaffIds = data.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        let hiddenData = try? JSONEncoder().encode(sortedAddresses)
+        hiddenStaffIds = hiddenData.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        let sortedOverrides = prefs.staffProgramOverrides
+            .sorted { $0.key < $1.key }
+            .map { Self.encodeTriple(address: $0.key, program: $0.value) }
+        let overridesData = try? JSONEncoder().encode(sortedOverrides)
+        staffProgramOverrides = overridesData.flatMap {
+            String(data: $0, encoding: .utf8)
+        } ?? "[]"
     }
 
     func toDomain() throws -> ReaderPreferences {
@@ -39,15 +48,29 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             throw DomainError.persistenceFailed(
                 reason: "reader_preferences.score_item_id is not a valid UUID: \(scoreItemId)")
         }
-        let decoded: [StaffAddress] = (try? JSONDecoder().decode(
+        let decodedHidden: [StaffAddress] = (try? JSONDecoder().decode(
             [StaffAddress].self,
             from: Data(hiddenStaffIds.utf8)
         )) ?? []
+        let decodedOverrides: [[Int]] = (try? JSONDecoder().decode(
+            [[Int]].self,
+            from: Data(staffProgramOverrides.utf8)
+        )) ?? []
+        var overrides: [StaffAddress: Int] = [:]
+        for triple in decodedOverrides where triple.count == 3 {
+            let address = StaffAddress(partIndex: triple[0], staffIndexInPart: triple[1])
+            overrides[address] = triple[2]
+        }
         return ReaderPreferences(
             id: ReaderPreferencesID(rawValue: idUUID),
             scoreItemID: ScoreItemID(rawValue: scoreUUID),
             staffSize: CGFloat(staffSize),
-            hiddenStaves: Set(decoded)
+            hiddenStaves: Set(decodedHidden),
+            staffProgramOverrides: overrides
         )
+    }
+
+    private static func encodeTriple(address: StaffAddress, program: Int) -> [Int] {
+        [address.partIndex, address.staffIndexInPart, program]
     }
 }

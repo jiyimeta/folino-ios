@@ -63,4 +63,41 @@ import Testing
             try #expect(db.tableExists("reader_preferences"))
         }
     }
+
+    @Test func v3AddsStaffProgramOverridesColumn() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+
+        try queue.read { db in
+            let cols = try db.columns(in: "reader_preferences").map(\.name)
+            #expect(cols.contains("staff_program_overrides"))
+        }
+    }
+
+    @Test func v3DefaultsExistingRowsToEmptyOverridesJSON() throws {
+        // Insert a row before v3 has been registered, then run the full
+        // migrator. The `DEFAULT` on the new column should backfill the
+        // pre-existing row.
+        let queue = try DatabaseQueue()
+        try AppMigrations.upToV2.migrate(queue)
+        try queue.write { db in
+            try db.execute(sql: """
+            INSERT INTO score_items (id, title, local_file_name, content_hash,
+                size_bytes, length_beats, default_tempo_bpm, added_at)
+            VALUES ('s', 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+            """)
+            try db.execute(sql: """
+            INSERT INTO reader_preferences
+                (id, score_item_id, staff_size, hidden_staff_ids)
+            VALUES ('p', 's', 14.0, '[]')
+            """)
+        }
+        try AppMigrations.all.migrate(queue)
+        try queue.read { db in
+            let row = try Row.fetchOne(db, sql: """
+            SELECT staff_program_overrides FROM reader_preferences WHERE id = 'p'
+            """)
+            #expect(row?["staff_program_overrides"] == "[]")
+        }
+    }
 }
