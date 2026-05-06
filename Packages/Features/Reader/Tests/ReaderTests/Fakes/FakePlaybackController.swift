@@ -9,6 +9,7 @@ final class FakePlaybackController: PlaybackController {
     private(set) var pauseCount = 0
     private(set) var lastLoadedPreferences: PlaybackPreferences?
     private(set) var staffVolumes: [Int: Double] = [:]
+    private(set) var recordedSetCursorCalls: [ScoreCursor] = []
 
     var loadError: Error?
     var playError: Error?
@@ -45,7 +46,10 @@ final class FakePlaybackController: PlaybackController {
         staffVolumes[staff] = volume
     }
 
-    func setCursor(to _: ChordPath) {}
+    func setCursor(to cursor: ScoreCursor) {
+        recordedSetCursorCalls.append(cursor)
+    }
+
     func setLoopRange(_: ABRepeatRange?) {}
     func setMetronomeEnabled(_: Bool) {}
     func setTempoMultiplier(_: Double) {}

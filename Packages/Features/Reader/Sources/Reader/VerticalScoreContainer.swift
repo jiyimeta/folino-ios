@@ -18,10 +18,13 @@ struct VerticalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
     let playbackCursor: ScoreCursor?
+    @Bindable var viewModel: ReaderViewModel
 
     @State private var document: LayoutDocument?
     @State private var lastWidth: CGFloat = 0
     @State private var systemFrames: [Int: CGRect] = [:]
+    @State private var lastManualCursor: ScoreCursor?
+    @GestureState private var seekProbeLocation: CGPoint?
 
     var body: some View {
         GeometryReader { proxy in
@@ -64,9 +67,28 @@ struct VerticalScoreContainer: View {
                 )
                 VerticalSystemAnchors(document: doc)
             }
+            .coordinateSpace(name: "scoreSurface")
+            .gesture(longPressSeekGesture(document: doc))
+            .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
         } else {
             Color.clear
         }
+    }
+
+    private func longPressSeekGesture(document: LayoutDocument) -> some Gesture {
+        let drag = DragGesture(minimumDistance: 0, coordinateSpace: .named("scoreSurface"))
+            .updating($seekProbeLocation) { value, state, _ in
+                state = value.location
+            }
+        let longPress = LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
+            .onEnded { _ in
+                guard let probe = seekProbeLocation,
+                      let cursor = nearestCursor(at: probe, in: document)
+                else { return }
+                viewModel.setManualCursor(cursor)
+                lastManualCursor = cursor
+            }
+        return drag.simultaneously(with: longPress)
     }
 
     private func rebuildLayout(width: CGFloat) {

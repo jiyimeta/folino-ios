@@ -8,8 +8,16 @@ struct ReaderToolbar: ToolbarContent {
     @Bindable var viewModel: ReaderViewModel
     @Binding var layoutMode: ReaderLayoutMode
 
+    private var trailingPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+            .topBarTrailing
+        #else
+            .primaryAction
+        #endif
+    }
+
     var body: some ToolbarContent {
-        ToolbarItemGroup(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: trailingPlacement) {
             Picker("Layout", selection: $layoutMode) {
                 Image(systemName: "list.bullet").tag(ReaderLayoutMode.vertical)
                 Image(systemName: "book.closed").tag(ReaderLayoutMode.page)

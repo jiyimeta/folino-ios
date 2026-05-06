@@ -76,6 +76,7 @@ struct ReaderGestureLayer<Content: View>: View {
     private func tapGesture(width: CGFloat) -> some Gesture {
         SpatialTapGesture(count: 1)
             .onEnded { value in
+                if viewModel.shouldSuppressChromeToggleTap() { return }
                 if !isPageMode || viewModel.viewportZoom > 1.0 {
                     viewModel.toggleChrome()
                     return

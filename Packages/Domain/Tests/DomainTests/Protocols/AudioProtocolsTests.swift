@@ -5,7 +5,7 @@ import Testing
 private final class FakePlaybackController: PlaybackController, @unchecked Sendable {
     var loadedScores = 0
     var lastTempo: Double = 1.0
-    var lastCursor: ChordPath?
+    var lastCursor: ScoreCursor?
     let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
     let cursor: AsyncStream<ScoreCursor?>
 
@@ -21,7 +21,7 @@ private final class FakePlaybackController: PlaybackController, @unchecked Senda
 
     func play() throws {}
     func pause() {}
-    func setCursor(to chord: ChordPath) { lastCursor = chord }
+    func setCursor(to cursor: ScoreCursor) { lastCursor = cursor }
     func setLoopRange(_ range: ABRepeatRange?) {}
     func setMetronomeEnabled(_ enabled: Bool) {}
     func setTempoMultiplier(_ value: Double) { lastTempo = value }
@@ -52,9 +52,10 @@ private actor FakeSoundfontResolver: SoundfontResolver {
 @Suite struct AudioProtocolsTests {
     @Test func playbackControllerSetsCursorAndTempo() async throws {
         let controller = FakePlaybackController()
-        await controller.setCursor(to: ChordPath(systemIndex: 1, measureIndex: 2, voiceIndex: 0, chordIndex: 3))
+        let target = ScoreCursor.beat(measureIndex: 2, tickInMeasure: 240)
+        await controller.setCursor(to: target)
         await controller.setTempoMultiplier(0.75)
-        #expect(controller.lastCursor == ChordPath(systemIndex: 1, measureIndex: 2, voiceIndex: 0, chordIndex: 3))
+        #expect(controller.lastCursor == target)
         #expect(controller.lastTempo == 0.75)
     }
 
