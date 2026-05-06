@@ -82,7 +82,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         await withTaskGroup(of: Void.self) { group in
             for (bank, program) in pairs {
                 group.addTask {
-                    _ = try? await resolver.resolveSoundfont(bank: bank, program: program)
+                    _ = try? await resolver.resolveSoundfont(
+                        bank: bank, program: program, isDrums: false
+                    )
                 }
             }
         }
