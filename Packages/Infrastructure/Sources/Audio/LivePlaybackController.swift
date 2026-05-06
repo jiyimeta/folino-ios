@@ -85,6 +85,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
                 forChannel: .staff(state.staffIndex), to: state.isSolo
             )
         }
+        engine.setRate(Float(preferences.tempoMultiplier))
     }
 
     /// Walks the score's distinct `(bank, program)` pairs and asks the
@@ -186,9 +187,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
         cursorHandler = handler
     }
 
-    // Stubs — engine doesn't expose these yet; keep the protocol whole.
+    // Stub — engine doesn't expose loop ranges yet; keep the protocol whole.
     public func setLoopRange(_: ABRepeatRange?) {}
-    public func setTempoMultiplier(_: Double) {}
+
+    public func setTempoMultiplier(_ value: Double) {
+        engine.setRate(Float(value))
+    }
 
     // MARK: - Now Playing / Remote Commands
 
