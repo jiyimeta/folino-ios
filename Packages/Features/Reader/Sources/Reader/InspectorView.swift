@@ -15,44 +15,52 @@ struct InspectorView: View {
 
     var body: some View {
         List {
-            tempoRow
-            Section {
-                Picker("Layout", selection: $viewModel.layoutMode) {
-                    Text("Vertical").tag(ReaderViewModel.LayoutMode.vertical)
-                    Text("Horizontal").tag(ReaderViewModel.LayoutMode.horizontal)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            }
-            ForEach(score.parts.indices, id: \.self) { partIndex in
-                let part = score.parts[partIndex]
-                Section {
-                    ForEach(part.staves.indices, id: \.self) { staffIndex in
-                        staffRow(address: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex))
-                    }
-                } header: {
-                    Text(part.instrument.longName ?? part.trackName ?? "-")
-                        .font(.headline)
-                        .padding(.bottom, -8)
-                }
-                .headerProminence(.increased)
-                .padding(.bottom, -8)
-            }
+            playbackContent
+            visualContent
         }
         .listStyle(.plain)
         .buttonStyle(.plain)
         .padding(.top, 16)
         .environment(\.defaultMinListRowHeight, 28)
         .task(id: viewModel.effectiveTempoMultiplier) {
-            // Pull the persisted value into the slider whenever the model
-            // changes from outside the gesture (initial load, % tap reset).
             if !isEditingTempo {
                 sliderValue = viewModel.effectiveTempoMultiplier
             }
         }
         .task {
             await viewModel.setMetronomeEnabled(isMetronomeEnabled)
+        }
+    }
+
+    @ViewBuilder
+    private var playbackContent: some View {
+        tempoRow
+        ForEach(score.parts.indices, id: \.self) { partIndex in
+            let part = score.parts[partIndex]
+            Section {
+                ForEach(part.staves.indices, id: \.self) { staffIndex in
+                    staffRow(address: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex))
+                }
+            } header: {
+                Text(part.instrument.longName ?? part.trackName ?? "-")
+                    .font(.headline)
+                    .padding(.bottom, -8)
+            }
+            .headerProminence(.increased)
+            .padding(.bottom, -8)
+        }
+    }
+
+    @ViewBuilder
+    private var visualContent: some View {
+        Section {
+            Picker("Layout", selection: $viewModel.layoutMode) {
+                Text("Vertical").tag(ReaderViewModel.LayoutMode.vertical)
+                Text("Horizontal").tag(ReaderViewModel.LayoutMode.horizontal)
+            }
+            .pickerStyle(.segmented)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
     }
 
