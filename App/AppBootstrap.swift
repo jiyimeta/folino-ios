@@ -4,6 +4,7 @@ import Foundation
 import Observation
 import Persistence
 import ScoreFiles
+import Soundfonts
 
 @MainActor
 @Observable
@@ -46,8 +47,14 @@ final class AppBootstrap {
             self.repository = repository
             self.gateway = gateway
             self.importer = importer
+            let soundfontResolver = MuseScoreSF2Resolver(
+                cacheDirectory: AppPaths.soundfontCacheDirectory
+            )
             playbackController = LivePlaybackController(
-                soundfontResolver: BundleSoundfontResolver()
+                soundfontResolver: BundleSoundfontResolver(
+                    cacheDirectory: AppPaths.soundfontCacheDirectory
+                ),
+                domainResolver: soundfontResolver
             )
 
             Task { [weak self] in

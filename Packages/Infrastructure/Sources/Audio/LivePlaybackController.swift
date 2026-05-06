@@ -15,14 +15,19 @@ import SheetMusicCore
 @MainActor
 public final class LivePlaybackController: Domain.PlaybackController {
     private let engine: PlaybackEngine
+    private let domainResolver: (any Domain.SoundfontResolver)?
     private var loadedScore: Score?
 
     private let cursorContinuation: AsyncStream<ScoreCursor?>.Continuation
     public nonisolated let cursor: AsyncStream<ScoreCursor?>
     private var cancellables: Set<AnyCancellable> = []
 
-    public init(soundfontResolver: any SheetMusicAudio.SoundfontResolver) {
+    public init(
+        soundfontResolver: any SheetMusicAudio.SoundfontResolver,
+        domainResolver: (any Domain.SoundfontResolver)? = nil
+    ) {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
+        self.domainResolver = domainResolver
         var continuation: AsyncStream<ScoreCursor?>.Continuation!
         cursor = AsyncStream { continuation = $0 }
         cursorContinuation = continuation
@@ -33,7 +38,10 @@ public final class LivePlaybackController: Domain.PlaybackController {
             .store(in: &cancellables)
     }
 
-    public func load(score: Score, preferences: PlaybackPreferences) throws {
+    public func load(score: Score, preferences: PlaybackPreferences) async throws {
+        if let domainResolver {
+            await Self.prefetchSoundfonts(score: score, resolver: domainResolver)
+        }
         try engine.prepare(score: score)
         loadedScore = score
         for state in preferences.perStaff {
@@ -46,6 +54,32 @@ public final class LivePlaybackController: Domain.PlaybackController {
             engine.setSoloed(
                 forChannel: .staff(state.staffIndex), to: state.isSolo
             )
+        }
+    }
+
+    /// Walks the score's distinct `(bank, program)` pairs and asks the
+    /// resolver to materialise each on disk, in parallel. Soft-fails per
+    /// patch — if one download 404s, the others still land and the engine
+    /// just plays that voice silently.
+    private static func prefetchSoundfonts(
+        score: Score, resolver: any Domain.SoundfontResolver
+    ) async {
+        var seen: Set<SoundfontPatchKey> = []
+        var pairs: [(bank: Int, program: Int)] = []
+        for entry in score.allStaves {
+            guard let part = score.part(at: entry.address) else { continue }
+            let channel = part.instrument.channels.first ?? InstrumentChannel()
+            let key = SoundfontPatchKey(bank: channel.bank, program: channel.program)
+            if seen.insert(key).inserted {
+                pairs.append((channel.bank, channel.program))
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for (bank, program) in pairs {
+                group.addTask {
+                    _ = try? await resolver.resolveSoundfont(bank: bank, program: program)
+                }
+            }
         }
     }
 
