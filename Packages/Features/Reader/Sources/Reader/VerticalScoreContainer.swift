@@ -48,10 +48,12 @@ struct VerticalScoreContainer: View {
     @GestureState private var liveMagnification: CGFloat = 1.0
     @GestureState private var liveMagAnchor: UnitPoint = .center
 
-    /// Padding that lives inside the scaled content so it scales with
-    /// the score. Held as an explicit constant (rather than `.padding()`'s
-    /// platform default) because the outer `.frame` math needs to know it.
-    private let scorePadding: CGFloat = 16
+    /// Vertical padding that lives inside the scaled content so the
+    /// first / last system don't butt up against the viewport edges.
+    /// Scales with the score because it's applied inside the
+    /// `scaleEffect`. No horizontal counterpart: at zoom 1.0 we want the
+    /// score to span the full viewport width edge-to-edge.
+    private let scoreVerticalPadding: CGFloat = 16
 
     /// Captured at the first `onChanged` of a pinch so the gesture-end
     /// commit can shift `ScrollPosition` by `start * (mag - 1)` without
@@ -63,12 +65,17 @@ struct VerticalScoreContainer: View {
 
     var body: some View {
         GeometryReader { proxy in
+            // Hand the full viewport width to layout. Any horizontal
+            // overflow in the resulting `doc.size.width` (engine right
+            // margin, spanners, ties) is absorbed by `effectiveZoom`'s
+            // fit-to-width factor below — so the user always sees the
+            // entire system at user-zoom 1.0 with no side margin.
+            let layoutWidth = max(proxy.size.width, staffSize * 4)
             scrollContent(viewport: proxy.size)
                 .task(id: TaskKey(
-                    score: score, size: staffSize,
-                    width: max(proxy.size.width, staffSize * 4)
+                    score: score, size: staffSize, width: layoutWidth
                 )) {
-                    await rebuildLayout(width: max(proxy.size.width, staffSize * 4))
+                    await rebuildLayout(width: layoutWidth)
                 }
         }
     }
@@ -76,7 +83,7 @@ struct VerticalScoreContainer: View {
     @ViewBuilder
     private func scrollContent(viewport: CGSize) -> some View {
         ScrollView([.vertical, .horizontal]) {
-            zoomedSurface
+            zoomedSurface(viewport: viewport)
                 .background(
                     GeometryReader { g in
                         Color.clear.preference(
@@ -101,13 +108,13 @@ struct VerticalScoreContainer: View {
     }
 
     @ViewBuilder
-    private var zoomedSurface: some View {
+    private func zoomedSurface(viewport: CGSize) -> some View {
         if let doc = document {
-            let zoom = viewModel.viewportZoom
-            let framedWidth = (doc.size.width + 2 * scorePadding) * zoom
-            let framedHeight = (doc.size.height + 2 * scorePadding) * zoom
+            let zoom = effectiveZoom(for: doc, viewport: viewport)
+            let framedWidth = doc.size.width * zoom
+            let framedHeight = (doc.size.height + 2 * scoreVerticalPadding) * zoom
             scoreSurface(document: doc)
-                .padding(scorePadding)
+                .padding(.vertical, scoreVerticalPadding)
                 .scaleEffect(liveMagnification, anchor: liveMagAnchor)
                 .scaleEffect(zoom, anchor: .topLeading)
                 .frame(
@@ -119,6 +126,22 @@ struct VerticalScoreContainer: View {
         } else {
             Color.clear
         }
+    }
+
+    /// User zoom scaled by a fit-to-width factor so the rendered content
+    /// never exceeds the viewport horizontally at user-zoom 1.0.
+    /// `LayoutEngine.layout` reports `doc.size.width = totalSystemExtent
+    /// + 2*sp`; spanners / ties / playback chrome can also extend slightly
+    /// past that. Rather than chase every contribution, we measure the
+    /// actual `doc.size.width` and shrink to fit when it exceeds the
+    /// viewport — the user-visible behaviour is "zoom 1.0 = fit width".
+    private func effectiveZoom(
+        for doc: LayoutDocument, viewport: CGSize
+    ) -> CGFloat {
+        let fit = doc.size.width > 0
+            ? min(1.0, viewport.width / doc.size.width)
+            : 1.0
+        return viewModel.viewportZoom * fit
     }
 
     @ViewBuilder
@@ -217,15 +240,18 @@ struct VerticalScoreContainer: View {
               let rect = doc.cursorFrame(for: cursor, in: score)
         else { return }
 
-        let zoom = viewModel.viewportZoom
+        // Mirror `zoomedSurface`'s effective scale (user zoom × fit-to-width)
+        // so cursor-frame coordinates match the rendered scroll-content size.
+        let zoom = effectiveZoom(for: doc, viewport: viewport)
         let pad = 8 * doc.metrics.sp * zoom
 
-        // Cursor frame in scroll-content coords: padded then scaled from
-        // top-leading. Mirrors `zoomedSurface`'s composition.
-        let minX = (rect.minX + scorePadding) * zoom
-        let maxX = (rect.maxX + scorePadding) * zoom
-        let minY = (rect.minY + scorePadding) * zoom
-        let maxY = (rect.maxY + scorePadding) * zoom
+        // Cursor frame in scroll-content coords: vertical padding only,
+        // then scaled from top-leading. Mirrors `zoomedSurface`'s
+        // composition (no horizontal padding).
+        let minX = rect.minX * zoom
+        let maxX = rect.maxX * zoom
+        let minY = (rect.minY + scoreVerticalPadding) * zoom
+        let maxY = (rect.maxY + scoreVerticalPadding) * zoom
 
         let curX = liveScrollOffset.x
         let curY = liveScrollOffset.y
