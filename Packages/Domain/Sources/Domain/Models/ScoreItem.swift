@@ -10,6 +10,7 @@ import Foundation
 public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public let id: ScoreItemID
     public var title: String
+    public var subtitle: String?
     public var composer: String?
     public var instrumentationSummary: String?
     /// Filename relative to the scores directory. Convention: `<id>.<canonical-extension>`.
@@ -29,6 +30,7 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public init(
         id: ScoreItemID = ScoreItemID(),
         title: String,
+        subtitle: String? = nil,
         composer: String?,
         instrumentationSummary: String?,
         localFileName: String,
@@ -44,6 +46,7 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     ) {
         self.id = id
         self.title = title
+        self.subtitle = subtitle
         self.composer = composer
         self.instrumentationSummary = instrumentationSummary
         self.localFileName = localFileName
