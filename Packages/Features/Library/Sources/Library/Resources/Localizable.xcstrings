@@ -235,6 +235,24 @@
         "en": { "stringUnit": { "state": "translated", "value": "Select a score" } },
         "ja": { "stringUnit": { "state": "translated", "value": "楽譜を選択してください" } }
       }
+    },
+    "Share…": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Share…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "共有…" } }
+      }
+    },
+    "Preparing…": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Preparing…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "準備中…" } }
+      }
+    },
+    "More": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "More" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "その他" } }
+      }
     }
   }
 }
