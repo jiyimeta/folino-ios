@@ -17,6 +17,7 @@ final class AppBootstrap {
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var importer: LiveScoreFileImporter?
     private(set) var playbackController: LivePlaybackController?
+    private(set) var reachability: LiveNetworkReachability?
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`.
     /// Last-wins: a second URL arriving before the first is consumed
@@ -54,6 +55,7 @@ final class AppBootstrap {
                 soundfontResolver: BundleSoundfontResolver(),
                 domainResolver: soundfontResolver
             )
+            reachability = LiveNetworkReachability()
 
             Task { [weak self] in
                 do {

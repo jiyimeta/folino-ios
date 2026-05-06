@@ -17,6 +17,8 @@ private final class FakePlaybackController: PlaybackController {
         loadedScores += 1
     }
 
+    func areSoundfontsAvailableLocally(for _: Score) -> Bool { true }
+
     func play() throws {}
     func pause() {}
     func setCursor(to cursor: ScoreCursor) { lastCursor = cursor }

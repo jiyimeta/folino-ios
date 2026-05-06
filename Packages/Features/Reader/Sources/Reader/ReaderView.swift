@@ -12,7 +12,8 @@ public struct ReaderView: View {
         repository: any ScoreLibraryRepository,
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
-        playbackController: (any PlaybackController)? = nil
+        playbackController: (any PlaybackController)? = nil,
+        reachability: (any NetworkReachability)? = nil
     ) {
         // Seed the device-class default at construction time. The view
         // model only uses this if no persisted record exists.
@@ -24,7 +25,8 @@ public struct ReaderView: View {
                 gateway: gateway,
                 scoresDirectory: scoresDirectory,
                 defaultStaffSize: initialDefault,
-                playbackController: playbackController
+                playbackController: playbackController,
+                reachability: reachability
             )
         )
     }
@@ -50,9 +52,9 @@ public struct ReaderView: View {
                 }
             }
             .alert(
-                "Loading playback sounds…",
+                soundfontAlertTitle(for: viewModel.soundfontAlertKind),
                 isPresented: Binding(
-                    get: { viewModel.isLoadingSoundfonts },
+                    get: { viewModel.soundfontAlertKind != nil },
                     set: { newValue in
                         if !newValue { viewModel.cancelLoadingSoundfonts() }
                     }
@@ -65,7 +67,19 @@ public struct ReaderView: View {
             .task {
                 viewModel.startObservingCursor()
                 await viewModel.load()
+                await viewModel.prepareForPlayback()
             }
+    }
+
+    private func soundfontAlertTitle(
+        for kind: ReaderViewModel.SoundfontAlertKind?
+    ) -> String {
+        switch kind {
+        case .offline:
+            String(localized: "You're offline")
+        case .loading, nil:
+            String(localized: "Loading playback sounds…")
+        }
     }
 
     @ViewBuilder

@@ -105,6 +105,128 @@ struct ReaderViewModelPlaybackTests {
         #expect(controller.playCount == 0)
     }
 
+    @Test func prepareForPlaybackPrimesEngineWithoutShowingAlert() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+        await vm.prepareForPlayback()
+
+        #expect(controller.loadCount == 1)
+        #expect(vm.soundfontAlertKind == nil)
+
+        // First user-driven toggle should reuse the primed engine — no
+        // additional load and no alert flash.
+        await vm.togglePlayback()
+        #expect(controller.loadCount == 1)
+        #expect(controller.playCount == 1)
+        #expect(vm.soundfontAlertKind == nil)
+        #expect(vm.isPlaying)
+    }
+
+    @Test func togglePlaybackShowsOfflineAlertWhenOfflineAndUncached() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.soundfontsAvailableLocally = false
+        controller.blocksLoadUntilCancelled = true
+        let reachability = FakeNetworkReachability(online: false)
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+            reachability: reachability
+        )
+        await vm.load()
+
+        let toggle = Task { await vm.togglePlayback() }
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(vm.soundfontAlertKind == .offline)
+        #expect(!vm.isLoadingSoundfonts)
+
+        vm.cancelLoadingSoundfonts()
+        _ = await toggle.value
+        #expect(vm.soundfontAlertKind == nil)
+    }
+
+    @Test func togglePlaybackShowsLoadingAlertWhenOnlineAndUncached() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.soundfontsAvailableLocally = false
+        controller.blocksLoadUntilCancelled = true
+        let reachability = FakeNetworkReachability(online: true)
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+            reachability: reachability
+        )
+        await vm.load()
+
+        let toggle = Task { await vm.togglePlayback() }
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(vm.soundfontAlertKind == .loading)
+
+        vm.cancelLoadingSoundfonts()
+        _ = await toggle.value
+        #expect(vm.soundfontAlertKind == nil)
+    }
+
+    @Test func togglePlaybackSkipsAlertWhenSoundfontsAreCached() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.soundfontsAvailableLocally = true
+        controller.blocksLoadUntilCancelled = true
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        let toggle = Task { await vm.togglePlayback() }
+        for _ in 0 ..< 5 { await Task.yield() }
+        // Even though `load` is blocked, the alert never shows because the
+        // controller reports the cache covers the score.
+        #expect(!vm.isLoadingSoundfonts)
+
+        vm.cancelLoadingSoundfonts()
+        _ = await toggle.value
+        #expect(!vm.isLoadingSoundfonts)
+        #expect(!vm.isPlaying)
+    }
+
     @Test func togglePlaybackIsNoOpWhenScoreNotLoaded() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()

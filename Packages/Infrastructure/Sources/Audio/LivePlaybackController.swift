@@ -94,23 +94,44 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private static func prefetchSoundfonts(
         score: Score, resolver: any Domain.SoundfontResolver
     ) async {
-        var seen: Set<SoundfontPatchKey> = []
-        var pairs: [(bank: Int, program: Int)] = []
-        for entry in score.allStaves {
-            guard let part = score.part(at: entry.address) else { continue }
-            let channel = part.instrument.channels.first ?? InstrumentChannel()
-            let key = SoundfontPatchKey(bank: channel.bank, program: channel.program)
-            if seen.insert(key).inserted {
-                pairs.append((channel.bank, channel.program))
-            }
-        }
+        let keys = distinctPatchKeys(in: score)
         await withTaskGroup(of: Void.self) { group in
-            for (bank, program) in pairs {
+            for key in keys {
                 group.addTask {
-                    _ = try? await resolver.resolveSoundfont(bank: bank, program: program)
+                    _ = try? await resolver.resolveSoundfont(
+                        bank: key.bank, program: key.program
+                    )
                 }
             }
         }
+    }
+
+    public func areSoundfontsAvailableLocally(for score: Score) async -> Bool {
+        // Only the bundled GM fallback is in play — nothing to fetch.
+        guard let domainResolver else { return true }
+        let needed = Self.distinctPatchKeys(in: score)
+        if needed.isEmpty { return true }
+        let cachedKeys: Set<SoundfontPatchKey>
+        do {
+            let patches = try await domainResolver.cachedPatches()
+            cachedKeys = Set(patches.map { SoundfontPatchKey(bank: $0.bank, program: $0.program) })
+        } catch {
+            // If we can't enumerate the cache, fall back to "may need to
+            // fetch" so the user gets the loading affordance instead of
+            // a silent stall.
+            return false
+        }
+        return needed.isSubset(of: cachedKeys)
+    }
+
+    private static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
+        var keys: Set<SoundfontPatchKey> = []
+        for entry in score.allStaves {
+            guard let part = score.part(at: entry.address) else { continue }
+            let channel = part.instrument.channels.first ?? InstrumentChannel()
+            keys.insert(SoundfontPatchKey(bank: channel.bank, program: channel.program))
+        }
+        return keys
     }
 
     public func play() throws {

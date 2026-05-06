@@ -13,6 +13,19 @@ public final class ReaderViewModel {
         case failed(message: String)
     }
 
+    /// Which copy the playback-prep alert should show. The view binds
+    /// presentation to whether this is non-nil and renders the title
+    /// from the case.
+    public enum SoundfontAlertKind: Sendable {
+        /// Soundfonts are still being prepared and the user pressed
+        /// play before the work finished.
+        case loading
+        /// The device is offline AND the cache doesn't already cover
+        /// every voice this score needs — the wait won't make progress
+        /// until connectivity is back.
+        case offline
+    }
+
     public static let defaultStaffVolume: Double = 1.0
 
     public private(set) var loadState: LoadState = .loading
@@ -21,11 +34,18 @@ public final class ReaderViewModel {
     public private(set) var staffVolumes: [StaffAddress: Double] = [:]
     public private(set) var mutedStaves: Set<StaffAddress> = []
     public private(set) var isPlaying: Bool = false
-    public private(set) var isLoadingSoundfonts: Bool = false
+    public private(set) var soundfontAlertKind: SoundfontAlertKind?
     public private(set) var playbackCursor: ScoreCursor?
     public var viewportZoom: CGFloat = 1.0
     public var lastNonUnitZoom: CGFloat = 1.0
     public var isInspectorPresented: Bool = false
+
+    /// Convenience for tests and previews — true while the "loading
+    /// playback sounds…" copy is showing.
+    public var isLoadingSoundfonts: Bool { soundfontAlertKind == .loading }
+    /// Convenience for tests and previews — true while the offline
+    /// copy is showing.
+    public var isOfflineAlertPresented: Bool { soundfontAlertKind == .offline }
 
     @ObservationIgnored
     private let repository: any ScoreLibraryRepository
@@ -38,11 +58,13 @@ public final class ReaderViewModel {
     @ObservationIgnored
     private let playbackController: (any PlaybackController)?
     @ObservationIgnored
+    private let reachability: (any NetworkReachability)?
+    @ObservationIgnored
     private var hasUpdatedLastOpened = false
     @ObservationIgnored
     private var hasLoadedIntoPlayback = false
     @ObservationIgnored
-    private var loadingTask: Task<Void, Error>?
+    private var preloadTask: Task<Void, Error>?
 
     public init(
         scoreItem: ScoreItem,
@@ -50,7 +72,8 @@ public final class ReaderViewModel {
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
         defaultStaffSize: CGFloat = 14,
-        playbackController: (any PlaybackController)? = nil
+        playbackController: (any PlaybackController)? = nil,
+        reachability: (any NetworkReachability)? = nil
     ) {
         self.scoreItem = scoreItem
         self.repository = repository
@@ -58,6 +81,7 @@ public final class ReaderViewModel {
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
         self.playbackController = playbackController
+        self.reachability = reachability
         preferences = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
@@ -144,28 +168,72 @@ public final class ReaderViewModel {
         return flatIndex
     }
 
+    /// Kick off the playback engine's `load` in the background as soon as
+    /// the score is open, so the user usually finds soundfonts ready by
+    /// the time they tap play. Idempotent — re-entry while a preload is
+    /// in flight or already finished is a no-op.
+    public func prepareForPlayback() async {
+        guard let controller = playbackController,
+              case let .loaded(score) = loadState,
+              !hasLoadedIntoPlayback,
+              preloadTask == nil
+        else { return }
+        let prefs = initialPlaybackPreferences(for: score)
+        let task = Task<Void, Error> {
+            try await controller.load(score: score, preferences: prefs)
+        }
+        preloadTask = task
+        do {
+            // Forward `.task` cancellation (user navigated away mid-prep)
+            // into the unstructured load — without this hop the engine
+            // load would keep running after the Reader disappears.
+            try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            hasLoadedIntoPlayback = true
+        } catch {
+            // Cancellation or controller error — leave the slot clear so
+            // a subsequent toggle starts a fresh attempt.
+        }
+        preloadTask = nil
+    }
+
     public func togglePlayback() async {
         guard let controller = playbackController,
               case let .loaded(score) = loadState,
-              !isLoadingSoundfonts
+              soundfontAlertKind == nil
         else { return }
         if !hasLoadedIntoPlayback {
+            let cached = await controller.areSoundfontsAvailableLocally(for: score)
+            let online = await reachability?.isOnline() ?? true
+            // Pick the alert copy based on what the wait will actually look
+            // like to the user:
+            //  - cache covers the score → no alert (load is just engine prep)
+            //  - offline + cache miss   → "you're offline" (download won't progress)
+            //  - online  + cache miss   → "loading playback sounds…"
+            if !cached, !online {
+                soundfontAlertKind = .offline
+            } else if !cached {
+                soundfontAlertKind = .loading
+            }
+
             let prefs = initialPlaybackPreferences(for: score)
-            isLoadingSoundfonts = true
-            let task = Task<Void, Error> {
+            let task = preloadTask ?? Task<Void, Error> {
                 try await controller.load(score: score, preferences: prefs)
             }
-            loadingTask = task
+            preloadTask = task
             do {
                 try await task.value
                 hasLoadedIntoPlayback = true
             } catch {
-                isLoadingSoundfonts = false
-                loadingTask = nil
+                soundfontAlertKind = nil
+                preloadTask = nil
                 return
             }
-            isLoadingSoundfonts = false
-            loadingTask = nil
+            soundfontAlertKind = nil
+            preloadTask = nil
         }
         if isPlaying {
             await controller.pause()
@@ -183,7 +251,7 @@ public final class ReaderViewModel {
     /// Cancels an in-flight `load` on the playback controller. Safe to call
     /// when no load is in flight — the cancel is a no-op.
     public func cancelLoadingSoundfonts() {
-        loadingTask?.cancel()
+        preloadTask?.cancel()
     }
 
     public func toggleStaff(address: StaffAddress) async {
