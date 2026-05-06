@@ -119,27 +119,31 @@ public enum RepeatMode: String, Hashable, Sendable, Codable {
 }
 ```
 
-### `PlaybackPreferences` (extended)
+### `ReaderPreferences` (extended — actual persistence site)
 
-Add `repeatMode: RepeatMode`. The existing `abRepeat: ABRepeatRange?` field is
-retained as the persisted A/B markers. Both fields persist independently —
-toggling away from `.abLoop` does **not** clear `abRepeat`.
+`ReaderPreferences` is the per-score record the repository persists today
+(`tempoMultiplier`, `hiddenStaves`, `staffProgramOverrides`). Loop state lives
+here so it survives across launches and CloudKit sync, alongside the other
+per-score Reader prefs:
 
 ```swift
-public struct PlaybackPreferences {
+public struct ReaderPreferences {
     // existing fields …
     public var repeatMode: RepeatMode      // new, default .off
-    public var abRepeat: ABRepeatRange?    // unchanged
+    public var abRepeat: ABRepeatRange?    // new, default nil
 }
 ```
 
-`Codable` migration: legacy data without `repeatMode` decodes with
-`.off`. Existing `abRepeat` values survive untouched.
+`Codable` migration: both new fields are decoded with `.off` / `nil` defaults
+when absent, so existing records round-trip cleanly.
+
+`PlaybackPreferences` (the transport struct passed into `engine.load`) keeps
+its existing `abRepeat` field; the Reader VM populates it from
+`ReaderPreferences` when calling `initialPlaybackPreferences(for:)`.
 
 ### `PlaybackController` protocol (no new methods)
 
-The existing `setLoopRange(_ range: ABRepeatRange?) async` covers all three
-modes:
+The existing `setLoopRange(_ range: ABRepeatRange?) async` is the contract:
 
 | Mode | Argument |
 | --- | --- |
@@ -148,8 +152,14 @@ modes:
 | `.abLoop` (both set) | the user's `abRepeat` |
 | `.abLoop` (one or zero set) | `nil` (loop inactive) |
 
-Computing the score-wide endpoints for `.loopAll` is the view model's job. No
-new audio adapter surface needed.
+**Implementation note:** `swift-sheet-music`'s `PlaybackEngine` does not yet
+expose a loop primitive — `LivePlaybackController.setLoopRange(_:)` is
+currently an empty stub. v1 implements the loop entirely in
+`ReaderViewModel` by observing `playbackCursor` and re-issuing
+`setCursor(to:)` (which routes through `engine.play(from:in:)` while playing)
+when the cursor crosses the upper bound. The controller still receives the
+`setLoopRange` calls so a future engine-level loop can take over without
+churning the VM.
 
 ## Architecture
 
@@ -269,9 +279,13 @@ reset-zoom button.
 
 ## Persistence
 
-`PlaybackPreferences` is persisted by the existing repository (CloudKit-backed
-per the Infrastructure layer). Adding `repeatMode` extends the existing
-`Codable` envelope; legacy records decode with `.off`. No migration required.
+`ReaderPreferences` is the per-score record persisted by the existing
+repository (CloudKit-backed per the Infrastructure layer). Adding
+`repeatMode` and `abRepeat` extends the existing `Codable` envelope; legacy
+records decode with `.off` / `nil`. No migration required. The view model's
+`mutatePreferences` path already routes through
+`repository.saveReaderPreferences`, so the new fields persist automatically
+when set.
 
 ## Testing
 
