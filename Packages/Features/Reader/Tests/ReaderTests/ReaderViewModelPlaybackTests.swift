@@ -781,6 +781,78 @@ struct ReaderViewModelPlaybackTests {
         let calls = controller.staffInstrumentCalls.filter { $0.program == 24 }
         #expect(calls.count == 1)
     }
+
+    @Test func togglePlaybackDuringSilentInstrumentPrefetchShowsLoadingAlert() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.soundfontsAvailableLocally = true
+        controller.blocksPrefetchUntilCancelled = true
+        let reachability = FakeNetworkReachability(online: true)
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+            reachability: reachability
+        )
+        await vm.load()
+
+        let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(vm.soundfontAlertKind == nil)
+
+        let toggle = Task { await vm.togglePlayback() }
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(vm.soundfontAlertKind == .loading)
+
+        vm.cancelLoadingSoundfonts()
+        _ = await toggle.value
+        _ = await pick.value
+        #expect(vm.soundfontAlertKind == nil)
+    }
+
+    @Test func togglePlaybackAfterSilentPrefetchSucceedsBeginsPlayback() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.soundfontsAvailableLocally = true
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+            reachability: FakeNetworkReachability(online: true)
+        )
+        await vm.load()
+        await vm.setPartProgram(6, forPartIndex: 0)
+
+        await vm.togglePlayback()
+        #expect(vm.isPlaying)
+        #expect(controller.playCount == 1)
+    }
 }
 
 // swiftlint:enable file_length type_body_length

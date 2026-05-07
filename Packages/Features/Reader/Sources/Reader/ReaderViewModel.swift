@@ -292,6 +292,22 @@ public final class ReaderViewModel {
               case let .loaded(score) = loadState,
               soundfontAlertKind == nil
         else { return }
+        if let pending = pendingInstrumentLoad, !pending.wasPlaying {
+            // Silent prefetch was kicked off when the user was not playing.
+            // Surface the existing alert copy and wait. The prefetch task's
+            // own success branch (in setPartProgram) fans setStaffInstrument
+            // out; we just need to block until the engine reflects the
+            // pick before kicking off play.
+            let online = await reachability?.isOnline() ?? true
+            soundfontAlertKind = online ? .loading : .offline
+            do {
+                try await pending.task.value
+                soundfontAlertKind = nil
+            } catch {
+                soundfontAlertKind = nil
+                return
+            }
+        }
         if !hasLoadedIntoPlayback {
             let cached = await controller.areSoundfontsAvailableLocally(for: score)
             let online = await reachability?.isOnline() ?? true
