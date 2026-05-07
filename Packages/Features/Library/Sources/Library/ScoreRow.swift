@@ -12,7 +12,7 @@ struct ScoreRow: View {
                         .font(.body)
                         .lineLimit(1)
                     if let subtitle = scoreItem.subtitle, !subtitle.isEmpty {
-                        Text("- \(subtitle)")
+                        Text(" · \(subtitle)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
