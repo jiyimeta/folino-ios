@@ -21,12 +21,12 @@ struct SettingsSheetTests {
 }
 
 private struct StubSoundfontResolver: SoundfontResolver {
-    func resolveSoundfont(bank _: Int, program _: Int) throws -> URL {
+    func resolveSoundfont(bank _: Int, program _: Int, isDrums _: Bool) throws -> URL {
         URL(fileURLWithPath: "/dev/null")
     }
 
     func cachedPatches() throws -> [SoundfontPatch] { [] }
     func totalCacheSizeBytes() throws -> Int64 { 0 }
-    func deletePatch(bank _: Int, program _: Int) throws {}
+    func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
     func clearCache() throws {}
 }

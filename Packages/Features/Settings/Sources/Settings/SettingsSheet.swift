@@ -7,6 +7,10 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private let soundfontResolver: (any SoundfontResolver)?
     private let presetCatalog: (any SoundfontPresetCatalog)?
     @Environment(\.dismiss) private var dismiss
+    @State private var isFeedbackMailPresented = false
+    @State private var feedbackMailResult: FeedbackMailComposeResult?
+    @State private var isMailSavedAlertPresented = false
+    @State private var isMailFailedAlertPresented = false
 
     public init(
         soundfontResolver: (any SoundfontResolver)? = nil,
@@ -31,6 +35,25 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
                 .toolbar { doneToolbar }
+                .sheet(isPresented: $isFeedbackMailPresented) {
+                    FeedbackMailView(result: $feedbackMailResult)
+                }
+                .alert("Mail Saved to Drafts", isPresented: $isMailSavedAlertPresented) {
+                    Button("OK", role: .cancel) {}
+                }
+                .alert("Mail Delivery Failed", isPresented: $isMailFailedAlertPresented) {
+                    Button("OK", role: .cancel) {}
+                }
+                .onChange(of: feedbackMailResult) { _, newValue in
+                    switch newValue {
+                    case .saved:
+                        isMailSavedAlertPresented = true
+                    case .failed:
+                        isMailFailedAlertPresented = true
+                    case .cancelled, .sent, nil:
+                        break
+                    }
+                }
         }
     }
 
@@ -65,6 +88,17 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     Image(systemName: "doc.text")
                 }
             }
+
+            Button {
+                isFeedbackMailPresented = true
+            } label: {
+                Label {
+                    Text("Send Feedback", bundle: .module)
+                } icon: {
+                    Image(systemName: "envelope")
+                }
+            }
+            .disabled(!FeedbackMailView.canSendMail)
         } header: {
             Text("About", bundle: .module)
         }
