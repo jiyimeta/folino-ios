@@ -464,6 +464,18 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         await playbackController?.setMetronomeEnabled(enabled)
     }
 
+    // MARK: - Repeat / loop
+
+    /// Staged A endpoint not yet committed (incomplete loop).
+    private var pendingA: ChordPath?
+    /// Staged B endpoint not yet committed (incomplete loop).
+    private var pendingB: ChordPath?
+
+    public var repeatMode: RepeatMode { preferences.repeatMode }
+    public var abRepeat: ABRepeatRange? { preferences.abRepeat }
+    public var pendingRepeatA: ChordPath? { pendingA ?? preferences.abRepeat?.start }
+    public var pendingRepeatB: ChordPath? { pendingB ?? preferences.abRepeat?.end }
+
     // MARK: - Private
 
     private func initialPlaybackPreferences(for score: Score) -> PlaybackPreferences {
@@ -490,7 +502,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             scoreItemID: scoreItem.id,
             perStaff: states,
             tempoMultiplier: preferences.tempoMultiplier ?? 1.0,
-            abRepeat: nil
+            abRepeat: preferences.abRepeat
         )
     }
 
@@ -525,7 +537,9 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             staffProgramOverrides: copy.staffProgramOverrides,
             staffVolumeOverrides: copy.staffVolumeOverrides,
             tempoMultiplier: copy.tempoMultiplier,
-            honorLayoutBreaks: copy.honorLayoutBreaks
+            honorLayoutBreaks: copy.honorLayoutBreaks,
+            repeatMode: copy.repeatMode,
+            abRepeat: copy.abRepeat
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)
@@ -556,6 +570,87 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         return (error as NSError).localizedDescription
     }
 }
+
+// MARK: - Repeat / loop mutators
+
+extension ReaderViewModel {
+    public func advanceRepeatMode() async {
+        let next = preferences.repeatMode.next
+        await mutatePreferences { $0.repeatMode = next }
+        await forwardLoopRangeToController()
+    }
+
+    public func setRepeatA() async {
+        guard case let .loaded(score) = loadState,
+              let cursor = playbackCursor else { return }
+        let measure = measureIndex(of: cursor)
+        let head = snapMeasureHead(measureIndex: measure, in: score)
+        pendingA = head
+        await commitPendingRepeat()
+        await forwardLoopRangeToController()
+    }
+
+    public func setRepeatB() async {
+        guard case let .loaded(score) = loadState,
+              let cursor = playbackCursor else { return }
+        let measure = measureIndex(of: cursor)
+        guard let end = snapMeasureEnd(measureIndex: measure, in: score) else { return }
+        pendingB = end
+        await commitPendingRepeat()
+        await forwardLoopRangeToController()
+    }
+
+    public func clearRepeatA() async {
+        pendingA = nil
+        if let existing = preferences.abRepeat {
+            pendingB = existing.end
+            await mutatePreferences { $0.abRepeat = nil }
+        }
+        // Forwards even when no save fired — keeps the controller's last-call
+        // cache aligned with the VM's intent (e.g. clearing during .loopAll).
+        await forwardLoopRangeToController()
+    }
+
+    public func clearRepeatB() async {
+        pendingB = nil
+        if let existing = preferences.abRepeat {
+            pendingA = existing.start
+            await mutatePreferences { $0.abRepeat = nil }
+        }
+        await forwardLoopRangeToController()
+    }
+
+    private func activeLoopRange(in score: Score) -> ABRepeatRange? {
+        switch preferences.repeatMode {
+        case .off: nil
+        case .loopAll: scoreFullRange(in: score)
+        case .abLoop: preferences.abRepeat
+        }
+    }
+
+    private func forwardLoopRangeToController() async {
+        guard let controller = playbackController,
+              case let .loaded(score) = loadState else { return }
+        await controller.setLoopRange(activeLoopRange(in: score))
+    }
+
+    private func commitPendingRepeat() async {
+        let candidateStart = pendingA ?? preferences.abRepeat?.start
+        let candidateEnd = pendingB ?? preferences.abRepeat?.end
+        guard let start = candidateStart, let end = candidateEnd else {
+            if preferences.abRepeat != nil {
+                await mutatePreferences { $0.abRepeat = nil }
+            }
+            return
+        }
+        let normalized = normalize(ABRepeatRange(start: start, end: end))
+        pendingA = normalized.start
+        pendingB = normalized.end
+        await mutatePreferences { $0.abRepeat = normalized }
+    }
+}
+
+// MARK: - Part instrument program overrides
 
 extension ReaderViewModel {
     /// Effective GM program for a part. All staves under a part share the

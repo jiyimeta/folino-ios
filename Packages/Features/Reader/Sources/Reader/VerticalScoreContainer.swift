@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -185,13 +186,19 @@ struct VerticalScoreContainer: View {
 
     @ViewBuilder
     private func scoreSurface(document doc: LayoutDocument) -> some View {
-        ScoreView(
-            document: doc, score: score, options: scoreOptions,
-            playbackCursor: playbackCursor, playbackCursorColor: .accentColor
-        )
-        .coordinateSpace(name: "scoreSurface")
-        .gesture(tapSeekGesture(document: doc))
-        .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
+        ZStack(alignment: .topLeading) {
+            ScoreView(
+                document: doc, score: score, options: scoreOptions,
+                playbackCursor: playbackCursor, playbackCursorColor: .accentColor
+            )
+            .coordinateSpace(name: "scoreSurface")
+            .gesture(tapSeekGesture(document: doc))
+            .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
+
+            if viewModel.repeatMode == .abLoop {
+                LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
+            }
+        }
     }
 
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {

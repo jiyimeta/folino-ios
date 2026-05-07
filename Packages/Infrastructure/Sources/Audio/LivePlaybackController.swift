@@ -17,10 +17,12 @@ import SheetMusicCore
 /// main actor.
 @MainActor
 public final class LivePlaybackController: Domain.PlaybackController {
-    private let engine: PlaybackEngine
+    let engine: PlaybackEngine
     private let domainResolver: any Domain.SoundfontResolver
     private let precisionProbe: any Domain.PrecisePatchProbe
-    private var loadedScore: Score?
+    // Internal (not private) so the +LoopBounds extension file can reach
+    // it when forwarding to engine.play(in:) after a setLoop / clearLoop.
+    var loadedScore: Score?
     /// Cursor the user picked while the engine's sequencer wasn't yet
     /// built (it's lazy — first `play(from:in:)` builds it). `seek` early-
     /// outs in that state, so we stash the request here and apply it on
@@ -254,7 +256,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     }
 
     public func setCursor(to cursor: ScoreCursor) {
-        // `AVAudioSequencer` halts when `currentPositionInSeconds` is written
+        // `AVAudioSequencer` halts when `currentPositionInBeats` is written
         // during playback, which kills the engine's own cursor timer on its
         // next tick (`tickCursor` early-outs on `!sequencer.isPlaying`). To
         // preserve "playback continues from the seeked position", route
@@ -276,8 +278,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         cursorHandler = handler
     }
 
-    // Stub — engine doesn't expose loop ranges yet; keep the protocol whole.
-    public func setLoopRange(_: ABRepeatRange?) {}
+    // setLoopRange lives in `LivePlaybackController+LoopBounds.swift`
+    // alongside the cursor-mapping helpers it depends on (file_length
+    // budget keeps `engine`-touching protocol methods split out).
 
     public func setTempoMultiplier(_ value: Double) {
         engine.setRate(Float(value))

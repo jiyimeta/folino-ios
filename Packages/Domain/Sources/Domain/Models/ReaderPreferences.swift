@@ -40,6 +40,11 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// available view width — useful when the score was authored for a
     /// different page size.
     public var honorLayoutBreaks: Bool
+    /// Current repeat / loop mode for this score. Defaults to `.off`.
+    public var repeatMode: RepeatMode
+    /// Active A–B loop range. Only meaningful when `repeatMode == .abLoop`.
+    /// `nil` when no range has been set.
+    public var abRepeat: ABRepeatRange?
 
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
@@ -49,7 +54,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         staffProgramOverrides: [StaffAddress: Int] = [:],
         staffVolumeOverrides: [StaffAddress: Double] = [:],
         tempoMultiplier: Double? = nil,
-        honorLayoutBreaks: Bool = true
+        honorLayoutBreaks: Bool = true,
+        repeatMode: RepeatMode = .off,
+        abRepeat: ABRepeatRange? = nil
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -61,5 +68,37 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             min(max($0, Self.minTempoMultiplier), Self.maxTempoMultiplier)
         }
         self.honorLayoutBreaks = honorLayoutBreaks
+        self.repeatMode = repeatMode
+        self.abRepeat = abRepeat
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, scoreItemID, staffSize, hiddenStaves, staffProgramOverrides
+        case staffVolumeOverrides, tempoMultiplier, honorLayoutBreaks
+        case repeatMode, abRepeat
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try c.decode(ReaderPreferencesID.self, forKey: .id)
+        let scoreItemID = try c.decode(ScoreItemID.self, forKey: .scoreItemID)
+        let staffSize = try c.decode(CGFloat.self, forKey: .staffSize)
+        let hiddenStaves = try c.decode(Set<StaffAddress>.self, forKey: .hiddenStaves)
+        let programOverrides = try c.decodeIfPresent(
+            [StaffAddress: Int].self, forKey: .staffProgramOverrides
+        ) ?? [:]
+        let volumeOverrides = try c.decodeIfPresent(
+            [StaffAddress: Double].self, forKey: .staffVolumeOverrides
+        ) ?? [:]
+        let tempo = try c.decodeIfPresent(Double.self, forKey: .tempoMultiplier)
+        let honorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks) ?? true
+        let mode = try c.decodeIfPresent(RepeatMode.self, forKey: .repeatMode) ?? .off
+        let ab = try c.decodeIfPresent(ABRepeatRange.self, forKey: .abRepeat)
+        self.init(
+            id: id, scoreItemID: scoreItemID, staffSize: staffSize,
+            hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
+            staffVolumeOverrides: volumeOverrides, tempoMultiplier: tempo,
+            honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab
+        )
     }
 }
