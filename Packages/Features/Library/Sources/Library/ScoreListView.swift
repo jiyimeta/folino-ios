@@ -52,7 +52,7 @@ struct ScoreListView: View {
                     onRequestDelete: { pendingDelete = $0 }
                 )
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 44, minHeight: 44)
