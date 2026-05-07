@@ -30,6 +30,9 @@ struct HorizontalScoreContainer: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollViewReader { scrollProxy in
+                // `.onChange` and `.task` chain on the helper's outermost view; they
+                // stay here (not inside scrollContent) because they need scrollProxy
+                // from the enclosing ScrollViewReader.
                 scrollContent(minHeight: proxy.size.height)
                     .onChange(of: playbackCursor) { _, newCursor in
                         autoScroll(

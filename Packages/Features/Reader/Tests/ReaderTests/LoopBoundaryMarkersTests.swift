@@ -124,8 +124,8 @@ import Testing
     }
 }
 
-@Suite struct LoopBoundaryMarkersWiringTests {
-    @Test @MainActor func viewBuildsWithRange() {
+@MainActor @Suite struct LoopBoundaryMarkersWiringTests {
+    @Test func viewBuildsWithRange() {
         // Smoke test: the view initializer accepts the same shape that
         // LoopRegionOverlay does, so the wiring blocks in
         // {Vertical,Horizontal}ScoreContainer compile.
