@@ -197,6 +197,7 @@ struct VerticalScoreContainer: View {
 
             if viewModel.repeatMode == .abLoop {
                 LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
+                LoopBoundaryMarkers(document: doc, range: viewModel.abRepeat)
             }
         }
     }

@@ -1,4 +1,5 @@
 import CoreGraphics
+import Domain
 import Foundation
 @testable import Reader
 import SheetMusicCore
@@ -120,5 +121,29 @@ import Testing
             lineThickness: Self.lineThickness,
             triangleWidth: Self.triangleWidth
         ) == nil)
+    }
+}
+
+@Suite struct LoopBoundaryMarkersWiringTests {
+    @Test @MainActor func viewBuildsWithRange() {
+        // Smoke test: the view initializer accepts the same shape that
+        // LoopRegionOverlay does, so the wiring blocks in
+        // {Vertical,Horizontal}ScoreContainer compile.
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let m = LayoutMeasure(measureIndex: 0, origin: .zero, width: 80, elements: [])
+        let system = LayoutSystem(
+            origin: .zero, size: CGSize(width: 80, height: 60),
+            measures: [m], staffOrigins: [.zero],
+            staffAddresses: [staff], partLabels: [], spanners: [],
+            sp: 3.5
+        )
+        let doc = LayoutDocument(
+            size: CGSize(width: 80, height: 60),
+            systems: [system], metrics: StaffMetrics(staffSize: 14)
+        )
+        let chord = ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0)
+        let range = ABRepeatRange(start: chord, end: chord)
+        _ = LoopBoundaryMarkers(document: doc, range: range)
+        _ = LoopBoundaryMarkers(document: doc, range: nil)
     }
 }
