@@ -268,4 +268,30 @@ struct ReaderViewModelRepeatTests {
             Issue.record("expected a .beat cursor seek to measure 0")
         }
     }
+
+    @Test func togglePlaybackPreSeeksToAWhenCursorAlreadyPastB() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode()
+        await vm.advanceRepeatMode()
+        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        await vm.setRepeatA()
+        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        await vm.setRepeatB()
+
+        // Move cursor past B before pressing play.
+        vm.setManualCursor(.beat(measureIndex: 5, tickInMeasure: 0))
+        let preSeekCount = controller.recordedSetCursorCalls.count
+
+        await vm.togglePlayback()
+
+        let last = controller.recordedSetCursorCalls.last
+        #expect(controller.recordedSetCursorCalls.count >= preSeekCount + 1)
+        if case let .beat(measureIndex, _) = last {
+            #expect(measureIndex == 0) // start of A
+        } else {
+            Issue.record("expected pre-seek to A's measure")
+        }
+        #expect(controller.playCount == 1)
+    }
 }

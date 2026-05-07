@@ -306,6 +306,7 @@ public final class ReaderViewModel {
             isPlaying = false
         } else {
             do {
+                await preSeekIfNeeded(controller: controller, score: score)
                 try await controller.play()
                 isPlaying = true
             } catch {
@@ -551,33 +552,24 @@ extension ReaderViewModel {
         await forwardLoopRangeToController()
     }
 
+    private func activeLoopRange(in score: Score) -> ABRepeatRange? {
+        switch preferences.repeatMode {
+        case .off: nil
+        case .loopAll: scoreFullRange(in: score)
+        case .abLoop: preferences.abRepeat
+        }
+    }
+
     private func forwardLoopRangeToController() async {
         guard let controller = playbackController,
               case let .loaded(score) = loadState else { return }
-        let range: ABRepeatRange? = switch preferences.repeatMode {
-        case .off:
-            nil
-        case .loopAll:
-            scoreFullRange(in: score)
-        case .abLoop:
-            preferences.abRepeat
-        }
-        await controller.setLoopRange(range)
+        await controller.setLoopRange(activeLoopRange(in: score))
     }
 
     private func evaluateLoopWrap(for cursor: ScoreCursor?) {
         guard isPlaying,
-              case let .loaded(score) = loadState else { return }
-
-        let active: ABRepeatRange? = switch preferences.repeatMode {
-        case .off:
-            nil
-        case .loopAll:
-            scoreFullRange(in: score)
-        case .abLoop:
-            preferences.abRepeat
-        }
-        guard let range = active else { return }
+              case let .loaded(score) = loadState,
+              let range = activeLoopRange(in: score) else { return }
 
         // Treat a nil cursor while we believe ourselves to be playing as a
         // natural-end signal: wrap to the loop start.
@@ -588,6 +580,17 @@ extension ReaderViewModel {
         if let cursor, measureIndex(of: cursor) > range.end.measureIndex {
             seekToLoopStart(range)
         }
+    }
+
+    private func preSeekIfNeeded(controller: any PlaybackController, score: Score) async {
+        guard let range = activeLoopRange(in: score),
+              let cursor = playbackCursor,
+              measureIndex(of: cursor) > range.end.measureIndex else { return }
+        let target = ScoreCursor.beat(
+            measureIndex: range.start.measureIndex, tickInMeasure: 0
+        )
+        await controller.setCursor(to: target)
+        playbackCursor = target
     }
 
     private func seekToLoopStart(_ range: ABRepeatRange) {
