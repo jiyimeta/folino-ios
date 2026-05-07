@@ -142,8 +142,11 @@ import Testing
             systems: [system], metrics: StaffMetrics(staffSize: 14)
         )
         let chord = ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0)
-        let range = ABRepeatRange(start: chord, end: chord)
-        _ = LoopBoundaryMarkers(document: doc, range: range)
-        _ = LoopBoundaryMarkers(document: doc, range: nil)
+        // Both endpoints, A-only, B-only, and neither — every shape the
+        // containers wire up via `pendingRepeatA` / `pendingRepeatB`.
+        _ = LoopBoundaryMarkers(document: doc, start: chord, end: chord)
+        _ = LoopBoundaryMarkers(document: doc, start: chord, end: nil)
+        _ = LoopBoundaryMarkers(document: doc, start: nil, end: chord)
+        _ = LoopBoundaryMarkers(document: doc, start: nil, end: nil)
     }
 }

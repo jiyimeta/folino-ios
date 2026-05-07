@@ -4,9 +4,10 @@ import SheetMusicLayout
 import SwiftUI
 
 /// Crisp accent-color line + filled triangle drawn at each endpoint of
-/// an active A–B loop. Shares the geometry plumbing of
-/// `LoopRegionOverlay` and is intended to draw on top of it inside the
-/// score-surface `ZStack`.
+/// an A–B loop. Each endpoint draws independently so a single marker
+/// shows as soon as A or B is set, before the other has been chosen.
+/// Shares the geometry plumbing of `LoopRegionOverlay` and is intended
+/// to draw on top of it inside the score-surface `ZStack`.
 struct LoopBoundaryMarkers: View {
     /// Multipliers applied to `document.metrics.sp` to derive marker
     /// dimensions. Exposed so tests can reference the same source of
@@ -17,19 +18,19 @@ struct LoopBoundaryMarkers: View {
     nonisolated static let lineThicknessFactor: CGFloat = 0.5
 
     let document: LayoutDocument
-    let range: ABRepeatRange?
+    let start: ChordPath?
+    let end: ChordPath?
 
     var body: some View {
         Canvas { context, _ in
-            guard let range else { return }
             let sp = document.metrics.sp
             let triangleHeight: CGFloat = sp * Self.triangleHeightFactor
             let triangleWidth: CGFloat = sp * Self.triangleWidthFactor
             let lineThickness: CGFloat = sp * Self.lineThicknessFactor
 
-            if let a = aMarkerGeometry(
+            if let start, let a = aMarkerGeometry(
                 document: document,
-                measureIndex: range.start.measureIndex,
+                measureIndex: start.measureIndex,
                 triangleHeight: triangleHeight,
                 lineThickness: lineThickness,
                 triangleWidth: triangleWidth
@@ -37,9 +38,9 @@ struct LoopBoundaryMarkers: View {
                 context.fill(Path(a.line), with: .color(.accentColor))
                 context.fill(a.triangle, with: .color(.accentColor))
             }
-            if let b = bMarkerGeometry(
+            if let end, let b = bMarkerGeometry(
                 document: document,
-                measureIndex: range.end.measureIndex,
+                measureIndex: end.measureIndex,
                 triangleHeight: triangleHeight,
                 lineThickness: lineThickness,
                 triangleWidth: triangleWidth

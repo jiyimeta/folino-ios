@@ -72,7 +72,11 @@ struct HorizontalScoreContainer: View {
 
                     if viewModel.repeatMode == .abLoop {
                         LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
-                        LoopBoundaryMarkers(document: doc, range: viewModel.abRepeat)
+                        LoopBoundaryMarkers(
+                            document: doc,
+                            start: viewModel.pendingRepeatA,
+                            end: viewModel.pendingRepeatB
+                        )
                     }
 
                     HorizontalMeasureAnchors(document: doc)
