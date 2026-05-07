@@ -27,6 +27,13 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// normalizes a saved value of exactly 1.0 back to `nil` so the
     /// override doesn't outlive the user's intent.
     public var tempoMultiplier: Double?
+    /// When `true` (default), the layout engine honors authored
+    /// `<LayoutBreak>line` / `<LayoutBreak>page` markup, so the engraver's
+    /// chosen system / page boundaries are reproduced. When `false`, the
+    /// engine ignores both forms and wraps measures purely on the
+    /// available view width — useful when the score was authored for a
+    /// different page size.
+    public var honorLayoutBreaks: Bool
 
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
@@ -34,7 +41,8 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         staffSize: CGFloat,
         hiddenStaves: Set<StaffAddress>,
         staffProgramOverrides: [StaffAddress: Int] = [:],
-        tempoMultiplier: Double? = nil
+        tempoMultiplier: Double? = nil,
+        honorLayoutBreaks: Bool = true
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -44,5 +52,6 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.tempoMultiplier = tempoMultiplier.map {
             min(max($0, Self.minTempoMultiplier), Self.maxTempoMultiplier)
         }
+        self.honorLayoutBreaks = honorLayoutBreaks
     }
 }

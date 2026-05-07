@@ -38,6 +38,22 @@
         "ja": { "stringUnit": { "state": "translated", "value": "すべて非表示" } }
       }
     },
+    "Honor authored breaks" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Honor authored breaks"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜の改行・改ページに従う"
+          }
+        }
+      }
+    },
     "Layout": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Layout" } },

@@ -139,6 +139,10 @@ public final class ReaderViewModel {
         await mutatePreferences { $0.staffSize = next }
     }
 
+    public func setHonorLayoutBreaks(_ value: Bool) async {
+        await mutatePreferences { $0.honorLayoutBreaks = value }
+    }
+
     public func volume(for address: StaffAddress) -> Double {
         staffVolumes[address] ?? Self.defaultStaffVolume
     }
@@ -450,7 +454,8 @@ public final class ReaderViewModel {
             staffSize: copy.staffSize,
             hiddenStaves: copy.hiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
-            tempoMultiplier: copy.tempoMultiplier
+            tempoMultiplier: copy.tempoMultiplier,
+            honorLayoutBreaks: copy.honorLayoutBreaks
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)
