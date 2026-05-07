@@ -96,6 +96,9 @@ private struct ReadyShell: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebar
                         .navigationSplitViewColumnWidth(min: 350, ideal: 420)
+                    #if DEBUG
+                        .debuggable()
+                    #endif
                 } detail: {
                     detail
                 }
@@ -117,6 +120,9 @@ private struct ReadyShell: View {
                     licenseContent: { LicenseListView() },
                     leadingToolbarItem: { settingsButton }
                 )
+                #if DEBUG
+                .debuggable()
+                #endif
             }
         }
         .sheet(isPresented: $isSettingsPresented) {
