@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Combine
 import Domain
 import Foundation
@@ -139,16 +140,26 @@ public final class LivePlaybackController: Domain.PlaybackController {
         return needed.isSubset(of: cachedKeys)
     }
 
-    // swiftlint:disable unavailable_function
-    public func isSoundfontCached(bank _: Int, program _: Int, isDrums _: Bool) -> Bool {
-        fatalError("Implemented in Task 2")
+    public func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) async -> Bool {
+        do {
+            let patches = try await domainResolver.cachedPatches()
+            let needle = SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
+            return patches.contains { patch in
+                SoundfontPatchKey(bank: patch.bank, program: patch.program, isDrums: patch.isDrums) == needle
+            }
+        } catch {
+            // Match `areSoundfontsAvailableLocally`'s policy: if the cache
+            // can't be enumerated, report "not cached" so callers surface
+            // the loading affordance instead of stalling silently.
+            return false
+        }
     }
 
-    public func prefetchSoundfont(bank _: Int, program _: Int, isDrums _: Bool) throws {
-        fatalError("Implemented in Task 2")
+    public func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) async throws {
+        _ = try await domainResolver.resolveSoundfont(
+            bank: bank, program: program, isDrums: isDrums
+        )
     }
-
-    // swiftlint:enable unavailable_function
 
     private static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
         var keys: Set<SoundfontPatchKey> = []
