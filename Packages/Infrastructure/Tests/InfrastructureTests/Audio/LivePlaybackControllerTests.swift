@@ -1,6 +1,7 @@
 @testable import Audio
 import Domain
 import Foundation
+import SheetMusicAudio
 import SheetMusicCore
 import Testing
 
@@ -49,6 +50,63 @@ import Testing
         let channel = firstChannel(of: result, partIndex: 0)
         #expect(channel.bank == 8)
         #expect(channel.program == 0)
+    }
+
+    @Test func isSoundfontCachedReturnsTrueWhenResolverListsPatch() async {
+        let resolver = FakeDomainSoundfontResolver(cached: [
+            SoundfontPatchKey(bank: 0, program: 73, isDrums: false),
+        ])
+        let controller = LivePlaybackController(
+            soundfontResolver: NoopAudioResolver(),
+            domainResolver: resolver,
+            precisionProbe: StubProbe(available: [])
+        )
+
+        let cached = await controller.isSoundfontCached(bank: 0, program: 73, isDrums: false)
+        let missing = await controller.isSoundfontCached(bank: 8, program: 0, isDrums: false)
+        #expect(cached)
+        #expect(!missing)
+    }
+
+    @Test func isSoundfontCachedReturnsFalseWhenResolverThrows() async {
+        let resolver = FakeDomainSoundfontResolver(cachedPatchesError: TestError.boom)
+        let controller = LivePlaybackController(
+            soundfontResolver: NoopAudioResolver(),
+            domainResolver: resolver,
+            precisionProbe: StubProbe(available: [])
+        )
+
+        let result = await controller.isSoundfontCached(bank: 0, program: 0, isDrums: false)
+        #expect(!result)
+    }
+
+    @Test func prefetchSoundfontDelegatesToResolver() async throws {
+        let resolver = FakeDomainSoundfontResolver()
+        let controller = LivePlaybackController(
+            soundfontResolver: NoopAudioResolver(),
+            domainResolver: resolver,
+            precisionProbe: StubProbe(available: [])
+        )
+
+        try await controller.prefetchSoundfont(bank: 8, program: 0, isDrums: false)
+        let calls = await resolver.resolveCalls
+        #expect(calls.count == 1)
+        #expect(calls.first?.bank == 8)
+        #expect(calls.first?.program == 0)
+        #expect(calls.first?.isDrums == false)
+    }
+
+    @Test func prefetchSoundfontPropagatesResolverError() async {
+        let resolver = FakeDomainSoundfontResolver(resolveError: TestError.boom)
+        let controller = LivePlaybackController(
+            soundfontResolver: NoopAudioResolver(),
+            domainResolver: resolver,
+            precisionProbe: StubProbe(available: [])
+        )
+
+        await #expect(throws: TestError.boom) {
+            try await controller.prefetchSoundfont(bank: 0, program: 0, isDrums: false)
+        }
     }
 }
 
@@ -99,4 +157,61 @@ private func makeScore(parts specs: [PartSpec]) -> Score {
 /// helper's own defensive behaviour.
 private func firstChannel(of score: Score, partIndex: Int) -> InstrumentChannel {
     score.parts[partIndex].instrument.channels.first ?? InstrumentChannel()
+}
+
+private enum TestError: Error, Equatable { case boom }
+
+/// Minimal AudioResolver — required by `LivePlaybackController.init` but
+/// never consulted by the cache / prefetch paths under test, which only
+/// touch the Domain resolver.
+private struct NoopAudioResolver: SheetMusicAudio.SoundfontResolver {
+    func soundfontURL(forBank _: UInt8, program _: UInt8, isDrums _: Bool) -> URL? {
+        nil
+    }
+
+    var defaultGMSoundfontURL: URL? { nil }
+}
+
+/// Records `resolveSoundfont` calls and returns either a fake URL or the
+/// configured error. `cachedPatches()` returns one `SoundfontPatch` per
+/// key in `cached`, or throws `cachedPatchesError` if set.
+private actor FakeDomainSoundfontResolver: Domain.SoundfontResolver {
+    var cached: Set<SoundfontPatchKey>
+    var cachedPatchesError: Error?
+    var resolveError: Error?
+    private(set) var resolveCalls: [(bank: Int, program: Int, isDrums: Bool)] = []
+
+    init(
+        cached: Set<SoundfontPatchKey> = [],
+        cachedPatchesError: Error? = nil,
+        resolveError: Error? = nil
+    ) {
+        self.cached = cached
+        self.cachedPatchesError = cachedPatchesError
+        self.resolveError = resolveError
+    }
+
+    func resolveSoundfont(bank: Int, program: Int, isDrums: Bool) throws -> URL {
+        resolveCalls.append((bank, program, isDrums))
+        if let error = resolveError { throw error }
+        cached.insert(SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums))
+        return URL(fileURLWithPath: "/tmp/sf-\(bank)-\(program)-\(isDrums).sf2")
+    }
+
+    func cachedPatches() throws -> [SoundfontPatch] {
+        if let error = cachedPatchesError { throw error }
+        let now = Date(timeIntervalSince1970: 0)
+        return cached.map {
+            SoundfontPatch(
+                bank: $0.bank, program: $0.program,
+                localFileName: "fake.sf2", sizeBytes: 0,
+                downloadedAt: now, lastUsedAt: now,
+                isBundled: false, isDrums: $0.isDrums
+            )
+        }
+    }
+
+    func totalCacheSizeBytes() throws -> Int64 { 0 }
+    func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
+    func clearCache() throws {}
 }

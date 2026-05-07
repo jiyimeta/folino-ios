@@ -15,6 +15,18 @@ public protocol PlaybackController: Sendable {
     /// needs to download.
     func areSoundfontsAvailableLocally(for score: Score) async -> Bool
 
+    /// True iff the soundfont for `(bank, program, isDrums)` is already
+    /// on disk (bundled or cached). Mirrors
+    /// `areSoundfontsAvailableLocally(for:)` at per-patch granularity —
+    /// the Inspector instrument-pick path uses this to decide whether
+    /// `setStaffInstrument` would fall back to a bundled patch.
+    func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) async -> Bool
+
+    /// Download and cache a single patch. Resolves on success; throws
+    /// `CancellationError` on `Task.cancel()`, or rethrows resolver
+    /// failures. Idempotent — a no-op if the patch is already cached.
+    func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) async throws
+
     func play() async throws
     func pause() async
 
