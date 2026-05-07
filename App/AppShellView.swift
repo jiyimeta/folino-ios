@@ -92,21 +92,7 @@ private struct ReadyShell: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebar
                 } detail: {
-                    if let item = detailScoreItem {
-                        ReaderView(
-                            scoreItem: item,
-                            repository: repository,
-                            gateway: gateway,
-                            scoresDirectory: scoresDirectory,
-                            playbackController: bootstrap.playbackController,
-                            reachability: bootstrap.reachability
-                        )
-                    } else {
-                        ContentUnavailableView(
-                            "Select a score",
-                            systemImage: "music.note"
-                        )
-                    }
+                    detail
                 }
             } else {
                 LibraryRootView(
@@ -162,6 +148,26 @@ private struct ReadyShell: View {
             guard newValue != nil,
                   let url = bootstrap.consumePendingIncomingURL() else { return }
             Task { await libraryVM.startImport(from: url) }
+        }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if let item = detailScoreItem {
+            ReaderView(
+                scoreItem: item,
+                repository: repository,
+                gateway: gateway,
+                scoresDirectory: scoresDirectory,
+                playbackController: bootstrap.playbackController,
+                reachability: bootstrap.reachability,
+                onBack: {
+                    detailScoreItem = nil
+                    columnVisibility = .doubleColumn
+                }
+            )
+        } else {
+            ContentUnavailableView("Select a score", systemImage: "music.note")
         }
     }
 

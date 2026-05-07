@@ -30,7 +30,6 @@ extension View {
     /// can likely be reverted to a plain `ToolbarContent`.
     struct ReaderTopOverlay: View {
         @Bindable var viewModel: ReaderViewModel
-        let showsBackButton: Bool
         let onBack: () -> Void
 
         /// Vertical space the overlay occupies inside the safe area
@@ -41,10 +40,8 @@ extension View {
 
         var body: some View {
             HStack(spacing: 12) {
-                if showsBackButton {
-                    overlayButton(systemImage: "chevron.backward", label: "Back", action: onBack)
-                        .glassEffect(.regular.interactive())
-                }
+                overlayButton(systemImage: "chevron.backward", label: "Back", action: onBack)
+                    .glassEffect(.regular.interactive())
                 Spacer()
                 HStack(spacing: 4) {
                     overlayButton(
