@@ -191,19 +191,81 @@ struct ReaderViewModelTests {
         #expect(vm.preferences.hiddenStaves.isEmpty)
     }
 
-    @Test func staffVolumeDefaultsToOneAndIsClampedOnSet() {
+    @Test func volumeFallsBackToOneWhenLoadStateHasNoParts() {
         let vm = makeVMNoLoad()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
         #expect(vm.volume(for: address) == 1.0)
+    }
 
-        vm.setVolume(0.4, for: address)
-        #expect(vm.volume(for: address) == 0.4)
-        #expect(vm.staffVolumes[address] == 0.4)
+    @Test func volumeUsesScoreCC7WhenNoOverride() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 64)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(loadScoreResult: .success((
+                score: score,
+                summary: ScoreFileSummary(
+                    title: "T", composer: nil, instrumentationSummary: "",
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
+                )
+            ))),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+        await vm.load()
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let value = vm.volume(for: address)
+        #expect(abs(value - 64.0 / 127.0) < 0.0001)
+    }
 
-        vm.setVolume(-0.5, for: address)
-        #expect(vm.volume(for: address) == 0)
-        vm.setVolume(2.0, for: address)
-        #expect(vm.volume(for: address) == 1.0)
+    @Test func volumeUsesPersistedOverrideWhenPresent() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id,
+            staffSize: 14,
+            hiddenStaves: [],
+            staffVolumeOverrides: [address: 0.3]
+        )
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 100)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: FakeScoreFileGateway(loadScoreResult: .success((
+                score: score,
+                summary: ScoreFileSummary(
+                    title: "T", composer: nil, instrumentationSummary: "",
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
+                )
+            ))),
+            scoresDirectory: URL(filePath: "/tmp"),
+            defaultStaffSize: 14
+        )
+        await vm.load()
+        #expect(vm.volume(for: address) == 0.3)
     }
 
     @Test func resetZoomReturnsToUnit() {

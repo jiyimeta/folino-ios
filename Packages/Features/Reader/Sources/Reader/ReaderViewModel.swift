@@ -32,7 +32,10 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public private(set) var loadState: LoadState = .loading
     public private(set) var scoreItem: ScoreItem
     public private(set) var preferences: ReaderPreferences
-    public private(set) var staffVolumes: [StaffAddress: Double] = [:]
+    /// Transient per-staff volume during a slider drag. Populated by
+    /// `setVolume`, cleared by `commitVolume`. Lives on the VM so SwiftUI
+    /// re-renders the slider as the value moves.
+    public private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
     public private(set) var mutedStaves: Set<StaffAddress> = []
     public private(set) var soloStaves: Set<StaffAddress> = []
     public private(set) var isPlaying: Bool = false
@@ -163,12 +166,15 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     }
 
     public func volume(for address: StaffAddress) -> Double {
-        staffVolumes[address] ?? Self.defaultStaffVolume
+        liveStaffVolumes[address]
+            ?? preferences.staffVolumeOverrides[address]
+            ?? scoreDefaultVolume(for: address)
+            ?? Self.defaultStaffVolume
     }
 
     public func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
-        staffVolumes[address] = clamped
+        liveStaffVolumes[address] = clamped
         guard let flatIndex = flattenedStaffIndex(for: address) else { return }
         Task { await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped) }
     }
@@ -460,7 +466,9 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
                     : 0)
             return StaffMixerState(
                 staffIndex: idx,
-                volume: staffVolumes[entry.address] ?? Self.defaultStaffVolume,
+                volume: preferences.staffVolumeOverrides[entry.address]
+                    ?? scoreDefaultVolume(for: entry.address)
+                    ?? Self.defaultStaffVolume,
                 isMuted: false,
                 isSolo: false,
                 gmBank: bank,
@@ -504,6 +512,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             staffSize: copy.staffSize,
             hiddenStaves: copy.hiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
+            staffVolumeOverrides: copy.staffVolumeOverrides,
             tempoMultiplier: copy.tempoMultiplier,
             honorLayoutBreaks: copy.honorLayoutBreaks
         )
