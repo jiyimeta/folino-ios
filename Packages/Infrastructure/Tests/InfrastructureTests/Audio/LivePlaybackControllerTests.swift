@@ -53,7 +53,7 @@ import Testing
 
     // MARK: - Loop bounds
 
-    @Test func loopBoundsUsesBeatRangeWhenEndIsNotLastMeasure() {
+    @Test func loopBoundsResolvesToFirstAndLastItemIDsAcrossMeasures() {
         let score = makeMeasureScore(measureCount: 4)
         let range = ABRepeatRange(
             start: ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 0),
@@ -62,35 +62,50 @@ import Testing
 
         let bounds = LivePlaybackController.loopBounds(for: range, in: score)
 
-        guard case let .beatRange(start, end) = bounds else {
-            Issue.record("expected .beatRange, got \(String(describing: bounds))")
-            return
+        // Each measure in `makeMeasureScore` carries a single quarter-note
+        // rest at element index 0. Both endpoints resolve to .rest IDs.
+        if case let .rest(startID) = bounds?.start {
+            #expect(startID.measureIndex == 1)
+            #expect(startID.elementIndex == 0)
+        } else {
+            Issue.record("expected .rest start, got \(String(describing: bounds?.start))")
         }
-        #expect(start == .beat(measureIndex: 1, tickInMeasure: 0))
-        #expect(end == .beat(measureIndex: 3, tickInMeasure: 0))
+        if case let .rest(lastID) = bounds?.last {
+            #expect(lastID.measureIndex == 2)
+            #expect(lastID.elementIndex == 0)
+        } else {
+            Issue.record("expected .rest last, got \(String(describing: bounds?.last))")
+        }
     }
 
-    @Test func loopBoundsUsesThroughEndOfWhenEndIsLastMeasure() {
-        let score = makeMeasureScore(measureCount: 3)
+    @Test func loopBoundsReturnsNilWhenEndMeasurePastScore() {
+        let score = makeMeasureScore(measureCount: 2)
         let range = ABRepeatRange(
-            start: ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 0),
-            end: ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0)
+            start: ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0),
+            end: ChordPath(systemIndex: 0, measureIndex: 5, voiceIndex: 0, chordIndex: 0)
         )
 
-        let bounds = LivePlaybackController.loopBounds(for: range, in: score)
+        #expect(LivePlaybackController.loopBounds(for: range, in: score) == nil)
+    }
 
-        guard case let .throughEndOf(start, last) = bounds else {
-            Issue.record("expected .throughEndOf, got \(String(describing: bounds))")
-            return
-        }
-        #expect(start == .beat(measureIndex: 1, tickInMeasure: 0))
-        // The last element in measure 2 is a quarter-note rest at element index 0.
-        if case let .rest(restID) = last {
-            #expect(restID.measureIndex == 2)
-            #expect(restID.voiceIndex == 0)
-            #expect(restID.elementIndex == 0)
+    @Test func firstScoreItemIDReturnsNoteIDForChordWithNotes() {
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
+        let measure = Measure(voices: [
+            Voice(elements: [.chord(chord), .rest(duration: .quarter)]),
+        ])
+        let score = makeSingleMeasureScore(measure: measure)
+
+        let id = LivePlaybackController.firstScoreItemID(inMeasure: 0, of: score)
+
+        if case let .note(noteID) = id {
+            #expect(noteID.measureIndex == 0)
+            #expect(noteID.elementIndex == 0)
+            #expect(noteID.noteIndexInChord == 0)
         } else {
-            Issue.record("expected .rest, got \(last)")
+            Issue.record("expected .note, got \(String(describing: id))")
         }
     }
 
@@ -106,13 +121,7 @@ import Testing
         let measure = Measure(voices: [
             Voice(elements: [.rest(duration: .quarter), .chord(chord)]),
         ])
-        let staff = Staff(measures: [measure])
-        let part = Part(
-            id: "P0",
-            instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
-            staves: [staff]
-        )
-        let score = Score(division: 480, parts: [part])
+        let score = makeSingleMeasureScore(measure: measure)
 
         let id = LivePlaybackController.lastScoreItemID(inMeasure: 0, of: score)
 
@@ -127,13 +136,7 @@ import Testing
 
     @Test func lastScoreItemIDReturnsNilForMeasureWithNoChordElements() {
         let measure = Measure(voices: [Voice(elements: [])])
-        let staff = Staff(measures: [measure])
-        let part = Part(
-            id: "P0",
-            instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
-            staves: [staff]
-        )
-        let score = Score(division: 480, parts: [part])
+        let score = makeSingleMeasureScore(measure: measure)
 
         let id = LivePlaybackController.lastScoreItemID(inMeasure: 0, of: score)
         #expect(id == nil)
@@ -190,8 +193,7 @@ private func firstChannel(of score: Score, partIndex: Int) -> InstrumentChannel 
 }
 
 /// Builds a single-part, single-staff score with `measureCount` measures,
-/// each containing a single quarter-note chord on voice 0. Just enough
-/// shape for the loop-bounds helpers to walk; no actual notes (rests are
+/// each containing a single quarter-note rest on voice 0 (rests are
 /// the unified empty-chord representation, which is what the cursor
 /// timeline keys via `.rest(RestID)`).
 private func makeMeasureScore(measureCount: Int) -> Score {
@@ -199,6 +201,19 @@ private func makeMeasureScore(measureCount: Int) -> Score {
         Measure(voices: [Voice(elements: [.rest(duration: .quarter)])])
     }
     let staff = Staff(measures: measures)
+    let part = Part(
+        id: "P0",
+        instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+        staves: [staff]
+    )
+    return Score(division: 480, parts: [part])
+}
+
+/// Builds a single-part, single-staff, single-measure score with the
+/// given `Measure`. Used by `firstScoreItemID` / `lastScoreItemID`
+/// tests that need to specify exact voice content.
+private func makeSingleMeasureScore(measure: Measure) -> Score {
+    let staff = Staff(measures: [measure])
     let part = Part(
         id: "P0",
         instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
