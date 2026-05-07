@@ -506,6 +506,7 @@ extension ReaderViewModel {
     public func advanceRepeatMode() async {
         let next = preferences.repeatMode.next
         await mutatePreferences { $0.repeatMode = next }
+        await forwardLoopRangeToController()
     }
 
     public func setRepeatA() async {
@@ -515,6 +516,7 @@ extension ReaderViewModel {
         let head = snapMeasureHead(measureIndex: measure, in: score)
         pendingA = head
         await commitPendingRepeat()
+        await forwardLoopRangeToController()
     }
 
     public func setRepeatB() async {
@@ -524,6 +526,7 @@ extension ReaderViewModel {
         guard let end = snapMeasureEnd(measureIndex: measure, in: score) else { return }
         pendingB = end
         await commitPendingRepeat()
+        await forwardLoopRangeToController()
     }
 
     public func clearRepeatA() async {
@@ -532,6 +535,7 @@ extension ReaderViewModel {
             pendingB = existing.end
             await mutatePreferences { $0.abRepeat = nil }
         }
+        await forwardLoopRangeToController()
     }
 
     public func clearRepeatB() async {
@@ -540,6 +544,21 @@ extension ReaderViewModel {
             pendingA = existing.start
             await mutatePreferences { $0.abRepeat = nil }
         }
+        await forwardLoopRangeToController()
+    }
+
+    private func forwardLoopRangeToController() async {
+        guard let controller = playbackController,
+              case let .loaded(score) = loadState else { return }
+        let range: ABRepeatRange? = switch preferences.repeatMode {
+        case .off:
+            nil
+        case .loopAll:
+            scoreFullRange(in: score)
+        case .abLoop:
+            return preferences.abRepeat
+        }
+        await controller.setLoopRange(range)
     }
 
     private func commitPendingRepeat() async {

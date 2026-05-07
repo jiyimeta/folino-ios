@@ -130,4 +130,52 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.abRepeat == nil)
         #expect(vm.pendingRepeatA?.measureIndex == 1)
     }
+
+    @Test func advanceRepeatModeForwardsLoopRange() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+
+        await vm.advanceRepeatMode() // .off -> .loopAll
+        #expect(controller.loopRangeCalls.last??.start.measureIndex == 0)
+
+        await vm.advanceRepeatMode() // .loopAll -> .abLoop with no markers
+        #expect(controller.loopRangeCalls.last == .some(nil))
+
+        await vm.advanceRepeatMode() // .abLoop -> .off
+        #expect(controller.loopRangeCalls.last == .some(nil))
+    }
+
+    @Test func setRepeatAOnlyDoesNotForwardLoopRangeYet() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode() // .loopAll
+        await vm.advanceRepeatMode() // .abLoop
+        let countBefore = controller.loopRangeCalls.count
+        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+
+        await vm.setRepeatA()
+
+        // One additional call recorded, value is `nil` (B still unset).
+        #expect(controller.loopRangeCalls.count == countBefore + 1)
+        #expect(controller.loopRangeCalls.last == .some(nil))
+    }
+
+    @Test func bothMarkersSetForwardsTheNormalizedRange() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode() // .loopAll
+        await vm.advanceRepeatMode() // .abLoop
+        vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        await vm.setRepeatA()
+        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+
+        await vm.setRepeatB()
+
+        // Auto-swap: B at m0 + A at m2 -> normalized start=m0, end=m2.
+        // loopRangeCalls is [ABRepeatRange?]; .last is (ABRepeatRange?)?
+        // flatMap collapses to ABRepeatRange? (outer=no calls, inner=nil call).
+        let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap { $0 }
+        #expect(last?.start.measureIndex == 0)
+        #expect(last?.end.measureIndex == 2)
+    }
 }
