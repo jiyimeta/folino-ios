@@ -486,3 +486,67 @@ public final class ReaderViewModel {
         return (error as NSError).localizedDescription
     }
 }
+
+extension ReaderViewModel {
+    /// Effective GM program for a part. All staves under a part share the
+    /// part's instrument, so we report the first staff's effective program
+    /// (or the score default when no override exists).
+    public func effectiveProgram(forPartIndex partIndex: Int) -> Int {
+        let firstAddress = StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
+        return effectiveProgram(for: firstAddress)
+    }
+
+    public func hasProgramOverride(forPartIndex partIndex: Int) -> Bool {
+        partStaffAddresses(forPartIndex: partIndex)
+            .contains { preferences.staffProgramOverrides[$0] != nil }
+    }
+
+    /// Set a program override for every staff under the part. Each staff has
+    /// its own engine voice, so we have to fan out — but to the user it
+    /// reads as one "this part's instrument" choice.
+    public func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
+        let addresses = partStaffAddresses(forPartIndex: partIndex)
+        guard !addresses.isEmpty else { return }
+        await mutatePreferences { prefs in
+            for address in addresses {
+                prefs.staffProgramOverrides[address] = program
+            }
+        }
+        for address in addresses {
+            guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+            await playbackController?.setStaffInstrument(
+                staff: flatIndex,
+                bank: scoreDefaultBank(for: address) ?? 0,
+                program: program
+            )
+        }
+    }
+
+    public func clearPartProgramOverride(forPartIndex partIndex: Int) async {
+        let addresses = partStaffAddresses(forPartIndex: partIndex)
+        guard !addresses.isEmpty else { return }
+        await mutatePreferences { prefs in
+            for address in addresses {
+                prefs.staffProgramOverrides.removeValue(forKey: address)
+            }
+        }
+        for address in addresses {
+            guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+            await playbackController?.setStaffInstrument(
+                staff: flatIndex,
+                bank: scoreDefaultBank(for: address) ?? 0,
+                program: scoreDefaultProgram(for: address) ?? 0
+            )
+        }
+    }
+
+    private func partStaffAddresses(forPartIndex partIndex: Int) -> [StaffAddress] {
+        guard
+            case let .loaded(score) = loadState,
+            score.parts.indices.contains(partIndex)
+        else { return [] }
+        return score.parts[partIndex].staves.indices.map { staffIndex in
+            StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+        }
+    }
+}

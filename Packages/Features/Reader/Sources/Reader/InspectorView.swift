@@ -14,7 +14,7 @@ struct InspectorView: View {
     @State private var sliderValue: Double = 1.0
     @State private var isEditingTempo: Bool = false
     @Environment(\.horizontalSizeClass) private var hsc
-    @State private var selectedTab: InspectorTab = .visual
+    @State private var selectedTab: InspectorTab = .playback
 
     var body: some View {
         Group {
@@ -77,9 +77,13 @@ struct InspectorView: View {
                     staffRow(address: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex))
                 }
             } header: {
-                Text(part.instrument.longName ?? part.trackName ?? "-")
-                    .font(.headline)
-                    .padding(.bottom, -8)
+                HStack {
+                    Text(part.instrument.longName ?? part.trackName ?? "-")
+                        .font(.headline)
+
+                    programPicker(partIndex: partIndex)
+                }
+                .padding(.bottom, -8)
             }
             .headerProminence(.increased)
             .padding(.bottom, -8)
@@ -240,23 +244,22 @@ struct InspectorView: View {
                 }
                 visibilityButton(address: address)
             }
-            programPicker(address: address)
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
 
     @ViewBuilder
-    private func programPicker(address: StaffAddress) -> some View {
-        let program = viewModel.effectiveProgram(for: address)
-        let hasOverride = viewModel.hasProgramOverride(for: address)
+    private func programPicker(partIndex: Int) -> some View {
+        let program = viewModel.effectiveProgram(forPartIndex: partIndex)
+        let hasOverride = viewModel.hasProgramOverride(forPartIndex: partIndex)
         HStack(spacing: 6) {
             Image(systemName: "music.note.list")
                 .foregroundStyle(.secondary)
             Menu {
                 if hasOverride {
                     Button {
-                        Task { await viewModel.clearStaffProgramOverride(for: address) }
+                        Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
                     } label: {
                         Label("Reset to default", systemImage: "arrow.uturn.backward")
                     }
@@ -267,8 +270,8 @@ struct InspectorView: View {
                         ForEach(family.programs) { instrument in
                             Button {
                                 Task {
-                                    await viewModel.setStaffProgram(
-                                        Int(instrument.program), for: address
+                                    await viewModel.setPartProgram(
+                                        Int(instrument.program), forPartIndex: partIndex
                                     )
                                 }
                             } label: {
