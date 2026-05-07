@@ -20,8 +20,10 @@ func snapMeasureHead(measureIndex: Int, in _: Score) -> ChordPath {
 }
 
 /// Last-chord ChordPath for the given measure. Walks voice 0 of the
-/// first staff to find the maximum chord index. Returns `nil` when the
-/// measure has no chords (e.g. all-rest measure, empty fixture).
+/// first staff to find the maximum chord index. Rests are represented
+/// as `.chord(...)` with empty notes and count for this purpose;
+/// purely non-chord measures (only clef / time signature / etc.) and
+/// empty voices return `nil`.
 func snapMeasureEnd(measureIndex: Int, in score: Score) -> ChordPath? {
     guard let part = score.parts.first,
           let staff = part.staves.first,

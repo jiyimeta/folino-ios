@@ -5,9 +5,10 @@ import Testing
 
 @Suite
 struct RepeatLoopHelpersTests {
-    /// One quarter-note rest element. Rests work for these tests since
-    /// the snap helpers treat any `.chord(_)` element (including
-    /// empty-notes rests) as a chord position.
+    /// One quarter-note element used to populate measure fixtures.
+    /// `VoiceElement.rest(duration:)` is sugar for
+    /// `.chord(Chord(duration: ..., notes: []))`, so the fixture is
+    /// composed of `.chord(_)` elements — what `snapMeasureEnd` matches.
     private static func element() -> VoiceElement {
         .rest(duration: .quarter)
     }
