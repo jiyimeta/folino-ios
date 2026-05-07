@@ -207,6 +207,10 @@ struct InspectorView: View {
                 }
             }
             .padding(.vertical, -8)
+
+            RepeatModeButton(mode: viewModel.repeatMode) {
+                await viewModel.advanceRepeatMode()
+            }
         }
     }
 
