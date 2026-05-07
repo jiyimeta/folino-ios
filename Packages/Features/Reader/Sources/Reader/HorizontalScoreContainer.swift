@@ -40,6 +40,11 @@ struct HorizontalScoreContainer: View {
                             .coordinateSpace(name: "scoreSurface")
                             .gesture(tapSeekGesture(document: doc))
                             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
+
+                            if viewModel.repeatMode == .abLoop {
+                                LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
+                            }
+
                             HorizontalMeasureAnchors(document: doc)
                         }
                         .frame(minHeight: proxy.size.height)
