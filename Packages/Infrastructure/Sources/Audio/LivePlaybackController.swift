@@ -139,6 +139,17 @@ public final class LivePlaybackController: Domain.PlaybackController {
         return needed.isSubset(of: cachedKeys)
     }
 
+    // swiftlint:disable unavailable_function
+    public func isSoundfontCached(bank _: Int, program _: Int, isDrums _: Bool) -> Bool {
+        fatalError("Implemented in Task 2")
+    }
+
+    public func prefetchSoundfont(bank _: Int, program _: Int, isDrums _: Bool) throws {
+        fatalError("Implemented in Task 2")
+    }
+
+    // swiftlint:enable unavailable_function
+
     private static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
         var keys: Set<SoundfontPatchKey> = []
         for entry in score.allStaves {
