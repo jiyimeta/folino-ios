@@ -105,7 +105,9 @@ public final class ReaderViewModel {
     public func startObservingCursor() {
         guard let controller = playbackController else { return }
         controller.observeCursor { [weak self] value in
-            self?.playbackCursor = value
+            guard let self else { return }
+            playbackCursor = value
+            evaluateLoopWrap(for: value)
         }
     }
 
@@ -561,6 +563,38 @@ extension ReaderViewModel {
             preferences.abRepeat
         }
         await controller.setLoopRange(range)
+    }
+
+    private func evaluateLoopWrap(for cursor: ScoreCursor?) {
+        guard isPlaying,
+              case let .loaded(score) = loadState else { return }
+
+        let active: ABRepeatRange? = switch preferences.repeatMode {
+        case .off:
+            nil
+        case .loopAll:
+            scoreFullRange(in: score)
+        case .abLoop:
+            preferences.abRepeat
+        }
+        guard let range = active else { return }
+
+        // Treat a nil cursor while we believe ourselves to be playing as a
+        // natural-end signal: wrap to the loop start.
+        if cursor == nil {
+            seekToLoopStart(range)
+            return
+        }
+        if let cursor, measureIndex(of: cursor) > range.end.measureIndex {
+            seekToLoopStart(range)
+        }
+    }
+
+    private func seekToLoopStart(_ range: ABRepeatRange) {
+        let startCursor = ScoreCursor.beat(
+            measureIndex: range.start.measureIndex, tickInMeasure: 0
+        )
+        setManualCursor(startCursor)
     }
 
     private func commitPendingRepeat() async {

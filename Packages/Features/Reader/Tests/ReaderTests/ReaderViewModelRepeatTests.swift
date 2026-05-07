@@ -178,4 +178,94 @@ struct ReaderViewModelRepeatTests {
         #expect(last?.start.measureIndex == 0)
         #expect(last?.end.measureIndex == 2)
     }
+
+    @Test func cursorPastEndDuringPlaybackSeeksToStartOfA() async throws {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode() // .loopAll
+        await vm.advanceRepeatMode() // .abLoop
+        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        await vm.setRepeatA()
+        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        await vm.setRepeatB()
+        vm.startObservingCursor()
+
+        // Begin playback so the wrap gate (`isPlaying`) opens.
+        await vm.togglePlayback()
+        let setCursorCountBefore = controller.recordedSetCursorCalls.count
+
+        // Engine emits a cursor in m=2 — past the loop end of m=1.
+        controller.emitCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        await Task.yield()
+
+        let lastSeek = controller.recordedSetCursorCalls.last
+        #expect(controller.recordedSetCursorCalls.count == setCursorCountBefore + 1)
+        if case let .beat(measureIndex, tick) = lastSeek {
+            #expect(measureIndex == 0)
+            #expect(tick == 0)
+        } else {
+            Issue.record("expected a .beat cursor seek")
+        }
+    }
+
+    @Test func cursorWithinLoopDoesNotTriggerSeek() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode()
+        await vm.advanceRepeatMode()
+        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        await vm.setRepeatA()
+        vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        await vm.setRepeatB()
+        vm.startObservingCursor()
+        await vm.togglePlayback()
+        let setCursorCountBefore = controller.recordedSetCursorCalls.count
+
+        controller.emitCursor(.beat(measureIndex: 1, tickInMeasure: 240))
+        await Task.yield()
+
+        #expect(controller.recordedSetCursorCalls.count == setCursorCountBefore)
+    }
+
+    @Test func cursorWrapDoesNotFireWhilePaused() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode()
+        await vm.advanceRepeatMode()
+        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        await vm.setRepeatA()
+        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        await vm.setRepeatB()
+        vm.startObservingCursor()
+        // Note: NOT calling togglePlayback — isPlaying stays false.
+        // Drain any pending Tasks (e.g. the setManualCursor dispatches) so
+        // the `before` baseline is stable before the emit.
+        await Task.yield()
+        let before = controller.recordedSetCursorCalls.count
+
+        controller.emitCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        await Task.yield()
+
+        #expect(controller.recordedSetCursorCalls.count == before)
+    }
+
+    @Test func nilCursorDuringLoopAllPlaybackWrapsToStart() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode() // .loopAll
+        vm.startObservingCursor()
+        await vm.togglePlayback()
+        let before = controller.recordedSetCursorCalls.count
+
+        // Engine signals end of score by nilling the cursor.
+        controller.emitCursor(nil)
+        await Task.yield()
+
+        #expect(controller.recordedSetCursorCalls.count == before + 1)
+        if case let .beat(measureIndex, _) = controller.recordedSetCursorCalls.last {
+            #expect(measureIndex == 0)
+        } else {
+            Issue.record("expected a .beat cursor seek to measure 0")
+        }
+    }
 }
