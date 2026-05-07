@@ -395,13 +395,19 @@ public final class ReaderViewModel {
 
     // MARK: - Repeat / loop
 
+    /// Staged A endpoint not yet committed (incomplete loop). `@ObservationIgnored`
+    /// because UI reads the public `pendingRepeatA` accessor instead.
+    @ObservationIgnored
+    var pendingA: ChordPath?
+    /// Staged B endpoint not yet committed (incomplete loop). `@ObservationIgnored`
+    /// because UI reads the public `pendingRepeatB` accessor instead.
+    @ObservationIgnored
+    var pendingB: ChordPath?
+
     public var repeatMode: RepeatMode { preferences.repeatMode }
     public var abRepeat: ABRepeatRange? { preferences.abRepeat }
-
-    public func advanceRepeatMode() async {
-        let next = preferences.repeatMode.next
-        await mutatePreferences { $0.repeatMode = next }
-    }
+    public var pendingRepeatA: ChordPath? { pendingA ?? preferences.abRepeat?.start }
+    public var pendingRepeatB: ChordPath? { pendingB ?? preferences.abRepeat?.end }
 
     // MARK: - Private
 
@@ -449,7 +455,7 @@ public final class ReaderViewModel {
         try? await repository.saveReaderPreferences(seeded)
     }
 
-    private func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
+    func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
         var copy = preferences
         apply(&copy)
         // Re-seat through the initializer so clamping rules in
