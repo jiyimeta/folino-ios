@@ -197,6 +197,17 @@ struct ReaderViewModelTests {
         #expect(vm.volume(for: address) == 1.0)
     }
 
+    @Test func setVolumeClampsOutOfRangeValues() {
+        let vm = makeVMNoLoad()
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
+        vm.setVolume(-0.5, for: address)
+        #expect(vm.liveStaffVolumes[address] == 0)
+
+        vm.setVolume(2.0, for: address)
+        #expect(vm.liveStaffVolumes[address] == 1)
+    }
+
     @Test func volumeUsesScoreCC7WhenNoOverride() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
