@@ -49,6 +49,9 @@ struct ReaderBottomOverlay: View {
                 }
             }
             Spacer()
+            if viewModel.repeatMode == .abLoop {
+                ABPill(viewModel: viewModel)
+            }
         }
         .padding()
     }
