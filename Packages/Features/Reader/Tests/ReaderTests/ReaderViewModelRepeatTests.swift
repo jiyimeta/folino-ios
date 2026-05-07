@@ -295,6 +295,60 @@ struct ReaderViewModelRepeatTests {
         #expect(controller.playCount == 1)
     }
 
+    @Test func rapidPastEndCursorEmissionsTriggerOnlyOneSeek() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode()
+        await vm.advanceRepeatMode()
+        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        await vm.setRepeatA()
+        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        await vm.setRepeatB()
+        vm.startObservingCursor()
+        await vm.togglePlayback()
+        let before = controller.recordedSetCursorCalls.count
+
+        // Engine emits past-B cursors at ~30Hz before our wrap seek lands.
+        // We should issue exactly ONE seek, not one per stale emission.
+        controller.emitCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        controller.emitCursor(.beat(measureIndex: 2, tickInMeasure: 120))
+        controller.emitCursor(.beat(measureIndex: 2, tickInMeasure: 240))
+        controller.emitCursor(.beat(measureIndex: 3, tickInMeasure: 0))
+        await Task.yield()
+
+        #expect(controller.recordedSetCursorCalls.count == before + 1)
+    }
+
+    @Test func wrapReArmsAfterCursorReturnsInsideLoop() async {
+        let (vm, controller, _) = Self.makeVM()
+        await vm.load()
+        await vm.advanceRepeatMode()
+        await vm.advanceRepeatMode()
+        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        await vm.setRepeatA()
+        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        await vm.setRepeatB()
+        vm.startObservingCursor()
+        await vm.togglePlayback()
+        let before = controller.recordedSetCursorCalls.count
+
+        // First exit → one seek.
+        controller.emitCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        await Task.yield()
+        #expect(controller.recordedSetCursorCalls.count == before + 1)
+
+        // Engine settles back inside the loop (the seek landed).
+        controller.emitCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        await Task.yield()
+        // Still one seek total — re-arm shouldn't fire a wrap on its own.
+        #expect(controller.recordedSetCursorCalls.count == before + 1)
+
+        // Second exit later → second seek.
+        controller.emitCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        await Task.yield()
+        #expect(controller.recordedSetCursorCalls.count == before + 2)
+    }
+
     @Test func persistedAbRepeatIsSeededIntoControllerOnPlaybackPrep() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()

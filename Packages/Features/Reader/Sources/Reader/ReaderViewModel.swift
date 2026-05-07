@@ -402,6 +402,13 @@ public final class ReaderViewModel {
     private var pendingA: ChordPath?
     /// Staged B endpoint not yet committed (incomplete loop).
     private var pendingB: ChordPath?
+    /// True between issuing a wrap-to-A seek and observing the engine
+    /// emit a cursor back inside the loop. Suppresses the wrap from
+    /// re-firing on the engine's stale past-B cursor emissions, which
+    /// would otherwise queue dozens of `play(from:in:)` calls per
+    /// second and thrash the AVAudioSequencer into a halt/restart loop.
+    @ObservationIgnored
+    private var isHandlingLoopWrap: Bool = false
 
     public var repeatMode: RepeatMode { preferences.repeatMode }
     public var abRepeat: ABRepeatRange? { preferences.abRepeat }
@@ -563,17 +570,38 @@ extension ReaderViewModel {
     }
 
     private func evaluateLoopWrap(for cursor: ScoreCursor?) {
-        guard isPlaying,
-              case let .loaded(score) = loadState,
-              let range = activeLoopRange(in: score) else { return }
+        guard isPlaying else {
+            // Paused (or never started) — clear suppression so the next
+            // playback session re-arms wrap detection.
+            isHandlingLoopWrap = false
+            return
+        }
+        guard case let .loaded(score) = loadState,
+              let range = activeLoopRange(in: score)
+        else {
+            // Mode flipped or score unloaded mid-wrap — drop the suppression so
+            // the next entry into a loop starts fresh.
+            isHandlingLoopWrap = false
+            return
+        }
+
+        // Re-arm the wrap when we observe a cursor that's actually inside the
+        // loop. This is the engine's confirmation that our previous seek landed.
+        if let cursor, measureIndex(of: cursor) <= range.end.measureIndex {
+            isHandlingLoopWrap = false
+        }
+
+        guard !isHandlingLoopWrap else { return }
 
         // Treat a nil cursor while we believe ourselves to be playing as a
         // natural-end signal: wrap to the loop start.
         if cursor == nil {
+            isHandlingLoopWrap = true
             seekToLoopStart(range)
             return
         }
         if let cursor, measureIndex(of: cursor) > range.end.measureIndex {
+            isHandlingLoopWrap = true
             seekToLoopStart(range)
         }
     }
