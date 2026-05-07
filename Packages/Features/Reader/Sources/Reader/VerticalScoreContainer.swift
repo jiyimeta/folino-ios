@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -35,6 +36,7 @@ import SwiftUI
 struct VerticalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
+    let honorLayoutBreaks: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -94,7 +96,8 @@ struct VerticalScoreContainer: View {
             let layoutWidth = max(proxy.size.width, staffSize * 4)
             scrollContent(viewport: proxy.size)
                 .task(id: TaskKey(
-                    score: score, size: staffSize, width: layoutWidth
+                    score: score, size: staffSize, width: layoutWidth,
+                    honorLayoutBreaks: honorLayoutBreaks
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }
@@ -106,6 +109,16 @@ struct VerticalScoreContainer: View {
         ScrollView([.vertical, .horizontal]) {
             zoomedSurface(viewport: viewport)
         }
+        // Pin the score's top-leading to the viewport's top-leading. Without
+        // this, the ScrollView's default anchor preserves the content's
+        // *centre* across size changes — and our content goes from 0×0
+        // (`Color.clear` while `document == nil`) to the full layout size
+        // once `rebuildLayout` finishes. Center-anchoring that growth
+        // visibly opens the score around the middle of the page on first
+        // paint. iPad makes it more obvious because `NavigationSplitView`
+        // re-runs the geometry pass as the detail column negotiates width,
+        // re-firing layout and growing the content size each time.
+        .defaultScrollAnchor(.topLeading)
         .scrollPosition($scrollPosition, anchor: .topLeading)
         .simultaneousGesture(doubleTapGesture)
         .onScrollGeometryChange(for: CGPoint.self) { geometry in
@@ -175,9 +188,8 @@ struct VerticalScoreContainer: View {
     private func scoreSurface(document doc: LayoutDocument) -> some View {
         ZStack(alignment: .topLeading) {
             ScoreView(
-                document: doc, score: score,
-                playbackCursor: playbackCursor,
-                playbackCursorColor: .accentColor
+                document: doc, score: score, options: scoreOptions,
+                playbackCursor: playbackCursor, playbackCursorColor: .accentColor
             )
             .coordinateSpace(name: "scoreSurface")
             .gesture(tapSeekGesture(document: doc))
@@ -290,16 +302,18 @@ struct VerticalScoreContainer: View {
             }
     }
 
-    private func rebuildLayout(width: CGFloat) {
-        let opts = ScoreViewOptions(
-            staffSize: staffSize,
-            systemGap: staffSize * 1.25,
-            wrapToViewWidth: true,
-            includeTitleFrame: true,
+    private var scoreOptions: ScoreViewOptions {
+        ScoreViewOptions(
+            staffSize: staffSize, systemGap: staffSize * 1.25,
+            wrapToViewWidth: true, includeTitleFrame: true,
+            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
             showBreakIndicators: false
         )
+    }
+
+    private func rebuildLayout(width: CGFloat) {
         document = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: width
+            score: score, options: scoreOptions, availableWidth: width
         )
         lastWidth = width
     }
@@ -377,8 +391,9 @@ struct VerticalScoreContainer: View {
         let scoreSignature: Int
         let size: CGFloat
         let width: CGFloat
+        let honorLayoutBreaks: Bool
 
-        init(score: Score, size: CGFloat, width: CGFloat) {
+        init(score: Score, size: CGFloat, width: CGFloat, honorLayoutBreaks: Bool) {
             // `Score` is Equatable but not Hashable. Use a cheap
             // identity proxy: parts.count + total staves + division.
             scoreSignature = score.parts.count
@@ -386,6 +401,7 @@ struct VerticalScoreContainer: View {
                 ^ (score.division << 16)
             self.size = size
             self.width = width
+            self.honorLayoutBreaks = honorLayoutBreaks
         }
     }
 }

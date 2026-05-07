@@ -7,6 +7,10 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private let soundfontResolver: (any SoundfontResolver)?
     private let presetCatalog: (any SoundfontPresetCatalog)?
     @Environment(\.dismiss) private var dismiss
+    @State private var isFeedbackMailPresented = false
+    @State private var feedbackMailResult: FeedbackMailComposeResult?
+    @State private var isMailSavedAlertPresented = false
+    @State private var isMailFailedAlertPresented = false
 
     public init(
         soundfontResolver: (any SoundfontResolver)? = nil,
@@ -22,34 +26,81 @@ public struct SettingsSheet<LicenseContent: View>: View {
         NavigationStack {
             Form {
                 if let soundfontResolver {
-                    Section("Storage") {
-                        NavigationLink {
-                            SoundfontCacheView(
-                                resolver: soundfontResolver,
-                                presetCatalog: presetCatalog
-                            )
-                        } label: {
-                            Label("Soundfont Cache", systemImage: "tray.full")
-                        }
-                    }
+                    storageSection(resolver: soundfontResolver)
                 }
-                Section("About") {
-                    NavigationLink {
-                        licenseContent()
-                            .navigationTitle("Licenses")
-                        #if os(iOS)
-                            .navigationBarTitleDisplayMode(.inline)
-                        #endif
-                    } label: {
-                        Label("Licenses", systemImage: "doc.text")
-                    }
-                }
+                aboutSection
             }
-            .navigationTitle("Settings")
+            .navigationTitle(Text("Settings", bundle: .module))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
                 .toolbar { doneToolbar }
+                .sheet(isPresented: $isFeedbackMailPresented) {
+                    FeedbackMailView(result: $feedbackMailResult)
+                }
+                .alert("Mail Saved to Drafts", isPresented: $isMailSavedAlertPresented) {
+                    Button("OK", role: .cancel) {}
+                }
+                .alert("Mail Delivery Failed", isPresented: $isMailFailedAlertPresented) {
+                    Button("OK", role: .cancel) {}
+                }
+                .onChange(of: feedbackMailResult) { _, newValue in
+                    switch newValue {
+                    case .saved:
+                        isMailSavedAlertPresented = true
+                    case .failed:
+                        isMailFailedAlertPresented = true
+                    case .cancelled, .sent, nil:
+                        break
+                    }
+                }
+        }
+    }
+
+    private func storageSection(resolver: any SoundfontResolver) -> some View {
+        Section {
+            NavigationLink {
+                SoundfontCacheView(resolver: resolver, presetCatalog: presetCatalog)
+            } label: {
+                Label {
+                    Text("Soundfont Cache", bundle: .module)
+                } icon: {
+                    Image(systemName: "tray.full")
+                }
+            }
+        } header: {
+            Text("Storage", bundle: .module)
+        }
+    }
+
+    private var aboutSection: some View {
+        Section {
+            NavigationLink {
+                licenseContent()
+                    .navigationTitle(Text("Licenses", bundle: .module))
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                #endif
+            } label: {
+                Label {
+                    Text("Licenses", bundle: .module)
+                } icon: {
+                    Image(systemName: "doc.text")
+                }
+            }
+
+            Button {
+                isFeedbackMailPresented = true
+            } label: {
+                Label {
+                    Text("Send Feedback", bundle: .module)
+                } icon: {
+                    Image(systemName: "envelope")
+                }
+            }
+            .disabled(!FeedbackMailView.canSendMail)
+        } header: {
+            Text("About", bundle: .module)
         }
     }
 
@@ -57,11 +108,11 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private var doneToolbar: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #endif
     }

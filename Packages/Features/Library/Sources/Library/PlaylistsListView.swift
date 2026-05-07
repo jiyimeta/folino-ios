@@ -11,9 +11,13 @@ struct PlaylistsListView: View {
         Group {
             if sortedPlaylists.isEmpty {
                 ContentUnavailableView {
-                    Label("No Playlists", systemImage: "music.note.list")
+                    Label {
+                        Text("No Playlists", bundle: .module)
+                    } icon: {
+                        Image(systemName: "music.note.list")
+                    }
                 } description: {
-                    Text("Create a playlist with the + button above.")
+                    Text("Create a playlist with the + button above.", bundle: .module)
                 }
             } else {
                 List {
@@ -33,14 +37,14 @@ struct PlaylistsListView: View {
                 }
             }
         }
-        .navigationTitle("Playlists")
+        .navigationTitle(Text("Playlists", bundle: .module))
         .toolbar { newPlaylistToolbar }
-        .alert("New Playlist", isPresented: $isCreating) {
-            TextField("Playlist name", text: $newPlaylistName)
-            Button("Add") { Task { await commit() } }
-            Button("Cancel", role: .cancel) {}
+        .alert(Text("New Playlist", bundle: .module), isPresented: $isCreating) {
+            TextField(text: $newPlaylistName) { Text("Playlist name", bundle: .module) }
+            Button { Task { await commit() } } label: { Text("Add", bundle: .module) }
+            Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
         } message: {
-            Text("Enter a name for the new playlist.")
+            Text("Enter a name for the new playlist.", bundle: .module)
         }
     }
 
@@ -58,7 +62,7 @@ struct PlaylistsListView: View {
             newPlaylistName = ""
             isCreating = true
         } label: {
-            Image(systemName: "plus").accessibilityLabel("New Playlist")
+            Image(systemName: "plus").accessibilityLabel(Text("New Playlist", bundle: .module))
         }
     }
 

@@ -17,6 +17,7 @@ import SwiftUI
 struct HorizontalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
+    let honorLayoutBreaks: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -30,10 +31,17 @@ struct HorizontalScoreContainer: View {
         GeometryReader { proxy in
             ScrollViewReader { scrollProxy in
                 ScrollView(.horizontal) {
+                    // Pin the leading edge so the score doesn't open
+                    // half-way across the page. See `VerticalScoreContainer`
+                    // for the fuller diagnosis — same root cause: the
+                    // ScrollView's content grows from `nil` to the full
+                    // natural width once `rebuildLayout` finishes, and the
+                    // default anchor preserves the *centre* across that
+                    // change.
                     if let doc = document {
                         ZStack(alignment: .topLeading) {
                             ScoreView(
-                                document: doc, score: score,
+                                document: doc, score: score, options: scoreOptions,
                                 playbackCursor: playbackCursor,
                                 playbackCursorColor: .accentColor
                             )
@@ -51,6 +59,7 @@ struct HorizontalScoreContainer: View {
                         .padding(scorePadding)
                     }
                 }
+                .defaultScrollAnchor(.leading)
                 .coordinateSpace(name: "hScroll")
                 .onPreferenceChange(HorizontalMeasureFramesKey.self) { frames in
                     measureFrames = frames
@@ -63,7 +72,10 @@ struct HorizontalScoreContainer: View {
                     )
                 }
             }
-            .task(id: TaskKey(score: score, size: staffSize)) {
+            .task(id: TaskKey(
+                score: score, size: staffSize,
+                honorLayoutBreaks: honorLayoutBreaks
+            )) {
                 rebuildLayout()
             }
         }
@@ -78,23 +90,22 @@ struct HorizontalScoreContainer: View {
             }
     }
 
-    private func rebuildLayout() {
-        // Horizontal mode: lay out at natural content width so systems
-        // never wrap. Title frame is omitted — it'd push the score
-        // down inside what is essentially a single long row.
-        let opts = ScoreViewOptions(
-            staffSize: staffSize,
-            systemGap: staffSize * 1.25,
-            wrapToViewWidth: false,
-            includeTitleFrame: false,
+    // Horizontal mode: lay out at natural content width so systems
+    // never wrap. Title frame is omitted — it'd push the score
+    // down inside what is essentially a single long row.
+    private var scoreOptions: ScoreViewOptions {
+        ScoreViewOptions(
+            staffSize: staffSize, systemGap: staffSize * 1.25,
+            wrapToViewWidth: false, includeTitleFrame: false,
+            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
             showBreakIndicators: false
         )
-        let natural = LayoutEngine.naturalContentWidth(
-            score: score, options: opts
-        )
-        document = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: natural
-        )
+    }
+
+    private func rebuildLayout() {
+        let opts = scoreOptions
+        let natural = LayoutEngine.naturalContentWidth(score: score, options: opts)
+        document = LayoutEngine.layout(score: score, options: opts, availableWidth: natural)
     }
 
     private func autoScroll(
@@ -137,12 +148,14 @@ struct HorizontalScoreContainer: View {
     private struct TaskKey: Hashable {
         let scoreSignature: Int
         let size: CGFloat
+        let honorLayoutBreaks: Bool
 
-        init(score: Score, size: CGFloat) {
+        init(score: Score, size: CGFloat, honorLayoutBreaks: Bool) {
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)
             self.size = size
+            self.honorLayoutBreaks = honorLayoutBreaks
         }
     }
 }

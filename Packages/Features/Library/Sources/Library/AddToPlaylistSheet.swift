@@ -32,13 +32,13 @@ struct AddToPlaylistSheet: View {
                     HStack {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(.tint)
-                        TextField("New playlist", text: $newPlaylistName)
+                        TextField(text: $newPlaylistName) { Text("New playlist", bundle: .module) }
                             .submitLabel(.done)
                             .onSubmit { Task { await commitNewPlaylist() } }
                     }
                 }
             }
-            .navigationTitle("Add \"\(scoreItem.title)\" to Playlist")
+            .navigationTitle(Text("Add \"\(scoreItem.title)\" to Playlist", bundle: .module))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -50,11 +50,11 @@ struct AddToPlaylistSheet: View {
     private var doneToolbar: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #endif
     }

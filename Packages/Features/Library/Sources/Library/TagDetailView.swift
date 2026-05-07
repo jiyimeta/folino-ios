@@ -43,21 +43,23 @@ struct TagDetailView: View {
         )
         .navigationTitle(tag.name)
         .toolbar { editMenuToolbar }
-        .alert("Rename Tag", isPresented: $isRenaming) {
-            TextField("Tag name", text: $renameText)
-            Button("Save") { Task { await commitRename() } }
-            Button("Cancel", role: .cancel) {}
+        .alert(Text("Rename Tag", bundle: .module), isPresented: $isRenaming) {
+            TextField(text: $renameText) { Text("Tag name", bundle: .module) }
+            Button { Task { await commitRename() } } label: { Text("Save", bundle: .module) }
+            Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
         }
         .alert(
-            "Delete \"\(tag.name)\"?",
+            Text("Delete \"\(tag.name)\"?", bundle: .module),
             isPresented: $isConfirmingDelete
         ) {
-            Button("Delete", role: .destructive) {
+            Button(role: .destructive) {
                 Task { await commitDelete() }
+            } label: {
+                Text("Delete", bundle: .module)
             }
-            Button("Cancel", role: .cancel) {}
+            Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
         } message: {
-            Text("Scores keep their data; only the tag and its assignments are removed.")
+            Text("Scores keep their data; only the tag and its assignments are removed.", bundle: .module)
         }
     }
 
@@ -75,13 +77,25 @@ struct TagDetailView: View {
             Button {
                 renameText = tag.name
                 isRenaming = true
-            } label: { Label("Rename…", systemImage: "pencil") }
+            } label: {
+                Label {
+                    Text("Rename…", bundle: .module)
+                } icon: {
+                    Image(systemName: "pencil")
+                }
+            }
             Button(role: .destructive) {
                 isConfirmingDelete = true
-            } label: { Label("Delete Tag", systemImage: "trash") }
+            } label: {
+                Label {
+                    Text("Delete Tag", bundle: .module)
+                } icon: {
+                    Image(systemName: "trash")
+                }
+            }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .accessibilityLabel("Edit Tag")
+                .accessibilityLabel(Text("Edit Tag", bundle: .module))
         }
     }
 

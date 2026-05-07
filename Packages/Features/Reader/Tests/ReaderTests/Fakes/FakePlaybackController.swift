@@ -52,6 +52,30 @@ final class FakePlaybackController: PlaybackController {
         soundfontsAvailableLocally
     }
 
+    /// Patches the fake reports as already on disk. Default: empty —
+    /// every pick is a cache miss unless the test seeds this set.
+    var cachedPatches: Set<SoundfontPatchKey> = []
+    private(set) var prefetchedPatches: [SoundfontPatchKey] = []
+    /// When true, `prefetchSoundfont` suspends until `Task.cancel()`
+    /// fires, throwing `CancellationError`. Mirrors
+    /// `blocksLoadUntilCancelled` for the per-patch path.
+    var blocksPrefetchUntilCancelled: Bool = false
+    var prefetchError: Error?
+
+    func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) -> Bool {
+        cachedPatches.contains(SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums))
+    }
+
+    func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) async throws {
+        if blocksPrefetchUntilCancelled {
+            try await Task.sleep(for: .seconds(60))
+        }
+        if let error = prefetchError { throw error }
+        let key = SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
+        prefetchedPatches.append(key)
+        cachedPatches.insert(key)
+    }
+
     func play() throws {
         if let error = playError { throw error }
         playCount += 1

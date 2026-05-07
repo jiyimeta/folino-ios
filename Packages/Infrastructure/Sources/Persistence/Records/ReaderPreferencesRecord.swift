@@ -14,6 +14,8 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     var staffSize: Double
     var hiddenStaffIds: String
     var staffProgramOverrides: String
+    var staffVolumeOverrides: String
+    var honorLayoutBreaks: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -21,6 +23,8 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         case staffSize = "staff_size"
         case hiddenStaffIds = "hidden_staff_ids"
         case staffProgramOverrides = "staff_program_overrides"
+        case staffVolumeOverrides = "staff_volume_overrides"
+        case honorLayoutBreaks = "honor_layout_breaks"
     }
 
     init(domain prefs: ReaderPreferences) {
@@ -37,6 +41,14 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         staffProgramOverrides = overridesData.flatMap {
             String(data: $0, encoding: .utf8)
         } ?? "[]"
+        let sortedVolumeOverrides = prefs.staffVolumeOverrides
+            .sorted { $0.key < $1.key }
+            .map { Self.encodeVolumeTriple(address: $0.key, volume: $0.value) }
+        let volumeOverridesData = try? JSONEncoder().encode(sortedVolumeOverrides)
+        staffVolumeOverrides = volumeOverridesData.flatMap {
+            String(data: $0, encoding: .utf8)
+        } ?? "[]"
+        honorLayoutBreaks = prefs.honorLayoutBreaks
     }
 
     func toDomain() throws -> ReaderPreferences {
@@ -61,16 +73,34 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             let address = StaffAddress(partIndex: triple[0], staffIndexInPart: triple[1])
             overrides[address] = triple[2]
         }
+        let decodedVolumeOverrides: [[Double]] = (try? JSONDecoder().decode(
+            [[Double]].self,
+            from: Data(staffVolumeOverrides.utf8)
+        )) ?? []
+        var volumeOverrides: [StaffAddress: Double] = [:]
+        for triple in decodedVolumeOverrides where triple.count == 3 {
+            let address = StaffAddress(
+                partIndex: Int(triple[0]),
+                staffIndexInPart: Int(triple[1])
+            )
+            volumeOverrides[address] = triple[2]
+        }
         return ReaderPreferences(
             id: ReaderPreferencesID(rawValue: idUUID),
             scoreItemID: ScoreItemID(rawValue: scoreUUID),
             staffSize: CGFloat(staffSize),
             hiddenStaves: Set(decodedHidden),
-            staffProgramOverrides: overrides
+            staffProgramOverrides: overrides,
+            staffVolumeOverrides: volumeOverrides,
+            honorLayoutBreaks: honorLayoutBreaks
         )
     }
 
     private static func encodeTriple(address: StaffAddress, program: Int) -> [Int] {
         [address.partIndex, address.staffIndexInPart, program]
+    }
+
+    private static func encodeVolumeTriple(address: StaffAddress, volume: Double) -> [Double] {
+        [Double(address.partIndex), Double(address.staffIndexInPart), volume]
     }
 }

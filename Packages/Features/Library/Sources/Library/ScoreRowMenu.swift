@@ -14,19 +14,32 @@ func scoreRowMenu(
     onRequestDelete: ((ScoreItem) -> Void)?
 ) -> some View {
     Button { onOpen(item) } label: {
-        Label("Open", systemImage: "music.note")
+        Label {
+            Text("Open", bundle: .module)
+        } icon: {
+            Image(systemName: "music.note")
+        }
     }
     Button { Task { await library.toggleFavorite(item) } } label: {
-        Label(
-            item.isFavorite ? "Unfavorite" : "Favorite",
-            systemImage: item.isFavorite ? "star.slash" : "star"
-        )
+        Label {
+            Text(item.isFavorite ? "Unfavorite" : "Favorite", bundle: .module)
+        } icon: {
+            Image(systemName: item.isFavorite ? "star.slash" : "star")
+        }
     }
     Button { onEditTags(item) } label: {
-        Label("Edit Tags…", systemImage: "tag")
+        Label {
+            Text("Edit Tags…", bundle: .module)
+        } icon: {
+            Image(systemName: "tag")
+        }
     }
     Button { onAddToPlaylist(item) } label: {
-        Label("Add to Playlist…", systemImage: "music.note.list")
+        Label {
+            Text("Add to Playlist…", bundle: .module)
+        } icon: {
+            Image(systemName: "music.note.list")
+        }
     }
 
     Divider()
@@ -35,7 +48,11 @@ func scoreRowMenu(
     if let onRequestDelete {
         Divider()
         Button(role: .destructive) { onRequestDelete(item) } label: {
-            Label("Delete", systemImage: "trash")
+            Label {
+                Text("Delete", bundle: .module)
+            } icon: {
+                Image(systemName: "trash")
+            }
         }
     }
 }
@@ -52,7 +69,11 @@ private func shareSubmenu(item: ScoreItem, library: LibraryViewModel) -> some Vi
             }
         }
     } label: {
-        Label("Share…", systemImage: "square.and.arrow.up")
+        Label {
+            Text("Share…", bundle: .module)
+        } icon: {
+            Image(systemName: "square.and.arrow.up")
+        }
     }
 }
 

@@ -34,7 +34,7 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
     public var body: some View {
         NavigationStack(path: $path) {
             rootList
-                .navigationTitle("Library")
+                .navigationTitle(Text("Library", bundle: .module))
                 .toolbar { leadingToolbar }
                 .toolbar { importToolbar }
                 .fileImporter(
@@ -64,36 +64,44 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
             AddToPlaylistSheet(scoreItem: item, library: viewModel)
         }
         .alert(
-            "Library",
+            Text("Library", bundle: .module),
             isPresented: errorAlertBinding,
             presenting: viewModel.errorAlertMessage
         ) { _ in
-            Button("OK") { viewModel.errorAlertMessage = nil }
+            Button { viewModel.errorAlertMessage = nil } label: {
+                Text("OK", bundle: .module)
+            }
         } message: { msg in
             Text(msg)
         }
         .alert(
-            "Already in Your Library",
+            Text("Already in Your Library", bundle: .module),
             isPresented: duplicateAlertBinding,
             presenting: viewModel.duplicatePrompt
         ) { prompt in
-            Button("Open") {
+            Button {
                 viewModel.duplicatePrompt = nil
                 Task { await viewModel.commit(plan: prompt.plan, decision: .openExisting(prompt.existing.id)) }
+            } label: {
+                Text("Open", bundle: .module)
             }
-            Button("Import as Duplicate") {
+            Button {
                 viewModel.duplicatePrompt = nil
                 Task { await viewModel.commit(plan: prompt.plan, decision: .importAsNew) }
+            } label: {
+                Text("Import as Duplicate", bundle: .module)
             }
-            Button("Cancel", role: .cancel) {
+            Button(role: .cancel) {
                 viewModel.duplicatePrompt = nil
+            } label: {
+                Text("Cancel", bundle: .module)
             }
         } message: { prompt in
-            Text("\"\(prompt.existing.title)\" is already imported. What do you want to do?")
+            Text("\"\(prompt.existing.title)\" is already imported. What do you want to do?", bundle: .module)
         }
         .overlay {
             if viewModel.isPreparingShare {
-                ProgressView("Preparing…")
+                ProgressView { Text("Preparing…", bundle: .module) }
                     .padding()
                     .background(.regularMaterial, in: .rect(cornerRadius: 12))
             }
@@ -127,7 +135,7 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
         Button {
             viewModel.isFileImporterPresented = true
         } label: {
-            Image(systemName: "plus").accessibilityLabel("Import Score")
+            Image(systemName: "plus").accessibilityLabel(Text("Import Score", bundle: .module))
         }
     }
 
@@ -139,9 +147,13 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
 
         if items.isEmpty && viewModel.repository.tags.isEmpty && viewModel.repository.playlists.isEmpty {
             ContentUnavailableView {
-                Label("No Scores Yet", systemImage: "music.note")
+                Label {
+                    Text("No Scores Yet", bundle: .module)
+                } icon: {
+                    Image(systemName: "music.note")
+                }
             } description: {
-                Text("Import your first score to get started.")
+                Text("Import your first score to get started.", bundle: .module)
             }
         } else {
             List {
@@ -155,17 +167,19 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
     @ViewBuilder
     private func favoritesSection(_ favorites: [ScoreItem]) -> some View {
         if !favorites.isEmpty {
-            Section("Favorites") {
+            Section {
                 ForEach(favorites) { item in
                     sectionRow(for: item)
                 }
+            } header: {
+                Text("Favorites", bundle: .module)
             }
         }
     }
 
     @ViewBuilder
     private func browseSection(items: [ScoreItem]) -> some View {
-        Section("Browse") {
+        Section {
             NavigationLink(value: LibraryRoute.allScores) {
                 browseRow(title: "All Scores", systemImage: "music.note", count: items.count)
             }
@@ -179,16 +193,20 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
                     count: viewModel.repository.playlists.count
                 )
             }
+        } header: {
+            Text("Browse", bundle: .module)
         }
     }
 
     @ViewBuilder
     private func recentsSection(_ recents: [ScoreItem]) -> some View {
         if !recents.isEmpty {
-            Section("Recently Opened") {
+            Section {
                 ForEach(recents) { item in
                     sectionRow(for: item)
                 }
+            } header: {
+                Text("Recently Opened", bundle: .module)
             }
         }
     }
@@ -215,7 +233,7 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("More"))
+            .accessibilityLabel(Text("More", bundle: .module))
         }
         .contextMenu {
             scoreRowMenu(
@@ -229,9 +247,13 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
         }
     }
 
-    private func browseRow(title: LocalizedStringResource, systemImage: String, count: Int) -> some View {
+    private func browseRow(title: LocalizedStringKey, systemImage: String, count: Int) -> some View {
         HStack {
-            Label(title, systemImage: systemImage)
+            Label {
+                Text(title, bundle: .module)
+            } icon: {
+                Image(systemName: systemImage)
+            }
             Spacer()
             Text(count, format: .number)
                 .foregroundStyle(.secondary)
@@ -261,7 +283,13 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
                     onTagDeleted: { /* NavigationStack pops automatically when destination renders 'Tag not found' */ }
                 )
             } else {
-                ContentUnavailableView("Tag not found", systemImage: "tag.slash")
+                ContentUnavailableView {
+                    Label {
+                        Text("Tag not found", bundle: .module)
+                    } icon: {
+                        Image(systemName: "tag.slash")
+                    }
+                }
             }
         case .playlists:
             PlaylistsListView(library: viewModel)
@@ -274,7 +302,13 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
                     onPlaylistDeleted: { /* same comment as tag */ }
                 )
             } else {
-                ContentUnavailableView("Playlist not found", systemImage: "music.note.list")
+                ContentUnavailableView {
+                    Label {
+                        Text("Playlist not found", bundle: .module)
+                    } icon: {
+                        Image(systemName: "music.note.list")
+                    }
+                }
             }
         }
     }
@@ -339,6 +373,6 @@ private struct AllScoresContainer: View {
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist
         )
-        .navigationTitle("All Scores")
+        .navigationTitle(Text("All Scores", bundle: .module))
     }
 }

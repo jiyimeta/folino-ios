@@ -5,7 +5,8 @@ import SwiftUI
 @MainActor
 public struct ReaderView: View {
     @State private var viewModel: ReaderViewModel
-    @Environment(\.horizontalSizeClass) private var _horizontalSizeClass
+    @Environment(\.dismiss) private var dismiss
+    private let onBack: (() -> Void)?
 
     public init(
         scoreItem: ScoreItem,
@@ -13,7 +14,8 @@ public struct ReaderView: View {
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
-        reachability: (any NetworkReachability)? = nil
+        reachability: (any NetworkReachability)? = nil,
+        onBack: (() -> Void)? = nil
     ) {
         // Seed the device-class default at construction time. The view
         // model only uses this if no persisted record exists.
@@ -29,46 +31,58 @@ public struct ReaderView: View {
                 reachability: reachability
             )
         )
+        self.onBack = onBack
     }
 
     public var body: some View {
-        ZStack(alignment: .bottom) {
-            content
-            ReaderBottomOverlay(viewModel: viewModel)
+        ZStack {
+            #if os(iOS)
+                content
+                    .safeAreaPadding(.top, ReaderTopOverlay.height)
+            #else
+                content
+            #endif
+            VStack(spacing: 0) {
+                #if os(iOS)
+                    ReaderTopOverlay(
+                        viewModel: viewModel,
+                        onBack: onBack ?? { dismiss() }
+                    )
+                #endif
+                Spacer()
+                ReaderBottomOverlay(viewModel: viewModel)
+            }
         }
-        .navigationTitle(viewModel.scoreItem.title)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
-            .toolbar {
-                ReaderToolbar(viewModel: viewModel)
+        .navigationTitle("")
+        .readerToolbar(viewModel: viewModel)
+        .inspector(isPresented: $viewModel.isInspectorPresented) {
+            if case let .loaded(score) = viewModel.loadState {
+                InspectorView(viewModel: viewModel, score: score)
+                    .presentationDetents([.medium, .large])
+            } else {
+                Color.clear
             }
-            .inspector(isPresented: $viewModel.isInspectorPresented) {
-                if case let .loaded(score) = viewModel.loadState {
-                    InspectorView(viewModel: viewModel, score: score)
-                        .presentationDetents([.medium, .large])
-                } else {
-                    Color.clear
+        }
+        .alert(
+            soundfontAlertTitle(for: viewModel.soundfontAlertKind),
+            isPresented: Binding(
+                get: { viewModel.soundfontAlertKind != nil },
+                set: { newValue in
+                    if !newValue { viewModel.cancelLoadingSoundfonts() }
                 }
+            )
+        ) {
+            Button(role: .cancel) {
+                viewModel.cancelLoadingSoundfonts()
+            } label: {
+                Text("Cancel", bundle: .module)
             }
-            .alert(
-                soundfontAlertTitle(for: viewModel.soundfontAlertKind),
-                isPresented: Binding(
-                    get: { viewModel.soundfontAlertKind != nil },
-                    set: { newValue in
-                        if !newValue { viewModel.cancelLoadingSoundfonts() }
-                    }
-                )
-            ) {
-                Button("Cancel", role: .cancel) {
-                    viewModel.cancelLoadingSoundfonts()
-                }
-            }
-            .task {
-                viewModel.startObservingCursor()
-                await viewModel.load()
-                await viewModel.prepareForPlayback()
-            }
+        }
+        .task {
+            viewModel.startObservingCursor()
+            await viewModel.load()
+            await viewModel.prepareForPlayback()
+        }
     }
 
     private func soundfontAlertTitle(
@@ -76,9 +90,9 @@ public struct ReaderView: View {
     ) -> String {
         switch kind {
         case .offline:
-            String(localized: "You're offline")
+            String(localized: "You're offline", bundle: .module)
         case .loading, nil:
-            String(localized: "Loading playback sounds…")
+            String(localized: "Loading playback sounds…", bundle: .module)
         }
     }
 
@@ -94,6 +108,7 @@ public struct ReaderView: View {
                 VerticalScoreContainer(
                     score: visible,
                     staffSize: viewModel.preferences.staffSize,
+                    honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel
                 )
@@ -101,18 +116,25 @@ public struct ReaderView: View {
                 HorizontalScoreContainer(
                     score: visible,
                     staffSize: viewModel.preferences.staffSize,
+                    honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel
                 )
             }
         case let .failed(message):
             ContentUnavailableView {
-                Label("Could not open this score", systemImage: "exclamationmark.triangle")
+                Label {
+                    Text("Could not open this score", bundle: .module)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
             } description: {
                 Text(message)
             } actions: {
-                Button("Retry") { Task { await viewModel.load() } }
-                    .buttonStyle(.borderedProminent)
+                Button { Task { await viewModel.load() } } label: {
+                    Text("Retry", bundle: .module)
+                }
+                .buttonStyle(.borderedProminent)
             }
         }
     }

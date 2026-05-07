@@ -12,7 +12,7 @@ struct ScoreRow: View {
                         .font(.body)
                         .lineLimit(1)
                     if let subtitle = scoreItem.subtitle, !subtitle.isEmpty {
-                        Text("- \(subtitle)")
+                        Text(" · \(subtitle)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -29,7 +29,7 @@ struct ScoreRow: View {
             if scoreItem.isFavorite {
                 Image(systemName: "star.fill")
                     .foregroundStyle(.tint)
-                    .accessibilityLabel("Favorite")
+                    .accessibilityLabel(Text("Favorite", bundle: .module))
             }
         }
         .contentShape(Rectangle())

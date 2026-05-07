@@ -68,7 +68,11 @@ targets:
           - Info.plist
           - Folino.entitlements
           - Resources/Soundfonts
+          - Resources/Fonts
       - path: App/Resources/Soundfonts
+        type: folder
+        buildPhase: resources
+      - path: App/Resources/Fonts
         type: folder
         buildPhase: resources
     settings:
@@ -93,5 +97,7 @@ targets:
       - package: Editor
       - package: ImportExport
       - package: Settings
+      - package: swift-sheet-music
+        product: SheetMusicLayout
       - package: LicenseList
         product: LicenseList

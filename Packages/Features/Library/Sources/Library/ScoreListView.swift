@@ -19,16 +19,20 @@ struct ScoreListView: View {
         .searchable(text: $viewModel.searchQuery)
         .toolbar { sortToolbarItem }
         .alert(
-            "Delete \"\(pendingDelete?.title ?? "")\"?",
+            Text("Delete \"\(pendingDelete?.title ?? "")\"?", bundle: .module),
             isPresented: deleteAlertBinding,
             presenting: pendingDelete
         ) { item in
-            Button("Delete", role: .destructive) {
+            Button(role: .destructive) {
                 Task { await library.delete(item) }
+            } label: {
+                Text("Delete", bundle: .module)
             }
-            Button("Cancel", role: .cancel) {}
+            Button(role: .cancel) {} label: {
+                Text("Cancel", bundle: .module)
+            }
         } message: { _ in
-            Text("This will remove the score and its file from this device.")
+            Text("This will remove the score and its file from this device.", bundle: .module)
         }
     }
 
@@ -55,16 +59,17 @@ struct ScoreListView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("More"))
+            .accessibilityLabel(Text("More", bundle: .module))
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 Task { await library.toggleFavorite(item) }
             } label: {
-                Label(
-                    item.isFavorite ? "Unfavorite" : "Favorite",
-                    systemImage: item.isFavorite ? "star.slash.fill" : "star.fill"
-                )
+                Label {
+                    Text(item.isFavorite ? "Unfavorite" : "Favorite", bundle: .module)
+                } icon: {
+                    Image(systemName: item.isFavorite ? "star.slash.fill" : "star.fill")
+                }
             }
             .tint(.yellow)
         }
@@ -72,7 +77,11 @@ struct ScoreListView: View {
             Button(role: .destructive) {
                 pendingDelete = item
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label {
+                    Text("Delete", bundle: .module)
+                } icon: {
+                    Image(systemName: "trash")
+                }
             }
         }
         .contextMenu {
@@ -109,7 +118,11 @@ struct ScoreListView: View {
                 Button {
                     viewModel.selectManualOrder()
                 } label: {
-                    Label("Manual Order", systemImage: viewModel.isManualOrderActive ? "checkmark" : "")
+                    Label {
+                        Text("Manual Order", bundle: .module)
+                    } icon: {
+                        Image(systemName: viewModel.isManualOrderActive ? "checkmark" : "")
+                    }
                 }
                 Divider()
             }
@@ -118,12 +131,16 @@ struct ScoreListView: View {
                     viewModel.selectSort(option)
                 } label: {
                     let isSelected = !viewModel.isManualOrderActive && viewModel.sort == option
-                    Label(option.labelKey, systemImage: isSelected ? "checkmark" : "")
+                    Label {
+                        Text(option.labelKey)
+                    } icon: {
+                        Image(systemName: isSelected ? "checkmark" : "")
+                    }
                 }
             }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
-                .accessibilityLabel("Sort")
+                .accessibilityLabel(Text("Sort", bundle: .module))
         }
     }
 }

@@ -7,7 +7,7 @@ import SheetMusicCore
 
 @MainActor
 @Observable
-public final class ReaderViewModel {
+public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public enum LoadState {
         case loading
         case loaded(Score)
@@ -32,7 +32,10 @@ public final class ReaderViewModel {
     public private(set) var loadState: LoadState = .loading
     public private(set) var scoreItem: ScoreItem
     public private(set) var preferences: ReaderPreferences
-    public private(set) var staffVolumes: [StaffAddress: Double] = [:]
+    /// Transient per-staff volume during a slider drag. Populated by
+    /// `setVolume`, cleared by `commitVolume`. Lives on the VM so SwiftUI
+    /// re-renders the slider as the value moves.
+    public private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
     public private(set) var mutedStaves: Set<StaffAddress> = []
     public private(set) var soloStaves: Set<StaffAddress> = []
     public private(set) var isPlaying: Bool = false
@@ -68,6 +71,25 @@ public final class ReaderViewModel {
     private var hasLoadedIntoPlayback = false
     @ObservationIgnored
     private var preloadTask: Task<Void, Error>?
+
+    @ObservationIgnored
+    private var pendingInstrumentLoad: PendingInstrumentLoad?
+
+    private struct PendingInstrumentLoad {
+        let partIndex: Int
+        let bank: Int
+        let program: Int
+        let isDrums: Bool
+        /// Per-staff snapshot of the override map restricted to this part
+        /// at the moment the pick was registered. `nil` value means "no
+        /// override existed for that address; remove on revert".
+        let previousOverrides: [(address: StaffAddress, previous: Int?)]
+        /// True iff playback was running at the moment we registered the
+        /// pick (or was inherited from an earlier in-flight pick that we
+        /// just cancelled). Drives auto-resume on success.
+        let wasPlaying: Bool
+        let task: Task<Void, Error>
+    }
 
     public init(
         scoreItem: ScoreItem,
@@ -139,15 +161,33 @@ public final class ReaderViewModel {
         await mutatePreferences { $0.staffSize = next }
     }
 
+    public func setHonorLayoutBreaks(_ value: Bool) async {
+        await mutatePreferences { $0.honorLayoutBreaks = value }
+    }
+
     public func volume(for address: StaffAddress) -> Double {
-        staffVolumes[address] ?? Self.defaultStaffVolume
+        liveStaffVolumes[address]
+            ?? preferences.staffVolumeOverrides[address]
+            ?? scoreDefaultVolume(for: address)
+            ?? Self.defaultStaffVolume
     }
 
     public func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
-        staffVolumes[address] = clamped
+        liveStaffVolumes[address] = clamped
         guard let flatIndex = flattenedStaffIndex(for: address) else { return }
         Task { await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped) }
+    }
+
+    /// Slider release: persist the value as the per-score override and
+    /// clear the transient drag entry. Forwards to the engine so the
+    /// post-clamp value is what gets played.
+    public func commitVolume(_ value: Double, for address: StaffAddress) async {
+        let clamped = min(max(value, 0), 1)
+        await mutatePreferences { $0.staffVolumeOverrides[address] = clamped }
+        liveStaffVolumes[address] = nil
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
     }
 
     public func toggleStaffMute(address: StaffAddress) {
@@ -223,6 +263,20 @@ public final class ReaderViewModel {
         return score.parts[address.partIndex].instrument.channel.bank
     }
 
+    /// CC7 (Channel Volume) from the part's first channel, mapped from
+    /// MIDI's 0…127 to the slider's 0…1. Returns nil when the score has no
+    /// matching part — callers fall back to `defaultStaffVolume`. Mirrors
+    /// `swift-sheet-music`'s `PlaybackEngine.initialStaffVolume`.
+    private func scoreDefaultVolume(for address: StaffAddress) -> Double? {
+        guard
+            case let .loaded(score) = loadState,
+            score.parts.indices.contains(address.partIndex)
+        else { return nil }
+        let cc7 = score.parts[address.partIndex].instrument.channel.volume
+        let clamped = max(0, min(127, cc7))
+        return Double(clamped) / 127.0
+    }
+
     private func flattenedStaffIndex(for address: StaffAddress) -> Int? {
         guard
             case let .loaded(score) = loadState,
@@ -269,6 +323,22 @@ public final class ReaderViewModel {
               case let .loaded(score) = loadState,
               soundfontAlertKind == nil
         else { return }
+        if let pending = pendingInstrumentLoad, !pending.wasPlaying {
+            // Silent prefetch was kicked off when the user was not playing.
+            // Surface the existing alert copy and wait. The prefetch task's
+            // own success branch (in setPartProgram) fans setStaffInstrument
+            // out; we just need to block until the engine reflects the
+            // pick before kicking off play.
+            let online = await reachability?.isOnline() ?? true
+            soundfontAlertKind = online ? .loading : .offline
+            do {
+                try await pending.task.value
+                soundfontAlertKind = nil
+            } catch {
+                soundfontAlertKind = nil
+                return
+            }
+        }
         if !hasLoadedIntoPlayback {
             let cached = await controller.areSoundfontsAvailableLocally(for: score)
             let online = await reachability?.isOnline() ?? true
@@ -316,6 +386,7 @@ public final class ReaderViewModel {
     /// when no load is in flight — the cancel is a no-op.
     public func cancelLoadingSoundfonts() {
         preloadTask?.cancel()
+        pendingInstrumentLoad?.task.cancel()
     }
 
     public func toggleStaff(address: StaffAddress) async {
@@ -418,7 +489,9 @@ public final class ReaderViewModel {
                     : 0)
             return StaffMixerState(
                 staffIndex: idx,
-                volume: staffVolumes[entry.address] ?? Self.defaultStaffVolume,
+                volume: preferences.staffVolumeOverrides[entry.address]
+                    ?? scoreDefaultVolume(for: entry.address)
+                    ?? Self.defaultStaffVolume,
                 isMuted: false,
                 isSolo: false,
                 gmBank: bank,
@@ -462,7 +535,9 @@ public final class ReaderViewModel {
             staffSize: copy.staffSize,
             hiddenStaves: copy.hiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
+            staffVolumeOverrides: copy.staffVolumeOverrides,
             tempoMultiplier: copy.tempoMultiplier,
+            honorLayoutBreaks: copy.honorLayoutBreaks,
             repeatMode: copy.repeatMode,
             abRepeat: copy.abRepeat
         )
@@ -483,11 +558,11 @@ public final class ReaderViewModel {
         if let domain = error as? DomainError {
             switch domain {
             case .scoreFileNotFound:
-                return String(localized: "The score file is missing or unreadable.")
+                return String(localized: "The score file is missing or unreadable.", bundle: .module)
             case .scoreParseFailed:
-                return String(localized: "This file looks corrupted or isn't a valid score.")
+                return String(localized: "This file looks corrupted or isn't a valid score.", bundle: .module)
             case .unsupportedFormat:
-                return String(localized: "Folino can't open this file type.")
+                return String(localized: "Folino can't open this file type.", bundle: .module)
             default:
                 return domain.errorDescription ?? "\(domain)"
             }
@@ -572,5 +647,180 @@ extension ReaderViewModel {
         pendingA = normalized.start
         pendingB = normalized.end
         await mutatePreferences { $0.abRepeat = normalized }
+    }
+}
+
+// MARK: - Part instrument program overrides
+
+extension ReaderViewModel {
+    /// Effective GM program for a part. All staves under a part share the
+    /// part's instrument, so we report the first staff's effective program
+    /// (or the score default when no override exists).
+    public func effectiveProgram(forPartIndex partIndex: Int) -> Int {
+        let firstAddress = StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
+        return effectiveProgram(for: firstAddress)
+    }
+
+    public func hasProgramOverride(forPartIndex partIndex: Int) -> Bool {
+        partStaffAddresses(forPartIndex: partIndex)
+            .contains { preferences.staffProgramOverrides[$0] != nil }
+    }
+
+    /// Set a program override for every staff under the part. Each staff has
+    /// its own engine voice, so we have to fan out — but to the user it
+    /// reads as one "this part's instrument" choice.
+    public func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
+        let addresses = partStaffAddresses(forPartIndex: partIndex)
+        guard !addresses.isEmpty,
+              case let .loaded(score) = loadState,
+              score.parts.indices.contains(partIndex)
+        else { return }
+        let part = score.parts[partIndex]
+        let bank = part.instrument.channel.bank
+        let isDrums = part.instrument.useDrumset
+
+        if let controller = playbackController,
+           await controller.isSoundfontCached(
+               bank: bank, program: program, isDrums: isDrums
+           ) == false
+        {
+            await runUncachedPartProgramSwap(
+                program: program, partIndex: partIndex,
+                addresses: addresses, bank: bank, isDrums: isDrums,
+                controller: controller
+            )
+            return
+        }
+
+        // Cache-hit (or no controller): preserve the original synchronous
+        // behaviour — persist the override and fan out to the engine.
+        await mutatePreferences { prefs in
+            for address in addresses {
+                prefs.staffProgramOverrides[address] = program
+            }
+        }
+        for address in addresses {
+            guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+            await playbackController?.setStaffInstrument(
+                staff: flatIndex,
+                bank: scoreDefaultBank(for: address) ?? 0,
+                program: program
+            )
+        }
+    }
+
+    // swiftlint:disable:next function_body_length
+    private func runUncachedPartProgramSwap(
+        program: Int,
+        partIndex: Int,
+        addresses: [StaffAddress],
+        bank: Int,
+        isDrums: Bool,
+        controller: any PlaybackController
+    ) async {
+        // 1. Latest pick wins on the same part: cancel any in-flight pick
+        //    and inherit its wasPlaying — without inheritance the new pick
+        //    would never auto-resume because the previous one already
+        //    paused us.
+        var inheritedWasPlaying = false
+        if let existing = pendingInstrumentLoad, existing.partIndex == partIndex {
+            inheritedWasPlaying = existing.wasPlaying
+            existing.task.cancel()
+            // Block until the cancelled task's catch branch finishes its
+            // revert; otherwise our snapshot below captures the mid-flight
+            // state the previous pick mutated to.
+            _ = try? await existing.task.value
+        }
+
+        let wasPlaying = isPlaying || inheritedWasPlaying
+        if isPlaying {
+            await controller.pause()
+            isPlaying = false
+        }
+
+        let snapshot = addresses.map { address in
+            (address: address, previous: preferences.staffProgramOverrides[address])
+        }
+        await mutatePreferences { prefs in
+            for address in addresses {
+                prefs.staffProgramOverrides[address] = program
+            }
+        }
+
+        if wasPlaying {
+            let online = await reachability?.isOnline() ?? true
+            soundfontAlertKind = online ? .loading : .offline
+        }
+
+        let task = Task<Void, Error> {
+            try await controller.prefetchSoundfont(
+                bank: bank, program: program, isDrums: isDrums
+            )
+        }
+        let pending = PendingInstrumentLoad(
+            partIndex: partIndex, bank: bank, program: program, isDrums: isDrums,
+            previousOverrides: snapshot, wasPlaying: wasPlaying, task: task
+        )
+        pendingInstrumentLoad = pending
+
+        do {
+            try await task.value
+            for address in addresses {
+                guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+                await controller.setStaffInstrument(
+                    staff: flatIndex, bank: bank, program: program
+                )
+            }
+            soundfontAlertKind = nil
+            if wasPlaying {
+                do {
+                    try await controller.play()
+                    isPlaying = true
+                } catch {
+                    isPlaying = false
+                }
+            }
+        } catch {
+            await mutatePreferences { prefs in
+                for entry in snapshot {
+                    if let previous = entry.previous {
+                        prefs.staffProgramOverrides[entry.address] = previous
+                    } else {
+                        prefs.staffProgramOverrides.removeValue(forKey: entry.address)
+                    }
+                }
+            }
+            soundfontAlertKind = nil
+            // Q1 A: only auto-resume on success. Cancel leaves us paused.
+        }
+        pendingInstrumentLoad = nil
+    }
+
+    public func clearPartProgramOverride(forPartIndex partIndex: Int) async {
+        let addresses = partStaffAddresses(forPartIndex: partIndex)
+        guard !addresses.isEmpty else { return }
+        await mutatePreferences { prefs in
+            for address in addresses {
+                prefs.staffProgramOverrides.removeValue(forKey: address)
+            }
+        }
+        for address in addresses {
+            guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+            await playbackController?.setStaffInstrument(
+                staff: flatIndex,
+                bank: scoreDefaultBank(for: address) ?? 0,
+                program: scoreDefaultProgram(for: address) ?? 0
+            )
+        }
+    }
+
+    private func partStaffAddresses(forPartIndex partIndex: Int) -> [StaffAddress] {
+        guard
+            case let .loaded(score) = loadState,
+            score.parts.indices.contains(partIndex)
+        else { return [] }
+        return score.parts[partIndex].staves.indices.map { staffIndex in
+            StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+        }
     }
 }

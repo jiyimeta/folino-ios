@@ -21,12 +21,25 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// channel program. Bank stays at 0 — the picker only swaps melodic
     /// programs (matches `swift-sheet-music`'s `ProgramMenu`).
     public var staffProgramOverrides: [StaffAddress: Int]
+    /// User-chosen volume `[0, 1]` per staff that overrides the score's mscx CC7.
+    /// Absent entries fall back to the score's `InstrumentChannel.volume`
+    /// (mapped from `0…127` to `0…1`), then to `1.0` if the score has no
+    /// matching part. Matches the override-overlay shape of
+    /// `staffProgramOverrides`.
+    public var staffVolumeOverrides: [StaffAddress: Double]
     /// Per-score playback rate override. `nil` means "no override" — the
     /// engine plays at the score's native tempo. Set values are clamped to
     /// `[minTempoMultiplier, maxTempoMultiplier]`. The Reader's view model
     /// normalizes a saved value of exactly 1.0 back to `nil` so the
     /// override doesn't outlive the user's intent.
     public var tempoMultiplier: Double?
+    /// When `true` (default), the layout engine honors authored
+    /// `<LayoutBreak>line` / `<LayoutBreak>page` markup, so the engraver's
+    /// chosen system / page boundaries are reproduced. When `false`, the
+    /// engine ignores both forms and wraps measures purely on the
+    /// available view width — useful when the score was authored for a
+    /// different page size.
+    public var honorLayoutBreaks: Bool
     /// Current repeat / loop mode for this score. Defaults to `.off`.
     public var repeatMode: RepeatMode
     /// Active A–B loop range. Only meaningful when `repeatMode == .abLoop`.
@@ -39,7 +52,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         staffSize: CGFloat,
         hiddenStaves: Set<StaffAddress>,
         staffProgramOverrides: [StaffAddress: Int] = [:],
+        staffVolumeOverrides: [StaffAddress: Double] = [:],
         tempoMultiplier: Double? = nil,
+        honorLayoutBreaks: Bool = true,
         repeatMode: RepeatMode = .off,
         abRepeat: ABRepeatRange? = nil
     ) {
@@ -48,16 +63,19 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.staffSize = min(max(staffSize, Self.minStaffSize), Self.maxStaffSize)
         self.hiddenStaves = hiddenStaves
         self.staffProgramOverrides = staffProgramOverrides.mapValues { min(max($0, 0), 127) }
+        self.staffVolumeOverrides = staffVolumeOverrides.mapValues { min(max($0, 0), 1) }
         self.tempoMultiplier = tempoMultiplier.map {
             min(max($0, Self.minTempoMultiplier), Self.maxTempoMultiplier)
         }
+        self.honorLayoutBreaks = honorLayoutBreaks
         self.repeatMode = repeatMode
         self.abRepeat = abRepeat
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, scoreItemID, staffSize, hiddenStaves, staffProgramOverrides
-        case tempoMultiplier, repeatMode, abRepeat
+        case staffVolumeOverrides, tempoMultiplier, honorLayoutBreaks
+        case repeatMode, abRepeat
     }
 
     public init(from decoder: Decoder) throws {
@@ -66,16 +84,21 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let scoreItemID = try c.decode(ScoreItemID.self, forKey: .scoreItemID)
         let staffSize = try c.decode(CGFloat.self, forKey: .staffSize)
         let hiddenStaves = try c.decode(Set<StaffAddress>.self, forKey: .hiddenStaves)
-        let overrides = try c.decodeIfPresent(
+        let programOverrides = try c.decodeIfPresent(
             [StaffAddress: Int].self, forKey: .staffProgramOverrides
         ) ?? [:]
+        let volumeOverrides = try c.decodeIfPresent(
+            [StaffAddress: Double].self, forKey: .staffVolumeOverrides
+        ) ?? [:]
         let tempo = try c.decodeIfPresent(Double.self, forKey: .tempoMultiplier)
+        let honorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks) ?? true
         let mode = try c.decodeIfPresent(RepeatMode.self, forKey: .repeatMode) ?? .off
         let ab = try c.decodeIfPresent(ABRepeatRange.self, forKey: .abRepeat)
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
-            hiddenStaves: hiddenStaves, staffProgramOverrides: overrides,
-            tempoMultiplier: tempo, repeatMode: mode, abRepeat: ab
+            hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
+            staffVolumeOverrides: volumeOverrides, tempoMultiplier: tempo,
+            honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab
         )
     }
 }

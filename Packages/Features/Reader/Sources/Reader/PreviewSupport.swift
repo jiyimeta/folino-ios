@@ -89,4 +89,40 @@
         static var previewEmpty: Instrument { Instrument(id: "") }
     }
 
+    /// Hand-built score tall enough to scroll inside a typical iPad viewport.
+    /// 36 measures of quarter notes wrapped across many systems — the
+    /// `VerticalScoreContainer` preview uses it to verify the initial scroll
+    /// position lands at the top of page 1, not somewhere in the middle.
+    enum PreviewSampleScore {
+        static var tall: Score {
+            let pitches: [(Int, Int)] = [
+                (60, 14), (62, 16), (64, 18), (65, 13),
+            ]
+            let measures: [Measure] = (0 ..< 36).map { measureIndex in
+                let chords: [VoiceElement] = pitches.map { pitch, tpc in
+                    .chord(Chord(
+                        duration: .quarter,
+                        notes: [Note(pitch: pitch, tpc: tpc)]
+                    ))
+                }
+                let prelude: [VoiceElement] = measureIndex == 0
+                    ? [
+                        .clef(Clef(concertClefType: "G")),
+                        .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    ]
+                    : []
+                return Measure(voices: [Voice(elements: prelude + chords)])
+            }
+            let part = Part(
+                id: "P0", trackName: "Treble", instrument: .previewEmpty,
+                staves: [Staff(staffType: "stdNormal", group: "pitched", measures: measures)]
+            )
+            return Score(
+                division: 480,
+                parts: [part],
+                metaTags: ["workTitle": "Scroll Position Test"]
+            )
+        }
+    }
+
 #endif

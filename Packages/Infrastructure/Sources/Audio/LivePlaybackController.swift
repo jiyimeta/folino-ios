@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Combine
 import Domain
 import Foundation
@@ -19,7 +20,16 @@ public final class LivePlaybackController: Domain.PlaybackController {
     let engine: PlaybackEngine
     private let domainResolver: any Domain.SoundfontResolver
     private let precisionProbe: any Domain.PrecisePatchProbe
+    // Internal (not private) so the +LoopBounds extension file can reach
+    // it when forwarding to engine.play(in:) after a setLoop / clearLoop.
     var loadedScore: Score?
+    /// Cursor the user picked while the engine's sequencer wasn't yet
+    /// built (it's lazy — first `play(from:in:)` builds it). `seek` early-
+    /// outs in that state, so we stash the request here and apply it on
+    /// the next `play()` via `engine.play(from:in:)`. Without this, the
+    /// first play after a tap-to-seek would reset to position 0 because
+    /// `play(in:)` with `state == .stopped` rewinds the sequencer.
+    private var pendingCursor: ScoreCursor?
 
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var cancellables: Set<AnyCancellable> = []
@@ -78,6 +88,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         let prepared = Self.scoreWithFallbackRewrites(score, probe: precisionProbe)
         try engine.prepare(score: prepared)
         loadedScore = prepared
+        pendingCursor = nil
         updateNowPlayingMetadata(for: prepared)
         for state in preferences.perStaff {
             engine.setVolume(
@@ -129,6 +140,27 @@ public final class LivePlaybackController: Domain.PlaybackController {
             return false
         }
         return needed.isSubset(of: cachedKeys)
+    }
+
+    public func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) async -> Bool {
+        do {
+            let patches = try await domainResolver.cachedPatches()
+            let needle = SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
+            return patches.contains { patch in
+                SoundfontPatchKey(bank: patch.bank, program: patch.program, isDrums: patch.isDrums) == needle
+            }
+        } catch {
+            // Match `areSoundfontsAvailableLocally`'s policy: if the cache
+            // can't be enumerated, report "not cached" so callers surface
+            // the loading affordance instead of stalling silently.
+            return false
+        }
+    }
+
+    public func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) async throws {
+        _ = try await domainResolver.resolveSoundfont(
+            bank: bank, program: program, isDrums: isDrums
+        )
     }
 
     private static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
@@ -191,7 +223,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func play() throws {
         guard let score = loadedScore else { return }
-        engine.play(in: score)
+        engine.play(from: pendingCursor, in: score)
+        pendingCursor = nil
         publishNowPlayingInfo()
     }
 
@@ -232,8 +265,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // timer in lockstep. Pure `seek` is fine while paused / stopped.
         if engine.state == .playing, let score = loadedScore {
             engine.play(from: cursor, in: score)
+            pendingCursor = nil
         } else {
+            // `seek` is a no-op until the sequencer is built (first `play`
+            // call), so always stash the request — `play()` consumes it.
             engine.seek(to: cursor)
+            pendingCursor = cursor
         }
     }
 

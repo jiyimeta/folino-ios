@@ -1,96 +1,434 @@
 {
-  "sourceLanguage": "en",
-  "version": "1.0",
-  "strings": {
-    "Cancel": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Cancel" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キャンセル" } }
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+
+    },
+    "%lld%%" : {
+
+    },
+    "Back" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "戻る"
+          }
+        }
       }
     },
-    "Could not open this score": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Could not open this score" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "この楽譜を開けませんでした" } }
+    "Cancel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャンセル"
+          }
+        }
       }
     },
-    "Loading playback sounds…": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Loading playback sounds…" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "再生音源をロード中" } }
+    "Could not open this score" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not open this score"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この楽譜を開けませんでした"
+          }
+        }
       }
     },
-    "Done": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Done" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "完了" } }
+    "Done" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
+          }
+        }
       }
     },
-    "Folino can't open this file type.": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Folino can't open this file type." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "このファイル形式は対応していません。" } }
+    "Folino can't open this file type." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folino can't open this file type."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイル形式は対応していません。"
+          }
+        }
       }
     },
-    "Hide All": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Hide All" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "すべて非表示" } }
+    "Hide All" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide All"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて非表示"
+          }
+        }
       }
     },
-    "Layout": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Layout" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "レイアウト" } }
+    "Honor authored breaks" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Honor authored breaks"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜の改行・改ページに従う"
+          }
+        }
       }
     },
-    "Reader": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Reader" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "リーダー" } }
+    "Inspector tab" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspector tab"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "インスペクタタブ"
+          }
+        }
       }
     },
-    "Reset zoom": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Reset zoom" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ズームをリセット" } }
+    "Layout" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レイアウト"
+          }
+        }
       }
     },
-    "Retry": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Retry" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "再試行" } }
+    "Layout direction" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout direction"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レイアウト方向"
+          }
+        }
       }
     },
-    "Show All": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Show All" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "すべて表示" } }
+    "Loading playback sounds…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading playback sounds…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生音源をロード中"
+          }
+        }
       }
     },
-    "Show staves panel": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Show staves panel" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "譜表パネルを表示" } }
+    "Pause" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一時停止"
+          }
+        }
       }
     },
-    "Staves": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Staves" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "譜表" } }
+    "Play" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生"
+          }
+        }
       }
     },
-    "The score file is missing or unreadable.": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "The score file is missing or unreadable." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "楽譜ファイルが見つからないか読み込めません。" } }
+    "Playback" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生"
+          }
+        }
       }
     },
-    "This file looks corrupted or isn't a valid score.": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "This file looks corrupted or isn't a valid score." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ファイルが破損しているか、有効な楽譜ではありません。" } }
+    "Reader" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reader"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リーダー"
+          }
+        }
+      }
+    },
+    "Reset to default" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset to default"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デフォルトに戻す"
+          }
+        }
+      }
+    },
+    "Reset zoom" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset zoom"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ズームをリセット"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再試行"
+          }
+        }
+      }
+    },
+    "Show All" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show All"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて表示"
+          }
+        }
+      }
+    },
+    "Show staves panel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show staves panel"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譜表パネルを表示"
+          }
+        }
+      }
+    },
+    "Staff size: %lld pt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staff size: %lld pt"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譜表サイズ: %lld pt"
+          }
+        }
+      }
+    },
+    "Staves" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staves"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譜表"
+          }
+        }
+      }
+    },
+    "The score file is missing or unreadable." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The score file is missing or unreadable."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜ファイルが見つからないか読み込めません。"
+          }
+        }
+      }
+    },
+    "This file looks corrupted or isn't a valid score." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file looks corrupted or isn't a valid score."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルが破損しているか、有効な楽譜ではありません。"
+          }
+        }
+      }
+    },
+    "Visual" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visual"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示"
+          }
+        }
+      }
+    },
+    "You're offline" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're offline"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフラインです"
+          }
+        }
       }
     }
-  }
+  },
+  "version" : "1.0"
 }

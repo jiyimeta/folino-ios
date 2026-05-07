@@ -141,6 +141,56 @@ import Testing
         #expect(decoded.tempoMultiplier == 1.25)
     }
 
+    @Test func staffVolumeOverridesDefaultToEmpty() {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: []
+        )
+        #expect(prefs.staffVolumeOverrides.isEmpty)
+    }
+
+    @Test func staffVolumeOverridesAreClampedToZeroThroughOne() {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let belowRange = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffVolumeOverrides: [address: -0.5]
+        )
+        #expect(belowRange.staffVolumeOverrides[address] == 0)
+
+        let aboveRange = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffVolumeOverrides: [address: 2.0]
+        )
+        #expect(aboveRange.staffVolumeOverrides[address] == 1)
+
+        let inRange = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffVolumeOverrides: [address: 0.42]
+        )
+        #expect(inRange.staffVolumeOverrides[address] == 0.42)
+    }
+
+    @Test func staffVolumeOverridesRoundTripThroughCodable() throws {
+        let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffVolumeOverrides: [address1: 0.25, address2: 0.8]
+        )
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
+        #expect(decoded.staffVolumeOverrides == prefs.staffVolumeOverrides)
+    }
+
     @Test func legacyJSONWithoutTempoMultiplierKeyDecodesAsNil() throws {
         // Ensures additive-only schema change: rows persisted before
         // tempoMultiplier landed must still load. We synthesize the

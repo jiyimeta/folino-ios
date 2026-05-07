@@ -1,0 +1,58 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "Folino couldn't start": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Folino couldn't start" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Folino を起動できませんでした" } }
+      }
+    },
+    "Enjoying Folino?": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Enjoying Folino?" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Folino はお気に入りですか？" } }
+      }
+    },
+    "Rate Folino": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Rate Folino" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Folino を評価する" } }
+      }
+    },
+    "Not Now": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Not Now" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "後で" } }
+      }
+    },
+    "Would you mind taking a moment to leave a review on the App Store?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Would you mind taking a moment to leave a review on the App Store?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Store でレビューを書いていただけますか？"
+          }
+        }
+      }
+    },
+    "Select a score": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Select a score" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "楽譜を選択してください" } }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Settings" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "設定" } }
+      }
+    }
+  }
+}

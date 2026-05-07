@@ -20,9 +20,11 @@ struct InspectorView: View {
         Group {
             if hsc == .compact {
                 VStack(spacing: 0) {
-                    Picker("Inspector tab", selection: $selectedTab) {
-                        Text("Playback").tag(InspectorTab.playback)
-                        Text("Visual").tag(InspectorTab.visual)
+                    Picker(selection: $selectedTab) {
+                        Text("Playback", bundle: .module).tag(InspectorTab.playback)
+                        Text("Visual", bundle: .module).tag(InspectorTab.visual)
+                    } label: {
+                        Text("Inspector tab", bundle: .module)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -38,8 +40,8 @@ struct InspectorView: View {
                 }
             } else {
                 List {
-                    Section("Playback") { playbackContent }
-                    Section("Visual") { visualContent }
+                    Section { playbackContent } header: { Text("Playback", bundle: .module) }
+                    Section { visualContent } header: { Text("Visual", bundle: .module) }
                 }
                 .listStyle(.plain)
                 .buttonStyle(.plain)
@@ -77,9 +79,13 @@ struct InspectorView: View {
                     staffRow(address: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex))
                 }
             } header: {
-                Text(part.instrument.longName ?? part.trackName ?? "-")
-                    .font(.headline)
-                    .padding(.bottom, -8)
+                HStack {
+                    Text(part.instrument.longName ?? part.trackName ?? "-")
+                        .font(.headline)
+
+                    programPicker(partIndex: partIndex)
+                }
+                .padding(.bottom, -8)
             }
             .headerProminence(.increased)
             .padding(.bottom, -8)
@@ -96,45 +102,42 @@ struct InspectorView: View {
             staffSizeRow
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+
+            breakPolicyRow
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
     }
 
     @ViewBuilder
     private var layoutRow: some View {
-        HStack(spacing: 16) {
-            layoutButton(
-                .vertical,
-                systemImage: "rectangle.split.1x2",
-                accessibilityLabel: "Vertical layout"
-            )
-            layoutButton(
-                .horizontal,
-                systemImage: "rectangle.split.2x1",
-                accessibilityLabel: "Horizontal layout"
-            )
+        HStack {
+            Text("Layout direction", bundle: .module)
+            Spacer()
+            Picker(selection: $viewModel.layoutMode) {
+                Image(systemName: "arrow.up.and.down").tag(ReaderViewModel.LayoutMode.vertical)
+                Image(systemName: "arrow.left.and.right").tag(ReaderViewModel.LayoutMode.horizontal)
+            } label: {
+                Text("Layout direction", bundle: .module)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 92)
+            .fixedSize()
         }
-        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
-    private func layoutButton(
-        _ mode: ReaderViewModel.LayoutMode,
-        systemImage: String,
-        accessibilityLabel: String
-    ) -> some View {
-        let isSelected = viewModel.layoutMode == mode
-        Button {
-            viewModel.layoutMode = mode
-        } label: {
-            Image(systemName: isSelected ? "\(systemImage).fill" : systemImage)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 32, height: 32)
-                .padding(.horizontal, 8)
+    private var breakPolicyRow: some View {
+        let binding = Binding<Bool>(
+            get: { viewModel.preferences.honorLayoutBreaks },
+            set: { newValue in
+                Task { await viewModel.setHonorLayoutBreaks(newValue) }
+            }
+        )
+        Toggle(isOn: binding) {
+            Text("Honor authored breaks", bundle: .module)
         }
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     @ViewBuilder
@@ -151,11 +154,12 @@ struct InspectorView: View {
             }
         )
         Stepper(
-            "Staff size \(Int(viewModel.preferences.staffSize))",
             value: staffSize,
             in: ReaderPreferences.minStaffSize ... ReaderPreferences.maxStaffSize,
             step: 1
-        )
+        ) {
+            Text("Staff size: \(Int(viewModel.preferences.staffSize)) pt", bundle: .module)
+        }
     }
 
     @ViewBuilder
@@ -224,9 +228,18 @@ struct InspectorView: View {
         let isSolo = viewModel.soloStaves.contains(address)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Slider(value: volumeBinding, in: 0 ... 1)
-                    .disabled(isMuted || !viewModel.soloStaves.isEmpty && !isSolo)
-                    .padding(.vertical, -8)
+                Slider(
+                    value: volumeBinding,
+                    in: 0 ... 1,
+                    onEditingChanged: { editing in
+                        if !editing {
+                            let final = volumeBinding.wrappedValue
+                            Task { await viewModel.commitVolume(final, for: address) }
+                        }
+                    }
+                )
+                .disabled(isMuted || !viewModel.soloStaves.isEmpty && !isSolo)
+                .padding(.vertical, -8)
 
                 Button {
                     viewModel.toggleStaffSolo(address: address)
@@ -251,26 +264,34 @@ struct InspectorView: View {
                 }
                 visibilityButton(address: address)
             }
-            programPicker(address: address)
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
 
     @ViewBuilder
-    private func programPicker(address: StaffAddress) -> some View {
-        let program = viewModel.effectiveProgram(for: address)
-        let hasOverride = viewModel.hasProgramOverride(for: address)
+    private func resetProgramButton(partIndex: Int) -> some View {
+        Button {
+            Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
+        } label: {
+            Label {
+                Text("Reset to default", bundle: .module)
+            } icon: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func programPicker(partIndex: Int) -> some View {
+        let program = viewModel.effectiveProgram(forPartIndex: partIndex)
+        let hasOverride = viewModel.hasProgramOverride(forPartIndex: partIndex)
         HStack(spacing: 6) {
             Image(systemName: "music.note.list")
                 .foregroundStyle(.secondary)
             Menu {
                 if hasOverride {
-                    Button {
-                        Task { await viewModel.clearStaffProgramOverride(for: address) }
-                    } label: {
-                        Label("Reset to default", systemImage: "arrow.uturn.backward")
-                    }
+                    resetProgramButton(partIndex: partIndex)
                     Divider()
                 }
                 ForEach(GMInstrument.Family.allCases, id: \.self) { family in
@@ -278,8 +299,8 @@ struct InspectorView: View {
                         ForEach(family.programs) { instrument in
                             Button {
                                 Task {
-                                    await viewModel.setStaffProgram(
-                                        Int(instrument.program), for: address
+                                    await viewModel.setPartProgram(
+                                        Int(instrument.program), forPartIndex: partIndex
                                     )
                                 }
                             } label: {

@@ -18,6 +18,8 @@ private final class FakePlaybackController: PlaybackController {
     }
 
     func areSoundfontsAvailableLocally(for _: Score) -> Bool { true }
+    func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) -> Bool { true }
+    func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) throws {}
 
     func play() throws {}
     func pause() {}
@@ -50,11 +52,11 @@ private actor FakeSoundfontResolver: SoundfontResolver {
 }
 
 @Suite struct AudioProtocolsTests {
-    @MainActor @Test func playbackControllerSetsCursorAndTempo() throws {
+    @MainActor @Test func playbackControllerSetsCursorAndTempo() async throws {
         let controller = FakePlaybackController()
         let target = ScoreCursor.beat(measureIndex: 2, tickInMeasure: 240)
-        controller.setCursor(to: target)
-        controller.setTempoMultiplier(0.75)
+        await controller.setCursor(to: target)
+        await controller.setTempoMultiplier(0.75)
         #expect(controller.lastCursor == target)
         #expect(controller.lastTempo == 0.75)
     }
