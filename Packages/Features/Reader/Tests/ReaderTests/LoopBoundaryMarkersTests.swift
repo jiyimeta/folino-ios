@@ -3,7 +3,6 @@ import Foundation
 @testable import Reader
 import SheetMusicCore
 import SheetMusicLayout
-import SwiftUI
 import Testing
 
 @Suite struct LoopBoundaryMarkersTests {
@@ -70,6 +69,7 @@ import Testing
         #expect(line.origin.x == 190 - Self.lineThickness / 2)
         #expect(line.origin.y == 100 - Self.triangleHeight)
         #expect(line.size.height == 60 + Self.triangleHeight)
+        #expect(line.size.width == Self.lineThickness)
     }
 
     @Test func aMarkerTrianglePointsRight() throws {
@@ -82,7 +82,8 @@ import Testing
         )
         let bbox = try #require(result?.triangle.boundingRect)
         // Apex (max X) is to the right of the line center (x = 10).
-        #expect(bbox.maxX > 10)
+        // Use a tolerance because CGFloat bbox arithmetic can drift by ~2e-7.
+        #expect(abs(bbox.maxX - (10 + Self.triangleWidth)) < 1e-4)
         #expect(bbox.minX == 10) // flat side aligned with line
         // Triangle sits above the system (top of system = 100).
         #expect(bbox.maxY <= 100)
@@ -99,7 +100,8 @@ import Testing
         )
         let bbox = try #require(result?.triangle.boundingRect)
         // Line center for measure 1 right edge = 190; apex (min X) is to its left.
-        #expect(bbox.minX < 190)
+        // Use a tolerance because CGFloat bbox arithmetic can drift by ~2e-7.
+        #expect(abs(bbox.minX - (190 - Self.triangleWidth)) < 1e-4)
         #expect(bbox.maxX == 190) // flat side aligned with line
         #expect(bbox.minY == 100 - Self.triangleHeight)
     }
