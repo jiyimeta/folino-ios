@@ -1,4 +1,4 @@
-// swiftlint:disable file_length
+// swiftlint:disable file_length type_body_length
 import Domain
 import Foundation
 @testable import Reader
@@ -6,7 +6,6 @@ import SheetMusicCore
 import Testing
 
 @Suite @MainActor
-// swiftlint:disable:next type_body_length
 struct ReaderViewModelTests {
     private static func makeItem() -> ScoreItem {
         ScoreItem(
@@ -465,3 +464,5 @@ struct ReaderViewModelTests {
         )
     }
 }
+
+// swiftlint:enable file_length type_body_length
