@@ -7,7 +7,7 @@ import SheetMusicCore
 
 @MainActor
 @Observable
-public final class ReaderViewModel {
+public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public enum LoadState {
         case loading
         case loaded(Score)
@@ -32,7 +32,10 @@ public final class ReaderViewModel {
     public private(set) var loadState: LoadState = .loading
     public private(set) var scoreItem: ScoreItem
     public private(set) var preferences: ReaderPreferences
-    public private(set) var staffVolumes: [StaffAddress: Double] = [:]
+    /// Transient per-staff volume during a slider drag. Populated by
+    /// `setVolume`, cleared by `commitVolume`. Lives on the VM so SwiftUI
+    /// re-renders the slider as the value moves.
+    public private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
     public private(set) var mutedStaves: Set<StaffAddress> = []
     public private(set) var soloStaves: Set<StaffAddress> = []
     public private(set) var isPlaying: Bool = false
@@ -163,14 +166,28 @@ public final class ReaderViewModel {
     }
 
     public func volume(for address: StaffAddress) -> Double {
-        staffVolumes[address] ?? Self.defaultStaffVolume
+        liveStaffVolumes[address]
+            ?? preferences.staffVolumeOverrides[address]
+            ?? scoreDefaultVolume(for: address)
+            ?? Self.defaultStaffVolume
     }
 
     public func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
-        staffVolumes[address] = clamped
+        liveStaffVolumes[address] = clamped
         guard let flatIndex = flattenedStaffIndex(for: address) else { return }
         Task { await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped) }
+    }
+
+    /// Slider release: persist the value as the per-score override and
+    /// clear the transient drag entry. Forwards to the engine so the
+    /// post-clamp value is what gets played.
+    public func commitVolume(_ value: Double, for address: StaffAddress) async {
+        let clamped = min(max(value, 0), 1)
+        await mutatePreferences { $0.staffVolumeOverrides[address] = clamped }
+        liveStaffVolumes[address] = nil
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
     }
 
     public func toggleStaffMute(address: StaffAddress) {
@@ -244,6 +261,20 @@ public final class ReaderViewModel {
             score.parts.indices.contains(address.partIndex)
         else { return nil }
         return score.parts[address.partIndex].instrument.channel.bank
+    }
+
+    /// CC7 (Channel Volume) from the part's first channel, mapped from
+    /// MIDI's 0…127 to the slider's 0…1. Returns nil when the score has no
+    /// matching part — callers fall back to `defaultStaffVolume`. Mirrors
+    /// `swift-sheet-music`'s `PlaybackEngine.initialStaffVolume`.
+    private func scoreDefaultVolume(for address: StaffAddress) -> Double? {
+        guard
+            case let .loaded(score) = loadState,
+            score.parts.indices.contains(address.partIndex)
+        else { return nil }
+        let cc7 = score.parts[address.partIndex].instrument.channel.volume
+        let clamped = max(0, min(127, cc7))
+        return Double(clamped) / 127.0
     }
 
     private func flattenedStaffIndex(for address: StaffAddress) -> Int? {
@@ -446,7 +477,9 @@ public final class ReaderViewModel {
                     : 0)
             return StaffMixerState(
                 staffIndex: idx,
-                volume: staffVolumes[entry.address] ?? Self.defaultStaffVolume,
+                volume: preferences.staffVolumeOverrides[entry.address]
+                    ?? scoreDefaultVolume(for: entry.address)
+                    ?? Self.defaultStaffVolume,
                 isMuted: false,
                 isSolo: false,
                 gmBank: bank,
@@ -490,6 +523,7 @@ public final class ReaderViewModel {
             staffSize: copy.staffSize,
             hiddenStaves: copy.hiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
+            staffVolumeOverrides: copy.staffVolumeOverrides,
             tempoMultiplier: copy.tempoMultiplier,
             honorLayoutBreaks: copy.honorLayoutBreaks
         )

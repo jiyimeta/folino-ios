@@ -140,4 +140,49 @@ import Testing
         }
         #expect(value == 1)
     }
+
+    @Test func v5AddsStaffVolumeOverridesColumn() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+
+        try queue.read { db in
+            let cols = try db.columns(in: "reader_preferences").map(\.name)
+            #expect(cols.contains("staff_volume_overrides"))
+        }
+    }
+
+    @Test func v5DefaultsExistingRowsToEmptyVolumeOverridesJSON() throws {
+        // Insert a row at the v4 schema, then run v5. The new column's
+        // DEFAULT '[]' should backfill the pre-existing row.
+        let queue = try DatabaseQueue()
+        try AppMigrations.upToV4.migrate(queue)
+        let scoreID = "00000000-0000-0000-0000-000000000002"
+        let prefsID = "22222222-2222-2222-2222-222222222222"
+        try queue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO score_items (id, title, local_file_name, content_hash,
+                    size_bytes, length_beats, default_tempo_bpm, added_at)
+                VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+                """,
+                arguments: [scoreID]
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO reader_preferences
+                    (id, score_item_id, staff_size, hidden_staff_ids,
+                     staff_program_overrides, honor_layout_breaks)
+                VALUES (?, ?, 14, '[]', '[]', 1)
+                """,
+                arguments: [prefsID, scoreID]
+            )
+        }
+        try AppMigrations.all.migrate(queue)
+        try queue.read { db in
+            let row = try Row.fetchOne(db, sql: """
+            SELECT staff_volume_overrides FROM reader_preferences WHERE id = ?
+            """, arguments: [prefsID])
+            #expect(row?["staff_volume_overrides"] == "[]")
+        }
+    }
 }

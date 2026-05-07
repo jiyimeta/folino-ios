@@ -853,6 +853,71 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.isPlaying)
         #expect(controller.playCount == 1)
     }
+
+    @Test func engineSeedUsesPersistedOverrideOverMscx() async throws {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id,
+            staffSize: 14,
+            hiddenStaves: [],
+            staffVolumeOverrides: [address: 0.3]
+        )
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 100)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+        await vm.prepareForPlayback()
+
+        let seeded = try #require(controller.lastLoadedPreferences)
+        let staff0 = try #require(seeded.perStaff.first { $0.staffIndex == 0 })
+        #expect(staff0.volume == 0.3)
+    }
+
+    @Test func engineSeedUsesMscxWhenNoOverride() async throws {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 80)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+        await vm.prepareForPlayback()
+
+        let seeded = try #require(controller.lastLoadedPreferences)
+        let staff0 = try #require(seeded.perStaff.first { $0.staffIndex == 0 })
+        #expect(abs(staff0.volume - 80.0 / 127.0) < 0.0001)
+    }
 }
 
 // swiftlint:enable file_length type_body_length

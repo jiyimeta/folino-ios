@@ -21,6 +21,12 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// channel program. Bank stays at 0 — the picker only swaps melodic
     /// programs (matches `swift-sheet-music`'s `ProgramMenu`).
     public var staffProgramOverrides: [StaffAddress: Int]
+    /// User-chosen volume `[0, 1]` per staff that overrides the score's mscx CC7.
+    /// Absent entries fall back to the score's `InstrumentChannel.volume`
+    /// (mapped from `0…127` to `0…1`), then to `1.0` if the score has no
+    /// matching part. Matches the override-overlay shape of
+    /// `staffProgramOverrides`.
+    public var staffVolumeOverrides: [StaffAddress: Double]
     /// Per-score playback rate override. `nil` means "no override" — the
     /// engine plays at the score's native tempo. Set values are clamped to
     /// `[minTempoMultiplier, maxTempoMultiplier]`. The Reader's view model
@@ -41,6 +47,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         staffSize: CGFloat,
         hiddenStaves: Set<StaffAddress>,
         staffProgramOverrides: [StaffAddress: Int] = [:],
+        staffVolumeOverrides: [StaffAddress: Double] = [:],
         tempoMultiplier: Double? = nil,
         honorLayoutBreaks: Bool = true
     ) {
@@ -49,6 +56,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.staffSize = min(max(staffSize, Self.minStaffSize), Self.maxStaffSize)
         self.hiddenStaves = hiddenStaves
         self.staffProgramOverrides = staffProgramOverrides.mapValues { min(max($0, 0), 127) }
+        self.staffVolumeOverrides = staffVolumeOverrides.mapValues { min(max($0, 0), 1) }
         self.tempoMultiplier = tempoMultiplier.map {
             min(max($0, Self.minTempoMultiplier), Self.maxTempoMultiplier)
         }
