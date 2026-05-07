@@ -294,4 +294,34 @@ struct ReaderViewModelRepeatTests {
         }
         #expect(controller.playCount == 1)
     }
+
+    @Test func persistedAbRepeatIsSeededIntoControllerOnPlaybackPrep() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let chord = ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 0)
+        let endChord = ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0)
+        let stored = ReaderPreferences(
+            scoreItemID: item.id,
+            staffSize: 14,
+            hiddenStaves: [],
+            repeatMode: .abLoop,
+            abRepeat: ABRepeatRange(start: chord, end: endChord)
+        )
+        repo.storedReaderPreferences[item.id] = stored
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item,
+            repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+
+        await vm.load()
+        await vm.prepareForPlayback()
+
+        #expect(controller.lastLoadedPreferences?.abRepeat?.start == chord)
+        #expect(controller.lastLoadedPreferences?.abRepeat?.end == endChord)
+    }
 }

@@ -436,7 +436,7 @@ public final class ReaderViewModel {
             scoreItemID: scoreItem.id,
             perStaff: states,
             tempoMultiplier: preferences.tempoMultiplier ?? 1.0,
-            abRepeat: nil
+            abRepeat: preferences.abRepeat
         )
     }
 
