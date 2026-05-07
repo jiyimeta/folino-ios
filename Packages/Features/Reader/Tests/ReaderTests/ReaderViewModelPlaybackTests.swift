@@ -1,3 +1,4 @@
+// swiftlint:disable file_length type_body_length
 import Domain
 import Foundation
 @testable import Reader
@@ -472,4 +473,76 @@ struct ReaderViewModelPlaybackTests {
         await Task.yield()
         #expect(controller.staffVolumes[2] == 0.3)
     }
+
+    @Test func setPartProgramWithCachedPatchSkipsPrefetch() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.cachedPatches = [SoundfontPatchKey(bank: 0, program: 6, isDrums: false)]
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        await vm.setPartProgram(6, forPartIndex: 0)
+
+        #expect(controller.prefetchedPatches.isEmpty)
+        #expect(vm.soundfontAlertKind == nil)
+        let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
+        #expect(calls.count == 1)
+    }
+
+    @Test func setPartProgramWithUncachedPatchPrefetchesSilentlyWhenNotPlaying() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        // cachedPatches deliberately empty — every pick is a miss.
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        await vm.setPartProgram(6, forPartIndex: 0)
+
+        #expect(vm.soundfontAlertKind == nil)
+        #expect(controller.prefetchedPatches.contains(
+            SoundfontPatchKey(bank: 0, program: 6, isDrums: false)
+        ))
+        // Engine reflection happens after prefetch resolves.
+        let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
+        #expect(calls.count == 1)
+        #expect(vm.preferences.staffProgramOverrides[
+            StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        ] == 6)
+    }
 }
+
+// swiftlint:enable file_length type_body_length

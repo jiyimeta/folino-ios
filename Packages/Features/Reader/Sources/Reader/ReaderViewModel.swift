@@ -69,6 +69,25 @@ public final class ReaderViewModel {
     @ObservationIgnored
     private var preloadTask: Task<Void, Error>?
 
+    @ObservationIgnored
+    private var pendingInstrumentLoad: PendingInstrumentLoad?
+
+    private struct PendingInstrumentLoad {
+        let partIndex: Int
+        let bank: Int
+        let program: Int
+        let isDrums: Bool
+        /// Per-staff snapshot of the override map restricted to this part
+        /// at the moment the pick was registered. `nil` value means "no
+        /// override existed for that address; remove on revert".
+        let previousOverrides: [(address: StaffAddress, previous: Int?)]
+        /// True iff playback was running at the moment we registered the
+        /// pick (or was inherited from an earlier in-flight pick that we
+        /// just cancelled). Drives auto-resume on success.
+        let wasPlaying: Bool
+        let task: Task<Void, Error>
+    }
+
     public init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
@@ -506,7 +525,29 @@ extension ReaderViewModel {
     /// reads as one "this part's instrument" choice.
     public func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
         let addresses = partStaffAddresses(forPartIndex: partIndex)
-        guard !addresses.isEmpty else { return }
+        guard !addresses.isEmpty,
+              case let .loaded(score) = loadState,
+              score.parts.indices.contains(partIndex)
+        else { return }
+        let part = score.parts[partIndex]
+        let bank = part.instrument.channel.bank
+        let isDrums = part.instrument.useDrumset
+
+        if let controller = playbackController,
+           await controller.isSoundfontCached(
+               bank: bank, program: program, isDrums: isDrums
+           ) == false
+        {
+            await runUncachedPartProgramSwap(
+                program: program, partIndex: partIndex,
+                addresses: addresses, bank: bank, isDrums: isDrums,
+                controller: controller
+            )
+            return
+        }
+
+        // Cache-hit (or no controller): preserve the original synchronous
+        // behaviour — persist the override and fan out to the engine.
         await mutatePreferences { prefs in
             for address in addresses {
                 prefs.staffProgramOverrides[address] = program
@@ -520,6 +561,57 @@ extension ReaderViewModel {
                 program: program
             )
         }
+    }
+
+    private func runUncachedPartProgramSwap(
+        program: Int,
+        partIndex: Int,
+        addresses: [StaffAddress],
+        bank: Int,
+        isDrums: Bool,
+        controller: any PlaybackController
+    ) async {
+        let snapshot = addresses.map { address in
+            (address: address, previous: preferences.staffProgramOverrides[address])
+        }
+        await mutatePreferences { prefs in
+            for address in addresses {
+                prefs.staffProgramOverrides[address] = program
+            }
+        }
+
+        let task = Task<Void, Error> {
+            try await controller.prefetchSoundfont(
+                bank: bank, program: program, isDrums: isDrums
+            )
+        }
+        let pending = PendingInstrumentLoad(
+            partIndex: partIndex, bank: bank, program: program, isDrums: isDrums,
+            previousOverrides: snapshot, wasPlaying: false, task: task
+        )
+        pendingInstrumentLoad = pending
+
+        do {
+            try await task.value
+            for address in addresses {
+                guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+                await controller.setStaffInstrument(
+                    staff: flatIndex, bank: bank, program: program
+                )
+            }
+        } catch {
+            // Cancel / failure: revert per-staff overrides.
+            await mutatePreferences { prefs in
+                for entry in snapshot {
+                    if let previous = entry.previous {
+                        prefs.staffProgramOverrides[entry.address] = previous
+                    } else {
+                        prefs.staffProgramOverrides.removeValue(forKey: entry.address)
+                    }
+                }
+            }
+        }
+        pendingInstrumentLoad = nil
     }
 
     public func clearPartProgramOverride(forPartIndex partIndex: Int) async {
