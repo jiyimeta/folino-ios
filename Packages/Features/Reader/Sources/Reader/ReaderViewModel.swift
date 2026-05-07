@@ -105,9 +105,7 @@ public final class ReaderViewModel {
     public func startObservingCursor() {
         guard let controller = playbackController else { return }
         controller.observeCursor { [weak self] value in
-            guard let self else { return }
-            playbackCursor = value
-            evaluateLoopWrap(for: value)
+            self?.playbackCursor = value
         }
     }
 
@@ -306,7 +304,6 @@ public final class ReaderViewModel {
             isPlaying = false
         } else {
             do {
-                await preSeekIfNeeded(controller: controller, score: score)
                 try await controller.play()
                 isPlaying = true
             } catch {
@@ -402,13 +399,6 @@ public final class ReaderViewModel {
     private var pendingA: ChordPath?
     /// Staged B endpoint not yet committed (incomplete loop).
     private var pendingB: ChordPath?
-    /// True between issuing a wrap-to-A seek and observing the engine
-    /// emit a cursor back inside the loop. Suppresses the wrap from
-    /// re-firing on the engine's stale past-B cursor emissions, which
-    /// would otherwise queue dozens of `play(from:in:)` calls per
-    /// second and thrash the AVAudioSequencer into a halt/restart loop.
-    @ObservationIgnored
-    private var isHandlingLoopWrap: Bool = false
 
     public var repeatMode: RepeatMode { preferences.repeatMode }
     public var abRepeat: ABRepeatRange? { preferences.abRepeat }
@@ -567,61 +557,6 @@ extension ReaderViewModel {
         guard let controller = playbackController,
               case let .loaded(score) = loadState else { return }
         await controller.setLoopRange(activeLoopRange(in: score))
-    }
-
-    private func evaluateLoopWrap(for cursor: ScoreCursor?) {
-        guard isPlaying else {
-            // Paused (or never started) — clear suppression so the next
-            // playback session re-arms wrap detection.
-            isHandlingLoopWrap = false
-            return
-        }
-        guard case let .loaded(score) = loadState,
-              let range = activeLoopRange(in: score)
-        else {
-            // Mode flipped or score unloaded mid-wrap — drop the suppression so
-            // the next entry into a loop starts fresh.
-            isHandlingLoopWrap = false
-            return
-        }
-
-        // Re-arm the wrap when we observe a cursor that's actually inside the
-        // loop. This is the engine's confirmation that our previous seek landed.
-        if let cursor, measureIndex(of: cursor) <= range.end.measureIndex {
-            isHandlingLoopWrap = false
-        }
-
-        guard !isHandlingLoopWrap else { return }
-
-        // Treat a nil cursor while we believe ourselves to be playing as a
-        // natural-end signal: wrap to the loop start.
-        if cursor == nil {
-            isHandlingLoopWrap = true
-            seekToLoopStart(range)
-            return
-        }
-        if let cursor, measureIndex(of: cursor) > range.end.measureIndex {
-            isHandlingLoopWrap = true
-            seekToLoopStart(range)
-        }
-    }
-
-    private func preSeekIfNeeded(controller: any PlaybackController, score: Score) async {
-        guard let range = activeLoopRange(in: score),
-              let cursor = playbackCursor,
-              measureIndex(of: cursor) > range.end.measureIndex else { return }
-        let target = ScoreCursor.beat(
-            measureIndex: range.start.measureIndex, tickInMeasure: 0
-        )
-        await controller.setCursor(to: target)
-        playbackCursor = target
-    }
-
-    private func seekToLoopStart(_ range: ABRepeatRange) {
-        let startCursor = ScoreCursor.beat(
-            measureIndex: range.start.measureIndex, tickInMeasure: 0
-        )
-        setManualCursor(startCursor)
     }
 
     private func commitPendingRepeat() async {
