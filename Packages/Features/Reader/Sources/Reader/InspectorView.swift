@@ -224,9 +224,18 @@ struct InspectorView: View {
         let isSolo = viewModel.soloStaves.contains(address)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Slider(value: volumeBinding, in: 0 ... 1)
-                    .disabled(isMuted || !viewModel.soloStaves.isEmpty && !isSolo)
-                    .padding(.vertical, -8)
+                Slider(
+                    value: volumeBinding,
+                    in: 0 ... 1,
+                    onEditingChanged: { editing in
+                        if !editing {
+                            let final = volumeBinding.wrappedValue
+                            Task { await viewModel.commitVolume(final, for: address) }
+                        }
+                    }
+                )
+                .disabled(isMuted || !viewModel.soloStaves.isEmpty && !isSolo)
+                .padding(.vertical, -8)
 
                 Button {
                     viewModel.toggleStaffSolo(address: address)
