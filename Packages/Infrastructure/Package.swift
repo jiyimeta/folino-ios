@@ -19,7 +19,7 @@ let package = Package(
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
         .package(
-            url: "git@github.com:jiyimeta/swift-sheet-music.git",
+            url: "https://github.com/jiyimeta/swift-sheet-music.git",
             revision: "3b905fc44b2c7d28e3a876ee2c2d0021b9d04833"
         ),
         .package(path: "../Domain"),
