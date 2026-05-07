@@ -41,7 +41,7 @@ struct HorizontalScoreContainer: View {
                     if let doc = document {
                         ZStack(alignment: .topLeading) {
                             ScoreView(
-                                document: doc, score: score,
+                                document: doc, score: score, options: scoreOptions,
                                 playbackCursor: playbackCursor,
                                 playbackCursorColor: .accentColor
                             )
@@ -85,24 +85,22 @@ struct HorizontalScoreContainer: View {
             }
     }
 
-    private func rebuildLayout() {
-        // Horizontal mode: lay out at natural content width so systems
-        // never wrap. Title frame is omitted — it'd push the score
-        // down inside what is essentially a single long row.
-        let opts = ScoreViewOptions(
-            staffSize: staffSize,
-            systemGap: staffSize * 1.25,
-            wrapToViewWidth: false,
-            includeTitleFrame: false,
+    // Horizontal mode: lay out at natural content width so systems
+    // never wrap. Title frame is omitted — it'd push the score
+    // down inside what is essentially a single long row.
+    private var scoreOptions: ScoreViewOptions {
+        ScoreViewOptions(
+            staffSize: staffSize, systemGap: staffSize * 1.25,
+            wrapToViewWidth: false, includeTitleFrame: false,
             breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
             showBreakIndicators: false
         )
-        let natural = LayoutEngine.naturalContentWidth(
-            score: score, options: opts
-        )
-        document = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: natural
-        )
+    }
+
+    private func rebuildLayout() {
+        let opts = scoreOptions
+        let natural = LayoutEngine.naturalContentWidth(score: score, options: opts)
+        document = LayoutEngine.layout(score: score, options: opts, availableWidth: natural)
     }
 
     private func autoScroll(

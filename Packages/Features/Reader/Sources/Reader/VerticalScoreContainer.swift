@@ -186,9 +186,8 @@ struct VerticalScoreContainer: View {
     @ViewBuilder
     private func scoreSurface(document doc: LayoutDocument) -> some View {
         ScoreView(
-            document: doc, score: score,
-            playbackCursor: playbackCursor,
-            playbackCursorColor: .accentColor
+            document: doc, score: score, options: scoreOptions,
+            playbackCursor: playbackCursor, playbackCursorColor: .accentColor
         )
         .coordinateSpace(name: "scoreSurface")
         .gesture(tapSeekGesture(document: doc))
@@ -296,17 +295,18 @@ struct VerticalScoreContainer: View {
             }
     }
 
-    private func rebuildLayout(width: CGFloat) {
-        let opts = ScoreViewOptions(
-            staffSize: staffSize,
-            systemGap: staffSize * 1.25,
-            wrapToViewWidth: true,
-            includeTitleFrame: true,
+    private var scoreOptions: ScoreViewOptions {
+        ScoreViewOptions(
+            staffSize: staffSize, systemGap: staffSize * 1.25,
+            wrapToViewWidth: true, includeTitleFrame: true,
             breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
             showBreakIndicators: false
         )
+    }
+
+    private func rebuildLayout(width: CGFloat) {
         document = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: width
+            score: score, options: scoreOptions, availableWidth: width
         )
         lastWidth = width
     }
