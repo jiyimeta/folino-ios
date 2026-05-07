@@ -95,7 +95,7 @@ struct PlaylistDetailView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "ellipsis")
                 .accessibilityLabel(Text("Edit Playlist", bundle: .module))
         }
     }

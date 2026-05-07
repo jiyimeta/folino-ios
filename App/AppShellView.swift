@@ -95,6 +95,7 @@ private struct ReadyShell: View {
             if horizontalSizeClass == .regular {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebar
+                        .navigationSplitViewColumnWidth(min: 350, ideal: 420)
                 } detail: {
                     detail
                 }

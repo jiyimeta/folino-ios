@@ -94,7 +94,7 @@ struct TagDetailView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "ellipsis")
                 .accessibilityLabel(Text("Edit Tag", bundle: .module))
         }
     }

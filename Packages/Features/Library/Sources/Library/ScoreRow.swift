@@ -7,17 +7,8 @@ struct ScoreRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 2) {
-                    Text(scoreItem.title)
-                        .font(.body)
-                        .lineLimit(1)
-                    if let subtitle = scoreItem.subtitle, !subtitle.isEmpty {
-                        Text(" · \(subtitle)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
+                Text("\(titleText)\(subtitleText)")
+                    .lineLimit(1)
                 if let composer = scoreItem.composer, !composer.isEmpty {
                     Text(composer)
                         .font(.subheadline)
@@ -33,6 +24,21 @@ struct ScoreRow: View {
             }
         }
         .contentShape(Rectangle())
+    }
+
+    private var titleText: Text {
+        Text(scoreItem.title)
+            .font(.body)
+    }
+
+    private var subtitleText: Text {
+        if let subtitle = scoreItem.subtitle, !subtitle.isEmpty {
+            Text(verbatim: "  · \(subtitle)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else {
+            Text(verbatim: "")
+        }
     }
 }
 
