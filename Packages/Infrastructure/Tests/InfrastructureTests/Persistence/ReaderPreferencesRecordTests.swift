@@ -104,4 +104,26 @@ import Testing
         let restored = try record.toDomain()
         #expect(restored.honorLayoutBreaks == true)
     }
+
+    @Test func emptyVolumeOverridesEncodesAsEmptyJSON() throws {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: []
+        )
+        let record = ReaderPreferencesRecord(domain: prefs)
+        #expect(record.staffVolumeOverrides == "[]")
+    }
+
+    @Test func volumeOverridesRoundTripThroughDomain() throws {
+        let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffVolumeOverrides: [address1: 0.25, address2: 0.75]
+        )
+        let record = ReaderPreferencesRecord(domain: prefs)
+        let restored = try record.toDomain()
+        #expect(restored.staffVolumeOverrides == [address1: 0.25, address2: 0.75])
+    }
 }
