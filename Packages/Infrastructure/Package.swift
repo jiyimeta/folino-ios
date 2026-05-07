@@ -20,7 +20,7 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            revision: "3b905fc44b2c7d28e3a876ee2c2d0021b9d04833"
+            revision: "29499d59d2c05ce9041f06903ed0d9077d2d6f26"
         ),
         .package(path: "../Domain"),
     ],
