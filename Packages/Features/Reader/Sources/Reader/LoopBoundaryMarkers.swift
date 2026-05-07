@@ -1,6 +1,54 @@
 import CoreGraphics
+import Domain
 import SheetMusicLayout
 import SwiftUI
+
+/// Crisp accent-color line + filled triangle drawn at each endpoint of
+/// an active A–B loop. Shares the geometry plumbing of
+/// `LoopRegionOverlay` and is intended to draw on top of it inside the
+/// score-surface `ZStack`.
+struct LoopBoundaryMarkers: View {
+    let document: LayoutDocument
+    let range: ABRepeatRange?
+
+    var body: some View {
+        Canvas { context, _ in
+            guard let range else { return }
+            let sp = document.metrics.sp
+            let triangleHeight: CGFloat = 1.0 * sp
+            let triangleWidth: CGFloat = 1.2 * sp
+            let lineThickness: CGFloat = 0.5 * sp
+
+            if let a = aMarkerGeometry(
+                document: document,
+                measureIndex: range.start.measureIndex,
+                triangleHeight: triangleHeight,
+                lineThickness: lineThickness,
+                triangleWidth: triangleWidth
+            ) {
+                context.fill(Path(a.line), with: .color(.accentColor))
+                context.fill(a.triangle, with: .color(.accentColor))
+            }
+            if let b = bMarkerGeometry(
+                document: document,
+                measureIndex: range.end.measureIndex,
+                triangleHeight: triangleHeight,
+                lineThickness: lineThickness,
+                triangleWidth: triangleWidth
+            ) {
+                context.fill(Path(b.line), with: .color(.accentColor))
+                context.fill(b.triangle, with: .color(.accentColor))
+            }
+        }
+        .frame(
+            width: document.size.width,
+            height: document.size.height,
+            alignment: .topLeading
+        )
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
 
 /// Returns the line rect and apex-right triangle path for the A endpoint
 /// of an A–B loop, drawn at the **left edge** of `measureIndex`. Returns
