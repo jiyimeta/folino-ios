@@ -393,6 +393,16 @@ public final class ReaderViewModel {
         await playbackController?.setMetronomeEnabled(enabled)
     }
 
+    // MARK: - Repeat / loop
+
+    public var repeatMode: RepeatMode { preferences.repeatMode }
+    public var abRepeat: ABRepeatRange? { preferences.abRepeat }
+
+    public func advanceRepeatMode() async {
+        let next = preferences.repeatMode.next
+        await mutatePreferences { $0.repeatMode = next }
+    }
+
     // MARK: - Private
 
     private func initialPlaybackPreferences(for score: Score) -> PlaybackPreferences {
@@ -450,7 +460,9 @@ public final class ReaderViewModel {
             staffSize: copy.staffSize,
             hiddenStaves: copy.hiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
-            tempoMultiplier: copy.tempoMultiplier
+            tempoMultiplier: copy.tempoMultiplier,
+            repeatMode: copy.repeatMode,
+            abRepeat: copy.abRepeat
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)
