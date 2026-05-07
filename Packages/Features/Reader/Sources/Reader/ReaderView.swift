@@ -5,7 +5,8 @@ import SwiftUI
 @MainActor
 public struct ReaderView: View {
     @State private var viewModel: ReaderViewModel
-    @Environment(\.horizontalSizeClass) private var _horizontalSizeClass
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dismiss) private var dismiss
 
     public init(
         scoreItem: ScoreItem,
@@ -32,43 +33,53 @@ public struct ReaderView: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .bottom) {
-            content
-            ReaderBottomOverlay(viewModel: viewModel)
+        ZStack {
+            #if os(iOS)
+                content
+                    .safeAreaPadding(.top, ReaderTopOverlay.height)
+            #else
+                content
+            #endif
+            VStack(spacing: 0) {
+                #if os(iOS)
+                    ReaderTopOverlay(
+                        viewModel: viewModel,
+                        showsBackButton: horizontalSizeClass == .compact,
+                        onBack: { dismiss() }
+                    )
+                #endif
+                Spacer()
+                ReaderBottomOverlay(viewModel: viewModel)
+            }
         }
-        .navigationTitle(viewModel.scoreItem.title)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
-            .toolbar {
-                ReaderToolbar(viewModel: viewModel)
+        .navigationTitle("")
+        .readerToolbar(viewModel: viewModel)
+        .inspector(isPresented: $viewModel.isInspectorPresented) {
+            if case let .loaded(score) = viewModel.loadState {
+                InspectorView(viewModel: viewModel, score: score)
+                    .presentationDetents([.medium, .large])
+            } else {
+                Color.clear
             }
-            .inspector(isPresented: $viewModel.isInspectorPresented) {
-                if case let .loaded(score) = viewModel.loadState {
-                    InspectorView(viewModel: viewModel, score: score)
-                        .presentationDetents([.medium, .large])
-                } else {
-                    Color.clear
+        }
+        .alert(
+            soundfontAlertTitle(for: viewModel.soundfontAlertKind),
+            isPresented: Binding(
+                get: { viewModel.soundfontAlertKind != nil },
+                set: { newValue in
+                    if !newValue { viewModel.cancelLoadingSoundfonts() }
                 }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                viewModel.cancelLoadingSoundfonts()
             }
-            .alert(
-                soundfontAlertTitle(for: viewModel.soundfontAlertKind),
-                isPresented: Binding(
-                    get: { viewModel.soundfontAlertKind != nil },
-                    set: { newValue in
-                        if !newValue { viewModel.cancelLoadingSoundfonts() }
-                    }
-                )
-            ) {
-                Button("Cancel", role: .cancel) {
-                    viewModel.cancelLoadingSoundfonts()
-                }
-            }
-            .task {
-                viewModel.startObservingCursor()
-                await viewModel.load()
-                await viewModel.prepareForPlayback()
-            }
+        }
+        .task {
+            viewModel.startObservingCursor()
+            await viewModel.load()
+            await viewModel.prepareForPlayback()
+        }
     }
 
     private func soundfontAlertTitle(
