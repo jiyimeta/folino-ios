@@ -29,7 +29,11 @@ struct AppShellView: View {
                 )
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {
-                    Label("Folino couldn't start", systemImage: "exclamationmark.triangle")
+                    Label {
+                        Text("Folino couldn't start")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle")
+                    }
                 } description: {
                     Text((failure as? LocalizedError)?.errorDescription ?? failure.localizedDescription)
                 }
@@ -37,9 +41,9 @@ struct AppShellView: View {
                 ProgressView().controlSize(.large)
             }
         }
-        .alert("Enjoying Folino?", isPresented: $reviewPrompt.isPrePromptPresented) {
-            Button("Rate Folino") { requestReview() }
-            Button("Not Now", role: .cancel) {}
+        .alert(Text("Enjoying Folino?"), isPresented: $reviewPrompt.isPrePromptPresented) {
+            Button { requestReview() } label: { Text("Rate Folino") }
+            Button(role: .cancel) {} label: { Text("Not Now") }
         } message: {
             Text("Would you mind taking a moment to leave a review on the App Store?")
         }
@@ -167,7 +171,7 @@ private struct ReadyShell: View {
                 }
             )
         } else {
-            ContentUnavailableView("Select a score", systemImage: "music.note")
+            emptyDetail
         }
     }
 
@@ -197,7 +201,17 @@ private struct ReadyShell: View {
         Button {
             isSettingsPresented = true
         } label: {
-            Image(systemName: "gear").accessibilityLabel("Settings")
+            Image(systemName: "gear").accessibilityLabel(Text("Settings"))
+        }
+    }
+
+    private var emptyDetail: some View {
+        ContentUnavailableView {
+            Label {
+                Text("Select a score")
+            } icon: {
+                Image(systemName: "music.note")
+            }
         }
     }
 }

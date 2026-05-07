@@ -12,10 +12,14 @@ public enum ScoreItemSort: String, CaseIterable, Sendable, Identifiable {
 
     public var labelKey: LocalizedStringResource {
         switch self {
-        case .dateAddedDesc: "sort.dateAdded"
-        case .titleAsc: "sort.title"
-        case .composerAsc: "sort.composer"
-        case .lastOpenedDesc: "sort.lastOpened"
+        case .dateAddedDesc:
+            LocalizedStringResource("sort.dateAdded", bundle: .atURL(Bundle.module.bundleURL))
+        case .titleAsc:
+            LocalizedStringResource("sort.title", bundle: .atURL(Bundle.module.bundleURL))
+        case .composerAsc:
+            LocalizedStringResource("sort.composer", bundle: .atURL(Bundle.module.bundleURL))
+        case .lastOpenedDesc:
+            LocalizedStringResource("sort.lastOpened", bundle: .atURL(Bundle.module.bundleURL))
         }
     }
 

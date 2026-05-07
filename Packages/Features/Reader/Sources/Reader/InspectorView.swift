@@ -20,9 +20,11 @@ struct InspectorView: View {
         Group {
             if hsc == .compact {
                 VStack(spacing: 0) {
-                    Picker("Inspector tab", selection: $selectedTab) {
-                        Text("Playback").tag(InspectorTab.playback)
-                        Text("Visual").tag(InspectorTab.visual)
+                    Picker(selection: $selectedTab) {
+                        Text("Playback", bundle: .module).tag(InspectorTab.playback)
+                        Text("Visual", bundle: .module).tag(InspectorTab.visual)
+                    } label: {
+                        Text("Inspector tab", bundle: .module)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -38,8 +40,8 @@ struct InspectorView: View {
                 }
             } else {
                 List {
-                    Section("Playback") { playbackContent }
-                    Section("Visual") { visualContent }
+                    Section { playbackContent } header: { Text("Playback", bundle: .module) }
+                    Section { visualContent } header: { Text("Visual", bundle: .module) }
                 }
                 .listStyle(.plain)
                 .buttonStyle(.plain)
@@ -110,11 +112,13 @@ struct InspectorView: View {
     @ViewBuilder
     private var layoutRow: some View {
         HStack {
-            Text("Layout direction")
+            Text("Layout direction", bundle: .module)
             Spacer()
-            Picker("Layout direction", selection: $viewModel.layoutMode) {
+            Picker(selection: $viewModel.layoutMode) {
                 Image(systemName: "arrow.up.and.down").tag(ReaderViewModel.LayoutMode.vertical)
                 Image(systemName: "arrow.left.and.right").tag(ReaderViewModel.LayoutMode.horizontal)
+            } label: {
+                Text("Layout direction", bundle: .module)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -131,7 +135,9 @@ struct InspectorView: View {
                 Task { await viewModel.setHonorLayoutBreaks(newValue) }
             }
         )
-        Toggle("Honor authored breaks", isOn: binding)
+        Toggle(isOn: binding) {
+            Text("Honor authored breaks", bundle: .module)
+        }
     }
 
     @ViewBuilder
@@ -148,11 +154,12 @@ struct InspectorView: View {
             }
         )
         Stepper(
-            "Staff size: \(Int(viewModel.preferences.staffSize)) pt",
             value: staffSize,
             in: ReaderPreferences.minStaffSize ... ReaderPreferences.maxStaffSize,
             step: 1
-        )
+        ) {
+            Text("Staff size: \(Int(viewModel.preferences.staffSize)) pt", bundle: .module)
+        }
     }
 
     @ViewBuilder
@@ -250,6 +257,19 @@ struct InspectorView: View {
     }
 
     @ViewBuilder
+    private func resetProgramButton(partIndex: Int) -> some View {
+        Button {
+            Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
+        } label: {
+            Label {
+                Text("Reset to default", bundle: .module)
+            } icon: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+        }
+    }
+
+    @ViewBuilder
     private func programPicker(partIndex: Int) -> some View {
         let program = viewModel.effectiveProgram(forPartIndex: partIndex)
         let hasOverride = viewModel.hasProgramOverride(forPartIndex: partIndex)
@@ -258,11 +278,7 @@ struct InspectorView: View {
                 .foregroundStyle(.secondary)
             Menu {
                 if hasOverride {
-                    Button {
-                        Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
-                    } label: {
-                        Label("Reset to default", systemImage: "arrow.uturn.backward")
-                    }
+                    resetProgramButton(partIndex: partIndex)
                     Divider()
                 }
                 ForEach(GMInstrument.Family.allCases, id: \.self) { family in

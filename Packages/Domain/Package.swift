@@ -7,6 +7,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 
 let package = Package(
     name: "Domain",
+    defaultLocalization: "en",
     platforms: [.iOS(.v26), .macOS(.v15)],
     products: [
         .library(name: "Domain", targets: ["Domain"]),
@@ -24,6 +25,7 @@ let package = Package(
             dependencies: [
                 .product(name: "SheetMusicCore", package: "swift-sheet-music"),
             ],
+            resources: [.process("Resources")],
             plugins: swiftLintPlugins
         ),
         .testTarget(name: "DomainTests", dependencies: ["Domain"]),

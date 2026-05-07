@@ -1,134 +1,306 @@
 {
-  "sourceLanguage": "en",
-  "version": "1.0",
-  "strings": {
-    "Settings": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Settings" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "設定" } }
-      }
-    },
-    "About": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "About" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "情報" } }
-      }
-    },
-    "Licenses": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Licenses" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ライセンス" } }
-      }
-    },
-    "Done": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Done" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "完了" } }
-      }
-    },
-    "Storage": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Storage" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ストレージ" } }
-      }
-    },
-    "Soundfont Cache": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Soundfont Cache" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "音源キャッシュ" } }
-      }
-    },
-    "Cached Soundfonts": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Cached Soundfonts" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キャッシュ済み音源" } }
-      }
-    },
-    "Total": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Total" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "合計" } }
-      }
-    },
-    "Delete All Cached Soundfonts": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Delete All Cached Soundfonts" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キャッシュをすべて削除" } }
-      }
-    },
-    "Delete all cached soundfonts?": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Delete all cached soundfonts?" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キャッシュをすべて削除しますか？" } }
-      }
-    },
-    "Cached files will be re-downloaded the next time they're needed.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cached files will be re-downloaded the next time they're needed."
+  "sourceLanguage" : "en",
+  "strings" : {
+    "About" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "削除した音源は次に必要になったときに再ダウンロードされます。"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "情報"
           }
         }
       }
     },
-    "Delete All": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Delete All" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "すべて削除" } }
-      }
-    },
-    "Cancel": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Cancel" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キャンセル" } }
-      }
-    },
-    "No cached soundfonts": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "No cached soundfonts" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キャッシュはありません" } }
-      }
-    },
-    "Patches downloaded for playback will appear here.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Patches downloaded for playback will appear here."
+    "Bank %1$lld · Program %2$lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bank %1$lld · Program %2$lld"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "再生のためにダウンロードした音源がここに表示されます。"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バンク %1$lld・プログラム %2$lld"
           }
         }
       }
     },
-    "Couldn't read cache": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Couldn't read cache" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キャッシュを読み込めませんでした" } }
+    "Bank %lld · Program %lld" : {
+      "comment" : "Soundfont cache row label for a non-GM patch",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bank %1$lld · Program %2$lld"
+          }
+        }
       }
     },
-    "Drum Kit (Program %lld)": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Drum Kit (Program %lld)" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ドラムキット（プログラム %lld）" } }
+    "Cached files will be re-downloaded the next time they're needed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cached files will be re-downloaded the next time they're needed."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "削除した音源は次に必要になったときに再ダウンロードされます。"
+          }
+        }
       }
     },
-    "Bank %1$lld · Program %2$lld": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Bank %1$lld · Program %2$lld" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "バンク %1$lld・プログラム %2$lld" } }
+    "Cached Soundfonts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cached Soundfonts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャッシュ済み音源"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャンセル"
+          }
+        }
+      }
+    },
+    "Couldn't read cache" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read cache"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャッシュを読み込めませんでした"
+          }
+        }
+      }
+    },
+    "Delete All" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete All"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて削除"
+          }
+        }
+      }
+    },
+    "Delete All Cached Soundfonts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete All Cached Soundfonts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャッシュをすべて削除"
+          }
+        }
+      }
+    },
+    "Delete all cached soundfonts?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete all cached soundfonts?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャッシュをすべて削除しますか？"
+          }
+        }
+      }
+    },
+    "Done" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
+          }
+        }
+      }
+    },
+    "Drum Kit (Program %lld)" : {
+      "comment" : "Soundfont cache row label for a percussion patch",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drum Kit (Program %lld)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ドラムキット（プログラム %lld）"
+          }
+        }
+      }
+    },
+    "Licenses" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Licenses"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライセンス"
+          }
+        }
+      }
+    },
+    "No cached soundfonts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No cached soundfonts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャッシュはありません"
+          }
+        }
+      }
+    },
+    "Patches downloaded for playback will appear here." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Patches downloaded for playback will appear here."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生のためにダウンロードした音源がここに表示されます。"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定"
+          }
+        }
+      }
+    },
+    "Soundfont Cache" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soundfont Cache"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音源キャッシュ"
+          }
+        }
+      }
+    },
+    "Storage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Storage"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ストレージ"
+          }
+        }
+      }
+    },
+    "Total" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合計"
+          }
+        }
       }
     }
-  }
+  },
+  "version" : "1.0"
 }

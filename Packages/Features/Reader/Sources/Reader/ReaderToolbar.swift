@@ -40,19 +40,23 @@ extension View {
 
         var body: some View {
             HStack(spacing: 12) {
-                overlayButton(systemImage: "chevron.backward", label: "Back", action: onBack)
-                    .glassEffect(.regular.interactive())
+                overlayButton(
+                    systemImage: "chevron.backward",
+                    label: Text("Back", bundle: .module),
+                    action: onBack
+                )
+                .glassEffect(.regular.interactive())
                 Spacer()
                 HStack(spacing: 4) {
                     overlayButton(
                         systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill",
-                        label: viewModel.isPlaying ? "Pause" : "Play"
+                        label: Text(viewModel.isPlaying ? "Pause" : "Play", bundle: .module)
                     ) {
                         Task { await viewModel.togglePlayback() }
                     }
                     overlayButton(
                         systemImage: "slider.horizontal.3",
-                        label: "Show staves panel"
+                        label: Text("Show staves panel", bundle: .module)
                     ) {
                         viewModel.isInspectorPresented.toggle()
                     }
@@ -66,7 +70,7 @@ extension View {
         @ViewBuilder
         private func overlayButton(
             systemImage: String,
-            label: String,
+            label: Text,
             action: @escaping () -> Void
         ) -> some View {
             Button(action: action) {
@@ -91,14 +95,14 @@ extension View {
                 } label: {
                     Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
                 }
-                .accessibilityLabel(viewModel.isPlaying ? "Pause" : "Play")
+                .accessibilityLabel(Text(viewModel.isPlaying ? "Pause" : "Play", bundle: .module))
 
                 Button {
                     viewModel.isInspectorPresented.toggle()
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }
-                .accessibilityLabel("Show staves panel")
+                .accessibilityLabel(Text("Show staves panel", bundle: .module))
             }
         }
     }
@@ -115,9 +119,13 @@ struct ReaderBottomOverlay: View {
                 Button {
                     viewModel.resetZoom()
                 } label: {
-                    Label("Reset zoom", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(.ultraThinMaterial, in: Capsule())
+                    Label {
+                        Text("Reset zoom", bundle: .module)
+                    } icon: {
+                        Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
                 }
             }
             Spacer()
