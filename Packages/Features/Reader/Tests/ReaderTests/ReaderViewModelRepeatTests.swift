@@ -66,7 +66,7 @@ struct ReaderViewModelRepeatTests {
         // The pending marker is reflected in pendingRepeatA.
         #expect(vm.pendingRepeatA?.measureIndex == 4)
         #expect(vm.pendingRepeatA?.chordIndex == 0)
-        #expect(vm.abRepeat?.end == nil) // B unset → abRepeat is nil
+        #expect(vm.abRepeat == nil)
         #expect(repo.savedReaderPreferences.last?.abRepeat == nil)
     }
 
@@ -77,11 +77,12 @@ struct ReaderViewModelRepeatTests {
 
         await vm.setRepeatB()
 
-        // FakeScoreFileGateway loads a 6-measure score; m1
-        // has at least one chord, so the snapped end ChordPath has
-        // measureIndex == 1.
+        // FakeScoreFileGateway loads a 6-measure score; m1 has 2 chord
+        // positions (indices 0 and 1), so the snapped end ChordPath has
+        // measureIndex == 1 and chordIndex == 1.
         // B-only → loop is incomplete; abRepeat is nil; pendingRepeatB reflects the snap.
         #expect(vm.pendingRepeatB?.measureIndex == 1)
+        #expect(vm.pendingRepeatB?.chordIndex == 1)
         #expect(vm.abRepeat == nil)
     }
 

@@ -530,23 +530,25 @@ extension ReaderViewModel {
         pendingA = nil
         if let existing = preferences.abRepeat {
             pendingB = existing.end
+            await mutatePreferences { $0.abRepeat = nil }
         }
-        await mutatePreferences { $0.abRepeat = nil }
     }
 
     public func clearRepeatB() async {
         pendingB = nil
         if let existing = preferences.abRepeat {
             pendingA = existing.start
+            await mutatePreferences { $0.abRepeat = nil }
         }
-        await mutatePreferences { $0.abRepeat = nil }
     }
 
     private func commitPendingRepeat() async {
         let candidateStart = pendingA ?? preferences.abRepeat?.start
         let candidateEnd = pendingB ?? preferences.abRepeat?.end
         guard let start = candidateStart, let end = candidateEnd else {
-            await mutatePreferences { $0.abRepeat = nil }
+            if preferences.abRepeat != nil {
+                await mutatePreferences { $0.abRepeat = nil }
+            }
             return
         }
         let normalized = normalize(ABRepeatRange(start: start, end: end))
