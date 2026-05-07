@@ -8,6 +8,14 @@ import SwiftUI
 /// `LoopRegionOverlay` and is intended to draw on top of it inside the
 /// score-surface `ZStack`.
 struct LoopBoundaryMarkers: View {
+    /// Multipliers applied to `document.metrics.sp` to derive marker
+    /// dimensions. Exposed so tests can reference the same source of
+    /// truth that the view draws with. Tune via the preview cases in
+    /// `VerticalScoreContainerPreviews`.
+    nonisolated static let triangleHeightFactor: CGFloat = 1.0
+    nonisolated static let triangleWidthFactor: CGFloat = 1.2
+    nonisolated static let lineThicknessFactor: CGFloat = 0.5
+
     let document: LayoutDocument
     let range: ABRepeatRange?
 
@@ -15,9 +23,9 @@ struct LoopBoundaryMarkers: View {
         Canvas { context, _ in
             guard let range else { return }
             let sp = document.metrics.sp
-            let triangleHeight: CGFloat = 1.0 * sp
-            let triangleWidth: CGFloat = 1.2 * sp
-            let lineThickness: CGFloat = 0.5 * sp
+            let triangleHeight: CGFloat = sp * Self.triangleHeightFactor
+            let triangleWidth: CGFloat = sp * Self.triangleWidthFactor
+            let lineThickness: CGFloat = sp * Self.lineThicknessFactor
 
             if let a = aMarkerGeometry(
                 document: document,

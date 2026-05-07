@@ -7,9 +7,9 @@ import Testing
 
 @Suite struct LoopBoundaryMarkersTests {
     private static let sp: CGFloat = 14.0 / 4 // staffSize 14 → sp 3.5
-    private static let triangleHeight: CGFloat = 1.0 * sp
-    private static let triangleWidth: CGFloat = 1.2 * sp
-    private static let lineThickness: CGFloat = 0.5 * sp
+    private static let triangleHeight: CGFloat = sp * LoopBoundaryMarkers.triangleHeightFactor
+    private static let triangleWidth: CGFloat = sp * LoopBoundaryMarkers.triangleWidthFactor
+    private static let lineThickness: CGFloat = sp * LoopBoundaryMarkers.lineThicknessFactor
 
     /// One system at y=100, height=60, with two measures:
     /// measure 0 origin.x = 0, width 80; measure 1 origin.x = 80, width 100.
