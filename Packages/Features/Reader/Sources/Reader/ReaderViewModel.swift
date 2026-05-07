@@ -179,6 +179,17 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         Task { await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped) }
     }
 
+    /// Slider release: persist the value as the per-score override and
+    /// clear the transient drag entry. Forwards to the engine so the
+    /// post-clamp value is what gets played.
+    public func commitVolume(_ value: Double, for address: StaffAddress) async {
+        let clamped = min(max(value, 0), 1)
+        await mutatePreferences { $0.staffVolumeOverrides[address] = clamped }
+        liveStaffVolumes[address] = nil
+        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
+    }
+
     public func toggleStaffMute(address: StaffAddress) {
         if mutedStaves.contains(address) {
             mutedStaves.remove(address)
