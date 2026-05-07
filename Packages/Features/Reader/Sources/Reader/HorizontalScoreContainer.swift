@@ -31,6 +31,13 @@ struct HorizontalScoreContainer: View {
         GeometryReader { proxy in
             ScrollViewReader { scrollProxy in
                 ScrollView(.horizontal) {
+                    // Pin the leading edge so the score doesn't open
+                    // half-way across the page. See `VerticalScoreContainer`
+                    // for the fuller diagnosis — same root cause: the
+                    // ScrollView's content grows from `nil` to the full
+                    // natural width once `rebuildLayout` finishes, and the
+                    // default anchor preserves the *centre* across that
+                    // change.
                     if let doc = document {
                         ZStack(alignment: .topLeading) {
                             ScoreView(
@@ -47,6 +54,7 @@ struct HorizontalScoreContainer: View {
                         .padding(scorePadding)
                     }
                 }
+                .defaultScrollAnchor(.leading)
                 .coordinateSpace(name: "hScroll")
                 .onPreferenceChange(HorizontalMeasureFramesKey.self) { frames in
                     measureFrames = frames

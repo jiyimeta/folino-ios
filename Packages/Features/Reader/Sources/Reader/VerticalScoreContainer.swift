@@ -108,6 +108,16 @@ struct VerticalScoreContainer: View {
         ScrollView([.vertical, .horizontal]) {
             zoomedSurface(viewport: viewport)
         }
+        // Pin the score's top-leading to the viewport's top-leading. Without
+        // this, the ScrollView's default anchor preserves the content's
+        // *centre* across size changes — and our content goes from 0×0
+        // (`Color.clear` while `document == nil`) to the full layout size
+        // once `rebuildLayout` finishes. Center-anchoring that growth
+        // visibly opens the score around the middle of the page on first
+        // paint. iPad makes it more obvious because `NavigationSplitView`
+        // re-runs the geometry pass as the detail column negotiates width,
+        // re-firing layout and growing the content size each time.
+        .defaultScrollAnchor(.topLeading)
         .scrollPosition($scrollPosition, anchor: .topLeading)
         .simultaneousGesture(doubleTapGesture)
         .onScrollGeometryChange(for: CGPoint.self) { geometry in
