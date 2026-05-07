@@ -30,47 +30,17 @@ struct HorizontalScoreContainer: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollViewReader { scrollProxy in
-                ScrollView(.horizontal) {
-                    // Pin the leading edge so the score doesn't open
-                    // half-way across the page. See `VerticalScoreContainer`
-                    // for the fuller diagnosis — same root cause: the
-                    // ScrollView's content grows from `nil` to the full
-                    // natural width once `rebuildLayout` finishes, and the
-                    // default anchor preserves the *centre* across that
-                    // change.
-                    if let doc = document {
-                        ZStack(alignment: .topLeading) {
-                            ScoreView(
-                                document: doc, score: score, options: scoreOptions,
-                                playbackCursor: playbackCursor,
-                                playbackCursorColor: .accentColor
-                            )
-                            .coordinateSpace(name: "scoreSurface")
-                            .gesture(tapSeekGesture(document: doc))
-                            .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
-
-                            if viewModel.repeatMode == .abLoop {
-                                LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
-                            }
-
-                            HorizontalMeasureAnchors(document: doc)
-                        }
-                        .frame(minHeight: proxy.size.height)
-                        .padding(scorePadding)
+                // `.onChange` and `.task` chain on the helper's outermost view; they
+                // stay here (not inside scrollContent) because they need scrollProxy
+                // from the enclosing ScrollViewReader.
+                scrollContent(minHeight: proxy.size.height)
+                    .onChange(of: playbackCursor) { _, newCursor in
+                        autoScroll(
+                            cursor: newCursor,
+                            viewport: proxy.size,
+                            proxy: scrollProxy
+                        )
                     }
-                }
-                .defaultScrollAnchor(.leading)
-                .coordinateSpace(name: "hScroll")
-                .onPreferenceChange(HorizontalMeasureFramesKey.self) { frames in
-                    measureFrames = frames
-                }
-                .onChange(of: playbackCursor) { _, newCursor in
-                    autoScroll(
-                        cursor: newCursor,
-                        viewport: proxy.size,
-                        proxy: scrollProxy
-                    )
-                }
             }
             .task(id: TaskKey(
                 score: score, size: staffSize,
@@ -78,6 +48,43 @@ struct HorizontalScoreContainer: View {
             )) {
                 rebuildLayout()
             }
+        }
+    }
+
+    // Pin the leading edge so the score doesn't open half-way across the page.
+    // See `VerticalScoreContainer` for the fuller diagnosis — same root cause:
+    // the ScrollView's content grows from `nil` to the full natural width once
+    // `rebuildLayout` finishes, and the default anchor preserves the *centre*
+    // across that change.
+    @ViewBuilder
+    private func scrollContent(minHeight: CGFloat) -> some View {
+        ScrollView(.horizontal) {
+            if let doc = document {
+                ZStack(alignment: .topLeading) {
+                    ScoreView(
+                        document: doc, score: score, options: scoreOptions,
+                        playbackCursor: playbackCursor,
+                        playbackCursorColor: .accentColor
+                    )
+                    .coordinateSpace(name: "scoreSurface")
+                    .gesture(tapSeekGesture(document: doc))
+                    .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
+
+                    if viewModel.repeatMode == .abLoop {
+                        LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
+                        LoopBoundaryMarkers(document: doc, range: viewModel.abRepeat)
+                    }
+
+                    HorizontalMeasureAnchors(document: doc)
+                }
+                .frame(minHeight: minHeight)
+                .padding(scorePadding)
+            }
+        }
+        .defaultScrollAnchor(.leading)
+        .coordinateSpace(name: "hScroll")
+        .onPreferenceChange(HorizontalMeasureFramesKey.self) { frames in
+            measureFrames = frames
         }
     }
 

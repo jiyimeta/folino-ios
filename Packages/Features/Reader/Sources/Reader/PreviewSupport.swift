@@ -51,6 +51,47 @@
         }
     }
 
+    /// `ScoreLibraryRepository` fake that delegates every call to a held
+    /// `PreviewFakeRepository` except `loadReaderPreferences`, which returns
+    /// a caller-provided `ReaderPreferences`. Use this in `#Preview` blocks
+    /// that need to exercise a non-default reader-preference state (e.g. a
+    /// pre-seeded A–B loop) without touching the production view-model API.
+    @MainActor
+    @Observable
+    final class PreviewSeededPreferencesRepository: ScoreLibraryRepository {
+        private let base = PreviewFakeRepository()
+        private let seededPreferences: ReaderPreferences
+
+        init(seededPreferences: ReaderPreferences) {
+            self.seededPreferences = seededPreferences
+        }
+
+        func loadReaderPreferences(for _: Domain.ScoreItemID) throws -> ReaderPreferences? {
+            seededPreferences
+        }
+
+        // Delegate every other method to `base`. (List them all so a future
+        // protocol addition fails to compile here, surfacing the gap.)
+        var scoreItems: [ScoreItem] { base.scoreItems }
+        var tags: [Tag] { base.tags }
+        var playlists: [Playlist] { base.playlists }
+
+        func refresh() throws { try base.refresh() }
+        func saveScoreItem(_ item: ScoreItem) throws { try base.saveScoreItem(item) }
+        func deleteScoreItem(id: Domain.ScoreItemID) throws { try base.deleteScoreItem(id: id) }
+        func saveTag(_ tag: Tag) throws { try base.saveTag(tag) }
+        func deleteTag(id: TagID) throws { try base.deleteTag(id: id) }
+        func savePlaylist(_ playlist: Playlist) throws { try base.savePlaylist(playlist) }
+        func deletePlaylist(id: PlaylistID) throws { try base.deletePlaylist(id: id) }
+        func scoreItems(matchingContentHash hash: String) throws -> [ScoreItem] {
+            try base.scoreItems(matchingContentHash: hash)
+        }
+
+        func saveReaderPreferences(_ prefs: ReaderPreferences) throws {
+            try base.saveReaderPreferences(prefs)
+        }
+    }
+
     final class PreviewFakeGateway: ScoreFileGateway, @unchecked Sendable {
         let score: Score
 
