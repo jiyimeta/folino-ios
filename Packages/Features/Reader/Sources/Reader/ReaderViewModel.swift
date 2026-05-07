@@ -556,7 +556,7 @@ extension ReaderViewModel {
         case .loopAll:
             scoreFullRange(in: score)
         case .abLoop:
-            return preferences.abRepeat
+            preferences.abRepeat
         }
         await controller.setLoopRange(range)
     }
