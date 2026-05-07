@@ -9,22 +9,21 @@ struct RepeatModeButton: View {
         Button {
             Task { await action() }
         } label: {
-            Image(systemName: symbol)
+            icon
                 .resizable()
                 .scaledToFit()
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .padding(.horizontal, 4)
-                .symbolVariant(mode == .off ? .none : .fill)
                 .accessibilityLabel(label)
         }
         .accessibilityValue(value)
     }
 
-    private var symbol: String {
+    private var icon: Image {
         switch mode {
-        case .off, .loopAll: "repeat"
-        case .abLoop: "repeat.1"
+        case .off, .loopAll: Image(systemName: "repeat")
+        case .abLoop: Image("repeat_a_b", bundle: .module)
         }
     }
 

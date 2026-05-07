@@ -4,13 +4,14 @@
     "" : {
       "shouldTranslate" : false
     },
-    " " : {
-      "shouldTranslate" : false
-    },
     "%lld%%" : {
       "shouldTranslate" : false
     },
+    "A" : {
+
+    },
     "A–B repeat markers" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -29,6 +30,9 @@
           }
         }
       }
+    },
+    "B" : {
+
     },
     "Back" : {
       "localizations" : {
@@ -169,6 +173,7 @@
       }
     },
     "m. %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -179,6 +184,7 @@
       }
     },
     "Not set" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -305,6 +311,7 @@
       }
     },
     "Set to measure %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {

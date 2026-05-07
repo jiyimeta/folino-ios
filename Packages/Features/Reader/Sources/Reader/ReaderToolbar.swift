@@ -130,9 +130,33 @@ struct ReaderBottomOverlay: View {
             }
             Spacer()
             if viewModel.repeatMode == .abLoop {
-                ABPill(viewModel: viewModel)
+                endpointButton(
+                    label: "A",
+                    isSet: viewModel.pendingRepeatA != nil,
+                    onSet: { Task { await viewModel.setRepeatA() } }
+                )
+
+                endpointButton(
+                    label: "B",
+                    isSet: viewModel.pendingRepeatB != nil,
+                    onSet: { Task { await viewModel.setRepeatB() } }
+                )
             }
         }
         .padding()
+    }
+
+    private func endpointButton(
+        label: LocalizedStringResource,
+        isSet: Bool,
+        onSet: @escaping () -> Void
+    ) -> some View {
+        Button(action: onSet) {
+            Text(label)
+                .tint(.primary)
+                .font(.system(size: 20, weight: .semibold))
+                .frame(width: 44, height: 44)
+        }
+        .glassEffect(.regular.tint(isSet ? .clear : .accentColor).interactive())
     }
 }

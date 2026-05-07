@@ -581,6 +581,11 @@ extension ReaderViewModel {
     }
 
     public func setRepeatA() async {
+        if let pendingRepeatA, pendingRepeatA.measureIndex == playbackCursor?.measureIndex {
+            await clearRepeatA()
+            return
+        }
+
         guard case let .loaded(score) = loadState,
               let cursor = playbackCursor else { return }
         let measure = measureIndex(of: cursor)
@@ -591,6 +596,11 @@ extension ReaderViewModel {
     }
 
     public func setRepeatB() async {
+        if let pendingRepeatB, pendingRepeatB.measureIndex == playbackCursor?.measureIndex {
+            await clearRepeatB()
+            return
+        }
+
         guard case let .loaded(score) = loadState,
               let cursor = playbackCursor else { return }
         let measure = measureIndex(of: cursor)
@@ -600,7 +610,7 @@ extension ReaderViewModel {
         await forwardLoopRangeToController()
     }
 
-    public func clearRepeatA() async {
+    private func clearRepeatA() async {
         pendingA = nil
         if let existing = preferences.abRepeat {
             pendingB = existing.end
@@ -611,7 +621,7 @@ extension ReaderViewModel {
         await forwardLoopRangeToController()
     }
 
-    public func clearRepeatB() async {
+    private func clearRepeatB() async {
         pendingB = nil
         if let existing = preferences.abRepeat {
             pendingA = existing.start
