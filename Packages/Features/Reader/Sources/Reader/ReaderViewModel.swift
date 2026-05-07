@@ -7,7 +7,7 @@ import SheetMusicCore
 
 @MainActor
 @Observable
-public final class ReaderViewModel {
+public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public enum LoadState {
         case loading
         case loaded(Score)
@@ -244,6 +244,20 @@ public final class ReaderViewModel {
             score.parts.indices.contains(address.partIndex)
         else { return nil }
         return score.parts[address.partIndex].instrument.channel.bank
+    }
+
+    /// CC7 (Channel Volume) from the part's first channel, mapped from
+    /// MIDI's 0…127 to the slider's 0…1. Returns nil when the score has no
+    /// matching part — callers fall back to `defaultStaffVolume`. Mirrors
+    /// `swift-sheet-music`'s `PlaybackEngine.initialStaffVolume`.
+    private func scoreDefaultVolume(for address: StaffAddress) -> Double? {
+        guard
+            case let .loaded(score) = loadState,
+            score.parts.indices.contains(address.partIndex)
+        else { return nil }
+        let cc7 = score.parts[address.partIndex].instrument.channel.volume
+        let clamped = max(0, min(127, cc7))
+        return Double(clamped) / 127.0
     }
 
     private func flattenedStaffIndex(for address: StaffAddress) -> Int? {
