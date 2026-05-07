@@ -22,30 +22,11 @@ public struct SettingsSheet<LicenseContent: View>: View {
         NavigationStack {
             Form {
                 if let soundfontResolver {
-                    Section("Storage") {
-                        NavigationLink {
-                            SoundfontCacheView(
-                                resolver: soundfontResolver,
-                                presetCatalog: presetCatalog
-                            )
-                        } label: {
-                            Label("Soundfont Cache", systemImage: "tray.full")
-                        }
-                    }
+                    storageSection(resolver: soundfontResolver)
                 }
-                Section("About") {
-                    NavigationLink {
-                        licenseContent()
-                            .navigationTitle("Licenses")
-                        #if os(iOS)
-                            .navigationBarTitleDisplayMode(.inline)
-                        #endif
-                    } label: {
-                        Label("Licenses", systemImage: "doc.text")
-                    }
-                }
+                aboutSection
             }
-            .navigationTitle("Settings")
+            .navigationTitle(Text("Settings", bundle: .module))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -53,15 +34,51 @@ public struct SettingsSheet<LicenseContent: View>: View {
         }
     }
 
+    private func storageSection(resolver: any SoundfontResolver) -> some View {
+        Section {
+            NavigationLink {
+                SoundfontCacheView(resolver: resolver, presetCatalog: presetCatalog)
+            } label: {
+                Label {
+                    Text("Soundfont Cache", bundle: .module)
+                } icon: {
+                    Image(systemName: "tray.full")
+                }
+            }
+        } header: {
+            Text("Storage", bundle: .module)
+        }
+    }
+
+    private var aboutSection: some View {
+        Section {
+            NavigationLink {
+                licenseContent()
+                    .navigationTitle(Text("Licenses", bundle: .module))
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                #endif
+            } label: {
+                Label {
+                    Text("Licenses", bundle: .module)
+                } icon: {
+                    Image(systemName: "doc.text")
+                }
+            }
+        } header: {
+            Text("About", bundle: .module)
+        }
+    }
+
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #endif
     }

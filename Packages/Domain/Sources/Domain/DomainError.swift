@@ -18,21 +18,24 @@ extension DomainError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case let .scoreFileNotFound(name):
-            "Score file not found: \(name)"
+            String(localized: "Score file not found: \(name)", bundle: .module)
         case let .unsupportedFormat(ext):
-            "Unsupported file format: \(ext)"
+            String(localized: "Unsupported file format: \(ext)", bundle: .module)
         case let .scoreParseFailed(reason):
-            "Could not parse score file: \(reason)"
+            String(localized: "Could not parse score file: \(reason)", bundle: .module)
         case let .scoreWriteFailed(reason):
-            "Could not write score file: \(reason)"
+            String(localized: "Could not write score file: \(reason)", bundle: .module)
         case let .soundfontDownloadFailed(key):
-            "Failed to download SoundFont (bank \(key.bank), program \(key.program))"
+            String(
+                localized: "Failed to download SoundFont (bank \(key.bank), program \(key.program))",
+                bundle: .module
+            )
         case let .persistenceFailed(reason):
-            "Library save failed: \(reason)"
+            String(localized: "Library save failed: \(reason)", bundle: .module)
         case let .syncFailed(reason):
-            "Sync failed: \(reason)"
+            String(localized: "Sync failed: \(reason)", bundle: .module)
         case let .audioEngineFailed(reason):
-            "Audio engine error: \(reason)"
+            String(localized: "Audio engine error: \(reason)", bundle: .module)
         }
     }
 }

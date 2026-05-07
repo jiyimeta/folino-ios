@@ -11,9 +11,13 @@ struct TagsListView: View {
         Group {
             if sortedTags.isEmpty {
                 ContentUnavailableView {
-                    Label("No Tags", systemImage: "tag")
+                    Label {
+                        Text("No Tags", bundle: .module)
+                    } icon: {
+                        Image(systemName: "tag")
+                    }
                 } description: {
-                    Text("Add tags from a score's context menu, or tap + above.")
+                    Text("Add tags from a score's context menu, or tap + above.", bundle: .module)
                 }
             } else {
                 List {
@@ -33,14 +37,14 @@ struct TagsListView: View {
                 }
             }
         }
-        .navigationTitle("Tags")
+        .navigationTitle(Text("Tags", bundle: .module))
         .toolbar { newTagToolbar }
-        .alert("New Tag", isPresented: $isCreating) {
-            TextField("Tag name", text: $newTagName)
-            Button("Add") { Task { await commit() } }
-            Button("Cancel", role: .cancel) {}
+        .alert(Text("New Tag", bundle: .module), isPresented: $isCreating) {
+            TextField(text: $newTagName) { Text("Tag name", bundle: .module) }
+            Button { Task { await commit() } } label: { Text("Add", bundle: .module) }
+            Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
         } message: {
-            Text("Enter a name for the new tag.")
+            Text("Enter a name for the new tag.", bundle: .module)
         }
     }
 
@@ -58,7 +62,7 @@ struct TagsListView: View {
             newTagName = ""
             isCreating = true
         } label: {
-            Image(systemName: "plus").accessibilityLabel("New Tag")
+            Image(systemName: "plus").accessibilityLabel(Text("New Tag", bundle: .module))
         }
     }
 

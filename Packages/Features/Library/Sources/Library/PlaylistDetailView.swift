@@ -18,9 +18,13 @@ struct PlaylistDetailView: View {
         Group {
             if orderedItems.isEmpty {
                 ContentUnavailableView {
-                    Label("No Scores in This Playlist", systemImage: "music.note.list")
+                    Label {
+                        Text("No Scores in This Playlist", bundle: .module)
+                    } icon: {
+                        Image(systemName: "music.note.list")
+                    }
                 } description: {
-                    Text("Add scores from the context menu of any score row.")
+                    Text("Add scores from the context menu of any score row.", bundle: .module)
                 }
             } else {
                 List {
@@ -39,21 +43,23 @@ struct PlaylistDetailView: View {
             .environment(\.editMode, $editMode)
         #endif
             .toolbar { editToolbar }
-            .alert("Rename Playlist", isPresented: $isRenaming) {
-                TextField("Playlist name", text: $renameText)
-                Button("Save") { Task { await commitRename() } }
-                Button("Cancel", role: .cancel) {}
+            .alert(Text("Rename Playlist", bundle: .module), isPresented: $isRenaming) {
+                TextField(text: $renameText) { Text("Playlist name", bundle: .module) }
+                Button { Task { await commitRename() } } label: { Text("Save", bundle: .module) }
+                Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
             }
             .alert(
-                "Delete \"\(playlist.name)\"?",
+                Text("Delete \"\(playlist.name)\"?", bundle: .module),
                 isPresented: $isConfirmingDelete
             ) {
-                Button("Delete", role: .destructive) {
+                Button(role: .destructive) {
                     Task { await commitDelete() }
+                } label: {
+                    Text("Delete", bundle: .module)
                 }
-                Button("Cancel", role: .cancel) {}
+                Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
             } message: {
-                Text("Scores keep their data; only the playlist and its order are removed.")
+                Text("Scores keep their data; only the playlist and its order are removed.", bundle: .module)
             }
     }
 
@@ -72,13 +78,25 @@ struct PlaylistDetailView: View {
             Button {
                 renameText = playlist.name
                 isRenaming = true
-            } label: { Label("Rename…", systemImage: "pencil") }
+            } label: {
+                Label {
+                    Text("Rename…", bundle: .module)
+                } icon: {
+                    Image(systemName: "pencil")
+                }
+            }
             Button(role: .destructive) {
                 isConfirmingDelete = true
-            } label: { Label("Delete Playlist", systemImage: "trash") }
+            } label: {
+                Label {
+                    Text("Delete Playlist", bundle: .module)
+                } icon: {
+                    Image(systemName: "trash")
+                }
+            }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .accessibilityLabel("Edit Playlist")
+                .accessibilityLabel(Text("Edit Playlist", bundle: .module))
         }
     }
 

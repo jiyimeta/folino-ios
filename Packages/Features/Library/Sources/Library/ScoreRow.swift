@@ -29,7 +29,7 @@ struct ScoreRow: View {
             if scoreItem.isFavorite {
                 Image(systemName: "star.fill")
                     .foregroundStyle(.tint)
-                    .accessibilityLabel("Favorite")
+                    .accessibilityLabel(Text("Favorite", bundle: .module))
             }
         }
         .contentShape(Rectangle())

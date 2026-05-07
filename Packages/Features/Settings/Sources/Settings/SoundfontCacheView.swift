@@ -20,59 +20,79 @@ struct SoundfontCacheView: View {
                 ProgressView().controlSize(.regular)
             } else if let loadError {
                 ContentUnavailableView {
-                    Label("Couldn't read cache", systemImage: "exclamationmark.triangle")
+                    Label {
+                        Text("Couldn't read cache", bundle: .module)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle")
+                    }
                 } description: {
                     Text(loadError)
                 }
             } else if patches.isEmpty {
                 ContentUnavailableView {
-                    Label("No cached soundfonts", systemImage: "tray")
+                    Label {
+                        Text("No cached soundfonts", bundle: .module)
+                    } icon: {
+                        Image(systemName: "tray")
+                    }
                 } description: {
-                    Text("Patches downloaded for playback will appear here.")
+                    Text("Patches downloaded for playback will appear here.", bundle: .module)
                 }
             } else {
                 cacheList
             }
         }
-        .navigationTitle("Soundfont Cache")
+        .navigationTitle(Text("Soundfont Cache", bundle: .module))
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
             .task { await reload() }
             .confirmationDialog(
-                "Delete all cached soundfonts?",
+                Text("Delete all cached soundfonts?", bundle: .module),
                 isPresented: $showDeleteAllConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("Delete All", role: .destructive) {
+                Button(role: .destructive) {
                     Task { await deleteAll() }
+                } label: {
+                    Text("Delete All", bundle: .module)
                 }
-                Button("Cancel", role: .cancel) {}
+                Button(role: .cancel) {} label: {
+                    Text("Cancel", bundle: .module)
+                }
             } message: {
-                Text("Cached files will be re-downloaded the next time they're needed.")
+                Text("Cached files will be re-downloaded the next time they're needed.", bundle: .module)
             }
     }
 
     private var cacheList: some View {
         List {
             Section {
-                LabeledContent("Total") {
+                LabeledContent {
                     Text(totalBytes.formatted(Self.byteFormat))
                         .monospacedDigit()
+                } label: {
+                    Text("Total", bundle: .module)
                 }
                 Button(role: .destructive) {
                     showDeleteAllConfirmation = true
                 } label: {
-                    Label("Delete All Cached Soundfonts", systemImage: "trash")
+                    Label {
+                        Text("Delete All Cached Soundfonts", bundle: .module)
+                    } icon: {
+                        Image(systemName: "trash")
+                    }
                 }
             }
-            Section("Cached Soundfonts") {
+            Section {
                 ForEach(patches) { patch in
                     row(for: patch)
                 }
                 .onDelete { indexSet in
                     Task { await deletePatches(at: indexSet) }
                 }
+            } header: {
+                Text("Cached Soundfonts", bundle: .module)
             }
         }
     }

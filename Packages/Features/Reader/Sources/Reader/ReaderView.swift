@@ -71,8 +71,10 @@ public struct ReaderView: View {
                 }
             )
         ) {
-            Button("Cancel", role: .cancel) {
+            Button(role: .cancel) {
                 viewModel.cancelLoadingSoundfonts()
+            } label: {
+                Text("Cancel", bundle: .module)
             }
         }
         .task {
@@ -87,9 +89,9 @@ public struct ReaderView: View {
     ) -> String {
         switch kind {
         case .offline:
-            String(localized: "You're offline")
+            String(localized: "You're offline", bundle: .module)
         case .loading, nil:
-            String(localized: "Loading playback sounds…")
+            String(localized: "Loading playback sounds…", bundle: .module)
         }
     }
 
@@ -120,12 +122,18 @@ public struct ReaderView: View {
             }
         case let .failed(message):
             ContentUnavailableView {
-                Label("Could not open this score", systemImage: "exclamationmark.triangle")
+                Label {
+                    Text("Could not open this score", bundle: .module)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
             } description: {
                 Text(message)
             } actions: {
-                Button("Retry") { Task { await viewModel.load() } }
-                    .buttonStyle(.borderedProminent)
+                Button { Task { await viewModel.load() } } label: {
+                    Text("Retry", bundle: .module)
+                }
+                .buttonStyle(.borderedProminent)
             }
         }
     }

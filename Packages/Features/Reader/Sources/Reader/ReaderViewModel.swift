@@ -474,11 +474,11 @@ public final class ReaderViewModel {
         if let domain = error as? DomainError {
             switch domain {
             case .scoreFileNotFound:
-                return String(localized: "The score file is missing or unreadable.")
+                return String(localized: "The score file is missing or unreadable.", bundle: .module)
             case .scoreParseFailed:
-                return String(localized: "This file looks corrupted or isn't a valid score.")
+                return String(localized: "This file looks corrupted or isn't a valid score.", bundle: .module)
             case .unsupportedFormat:
-                return String(localized: "Folino can't open this file type.")
+                return String(localized: "Folino can't open this file type.", bundle: .module)
             default:
                 return domain.errorDescription ?? "\(domain)"
             }

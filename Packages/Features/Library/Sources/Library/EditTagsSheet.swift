@@ -33,13 +33,13 @@ struct EditTagsSheet: View {
                     HStack {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(.tint)
-                        TextField("New tag", text: $newTagName)
+                        TextField(text: $newTagName) { Text("New tag", bundle: .module) }
                             .submitLabel(.done)
                             .onSubmit { Task { await commitNewTag() } }
                     }
                 }
             }
-            .navigationTitle("Tags for \"\(scoreItem.title)\"")
+            .navigationTitle(Text("Tags for \"\(scoreItem.title)\"", bundle: .module))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -51,11 +51,11 @@ struct EditTagsSheet: View {
     private var doneToolbar: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button("Done") { dismiss() }
+                Button { dismiss() } label: { Text("Done", bundle: .module) }
             }
         #endif
     }

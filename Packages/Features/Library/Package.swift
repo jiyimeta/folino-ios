@@ -7,6 +7,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 
 let package = Package(
     name: "Library",
+    defaultLocalization: "en",
     platforms: [.iOS(.v26), .macOS(.v15)],
     products: [
         .library(name: "Library", targets: ["Library"]),
