@@ -339,6 +339,7 @@ public final class ReaderViewModel {
     /// when no load is in flight — the cancel is a no-op.
     public func cancelLoadingSoundfonts() {
         preloadTask?.cancel()
+        pendingInstrumentLoad?.task.cancel()
     }
 
     public func toggleStaff(address: StaffAddress) async {
@@ -580,6 +581,16 @@ extension ReaderViewModel {
             }
         }
 
+        let wasPlaying = isPlaying
+        if isPlaying {
+            await controller.pause()
+            isPlaying = false
+        }
+        if wasPlaying {
+            let online = await reachability?.isOnline() ?? true
+            soundfontAlertKind = online ? .loading : .offline
+        }
+
         let task = Task<Void, Error> {
             try await controller.prefetchSoundfont(
                 bank: bank, program: program, isDrums: isDrums
@@ -587,7 +598,7 @@ extension ReaderViewModel {
         }
         let pending = PendingInstrumentLoad(
             partIndex: partIndex, bank: bank, program: program, isDrums: isDrums,
-            previousOverrides: snapshot, wasPlaying: false, task: task
+            previousOverrides: snapshot, wasPlaying: wasPlaying, task: task
         )
         pendingInstrumentLoad = pending
 
@@ -599,8 +610,16 @@ extension ReaderViewModel {
                     staff: flatIndex, bank: bank, program: program
                 )
             }
+            soundfontAlertKind = nil
+            if wasPlaying {
+                do {
+                    try await controller.play()
+                    isPlaying = true
+                } catch {
+                    isPlaying = false
+                }
+            }
         } catch {
-            // Cancel / failure: revert per-staff overrides.
             await mutatePreferences { prefs in
                 for entry in snapshot {
                     if let previous = entry.previous {
@@ -610,6 +629,8 @@ extension ReaderViewModel {
                     }
                 }
             }
+            soundfontAlertKind = nil
+            // Q1 A: only auto-resume on success. Cancel leaves us paused.
         }
         pendingInstrumentLoad = nil
     }
