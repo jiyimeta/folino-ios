@@ -535,6 +535,8 @@ extension ReaderViewModel {
             pendingB = existing.end
             await mutatePreferences { $0.abRepeat = nil }
         }
+        // Forwards even when no save fired — keeps the controller's last-call
+        // cache aligned with the VM's intent (e.g. clearing during .loopAll).
         await forwardLoopRangeToController()
     }
 
