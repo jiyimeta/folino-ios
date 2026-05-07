@@ -1,6 +1,6 @@
 import Foundation
 
-/// File format Folino can read and write. Each case represents a distinct on-disk encoding.
+/// File format folino can read and write. Each case represents a distinct on-disk encoding.
 public enum ScoreFormat: String, Hashable, Sendable, Codable, CaseIterable {
     case mscx
     case mscz
@@ -8,7 +8,7 @@ public enum ScoreFormat: String, Hashable, Sendable, Codable, CaseIterable {
     case mxl
     case midi
 
-    /// The default file extension Folino writes when exporting this format.
+    /// The default file extension folino writes when exporting this format.
     public var canonicalExtension: String {
         switch self {
         case .mscx: "mscx"

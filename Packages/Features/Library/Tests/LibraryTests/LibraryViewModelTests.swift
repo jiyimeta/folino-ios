@@ -160,7 +160,7 @@ extension LibraryViewModelTests {
         let f = Self.makeVM()
         f.importer.prepareImportErrors = [.unsupportedFormat("xyz")]
         await f.vm.startImport(from: URL(filePath: "/tmp/x.xyz"))
-        #expect(f.vm.errorAlertMessage == "Folino can't open this file type.")
+        #expect(f.vm.errorAlertMessage == "folino can't open this file type.")
     }
 
     @Test func parseErrorMessage() async {

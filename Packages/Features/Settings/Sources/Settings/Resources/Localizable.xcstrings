@@ -41,6 +41,12 @@
             "state" : "new",
             "value" : "Bank %1$lld · Program %2$lld"
           }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バンク %1$lld・プログラム %2$lld"
+          }
         }
       }
     },
@@ -189,6 +195,22 @@
         }
       }
     },
+    "Licenses" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Licenses"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライセンス"
+          }
+        }
+      }
+    },
     "Mail Delivery Failed" : {
       "localizations" : {
         "en" : {
@@ -221,18 +243,18 @@
         }
       }
     },
-    "Licenses" : {
+    "No cached soundfonts" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Licenses"
+            "value" : "No cached soundfonts"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ライセンス"
+            "value" : "キャッシュはありません"
           }
         }
       }
@@ -249,22 +271,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
-          }
-        }
-      }
-    },
-    "No cached soundfonts" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No cached soundfonts"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "キャッシュはありません"
           }
         }
       }

@@ -27,7 +27,7 @@ import SwiftUI
         func makeUIViewController(context: Context) -> MFMailComposeViewController {
             let controller = MFMailComposeViewController()
             controller.mailComposeDelegate = context.coordinator
-            controller.setSubject("Folino Feedback")
+            controller.setSubject("folino Feedback")
             controller.setToRecipients([FeedbackMailConfiguration.recipient])
             controller.setMessageBody(FeedbackMailConfiguration.messageBody, isHTML: false)
             return controller

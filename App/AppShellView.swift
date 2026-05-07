@@ -30,7 +30,7 @@ struct AppShellView: View {
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {
                     Label {
-                        Text("Folino couldn't start")
+                        Text("folino couldn't start")
                     } icon: {
                         Image(systemName: "exclamationmark.triangle")
                     }
@@ -41,8 +41,8 @@ struct AppShellView: View {
                 ProgressView().controlSize(.large)
             }
         }
-        .alert(Text("Enjoying Folino?"), isPresented: $reviewPrompt.isPrePromptPresented) {
-            Button { requestReview() } label: { Text("Rate Folino") }
+        .alert(Text("Enjoying folino?"), isPresented: $reviewPrompt.isPrePromptPresented) {
+            Button { requestReview() } label: { Text("Rate folino") }
             Button(role: .cancel) {} label: { Text("Not Now") }
         } message: {
             Text("Would you mind taking a moment to leave a review on the App Store?")

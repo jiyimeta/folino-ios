@@ -1,6 +1,6 @@
 import Foundation
 
-/// A persisted entry in Folino's library. The actual score bytes live on disk
+/// A persisted entry in folino's library. The actual score bytes live on disk
 /// at `AppPaths.scoresDirectory/localFileName` (the resolution to absolute URL
 /// happens in Infrastructure, not Domain).
 ///

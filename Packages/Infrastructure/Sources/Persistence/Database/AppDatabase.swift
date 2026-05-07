@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-/// Constructs a `DatabasePool` for Folino's SQLite store and runs schema
+/// Constructs a `DatabasePool` for folino's SQLite store and runs schema
 /// migrations on first use. Owned by the App composition root; the pool's
 /// thread safety lets background tasks read while writes happen on the
 /// writer queue.

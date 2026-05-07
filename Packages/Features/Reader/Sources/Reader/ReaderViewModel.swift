@@ -562,7 +562,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             case .scoreParseFailed:
                 return String(localized: "This file looks corrupted or isn't a valid score.", bundle: .module)
             case .unsupportedFormat:
-                return String(localized: "Folino can't open this file type.", bundle: .module)
+                return String(localized: "folino can't open this file type.", bundle: .module)
             default:
                 return domain.errorDescription ?? "\(domain)"
             }

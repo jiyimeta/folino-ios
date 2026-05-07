@@ -128,7 +128,7 @@ public final class LibraryViewModel {
         if let domain = error as? DomainError {
             switch domain {
             case .unsupportedFormat:
-                return String(localized: "Folino can't open this file type.")
+                return String(localized: "folino can't open this file type.")
             case .scoreParseFailed:
                 return String(localized: "This file looks corrupted or isn't a valid score.")
             case .persistenceFailed:

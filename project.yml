@@ -78,7 +78,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino
-        PRODUCT_NAME: Folino
+        PRODUCT_NAME: folino
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Folino.entitlements
         TARGETED_DEVICE_FAMILY: 1,2

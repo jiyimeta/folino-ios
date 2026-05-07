@@ -7,13 +7,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Folino"
+            "value" : "folino"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Folino"
+            "value" : "folino"
           }
         }
       }
@@ -25,7 +25,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Folino"
+            "value" : "folino"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "folino"
           }
         }
       }

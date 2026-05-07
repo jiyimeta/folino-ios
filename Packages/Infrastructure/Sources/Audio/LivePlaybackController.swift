@@ -11,7 +11,7 @@ import SheetMusicCore
     import AppKit
 #endif
 
-/// Bridges Folino's `Domain.PlaybackController` onto
+/// Bridges folino's `Domain.PlaybackController` onto
 /// `SheetMusicAudio.PlaybackEngine`. The engine is `@MainActor` so this
 /// adapter is too — the protocol's `async` methods become hops onto the
 /// main actor.

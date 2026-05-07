@@ -2,10 +2,33 @@
   "sourceLanguage" : "en",
   "strings" : {
     "" : {
-
+      "shouldTranslate" : false
+    },
+    " " : {
+      "shouldTranslate" : false
     },
     "%lld%%" : {
-
+      "shouldTranslate" : false
+    },
+    "A–B repeat markers" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B リピートマーカー"
+          }
+        }
+      }
+    },
+    "A–B section" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B 区間リピート"
+          }
+        }
+      }
     },
     "Back" : {
       "localizations" : {
@@ -55,52 +78,18 @@
         }
       }
     },
-    "Done" : {
-      "extractionState" : "stale",
+    "folino can't open this file type." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Done"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完了"
-          }
-        }
-      }
-    },
-    "Folino can't open this file type." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Folino can't open this file type."
+            "value" : "folino can't open this file type."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "このファイル形式は対応していません。"
-          }
-        }
-      }
-    },
-    "Hide All" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide All"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべて非表示"
           }
         }
       }
@@ -137,23 +126,6 @@
         }
       }
     },
-    "Layout" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Layout"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "レイアウト"
-          }
-        }
-      }
-    },
     "Layout direction" : {
       "localizations" : {
         "en" : {
@@ -182,6 +154,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生音源をロード中"
+          }
+        }
+      }
+    },
+    "Loop all" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全体リピート"
+          }
+        }
+      }
+    },
+    "m. %lld" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld小節"
+          }
+        }
+      }
+    },
+    "Not set" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未設定"
+          }
+        }
+      }
+    },
+    "Off" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフ"
           }
         }
       }
@@ -234,19 +246,12 @@
         }
       }
     },
-    "Reader" : {
-      "extractionState" : "stale",
+    "Repeat" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reader"
-          }
-        },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "リーダー"
+            "value" : "リピート"
           }
         }
       }
@@ -299,19 +304,12 @@
         }
       }
     },
-    "Show All" : {
-      "extractionState" : "stale",
+    "Set to measure %lld" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show All"
-          }
-        },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべて表示"
+            "value" : "%lld小節にセット"
           }
         }
       }
@@ -344,23 +342,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "譜表サイズ: %lld pt"
-          }
-        }
-      }
-    },
-    "Staves" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Staves"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "譜表"
           }
         }
       }
@@ -430,5 +411,5 @@
       }
     }
   },
-  "version" : "1.0"
+  "version" : "1.1"
 }

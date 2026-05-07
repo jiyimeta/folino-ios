@@ -2,7 +2,7 @@ import Domain
 import Foundation
 import SheetMusicAudio
 
-/// Single resolver that covers both Folino's async download path
+/// Single resolver that covers both folino's async download path
 /// (`Domain.SoundfontResolver`) and `swift-sheet-music`'s synchronous
 /// per-(bank, program, isDrums) lookup (`SheetMusicAudio.SoundfontResolver`).
 ///
