@@ -16,10 +16,10 @@ import SheetMusicCore
 /// main actor.
 @MainActor
 public final class LivePlaybackController: Domain.PlaybackController {
-    private let engine: PlaybackEngine
+    let engine: PlaybackEngine
     private let domainResolver: any Domain.SoundfontResolver
     private let precisionProbe: any Domain.PrecisePatchProbe
-    private var loadedScore: Score?
+    var loadedScore: Score?
 
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var cancellables: Set<AnyCancellable> = []
@@ -223,33 +223,27 @@ public final class LivePlaybackController: Domain.PlaybackController {
     }
 
     public func setCursor(to cursor: ScoreCursor) {
-        // `PlaybackEngine.seek(to:)` does the stop/write/start cycle that
-        // keeps the running sequencer and audible transport aligned.
-        engine.seek(to: cursor)
+        // `AVAudioSequencer` halts when `currentPositionInBeats` is written
+        // during playback, which kills the engine's own cursor timer on its
+        // next tick (`tickCursor` early-outs on `!sequencer.isPlaying`). To
+        // preserve "playback continues from the seeked position", route
+        // through `play(from:in:)` while playing — that path writes the
+        // position AND calls `sequencer.start()` AND restarts the cursor
+        // timer in lockstep. Pure `seek` is fine while paused / stopped.
+        if engine.state == .playing, let score = loadedScore {
+            engine.play(from: cursor, in: score)
+        } else {
+            engine.seek(to: cursor)
+        }
     }
 
     public func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
         cursorHandler = handler
     }
 
-    public func setLoopRange(_ range: ABRepeatRange?) {
-        let wasPlaying = engine.state == .playing
-        if let range, let score = loadedScore,
-           let bounds = Self.loopBounds(for: range, in: score)
-        {
-            switch bounds {
-            case let .beatRange(start, end):
-                engine.setLoop(from: start, to: end)
-            case let .throughEndOf(start, last):
-                engine.setLoop(from: start, throughEndOf: last)
-            }
-        } else {
-            engine.clearLoop()
-        }
-        if wasPlaying, let score = loadedScore {
-            engine.play(in: score)
-        }
-    }
+    // setLoopRange lives in `LivePlaybackController+LoopBounds.swift`
+    // alongside the cursor-mapping helpers it depends on (file_length
+    // budget keeps `engine`-touching protocol methods split out).
 
     public func setTempoMultiplier(_ value: Double) {
         engine.setRate(Float(value))

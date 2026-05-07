@@ -1,8 +1,43 @@
 import Domain
 import Foundation
+import SheetMusicAudio
 import SheetMusicCore
 
 extension LivePlaybackController {
+    public func setLoopRange(_ range: ABRepeatRange?) {
+        let wasPlaying = engine.state == .playing
+        var didMutate = false
+        if let range {
+            // Only act when the persisted range resolves into engine cursor
+            // bounds. An unresolvable range (stale data after a score with
+            // fewer measures, or a last-measure case where the end measure
+            // has no chord/rest to anchor `throughEndOf` on) leaves the
+            // engine's existing loop alone — silently clearing it would
+            // destroy the user's loop on a corner-case bug.
+            if let score = loadedScore,
+               let bounds = Self.loopBounds(for: range, in: score)
+            {
+                switch bounds {
+                case let .beatRange(start, end):
+                    engine.setLoop(from: start, to: end)
+                case let .throughEndOf(start, last):
+                    engine.setLoop(from: start, throughEndOf: last)
+                }
+                didMutate = true
+            }
+        } else if engine.loopRange != nil {
+            // Skip the engine's `clearLoop` when there's nothing to clear —
+            // it pauses the sequencer unconditionally, so a no-op clear
+            // would still cause an audible pause / restart blip on the
+            // auto-resume path below.
+            engine.clearLoop()
+            didMutate = true
+        }
+        if didMutate, wasPlaying, let score = loadedScore {
+            engine.play(in: score)
+        }
+    }
+
     /// Half-open loop interval resolved against the loaded score. The
     /// caller maps each case to the matching `PlaybackEngine.setLoop`
     /// overload — `.beatRange` to `setLoop(from:to:)`,
