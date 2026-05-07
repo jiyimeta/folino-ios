@@ -398,13 +398,9 @@ public final class ReaderViewModel {
 
     // MARK: - Repeat / loop
 
-    /// Staged A endpoint not yet committed (incomplete loop). `@ObservationIgnored`
-    /// because UI reads the public `pendingRepeatA` accessor instead.
-    @ObservationIgnored
+    /// Staged A endpoint not yet committed (incomplete loop).
     private var pendingA: ChordPath?
-    /// Staged B endpoint not yet committed (incomplete loop). `@ObservationIgnored`
-    /// because UI reads the public `pendingRepeatB` accessor instead.
-    @ObservationIgnored
+    /// Staged B endpoint not yet committed (incomplete loop).
     private var pendingB: ChordPath?
 
     public var repeatMode: RepeatMode { preferences.repeatMode }
