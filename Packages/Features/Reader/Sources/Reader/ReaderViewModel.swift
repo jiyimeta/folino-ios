@@ -398,11 +398,11 @@ public final class ReaderViewModel {
     /// Staged A endpoint not yet committed (incomplete loop). `@ObservationIgnored`
     /// because UI reads the public `pendingRepeatA` accessor instead.
     @ObservationIgnored
-    var pendingA: ChordPath?
+    private var pendingA: ChordPath?
     /// Staged B endpoint not yet committed (incomplete loop). `@ObservationIgnored`
     /// because UI reads the public `pendingRepeatB` accessor instead.
     @ObservationIgnored
-    var pendingB: ChordPath?
+    private var pendingB: ChordPath?
 
     public var repeatMode: RepeatMode { preferences.repeatMode }
     public var abRepeat: ABRepeatRange? { preferences.abRepeat }
@@ -455,7 +455,7 @@ public final class ReaderViewModel {
         try? await repository.saveReaderPreferences(seeded)
     }
 
-    func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
+    private func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
         var copy = preferences
         apply(&copy)
         // Re-seat through the initializer so clamping rules in
@@ -497,5 +497,61 @@ public final class ReaderViewModel {
             }
         }
         return (error as NSError).localizedDescription
+    }
+}
+
+// MARK: - Repeat / loop mutators
+
+extension ReaderViewModel {
+    public func advanceRepeatMode() async {
+        let next = preferences.repeatMode.next
+        await mutatePreferences { $0.repeatMode = next }
+    }
+
+    public func setRepeatA() async {
+        guard case let .loaded(score) = loadState,
+              let cursor = playbackCursor else { return }
+        let measure = measureIndex(of: cursor)
+        let head = snapMeasureHead(measureIndex: measure, in: score)
+        pendingA = head
+        await commitPendingRepeat()
+    }
+
+    public func setRepeatB() async {
+        guard case let .loaded(score) = loadState,
+              let cursor = playbackCursor else { return }
+        let measure = measureIndex(of: cursor)
+        guard let end = snapMeasureEnd(measureIndex: measure, in: score) else { return }
+        pendingB = end
+        await commitPendingRepeat()
+    }
+
+    public func clearRepeatA() async {
+        pendingA = nil
+        if let existing = preferences.abRepeat {
+            pendingB = existing.end
+        }
+        await mutatePreferences { $0.abRepeat = nil }
+    }
+
+    public func clearRepeatB() async {
+        pendingB = nil
+        if let existing = preferences.abRepeat {
+            pendingA = existing.start
+        }
+        await mutatePreferences { $0.abRepeat = nil }
+    }
+
+    private func commitPendingRepeat() async {
+        let candidateStart = pendingA ?? preferences.abRepeat?.start
+        let candidateEnd = pendingB ?? preferences.abRepeat?.end
+        guard let start = candidateStart, let end = candidateEnd else {
+            await mutatePreferences { $0.abRepeat = nil }
+            return
+        }
+        let normalized = normalize(ABRepeatRange(start: start, end: end))
+        pendingA = normalized.start
+        pendingB = normalized.end
+        await mutatePreferences { $0.abRepeat = normalized }
     }
 }
