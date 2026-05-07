@@ -660,6 +660,127 @@ struct ReaderViewModelPlaybackTests {
         vm.cancelLoadingSoundfonts()
         _ = await pick.value
     }
+
+    @Test func cancelDuringInstrumentPrefetchRevertsProgramOverride() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.blocksPrefetchUntilCancelled = true
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(vm.preferences.staffProgramOverrides[address] == 6)
+
+        vm.cancelLoadingSoundfonts()
+        _ = await pick.value
+
+        #expect(vm.preferences.staffProgramOverrides[address] == nil)
+        #expect(vm.effectiveProgram(forPartIndex: 0) == 40)
+        let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
+        #expect(calls.isEmpty)
+    }
+
+    @Test func secondInstrumentPickCancelsFirstAndKeepsOriginalAsRevertTarget() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.blocksPrefetchUntilCancelled = true
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+
+        let firstPick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        for _ in 0 ..< 5 { await Task.yield() }
+
+        let secondPick = Task { await vm.setPartProgram(24, forPartIndex: 0) }
+        for _ in 0 ..< 10 { await Task.yield() }
+        _ = await firstPick.value
+
+        vm.cancelLoadingSoundfonts()
+        _ = await secondPick.value
+
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        #expect(vm.preferences.staffProgramOverrides[address] == nil)
+        #expect(vm.effectiveProgram(forPartIndex: 0) == 40)
+    }
+
+    @Test func secondInstrumentPickInheritsWasPlayingFromFirstPick() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()]
+                ),
+            ],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        controller.cachedPatches = [SoundfontPatchKey(bank: 0, program: 40, isDrums: false)]
+        controller.soundfontsAvailableLocally = true
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+            reachability: FakeNetworkReachability(online: true)
+        )
+        await vm.load()
+        await vm.togglePlayback()
+        #expect(vm.isPlaying)
+
+        controller.blocksPrefetchUntilCancelled = true
+        let firstPick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(!vm.isPlaying)
+        #expect(vm.soundfontAlertKind == .loading)
+
+        controller.blocksPrefetchUntilCancelled = false
+        let secondPick = Task { await vm.setPartProgram(24, forPartIndex: 0) }
+        _ = await firstPick.value
+        _ = await secondPick.value
+
+        #expect(vm.isPlaying)
+        let calls = controller.staffInstrumentCalls.filter { $0.program == 24 }
+        #expect(calls.count == 1)
+    }
 }
 
 // swiftlint:enable file_length type_body_length

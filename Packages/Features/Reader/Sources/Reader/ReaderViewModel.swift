@@ -564,6 +564,7 @@ extension ReaderViewModel {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     private func runUncachedPartProgramSwap(
         program: Int,
         partIndex: Int,
@@ -572,6 +573,26 @@ extension ReaderViewModel {
         isDrums: Bool,
         controller: any PlaybackController
     ) async {
+        // 1. Latest pick wins on the same part: cancel any in-flight pick
+        //    and inherit its wasPlaying — without inheritance the new pick
+        //    would never auto-resume because the previous one already
+        //    paused us.
+        var inheritedWasPlaying = false
+        if let existing = pendingInstrumentLoad, existing.partIndex == partIndex {
+            inheritedWasPlaying = existing.wasPlaying
+            existing.task.cancel()
+            // Block until the cancelled task's catch branch finishes its
+            // revert; otherwise our snapshot below captures the mid-flight
+            // state the previous pick mutated to.
+            _ = try? await existing.task.value
+        }
+
+        let wasPlaying = isPlaying || inheritedWasPlaying
+        if isPlaying {
+            await controller.pause()
+            isPlaying = false
+        }
+
         let snapshot = addresses.map { address in
             (address: address, previous: preferences.staffProgramOverrides[address])
         }
@@ -581,11 +602,6 @@ extension ReaderViewModel {
             }
         }
 
-        let wasPlaying = isPlaying
-        if isPlaying {
-            await controller.pause()
-            isPlaying = false
-        }
         if wasPlaying {
             let online = await reachability?.isOnline() ?? true
             soundfontAlertKind = online ? .loading : .offline
