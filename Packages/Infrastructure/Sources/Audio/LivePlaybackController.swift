@@ -223,26 +223,33 @@ public final class LivePlaybackController: Domain.PlaybackController {
     }
 
     public func setCursor(to cursor: ScoreCursor) {
-        // `AVAudioSequencer` halts when `currentPositionInSeconds` is written
-        // during playback, which kills the engine's own cursor timer on its
-        // next tick (`tickCursor` early-outs on `!sequencer.isPlaying`). To
-        // preserve "playback continues from the seeked position", route
-        // through `play(from:in:)` while playing — that path writes the
-        // position AND calls `sequencer.start()` AND restarts the cursor
-        // timer in lockstep. Pure `seek` is fine while paused / stopped.
-        if engine.state == .playing, let score = loadedScore {
-            engine.play(from: cursor, in: score)
-        } else {
-            engine.seek(to: cursor)
-        }
+        // `PlaybackEngine.seek(to:)` does the stop/write/start cycle that
+        // keeps the running sequencer and audible transport aligned.
+        engine.seek(to: cursor)
     }
 
     public func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
         cursorHandler = handler
     }
 
-    // Stub — engine doesn't expose loop ranges yet; keep the protocol whole.
-    public func setLoopRange(_: ABRepeatRange?) {}
+    public func setLoopRange(_ range: ABRepeatRange?) {
+        let wasPlaying = engine.state == .playing
+        if let range, let score = loadedScore,
+           let bounds = Self.loopBounds(for: range, in: score)
+        {
+            switch bounds {
+            case let .beatRange(start, end):
+                engine.setLoop(from: start, to: end)
+            case let .throughEndOf(start, last):
+                engine.setLoop(from: start, throughEndOf: last)
+            }
+        } else {
+            engine.clearLoop()
+        }
+        if wasPlaying, let score = loadedScore {
+            engine.play(in: score)
+        }
+    }
 
     public func setTempoMultiplier(_ value: Double) {
         engine.setRate(Float(value))
