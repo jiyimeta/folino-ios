@@ -5,8 +5,8 @@ import SwiftUI
 @MainActor
 public struct ReaderView: View {
     @State private var viewModel: ReaderViewModel
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dismiss) private var dismiss
+    private let onBack: (() -> Void)?
 
     public init(
         scoreItem: ScoreItem,
@@ -14,7 +14,8 @@ public struct ReaderView: View {
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
-        reachability: (any NetworkReachability)? = nil
+        reachability: (any NetworkReachability)? = nil,
+        onBack: (() -> Void)? = nil
     ) {
         // Seed the device-class default at construction time. The view
         // model only uses this if no persisted record exists.
@@ -30,6 +31,7 @@ public struct ReaderView: View {
                 reachability: reachability
             )
         )
+        self.onBack = onBack
     }
 
     public var body: some View {
@@ -44,8 +46,7 @@ public struct ReaderView: View {
                 #if os(iOS)
                     ReaderTopOverlay(
                         viewModel: viewModel,
-                        showsBackButton: horizontalSizeClass == .compact,
-                        onBack: { dismiss() }
+                        onBack: onBack ?? { dismiss() }
                     )
                 #endif
                 Spacer()
