@@ -10,6 +10,16 @@ public struct ReaderRootScreen: View {
     private let onBack: (() -> Void)?
     private let hidesBackButton: Bool
 
+    @AppStorage(ReaderGlobalSettingsKey.layoutMode)
+    private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
+
+    @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
+    private var isMetronomeEnabled: Bool = false
+
+    private var layoutMode: ReaderLayoutMode {
+        ReaderLayoutMode(rawValue: layoutModeRaw) ?? .vertical
+    }
+
     public init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
@@ -79,6 +89,16 @@ public struct ReaderRootScreen: View {
             viewModel.startObservingCursor()
             await viewModel.load()
             await viewModel.prepareForPlayback()
+            // Initial sync: the engine starts up unaware of persisted state,
+            // so seed it from the @AppStorage value at view start.
+            await viewModel.setMetronomeEnabled(isMetronomeEnabled)
+        }
+        .onChange(of: isMetronomeEnabled) { _, newValue in
+            // The iPad fix: if the user toggles metronome from the Settings
+            // sheet while a Reader detail pane is alive in the same scene,
+            // the running engine has to be reconfigured here — the
+            // Inspector's button no longer drives that side effect.
+            Task { await viewModel.setMetronomeEnabled(newValue) }
         }
     }
 
@@ -100,7 +120,7 @@ public struct ReaderRootScreen: View {
             ProgressView().controlSize(.large)
         case let .loaded(score):
             let visible = score.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
-            switch viewModel.layoutMode {
+            switch layoutMode {
             case .vertical:
                 VerticalScoreContainer(
                     score: visible,
