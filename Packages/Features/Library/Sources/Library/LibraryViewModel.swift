@@ -68,6 +68,22 @@ public final class LibraryViewModel {
         }
     }
 
+    public func deletePlaylist(_ playlist: Playlist) async {
+        do {
+            try await repository.deletePlaylist(id: playlist.id)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
+    public func deleteTag(_ tag: Tag) async {
+        do {
+            try await repository.deleteTag(id: tag.id)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
     public func bulkDelete(_ ids: Set<ScoreItemID>) async {
         for id in ids {
             do {

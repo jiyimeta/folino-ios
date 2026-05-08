@@ -10,6 +10,9 @@ struct TagsListScreen: View {
             memberCount: memberCount(of:),
             onCreate: { name in
                 Task { await library.createTag(name: name) }
+            },
+            onDelete: { tag in
+                Task { await library.deleteTag(tag) }
             }
         )
     }

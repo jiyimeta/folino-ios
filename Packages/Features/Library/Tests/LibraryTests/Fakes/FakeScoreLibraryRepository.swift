@@ -21,6 +21,10 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     var saveScoreItemError: DomainError?
     /// If non-nil, `deleteScoreItem(id:)` throws this error.
     var deleteScoreItemError: DomainError?
+    /// If non-nil, `deleteTag(id:)` throws this error.
+    var deleteTagError: DomainError?
+    /// If non-nil, `deletePlaylist(id:)` throws this error.
+    var deletePlaylistError: DomainError?
 
     func refresh() throws {
         refreshCount += 1
@@ -52,6 +56,7 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     func deleteTag(id: TagID) throws {
+        if let error = deleteTagError { throw error }
         deletedTagIDs.append(id)
         tags.removeAll { $0.id == id }
         for idx in scoreItems.indices {
@@ -69,6 +74,7 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     func deletePlaylist(id: PlaylistID) throws {
+        if let error = deletePlaylistError { throw error }
         deletedPlaylistIDs.append(id)
         playlists.removeAll { $0.id == id }
     }
