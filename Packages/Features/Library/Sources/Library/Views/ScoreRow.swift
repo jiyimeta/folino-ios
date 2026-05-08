@@ -5,24 +5,26 @@ struct ScoreRow: View {
     let scoreItem: ScoreItem
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(titleText) \(subtitleText)")
-                    .lineLimit(1)
-                if let composer = scoreItem.composer, !composer.isEmpty {
-                    Text(composer)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(titleText) \(subtitleText)")
+                .lineLimit(1)
+                .overlay(alignment: .leading) {
+                    if scoreItem.isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(.tint)
+                            .offset(x: -12)
+                            .accessibilityLabel(Text("library.score.favorite.action", bundle: .module))
+                    }
                 }
-            }
-            Spacer(minLength: 8)
-            if scoreItem.isFavorite {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.tint)
-                    .accessibilityLabel(Text("library.score.favorite.action", bundle: .module))
+            if let composer = scoreItem.composer, !composer.isEmpty {
+                Text(composer)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 
