@@ -28,6 +28,7 @@
       "Bash(git commit:*)",
       "Bash(git checkout:*)",
       "Bash(git switch:*)",
+      "Bash(git mv:*)",
       "Bash(git stash:*)",
       "Bash(git restore:*)",
       "Bash(git fetch:*)",
@@ -62,7 +63,7 @@
       "mcp__xcode__GetTestList",
       "mcp__xcode__RenderPreview"
     ],
-    "deny": [
+    "ask": [
       "Edit(.claude/settings.json)",
       "Edit(.claude/settings.local.json)",
       "Edit(./.claude/settings.json)",
@@ -87,6 +88,14 @@
       "Bash(git worktree remove:*)",
       "Bash(git worktree prune:*)",
       "Bash(git update-ref -d:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr close:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh release create:*)",
+      "Bash(gh release delete:*)",
+      "Bash(gh repo archive:*)"
+    ],
+    "deny": [
       "Bash(git filter-branch:*)",
       "Bash(git filter-repo:*)",
       "Bash(rm -rf /)",
@@ -97,13 +106,7 @@
       "Bash(rm -rf $HOME/:*)",
       "Bash(rm -rf /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS)",
       "Bash(rm -rf /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/:*)",
-      "Bash(gh pr merge:*)",
-      "Bash(gh pr close:*)",
-      "Bash(gh pr edit:*)",
-      "Bash(gh release create:*)",
-      "Bash(gh release delete:*)",
-      "Bash(gh repo delete:*)",
-      "Bash(gh repo archive:*)"
+      "Bash(gh repo delete:*)"
     ]
   }
 }
