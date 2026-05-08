@@ -90,8 +90,8 @@ platform :ios do
     end
   end
 
-  desc "Push metadata + release notes (+ optional screenshots). Does NOT submit for review."
-  lane :push_metadata do |options|
+  desc "Push metadata + release notes (+ optional screenshots), then submit for review."
+  lane :submit do |options|
     version = options.fetch(:version)
     build = options.fetch(:build)
     screenshots_path = options[:screenshots_path]   # may be nil
@@ -106,7 +106,8 @@ platform :ios do
       overwrite_screenshots: !screenshots_path.nil?,
       skip_metadata: false,
       metadata_path: "./fastlane/metadata",
-      submit_for_review: false,
+      submit_for_review: true,
+      automatic_release: true,
       force: true,
       precheck_include_in_app_purchases: false
     )
