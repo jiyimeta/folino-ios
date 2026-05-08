@@ -1,18 +1,14 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Enjoying folino?" : {
+    "app.bootstrap.error.title" : {
       "localizations" : {
-        "ja" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "folino はいかがですか？"
+            "value" : "folino couldn't start"
           }
-        }
-      }
-    },
-    "folino couldn't start" : {
-      "localizations" : {
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21,33 +17,7 @@
         }
       }
     },
-    "Not Now" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Now"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "後で"
-          }
-        }
-      }
-    },
-    "Rate folino" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino を評価する"
-          }
-        }
-      }
-    },
-    "Select a score" : {
+    "app.detail.empty.title" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -63,23 +33,7 @@
         }
       }
     },
-    "Settings" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Settings"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定"
-          }
-        }
-      }
-    },
-    "Would you mind taking a moment to leave a review on the App Store?" : {
+    "app.review.preprompt.message" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -91,6 +45,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "App Store でレビューを書いていただけますか？"
+          }
+        }
+      }
+    },
+    "app.review.preprompt.notNow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not Now"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "後で"
+          }
+        }
+      }
+    },
+    "app.review.preprompt.rate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rate folino"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino を評価する"
+          }
+        }
+      }
+    },
+    "app.review.preprompt.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enjoying folino?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino はいかがですか？"
+          }
+        }
+      }
+    },
+    "app.toolbar.settings.label" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定"
           }
         }
       }

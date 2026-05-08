@@ -30,7 +30,7 @@ struct AppShellView: View {
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {
                     Label {
-                        Text("folino couldn't start")
+                        Text("app.bootstrap.error.title")
                     } icon: {
                         Image(systemName: "exclamationmark.triangle")
                     }
@@ -41,11 +41,11 @@ struct AppShellView: View {
                 ProgressView().controlSize(.large)
             }
         }
-        .alert(Text("Enjoying folino?"), isPresented: $reviewPrompt.isPrePromptPresented) {
-            Button { requestReview() } label: { Text("Rate folino") }
-            Button(role: .cancel) {} label: { Text("Not Now") }
+        .alert(Text("app.review.preprompt.title"), isPresented: $reviewPrompt.isPrePromptPresented) {
+            Button { requestReview() } label: { Text("app.review.preprompt.rate") }
+            Button(role: .cancel) {} label: { Text("app.review.preprompt.notNow") }
         } message: {
-            Text("Would you mind taking a moment to leave a review on the App Store?")
+            Text("app.review.preprompt.message")
         }
     }
 }
@@ -232,14 +232,14 @@ private struct ReadyShell: View {
         Button {
             isSettingsPresented = true
         } label: {
-            Image(systemName: "gear").accessibilityLabel(Text("Settings"))
+            Image(systemName: "gear").accessibilityLabel(Text("app.toolbar.settings.label"))
         }
     }
 
     private var emptyDetail: some View {
         ContentUnavailableView {
             Label {
-                Text("Select a score")
+                Text("app.detail.empty.title")
             } icon: {
                 Image(systemName: "music.note")
             }
