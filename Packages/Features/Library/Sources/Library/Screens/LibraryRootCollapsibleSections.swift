@@ -11,32 +11,34 @@ struct LibraryRootPlaylistsSection: View {
         if !allPlaylists.isEmpty {
             let total = allPlaylists.count
             let topN = playlistsByRecentlyUsed(allPlaylists, scoreItems: scoreItems, limit: 5)
-            Section(isExpanded: $expanded) {
-                ForEach(topN) { playlist in
-                    NavigationLink(value: LibraryRoute.playlistDetail(playlist.id)) {
-                        HStack {
-                            Image(systemName: "music.note.list").foregroundStyle(.tint)
-                            Text(playlist.name).foregroundStyle(.primary)
-                            Spacer()
-                            Text(playlist.orderedScoreItemIDs.count, format: .number)
-                                .foregroundStyle(.secondary)
+            Section {
+                if expanded {
+                    ForEach(topN) { playlist in
+                        NavigationLink(value: LibraryRoute.playlistDetail(playlist.id)) {
+                            HStack {
+                                Image(systemName: "music.note.list").foregroundStyle(.tint)
+                                Text(playlist.name).foregroundStyle(.primary)
+                                Spacer()
+                                Text(playlist.orderedScoreItemIDs.count, format: .number)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
-                }
-                if total > 5 {
-                    NavigationLink(value: LibraryRoute.playlists) {
-                        HStack {
-                            Text("See All", bundle: .module).foregroundStyle(.secondary)
-                            Spacer()
+                    if total > 5 {
+                        NavigationLink(value: LibraryRoute.playlists) {
+                            HStack {
+                                Text("See All", bundle: .module).foregroundStyle(.secondary)
+                                Spacer()
+                            }
                         }
                     }
                 }
             } header: {
-                HStack {
-                    Text("Playlists", bundle: .module)
-                    Spacer()
-                    Text(total, format: .number).foregroundStyle(.secondary)
-                }
+                CollapsibleSectionHeader(
+                    title: Text("Playlists", bundle: .module),
+                    count: total,
+                    expanded: $expanded
+                )
             }
         }
     }
@@ -52,37 +54,84 @@ struct LibraryRootTagsSection: View {
         if !allTags.isEmpty {
             let total = allTags.count
             let topN = tagsByRecentlyUsed(allTags, scoreItems: scoreItems, limit: 5)
-            Section(isExpanded: $expanded) {
-                ForEach(topN) { tag in
-                    NavigationLink(value: LibraryRoute.tagDetail(tag.id)) {
-                        HStack {
-                            Image(systemName: "tag.fill").foregroundStyle(.tint)
-                            Text(tag.name).foregroundStyle(.primary)
-                            Spacer()
-                            Text(memberCount(of: tag), format: .number)
-                                .foregroundStyle(.secondary)
+            Section {
+                if expanded {
+                    ForEach(topN) { tag in
+                        NavigationLink(value: LibraryRoute.tagDetail(tag.id)) {
+                            HStack {
+                                Image(systemName: "tag.fill").foregroundStyle(.tint)
+                                Text(tag.name).foregroundStyle(.primary)
+                                Spacer()
+                                Text(memberCount(of: tag), format: .number)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
-                }
-                if total > 5 {
-                    NavigationLink(value: LibraryRoute.tags) {
-                        HStack {
-                            Text("See All", bundle: .module).foregroundStyle(.secondary)
-                            Spacer()
+                    if total > 5 {
+                        NavigationLink(value: LibraryRoute.tags) {
+                            HStack {
+                                Text("See All", bundle: .module).foregroundStyle(.secondary)
+                                Spacer()
+                            }
                         }
                     }
                 }
             } header: {
-                HStack {
-                    Text("Tags", bundle: .module)
-                    Spacer()
-                    Text(total, format: .number).foregroundStyle(.secondary)
-                }
+                CollapsibleSectionHeader(
+                    title: Text("Tags", bundle: .module),
+                    count: total,
+                    expanded: $expanded
+                )
             }
+            .animation(.default, value: expanded)
         }
     }
 
     private func memberCount(of tag: Tag) -> Int {
         scoreItems.reduce(0) { acc, item in acc + (item.tagIDs.contains(tag.id) ? 1 : 0) }
     }
+}
+
+private struct CollapsibleSectionHeader: View {
+    let title: Text
+    let count: Int
+    @Binding var expanded: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.snappy) { expanded.toggle() }
+        } label: {
+            HStack {
+                title
+                Spacer()
+                Text(count, format: .number).foregroundStyle(.secondary)
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .rotationEffect(.degrees(expanded ? 0 : -90))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+#Preview("Collapsible Sections") {
+    List {
+        LibraryRootPlaylistsSection(
+            allPlaylists: [
+                Playlist(name: "Practice", orderedScoreItemIDs: [], createdAt: .now),
+                Playlist(name: "Recital", orderedScoreItemIDs: [], createdAt: .now),
+            ],
+            scoreItems: []
+        )
+        LibraryRootTagsSection(
+            allTags: [
+                Tag(name: "Bach", colorHex: "#FF0000"),
+                Tag(name: "Chopin", colorHex: "#00FF00"),
+            ],
+            scoreItems: []
+        )
+    }
+    .listStyle(.sidebar)
 }
