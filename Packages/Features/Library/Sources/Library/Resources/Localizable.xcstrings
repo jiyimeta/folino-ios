@@ -172,6 +172,22 @@
         }
       }
     },
+    "Create" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作成"
+          }
+        }
+      }
+    },
     "Create a playlist with the + button above." : {
       "localizations" : {
         "en" : {

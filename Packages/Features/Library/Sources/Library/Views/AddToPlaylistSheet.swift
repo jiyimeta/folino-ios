@@ -38,6 +38,13 @@ struct AddToPlaylistSheet: View {
                         TextField(text: $newPlaylistName) { Text("New playlist", bundle: .module) }
                             .submitLabel(.done)
                             .onSubmit { commitNewPlaylist() }
+                        Button {
+                            commitNewPlaylist()
+                        } label: {
+                            Text("Create", bundle: .module)
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(trimmedNewPlaylistName.isEmpty)
                     }
                 }
             }
@@ -62,8 +69,12 @@ struct AddToPlaylistSheet: View {
         #endif
     }
 
+    private var trimmedNewPlaylistName: String {
+        newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func commitNewPlaylist() {
-        let trimmed = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = trimmedNewPlaylistName
         guard !trimmed.isEmpty else { return }
         onCreate(trimmed)
         newPlaylistName = ""
