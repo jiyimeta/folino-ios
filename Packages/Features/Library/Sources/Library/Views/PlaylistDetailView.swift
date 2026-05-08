@@ -6,9 +6,15 @@ struct PlaylistDetailView: View {
     let items: [ScoreItem]
     let onOpen: (ScoreItem) -> Void
     let onMove: (IndexSet, Int) -> Void
-    let onRemoveFromPlaylist: (IndexSet) -> Void
+    let onRemoveFromPlaylist: (ScoreItem) -> Void
     let onRename: (String) -> Void
     let onDelete: () -> Void
+    @Binding var selectedIDs: Set<ScoreItemID>
+    let availableShareFormats: [ScoreShareFormat]
+    let onBulkShare: (ScoreShareFormat) -> Void
+    let onBulkAddToPlaylist: () -> Void
+    let onBulkEditTags: () -> Void
+    let onBulkDelete: () -> Void
 
     #if os(iOS)
         @State private var editMode: EditMode = .inactive
@@ -30,16 +36,47 @@ struct PlaylistDetailView: View {
                     Text("Add scores from the context menu of any score row.", bundle: .module)
                 }
             } else {
-                List {
+                List(selection: $selectedIDs) {
                     ForEach(items) { item in
                         ScoreRow(scoreItem: item)
                             .contentShape(Rectangle())
-                            .onTapGesture { onOpen(item) }
+                            .onTapGesture {
+                                if isEditing {
+                                    toggleSelection(item.id)
+                                } else {
+                                    onOpen(item)
+                                }
+                            }
+                            .tag(item.id)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    onRemoveFromPlaylist(item)
+                                } label: {
+                                    Label {
+                                        Text("Remove from playlist", bundle: .module)
+                                    } icon: {
+                                        Image(systemName: "minus.circle")
+                                    }
+                                }
+                            }
                     }
                     .onMove(perform: onMove)
-                    .onDelete(perform: onRemoveFromPlaylist)
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            #if os(iOS)
+                if editMode.isEditing {
+                    BulkActionBar(
+                        selectionCount: selectedIDs.count,
+                        availableShareFormats: availableShareFormats,
+                        onShare: onBulkShare,
+                        onAddToPlaylist: onBulkAddToPlaylist,
+                        onEditTags: onBulkEditTags,
+                        onDelete: onBulkDelete
+                    )
+                }
+            #endif
         }
         .navigationTitle(playlistName)
         #if os(iOS)
@@ -73,11 +110,46 @@ struct PlaylistDetailView: View {
     @ToolbarContentBuilder
     private var editToolbar: some ToolbarContent {
         #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { EditButton() }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation {
+                        if editMode.isEditing {
+                            editMode = .inactive
+                            selectedIDs = []
+                        } else {
+                            editMode = .active
+                        }
+                    }
+                } label: {
+                    if editMode.isEditing {
+                        Text("Cancel", bundle: .module)
+                            .transition(.identity)
+                    } else {
+                        Text("Select", bundle: .module)
+                            .transition(.identity)
+                    }
+                }
+            }
             ToolbarItem(placement: .topBarLeading) { manageMenu }
         #else
             ToolbarItem(placement: .automatic) { manageMenu }
         #endif
+    }
+
+    private var isEditing: Bool {
+        #if os(iOS)
+            return editMode.isEditing
+        #else
+            return false
+        #endif
+    }
+
+    private func toggleSelection(_ id: ScoreItemID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
     }
 
     private var manageMenu: some View {
@@ -129,31 +201,40 @@ struct PlaylistDetailView: View {
         }
     }
 
-    #Preview("Filled") {
-        NavigationStack {
-            PlaylistDetailView(
-                playlistName: "Daily warm-up",
-                items: PlaylistDetailViewPreview.items,
-                onOpen: { _ in },
-                onMove: { _, _ in },
-                onRemoveFromPlaylist: { _ in },
-                onRename: { _ in },
-                onDelete: {}
-            )
+    private struct PlaylistDetailViewPreviewHost: View {
+        let playlistName: String
+        let items: [ScoreItem]
+        @State private var selectedIDs: Set<ScoreItemID> = []
+
+        var body: some View {
+            NavigationStack {
+                PlaylistDetailView(
+                    playlistName: playlistName,
+                    items: items,
+                    onOpen: { _ in },
+                    onMove: { _, _ in },
+                    onRemoveFromPlaylist: { (_: ScoreItem) in },
+                    onRename: { _ in },
+                    onDelete: {},
+                    selectedIDs: $selectedIDs,
+                    availableShareFormats: [],
+                    onBulkShare: { _ in },
+                    onBulkAddToPlaylist: {},
+                    onBulkEditTags: {},
+                    onBulkDelete: {}
+                )
+            }
         }
     }
 
+    #Preview("Filled") {
+        PlaylistDetailViewPreviewHost(
+            playlistName: "Daily warm-up",
+            items: PlaylistDetailViewPreview.items
+        )
+    }
+
     #Preview("Empty") {
-        NavigationStack {
-            PlaylistDetailView(
-                playlistName: "Empty Set",
-                items: [],
-                onOpen: { _ in },
-                onMove: { _, _ in },
-                onRemoveFromPlaylist: { _ in },
-                onRename: { _ in },
-                onDelete: {}
-            )
-        }
+        PlaylistDetailViewPreviewHost(playlistName: "Empty Set", items: [])
     }
 #endif

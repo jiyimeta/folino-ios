@@ -15,10 +15,10 @@ public final class LibraryViewModel {
 
     public struct ShareTarget: Identifiable, Equatable, Sendable {
         public let id: UUID
-        public let url: URL
-        public init(url: URL) {
+        public let urls: [URL]
+        public init(urls: [URL]) {
             id = UUID()
-            self.url = url
+            self.urls = urls
         }
     }
 
@@ -68,15 +68,96 @@ public final class LibraryViewModel {
         }
     }
 
+    public func bulkDelete(_ ids: Set<ScoreItemID>) async {
+        for id in ids {
+            do {
+                try await repository.deleteScoreItem(id: id)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+    }
+
+    public func bulkRemoveFromPlaylist(
+        _ ids: Set<ScoreItemID>,
+        from playlist: Playlist
+    ) async {
+        guard !ids.isEmpty else { return }
+        var updated = playlist
+        updated.orderedScoreItemIDs.removeAll { ids.contains($0) }
+        guard updated.orderedScoreItemIDs != playlist.orderedScoreItemIDs else { return }
+        do {
+            try await repository.savePlaylist(updated)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
+    public func bulkAddToPlaylist(
+        _ orderedIDs: [ScoreItemID],
+        to playlist: Playlist
+    ) async {
+        guard !orderedIDs.isEmpty else { return }
+        let existing = Set(playlist.orderedScoreItemIDs)
+        let toAppend = orderedIDs.filter { !existing.contains($0) }
+        guard !toAppend.isEmpty else { return }
+        var updated = playlist
+        updated.orderedScoreItemIDs.append(contentsOf: toAppend)
+        do {
+            try await repository.savePlaylist(updated)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
+    public func bulkAddTags(
+        _ ids: Set<ScoreItemID>,
+        tagIDs: Set<TagID>
+    ) async {
+        guard !ids.isEmpty, !tagIDs.isEmpty else { return }
+        for id in ids {
+            guard let item = repository.scoreItems.first(where: { $0.id == id }) else { continue }
+            let merged = item.tagIDs.union(tagIDs)
+            guard merged != item.tagIDs else { continue }
+            var updated = item
+            updated.tagIDs = merged
+            do {
+                try await repository.saveScoreItem(updated)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+    }
+
     public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
         isPreparingShare = true
         defer { isPreparingShare = false }
         do {
             let url = try await shareService.prepareShare(item: item, format: format)
-            shareTarget = ShareTarget(url: url)
+            shareTarget = ShareTarget(urls: [url])
         } catch {
             errorAlertMessage = describe(error)
         }
+    }
+
+    public func requestBulkShare(_ items: [ScoreItem], format: ScoreShareFormat) async {
+        guard !items.isEmpty else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+        var urls: [URL] = []
+        urls.reserveCapacity(items.count)
+        for item in items {
+            do {
+                let url = try await shareService.prepareShare(item: item, format: format)
+                urls.append(url)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+        shareTarget = ShareTarget(urls: urls)
     }
 
     public func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {

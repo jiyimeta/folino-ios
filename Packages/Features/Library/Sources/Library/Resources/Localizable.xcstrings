@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
     "\"%@\" is already imported. What do you want to do?" : {
       "localizations" : {
         "en" : {
@@ -27,6 +30,38 @@
         }
       },
       "shouldTranslate" : false
+    },
+    "%lld selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld selected"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件選択中"
+          }
+        }
+      }
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
     },
     "Add" : {
       "localizations" : {
@@ -60,6 +95,22 @@
         }
       }
     },
+    "Add %lld scores to playlist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add %lld scores to playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件をプレイリストに追加"
+          }
+        }
+      }
+    },
     "Add scores from the context menu of any score row." : {
       "localizations" : {
         "en" : {
@@ -88,6 +139,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "楽譜のコンテキストメニューから、または上の + ボタンからタグを追加できます。"
+          }
+        }
+      }
+    },
+    "Add to Playlist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to Playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストに追加"
           }
         }
       }
@@ -232,6 +299,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「%@」を削除しますか？"
+          }
+        }
+      }
+    },
+    "Delete %lld scores?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete %lld scores?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件のスコアを削除しますか？"
+          }
+        }
+      }
+    },
+    "Delete completely" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete completely"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完全に削除"
           }
         }
       }
@@ -792,6 +891,22 @@
         }
       }
     },
+    "Remove from playlist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストから削除"
+          }
+        }
+      }
+    },
     "Rename Playlist" : {
       "localizations" : {
         "en" : {
@@ -884,6 +999,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "楽譜のデータはそのままです。タグと、その割り当てだけが削除されます。"
+          }
+        }
+      }
+    },
+    "Select" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択"
           }
         }
       }
@@ -1048,6 +1180,22 @@
         }
       }
     },
+    "Tags for %lld scores" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tags for %lld scores"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件のスコアにタグを追加"
+          }
+        }
+      }
+    },
     "There was a problem saving the score. Check available storage." : {
       "localizations" : {
         "en" : {
@@ -1092,6 +1240,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "この楽譜とそのファイルがこの端末から削除されます。"
+          }
+        }
+      }
+    },
+    "This will remove the scores and their files from this device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This will remove the scores and their files from this device."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スコアとファイルがこの端末から削除されます。"
           }
         }
       }

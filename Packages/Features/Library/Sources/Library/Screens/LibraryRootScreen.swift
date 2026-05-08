@@ -108,7 +108,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         }
         #if os(iOS)
         .sheet(item: $viewModel.shareTarget) { target in
-            ActivityViewControllerRepresentable(items: [target.url])
+            ActivityViewControllerRepresentable(items: target.urls)
         }
         #endif
     }

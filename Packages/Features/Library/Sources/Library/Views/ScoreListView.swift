@@ -1,6 +1,11 @@
 import Domain
 import SwiftUI
 
+enum BulkContext {
+    case scores
+    case playlist
+}
+
 struct ScoreListView<RowMenu: View>: View {
     let items: [ScoreItem]
     @Binding var searchText: String
@@ -13,32 +18,104 @@ struct ScoreListView<RowMenu: View>: View {
     let onConfirmDelete: (ScoreItem) -> Void
     let onSelectSort: (ScoreItemSort) -> Void
     let onSelectManualOrder: () -> Void
+    #if os(iOS)
+        @Binding var editMode: EditMode
+    #endif
+    @Binding var selectedIDs: Set<ScoreItemID>
+    let bulkContext: BulkContext
+    let availableShareFormats: [ScoreShareFormat]
+    let onBulkShare: (ScoreShareFormat) -> Void
+    let onBulkAddToPlaylist: () -> Void
+    let onBulkEditTags: () -> Void
+    let onBulkDelete: () -> Void
     @ViewBuilder let rowMenu: (ScoreItem) -> RowMenu
 
     var body: some View {
-        List {
+        list
+            .searchable(text: $searchText)
+            .toolbar { trailingToolbarItems }
+        #if os(iOS)
+            .environment(\.editMode, $editMode)
+        #endif
+            .navigationTitle(navigationTitleText)
+            .safeAreaInset(edge: .bottom) {
+                if isEditing {
+                    BulkActionBar(
+                        selectionCount: selectedIDs.count,
+                        availableShareFormats: availableShareFormats,
+                        onShare: onBulkShare,
+                        onAddToPlaylist: onBulkAddToPlaylist,
+                        onEditTags: onBulkEditTags,
+                        onDelete: onBulkDelete
+                    )
+                }
+            }
+            .alert(
+                Text("Delete \"\(pendingDelete?.title ?? "")\"?", bundle: .module),
+                isPresented: deleteAlertBinding,
+                presenting: pendingDelete
+            ) { item in
+                Button(role: .destructive) {
+                    onConfirmDelete(item)
+                } label: {
+                    Text("Delete", bundle: .module)
+                }
+                Button(role: .cancel) {} label: {
+                    Text("Cancel", bundle: .module)
+                }
+            } message: { _ in
+                Text("This will remove the score and its file from this device.", bundle: .module)
+            }
+    }
+
+    @ViewBuilder
+    private var list: some View {
+        List(selection: $selectedIDs) {
             ForEach(items) { item in
                 row(for: item)
+                    .tag(item.id)
             }
         }
-        .searchable(text: $searchText)
-        .toolbar { sortToolbarItem }
-        .alert(
-            Text("Delete \"\(pendingDelete?.title ?? "")\"?", bundle: .module),
-            isPresented: deleteAlertBinding,
-            presenting: pendingDelete
-        ) { item in
-            Button(role: .destructive) {
-                onConfirmDelete(item)
-            } label: {
-                Text("Delete", bundle: .module)
-            }
-            Button(role: .cancel) {} label: {
-                Text("Cancel", bundle: .module)
-            }
-        } message: { _ in
-            Text("This will remove the score and its file from this device.", bundle: .module)
+    }
+
+    private var isEditing: Bool {
+        #if os(iOS)
+            return editMode.isEditing
+        #else
+            return false
+        #endif
+    }
+
+    private var navigationTitleText: Text {
+        if isEditing, !selectedIDs.isEmpty {
+            return Text("\(selectedIDs.count) selected", bundle: .module)
         }
+        return Text("")
+    }
+
+    @ToolbarContentBuilder
+    private var trailingToolbarItems: some ToolbarContent {
+        #if os(iOS)
+            ToolbarItem(placement: .topBarTrailing) { sortMenu }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation {
+                        if editMode.isEditing {
+                            editMode = .inactive
+                            selectedIDs = []
+                        } else {
+                            editMode = .active
+                        }
+                    }
+                } label: {
+                    Text(editMode.isEditing ? "Cancel" : "Select", bundle: .module)
+                        .contentTransition(.identity)
+                }
+            }
+        #else
+            ToolbarItem(placement: .automatic) { sortMenu }
+        #endif
     }
 
     @ViewBuilder
@@ -46,18 +123,26 @@ struct ScoreListView<RowMenu: View>: View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
-                .onTapGesture { onTap(item) }
-            Menu {
-                rowMenu(item)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
+                .onTapGesture {
+                    if isEditing {
+                        toggleSelection(item.id)
+                    } else {
+                        onTap(item)
+                    }
+                }
+            if !isEditing {
+                Menu {
+                    rowMenu(item)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("More", bundle: .module))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("More", bundle: .module))
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
@@ -87,20 +172,19 @@ struct ScoreListView<RowMenu: View>: View {
         }
     }
 
+    private func toggleSelection(_ id: ScoreItemID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
+    }
+
     private var deleteAlertBinding: Binding<Bool> {
         Binding(
             get: { pendingDelete != nil },
             set: { isPresented in if !isPresented { pendingDelete = nil } }
         )
-    }
-
-    @ToolbarContentBuilder
-    private var sortToolbarItem: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { sortMenu }
-        #else
-            ToolbarItem(placement: .automatic) { sortMenu }
-        #endif
     }
 
     private var sortMenu: some View {
@@ -136,7 +220,7 @@ struct ScoreListView<RowMenu: View>: View {
     }
 }
 
-#if DEBUG
+#if DEBUG && os(iOS)
     private enum ScoreListViewPreview {
         static func item(
             title: String,
@@ -174,6 +258,10 @@ struct ScoreListView<RowMenu: View>: View {
         @State private var pendingDelete: ScoreItem?
         @State private var sort: ScoreItemSort = .dateAddedDesc
         @State private var isManualOrderActive: Bool = false
+        #if os(iOS)
+            @State private var editMode: EditMode = .inactive
+        #endif
+        @State private var selectedIDs: Set<ScoreItemID> = []
 
         let items: [ScoreItem]
         let showsManualOrderOption: Bool
@@ -191,7 +279,15 @@ struct ScoreListView<RowMenu: View>: View {
                     onToggleFavorite: { _ in },
                     onConfirmDelete: { _ in },
                     onSelectSort: { sort = $0; isManualOrderActive = false },
-                    onSelectManualOrder: { isManualOrderActive = true }
+                    onSelectManualOrder: { isManualOrderActive = true },
+                    editMode: $editMode,
+                    selectedIDs: $selectedIDs,
+                    bulkContext: .scores,
+                    availableShareFormats: [],
+                    onBulkShare: { _ in },
+                    onBulkAddToPlaylist: {},
+                    onBulkEditTags: {},
+                    onBulkDelete: {}
                 ) { _ in
                     Button("Open") {}
                     Button("Delete", role: .destructive) {}
