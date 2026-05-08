@@ -2,23 +2,26 @@ import Domain
 import SwiftUI
 
 struct EditTagsSheet: View {
-    let scoreItem: ScoreItem
-    let library: LibraryViewModel
-    @Environment(\.dismiss) private var dismiss
+    let scoreTitle: String
+    let assignedTagIDs: Set<TagID>
+    let allTags: [Tag]
+    let onToggle: (Tag) -> Void
+    let onCreate: (String) -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @State private var newTagName: String = ""
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(library.repository.tags) { tag in
+                    ForEach(allTags) { tag in
                         Button {
-                            Task { await toggle(tag) }
+                            onToggle(tag)
                         } label: {
                             HStack {
                                 Image(
-                                    systemName: scoreItem.tagIDs.contains(tag.id)
+                                    systemName: assignedTagIDs.contains(tag.id)
                                         ? "checkmark.circle.fill" : "circle"
                                 )
                                 .foregroundStyle(.tint)
@@ -35,11 +38,11 @@ struct EditTagsSheet: View {
                             .foregroundStyle(.tint)
                         TextField(text: $newTagName) { Text("New tag", bundle: .module) }
                             .submitLabel(.done)
-                            .onSubmit { Task { await commitNewTag() } }
+                            .onSubmit { commitNewTag() }
                     }
                 }
             }
-            .navigationTitle(Text("Tags for \"\(scoreItem.title)\"", bundle: .module))
+            .navigationTitle(Text("Tags for \"\(scoreTitle)\"", bundle: .module))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -60,34 +63,41 @@ struct EditTagsSheet: View {
         #endif
     }
 
-    private func toggle(_ tag: Tag) async {
-        var updated = currentScoreItem()
-        if updated.tagIDs.contains(tag.id) {
-            updated.tagIDs.remove(tag.id)
-        } else {
-            updated.tagIDs.insert(tag.id)
-        }
-        await library.save(updated)
-    }
-
-    private func commitNewTag() async {
+    private func commitNewTag() {
         let trimmed = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let tag = Tag(name: trimmed, colorHex: "#5856D6")
-        do {
-            try await library.repository.saveTag(tag)
-        } catch {
-            return
-        }
-        var updated = currentScoreItem()
-        updated.tagIDs.insert(tag.id)
-        await library.save(updated)
+        onCreate(trimmed)
         newTagName = ""
     }
-
-    /// Re-read from the repository on each operation in case other operations
-    /// have mutated the score's tagIDs while this sheet is open.
-    private func currentScoreItem() -> ScoreItem {
-        library.repository.scoreItems.first(where: { $0.id == scoreItem.id }) ?? scoreItem
-    }
 }
+
+#if DEBUG
+    #Preview("Mixed selection") {
+        struct Host: View {
+            @State private var assigned: Set<TagID>
+            let tags: [Tag]
+            init() {
+                let tags = [
+                    Tag(name: "Practice", colorHex: "#5856D6"),
+                    Tag(name: "Recital", colorHex: "#FF9500"),
+                    Tag(name: "Sight reading", colorHex: "#34C759"),
+                ]
+                self.tags = tags
+                _assigned = State(initialValue: [tags[0].id])
+            }
+
+            var body: some View {
+                EditTagsSheet(
+                    scoreTitle: "Clair de Lune",
+                    assignedTagIDs: assigned,
+                    allTags: tags,
+                    onToggle: { tag in
+                        if assigned.contains(tag.id) { assigned.remove(tag.id) } else { assigned.insert(tag.id) }
+                    },
+                    onCreate: { _ in }
+                )
+            }
+        }
+        return Host()
+    }
+#endif

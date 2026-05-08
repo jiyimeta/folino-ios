@@ -103,7 +103,7 @@ private struct ReadyShell: View {
                     detail
                 }
             } else {
-                LibraryRootView(
+                LibraryRootScreen(
                     viewModel: libraryVM,
                     path: $compactPath,
                     onOpenScore: { compactPath.append($0) },
@@ -184,7 +184,7 @@ private struct ReadyShell: View {
 
     @ViewBuilder
     private var sidebar: some View {
-        LibraryRootView(
+        LibraryRootScreen(
             viewModel: libraryVM,
             path: $sidebarPath,
             onOpenScore: { item in

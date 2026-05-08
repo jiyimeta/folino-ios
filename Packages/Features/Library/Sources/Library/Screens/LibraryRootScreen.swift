@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import UtilityUI
 
 @MainActor
-public struct LibraryRootView<LicenseContent: View, ReaderContent: View, LeadingToolbar: View>: View {
+public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, LeadingToolbar: View>: View {
     @Bindable var viewModel: LibraryViewModel
     @Binding private var path: NavigationPath
     private let onOpenScore: (ScoreItem) -> Void
@@ -58,10 +58,10 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
                 }
         }
         .sheet(item: $editTagsTarget) { item in
-            EditTagsSheet(scoreItem: item, library: viewModel)
+            EditTagsScreen(scoreItem: item, library: viewModel)
         }
         .sheet(item: $addToPlaylistTarget) { item in
-            AddToPlaylistSheet(scoreItem: item, library: viewModel)
+            AddToPlaylistScreen(scoreItem: item, library: viewModel)
         }
         .alert(
             Text("Library", bundle: .module),
@@ -264,17 +264,17 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
     private func destination(for route: LibraryRoute) -> some View {
         switch route {
         case .allScores:
-            AllScoresContainer(
+            AllScoresScreen(
                 library: viewModel,
                 onOpen: onOpenScore,
                 onEditTags: { editTagsTarget = $0 },
                 onAddToPlaylist: { addToPlaylistTarget = $0 }
             )
         case .tags:
-            TagsListView(library: viewModel)
+            TagsListScreen(library: viewModel)
         case let .tagDetail(tagID):
             if let tag = viewModel.repository.tags.first(where: { $0.id == tagID }) {
-                TagDetailView(
+                TagDetailScreen(
                     tag: tag,
                     library: viewModel,
                     onOpen: onOpenScore,
@@ -292,10 +292,10 @@ public struct LibraryRootView<LicenseContent: View, ReaderContent: View, Leading
                 }
             }
         case .playlists:
-            PlaylistsListView(library: viewModel)
+            PlaylistsListScreen(library: viewModel)
         case let .playlistDetail(playlistID):
             if let playlist = viewModel.repository.playlists.first(where: { $0.id == playlistID }) {
-                PlaylistDetailView(
+                PlaylistDetailScreen(
                     playlist: playlist,
                     library: viewModel,
                     onOpen: onOpenScore,
@@ -342,7 +342,7 @@ enum ScoreFileTypes {
     }
 }
 
-private struct AllScoresContainer: View {
+private struct AllScoresScreen: View {
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
@@ -366,7 +366,7 @@ private struct AllScoresContainer: View {
     }
 
     var body: some View {
-        ScoreListView(
+        ScoreListScreen(
             viewModel: listVM,
             library: library,
             onOpen: onOpen,

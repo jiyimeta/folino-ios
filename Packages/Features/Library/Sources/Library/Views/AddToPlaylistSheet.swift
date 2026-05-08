@@ -2,22 +2,25 @@ import Domain
 import SwiftUI
 
 struct AddToPlaylistSheet: View {
-    let scoreItem: ScoreItem
-    let library: LibraryViewModel
-    @Environment(\.dismiss) private var dismiss
+    let scoreTitle: String
+    let scoreItemID: ScoreItemID
+    let allPlaylists: [Playlist]
+    let onToggle: (Playlist) -> Void
+    let onCreate: (String) -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @State private var newPlaylistName: String = ""
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(library.repository.playlists) { playlist in
+                    ForEach(allPlaylists) { playlist in
                         Button {
-                            Task { await toggle(playlist) }
+                            onToggle(playlist)
                         } label: {
                             HStack {
-                                Image(systemName: playlist.orderedScoreItemIDs.contains(scoreItem.id)
+                                Image(systemName: playlist.orderedScoreItemIDs.contains(scoreItemID)
                                     ? "checkmark.circle.fill"
                                     : "circle")
                                     .foregroundStyle(.tint)
@@ -34,11 +37,11 @@ struct AddToPlaylistSheet: View {
                             .foregroundStyle(.tint)
                         TextField(text: $newPlaylistName) { Text("New playlist", bundle: .module) }
                             .submitLabel(.done)
-                            .onSubmit { Task { await commitNewPlaylist() } }
+                            .onSubmit { commitNewPlaylist() }
                     }
                 }
             }
-            .navigationTitle(Text("Add \"\(scoreItem.title)\" to Playlist", bundle: .module))
+            .navigationTitle(Text("Add \"\(scoreTitle)\" to Playlist", bundle: .module))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -59,36 +62,38 @@ struct AddToPlaylistSheet: View {
         #endif
     }
 
-    private func toggle(_ playlist: Playlist) async {
-        var updated = playlist
-        if let idx = updated.orderedScoreItemIDs.firstIndex(of: scoreItem.id) {
-            updated.orderedScoreItemIDs.remove(at: idx)
-        } else {
-            updated.orderedScoreItemIDs.append(scoreItem.id)
-        }
-        do {
-            try await library.repository.savePlaylist(updated)
-        } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
-        }
-    }
-
-    private func commitNewPlaylist() async {
+    private func commitNewPlaylist() {
         let trimmed = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let playlist = Playlist(
-            name: trimmed,
-            orderedScoreItemIDs: [scoreItem.id],
-            createdAt: Date()
-        )
-        do {
-            try await library.repository.savePlaylist(playlist)
-        } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
-            return
-        }
+        onCreate(trimmed)
         newPlaylistName = ""
     }
 }
+
+#if DEBUG
+    #Preview {
+        struct Host: View {
+            @State private var playlists: [Playlist]
+            let scoreID: ScoreItemID
+            init() {
+                let scoreID = ScoreItemID()
+                self.scoreID = scoreID
+                _playlists = State(initialValue: [
+                    Playlist(name: "Daily warm-up", orderedScoreItemIDs: [scoreID], createdAt: Date()),
+                    Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
+                ])
+            }
+
+            var body: some View {
+                AddToPlaylistSheet(
+                    scoreTitle: "Clair de Lune",
+                    scoreItemID: scoreID,
+                    allPlaylists: playlists,
+                    onToggle: { _ in },
+                    onCreate: { _ in }
+                )
+            }
+        }
+        return Host()
+    }
+#endif

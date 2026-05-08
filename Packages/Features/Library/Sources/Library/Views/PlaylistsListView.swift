@@ -2,14 +2,15 @@ import Domain
 import SwiftUI
 
 struct PlaylistsListView: View {
-    let library: LibraryViewModel
+    let playlists: [Playlist]
+    let onCreate: (String) -> Void
 
     @State private var isCreating = false
     @State private var newPlaylistName: String = ""
 
     var body: some View {
         Group {
-            if sortedPlaylists.isEmpty {
+            if playlists.isEmpty {
                 ContentUnavailableView {
                     Label {
                         Text("No Playlists", bundle: .module)
@@ -21,7 +22,7 @@ struct PlaylistsListView: View {
                 }
             } else {
                 List {
-                    ForEach(sortedPlaylists) { playlist in
+                    ForEach(playlists) { playlist in
                         NavigationLink(value: LibraryRoute.playlistDetail(playlist.id)) {
                             HStack {
                                 Image(systemName: "music.note.list")
@@ -41,7 +42,14 @@ struct PlaylistsListView: View {
         .toolbar { newPlaylistToolbar }
         .alert(Text("New Playlist", bundle: .module), isPresented: $isCreating) {
             TextField(text: $newPlaylistName) { Text("Playlist name", bundle: .module) }
-            Button { Task { await commit() } } label: { Text("Add", bundle: .module) }
+            Button {
+                let trimmed = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                onCreate(trimmed)
+                newPlaylistName = ""
+            } label: {
+                Text("Add", bundle: .module)
+            }
             Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
         } message: {
             Text("Enter a name for the new playlist.", bundle: .module)
@@ -65,22 +73,26 @@ struct PlaylistsListView: View {
             Image(systemName: "plus").accessibilityLabel(Text("New Playlist", bundle: .module))
         }
     }
-
-    private var sortedPlaylists: [Playlist] {
-        library.repository.playlists.sorted {
-            $0.name.localizedStandardCompare($1.name) == .orderedAscending
-        }
-    }
-
-    private func commit() async {
-        let trimmed = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let playlist = Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date())
-        do {
-            try await library.repository.savePlaylist(playlist)
-        } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
-        }
-    }
 }
+
+#if DEBUG
+    private struct PlaylistsListViewPreviewHost: View {
+        let playlists: [Playlist]
+        var body: some View {
+            NavigationStack {
+                PlaylistsListView(playlists: playlists, onCreate: { _ in })
+            }
+        }
+    }
+
+    #Preview("Filled") {
+        PlaylistsListViewPreviewHost(playlists: [
+            Playlist(name: "Daily warm-up", orderedScoreItemIDs: [], createdAt: Date()),
+            Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
+        ])
+    }
+
+    #Preview("Empty") {
+        PlaylistsListViewPreviewHost(playlists: [])
+    }
+#endif

@@ -1,16 +1,20 @@
 import Domain
 import SwiftUI
 
-/// Single source of truth for the row menu used by both context-menus
-/// and trailing ellipsis menus across the Library feature.
+/// Pure menu builder used by the trailing ellipsis menus and context-menus
+/// across the Library feature. Takes plain Domain values and closures so it
+/// can be reused from any Screen and rendered in `#Preview`.
 @MainActor
 @ViewBuilder
 func scoreRowMenu(
     item: ScoreItem,
-    library: LibraryViewModel,
+    availableFormats: [ScoreShareFormat],
+    resolvedSourceFormat: ScoreFormat,
     onOpen: @escaping (ScoreItem) -> Void,
+    onToggleFavorite: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,
     onAddToPlaylist: @escaping (ScoreItem) -> Void,
+    onShare: @escaping (ScoreShareFormat) -> Void,
     onRequestDelete: ((ScoreItem) -> Void)?
 ) -> some View {
     Button { onOpen(item) } label: {
@@ -20,7 +24,7 @@ func scoreRowMenu(
             Image(systemName: "music.note")
         }
     }
-    Button { Task { await library.toggleFavorite(item) } } label: {
+    Button { onToggleFavorite(item) } label: {
         Label {
             Text(item.isFavorite ? "Unfavorite" : "Favorite", bundle: .module)
         } icon: {
@@ -43,7 +47,11 @@ func scoreRowMenu(
     }
 
     Divider()
-    shareSubmenu(item: item, library: library)
+    shareSubmenu(
+        availableFormats: availableFormats,
+        resolvedSourceFormat: resolvedSourceFormat,
+        onShare: onShare
+    )
 
     if let onRequestDelete {
         Divider()
@@ -59,13 +67,17 @@ func scoreRowMenu(
 
 @MainActor
 @ViewBuilder
-private func shareSubmenu(item: ScoreItem, library: LibraryViewModel) -> some View {
+private func shareSubmenu(
+    availableFormats: [ScoreShareFormat],
+    resolvedSourceFormat: ScoreFormat,
+    onShare: @escaping (ScoreShareFormat) -> Void
+) -> some View {
     Menu {
-        ForEach(library.shareService.availableFormats(for: item), id: \.self) { format in
+        ForEach(availableFormats, id: \.self) { format in
             Button {
-                Task { await library.requestShare(item, format: format) }
+                onShare(format)
             } label: {
-                shareMenuLabel(item: item, format: format, library: library)
+                shareMenuLabel(format: format, resolvedSourceFormat: resolvedSourceFormat)
             }
         }
     } label: {
@@ -80,14 +92,12 @@ private func shareSubmenu(item: ScoreItem, library: LibraryViewModel) -> some Vi
 @MainActor
 @ViewBuilder
 private func shareMenuLabel(
-    item: ScoreItem,
     format: ScoreShareFormat,
-    library: LibraryViewModel
+    resolvedSourceFormat: ScoreFormat
 ) -> some View {
     switch format {
     case .sourceFormat:
-        let resolved = library.shareService.resolvedSourceFormat(for: item)
-        switch resolved {
+        switch resolvedSourceFormat {
         case .mscz, .mscx:
             Label("MuseScore (.mscz)", systemImage: "doc.zipper")
         case .musicXML:

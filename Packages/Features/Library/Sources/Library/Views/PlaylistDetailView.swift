@@ -2,10 +2,13 @@ import Domain
 import SwiftUI
 
 struct PlaylistDetailView: View {
-    let playlist: Playlist
-    let library: LibraryViewModel
+    let playlistName: String
+    let items: [ScoreItem]
     let onOpen: (ScoreItem) -> Void
-    let onPlaylistDeleted: () -> Void
+    let onMove: (IndexSet, Int) -> Void
+    let onRemoveFromPlaylist: (IndexSet) -> Void
+    let onRename: (String) -> Void
+    let onDelete: () -> Void
 
     #if os(iOS)
         @State private var editMode: EditMode = .inactive
@@ -16,7 +19,7 @@ struct PlaylistDetailView: View {
 
     var body: some View {
         Group {
-            if orderedItems.isEmpty {
+            if items.isEmpty {
                 ContentUnavailableView {
                     Label {
                         Text("No Scores in This Playlist", bundle: .module)
@@ -28,32 +31,36 @@ struct PlaylistDetailView: View {
                 }
             } else {
                 List {
-                    ForEach(orderedItems) { item in
+                    ForEach(items) { item in
                         ScoreRow(scoreItem: item)
                             .contentShape(Rectangle())
                             .onTapGesture { onOpen(item) }
                     }
-                    .onMove(perform: move)
-                    .onDelete(perform: removeFromPlaylist)
+                    .onMove(perform: onMove)
+                    .onDelete(perform: onRemoveFromPlaylist)
                 }
             }
         }
-        .navigationTitle(playlist.name)
+        .navigationTitle(playlistName)
         #if os(iOS)
             .environment(\.editMode, $editMode)
         #endif
             .toolbar { editToolbar }
             .alert(Text("Rename Playlist", bundle: .module), isPresented: $isRenaming) {
                 TextField(text: $renameText) { Text("Playlist name", bundle: .module) }
-                Button { Task { await commitRename() } } label: { Text("Save", bundle: .module) }
+                Button {
+                    let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty, trimmed != playlistName else { return }
+                    onRename(trimmed)
+                } label: { Text("Save", bundle: .module) }
                 Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
             }
             .alert(
-                Text("Delete \"\(playlist.name)\"?", bundle: .module),
+                Text("Delete \"\(playlistName)\"?", bundle: .module),
                 isPresented: $isConfirmingDelete
             ) {
                 Button(role: .destructive) {
-                    Task { await commitDelete() }
+                    onDelete()
                 } label: {
                     Text("Delete", bundle: .module)
                 }
@@ -76,7 +83,7 @@ struct PlaylistDetailView: View {
     private var manageMenu: some View {
         Menu {
             Button {
-                renameText = playlist.name
+                renameText = playlistName
                 isRenaming = true
             } label: {
                 Label {
@@ -99,61 +106,54 @@ struct PlaylistDetailView: View {
                 .accessibilityLabel(Text("Edit Playlist", bundle: .module))
         }
     }
-
-    private var orderedItems: [ScoreItem] {
-        let lookup = Dictionary(uniqueKeysWithValues: library.repository.scoreItems.map { ($0.id, $0) })
-        return playlist.orderedScoreItemIDs.compactMap { lookup[$0] }
-    }
-
-    private func move(from offsets: IndexSet, to destination: Int) {
-        var ids = playlist.orderedScoreItemIDs
-        ids.move(fromOffsets: offsets, toOffset: destination)
-        var updated = playlist
-        updated.orderedScoreItemIDs = ids
-        Task {
-            do {
-                try await library.repository.savePlaylist(updated)
-            } catch {
-                library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                    ?? error.localizedDescription
-            }
-        }
-    }
-
-    private func removeFromPlaylist(at offsets: IndexSet) {
-        let removedIDs = offsets.map { orderedItems[$0].id }
-        var updated = playlist
-        updated.orderedScoreItemIDs.removeAll { removedIDs.contains($0) }
-        Task {
-            do {
-                try await library.repository.savePlaylist(updated)
-            } catch {
-                library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                    ?? error.localizedDescription
-            }
-        }
-    }
-
-    private func commitRename() async {
-        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != playlist.name else { return }
-        var updated = playlist
-        updated.name = trimmed
-        do {
-            try await library.repository.savePlaylist(updated)
-        } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
-        }
-    }
-
-    private func commitDelete() async {
-        do {
-            try await library.repository.deletePlaylist(id: playlist.id)
-            onPlaylistDeleted()
-        } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
-        }
-    }
 }
+
+#if DEBUG
+    private enum PlaylistDetailViewPreview {
+        static let items: [ScoreItem] = (1 ... 4).map { idx in
+            ScoreItem(
+                title: "Score \(idx)",
+                composer: "Composer \(idx)",
+                instrumentationSummary: "Piano",
+                localFileName: "\(UUID().uuidString).musicxml",
+                contentHash: String(repeating: "0", count: 64),
+                sizeBytes: 1024,
+                lengthBeats: 256,
+                defaultTempoBpm: 120,
+                primaryKey: nil,
+                addedAt: Date(),
+                lastOpenedAt: nil,
+                tagIDs: [],
+                isFavorite: false
+            )
+        }
+    }
+
+    #Preview("Filled") {
+        NavigationStack {
+            PlaylistDetailView(
+                playlistName: "Daily warm-up",
+                items: PlaylistDetailViewPreview.items,
+                onOpen: { _ in },
+                onMove: { _, _ in },
+                onRemoveFromPlaylist: { _ in },
+                onRename: { _ in },
+                onDelete: {}
+            )
+        }
+    }
+
+    #Preview("Empty") {
+        NavigationStack {
+            PlaylistDetailView(
+                playlistName: "Empty Set",
+                items: [],
+                onOpen: { _ in },
+                onMove: { _, _ in },
+                onRemoveFromPlaylist: { _ in },
+                onRename: { _ in },
+                onDelete: {}
+            )
+        }
+    }
+#endif
