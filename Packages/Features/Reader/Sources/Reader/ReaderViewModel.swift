@@ -70,6 +70,12 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     private var hasLoadedIntoPlayback = false
     @ObservationIgnored
     private var preloadTask: Task<Void, Error>?
+    /// Untranslated cursor as the engine published it. Kept so we can
+    /// re-derive `playbackCursor` whenever `hiddenStaves` changes — the
+    /// engine doesn't know about visibility, so the same raw value can
+    /// map to a different visible representation across toggles.
+    @ObservationIgnored
+    private var rawPlaybackCursor: ScoreCursor?
 
     @ObservationIgnored
     private var pendingInstrumentLoad: PendingInstrumentLoad?
@@ -126,8 +132,30 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public func startObservingCursor() {
         guard let controller = playbackController else { return }
         controller.observeCursor { [weak self] value in
-            self?.playbackCursor = value
+            guard let self else { return }
+            rawPlaybackCursor = value
+            playbackCursor = translateCursorForHiddenStaves(value)
         }
+    }
+
+    /// When the engine emits a `.item(id)` cursor whose staff is hidden,
+    /// the rendering side (`PlaybackCursorView.itemFrame`) can't resolve
+    /// it because `LayoutDocument` was built from a filtered Score.
+    /// Translate to `.beat` so the cursor falls back to interpolated X
+    /// against the surviving columns. `.beat` and visible-staff `.item`
+    /// values pass through unchanged.
+    private func translateCursorForHiddenStaves(
+        _ cursor: ScoreCursor?
+    ) -> ScoreCursor? {
+        guard let cursor else { return nil }
+        let hidden = preferences.hiddenStaves
+        guard !hidden.isEmpty,
+              case let .item(id) = cursor,
+              hidden.contains(id.staff),
+              case let .loaded(score) = loadState,
+              let tick = score.resolveTickInMeasure(for: id)
+        else { return cursor }
+        return .beat(measureIndex: id.measureIndex, tickInMeasure: tick)
     }
 
     public func load() async {
@@ -396,6 +424,10 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
                 prefs.hiddenStaves.insert(address)
             }
         }
+        // Re-translate against the new visibility so the cursor recovers
+        // immediately when the staff comes back, and falls back to .beat
+        // immediately when one is hidden mid-playback.
+        playbackCursor = translateCursorForHiddenStaves(rawPlaybackCursor)
     }
 
     public func resetZoom() {
@@ -419,6 +451,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     }
 
     public func setManualCursor(_ cursor: ScoreCursor) {
+        rawPlaybackCursor = cursor
         playbackCursor = cursor
         guard let controller = playbackController else { return }
         Task { await controller.setCursor(to: cursor) }
@@ -609,7 +642,7 @@ extension ReaderViewModel {
         await forwardLoopRangeToController()
     }
 
-    private func clearRepeatA() async {
+    func clearRepeatA() async {
         pendingA = nil
         if let existing = preferences.abRepeat {
             pendingB = existing.end
@@ -620,7 +653,7 @@ extension ReaderViewModel {
         await forwardLoopRangeToController()
     }
 
-    private func clearRepeatB() async {
+    func clearRepeatB() async {
         pendingB = nil
         if let existing = preferences.abRepeat {
             pendingA = existing.start
