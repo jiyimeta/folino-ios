@@ -60,11 +60,12 @@ private struct ReadyShell: View {
 
     @State private var libraryVM: LibraryViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var compactPath = NavigationPath()
-    @State private var sidebarPath = NavigationPath()
+    @State private var compactPath: NavigationPath
+    @State private var sidebarPath: NavigationPath
     @State private var detailScoreItem: ScoreItem?
     @State private var isSettingsPresented = false
-    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
+    @State private var columnVisibility: NavigationSplitViewVisibility
+    @State private var navStateStore = NavigationStateStore()
 
     init(
         bootstrap: AppBootstrap,
@@ -87,6 +88,26 @@ private struct ReadyShell: View {
                 gateway: gateway,
                 shareService: shareService
             )
+        )
+
+        let store = NavigationStateStore()
+        let restoredCompact = store.loadCompactPath() ?? NavigationPath()
+        let restoredSidebar = store.loadSidebarPath() ?? NavigationPath()
+        let restoredDetail = store.loadDetailScoreID()
+            .flatMap { id in repository.scoreItems.first { $0.id == id } }
+        _compactPath = State(wrappedValue: restoredCompact)
+        _sidebarPath = State(wrappedValue: restoredSidebar)
+        _detailScoreItem = State(wrappedValue: restoredDetail)
+        _columnVisibility = State(
+            wrappedValue: restoredDetail != nil ? .detailOnly : .doubleColumn
+        )
+    }
+
+    private func saveNavSnapshot() {
+        navStateStore.save(
+            compact: compactPath,
+            sidebar: sidebarPath,
+            detailScoreID: detailScoreItem?.id
         )
     }
 
@@ -160,6 +181,9 @@ private struct ReadyShell: View {
                   let url = bootstrap.consumePendingIncomingURL() else { return }
             Task { await libraryVM.startImport(from: url) }
         }
+        .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
+        .onChange(of: sidebarPath) { _, _ in saveNavSnapshot() }
+        .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
     }
 
     @ViewBuilder
