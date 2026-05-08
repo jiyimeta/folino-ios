@@ -6,6 +6,19 @@ enum BulkContext {
     case playlist
 }
 
+private struct SelectionTitleModifier: ViewModifier {
+    let isShowingSelectionCount: Bool
+    let selectionCount: Int
+
+    func body(content: Content) -> some View {
+        if isShowingSelectionCount {
+            content.navigationTitle(Text("\(selectionCount) selected", bundle: .module))
+        } else {
+            content
+        }
+    }
+}
+
 struct ScoreListView<RowMenu: View>: View {
     let items: [ScoreItem]
     @Binding var searchText: String
@@ -31,13 +44,21 @@ struct ScoreListView<RowMenu: View>: View {
     @ViewBuilder let rowMenu: (ScoreItem) -> RowMenu
 
     var body: some View {
+        listWithChrome
+            .modifier(SelectionTitleModifier(
+                isShowingSelectionCount: isShowingSelectionCount,
+                selectionCount: selectedIDs.count
+            ))
+    }
+
+    @ViewBuilder
+    private var listWithChrome: some View {
         list
             .searchable(text: $searchText)
             .toolbar { trailingToolbarItems }
         #if os(iOS)
             .environment(\.editMode, $editMode)
         #endif
-            .navigationTitle(navigationTitleText)
             .safeAreaInset(edge: .bottom) {
                 if isEditing {
                     BulkActionBar(
@@ -86,11 +107,8 @@ struct ScoreListView<RowMenu: View>: View {
         #endif
     }
 
-    private var navigationTitleText: Text {
-        if isEditing, !selectedIDs.isEmpty {
-            return Text("\(selectedIDs.count) selected", bundle: .module)
-        }
-        return Text("")
+    private var isShowingSelectionCount: Bool {
+        isEditing && !selectedIDs.isEmpty
     }
 
     @ToolbarContentBuilder
