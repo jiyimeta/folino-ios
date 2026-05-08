@@ -57,6 +57,7 @@
       "Bash(python3:*)",
       "Bash(file:*)",
       "Bash(stat:*)",
+      "Bash(realpath:*)",
       "Bash(du:*)",
       "Bash(brew list:*)",
       "Bash(swift -version)",
