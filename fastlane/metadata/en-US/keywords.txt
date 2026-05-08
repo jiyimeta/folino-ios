@@ -1,1 +1,1 @@
-vocal,piano,guitar,bass,drums,karaoke,a cappella,rehearsal,choir,concert,band,orchestra,finale
+vocal,piano,guitar,bass,drums,karaoke,a cappella,rehearsal,choir,concert,band,orchestra,finale,flat
