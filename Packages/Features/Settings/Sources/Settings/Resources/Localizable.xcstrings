@@ -195,6 +195,38 @@
         }
       }
     },
+    "Horizontal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Horizontal"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "横方向"
+          }
+        }
+      }
+    },
+    "Layout direction" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout direction"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レイアウト方向"
+          }
+        }
+      }
+    },
     "Licenses" : {
       "localizations" : {
         "en" : {
@@ -243,6 +275,22 @@
         }
       }
     },
+    "Metronome" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metronome"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メトロノーム"
+          }
+        }
+      }
+    },
     "No cached soundfonts" : {
       "localizations" : {
         "en" : {
@@ -287,6 +335,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生のためにダウンロードした音源がここに表示されます。"
+          }
+        }
+      }
+    },
+    "Reader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reader"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リーダー"
           }
         }
       }
@@ -367,6 +431,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "合計"
+          }
+        }
+      }
+    },
+    "Vertical" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vertical"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "縦方向"
           }
         }
       }

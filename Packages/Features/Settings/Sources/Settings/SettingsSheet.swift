@@ -12,6 +12,12 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @State private var isMailSavedAlertPresented = false
     @State private var isMailFailedAlertPresented = false
 
+    @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
+    private var isMetronomeEnabled: Bool = false
+
+    @AppStorage(ReaderGlobalSettingsKey.layoutMode)
+    private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
+
     public init(
         soundfontResolver: (any SoundfontResolver)? = nil,
         presetCatalog: (any SoundfontPresetCatalog)? = nil,
@@ -25,6 +31,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     public var body: some View {
         NavigationStack {
             Form {
+                readerSection
                 if let soundfontResolver {
                     storageSection(resolver: soundfontResolver)
                 }
@@ -54,6 +61,42 @@ public struct SettingsSheet<LicenseContent: View>: View {
                         break
                     }
                 }
+        }
+    }
+
+    private var readerSection: some View {
+        Section {
+            Toggle(isOn: $isMetronomeEnabled) {
+                Label {
+                    Text("Metronome", bundle: .module)
+                } icon: {
+                    Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
+                }
+            }
+
+            Picker(selection: $layoutModeRaw) {
+                Label {
+                    Text("Vertical", bundle: .module)
+                } icon: {
+                    Image(systemName: "arrow.up.and.down")
+                }
+                .tag(ReaderLayoutMode.vertical.rawValue)
+
+                Label {
+                    Text("Horizontal", bundle: .module)
+                } icon: {
+                    Image(systemName: "arrow.left.and.right")
+                }
+                .tag(ReaderLayoutMode.horizontal.rawValue)
+            } label: {
+                Label {
+                    Text("Layout direction", bundle: .module)
+                } icon: {
+                    Image(systemName: "rectangle.split.1x2")
+                }
+            }
+        } header: {
+            Text("Reader", bundle: .module)
         }
     }
 
