@@ -46,6 +46,7 @@
       "Bash(gh api:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
+      "Bash(cp:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(rg:*)",
