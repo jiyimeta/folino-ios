@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 @MainActor
 struct SoundfontCacheView: View {
@@ -21,7 +22,7 @@ struct SoundfontCacheView: View {
             } else if let loadError {
                 ContentUnavailableView {
                     Label {
-                        Text("Couldn't read cache", bundle: .module)
+                        Text("settings.soundfont.error.title", bundle: .module)
                     } icon: {
                         Image(systemName: "exclamationmark.triangle")
                     }
@@ -31,37 +32,35 @@ struct SoundfontCacheView: View {
             } else if patches.isEmpty {
                 ContentUnavailableView {
                     Label {
-                        Text("No cached soundfonts", bundle: .module)
+                        Text("settings.soundfont.empty.title", bundle: .module)
                     } icon: {
                         Image(systemName: "tray")
                     }
                 } description: {
-                    Text("Patches downloaded for playback will appear here.", bundle: .module)
+                    Text("settings.soundfont.empty.hint", bundle: .module)
                 }
             } else {
                 cacheList
             }
         }
-        .navigationTitle(Text("Soundfont Cache", bundle: .module))
+        .navigationTitle(Text("settings.soundfont.title", bundle: .module))
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
             .task { await reload() }
             .confirmationDialog(
-                Text("Delete all cached soundfonts?", bundle: .module),
+                Text("settings.soundfont.deleteAll.title", bundle: .module),
                 isPresented: $showDeleteAllConfirmation,
                 titleVisibility: .visible
             ) {
                 Button(role: .destructive) {
                     Task { await deleteAll() }
                 } label: {
-                    Text("Delete All", bundle: .module)
+                    Text("settings.soundfont.deleteAll.button", bundle: .module)
                 }
-                Button(role: .cancel) {} label: {
-                    Text("Cancel", bundle: .module)
-                }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
             } message: {
-                Text("Cached files will be re-downloaded the next time they're needed.", bundle: .module)
+                Text("settings.soundfont.deleteAll.message", bundle: .module)
             }
     }
 
@@ -72,13 +71,13 @@ struct SoundfontCacheView: View {
                     Text(totalBytes.formatted(Self.byteFormat))
                         .monospacedDigit()
                 } label: {
-                    Text("Total", bundle: .module)
+                    Text("settings.soundfont.total", bundle: .module)
                 }
                 Button(role: .destructive) {
                     showDeleteAllConfirmation = true
                 } label: {
                     Label {
-                        Text("Delete All Cached Soundfonts", bundle: .module)
+                        Text("settings.soundfont.deleteAll.action", bundle: .module)
                     } icon: {
                         Image(systemName: "trash")
                     }
@@ -92,7 +91,7 @@ struct SoundfontCacheView: View {
                     Task { await deletePatches(at: indexSet) }
                 }
             } header: {
-                Text("Cached Soundfonts", bundle: .module)
+                Text("settings.soundfont.cached.title", bundle: .module)
             }
         }
     }

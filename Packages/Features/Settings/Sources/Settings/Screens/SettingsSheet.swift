@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 @MainActor
 public struct SettingsSheet<LicenseContent: View>: View {
@@ -30,7 +31,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 }
                 aboutSection
             }
-            .navigationTitle(Text("Settings", bundle: .module))
+            .navigationTitle(Text("settings.title", bundle: .module))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -38,11 +39,17 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 .sheet(isPresented: $isFeedbackMailPresented) {
                     FeedbackMailView(result: $feedbackMailResult)
                 }
-                .alert("Mail Saved to Drafts", isPresented: $isMailSavedAlertPresented) {
-                    Button("OK", role: .cancel) {}
+                .alert(
+                    Text("settings.feedback.saved.title", bundle: .module),
+                    isPresented: $isMailSavedAlertPresented
+                ) {
+                    Button(role: .cancel) {} label: { L10n.Common.ok }
                 }
-                .alert("Mail Delivery Failed", isPresented: $isMailFailedAlertPresented) {
-                    Button("OK", role: .cancel) {}
+                .alert(
+                    Text("settings.feedback.failed.title", bundle: .module),
+                    isPresented: $isMailFailedAlertPresented
+                ) {
+                    Button(role: .cancel) {} label: { L10n.Common.ok }
                 }
                 .onChange(of: feedbackMailResult) { _, newValue in
                     switch newValue {
@@ -63,13 +70,13 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 SoundfontCacheView(resolver: resolver, presetCatalog: presetCatalog)
             } label: {
                 Label {
-                    Text("Soundfont Cache", bundle: .module)
+                    Text("settings.soundfont.title", bundle: .module)
                 } icon: {
                     Image(systemName: "tray.full")
                 }
             }
         } header: {
-            Text("Storage", bundle: .module)
+            Text("settings.storage.title", bundle: .module)
         }
     }
 
@@ -77,13 +84,13 @@ public struct SettingsSheet<LicenseContent: View>: View {
         Section {
             NavigationLink {
                 licenseContent()
-                    .navigationTitle(Text("Licenses", bundle: .module))
+                    .navigationTitle(Text("settings.about.licenses", bundle: .module))
                 #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
                 #endif
             } label: {
                 Label {
-                    Text("Licenses", bundle: .module)
+                    Text("settings.about.licenses", bundle: .module)
                 } icon: {
                     Image(systemName: "doc.text")
                 }
@@ -93,14 +100,14 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 isFeedbackMailPresented = true
             } label: {
                 Label {
-                    Text("Send Feedback", bundle: .module)
+                    Text("settings.about.sendFeedback", bundle: .module)
                 } icon: {
                     Image(systemName: "envelope")
                 }
             }
             .disabled(!FeedbackMailView.canSendMail)
         } header: {
-            Text("About", bundle: .module)
+            Text("settings.about.title", bundle: .module)
         }
     }
 
@@ -108,11 +115,11 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private var doneToolbar: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button { dismiss() } label: { Text("Done", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.done }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button { dismiss() } label: { Text("Done", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.done }
             }
         #endif
     }

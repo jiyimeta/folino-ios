@@ -4,7 +4,8 @@ enum GMProgramName {
     static func displayName(bank: Int, program: Int) -> String {
         if bank == percussionBank {
             return String(
-                localized: "Drum Kit (Program \(program))",
+                localized: "settings.soundfont.drumKit.label",
+                defaultValue: "Drum Kit (Program \(program))",
                 bundle: Bundle.module,
                 comment: "Soundfont cache row label for a percussion patch"
             )
@@ -13,7 +14,8 @@ enum GMProgramName {
             return melodicNames[program]
         }
         return String(
-            localized: "Bank \(bank) · Program \(program)",
+            localized: "settings.soundfont.patch.label",
+            defaultValue: "Bank \(bank) · Program \(program)",
             bundle: Bundle.module,
             comment: "Soundfont cache row label for a non-GM patch"
         )
