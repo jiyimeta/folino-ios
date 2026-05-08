@@ -87,8 +87,6 @@
       "Write(.claude/settings.local.json)",
       "Write(./.claude/settings.json)",
       "Write(./.claude/settings.local.json)",
-      "Edit(/Users/kiichi/.claude/settings.json)",
-      "Write(/Users/kiichi/.claude/settings.json)",
       "Bash(git push)",
       "Bash(git push:*)",
       "Bash(git reset --hard)",
@@ -119,8 +117,6 @@
       "Bash(rm -rf ~/:*)",
       "Bash(rm -rf $HOME)",
       "Bash(rm -rf $HOME/:*)",
-      "Bash(rm -rf /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS)",
-      "Bash(rm -rf /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/:*)",
       "Bash(gh repo delete:*)"
     ]
   }
