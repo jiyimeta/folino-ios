@@ -85,7 +85,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 Label {
                     Text("settings.reader.layout.title", bundle: .module)
                 } icon: {
-                    Image(systemName: "rectangle.split.1x2")
+                    Image(systemName: "scroll")
                 }
                 Spacer()
                 Picker(selection: $layoutModeRaw) {
