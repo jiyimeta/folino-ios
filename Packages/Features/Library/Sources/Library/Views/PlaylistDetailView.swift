@@ -6,7 +6,7 @@ struct PlaylistDetailView: View {
     let items: [ScoreItem]
     let onOpen: (ScoreItem) -> Void
     let onMove: (IndexSet, Int) -> Void
-    let onRemoveFromPlaylist: (IndexSet) -> Void
+    let onRemoveFromPlaylist: (ScoreItem) -> Void
     let onRename: (String) -> Void
     let onDelete: () -> Void
     @Binding var selectedIDs: Set<ScoreItemID>
@@ -48,9 +48,19 @@ struct PlaylistDetailView: View {
                                 }
                             }
                             .tag(item.id)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    onRemoveFromPlaylist(item)
+                                } label: {
+                                    Label {
+                                        Text("Remove from playlist", bundle: .module)
+                                    } icon: {
+                                        Image(systemName: "minus.circle")
+                                    }
+                                }
+                            }
                     }
                     .onMove(perform: onMove)
-                    .onDelete(perform: onRemoveFromPlaylist)
                 }
             }
         }
@@ -203,7 +213,7 @@ struct PlaylistDetailView: View {
                     items: items,
                     onOpen: { _ in },
                     onMove: { _, _ in },
-                    onRemoveFromPlaylist: { _ in },
+                    onRemoveFromPlaylist: { (_: ScoreItem) in },
                     onRename: { _ in },
                     onDelete: {},
                     selectedIDs: $selectedIDs,

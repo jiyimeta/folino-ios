@@ -34,7 +34,7 @@ struct PlaylistDetailScreen: View {
             items: orderedItems,
             onOpen: onOpen,
             onMove: { offsets, destination in move(from: offsets, to: destination) },
-            onRemoveFromPlaylist: { offsets in removeFromPlaylist(at: offsets) },
+            onRemoveFromPlaylist: { item in removeFromPlaylist(item) },
             onRename: { newName in Task { await commitRename(newName) } },
             onDelete: { Task { await commitDelete() } },
             selectedIDs: $selectedIDs,
@@ -133,10 +133,9 @@ struct PlaylistDetailScreen: View {
         Task { await save(updated) }
     }
 
-    private func removeFromPlaylist(at offsets: IndexSet) {
-        let removedIDs = offsets.map { orderedItems[$0].id }
+    private func removeFromPlaylist(_ item: ScoreItem) {
         var updated = currentPlaylist()
-        updated.orderedScoreItemIDs.removeAll { removedIDs.contains($0) }
+        updated.orderedScoreItemIDs.removeAll { $0 == item.id }
         Task { await save(updated) }
     }
 
