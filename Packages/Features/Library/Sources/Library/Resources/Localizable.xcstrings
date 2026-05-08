@@ -104,22 +104,12 @@
         }
       }
     },
-    "library.format.musescore" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MuseScore (.mscz)"
-          }
-        }
-      }
-    },
     "library.format.musescore3" : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MuseScore 3 (.mscz)"
+            "value" : "MuseScore 3"
           }
         }
       }
@@ -129,7 +119,23 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MuseScore 4 (.mscz)"
+            "value" : "MuseScore 4"
+          }
+        }
+      }
+    },
+    "library.format.original.suffix" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(original format)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（元の形式）"
           }
         }
       }

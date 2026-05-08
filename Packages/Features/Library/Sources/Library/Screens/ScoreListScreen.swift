@@ -162,12 +162,11 @@ struct ScoreListScreen: View {
     }
 
     private var bulkAvailableShareFormats: [ScoreShareFormat] {
-        let perItem = selectedItems.map { Set(library.shareService.availableFormats(for: $0)) }
-        guard let first = perItem.first else { return [] }
-        let intersection = perItem.dropFirst().reduce(first) { $0.intersection($1) }
-        // Display order matches the row menu.
-        return [.msczOriginal, .msczMuseScore4, .msczMuseScore3, .pdf, .midi]
-            .filter { intersection.contains($0) }
+        // Every item now reports the same four formats; the per-item
+        // `isOriginal` flag is meaningful only for the row menu, not
+        // for the bulk one. `prepareShare` returns original bytes
+        // per-item where the source matches the picked format.
+        selectedItems.isEmpty ? [] : [.museScoreV4, .museScoreV3, .pdf, .midi]
     }
 
     private func performBulkShare(_ format: ScoreShareFormat) {
