@@ -42,21 +42,24 @@ extension View {
             HStack(spacing: 12) {
                 overlayButton(
                     systemImage: "chevron.backward",
-                    label: Text("Back", bundle: .module),
+                    label: Text("reader.toolbar.back", bundle: .module),
                     action: onBack
                 )
                 .glassEffect(.regular.interactive())
                 Spacer()
                 HStack(spacing: 4) {
+                    let playLabelKey: LocalizedStringKey = viewModel.isPlaying
+                        ? "reader.toolbar.pause"
+                        : "reader.toolbar.play"
                     overlayButton(
                         systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill",
-                        label: Text(viewModel.isPlaying ? "Pause" : "Play", bundle: .module)
+                        label: Text(playLabelKey, bundle: .module)
                     ) {
                         Task { await viewModel.togglePlayback() }
                     }
                     overlayButton(
                         systemImage: "slider.horizontal.3",
-                        label: Text("Show staves panel", bundle: .module)
+                        label: Text("reader.toolbar.showStaves", bundle: .module)
                     ) {
                         viewModel.isInspectorPresented.toggle()
                     }
@@ -95,14 +98,19 @@ extension View {
                 } label: {
                     Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
                 }
-                .accessibilityLabel(Text(viewModel.isPlaying ? "Pause" : "Play", bundle: .module))
+                .accessibilityLabel(
+                    Text(
+                        viewModel.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
+                        bundle: .module
+                    )
+                )
 
                 Button {
                     viewModel.isInspectorPresented.toggle()
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }
-                .accessibilityLabel(Text("Show staves panel", bundle: .module))
+                .accessibilityLabel(Text("reader.toolbar.showStaves", bundle: .module))
             }
         }
     }
@@ -120,7 +128,7 @@ struct ReaderBottomOverlay: View {
                     viewModel.resetZoom()
                 } label: {
                     Label {
-                        Text("Reset zoom", bundle: .module)
+                        Text("reader.toolbar.resetZoom", bundle: .module)
                     } icon: {
                         Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
                     }
@@ -147,12 +155,12 @@ struct ReaderBottomOverlay: View {
     }
 
     private func endpointButton(
-        label: LocalizedStringResource,
+        label: String,
         isSet: Bool,
         onSet: @escaping () -> Void
     ) -> some View {
         Button(action: onSet) {
-            Text(label)
+            Text(verbatim: label)
                 .tint(.primary)
                 .font(.system(size: 20, weight: .semibold))
                 .frame(width: 44, height: 44)

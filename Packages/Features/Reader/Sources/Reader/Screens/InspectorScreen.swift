@@ -21,10 +21,10 @@ struct InspectorScreen: View {
             if hsc == .compact {
                 VStack(spacing: 0) {
                     Picker(selection: $selectedTab) {
-                        Text("Playback", bundle: .module).tag(InspectorTab.playback)
-                        Text("Visual", bundle: .module).tag(InspectorTab.visual)
+                        Text("reader.inspector.tab.playback", bundle: .module).tag(InspectorTab.playback)
+                        Text("reader.inspector.tab.visual", bundle: .module).tag(InspectorTab.visual)
                     } label: {
-                        Text("Inspector tab", bundle: .module)
+                        Text("reader.inspector.tabPicker", bundle: .module)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -40,8 +40,8 @@ struct InspectorScreen: View {
                 }
             } else {
                 List {
-                    Section { playbackContent } header: { Text("Playback", bundle: .module) }
-                    Section { visualContent } header: { Text("Visual", bundle: .module) }
+                    Section { playbackContent } header: { Text("reader.inspector.tab.playback", bundle: .module) }
+                    Section { visualContent } header: { Text("reader.inspector.tab.visual", bundle: .module) }
                 }
                 .listStyle(.plain)
                 .buttonStyle(.plain)
@@ -112,13 +112,13 @@ struct InspectorScreen: View {
     @ViewBuilder
     private var layoutRow: some View {
         HStack {
-            Text("Layout direction", bundle: .module)
+            Text("reader.preferences.layoutDirection", bundle: .module)
             Spacer()
             Picker(selection: $viewModel.layoutMode) {
                 Image(systemName: "arrow.up.and.down").tag(ReaderViewModel.LayoutMode.vertical)
                 Image(systemName: "arrow.left.and.right").tag(ReaderViewModel.LayoutMode.horizontal)
             } label: {
-                Text("Layout direction", bundle: .module)
+                Text("reader.preferences.layoutDirection", bundle: .module)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -136,7 +136,7 @@ struct InspectorScreen: View {
             }
         )
         Toggle(isOn: binding) {
-            Text("Honor authored breaks", bundle: .module)
+            Text("reader.preferences.honorBreaks", bundle: .module)
         }
     }
 
@@ -158,7 +158,11 @@ struct InspectorScreen: View {
             in: ReaderPreferences.minStaffSize ... ReaderPreferences.maxStaffSize,
             step: 1
         ) {
-            Text("Staff size: \(Int(viewModel.preferences.staffSize)) pt", bundle: .module)
+            Text(String(
+                localized: "reader.preferences.staffSize",
+                defaultValue: "Staff size: \(Int(viewModel.preferences.staffSize)) pt",
+                bundle: .module
+            ))
         }
     }
 
@@ -275,7 +279,7 @@ struct InspectorScreen: View {
             Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
         } label: {
             Label {
-                Text("Reset to default", bundle: .module)
+                Text("reader.preferences.resetDefault", bundle: .module)
             } icon: {
                 Image(systemName: "arrow.uturn.backward")
             }

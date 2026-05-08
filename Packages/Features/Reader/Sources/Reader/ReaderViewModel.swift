@@ -558,11 +558,11 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         if let domain = error as? DomainError {
             switch domain {
             case .scoreFileNotFound:
-                return String(localized: "The score file is missing or unreadable.", bundle: .module)
+                return String(localized: "reader.error.fileMissing", bundle: .module)
             case .scoreParseFailed:
-                return String(localized: "This file looks corrupted or isn't a valid score.", bundle: .module)
+                return String(localized: "reader.error.corrupted", bundle: .module)
             case .unsupportedFormat:
-                return String(localized: "folino can't open this file type.", bundle: .module)
+                return String(localized: "reader.error.cannotOpen.unsupportedType", bundle: .module)
             default:
                 return domain.errorDescription ?? "\(domain)"
             }

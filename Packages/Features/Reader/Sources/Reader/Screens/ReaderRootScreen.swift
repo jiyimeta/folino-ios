@@ -1,6 +1,7 @@
 import Domain
 import SheetMusicCore
 import SwiftUI
+import UtilityUI
 
 @MainActor
 public struct ReaderRootScreen: View {
@@ -75,7 +76,7 @@ public struct ReaderRootScreen: View {
             Button(role: .cancel) {
                 viewModel.cancelLoadingSoundfonts()
             } label: {
-                Text("Cancel", bundle: .module)
+                L10n.Common.cancel
             }
         }
         .task {
@@ -90,9 +91,9 @@ public struct ReaderRootScreen: View {
     ) -> String {
         switch kind {
         case .offline:
-            String(localized: "You're offline", bundle: .module)
+            String(localized: "reader.error.offline", bundle: .module)
         case .loading, nil:
-            String(localized: "Loading playback sounds…", bundle: .module)
+            String(localized: "reader.playback.loadingSounds", bundle: .module)
         }
     }
 
@@ -124,7 +125,7 @@ public struct ReaderRootScreen: View {
         case let .failed(message):
             ContentUnavailableView {
                 Label {
-                    Text("Could not open this score", bundle: .module)
+                    Text("reader.error.cannotOpen.title", bundle: .module)
                 } icon: {
                     Image(systemName: "exclamationmark.triangle")
                 }
@@ -132,7 +133,7 @@ public struct ReaderRootScreen: View {
                 Text(message)
             } actions: {
                 Button { Task { await viewModel.load() } } label: {
-                    Text("Retry", bundle: .module)
+                    Text("reader.error.retry", bundle: .module)
                 }
                 .buttonStyle(.borderedProminent)
             }

@@ -32,14 +32,14 @@ struct RepeatModeButton: View {
     }
 
     private var label: String {
-        String(localized: "Repeat")
+        String(localized: "reader.repeat.title", bundle: .module)
     }
 
     private var value: String {
         switch mode {
-        case .off: String(localized: "Off")
-        case .loopAll: String(localized: "Loop all")
-        case .abLoop: String(localized: "A–B section")
+        case .off: String(localized: "reader.repeat.off", bundle: .module)
+        case .loopAll: String(localized: "reader.repeat.loopAll", bundle: .module)
+        case .abLoop: String(localized: "reader.repeat.abLoop", bundle: .module)
         }
     }
 }
