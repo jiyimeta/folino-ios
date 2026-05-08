@@ -93,7 +93,20 @@ struct ScoreListView<RowMenu: View>: View {
     @ToolbarContentBuilder
     private var editToolbarItem: some ToolbarContent {
         #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) { EditButton() }
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    withAnimation {
+                        if editMode.isEditing {
+                            editMode = .inactive
+                            selectedIDs = []
+                        } else {
+                            editMode = .active
+                        }
+                    }
+                } label: {
+                    Text(editMode.isEditing ? "Done" : "Select", bundle: .module)
+                }
+            }
         #else
             ToolbarItem(placement: .automatic) { EmptyView() }
         #endif
@@ -104,18 +117,26 @@ struct ScoreListView<RowMenu: View>: View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
-                .onTapGesture { onTap(item) }
-            Menu {
-                rowMenu(item)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
+                .onTapGesture {
+                    if isEditing {
+                        toggleSelection(item.id)
+                    } else {
+                        onTap(item)
+                    }
+                }
+            if !isEditing {
+                Menu {
+                    rowMenu(item)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("More", bundle: .module))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("More", bundle: .module))
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
@@ -142,6 +163,14 @@ struct ScoreListView<RowMenu: View>: View {
         }
         .contextMenu {
             rowMenu(item)
+        }
+    }
+
+    private func toggleSelection(_ id: ScoreItemID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
         }
     }
 

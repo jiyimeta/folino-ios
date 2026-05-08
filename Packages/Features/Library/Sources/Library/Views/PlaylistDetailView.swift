@@ -38,7 +38,13 @@ struct PlaylistDetailView: View {
                     ForEach(items) { item in
                         ScoreRow(scoreItem: item)
                             .contentShape(Rectangle())
-                            .onTapGesture { onOpen(item) }
+                            .onTapGesture {
+                                if isEditing {
+                                    toggleSelection(item.id)
+                                } else {
+                                    onOpen(item)
+                                }
+                            }
                             .tag(item.id)
                     }
                     .onMove(perform: onMove)
@@ -90,11 +96,40 @@ struct PlaylistDetailView: View {
     @ToolbarContentBuilder
     private var editToolbar: some ToolbarContent {
         #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { EditButton() }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation {
+                        if editMode.isEditing {
+                            editMode = .inactive
+                            selectedIDs = []
+                        } else {
+                            editMode = .active
+                        }
+                    }
+                } label: {
+                    Text(editMode.isEditing ? "Done" : "Select", bundle: .module)
+                }
+            }
             ToolbarItem(placement: .topBarLeading) { manageMenu }
         #else
             ToolbarItem(placement: .automatic) { manageMenu }
         #endif
+    }
+
+    private var isEditing: Bool {
+        #if os(iOS)
+            return editMode.isEditing
+        #else
+            return false
+        #endif
+    }
+
+    private func toggleSelection(_ id: ScoreItemID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
     }
 
     private var manageMenu: some View {
