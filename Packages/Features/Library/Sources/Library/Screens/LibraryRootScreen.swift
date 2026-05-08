@@ -15,6 +15,11 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var editTagsTarget: ScoreItem?
     @State private var addToPlaylistTarget: ScoreItem?
 
+    @State private var isCreatingPlaylist: Bool = false
+    @State private var newPlaylistName: String = ""
+    @State private var isCreatingTag: Bool = false
+    @State private var newTagName: String = ""
+
     public init(
         viewModel: LibraryViewModel,
         path: Binding<NavigationPath>,
@@ -74,6 +79,28 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         } message: { msg in
             Text(msg)
         }
+        .alert(Text("New Playlist", bundle: .module), isPresented: $isCreatingPlaylist) {
+            TextField(text: $newPlaylistName) { Text("Playlist name", bundle: .module) }
+            Button {
+                let name = newPlaylistName
+                newPlaylistName = ""
+                Task { await viewModel.createPlaylist(name: name) }
+            } label: { Text("Add", bundle: .module) }
+            Button(role: .cancel) { newPlaylistName = "" } label: { Text("Cancel", bundle: .module) }
+        } message: {
+            Text("Enter a name for the new playlist.", bundle: .module)
+        }
+        .alert(Text("New Tag", bundle: .module), isPresented: $isCreatingTag) {
+            TextField(text: $newTagName) { Text("Tag name", bundle: .module) }
+            Button {
+                let name = newTagName
+                newTagName = ""
+                Task { await viewModel.createTag(name: name) }
+            } label: { Text("Add", bundle: .module) }
+            Button(role: .cancel) { newTagName = "" } label: { Text("Cancel", bundle: .module) }
+        } message: {
+            Text("Enter a name for the new tag.", bundle: .module)
+        }
         .alert(
             Text("Already in Your Library", bundle: .module),
             isPresented: duplicateAlertBinding,
@@ -116,9 +143,9 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @ToolbarContentBuilder
     private var importToolbar: some ToolbarContent {
         #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { importButton }
+            ToolbarItem(placement: .topBarTrailing) { addMenu }
         #else
-            ToolbarItem(placement: .automatic) { importButton }
+            ToolbarItem(placement: .automatic) { addMenu }
         #endif
     }
 
@@ -131,11 +158,39 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         #endif
     }
 
-    private var importButton: some View {
-        Button {
-            viewModel.isFileImporterPresented = true
+    private var addMenu: some View {
+        Menu {
+            Button {
+                viewModel.isFileImporterPresented = true
+            } label: {
+                Label {
+                    Text("Import Score", bundle: .module)
+                } icon: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+            }
+            Button {
+                newPlaylistName = ""
+                isCreatingPlaylist = true
+            } label: {
+                Label {
+                    Text("New Playlist", bundle: .module)
+                } icon: {
+                    Image(systemName: "music.note.list")
+                }
+            }
+            Button {
+                newTagName = ""
+                isCreatingTag = true
+            } label: {
+                Label {
+                    Text("New Tag", bundle: .module)
+                } icon: {
+                    Image(systemName: "tag")
+                }
+            }
         } label: {
-            Image(systemName: "plus").accessibilityLabel(Text("Import Score", bundle: .module))
+            Image(systemName: "plus").accessibilityLabel(Text("Add", bundle: .module))
         }
     }
 
