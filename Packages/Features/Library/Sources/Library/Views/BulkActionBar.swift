@@ -7,39 +7,95 @@ struct BulkActionBar: View {
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            barButton(systemImage: "music.note.list", labelKey: "Add to Playlist", action: onAddToPlaylist)
-            barButton(systemImage: "tag", labelKey: "Tags", action: onEditTags)
-            barButton(systemImage: "trash", labelKey: "Delete", role: .destructive, action: onDelete)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(.bar)
-        .disabled(selectionCount == 0)
+        #if os(iOS)
+            iOSBody
+        #else
+            macOSBody
+        #endif
     }
 
-    @ViewBuilder
-    private func barButton(
-        systemImage: String,
-        labelKey: LocalizedStringKey,
-        role: ButtonRole? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(role: role, action: action) {
-            VStack(spacing: 2) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                Text(labelKey, bundle: .module)
-                    .font(.caption2)
+    #if os(iOS)
+        @ViewBuilder
+        private var iOSBody: some View {
+            HStack(spacing: 12) {
+                GlassEffectContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        constructiveButton(
+                            systemImage: "music.note.list",
+                            labelKey: "Add to Playlist",
+                            action: onAddToPlaylist
+                        )
+                        constructiveButton(
+                            systemImage: "tag",
+                            labelKey: "Tags",
+                            action: onEditTags
+                        )
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                destructiveButton(
+                    systemImage: "trash",
+                    labelKey: "Delete",
+                    action: onDelete
+                )
             }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .disabled(selectionCount == 0)
         }
-        .buttonStyle(.plain)
-    }
+
+        @ViewBuilder
+        private func constructiveButton(
+            systemImage: String,
+            labelKey: LocalizedStringKey,
+            action: @escaping () -> Void
+        ) -> some View {
+            Button(action: action) {
+                Label {
+                    Text(labelKey, bundle: .module)
+                } icon: {
+                    Image(systemName: systemImage)
+                }
+            }
+            .buttonStyle(.glass)
+        }
+
+        @ViewBuilder
+        private func destructiveButton(
+            systemImage: String,
+            labelKey: LocalizedStringKey,
+            action: @escaping () -> Void
+        ) -> some View {
+            Button(role: .destructive, action: action) {
+                Label {
+                    Text(labelKey, bundle: .module)
+                } icon: {
+                    Image(systemName: systemImage)
+                }
+                .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.glass)
+            .tint(.red)
+            .accessibilityLabel(Text(labelKey, bundle: .module))
+        }
+    #else
+        @ViewBuilder
+        private var macOSBody: some View {
+            HStack {
+                Button("Add to Playlist", action: onAddToPlaylist)
+                Button("Tags", action: onEditTags)
+                Spacer()
+                Button("Delete", role: .destructive, action: onDelete)
+            }
+            .padding()
+            .disabled(selectionCount == 0)
+        }
+    #endif
 }
 
-#if DEBUG
+#if DEBUG && os(iOS)
     #Preview("Enabled") {
         BulkActionBar(selectionCount: 3, onAddToPlaylist: {}, onEditTags: {}, onDelete: {})
     }
