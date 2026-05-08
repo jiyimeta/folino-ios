@@ -8,6 +8,7 @@ public struct ReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
     private let onBack: (() -> Void)?
+    private let hidesBackButton: Bool
 
     public init(
         scoreItem: ScoreItem,
@@ -16,7 +17,8 @@ public struct ReaderRootScreen: View {
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
         reachability: (any NetworkReachability)? = nil,
-        onBack: (() -> Void)? = nil
+        onBack: (() -> Void)? = nil,
+        hidesBackButton: Bool = false
     ) {
         // Seed the device-class default at construction time. The view
         // model only uses this if no persisted record exists.
@@ -33,6 +35,7 @@ public struct ReaderRootScreen: View {
             )
         )
         self.onBack = onBack
+        self.hidesBackButton = hidesBackButton
     }
 
     public var body: some View {
@@ -47,7 +50,7 @@ public struct ReaderRootScreen: View {
                 #if os(iOS)
                     ReaderTopOverlay(
                         viewModel: viewModel,
-                        onBack: onBack ?? { dismiss() }
+                        onBack: hidesBackButton ? nil : (onBack ?? { dismiss() })
                     )
                 #endif
                 Spacer()

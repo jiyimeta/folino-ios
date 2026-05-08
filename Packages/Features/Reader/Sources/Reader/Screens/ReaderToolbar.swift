@@ -30,7 +30,9 @@ extension View {
     /// can likely be reverted to a plain `ToolbarContent`.
     struct ReaderTopOverlay: View {
         @Bindable var viewModel: ReaderViewModel
-        let onBack: () -> Void
+        /// `nil` hides the back button entirely — used by iPad split-view detail
+        /// where the sidebar already provides navigation back to the library.
+        let onBack: (() -> Void)?
 
         /// Vertical space the overlay occupies inside the safe area
         /// (button 40 + top padding 4 + a little breathing room). Used by
@@ -40,12 +42,14 @@ extension View {
 
         var body: some View {
             HStack(spacing: 12) {
-                overlayButton(
-                    systemImage: "chevron.backward",
-                    label: Text("reader.toolbar.back", bundle: .module),
-                    action: onBack
-                )
-                .glassEffect(.regular.interactive())
+                if let onBack {
+                    overlayButton(
+                        systemImage: "chevron.backward",
+                        label: Text("reader.toolbar.back", bundle: .module),
+                        action: onBack
+                    )
+                    .glassEffect(.regular.interactive())
+                }
                 Spacer()
                 HStack(spacing: 4) {
                     let playLabelKey: LocalizedStringKey = viewModel.isPlaying

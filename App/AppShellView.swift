@@ -123,6 +123,7 @@ private struct ReadyShell: View {
                 } detail: {
                     detail
                 }
+                .navigationSplitViewStyle(.prominentDetail)
             } else {
                 LibraryRootScreen(
                     viewModel: libraryVM,
@@ -196,10 +197,8 @@ private struct ReadyShell: View {
                 scoresDirectory: scoresDirectory,
                 playbackController: bootstrap.playbackController,
                 reachability: bootstrap.reachability,
-                onBack: {
-                    detailScoreItem = nil
-                    columnVisibility = .doubleColumn
-                }
+                onBack: { columnVisibility = .doubleColumn },
+                hidesBackButton: columnVisibility == .doubleColumn
             )
         } else {
             emptyDetail
