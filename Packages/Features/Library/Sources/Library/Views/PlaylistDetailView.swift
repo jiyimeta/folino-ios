@@ -107,7 +107,7 @@ struct PlaylistDetailView: View {
                         }
                     }
                 } label: {
-                    Text(editMode.isEditing ? "Done" : "Select", bundle: .module)
+                    Text(editMode.isEditing ? "Cancel" : "Select", bundle: .module)
                 }
             }
             ToolbarItem(placement: .topBarLeading) { manageMenu }

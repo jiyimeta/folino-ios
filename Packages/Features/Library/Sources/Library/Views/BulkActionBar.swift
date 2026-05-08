@@ -53,13 +53,11 @@ struct BulkActionBar: View {
             action: @escaping () -> Void
         ) -> some View {
             Button(action: action) {
-                Label {
-                    Text(labelKey, bundle: .module)
-                } icon: {
-                    Image(systemName: systemImage)
-                }
+                Image(systemName: systemImage)
             }
             .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel(Text(labelKey, bundle: .module))
         }
 
         @ViewBuilder
@@ -69,14 +67,10 @@ struct BulkActionBar: View {
             action: @escaping () -> Void
         ) -> some View {
             Button(role: .destructive, action: action) {
-                Label {
-                    Text(labelKey, bundle: .module)
-                } icon: {
-                    Image(systemName: systemImage)
-                }
-                .labelStyle(.iconOnly)
+                Image(systemName: systemImage)
             }
             .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
             .tint(.red)
             .accessibilityLabel(Text(labelKey, bundle: .module))
         }

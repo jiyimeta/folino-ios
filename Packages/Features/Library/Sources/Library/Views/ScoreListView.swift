@@ -93,7 +93,7 @@ struct ScoreListView<RowMenu: View>: View {
     @ToolbarContentBuilder
     private var editToolbarItem: some ToolbarContent {
         #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     withAnimation {
                         if editMode.isEditing {
@@ -104,7 +104,7 @@ struct ScoreListView<RowMenu: View>: View {
                         }
                     }
                 } label: {
-                    Text(editMode.isEditing ? "Done" : "Select", bundle: .module)
+                    Text(editMode.isEditing ? "Cancel" : "Select", bundle: .module)
                 }
             }
         #else
