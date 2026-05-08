@@ -16,9 +16,7 @@ struct AddToPlaylistSheet: View {
         NavigationStack {
             content
                 .navigationTitle(Text(navigationTitleText))
-            #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-            #endif
                 .toolbar { doneToolbar }
         }
     }
@@ -63,15 +61,9 @@ struct AddToPlaylistSheet: View {
 
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { dismiss() } label: { L10n.Common.done }
-            }
-        #else
-            ToolbarItem(placement: .automatic) {
-                Button { dismiss() } label: { L10n.Common.done }
-            }
-        #endif
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { dismiss() } label: { L10n.Common.done }
+        }
     }
 }
 

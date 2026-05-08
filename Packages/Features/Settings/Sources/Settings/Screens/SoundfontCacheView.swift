@@ -44,24 +44,22 @@ struct SoundfontCacheView: View {
             }
         }
         .navigationTitle(Text("settings.soundfont.title", bundle: .module))
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
-            .task { await reload() }
-            .confirmationDialog(
-                Text("settings.soundfont.deleteAll.title", bundle: .module),
-                isPresented: $showDeleteAllConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(role: .destructive) {
-                    Task { await deleteAll() }
-                } label: {
-                    Text("settings.soundfont.deleteAll.button", bundle: .module)
-                }
-                Button(role: .cancel) {} label: { L10n.Common.cancel }
-            } message: {
-                Text("settings.soundfont.deleteAll.message", bundle: .module)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await reload() }
+        .confirmationDialog(
+            Text("settings.soundfont.deleteAll.title", bundle: .module),
+            isPresented: $showDeleteAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                Task { await deleteAll() }
+            } label: {
+                Text("settings.soundfont.deleteAll.button", bundle: .module)
             }
+            Button(role: .cancel) {} label: { L10n.Common.cancel }
+        } message: {
+            Text("settings.soundfont.deleteAll.message", bundle: .module)
+        }
     }
 
     private var cacheList: some View {

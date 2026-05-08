@@ -257,6 +257,7 @@
       }
     },
     "library.playlist.add.action" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

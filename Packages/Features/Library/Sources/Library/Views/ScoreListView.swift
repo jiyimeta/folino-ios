@@ -37,9 +37,7 @@ struct ScoreListView<RowMenu: View>: View {
     let onConfirmDelete: (ScoreItem) -> Void
     let onSelectSort: (ScoreItemSort) -> Void
     let onSelectManualOrder: () -> Void
-    #if os(iOS)
-        @Binding var editMode: EditMode
-    #endif
+    @Binding var editMode: EditMode
     @Binding var selectedIDs: Set<ScoreItemID>
     let bulkContext: BulkContext
     let availableShareFormats: [ScoreShareFormat]
@@ -62,9 +60,7 @@ struct ScoreListView<RowMenu: View>: View {
         list
             .searchable(text: $searchText)
             .toolbar { trailingToolbarItems }
-        #if os(iOS)
             .environment(\.editMode, $editMode)
-        #endif
             .safeAreaInset(edge: .bottom) {
                 if isEditing {
                     BulkActionBar(
@@ -110,11 +106,7 @@ struct ScoreListView<RowMenu: View>: View {
     }
 
     private var isEditing: Bool {
-        #if os(iOS)
-            return editMode.isEditing
-        #else
-            return false
-        #endif
+        editMode.isEditing
     }
 
     private var isShowingSelectionCount: Bool {
@@ -123,27 +115,23 @@ struct ScoreListView<RowMenu: View>: View {
 
     @ToolbarContentBuilder
     private var trailingToolbarItems: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { sortMenu }
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation {
-                        if editMode.isEditing {
-                            editMode = .inactive
-                            selectedIDs = []
-                        } else {
-                            editMode = .active
-                        }
+        ToolbarItem(placement: .topBarTrailing) { sortMenu }
+        ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                withAnimation {
+                    if editMode.isEditing {
+                        editMode = .inactive
+                        selectedIDs = []
+                    } else {
+                        editMode = .active
                     }
-                } label: {
-                    (editMode.isEditing ? L10n.Common.cancel : L10n.Common.select)
-                        .contentTransition(.identity)
                 }
+            } label: {
+                (editMode.isEditing ? L10n.Common.cancel : L10n.Common.select)
+                    .contentTransition(.identity)
             }
-        #else
-            ToolbarItem(placement: .automatic) { sortMenu }
-        #endif
+        }
     }
 
     @ViewBuilder
@@ -252,7 +240,7 @@ struct ScoreListView<RowMenu: View>: View {
     }
 }
 
-#if DEBUG && os(iOS)
+#if DEBUG
     private enum ScoreListViewPreview {
         static func item(
             title: String,
@@ -290,9 +278,7 @@ struct ScoreListView<RowMenu: View>: View {
         @State private var pendingDelete: ScoreItem?
         @State private var sort: ScoreItemSort = .dateAddedDesc
         @State private var isManualOrderActive: Bool = false
-        #if os(iOS)
-            @State private var editMode: EditMode = .inactive
-        #endif
+        @State private var editMode: EditMode = .inactive
         @State private var selectedIDs: Set<ScoreItemID> = []
 
         let items: [ScoreItem]

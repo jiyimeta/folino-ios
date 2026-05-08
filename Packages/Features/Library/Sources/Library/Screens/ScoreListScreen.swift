@@ -10,9 +10,7 @@ struct ScoreListScreen: View {
     let onAddToPlaylist: (ScoreItem) -> Void
 
     @State private var pendingDelete: ScoreItem?
-    #if os(iOS)
-        @State private var editMode: EditMode = .inactive
-    #endif
+    @State private var editMode: EditMode = .inactive
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var bulkSheet: BulkSheet?
     @State private var bulkDeletePrompt: BulkDeletePrompt?
@@ -78,68 +76,36 @@ struct ScoreListScreen: View {
 
     @ViewBuilder
     private var listContent: some View {
-        #if os(iOS)
-            ScoreListView(
-                items: viewModel.displayedItems,
-                searchText: $viewModel.searchQuery,
-                sort: viewModel.sort,
-                isManualOrderActive: viewModel.isManualOrderActive,
-                showsManualOrderOption: isPlaylistSource,
-                pendingDelete: $pendingDelete,
-                onTap: onOpen,
-                onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
-                onConfirmDelete: { item in Task { await library.delete(item) } },
-                onSelectSort: { viewModel.selectSort($0) },
-                onSelectManualOrder: { viewModel.selectManualOrder() },
-                editMode: $editMode,
-                selectedIDs: $selectedIDs,
-                bulkContext: bulkContext,
-                availableShareFormats: bulkAvailableShareFormats,
-                onBulkShare: { format in performBulkShare(format) },
-                onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
-                onBulkEditTags: { bulkSheet = .editTags },
-                onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
-            ) { item in
-                scoreRowMenu(
-                    item: item,
-                    library: library,
-                    onOpen: onOpen,
-                    onEditTags: onEditTags,
-                    onAddToPlaylist: onAddToPlaylist,
-                    onRequestDelete: { pendingDelete = $0 }
-                )
-            }
-        #else
-            ScoreListView(
-                items: viewModel.displayedItems,
-                searchText: $viewModel.searchQuery,
-                sort: viewModel.sort,
-                isManualOrderActive: viewModel.isManualOrderActive,
-                showsManualOrderOption: isPlaylistSource,
-                pendingDelete: $pendingDelete,
-                onTap: onOpen,
-                onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
-                onConfirmDelete: { item in Task { await library.delete(item) } },
-                onSelectSort: { viewModel.selectSort($0) },
-                onSelectManualOrder: { viewModel.selectManualOrder() },
-                selectedIDs: $selectedIDs,
-                bulkContext: bulkContext,
-                availableShareFormats: bulkAvailableShareFormats,
-                onBulkShare: { format in performBulkShare(format) },
-                onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
-                onBulkEditTags: { bulkSheet = .editTags },
-                onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
-            ) { item in
-                scoreRowMenu(
-                    item: item,
-                    library: library,
-                    onOpen: onOpen,
-                    onEditTags: onEditTags,
-                    onAddToPlaylist: onAddToPlaylist,
-                    onRequestDelete: { pendingDelete = $0 }
-                )
-            }
-        #endif
+        ScoreListView(
+            items: viewModel.displayedItems,
+            searchText: $viewModel.searchQuery,
+            sort: viewModel.sort,
+            isManualOrderActive: viewModel.isManualOrderActive,
+            showsManualOrderOption: isPlaylistSource,
+            pendingDelete: $pendingDelete,
+            onTap: onOpen,
+            onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
+            onConfirmDelete: { item in Task { await library.delete(item) } },
+            onSelectSort: { viewModel.selectSort($0) },
+            onSelectManualOrder: { viewModel.selectManualOrder() },
+            editMode: $editMode,
+            selectedIDs: $selectedIDs,
+            bulkContext: bulkContext,
+            availableShareFormats: bulkAvailableShareFormats,
+            onBulkShare: { format in performBulkShare(format) },
+            onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
+            onBulkEditTags: { bulkSheet = .editTags },
+            onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
+        ) { item in
+            scoreRowMenu(
+                item: item,
+                library: library,
+                onOpen: onOpen,
+                onEditTags: onEditTags,
+                onAddToPlaylist: onAddToPlaylist,
+                onRequestDelete: { pendingDelete = $0 }
+            )
+        }
     }
 
     private var isPlaylistSource: Bool {
@@ -183,8 +149,6 @@ struct ScoreListScreen: View {
 
     private func exitSelectionMode() {
         selectedIDs = []
-        #if os(iOS)
-            editMode = .inactive
-        #endif
+        editMode = .inactive
     }
 }

@@ -46,24 +46,16 @@ struct EditTagsSheet: View {
                 defaultValue: "Tags for \"\(scoreTitle)\"",
                 bundle: .module
             )))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar { doneToolbar }
         }
     }
 
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { dismiss() } label: { L10n.Common.done }
-            }
-        #else
-            ToolbarItem(placement: .automatic) {
-                Button { dismiss() } label: { L10n.Common.done }
-            }
-        #endif
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { dismiss() } label: { L10n.Common.done }
+        }
     }
 }
 

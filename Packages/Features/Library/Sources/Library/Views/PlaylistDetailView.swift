@@ -17,9 +17,7 @@ struct PlaylistDetailView: View {
     let onBulkEditTags: () -> Void
     let onBulkDelete: () -> Void
 
-    #if os(iOS)
-        @State private var editMode: EditMode = .inactive
-    #endif
+    @State private var editMode: EditMode = .inactive
 
     var body: some View {
         Group {
@@ -63,59 +61,51 @@ struct PlaylistDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            #if os(iOS)
-                if editMode.isEditing {
-                    BulkActionBar(
-                        selectionCount: selectedIDs.count,
-                        availableShareFormats: availableShareFormats,
-                        onShare: onBulkShare,
-                        onAddToPlaylist: onBulkAddToPlaylist,
-                        onEditTags: onBulkEditTags,
-                        onDelete: onBulkDelete
-                    )
-                }
-            #endif
+            if editMode.isEditing {
+                BulkActionBar(
+                    selectionCount: selectedIDs.count,
+                    availableShareFormats: availableShareFormats,
+                    onShare: onBulkShare,
+                    onAddToPlaylist: onBulkAddToPlaylist,
+                    onEditTags: onBulkEditTags,
+                    onDelete: onBulkDelete
+                )
+            }
         }
         .navigationTitle(playlistName)
-        #if os(iOS)
-            .environment(\.editMode, $editMode)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        withAnimation {
-                            if editMode.isEditing {
-                                editMode = .inactive
-                                selectedIDs = []
-                            } else {
-                                editMode = .active
-                            }
-                        }
-                    } label: {
+        .environment(\.editMode, $editMode)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation {
                         if editMode.isEditing {
-                            L10n.Common.cancel
-                                .transition(.identity)
+                            editMode = .inactive
+                            selectedIDs = []
                         } else {
-                            L10n.Common.select
-                                .transition(.identity)
+                            editMode = .active
                         }
+                    }
+                } label: {
+                    if editMode.isEditing {
+                        L10n.Common.cancel
+                            .transition(.identity)
+                    } else {
+                        L10n.Common.select
+                            .transition(.identity)
                     }
                 }
             }
-        #endif
-            .manageEntityToolbar(
-                    entityName: playlistName,
-                    copy: .playlist,
-                    onRename: onRename,
-                    onDelete: onDelete
-                )
+        }
+        .manageEntityToolbar(
+            entityName: playlistName,
+            copy: .playlist,
+            onRename: onRename,
+            onDelete: onDelete
+        )
     }
 
     private var isEditing: Bool {
-        #if os(iOS)
-            return editMode.isEditing
-        #else
-            return false
-        #endif
+        editMode.isEditing
     }
 
     private func toggleSelection(_ id: ScoreItemID) {

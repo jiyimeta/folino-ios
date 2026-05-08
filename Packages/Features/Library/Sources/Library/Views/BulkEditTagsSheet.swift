@@ -23,9 +23,7 @@ struct BulkEditTagsSheet: View {
                 defaultValue: "Tags for \(selectionCount) scores",
                 bundle: .module
             )))
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar { toolbarItems }
         }
     }
@@ -62,23 +60,13 @@ struct BulkEditTagsSheet: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: { L10n.Common.cancel }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { onCommit(checked) } label: { L10n.Common.done }
-                    .disabled(checked.isEmpty)
-            }
-        #else
-            ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { L10n.Common.cancel }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button { onCommit(checked) } label: { L10n.Common.done }
-                    .disabled(checked.isEmpty)
-            }
-        #endif
+        ToolbarItem(placement: .topBarLeading) {
+            Button { dismiss() } label: { L10n.Common.cancel }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { onCommit(checked) } label: { L10n.Common.done }
+                .disabled(checked.isEmpty)
+        }
     }
 }
 

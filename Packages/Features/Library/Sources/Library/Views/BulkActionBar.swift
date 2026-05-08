@@ -11,92 +11,59 @@ struct BulkActionBar: View {
     let onDelete: () -> Void
 
     var body: some View {
-        #if os(iOS)
-            iOSBody
-        #else
-            macOSBody
-        #endif
+        HStack(spacing: 12) {
+            Menu {
+                actionMenuContent
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .frame(width: 48, height: 48)
+            }
+            .tint(.primary)
+            .accessibilityLabel(L10n.Common.more)
+            .glassEffect(.regular.interactive())
+
+            Spacer(minLength: 0)
+
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+                    .frame(width: 48, height: 48)
+            }
+            .tint(.red)
+            .accessibilityLabel(L10n.Common.delete)
+            .glassEffect(.regular.interactive())
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 8)
+        .disabled(selectionCount == 0)
     }
 
-    #if os(iOS)
-        @ViewBuilder
-        private var iOSBody: some View {
-            HStack(spacing: 12) {
-                Menu {
-                    actionMenuContent
+    @ViewBuilder
+    private var actionMenuContent: some View {
+        if !availableShareFormats.isEmpty {
+            ForEach(availableShareFormats, id: \.self) { format in
+                Button {
+                    onShare(format)
                 } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .frame(width: 48, height: 48)
+                    bulkShareFormatLabel(format)
                 }
-                .tint(.primary)
-                .accessibilityLabel(L10n.Common.more)
-                .glassEffect(.regular.interactive())
-
-                Spacer(minLength: 0)
-
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "trash")
-                        .frame(width: 48, height: 48)
-                }
-                .tint(.red)
-                .accessibilityLabel(L10n.Common.delete)
-                .glassEffect(.regular.interactive())
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 8)
-            .disabled(selectionCount == 0)
+            Divider()
         }
-
-        @ViewBuilder
-        private var actionMenuContent: some View {
-            if !availableShareFormats.isEmpty {
-                ForEach(availableShareFormats, id: \.self) { format in
-                    Button {
-                        onShare(format)
-                    } label: {
-                        bulkShareFormatLabel(format)
-                    }
-                }
-                Divider()
-            }
-            Button(action: onAddToPlaylist) {
-                Label {
-                    Text("library.playlist.add.actionEllipsis", bundle: .module)
-                } icon: {
-                    Image(systemName: "music.note.list")
-                }
-            }
-            Button(action: onEditTags) {
-                Label {
-                    Text("library.tags.add.action", bundle: .module)
-                } icon: {
-                    Image(systemName: "tag")
-                }
+        Button(action: onAddToPlaylist) {
+            Label {
+                Text("library.playlist.add.actionEllipsis", bundle: .module)
+            } icon: {
+                Image(systemName: "music.note.list")
             }
         }
-    #else
-        @ViewBuilder
-        private var macOSBody: some View {
-            HStack {
-                Menu {
-                    Button(action: onAddToPlaylist) {
-                        Text("library.playlist.add.action", bundle: .module)
-                    }
-                    Button(action: onEditTags) {
-                        Text("library.tags.add.action", bundle: .module)
-                    }
-                } label: {
-                    L10n.Common.more
-                }
-                Spacer()
-                Button(role: .destructive, action: onDelete) {
-                    L10n.Common.delete
-                }
+        Button(action: onEditTags) {
+            Label {
+                Text("library.tags.add.action", bundle: .module)
+            } icon: {
+                Image(systemName: "tag")
             }
-            .padding()
-            .disabled(selectionCount == 0)
         }
-    #endif
+    }
 }
 
 @MainActor
@@ -114,7 +81,7 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
     }
 }
 
-#if DEBUG && os(iOS)
+#if DEBUG
     #Preview("Enabled") {
         NavigationStack {
             List {

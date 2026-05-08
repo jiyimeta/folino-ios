@@ -153,29 +153,19 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     .background(.regularMaterial, in: .rect(cornerRadius: 12))
             }
         }
-        #if os(iOS)
         .sheet(item: $viewModel.shareTarget) { target in
             ActivityViewControllerRepresentable(items: target.urls)
         }
-        #endif
     }
 
     @ToolbarContentBuilder
     private var importToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { addMenu }
-        #else
-            ToolbarItem(placement: .automatic) { addMenu }
-        #endif
+        ToolbarItem(placement: .topBarTrailing) { addMenu }
     }
 
     @ToolbarContentBuilder
     private var leadingToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) { leadingToolbarItem() }
-        #else
-            ToolbarItem(placement: .automatic) { leadingToolbarItem() }
-        #endif
+        ToolbarItem(placement: .topBarLeading) { leadingToolbarItem() }
     }
 
     private var addMenu: some View {

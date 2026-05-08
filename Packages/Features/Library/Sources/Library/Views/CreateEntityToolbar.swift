@@ -55,11 +55,7 @@ private struct CreateEntityToolbarModifier: ViewModifier {
 
     @ToolbarContentBuilder
     private var createToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { createButton }
-        #else
-            ToolbarItem(placement: .automatic) { createButton }
-        #endif
+        ToolbarItem(placement: .topBarTrailing) { createButton }
     }
 
     private var createButton: some View {

@@ -74,11 +74,7 @@ private struct ManageEntityToolbarModifier: ViewModifier {
 
     @ToolbarContentBuilder
     private var manageToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) { manageMenu }
-        #else
-            ToolbarItem(placement: .automatic) { manageMenu }
-        #endif
+        ToolbarItem(placement: .topBarLeading) { manageMenu }
     }
 
     private var manageMenu: some View {

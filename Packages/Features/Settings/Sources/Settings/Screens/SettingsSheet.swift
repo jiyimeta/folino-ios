@@ -39,35 +39,33 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 aboutSection
             }
             .navigationTitle(Text("settings.title", bundle: .module))
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-                .toolbar { doneToolbar }
-                .sheet(isPresented: $isFeedbackMailPresented) {
-                    FeedbackMailView(result: $feedbackMailResult)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { doneToolbar }
+            .sheet(isPresented: $isFeedbackMailPresented) {
+                FeedbackMailView(result: $feedbackMailResult)
+            }
+            .alert(
+                Text("settings.feedback.saved.title", bundle: .module),
+                isPresented: $isMailSavedAlertPresented
+            ) {
+                Button(role: .cancel) {} label: { L10n.Common.ok }
+            }
+            .alert(
+                Text("settings.feedback.failed.title", bundle: .module),
+                isPresented: $isMailFailedAlertPresented
+            ) {
+                Button(role: .cancel) {} label: { L10n.Common.ok }
+            }
+            .onChange(of: feedbackMailResult) { _, newValue in
+                switch newValue {
+                case .saved:
+                    isMailSavedAlertPresented = true
+                case .failed:
+                    isMailFailedAlertPresented = true
+                case .cancelled, .sent, nil:
+                    break
                 }
-                .alert(
-                    Text("settings.feedback.saved.title", bundle: .module),
-                    isPresented: $isMailSavedAlertPresented
-                ) {
-                    Button(role: .cancel) {} label: { L10n.Common.ok }
-                }
-                .alert(
-                    Text("settings.feedback.failed.title", bundle: .module),
-                    isPresented: $isMailFailedAlertPresented
-                ) {
-                    Button(role: .cancel) {} label: { L10n.Common.ok }
-                }
-                .onChange(of: feedbackMailResult) { _, newValue in
-                    switch newValue {
-                    case .saved:
-                        isMailSavedAlertPresented = true
-                    case .failed:
-                        isMailFailedAlertPresented = true
-                    case .cancelled, .sent, nil:
-                        break
-                    }
-                }
+            }
         }
     }
 
@@ -127,9 +125,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
             NavigationLink {
                 licenseContent()
                     .navigationTitle(Text("settings.about.licenses", bundle: .module))
-                #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
-                #endif
             } label: {
                 Label {
                     Text("settings.about.licenses", bundle: .module)
@@ -155,15 +151,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
 
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { dismiss() } label: { L10n.Common.done }
-            }
-        #else
-            ToolbarItem(placement: .automatic) {
-                Button { dismiss() } label: { L10n.Common.done }
-            }
-        #endif
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { dismiss() } label: { L10n.Common.done }
+        }
     }
 }
 

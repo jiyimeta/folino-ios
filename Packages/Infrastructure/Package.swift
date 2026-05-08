@@ -7,7 +7,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 
 let package = Package(
     name: "Infrastructure",
-    platforms: [.iOS(.v26), .macOS(.v15)],
+    platforms: [.iOS(.v26)],
     products: [
         .library(name: "Persistence", targets: ["Persistence"]),
         .library(name: "CloudSync", targets: ["CloudSync"]),

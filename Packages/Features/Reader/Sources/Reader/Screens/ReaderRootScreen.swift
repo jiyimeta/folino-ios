@@ -50,26 +50,19 @@ public struct ReaderRootScreen: View {
 
     public var body: some View {
         ZStack {
-            #if os(iOS)
-                content
-                    .safeAreaPadding(.top, ReaderTopOverlay.height)
-            #else
-                content
-            #endif
+            content
+                .safeAreaPadding(.top, ReaderTopOverlay.height)
             VStack(spacing: 0) {
-                #if os(iOS)
-                    ReaderTopOverlay(
-                        viewModel: viewModel,
-                        onBack: hidesBackButton ? nil : (onBack ?? { dismiss() })
-                    )
-                #endif
+                ReaderTopOverlay(
+                    viewModel: viewModel,
+                    onBack: hidesBackButton ? nil : (onBack ?? { dismiss() })
+                )
                 Spacer()
                 ReaderBottomOverlay(viewModel: viewModel)
             }
         }
         .navigationTitle("")
-        .readerToolbar(viewModel: viewModel)
-        .readerInspector(viewModel: viewModel)
+        .toolbar(.hidden, for: .navigationBar)
         .alert(
             soundfontAlertTitle(for: viewModel.soundfontAlertKind),
             isPresented: Binding(
