@@ -110,6 +110,7 @@ struct ScoreListView<RowMenu: View>: View {
                     }
                 } label: {
                     Text(editMode.isEditing ? "Cancel" : "Select", bundle: .module)
+                        .contentTransition(.identity)
                 }
             }
         #else

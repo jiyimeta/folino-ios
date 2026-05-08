@@ -112,6 +112,7 @@ struct PlaylistDetailView: View {
                     }
                 } label: {
                     Text(editMode.isEditing ? "Cancel" : "Select", bundle: .module)
+                        .contentTransition(.identity)
                 }
             }
             ToolbarItem(placement: .topBarLeading) { manageMenu }
