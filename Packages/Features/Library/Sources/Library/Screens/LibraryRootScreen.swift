@@ -15,6 +15,11 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var editTagsTarget: ScoreItem?
     @State private var addToPlaylistTarget: ScoreItem?
 
+    @State private var isCreatingPlaylist: Bool = false
+    @State private var newPlaylistName: String = ""
+    @State private var isCreatingTag: Bool = false
+    @State private var newTagName: String = ""
+
     public init(
         viewModel: LibraryViewModel,
         path: Binding<NavigationPath>,
@@ -74,6 +79,28 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         } message: { msg in
             Text(msg)
         }
+        .alert(Text("New Playlist", bundle: .module), isPresented: $isCreatingPlaylist) {
+            TextField(text: $newPlaylistName) { Text("Playlist name", bundle: .module) }
+            Button {
+                let name = newPlaylistName
+                newPlaylistName = ""
+                Task { await viewModel.createPlaylist(name: name) }
+            } label: { Text("Add", bundle: .module) }
+            Button(role: .cancel) { newPlaylistName = "" } label: { Text("Cancel", bundle: .module) }
+        } message: {
+            Text("Enter a name for the new playlist.", bundle: .module)
+        }
+        .alert(Text("New Tag", bundle: .module), isPresented: $isCreatingTag) {
+            TextField(text: $newTagName) { Text("Tag name", bundle: .module) }
+            Button {
+                let name = newTagName
+                newTagName = ""
+                Task { await viewModel.createTag(name: name) }
+            } label: { Text("Add", bundle: .module) }
+            Button(role: .cancel) { newTagName = "" } label: { Text("Cancel", bundle: .module) }
+        } message: {
+            Text("Enter a name for the new tag.", bundle: .module)
+        }
         .alert(
             Text("Already in Your Library", bundle: .module),
             isPresented: duplicateAlertBinding,
@@ -116,9 +143,9 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @ToolbarContentBuilder
     private var importToolbar: some ToolbarContent {
         #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { importButton }
+            ToolbarItem(placement: .topBarTrailing) { addMenu }
         #else
-            ToolbarItem(placement: .automatic) { importButton }
+            ToolbarItem(placement: .automatic) { addMenu }
         #endif
     }
 
@@ -131,18 +158,45 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         #endif
     }
 
-    private var importButton: some View {
-        Button {
-            viewModel.isFileImporterPresented = true
+    private var addMenu: some View {
+        Menu {
+            Button {
+                viewModel.isFileImporterPresented = true
+            } label: {
+                Label {
+                    Text("Import Score", bundle: .module)
+                } icon: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+            }
+            Button {
+                newPlaylistName = ""
+                isCreatingPlaylist = true
+            } label: {
+                Label {
+                    Text("New Playlist", bundle: .module)
+                } icon: {
+                    Image(systemName: "music.note.list")
+                }
+            }
+            Button {
+                newTagName = ""
+                isCreatingTag = true
+            } label: {
+                Label {
+                    Text("New Tag", bundle: .module)
+                } icon: {
+                    Image(systemName: "tag")
+                }
+            }
         } label: {
-            Image(systemName: "plus").accessibilityLabel(Text("Import Score", bundle: .module))
+            Image(systemName: "plus").accessibilityLabel(Text("Add", bundle: .module))
         }
     }
 
     @ViewBuilder
     private var rootList: some View {
         let items = viewModel.repository.scoreItems
-        let favorites = items.favorites(limit: 5)
         let recents = items.mostRecentlyOpened(limit: 5)
 
         if items.isEmpty && viewModel.repository.tags.isEmpty && viewModel.repository.playlists.isEmpty {
@@ -157,41 +211,32 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             }
         } else {
             List {
-                favoritesSection(favorites)
                 browseSection(items: items)
+                LibraryRootPlaylistsSection(
+                    allPlaylists: viewModel.repository.playlists,
+                    scoreItems: items
+                )
+                LibraryRootTagsSection(
+                    allTags: viewModel.repository.tags,
+                    scoreItems: items
+                )
                 recentsSection(recents)
             }
-        }
-    }
-
-    @ViewBuilder
-    private func favoritesSection(_ favorites: [ScoreItem]) -> some View {
-        if !favorites.isEmpty {
-            Section {
-                ForEach(favorites) { item in
-                    sectionRow(for: item)
-                }
-            } header: {
-                Text("Favorites", bundle: .module)
-            }
+            .listStyle(.sidebar)
         }
     }
 
     @ViewBuilder
     private func browseSection(items: [ScoreItem]) -> some View {
+        let favoriteCount = items.filter(\.isFavorite).count
         Section {
             NavigationLink(value: LibraryRoute.allScores) {
                 browseRow(title: "All Scores", systemImage: "music.note", count: items.count)
             }
-            NavigationLink(value: LibraryRoute.tags) {
-                browseRow(title: "Tags", systemImage: "tag", count: viewModel.repository.tags.count)
-            }
-            NavigationLink(value: LibraryRoute.playlists) {
-                browseRow(
-                    title: "Playlists",
-                    systemImage: "music.note.list",
-                    count: viewModel.repository.playlists.count
-                )
+            if favoriteCount > 0 {
+                NavigationLink(value: LibraryRoute.favorites) {
+                    browseRow(title: "Favorites", systemImage: "heart.fill", count: favoriteCount)
+                }
             }
         } header: {
             Text("Browse", bundle: .module)
@@ -271,6 +316,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 onEditTags: { editTagsTarget = $0 },
                 onAddToPlaylist: { addToPlaylistTarget = $0 }
             )
+        case .favorites:
+            FavoritesScreen(
+                library: viewModel,
+                onOpen: onOpenScore,
+                onEditTags: { editTagsTarget = $0 },
+                onAddToPlaylist: { addToPlaylistTarget = $0 }
+            )
         case .tags:
             TagsListScreen(library: viewModel)
         case let .tagDetail(tagID):
@@ -340,40 +392,5 @@ enum ScoreFileTypes {
         types.append(.zip)
         // Plain `.mscx` is XML; explicit `.xml` already covers it.
         return types
-    }
-}
-
-private struct AllScoresScreen: View {
-    let library: LibraryViewModel
-    let onOpen: (ScoreItem) -> Void
-    let onEditTags: (ScoreItem) -> Void
-    let onAddToPlaylist: (ScoreItem) -> Void
-
-    @State private var listVM: ScoreListViewModel
-
-    init(
-        library: LibraryViewModel,
-        onOpen: @escaping (ScoreItem) -> Void,
-        onEditTags: @escaping (ScoreItem) -> Void,
-        onAddToPlaylist: @escaping (ScoreItem) -> Void
-    ) {
-        self.library = library
-        self.onOpen = onOpen
-        self.onEditTags = onEditTags
-        self.onAddToPlaylist = onAddToPlaylist
-        _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .all, repository: library.repository)
-        )
-    }
-
-    var body: some View {
-        ScoreListScreen(
-            viewModel: listVM,
-            library: library,
-            onOpen: onOpen,
-            onEditTags: onEditTags,
-            onAddToPlaylist: onAddToPlaylist
-        )
-        .navigationTitle(Text("All Scores", bundle: .module))
     }
 }

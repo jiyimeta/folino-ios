@@ -9,15 +9,7 @@ struct TagsListScreen: View {
             tags: sortedTags,
             memberCount: memberCount(of:),
             onCreate: { name in
-                let tag = Tag(name: name, colorHex: "#5856D6")
-                Task {
-                    do {
-                        try await library.repository.saveTag(tag)
-                    } catch {
-                        library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                            ?? error.localizedDescription
-                    }
-                }
+                Task { await library.createTag(name: name) }
             }
         )
     }

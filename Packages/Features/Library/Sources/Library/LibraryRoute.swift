@@ -7,6 +7,7 @@ import Foundation
 /// importing the screen.
 enum LibraryRoute: Hashable {
     case allScores
+    case favorites
     case tags
     case tagDetail(TagID)
     case playlists

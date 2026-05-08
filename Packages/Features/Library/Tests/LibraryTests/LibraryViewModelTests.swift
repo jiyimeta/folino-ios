@@ -75,6 +75,34 @@ struct LibraryViewModelTests {
         await f.vm.delete(item)
         #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
+
+    @Test func createPlaylistTrimmedNonEmptyPersists() async {
+        let f = Self.makeVM()
+        await f.vm.createPlaylist(name: "  Recital  ")
+        #expect(f.repo.savedPlaylists.count == 1)
+        #expect(f.repo.savedPlaylists.first?.name == "Recital")
+        #expect(f.repo.savedPlaylists.first?.orderedScoreItemIDs.isEmpty == true)
+    }
+
+    @Test func createPlaylistEmptyNameNoOp() async {
+        let f = Self.makeVM()
+        await f.vm.createPlaylist(name: "   ")
+        #expect(f.repo.savedPlaylists.isEmpty)
+    }
+
+    @Test func createTagTrimmedNonEmptyPersistsWithDefaultColor() async {
+        let f = Self.makeVM()
+        await f.vm.createTag(name: "  Practice  ")
+        #expect(f.repo.savedTags.count == 1)
+        #expect(f.repo.savedTags.first?.name == "Practice")
+        #expect(f.repo.savedTags.first?.colorHex == "#5856D6")
+    }
+
+    @Test func createTagEmptyNameNoOp() async {
+        let f = Self.makeVM()
+        await f.vm.createTag(name: "")
+        #expect(f.repo.savedTags.isEmpty)
+    }
 }
 
 extension LibraryViewModelTests {

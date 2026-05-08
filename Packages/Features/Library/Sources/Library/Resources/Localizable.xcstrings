@@ -1029,6 +1029,23 @@
         }
       }
     },
+    "See All" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See All"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて表示"
+          }
+        }
+      }
+    },
     "Select" : {
       "localizations" : {
         "en" : {
