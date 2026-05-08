@@ -87,6 +87,15 @@ public final class LivePlaybackController: Domain.PlaybackController {
         try Task.checkCancellation()
         let prepared = Self.scoreWithFallbackRewrites(score, probe: precisionProbe)
         try engine.prepare(score: prepared)
+        // `prepare` ends with `AVAudioEngine.start()` so the engine is running
+        // even though `PlaybackState` is `.stopped`. iOS Control Center reads
+        // the running engine as "audio is active" and overrides our
+        // `MPNowPlayingInfoCenter.playbackState = .paused`, drawing the pause
+        // glyph before the user has pressed play. Pausing the engine here
+        // matches what `PlaybackEngine.pause()` does after a real pause —
+        // sequencer is still nil (lazy), so this just stops the audio graph
+        // and parks `state` at `.paused`.
+        engine.pause()
         loadedScore = prepared
         pendingCursor = nil
         updateNowPlayingMetadata(for: prepared)
@@ -294,6 +303,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         center.pauseCommand.removeTarget(nil)
         center.skipForwardCommand.removeTarget(nil)
         center.skipBackwardCommand.removeTarget(nil)
+        center.changePlaybackPositionCommand.removeTarget(nil)
         // Disable togglePlayPause: with all three registered, iOS 17+
         // sometimes follows a Control Center pause tap with a synthesised
         // toggle event, which our handler would interpret as "state is
@@ -339,6 +349,26 @@ public final class LivePlaybackController: Domain.PlaybackController {
             else { return .commandFailed }
             MainActor.assumeIsolated {
                 self.engine.skip(by: -skip.interval)
+                self.publishNowPlayingInfo()
+            }
+            return .success
+        }
+
+        // Lock-screen / Control Center scrubber drag. iOS only fires this
+        // when `MPMediaItemPropertyPlaybackDuration` is published, which we
+        // already do in `publishNowPlayingInfo`. `engine.skip(by:)` clamps
+        // to `[0, totalTimeSeconds]` and preserves play / pause state, so
+        // forwarding the delta from the engine's current time is enough.
+        // No-op until the sequencer has been built (first `play` call) —
+        // before that, scrubbing is unreachable in practice because the
+        // user has to press play to engage the lock-screen player.
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let self,
+                  let position = event as? MPChangePlaybackPositionCommandEvent
+            else { return .commandFailed }
+            MainActor.assumeIsolated {
+                let delta = position.positionTime - self.engine.currentTimeSeconds
+                self.engine.skip(by: delta)
                 self.publishNowPlayingInfo()
             }
             return .success
