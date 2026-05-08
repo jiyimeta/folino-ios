@@ -28,6 +28,22 @@
       },
       "shouldTranslate" : false
     },
+    "%lld selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld selected"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件選択中"
+          }
+        }
+      }
+    },
     "Add" : {
       "localizations" : {
         "en" : {
@@ -56,6 +72,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「%@」をプレイリストに追加"
+          }
+        }
+      }
+    },
+    "Add %lld scores to playlist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add %lld scores to playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件をプレイリストに追加"
           }
         }
       }
@@ -236,6 +268,22 @@
         }
       }
     },
+    "Delete %lld scores?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete %lld scores?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件のスコアを削除しますか？"
+          }
+        }
+      }
+    },
     "Delete Playlist" : {
       "localizations" : {
         "en" : {
@@ -264,6 +312,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "タグを削除"
+          }
+        }
+      }
+    },
+    "Delete completely" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete completely"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完全に削除"
           }
         }
       }
@@ -392,6 +456,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "お気に入り"
+          }
+        }
+      }
+    },
+    "Remove from playlist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストから削除"
+          }
+        }
+      }
+    },
+    "Select" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択"
+          }
+        }
+      }
+    },
+    "Tags for %lld scores" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tags for %lld scores"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件のスコアにタグを追加"
+          }
+        }
+      }
+    },
+    "This will remove the scores and their files from this device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This will remove the scores and their files from this device."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スコアとファイルがこの端末から削除されます。"
           }
         }
       }
