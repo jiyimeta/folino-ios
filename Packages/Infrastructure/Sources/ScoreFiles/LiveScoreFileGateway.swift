@@ -32,21 +32,20 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
                 throw DomainError.scoreFileNotFound(name: fileURL.lastPathComponent)
             }
             do {
-                let score: Score
-                switch format {
+                let score: Score = switch format {
                 case .mscx:
-                    score = try SheetMusic.loadScore(mscxData: data)
+                    try SheetMusic.loadScore(mscxData: data)
                 case .mscz:
-                    score = try SheetMusic.loadScore(msczData: data)
+                    try SheetMusic.loadScore(msczData: data)
                 case .musicXML:
-                    score = try SheetMusic.loadScore(musicXMLData: data)
+                    try SheetMusic.loadScore(musicXMLData: data)
                 case .mxl:
-                    score = try SheetMusic.loadScore(mxlData: data)
+                    try SheetMusic.loadScore(mxlData: data)
                 case .midi:
-                    // swift-sheet-music does not yet expose SMF → Score parsing;
-                    // surface that as `scoreParseFailed` so the importer can show
-                    // a clear error.
-                    throw DomainError.scoreParseFailed(reason: "MIDI parsing not yet supported")
+                    try SheetMusic.loadScore(
+                        midiData: data,
+                        sourceFilename: fileURL.deletingPathExtension().lastPathComponent
+                    )
                 }
                 return (score, ScoreFileSummary(score: score))
             } catch let error as DomainError {

@@ -67,17 +67,18 @@ import Testing
             Fixtures.minimalMIDIData(), ext: "mid", in: tmp.url
         )
         let gateway = LiveScoreFileGateway()
-        // For v1 we accept that MIDI metadata extraction may be very minimal.
-        // swift-sheet-music does not yet expose SMF→Score parsing; the call
-        // should surface a `scoreParseFailed` (or any DomainError) rather
-        // than crashing.
-        do {
-            _ = try await gateway.loadFileMetadata(fileURL: midURL)
-        } catch DomainError.scoreParseFailed {
-            // Acceptable in v1.
-        } catch {
-            Issue.record("unexpected error: \(error)")
-        }
+        let summary = try await gateway.loadFileMetadata(fileURL: midURL)
+        #expect(summary.lengthBeats >= 0)
+    }
+
+    @Test func loadScoreParsesMIDI() async throws {
+        let tmp = try TempDirectory()
+        let midURL = try Fixtures.writeToTempFile(
+            Fixtures.minimalMIDIData(), ext: "mid", in: tmp.url
+        )
+        let gateway = LiveScoreFileGateway()
+        let result = try await gateway.loadScore(fileURL: midURL)
+        #expect(result.score.parts.isEmpty == false)
     }
 
     @Test func saveScoreThrowsUnsupportedFormatInV1() async throws {
