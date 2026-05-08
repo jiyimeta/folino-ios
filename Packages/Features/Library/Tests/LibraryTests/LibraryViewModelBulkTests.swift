@@ -140,4 +140,40 @@ struct LibraryViewModelBulkTests {
 
         #expect(f.repo.savedPlaylists.isEmpty)
     }
+
+    // MARK: - bulkAddTags
+
+    @Test func bulkAddTagsUnionsTagSets() async {
+        let tagA = TagID()
+        let tagB = TagID()
+        var item1 = Self.makeItem(title: "1"); item1.tagIDs = [tagA]
+        var item2 = Self.makeItem(title: "2"); item2.tagIDs = []
+        let f = Self.makeVM(scoreItems: [item1, item2])
+
+        await f.vm.bulkAddTags([item1.id, item2.id], tagIDs: [tagB])
+
+        let saved1 = f.repo.scoreItems.first { $0.id == item1.id }
+        let saved2 = f.repo.scoreItems.first { $0.id == item2.id }
+        #expect(saved1?.tagIDs == [tagA, tagB])
+        #expect(saved2?.tagIDs == [tagB])
+    }
+
+    @Test func bulkAddTagsSkipsWritesWhenAlreadyHasAll() async {
+        let tagA = TagID()
+        var item = Self.makeItem(title: "1"); item.tagIDs = [tagA]
+        let f = Self.makeVM(scoreItems: [item])
+
+        await f.vm.bulkAddTags([item.id], tagIDs: [tagA])
+
+        #expect(f.repo.savedScoreItems.isEmpty)
+    }
+
+    @Test func bulkAddTagsEmptyTagsIsNoOp() async {
+        let item = Self.makeItem(title: "1")
+        let f = Self.makeVM(scoreItems: [item])
+
+        await f.vm.bulkAddTags([item.id], tagIDs: [])
+
+        #expect(f.repo.savedScoreItems.isEmpty)
+    }
 }

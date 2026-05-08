@@ -111,6 +111,26 @@ public final class LibraryViewModel {
         }
     }
 
+    public func bulkAddTags(
+        _ ids: Set<ScoreItemID>,
+        tagIDs: Set<TagID>
+    ) async {
+        guard !ids.isEmpty, !tagIDs.isEmpty else { return }
+        for id in ids {
+            guard let item = repository.scoreItems.first(where: { $0.id == id }) else { continue }
+            let merged = item.tagIDs.union(tagIDs)
+            guard merged != item.tagIDs else { continue }
+            var updated = item
+            updated.tagIDs = merged
+            do {
+                try await repository.saveScoreItem(updated)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+    }
+
     public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
         isPreparingShare = true
         defer { isPreparingShare = false }
