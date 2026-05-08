@@ -38,6 +38,8 @@ struct PlaylistDetailScreen: View {
             onRename: { newName in Task { await commitRename(newName) } },
             onDelete: { Task { await commitDelete() } },
             selectedIDs: $selectedIDs,
+            availableShareFormats: bulkAvailableShareFormats,
+            onBulkShare: { format in performBulkShare(format) },
             onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
             onBulkEditTags: { bulkSheet = .editTags },
             onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
@@ -93,6 +95,24 @@ struct PlaylistDetailScreen: View {
 
     private var orderedSelectedIDs: [ScoreItemID] {
         orderedItems.map(\.id).filter { selectedIDs.contains($0) }
+    }
+
+    private var selectedItems: [ScoreItem] {
+        orderedItems.filter { selectedIDs.contains($0.id) }
+    }
+
+    private var bulkAvailableShareFormats: [ScoreShareFormat] {
+        let perItem = selectedItems.map { Set(library.shareService.availableFormats(for: $0)) }
+        guard let first = perItem.first else { return [] }
+        let intersection = perItem.dropFirst().reduce(first) { $0.intersection($1) }
+        return [.sourceFormat, .pdf, .midi].filter { intersection.contains($0) }
+    }
+
+    private func performBulkShare(_ format: ScoreShareFormat) {
+        // TODO: proper multi-URL bulk share. For now, share the first
+        // selected item — system share sheet handles one URL.
+        guard let first = selectedItems.first else { return }
+        Task { await library.requestShare(first, format: format) }
     }
 
     private var bulkDeleteAlertBinding: Binding<Bool> {

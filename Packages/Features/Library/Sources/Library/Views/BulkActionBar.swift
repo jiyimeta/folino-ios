@@ -1,7 +1,10 @@
+import Domain
 import SwiftUI
 
 struct BulkActionBar: View {
     let selectionCount: Int
+    let availableShareFormats: [ScoreShareFormat]
+    let onShare: (ScoreShareFormat) -> Void
     let onAddToPlaylist: () -> Void
     let onEditTags: () -> Void
     let onDelete: () -> Void
@@ -18,28 +21,24 @@ struct BulkActionBar: View {
         @ViewBuilder
         private var iOSBody: some View {
             HStack(spacing: 12) {
-                HStack(spacing: 0) {
-                    iconButton(
-                        systemImage: "music.note.list",
-                        labelKey: "Add to Playlist",
-                        action: onAddToPlaylist
-                    )
-                    iconButton(
-                        systemImage: "tag",
-                        labelKey: "Tags",
-                        action: onEditTags
-                    )
+                Menu {
+                    actionMenuContent
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 48, height: 48)
                 }
+                .tint(.primary)
+                .accessibilityLabel(Text("More", bundle: .module))
                 .glassEffect(.regular.interactive())
 
                 Spacer(minLength: 0)
 
-                iconButton(
-                    systemImage: "trash",
-                    labelKey: "Delete",
-                    role: .destructive,
-                    action: onDelete
-                )
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .frame(width: 48, height: 48)
+                }
+                .tint(.red)
+                .accessibilityLabel(Text("Delete", bundle: .module))
                 .glassEffect(.regular.interactive())
             }
             .padding(.horizontal, 28)
@@ -48,25 +47,34 @@ struct BulkActionBar: View {
         }
 
         @ViewBuilder
-        private func iconButton(
-            systemImage: String,
-            labelKey: LocalizedStringKey,
-            role: ButtonRole? = nil,
-            action: @escaping () -> Void
-        ) -> some View {
-            Button(role: role, action: action) {
-                Image(systemName: systemImage)
-                    .frame(width: 48, height: 48)
+        private var actionMenuContent: some View {
+            if !availableShareFormats.isEmpty {
+                bulkShareSubmenu(formats: availableShareFormats, onShare: onShare)
+                Divider()
             }
-            .tint(role == .destructive ? .red : .primary)
-            .accessibilityLabel(Text(labelKey, bundle: .module))
+            Button(action: onAddToPlaylist) {
+                Label {
+                    Text("Add to Playlist…", bundle: .module)
+                } icon: {
+                    Image(systemName: "music.note.list")
+                }
+            }
+            Button(action: onEditTags) {
+                Label {
+                    Text("Add Tags…", bundle: .module)
+                } icon: {
+                    Image(systemName: "tag")
+                }
+            }
         }
     #else
         @ViewBuilder
         private var macOSBody: some View {
             HStack {
-                Button("Add to Playlist", action: onAddToPlaylist)
-                Button("Tags", action: onEditTags)
+                Menu("More") {
+                    Button("Add to Playlist", action: onAddToPlaylist)
+                    Button("Add Tags", action: onEditTags)
+                }
                 Spacer()
                 Button("Delete", role: .destructive, action: onDelete)
             }
@@ -76,6 +84,46 @@ struct BulkActionBar: View {
     #endif
 }
 
+@MainActor
+@ViewBuilder
+private func bulkShareSubmenu(
+    formats: [ScoreShareFormat],
+    onShare: @escaping (ScoreShareFormat) -> Void
+) -> some View {
+    Menu {
+        ForEach(formats, id: \.self) { format in
+            Button {
+                onShare(format)
+            } label: {
+                bulkShareFormatLabel(format)
+            }
+        }
+    } label: {
+        Label {
+            Text("Share…", bundle: .module)
+        } icon: {
+            Image(systemName: "square.and.arrow.up")
+        }
+    }
+}
+
+@MainActor
+@ViewBuilder
+private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
+    switch format {
+    case .sourceFormat:
+        Label {
+            Text("Original Format", bundle: .module)
+        } icon: {
+            Image(systemName: "doc")
+        }
+    case .pdf:
+        Label("PDF", systemImage: "doc.richtext")
+    case .midi:
+        Label("MIDI", systemImage: "pianokeys")
+    }
+}
+
 #if DEBUG && os(iOS)
     #Preview("Enabled") {
         NavigationStack {
@@ -83,13 +131,27 @@ struct BulkActionBar: View {
                 Text("Foo")
             }
             .safeAreaInset(edge: .bottom) {
-                BulkActionBar(selectionCount: 3, onAddToPlaylist: {}, onEditTags: {}, onDelete: {})
+                BulkActionBar(
+                    selectionCount: 3,
+                    availableShareFormats: [.pdf, .midi],
+                    onShare: { _ in },
+                    onAddToPlaylist: {},
+                    onEditTags: {},
+                    onDelete: {}
+                )
             }
             .searchable(text: .constant("Foo"))
         }
     }
 
     #Preview("Disabled") {
-        BulkActionBar(selectionCount: 0, onAddToPlaylist: {}, onEditTags: {}, onDelete: {})
+        BulkActionBar(
+            selectionCount: 0,
+            availableShareFormats: [],
+            onShare: { _ in },
+            onAddToPlaylist: {},
+            onEditTags: {},
+            onDelete: {}
+        )
     }
 #endif

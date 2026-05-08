@@ -10,6 +10,8 @@ struct PlaylistDetailView: View {
     let onRename: (String) -> Void
     let onDelete: () -> Void
     @Binding var selectedIDs: Set<ScoreItemID>
+    let availableShareFormats: [ScoreShareFormat]
+    let onBulkShare: (ScoreShareFormat) -> Void
     let onBulkAddToPlaylist: () -> Void
     let onBulkEditTags: () -> Void
     let onBulkDelete: () -> Void
@@ -57,6 +59,8 @@ struct PlaylistDetailView: View {
                 if editMode.isEditing {
                     BulkActionBar(
                         selectionCount: selectedIDs.count,
+                        availableShareFormats: availableShareFormats,
+                        onShare: onBulkShare,
                         onAddToPlaylist: onBulkAddToPlaylist,
                         onEditTags: onBulkEditTags,
                         onDelete: onBulkDelete
@@ -197,6 +201,8 @@ struct PlaylistDetailView: View {
                     onRename: { _ in },
                     onDelete: {},
                     selectedIDs: $selectedIDs,
+                    availableShareFormats: [],
+                    onBulkShare: { _ in },
                     onBulkAddToPlaylist: {},
                     onBulkEditTags: {},
                     onBulkDelete: {}

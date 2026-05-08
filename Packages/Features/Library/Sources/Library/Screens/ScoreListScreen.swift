@@ -89,6 +89,8 @@ struct ScoreListScreen: View {
                 editMode: $editMode,
                 selectedIDs: $selectedIDs,
                 bulkContext: bulkContext,
+                availableShareFormats: bulkAvailableShareFormats,
+                onBulkShare: { format in performBulkShare(format) },
                 onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
                 onBulkEditTags: { bulkSheet = .editTags },
                 onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
@@ -117,6 +119,8 @@ struct ScoreListScreen: View {
                 onSelectManualOrder: { viewModel.selectManualOrder() },
                 selectedIDs: $selectedIDs,
                 bulkContext: bulkContext,
+                availableShareFormats: bulkAvailableShareFormats,
+                onBulkShare: { format in performBulkShare(format) },
                 onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
                 onBulkEditTags: { bulkSheet = .editTags },
                 onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
@@ -146,6 +150,26 @@ struct ScoreListScreen: View {
         viewModel.displayedItems
             .map(\.id)
             .filter { selectedIDs.contains($0) }
+    }
+
+    private var selectedItems: [ScoreItem] {
+        viewModel.displayedItems.filter { selectedIDs.contains($0.id) }
+    }
+
+    private var bulkAvailableShareFormats: [ScoreShareFormat] {
+        let perItem = selectedItems.map { Set(library.shareService.availableFormats(for: $0)) }
+        guard let first = perItem.first else { return [] }
+        let intersection = perItem.dropFirst().reduce(first) { $0.intersection($1) }
+        // Order: sourceFormat, pdf, midi (matches the row menu)
+        return [.sourceFormat, .pdf, .midi].filter { intersection.contains($0) }
+    }
+
+    private func performBulkShare(_ format: ScoreShareFormat) {
+        // TODO: proper bulk share with multi-URL ShareLink. For now, share the
+        // first selected item — the system share sheet only handles one URL at
+        // a time without a Domain-side change.
+        guard let first = selectedItems.first else { return }
+        Task { await library.requestShare(first, format: format) }
     }
 
     private var bulkDeleteAlertBinding: Binding<Bool> {

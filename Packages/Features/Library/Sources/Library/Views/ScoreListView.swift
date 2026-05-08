@@ -23,6 +23,8 @@ struct ScoreListView<RowMenu: View>: View {
     #endif
     @Binding var selectedIDs: Set<ScoreItemID>
     let bulkContext: BulkContext
+    let availableShareFormats: [ScoreShareFormat]
+    let onBulkShare: (ScoreShareFormat) -> Void
     let onBulkAddToPlaylist: () -> Void
     let onBulkEditTags: () -> Void
     let onBulkDelete: () -> Void
@@ -40,6 +42,8 @@ struct ScoreListView<RowMenu: View>: View {
                 if isEditing {
                     BulkActionBar(
                         selectionCount: selectedIDs.count,
+                        availableShareFormats: availableShareFormats,
+                        onShare: onBulkShare,
                         onAddToPlaylist: onBulkAddToPlaylist,
                         onEditTags: onBulkEditTags,
                         onDelete: onBulkDelete
@@ -278,6 +282,8 @@ struct ScoreListView<RowMenu: View>: View {
                     editMode: $editMode,
                     selectedIDs: $selectedIDs,
                     bulkContext: .scores,
+                    availableShareFormats: [],
+                    onBulkShare: { _ in },
                     onBulkAddToPlaylist: {},
                     onBulkEditTags: {},
                     onBulkDelete: {}
