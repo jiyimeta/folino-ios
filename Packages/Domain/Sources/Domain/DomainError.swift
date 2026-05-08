@@ -18,24 +18,53 @@ extension DomainError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case let .scoreFileNotFound(name):
-            String(localized: "Score file not found: \(name)", bundle: .module)
+            String(
+                localized: "domain.error.scoreFileNotFound",
+                defaultValue: "Score file not found: \(name)",
+                bundle: .module
+            )
         case let .unsupportedFormat(ext):
-            String(localized: "Unsupported file format: \(ext)", bundle: .module)
+            String(
+                localized: "domain.error.unsupportedFormat",
+                defaultValue: "Unsupported file format: \(ext)",
+                bundle: .module
+            )
         case let .scoreParseFailed(reason):
-            String(localized: "Could not parse score file: \(reason)", bundle: .module)
+            String(
+                localized: "domain.error.scoreParseFailed",
+                defaultValue: "Could not parse score file: \(reason)",
+                bundle: .module
+            )
         case let .scoreWriteFailed(reason):
-            String(localized: "Could not write score file: \(reason)", bundle: .module)
+            String(
+                localized: "domain.error.scoreWriteFailed",
+                defaultValue: "Could not write score file: \(reason)",
+                bundle: .module
+            )
         case let .soundfontDownloadFailed(key):
             String(
-                localized: "Failed to download SoundFont (bank \(key.bank), program \(key.program))",
+                localized: "domain.error.soundfontDownloadFailed",
+                defaultValue: "Failed to download SoundFont (bank \(key.bank), program \(key.program))",
                 bundle: .module
             )
         case let .persistenceFailed(reason):
-            String(localized: "Library save failed: \(reason)", bundle: .module)
+            String(
+                localized: "domain.error.persistenceFailed",
+                defaultValue: "Library save failed: \(reason)",
+                bundle: .module
+            )
         case let .syncFailed(reason):
-            String(localized: "Sync failed: \(reason)", bundle: .module)
+            String(
+                localized: "domain.error.syncFailed",
+                defaultValue: "Sync failed: \(reason)",
+                bundle: .module
+            )
         case let .audioEngineFailed(reason):
-            String(localized: "Audio engine error: \(reason)", bundle: .module)
+            String(
+                localized: "domain.error.audioEngineFailed",
+                defaultValue: "Audio engine error: \(reason)",
+                bundle: .module
+            )
         }
     }
 }

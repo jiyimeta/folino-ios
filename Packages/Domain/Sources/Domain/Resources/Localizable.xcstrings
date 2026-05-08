@@ -1,54 +1,134 @@
 {
-  "sourceLanguage": "en",
-  "version": "1.0",
-  "strings": {
-    "Score file not found: %@": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Score file not found: %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "楽譜ファイルが見つかりません: %@" } }
+  "sourceLanguage" : "en",
+  "strings" : {
+    "domain.error.audioEngineFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio engine error: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オーディオエンジンエラー: %@"
+          }
+        }
       }
     },
-    "Unsupported file format: %@": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Unsupported file format: %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "未対応のファイル形式です: %@" } }
+    "domain.error.persistenceFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library save failed: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブラリの保存に失敗しました: %@"
+          }
+        }
       }
     },
-    "Could not parse score file: %@": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Could not parse score file: %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "楽譜ファイルを読み取れませんでした: %@" } }
+    "domain.error.scoreFileNotFound" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Score file not found: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜ファイルが見つかりません: %@"
+          }
+        }
       }
     },
-    "Could not write score file: %@": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Could not write score file: %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "楽譜ファイルを書き込めませんでした: %@" } }
+    "domain.error.scoreParseFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not parse score file: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜ファイルを読み取れませんでした: %@"
+          }
+        }
       }
     },
-    "Failed to download SoundFont (bank %lld, program %lld)": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Failed to download SoundFont (bank %lld, program %lld)" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "SoundFont のダウンロードに失敗しました（バンク %lld、プログラム %lld）" } }
+    "domain.error.scoreWriteFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not write score file: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜ファイルを書き込めませんでした: %@"
+          }
+        }
       }
     },
-    "Library save failed: %@": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Library save failed: %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ライブラリの保存に失敗しました: %@" } }
+    "domain.error.soundfontDownloadFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to download SoundFont (bank %1$lld, program %2$lld)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SoundFont のダウンロードに失敗しました（バンク %1$lld、プログラム %2$lld）"
+          }
+        }
       }
     },
-    "Sync failed: %@": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Sync failed: %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "同期に失敗しました: %@" } }
+    "domain.error.syncFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync failed: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同期に失敗しました: %@"
+          }
+        }
       }
     },
-    "Audio engine error: %@": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Audio engine error: %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "オーディオエンジンエラー: %@" } }
+    "domain.error.unsupportedFormat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsupported file format: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未対応のファイル形式です: %@"
+          }
+        }
       }
     }
-  }
+  },
+  "version" : "1.0"
 }
