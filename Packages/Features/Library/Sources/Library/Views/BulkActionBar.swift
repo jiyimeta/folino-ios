@@ -18,60 +18,47 @@ struct BulkActionBar: View {
         @ViewBuilder
         private var iOSBody: some View {
             HStack(spacing: 12) {
-                GlassEffectContainer(spacing: 8) {
-                    HStack(spacing: 8) {
-                        constructiveButton(
-                            systemImage: "music.note.list",
-                            labelKey: "Add to Playlist",
-                            action: onAddToPlaylist
-                        )
-                        constructiveButton(
-                            systemImage: "tag",
-                            labelKey: "Tags",
-                            action: onEditTags
-                        )
-                    }
+                HStack(spacing: 0) {
+                    iconButton(
+                        systemImage: "music.note.list",
+                        labelKey: "Add to Playlist",
+                        action: onAddToPlaylist
+                    )
+                    iconButton(
+                        systemImage: "tag",
+                        labelKey: "Tags",
+                        action: onEditTags
+                    )
                 }
+                .glassEffect(.regular.interactive())
 
                 Spacer(minLength: 0)
 
-                destructiveButton(
+                iconButton(
                     systemImage: "trash",
                     labelKey: "Delete",
+                    role: .destructive,
                     action: onDelete
                 )
+                .glassEffect(.regular.interactive())
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 28)
             .padding(.vertical, 8)
             .disabled(selectionCount == 0)
         }
 
         @ViewBuilder
-        private func constructiveButton(
+        private func iconButton(
             systemImage: String,
             labelKey: LocalizedStringKey,
+            role: ButtonRole? = nil,
             action: @escaping () -> Void
         ) -> some View {
-            Button(action: action) {
+            Button(role: role, action: action) {
                 Image(systemName: systemImage)
+                    .frame(width: 48, height: 48)
             }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel(Text(labelKey, bundle: .module))
-        }
-
-        @ViewBuilder
-        private func destructiveButton(
-            systemImage: String,
-            labelKey: LocalizedStringKey,
-            action: @escaping () -> Void
-        ) -> some View {
-            Button(role: .destructive, action: action) {
-                Image(systemName: systemImage)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .tint(.red)
+            .tint(role == .destructive ? .red : .primary)
             .accessibilityLabel(Text(labelKey, bundle: .module))
         }
     #else
@@ -91,7 +78,15 @@ struct BulkActionBar: View {
 
 #if DEBUG && os(iOS)
     #Preview("Enabled") {
-        BulkActionBar(selectionCount: 3, onAddToPlaylist: {}, onEditTags: {}, onDelete: {})
+        NavigationStack {
+            List {
+                Text("Foo")
+            }
+            .safeAreaInset(edge: .bottom) {
+                BulkActionBar(selectionCount: 3, onAddToPlaylist: {}, onEditTags: {}, onDelete: {})
+            }
+            .searchable(text: .constant("Foo"))
+        }
     }
 
     #Preview("Disabled") {
