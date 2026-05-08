@@ -16,7 +16,6 @@ func scoreRowMenu(
     scoreRowMenu(
         item: item,
         availableFormats: library.shareService.availableFormats(for: item),
-        resolvedSourceFormat: library.shareService.resolvedSourceFormat(for: item),
         onOpen: onOpen,
         onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
         onEditTags: onEditTags,

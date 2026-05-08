@@ -103,12 +103,12 @@ struct BulkActionBar: View {
 @ViewBuilder
 private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
     switch format {
-    case .sourceFormat:
-        Label {
-            Text("library.format.original", bundle: .module)
-        } icon: {
-            Image(systemName: "doc")
-        }
+    case .msczOriginal:
+        Label { Text("library.format.musescore", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
+    case .msczMuseScore4:
+        Label { Text("library.format.musescore4", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
+    case .msczMuseScore3:
+        Label { Text("library.format.musescore3", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
     case .pdf:
         Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "doc.richtext") }
     case .midi:

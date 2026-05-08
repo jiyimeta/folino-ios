@@ -10,7 +10,6 @@ import UtilityUI
 func scoreRowMenu(
     item: ScoreItem,
     availableFormats: [ScoreShareFormat],
-    resolvedSourceFormat: ScoreFormat,
     onOpen: @escaping (ScoreItem) -> Void,
     onToggleFavorite: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,
@@ -50,7 +49,6 @@ func scoreRowMenu(
     Divider()
     shareSubmenu(
         availableFormats: availableFormats,
-        resolvedSourceFormat: resolvedSourceFormat,
         onShare: onShare
     )
 
@@ -70,7 +68,6 @@ func scoreRowMenu(
 @ViewBuilder
 private func shareSubmenu(
     availableFormats: [ScoreShareFormat],
-    resolvedSourceFormat: ScoreFormat,
     onShare: @escaping (ScoreShareFormat) -> Void
 ) -> some View {
     Menu {
@@ -78,7 +75,7 @@ private func shareSubmenu(
             Button {
                 onShare(format)
             } label: {
-                shareMenuLabel(format: format, resolvedSourceFormat: resolvedSourceFormat)
+                shareMenuLabel(format: format)
             }
         }
     } label: {
@@ -92,26 +89,14 @@ private func shareSubmenu(
 
 @MainActor
 @ViewBuilder
-private func shareMenuLabel(
-    format: ScoreShareFormat,
-    resolvedSourceFormat: ScoreFormat
-) -> some View {
+private func shareMenuLabel(format: ScoreShareFormat) -> some View {
     switch format {
-    case .sourceFormat:
-        switch resolvedSourceFormat {
-        case .mscz, .mscx:
-            Label { Text("library.format.musescore", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
-        case .musicXML:
-            Label { Text("library.format.musicxml", bundle: .module) } icon: { Image(systemName: "doc.text") }
-        case .mxl:
-            Label {
-                Text("library.format.musicxmlCompressed", bundle: .module)
-            } icon: {
-                Image(systemName: "doc.zipper")
-            }
-        case .midi:
-            Label { Text("library.format.midi", bundle: .module) } icon: { Image(systemName: "pianokeys") }
-        }
+    case .msczOriginal:
+        Label { Text("library.format.musescore", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
+    case .msczMuseScore4:
+        Label { Text("library.format.musescore4", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
+    case .msczMuseScore3:
+        Label { Text("library.format.musescore3", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
     case .pdf:
         Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "doc.richtext") }
     case .midi:

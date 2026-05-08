@@ -110,7 +110,8 @@ struct PlaylistDetailScreen: View {
         let perItem = selectedItems.map { Set(library.shareService.availableFormats(for: $0)) }
         guard let first = perItem.first else { return [] }
         let intersection = perItem.dropFirst().reduce(first) { $0.intersection($1) }
-        return [.sourceFormat, .pdf, .midi].filter { intersection.contains($0) }
+        return [.msczOriginal, .msczMuseScore4, .msczMuseScore3, .pdf, .midi]
+            .filter { intersection.contains($0) }
     }
 
     private func performBulkShare(_ format: ScoreShareFormat) {

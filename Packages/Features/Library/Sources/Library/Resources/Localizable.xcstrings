@@ -114,32 +114,22 @@
         }
       }
     },
-    "library.format.musicxml" : {
+    "library.format.musescore3" : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MusicXML (.musicxml)"
+            "value" : "MuseScore 3 (.mscz)"
           }
         }
       }
     },
-    "library.format.musicxmlCompressed" : {
+    "library.format.musescore4" : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MusicXML (.mxl)"
-          }
-        }
-      }
-    },
-    "library.format.original" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "元の形式"
+            "value" : "MuseScore 4 (.mscz)"
           }
         }
       }

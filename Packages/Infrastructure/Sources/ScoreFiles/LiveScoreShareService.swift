@@ -31,24 +31,17 @@ public struct LiveScoreShareService: ScoreShareService {
         return String(candidate.prefix(100))
     }
 
-    public func availableFormats(for _: ScoreItem) -> [ScoreShareFormat] {
-        // TODO: re-evaluate when LiveScoreFileGateway gains MIDI parsing —
-        // PDF/MIDI for a `.midi` item would fail with `scoreParseFailed`
-        // until then. Imports of `.midi` are currently blocked.
-        [.sourceFormat, .pdf, .midi]
-    }
-
-    public func resolvedSourceFormat(for item: ScoreItem) -> ScoreFormat {
+    public func availableFormats(for item: ScoreItem) -> [ScoreShareFormat] {
         // localFileName follows the import-time invariant
         // "<id>.<canonical-extension>", so detect() is total here.
-        guard let format = ScoreFormat.detect(filename: item.localFileName) else {
-            return .mscz
-        }
-        switch format {
-        case .mscx, .mscz: return .mscz
-        case .musicXML: return .musicXML
-        case .mxl: return .mxl
-        case .midi: return .midi
+        switch ScoreFormat.detect(filename: item.localFileName) {
+        case .mscx?, .mscz?:
+            return [.msczOriginal, .pdf, .midi]
+        default:
+            // TODO: re-evaluate when LiveScoreFileGateway gains MIDI parsing —
+            // PDF/MIDI/MSCZ for a `.midi` item would fail with `scoreParseFailed`
+            // until then. Imports of `.midi` are currently blocked.
+            return [.msczMuseScore4, .msczMuseScore3, .pdf, .midi]
         }
     }
 
@@ -58,8 +51,16 @@ public struct LiveScoreShareService: ScoreShareService {
     ) async throws -> URL {
         let title = Self.sanitize(title: item.title)
         switch format {
-        case .sourceFormat:
-            return try prepareSourceFormat(item: item, sanitizedTitle: title)
+        case .msczOriginal:
+            return try prepareMSCZOriginal(item: item, sanitizedTitle: title)
+        case .msczMuseScore4:
+            return try await prepareMSCZExport(
+                item: item, sanitizedTitle: title, target: .v4
+            )
+        case .msczMuseScore3:
+            return try await prepareMSCZExport(
+                item: item, sanitizedTitle: title, target: .v3
+            )
         case .pdf:
             return try await preparePDF(item: item, sanitizedTitle: title)
         case .midi:
@@ -108,21 +109,19 @@ public struct LiveScoreShareService: ScoreShareService {
         return destination
     }
 
-    private func prepareSourceFormat(
+    private func prepareMSCZOriginal(
         item: ScoreItem,
         sanitizedTitle: String
     ) throws -> URL {
         let sourceURL = scoresDirectory.appending(path: item.localFileName)
-        let resolved = resolvedSourceFormat(for: item)
-        let destination = shareTempDirectory.appending(
-            path: "\(sanitizedTitle).\(resolved.canonicalExtension)"
-        )
+        let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).mscz")
         try? FileManager.default.removeItem(at: destination)
 
         guard let onDisk = ScoreFormat.detect(filename: item.localFileName) else {
             throw DomainError.unsupportedFormat(sourceURL.pathExtension)
         }
-        if onDisk == .mscx {
+        switch onDisk {
+        case .mscx:
             let mscxData: Data
             do {
                 mscxData = try Data(contentsOf: sourceURL)
@@ -141,11 +140,38 @@ public struct LiveScoreShareService: ScoreShareService {
                 throw DomainError.scoreWriteFailed(reason: "\(error)")
             }
             return destination
+        case .mscz:
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: destination)
+            } catch {
+                throw DomainError.scoreFileNotFound(name: item.localFileName)
+            }
+            return destination
+        case .musicXML, .mxl, .midi:
+            // Caller error: `availableFormats(for:)` only offers
+            // `.msczOriginal` to items whose source is `.mscx`/`.mscz`.
+            throw DomainError.unsupportedFormat(sourceURL.pathExtension)
         }
+    }
+
+    private func prepareMSCZExport(
+        item: ScoreItem,
+        sanitizedTitle: String,
+        target: MSCXVersion
+    ) async throws -> URL {
+        let sourceURL = scoresDirectory.appending(path: item.localFileName)
+        let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).mscz")
+        try? FileManager.default.removeItem(at: destination)
+
+        let (score, _) = try await gateway.loadScore(fileURL: sourceURL)
         do {
-            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            try MSCZWriter.write(
+                score: score,
+                options: MSCXEncoderOptions(targetVersion: target),
+                to: destination
+            )
         } catch {
-            throw DomainError.scoreFileNotFound(name: item.localFileName)
+            throw DomainError.scoreWriteFailed(reason: "\(error)")
         }
         return destination
     }

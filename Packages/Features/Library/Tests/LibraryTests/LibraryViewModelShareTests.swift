@@ -31,11 +31,11 @@ struct LibraryViewModelShareTests {
     @Test func requestShareSuccessSetsShareTarget() async {
         let (vm, share) = Self.makeVM()
         share.prepareShareReturnURL = URL(fileURLWithPath: "/tmp/share/T.mscz")
-        await vm.requestShare(Self.makeItem(), format: .sourceFormat)
+        await vm.requestShare(Self.makeItem(), format: .msczOriginal)
         #expect(vm.shareTarget?.urls == [URL(fileURLWithPath: "/tmp/share/T.mscz")])
         #expect(vm.errorAlertMessage == nil)
         #expect(share.prepareShareCalls.count == 1)
-        #expect(share.prepareShareCalls.first?.format == .sourceFormat)
+        #expect(share.prepareShareCalls.first?.format == .msczOriginal)
     }
 
     @Test func requestShareFailureSetsErrorAlert() async {

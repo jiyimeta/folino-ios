@@ -23,20 +23,26 @@ import Testing
         )
     }
 
-    @Test func availableFormatsAlwaysReturnsAllThree() throws {
+    @Test func availableFormatsForMSCXAndMSCZItems() throws {
         let tmp = try TempDirectory()
         let svc = Self.makeService(in: tmp.url)
-        let item = Self.makeItem(localFileName: "abc.mscz")
-        #expect(svc.availableFormats(for: item) == [.sourceFormat, .pdf, .midi])
+        #expect(
+            svc.availableFormats(for: Self.makeItem(localFileName: "x.mscz"))
+                == [.msczOriginal, .pdf, .midi]
+        )
+        #expect(
+            svc.availableFormats(for: Self.makeItem(localFileName: "x.mscx"))
+                == [.msczOriginal, .pdf, .midi]
+        )
     }
 
-    @Test func resolvedSourceFormatMapsMSCXToMSCZ() throws {
+    @Test func availableFormatsForOtherItemsOffersV4AndV3Export() throws {
         let tmp = try TempDirectory()
         let svc = Self.makeService(in: tmp.url)
-        #expect(svc.resolvedSourceFormat(for: Self.makeItem(localFileName: "x.mscx")) == .mscz)
-        #expect(svc.resolvedSourceFormat(for: Self.makeItem(localFileName: "x.mscz")) == .mscz)
-        #expect(svc.resolvedSourceFormat(for: Self.makeItem(localFileName: "x.musicxml")) == .musicXML)
-        #expect(svc.resolvedSourceFormat(for: Self.makeItem(localFileName: "x.mxl")) == .mxl)
+        let expected: [ScoreShareFormat] = [.msczMuseScore4, .msczMuseScore3, .pdf, .midi]
+        #expect(svc.availableFormats(for: Self.makeItem(localFileName: "x.musicxml")) == expected)
+        #expect(svc.availableFormats(for: Self.makeItem(localFileName: "x.mxl")) == expected)
+        #expect(svc.availableFormats(for: Self.makeItem(localFileName: "x.mid")) == expected)
     }
 
     @Test func sanitizeTitleReplacesPathAndNullBytes() {
@@ -56,7 +62,7 @@ import Testing
         #expect(LiveScoreShareService.sanitize(title: "///") == "score")
     }
 
-    @Test func prepareShareSourceMSCZCopiesBytesIntoTemp() async throws {
+    @Test func prepareShareMSCZOriginalCopiesBytesIntoTemp() async throws {
         let tmp = try TempDirectory()
         let scores = tmp.url.appending(path: "Scores")
         let shareTmp = tmp.url.appending(path: "Share")
@@ -74,14 +80,14 @@ import Testing
         )
         let item = Self.makeItem(localFileName: local)
 
-        let url = try await svc.prepareShare(item: item, format: .sourceFormat)
+        let url = try await svc.prepareShare(item: item, format: .msczOriginal)
         #expect(url.deletingLastPathComponent().path == shareTmp.path)
         #expect(url.pathExtension == "mscz")
         let onDisk = try Data(contentsOf: url)
         #expect(onDisk == mscz)
     }
 
-    @Test func prepareShareWrapsMSCXAsMSCZ() async throws {
+    @Test func prepareShareMSCZOriginalWrapsMSCXAsMSCZ() async throws {
         let tmp = try TempDirectory()
         let scores = tmp.url.appending(path: "Scores")
         let shareTmp = tmp.url.appending(path: "Share")
@@ -99,11 +105,66 @@ import Testing
         )
         let item = Self.makeItem(localFileName: local)
 
-        let url = try await svc.prepareShare(item: item, format: .sourceFormat)
+        let url = try await svc.prepareShare(item: item, format: .msczOriginal)
         #expect(url.pathExtension == "mscz")
         // Round-trip: produced bytes load via SheetMusic's .mscz parser.
         let bytes = try Data(contentsOf: url)
         _ = try SheetMusic.loadScore(msczData: bytes)
+    }
+
+    @Test func prepareShareMSCZMuseScore4ExportsLoadableMSCZ() async throws {
+        let tmp = try TempDirectory()
+        let scores = tmp.url.appending(path: "Scores")
+        let shareTmp = tmp.url.appending(path: "Share")
+        try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
+
+        // The MSCZ export path runs for items whose source the gateway can
+        // parse to a Score; drive it with the available `.mscz` fixture
+        // (UI only surfaces this format for non-MSCX/MSCZ items, but the
+        // Score → MSCZ pipeline is identical regardless of source format).
+        let mscz = try Fixtures.minimalMSCZData()
+        let local = "abc.mscz"
+        try mscz.write(to: scores.appending(path: local))
+
+        let svc = LiveScoreShareService(
+            scoresDirectory: scores,
+            shareTempDirectory: shareTmp,
+            gateway: LiveScoreFileGateway()
+        )
+        let item = Self.makeItem(localFileName: local)
+
+        let url = try await svc.prepareShare(item: item, format: .msczMuseScore4)
+        #expect(url.pathExtension == "mscz")
+        let bytes = try Data(contentsOf: url)
+        _ = try SheetMusic.loadScore(msczData: bytes)
+        // V4 re-encodes — output must NOT match the original bytes verbatim.
+        #expect(bytes != mscz)
+    }
+
+    @Test func prepareShareMSCZMuseScore3ExportsLoadableMSCZ() async throws {
+        let tmp = try TempDirectory()
+        let scores = tmp.url.appending(path: "Scores")
+        let shareTmp = tmp.url.appending(path: "Share")
+        try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
+
+        let mscz = try Fixtures.minimalMSCZData()
+        let local = "abc.mscz"
+        try mscz.write(to: scores.appending(path: local))
+
+        let svc = LiveScoreShareService(
+            scoresDirectory: scores,
+            shareTempDirectory: shareTmp,
+            gateway: LiveScoreFileGateway()
+        )
+        let item = Self.makeItem(localFileName: local)
+
+        let url = try await svc.prepareShare(item: item, format: .msczMuseScore3)
+        #expect(url.pathExtension == "mscz")
+        let bytes = try Data(contentsOf: url)
+        _ = try SheetMusic.loadScore(msczData: bytes)
+        #expect(bytes != mscz)
     }
 
     @Test func prepareSharePDFStartsWithPDFMagic() async throws {
