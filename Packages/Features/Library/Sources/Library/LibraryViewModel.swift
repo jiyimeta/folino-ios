@@ -15,10 +15,10 @@ public final class LibraryViewModel {
 
     public struct ShareTarget: Identifiable, Equatable, Sendable {
         public let id: UUID
-        public let url: URL
-        public init(url: URL) {
+        public let urls: [URL]
+        public init(urls: [URL]) {
             id = UUID()
-            self.url = url
+            self.urls = urls
         }
     }
 
@@ -136,10 +136,28 @@ public final class LibraryViewModel {
         defer { isPreparingShare = false }
         do {
             let url = try await shareService.prepareShare(item: item, format: format)
-            shareTarget = ShareTarget(url: url)
+            shareTarget = ShareTarget(urls: [url])
         } catch {
             errorAlertMessage = describe(error)
         }
+    }
+
+    public func requestBulkShare(_ items: [ScoreItem], format: ScoreShareFormat) async {
+        guard !items.isEmpty else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+        var urls: [URL] = []
+        urls.reserveCapacity(items.count)
+        for item in items {
+            do {
+                let url = try await shareService.prepareShare(item: item, format: format)
+                urls.append(url)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+        shareTarget = ShareTarget(urls: urls)
     }
 
     public func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {

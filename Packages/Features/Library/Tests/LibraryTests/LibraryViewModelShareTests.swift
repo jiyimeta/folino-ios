@@ -32,7 +32,7 @@ struct LibraryViewModelShareTests {
         let (vm, share) = Self.makeVM()
         share.prepareShareReturnURL = URL(fileURLWithPath: "/tmp/share/T.mscz")
         await vm.requestShare(Self.makeItem(), format: .sourceFormat)
-        #expect(vm.shareTarget?.url.path == "/tmp/share/T.mscz")
+        #expect(vm.shareTarget?.urls == [URL(fileURLWithPath: "/tmp/share/T.mscz")])
         #expect(vm.errorAlertMessage == nil)
         #expect(share.prepareShareCalls.count == 1)
         #expect(share.prepareShareCalls.first?.format == .sourceFormat)
@@ -55,6 +55,34 @@ struct LibraryViewModelShareTests {
         await vm.requestShare(Self.makeItem(), format: .midi)
         #expect(observed.value == [true])
         #expect(vm.isPreparingShare == false)
+    }
+
+    @Test func requestBulkShareCollectsURLsForEachItem() async {
+        let (vm, share) = Self.makeVM()
+        share.prepareShareReturnURL = URL(fileURLWithPath: "/tmp/share/T.pdf")
+        let items = [Self.makeItem(), Self.makeItem(), Self.makeItem()]
+
+        await vm.requestBulkShare(items, format: .pdf)
+
+        #expect(share.prepareShareCalls.count == 3)
+        #expect(share.prepareShareCalls.allSatisfy { $0.format == .pdf })
+        #expect(vm.shareTarget?.urls.count == 3)
+        #expect(vm.errorAlertMessage == nil)
+    }
+
+    @Test func requestBulkShareEmptyIsNoOp() async {
+        let (vm, share) = Self.makeVM()
+        await vm.requestBulkShare([], format: .pdf)
+        #expect(share.prepareShareCalls.isEmpty)
+        #expect(vm.shareTarget == nil)
+    }
+
+    @Test func requestBulkShareAbortsOnError() async {
+        let (vm, share) = Self.makeVM()
+        share.prepareShareError = .scoreParseFailed(reason: "boom")
+        await vm.requestBulkShare([Self.makeItem(), Self.makeItem()], format: .pdf)
+        #expect(vm.shareTarget == nil)
+        #expect(vm.errorAlertMessage != nil)
     }
 }
 

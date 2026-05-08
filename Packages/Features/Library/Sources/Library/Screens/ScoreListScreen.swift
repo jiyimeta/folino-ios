@@ -165,11 +165,8 @@ struct ScoreListScreen: View {
     }
 
     private func performBulkShare(_ format: ScoreShareFormat) {
-        // TODO: proper bulk share with multi-URL ShareLink. For now, share the
-        // first selected item — the system share sheet only handles one URL at
-        // a time without a Domain-side change.
-        guard let first = selectedItems.first else { return }
-        Task { await library.requestShare(first, format: format) }
+        let items = selectedItems
+        Task { await library.requestBulkShare(items, format: format) }
     }
 
     private var bulkDeleteAlertBinding: Binding<Bool> {
