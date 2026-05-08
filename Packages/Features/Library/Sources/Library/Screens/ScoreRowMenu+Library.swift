@@ -15,7 +15,9 @@ func scoreRowMenu(
 ) -> some View {
     scoreRowMenu(
         item: item,
-        availableFormats: library.shareService.availableFormats(for: item),
+        loadShareFormats: { [shareService = library.shareService] in
+            await shareService.availableFormats(for: item)
+        },
         onOpen: onOpen,
         onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
         onEditTags: onEditTags,

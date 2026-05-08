@@ -2,7 +2,12 @@ import Domain
 import Foundation
 
 final class FakeScoreShareService: ScoreShareService, @unchecked Sendable {
-    var availableFormatsByDefault: [ScoreShareFormat] = [.msczOriginal, .pdf, .midi]
+    var availableFormatsByDefault: [ScoreShareFormatOption] = [
+        ScoreShareFormatOption(format: .museScoreV4, isOriginal: true),
+        ScoreShareFormatOption(format: .museScoreV3),
+        ScoreShareFormatOption(format: .pdf),
+        ScoreShareFormatOption(format: .midi),
+    ]
 
     var prepareShareError: DomainError?
     var prepareShareReturnURL: URL = .init(fileURLWithPath: "/tmp/share-fake")
@@ -13,7 +18,7 @@ final class FakeScoreShareService: ScoreShareService, @unchecked Sendable {
     /// in flight.
     var inFlightHook: (@Sendable () async -> Void)?
 
-    func availableFormats(for _: ScoreItem) -> [ScoreShareFormat] {
+    func availableFormats(for _: ScoreItem) -> [ScoreShareFormatOption] {
         availableFormatsByDefault
     }
 

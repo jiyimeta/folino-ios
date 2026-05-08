@@ -107,11 +107,9 @@ struct PlaylistDetailScreen: View {
     }
 
     private var bulkAvailableShareFormats: [ScoreShareFormat] {
-        let perItem = selectedItems.map { Set(library.shareService.availableFormats(for: $0)) }
-        guard let first = perItem.first else { return [] }
-        let intersection = perItem.dropFirst().reduce(first) { $0.intersection($1) }
-        return [.msczOriginal, .msczMuseScore4, .msczMuseScore3, .pdf, .midi]
-            .filter { intersection.contains($0) }
+        // See `ScoreListScreen.bulkAvailableShareFormats` for the
+        // per-item-vs-bulk reasoning.
+        selectedItems.isEmpty ? [] : [.museScoreV4, .museScoreV3, .pdf, .midi]
     }
 
     private func performBulkShare(_ format: ScoreShareFormat) {
