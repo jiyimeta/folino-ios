@@ -24,7 +24,7 @@ struct BulkActionBar: View {
                 Menu {
                     actionMenuContent
                 } label: {
-                    Image(systemName: "ellipsis")
+                    Image(systemName: "square.and.arrow.up")
                         .frame(width: 48, height: 48)
                 }
                 .tint(.primary)
@@ -49,7 +49,13 @@ struct BulkActionBar: View {
         @ViewBuilder
         private var actionMenuContent: some View {
             if !availableShareFormats.isEmpty {
-                bulkShareSubmenu(formats: availableShareFormats, onShare: onShare)
+                ForEach(availableShareFormats, id: \.self) { format in
+                    Button {
+                        onShare(format)
+                    } label: {
+                        bulkShareFormatLabel(format)
+                    }
+                }
                 Divider()
             }
             Button(action: onAddToPlaylist) {
@@ -82,29 +88,6 @@ struct BulkActionBar: View {
             .disabled(selectionCount == 0)
         }
     #endif
-}
-
-@MainActor
-@ViewBuilder
-private func bulkShareSubmenu(
-    formats: [ScoreShareFormat],
-    onShare: @escaping (ScoreShareFormat) -> Void
-) -> some View {
-    Menu {
-        ForEach(formats, id: \.self) { format in
-            Button {
-                onShare(format)
-            } label: {
-                bulkShareFormatLabel(format)
-            }
-        }
-    } label: {
-        Label {
-            Text("Share…", bundle: .module)
-        } icon: {
-            Image(systemName: "square.and.arrow.up")
-        }
-    }
 }
 
 @MainActor
