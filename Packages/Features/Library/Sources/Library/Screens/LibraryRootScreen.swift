@@ -142,7 +142,6 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @ViewBuilder
     private var rootList: some View {
         let items = viewModel.repository.scoreItems
-        let favorites = items.favorites(limit: 5)
         let recents = items.mostRecentlyOpened(limit: 5)
 
         if items.isEmpty && viewModel.repository.tags.isEmpty && viewModel.repository.playlists.isEmpty {
@@ -157,41 +156,24 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             }
         } else {
             List {
-                favoritesSection(favorites)
                 browseSection(items: items)
+                // Tasks 6 + 7 will insert playlistsSection / tagsSection here.
                 recentsSection(recents)
             }
         }
     }
 
     @ViewBuilder
-    private func favoritesSection(_ favorites: [ScoreItem]) -> some View {
-        if !favorites.isEmpty {
-            Section {
-                ForEach(favorites) { item in
-                    sectionRow(for: item)
-                }
-            } header: {
-                Text("Favorites", bundle: .module)
-            }
-        }
-    }
-
-    @ViewBuilder
     private func browseSection(items: [ScoreItem]) -> some View {
+        let favoriteCount = items.filter(\.isFavorite).count
         Section {
             NavigationLink(value: LibraryRoute.allScores) {
                 browseRow(title: "All Scores", systemImage: "music.note", count: items.count)
             }
-            NavigationLink(value: LibraryRoute.tags) {
-                browseRow(title: "Tags", systemImage: "tag", count: viewModel.repository.tags.count)
-            }
-            NavigationLink(value: LibraryRoute.playlists) {
-                browseRow(
-                    title: "Playlists",
-                    systemImage: "music.note.list",
-                    count: viewModel.repository.playlists.count
-                )
+            if favoriteCount > 0 {
+                NavigationLink(value: LibraryRoute.favorites) {
+                    browseRow(title: "Favorites", systemImage: "heart.fill", count: favoriteCount)
+                }
             }
         } header: {
             Text("Browse", bundle: .module)
@@ -265,6 +247,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         switch route {
         case .allScores:
             AllScoresScreen(
+                library: viewModel,
+                onOpen: onOpenScore,
+                onEditTags: { editTagsTarget = $0 },
+                onAddToPlaylist: { addToPlaylistTarget = $0 }
+            )
+        case .favorites:
+            FavoritesScreen(
                 library: viewModel,
                 onOpen: onOpenScore,
                 onEditTags: { editTagsTarget = $0 },
