@@ -15,8 +15,6 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var editTagsTarget: ScoreItem?
     @State private var addToPlaylistTarget: ScoreItem?
 
-    @AppStorage("library.section.playlists.expanded") private var playlistsExpanded: Bool = true
-
     public init(
         viewModel: LibraryViewModel,
         path: Binding<NavigationPath>,
@@ -159,49 +157,17 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         } else {
             List {
                 browseSection(items: items)
-                playlistsSection(
+                LibraryRootPlaylistsSection(
                     allPlaylists: viewModel.repository.playlists,
                     scoreItems: items
                 )
-                // Task 7 will insert tagsSection here.
+                LibraryRootTagsSection(
+                    allTags: viewModel.repository.tags,
+                    scoreItems: items
+                )
                 recentsSection(recents)
             }
             .listStyle(.sidebar)
-        }
-    }
-
-    @ViewBuilder
-    private func playlistsSection(allPlaylists: [Playlist], scoreItems: [ScoreItem]) -> some View {
-        if !allPlaylists.isEmpty {
-            let total = allPlaylists.count
-            let topN = playlistsByRecentlyUsed(allPlaylists, scoreItems: scoreItems, limit: 5)
-            Section(isExpanded: $playlistsExpanded) {
-                ForEach(topN) { playlist in
-                    NavigationLink(value: LibraryRoute.playlistDetail(playlist.id)) {
-                        HStack {
-                            Image(systemName: "music.note.list").foregroundStyle(.tint)
-                            Text(playlist.name).foregroundStyle(.primary)
-                            Spacer()
-                            Text(playlist.orderedScoreItemIDs.count, format: .number)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                if total > 5 {
-                    NavigationLink(value: LibraryRoute.playlists) {
-                        HStack {
-                            Text("See All", bundle: .module).foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                    }
-                }
-            } header: {
-                HStack {
-                    Text("Playlists", bundle: .module)
-                    Spacer()
-                    Text(total, format: .number).foregroundStyle(.secondary)
-                }
-            }
         }
     }
 
