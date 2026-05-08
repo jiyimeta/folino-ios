@@ -3,7 +3,7 @@ import SheetMusicCore
 import SwiftUI
 
 @MainActor
-public struct ReaderView: View {
+public struct ReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
     private let onBack: (() -> Void)?
@@ -57,7 +57,7 @@ public struct ReaderView: View {
         .readerToolbar(viewModel: viewModel)
         .inspector(isPresented: $viewModel.isInspectorPresented) {
             if case let .loaded(score) = viewModel.loadState {
-                InspectorView(viewModel: viewModel, score: score)
+                InspectorScreen(viewModel: viewModel, score: score)
                     .presentationDetents([.medium, .large])
             } else {
                 Color.clear
@@ -142,9 +142,9 @@ public struct ReaderView: View {
 
 #if DEBUG
     /// Documents the shape of a real Score fixture. Not used by the previews
-    /// below — building a `ReaderView` preview requires wiring a fake gateway
+    /// below — building a `ReaderRootScreen` preview requires wiring a fake gateway
     /// that returns a real `Score`, which is too brittle for a preview. See
-    /// `InspectorView` for a productive Score-shaped preview.
+    /// `InspectorScreen` for a productive Score-shaped preview.
     @MainActor
     private func previewScore() -> Score {
         Score(
@@ -159,10 +159,10 @@ public struct ReaderView: View {
     }
 
     #Preview("Loaded · vertical · iPhone") {
-        // A real assembled-ReaderView preview would need a fake gateway
+        // A real assembled-ReaderRootScreen preview would need a fake gateway
         // returning a non-empty Score plus persistence wiring. Snapshot the
         // chrome-only intent here; productive Score shape lives in
-        // `InspectorView`'s preview.
+        // `InspectorScreen`'s preview.
         Text("Run via xcode preview to see the assembled view")
     }
 #endif

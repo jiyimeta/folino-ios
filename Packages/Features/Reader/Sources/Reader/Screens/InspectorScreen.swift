@@ -3,7 +3,7 @@ import SheetMusicAudio
 import SheetMusicCore
 import SwiftUI
 
-struct InspectorView: View {
+struct InspectorScreen: View {
     @Bindable var viewModel: ReaderViewModel
     let score: Score
 
@@ -384,7 +384,7 @@ private enum InspectorTab: Hashable {
         Text("Contents")
             .task { await vm.load() }
             .sheet(isPresented: .constant(true)) {
-                InspectorView(viewModel: vm, score: score)
+                InspectorScreen(viewModel: vm, score: score)
                     .presentationDetents([.medium, .large])
             }
     }

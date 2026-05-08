@@ -108,7 +108,7 @@ private struct ReadyShell: View {
                     path: $compactPath,
                     onOpenScore: { compactPath.append($0) },
                     readerDestination: { item in
-                        ReaderView(
+                        ReaderRootScreen(
                             scoreItem: item,
                             repository: repository,
                             gateway: gateway,
@@ -165,7 +165,7 @@ private struct ReadyShell: View {
     @ViewBuilder
     private var detail: some View {
         if let item = detailScoreItem {
-            ReaderView(
+            ReaderRootScreen(
                 scoreItem: item,
                 repository: repository,
                 gateway: gateway,
@@ -192,7 +192,7 @@ private struct ReadyShell: View {
                 columnVisibility = .detailOnly
             },
             readerDestination: { item in
-                ReaderView(
+                ReaderRootScreen(
                     scoreItem: item,
                     repository: repository,
                     gateway: gateway,

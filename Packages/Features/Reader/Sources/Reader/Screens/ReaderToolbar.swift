@@ -1,11 +1,11 @@
 import SwiftUI
 
 extension View {
-    /// Platform-aware toolbar wiring for `ReaderView`. iOS hides the
+    /// Platform-aware toolbar wiring for `ReaderRootScreen`. iOS hides the
     /// navigation bar entirely (the buttons are rendered as a floating
     /// `ReaderTopOverlay`); macOS keeps the conventional toolbar items.
     /// Lives in a `View` extension so the call site stays a flat
-    /// modifier chain — embedding `#if` directly in `ReaderView`'s body
+    /// modifier chain — embedding `#if` directly in `ReaderRootScreen`'s body
     /// triggers SwiftFormat ↔ SwiftLint indent oscillation.
     @ViewBuilder
     func readerToolbar(viewModel: ReaderViewModel) -> some View {
@@ -19,7 +19,7 @@ extension View {
 
 #if os(iOS)
     /// Top overlay hosting Back / Play / Inspector buttons on iOS. Rendered
-    /// inside `ReaderView`'s `ZStack` so the score stays visible behind the
+    /// inside `ReaderRootScreen`'s `ZStack` so the score stays visible behind the
     /// buttons — maximising the rendered staff area, which is core to the
     /// app's value proposition.
     ///
@@ -34,7 +34,7 @@ extension View {
 
         /// Vertical space the overlay occupies inside the safe area
         /// (button 40 + top padding 4 + a little breathing room). Used by
-        /// `ReaderView` to extend the score's safe area so the first
+        /// `ReaderRootScreen` to extend the score's safe area so the first
         /// staff is never hidden under the floating buttons.
         static let height: CGFloat = 52
 
