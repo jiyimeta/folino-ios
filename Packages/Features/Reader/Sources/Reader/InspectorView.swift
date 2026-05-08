@@ -7,7 +7,9 @@ struct InspectorView: View {
     @Bindable var viewModel: ReaderViewModel
     let score: Score
 
-    @AppStorage("readerMetronomeEnabled") private var isMetronomeEnabled: Bool = false
+    @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled: Bool = false
+    @AppStorage(ReaderGlobalSettingsKey.layoutMode)
+    private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
     /// Slider's local edit value. Syncs from `viewModel.effectiveTempoMultiplier`
     /// when the user is not dragging — keeps the UI consistent after a reset
     /// from outside the slider (e.g. the % label tap).
@@ -55,9 +57,6 @@ struct InspectorView: View {
             if !isEditingTempo {
                 sliderValue = viewModel.effectiveTempoMultiplier
             }
-        }
-        .task {
-            await viewModel.setMetronomeEnabled(isMetronomeEnabled)
         }
     }
 
@@ -114,9 +113,11 @@ struct InspectorView: View {
         HStack {
             Text("Layout direction", bundle: .module)
             Spacer()
-            Picker(selection: $viewModel.layoutMode) {
-                Image(systemName: "arrow.up.and.down").tag(ReaderViewModel.LayoutMode.vertical)
-                Image(systemName: "arrow.left.and.right").tag(ReaderViewModel.LayoutMode.horizontal)
+            Picker(selection: $layoutModeRaw) {
+                Image(systemName: "arrow.up.and.down")
+                    .tag(ReaderLayoutMode.vertical.rawValue)
+                Image(systemName: "arrow.left.and.right")
+                    .tag(ReaderLayoutMode.horizontal.rawValue)
             } label: {
                 Text("Layout direction", bundle: .module)
             }
@@ -176,7 +177,6 @@ struct InspectorView: View {
         HStack(spacing: 8) {
             Button {
                 isMetronomeEnabled.toggle()
-                Task { await viewModel.setMetronomeEnabled(isMetronomeEnabled) }
             } label: {
                 Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
                     .resizable()

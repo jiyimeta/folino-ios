@@ -44,7 +44,6 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public var viewportZoom: CGFloat = 1.0
     public var lastNonUnitZoom: CGFloat = 1.0
     public var isInspectorPresented: Bool = false
-    public var layoutMode: LayoutMode = .vertical
 
     /// Convenience for tests and previews — true while the "loading
     /// playback sounds…" copy is showing.
