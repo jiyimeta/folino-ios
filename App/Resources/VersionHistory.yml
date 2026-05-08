@@ -1,1 +1,8 @@
-[]
+- version: 1.1.0
+  descriptions:
+    - en: Added support for importing MIDI files
+      ja: MIDIファイルの取り込みに対応
+    - en: Improved score recognition accuracy
+      ja: 楽譜読み込み精度の向上
+    - en: Overall UI/UX refinements
+      ja: 全体的なUI/UXの改善

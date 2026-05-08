@@ -1,2 +1,3 @@
-Introducing folino.
-This first release includes core features for score viewing, MIDI playback, A-B repeat, a metronome, tempo control, and practice.
+- Added support for importing MIDI files
+- Improved score recognition accuracy
+- Overall UI/UX refinements
