@@ -53,6 +53,7 @@
       "Bash(awk:*)",
       "Bash(sed:*)",
       "Bash(jq:*)",
+      "Bash(python3:*)",
       "Bash(file:*)",
       "Bash(stat:*)",
       "Bash(du:*)",
