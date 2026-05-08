@@ -3,6 +3,7 @@
 # commands/agents/skills/ (team-shared) should be committed.
 .claude/settings.local.json
 .claude/*.local.*
+.claude/worktrees/
 
 # Superpowers brainstorming session artefacts (mockups, viewer state)
 .superpowers/
