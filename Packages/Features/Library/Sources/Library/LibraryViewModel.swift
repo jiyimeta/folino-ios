@@ -79,6 +79,21 @@ public final class LibraryViewModel {
         }
     }
 
+    public func bulkRemoveFromPlaylist(
+        _ ids: Set<ScoreItemID>,
+        from playlist: Playlist
+    ) async {
+        guard !ids.isEmpty else { return }
+        var updated = playlist
+        updated.orderedScoreItemIDs.removeAll { ids.contains($0) }
+        guard updated.orderedScoreItemIDs != playlist.orderedScoreItemIDs else { return }
+        do {
+            try await repository.savePlaylist(updated)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
     public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
         isPreparingShare = true
         defer { isPreparingShare = false }

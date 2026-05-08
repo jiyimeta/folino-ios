@@ -66,4 +66,37 @@ struct LibraryViewModelBulkTests {
         #expect(f.repo.deletedScoreItemIDs.isEmpty) // FakeRepo throws before recording
         #expect(f.vm.errorAlertMessage != nil)
     }
+
+    // MARK: - bulkRemoveFromPlaylist
+
+    @Test func bulkRemoveFromPlaylistFiltersAndPreservesOrder() async {
+        let a = Self.makeItem(title: "A")
+        let b = Self.makeItem(title: "B")
+        let c = Self.makeItem(title: "C")
+        let f = Self.makeVM(scoreItems: [a, b, c])
+        let playlist = Playlist(
+            name: "P",
+            orderedScoreItemIDs: [a.id, b.id, c.id],
+            createdAt: Self.base
+        )
+        f.repo.playlists = [playlist]
+
+        await f.vm.bulkRemoveFromPlaylist([a.id, c.id], from: playlist)
+
+        #expect(f.repo.savedPlaylists.last?.orderedScoreItemIDs == [b.id])
+        #expect(f.repo.scoreItems.count == 3) // scores stay
+    }
+
+    @Test func bulkRemoveFromPlaylistEmptyIsNoOp() async {
+        let a = Self.makeItem(title: "A")
+        let f = Self.makeVM(scoreItems: [a])
+        let playlist = Playlist(
+            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base
+        )
+        f.repo.playlists = [playlist]
+
+        await f.vm.bulkRemoveFromPlaylist([], from: playlist)
+
+        #expect(f.repo.savedPlaylists.isEmpty)
+    }
 }
