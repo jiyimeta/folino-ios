@@ -9,6 +9,10 @@ struct PlaylistDetailView: View {
     let onRemoveFromPlaylist: (IndexSet) -> Void
     let onRename: (String) -> Void
     let onDelete: () -> Void
+    @Binding var selectedIDs: Set<ScoreItemID>
+    let onBulkAddToPlaylist: () -> Void
+    let onBulkEditTags: () -> Void
+    let onBulkDelete: () -> Void
 
     #if os(iOS)
         @State private var editMode: EditMode = .inactive
@@ -30,16 +34,29 @@ struct PlaylistDetailView: View {
                     Text("Add scores from the context menu of any score row.", bundle: .module)
                 }
             } else {
-                List {
+                List(selection: $selectedIDs) {
                     ForEach(items) { item in
                         ScoreRow(scoreItem: item)
                             .contentShape(Rectangle())
                             .onTapGesture { onOpen(item) }
+                            .tag(item.id)
                     }
                     .onMove(perform: onMove)
                     .onDelete(perform: onRemoveFromPlaylist)
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            #if os(iOS)
+                if editMode.isEditing {
+                    BulkActionBar(
+                        selectionCount: selectedIDs.count,
+                        onAddToPlaylist: onBulkAddToPlaylist,
+                        onEditTags: onBulkEditTags,
+                        onDelete: onBulkDelete
+                    )
+                }
+            #endif
         }
         .navigationTitle(playlistName)
         #if os(iOS)
@@ -129,31 +146,38 @@ struct PlaylistDetailView: View {
         }
     }
 
-    #Preview("Filled") {
-        NavigationStack {
-            PlaylistDetailView(
-                playlistName: "Daily warm-up",
-                items: PlaylistDetailViewPreview.items,
-                onOpen: { _ in },
-                onMove: { _, _ in },
-                onRemoveFromPlaylist: { _ in },
-                onRename: { _ in },
-                onDelete: {}
-            )
+    private struct PlaylistDetailViewPreviewHost: View {
+        let playlistName: String
+        let items: [ScoreItem]
+        @State private var selectedIDs: Set<ScoreItemID> = []
+
+        var body: some View {
+            NavigationStack {
+                PlaylistDetailView(
+                    playlistName: playlistName,
+                    items: items,
+                    onOpen: { _ in },
+                    onMove: { _, _ in },
+                    onRemoveFromPlaylist: { _ in },
+                    onRename: { _ in },
+                    onDelete: {},
+                    selectedIDs: $selectedIDs,
+                    onBulkAddToPlaylist: {},
+                    onBulkEditTags: {},
+                    onBulkDelete: {}
+                )
+            }
         }
     }
 
+    #Preview("Filled") {
+        PlaylistDetailViewPreviewHost(
+            playlistName: "Daily warm-up",
+            items: PlaylistDetailViewPreview.items
+        )
+    }
+
     #Preview("Empty") {
-        NavigationStack {
-            PlaylistDetailView(
-                playlistName: "Empty Set",
-                items: [],
-                onOpen: { _ in },
-                onMove: { _, _ in },
-                onRemoveFromPlaylist: { _ in },
-                onRename: { _ in },
-                onDelete: {}
-            )
-        }
+        PlaylistDetailViewPreviewHost(playlistName: "Empty Set", items: [])
     }
 #endif
