@@ -257,7 +257,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             }
             if favoriteCount > 0 {
                 NavigationLink(value: LibraryRoute.favorites) {
-                    browseRow(title: "library.favorites", systemImage: "heart.fill", count: favoriteCount)
+                    browseRow(title: "library.favorites", systemImage: "star.fill", count: favoriteCount)
                 }
             }
         }
