@@ -15,6 +15,26 @@ extension View {
             toolbar { ReaderToolbar(viewModel: viewModel) }
         #endif
     }
+
+    /// macOS uses the system `.inspector` column. iOS routes the same toggle
+    /// through a popover anchored to the toolbar's slider button instead — that
+    /// avoids the iPad reflow the system inspector causes by squeezing the
+    /// detail column. Wrapped in an extension for the same SwiftFormat reason.
+    @ViewBuilder
+    func readerInspector(viewModel: ReaderViewModel) -> some View {
+        #if os(macOS)
+            @Bindable var bindable = viewModel
+            inspector(isPresented: $bindable.isInspectorPresented) {
+                if case let .loaded(score) = viewModel.loadState {
+                    InspectorScreen(viewModel: viewModel, score: score)
+                } else {
+                    Color.clear
+                }
+            }
+        #else
+            self
+        #endif
+    }
 }
 
 #if os(iOS)
@@ -67,11 +87,29 @@ extension View {
                     ) {
                         viewModel.isInspectorPresented.toggle()
                     }
+                    .popover(isPresented: $viewModel.isInspectorPresented) {
+                        inspectorPopoverContent
+                    }
                 }
                 .glassEffect(.regular.interactive())
             }
             .padding(.horizontal)
             .padding(.top, 4)
+        }
+
+        /// Inspector content rendered as a popover on iPad (anchored to the
+        /// slider button) and adapted to a sheet on iPhone — keeps the score's
+        /// width fixed so opening the inspector doesn't trigger a reflow.
+        @ViewBuilder
+        private var inspectorPopoverContent: some View {
+            if case let .loaded(score) = viewModel.loadState {
+                InspectorScreen(viewModel: viewModel, score: score)
+                    .frame(idealWidth: 380, idealHeight: 600)
+                    .presentationDetents([.medium, .large])
+                    .presentationCompactAdaptation(.sheet)
+            } else {
+                Color.clear
+            }
         }
 
         @ViewBuilder

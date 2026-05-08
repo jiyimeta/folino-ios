@@ -59,14 +59,7 @@ public struct ReaderRootScreen: View {
         }
         .navigationTitle("")
         .readerToolbar(viewModel: viewModel)
-        .inspector(isPresented: $viewModel.isInspectorPresented) {
-            if case let .loaded(score) = viewModel.loadState {
-                InspectorScreen(viewModel: viewModel, score: score)
-                    .presentationDetents([.medium, .large])
-            } else {
-                Color.clear
-            }
-        }
+        .readerInspector(viewModel: viewModel)
         .alert(
             soundfontAlertTitle(for: viewModel.soundfontAlertKind),
             isPresented: Binding(
