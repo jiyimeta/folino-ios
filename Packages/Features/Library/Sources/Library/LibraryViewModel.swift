@@ -68,6 +68,17 @@ public final class LibraryViewModel {
         }
     }
 
+    public func bulkDelete(_ ids: Set<ScoreItemID>) async {
+        for id in ids {
+            do {
+                try await repository.deleteScoreItem(id: id)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+    }
+
     public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
         isPreparingShare = true
         defer { isPreparingShare = false }
