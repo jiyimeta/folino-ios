@@ -12,7 +12,7 @@
 			<key>CFBundleTypeName</key>
 			<string>MuseScore Score (mscx)</string>
 			<key>LSHandlerRank</key>
-			<string>Default</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>org.musescore.mscx</string>
@@ -22,7 +22,7 @@
 			<key>CFBundleTypeName</key>
 			<string>MuseScore Score (mscz)</string>
 			<key>LSHandlerRank</key>
-			<string>Default</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>org.musescore.mscz</string>
@@ -32,7 +32,7 @@
 			<key>CFBundleTypeName</key>
 			<string>MusicXML</string>
 			<key>LSHandlerRank</key>
-			<string>Default</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.recordare.musicxml</string>
@@ -42,7 +42,7 @@
 			<key>CFBundleTypeName</key>
 			<string>Compressed MusicXML</string>
 			<key>LSHandlerRank</key>
-			<string>Default</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.recordare.musicxml.zipped</string>
@@ -52,7 +52,7 @@
 			<key>CFBundleTypeName</key>
 			<string>Standard MIDI File</string>
 			<key>LSHandlerRank</key>
-			<string>Alternate</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>public.midi-audio</string>
@@ -77,17 +77,17 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<true/>
-	</dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
