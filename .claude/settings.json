@@ -45,6 +45,7 @@
       "Bash(gh repo view:*)",
       "Bash(gh api:*)",
       "Bash(ls:*)",
+      "Bash(mkdir:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(rg:*)",
