@@ -31,8 +31,7 @@ struct ScoreListView<RowMenu: View>: View {
     var body: some View {
         list
             .searchable(text: $searchText)
-            .toolbar { sortToolbarItem }
-            .toolbar { editToolbarItem }
+            .toolbar { trailingToolbarItems }
         #if os(iOS)
             .environment(\.editMode, $editMode)
         #endif
@@ -91,8 +90,10 @@ struct ScoreListView<RowMenu: View>: View {
     }
 
     @ToolbarContentBuilder
-    private var editToolbarItem: some ToolbarContent {
+    private var trailingToolbarItems: some ToolbarContent {
         #if os(iOS)
+            ToolbarItem(placement: .topBarTrailing) { sortMenu }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     withAnimation {
@@ -108,7 +109,7 @@ struct ScoreListView<RowMenu: View>: View {
                 }
             }
         #else
-            ToolbarItem(placement: .automatic) { EmptyView() }
+            ToolbarItem(placement: .automatic) { sortMenu }
         #endif
     }
 
@@ -179,15 +180,6 @@ struct ScoreListView<RowMenu: View>: View {
             get: { pendingDelete != nil },
             set: { isPresented in if !isPresented { pendingDelete = nil } }
         )
-    }
-
-    @ToolbarContentBuilder
-    private var sortToolbarItem: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { sortMenu }
-        #else
-            ToolbarItem(placement: .automatic) { sortMenu }
-        #endif
     }
 
     private var sortMenu: some View {
