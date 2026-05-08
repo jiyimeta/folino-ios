@@ -15,6 +15,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var editTagsTarget: ScoreItem?
     @State private var addToPlaylistTarget: ScoreItem?
 
+    @AppStorage("library.section.playlists.expanded") private var playlistsExpanded: Bool = true
+
     public init(
         viewModel: LibraryViewModel,
         path: Binding<NavigationPath>,
@@ -157,8 +159,48 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         } else {
             List {
                 browseSection(items: items)
-                // Tasks 6 + 7 will insert playlistsSection / tagsSection here.
+                playlistsSection(
+                    allPlaylists: viewModel.repository.playlists,
+                    scoreItems: items
+                )
+                // Task 7 will insert tagsSection here.
                 recentsSection(recents)
+            }
+            .listStyle(.sidebar)
+        }
+    }
+
+    @ViewBuilder
+    private func playlistsSection(allPlaylists: [Playlist], scoreItems: [ScoreItem]) -> some View {
+        if !allPlaylists.isEmpty {
+            let total = allPlaylists.count
+            let topN = playlistsByRecentlyUsed(allPlaylists, scoreItems: scoreItems, limit: 5)
+            Section(isExpanded: $playlistsExpanded) {
+                ForEach(topN) { playlist in
+                    NavigationLink(value: LibraryRoute.playlistDetail(playlist.id)) {
+                        HStack {
+                            Image(systemName: "music.note.list").foregroundStyle(.tint)
+                            Text(playlist.name).foregroundStyle(.primary)
+                            Spacer()
+                            Text(playlist.orderedScoreItemIDs.count, format: .number)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if total > 5 {
+                    NavigationLink(value: LibraryRoute.playlists) {
+                        HStack {
+                            Text("See All", bundle: .module).foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Playlists", bundle: .module)
+                    Spacer()
+                    Text(total, format: .number).foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -328,40 +370,5 @@ enum ScoreFileTypes {
         types.append(.zip)
         // Plain `.mscx` is XML; explicit `.xml` already covers it.
         return types
-    }
-}
-
-private struct AllScoresScreen: View {
-    let library: LibraryViewModel
-    let onOpen: (ScoreItem) -> Void
-    let onEditTags: (ScoreItem) -> Void
-    let onAddToPlaylist: (ScoreItem) -> Void
-
-    @State private var listVM: ScoreListViewModel
-
-    init(
-        library: LibraryViewModel,
-        onOpen: @escaping (ScoreItem) -> Void,
-        onEditTags: @escaping (ScoreItem) -> Void,
-        onAddToPlaylist: @escaping (ScoreItem) -> Void
-    ) {
-        self.library = library
-        self.onOpen = onOpen
-        self.onEditTags = onEditTags
-        self.onAddToPlaylist = onAddToPlaylist
-        _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .all, repository: library.repository)
-        )
-    }
-
-    var body: some View {
-        ScoreListScreen(
-            viewModel: listVM,
-            library: library,
-            onOpen: onOpen,
-            onEditTags: onEditTags,
-            onAddToPlaylist: onAddToPlaylist
-        )
-        .navigationTitle(Text("All Scores", bundle: .module))
     }
 }
