@@ -7,9 +7,6 @@ struct TagsListView: View {
     let memberCount: (Tag) -> Int
     let onCreate: (String) -> Void
 
-    @State private var isCreating = false
-    @State private var newTagName: String = ""
-
     var body: some View {
         Group {
             if tags.isEmpty {
@@ -41,39 +38,7 @@ struct TagsListView: View {
             }
         }
         .navigationTitle(Text("library.tags", bundle: .module))
-        .toolbar { newTagToolbar }
-        .alert(Text("library.tag.create.title", bundle: .module), isPresented: $isCreating) {
-            TextField(text: $newTagName) { Text("library.tag.namePlaceholder", bundle: .module) }
-            Button {
-                let trimmed = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                onCreate(trimmed)
-                newTagName = ""
-            } label: {
-                L10n.Common.add
-            }
-            Button(role: .cancel) {} label: { L10n.Common.cancel }
-        } message: {
-            Text("library.tag.create.message", bundle: .module)
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var newTagToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) { newTagButton }
-        #else
-            ToolbarItem(placement: .automatic) { newTagButton }
-        #endif
-    }
-
-    private var newTagButton: some View {
-        Button {
-            newTagName = ""
-            isCreating = true
-        } label: {
-            Image(systemName: "plus").accessibilityLabel(Text("library.tag.create.title", bundle: .module))
-        }
+        .createEntityToolbar(copy: .tag, onCreate: onCreate)
     }
 }
 

@@ -20,9 +20,6 @@ struct PlaylistDetailView: View {
     #if os(iOS)
         @State private var editMode: EditMode = .inactive
     #endif
-    @State private var isRenaming = false
-    @State private var renameText: String = ""
-    @State private var isConfirmingDelete = false
 
     var body: some View {
         Group {
@@ -82,63 +79,35 @@ struct PlaylistDetailView: View {
         .navigationTitle(playlistName)
         #if os(iOS)
             .environment(\.editMode, $editMode)
-        #endif
-            .toolbar { editToolbar }
-            .alert(Text("library.playlist.rename.title", bundle: .module), isPresented: $isRenaming) {
-                TextField(text: $renameText) { Text("library.playlist.namePlaceholder", bundle: .module) }
-                Button {
-                    let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty, trimmed != playlistName else { return }
-                    onRename(trimmed)
-                } label: { L10n.Common.save }
-                Button(role: .cancel) {} label: { L10n.Common.cancel }
-            }
-            .alert(
-                Text(String(
-                    localized: "library.score.delete.title",
-                    defaultValue: "Delete \"\(playlistName)\"?",
-                    bundle: .module
-                )),
-                isPresented: $isConfirmingDelete
-            ) {
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    L10n.Common.delete
-                }
-                Button(role: .cancel) {} label: { L10n.Common.cancel }
-            } message: {
-                Text("library.playlist.delete.message", bundle: .module)
-            }
-    }
-
-    @ToolbarContentBuilder
-    private var editToolbar: some ToolbarContent {
-        #if os(iOS)
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation {
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        withAnimation {
+                            if editMode.isEditing {
+                                editMode = .inactive
+                                selectedIDs = []
+                            } else {
+                                editMode = .active
+                            }
+                        }
+                    } label: {
                         if editMode.isEditing {
-                            editMode = .inactive
-                            selectedIDs = []
+                            L10n.Common.cancel
+                                .transition(.identity)
                         } else {
-                            editMode = .active
+                            L10n.Common.select
+                                .transition(.identity)
                         }
                     }
-                } label: {
-                    if editMode.isEditing {
-                        L10n.Common.cancel
-                            .transition(.identity)
-                    } else {
-                        L10n.Common.select
-                            .transition(.identity)
-                    }
                 }
             }
-            ToolbarItem(placement: .topBarLeading) { manageMenu }
-        #else
-            ToolbarItem(placement: .automatic) { manageMenu }
         #endif
+            .manageEntityToolbar(
+                    entityName: playlistName,
+                    copy: .playlist,
+                    onRename: onRename,
+                    onDelete: onDelete
+                )
     }
 
     private var isEditing: Bool {
@@ -154,33 +123,6 @@ struct PlaylistDetailView: View {
             selectedIDs.remove(id)
         } else {
             selectedIDs.insert(id)
-        }
-    }
-
-    private var manageMenu: some View {
-        Menu {
-            Button {
-                renameText = playlistName
-                isRenaming = true
-            } label: {
-                Label {
-                    L10n.Common.rename
-                } icon: {
-                    Image(systemName: "pencil")
-                }
-            }
-            Button(role: .destructive) {
-                isConfirmingDelete = true
-            } label: {
-                Label {
-                    Text("library.playlist.delete.action", bundle: .module)
-                } icon: {
-                    Image(systemName: "trash")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .accessibilityLabel(Text("library.playlist.edit.title", bundle: .module))
         }
     }
 }
