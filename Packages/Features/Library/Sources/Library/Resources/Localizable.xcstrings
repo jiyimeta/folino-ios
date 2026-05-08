@@ -54,6 +54,12 @@
             "state" : "new",
             "value" : "%1$lld/%2$lld"
           }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld"
+          }
         }
       }
     },
@@ -138,7 +144,20 @@
       }
     },
     "Add to Playlist" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to Playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストに追加"
+          }
+        }
+      }
     },
     "Add to Playlist…" : {
       "localizations" : {

@@ -111,8 +111,13 @@ struct PlaylistDetailView: View {
                         }
                     }
                 } label: {
-                    Text(editMode.isEditing ? "Cancel" : "Select", bundle: .module)
-                        .contentTransition(.identity)
+                    if editMode.isEditing {
+                        Text("Cancel", bundle: .module)
+                            .transition(.identity)
+                    } else {
+                        Text("Select", bundle: .module)
+                            .transition(.identity)
+                    }
                 }
             }
             ToolbarItem(placement: .topBarLeading) { manageMenu }
