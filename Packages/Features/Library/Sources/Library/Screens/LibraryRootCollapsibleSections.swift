@@ -1,9 +1,11 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct LibraryRootPlaylistsSection: View {
     let allPlaylists: [Playlist]
     let scoreItems: [ScoreItem]
+    let onRequestDelete: (Playlist) -> Void
 
     @AppStorage("library.section.playlists.expanded") private var expanded: Bool = true
 
@@ -24,6 +26,17 @@ struct LibraryRootPlaylistsSection: View {
                                 Spacer()
                                 Text(playlist.orderedScoreItemIDs.count, format: .number)
                                     .foregroundStyle(.secondary)
+                            }
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                onRequestDelete(playlist)
+                            } label: {
+                                Label {
+                                    L10n.Common.delete
+                                } icon: {
+                                    Image(systemName: "trash")
+                                }
                             }
                         }
                     }
@@ -50,6 +63,7 @@ struct LibraryRootPlaylistsSection: View {
 struct LibraryRootTagsSection: View {
     let allTags: [Tag]
     let scoreItems: [ScoreItem]
+    let onRequestDelete: (Tag) -> Void
 
     @AppStorage("library.section.tags.expanded") private var expanded: Bool = true
 
@@ -70,6 +84,17 @@ struct LibraryRootTagsSection: View {
                                 Spacer()
                                 Text(memberCount(of: tag), format: .number)
                                     .foregroundStyle(.secondary)
+                            }
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                onRequestDelete(tag)
+                            } label: {
+                                Label {
+                                    L10n.Common.delete
+                                } icon: {
+                                    Image(systemName: "trash")
+                                }
                             }
                         }
                     }
@@ -129,14 +154,16 @@ private struct CollapsibleSectionHeader: View {
                 Playlist(name: "Practice", orderedScoreItemIDs: [], createdAt: .now),
                 Playlist(name: "Recital", orderedScoreItemIDs: [], createdAt: .now),
             ],
-            scoreItems: []
+            scoreItems: [],
+            onRequestDelete: { _ in }
         )
         LibraryRootTagsSection(
             allTags: [
                 Tag(name: "Bach", colorHex: "#FF0000"),
                 Tag(name: "Chopin", colorHex: "#00FF00"),
             ],
-            scoreItems: []
+            scoreItems: [],
+            onRequestDelete: { _ in }
         )
     }
     .listStyle(.sidebar)

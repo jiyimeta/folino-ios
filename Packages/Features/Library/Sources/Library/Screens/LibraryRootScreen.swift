@@ -20,6 +20,10 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var isCreatingTag: Bool = false
     @State private var newTagName: String = ""
 
+    @State private var pendingDeletePlaylist: Playlist?
+    @State private var pendingDeleteTag: Tag?
+    @State private var pendingDeleteScore: ScoreItem?
+
     public init(
         viewModel: LibraryViewModel,
         path: Binding<NavigationPath>,
@@ -56,7 +60,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     }
                 }
                 .navigationDestination(for: LibraryRoute.self) { route in
-                    destination(for: route)
+                    libraryRootDestination(
+                        for: route,
+                        viewModel: viewModel,
+                        onOpenScore: onOpenScore,
+                        onEditTags: { editTagsTarget = $0 },
+                        onAddToPlaylist: { addToPlaylistTarget = $0 }
+                    )
                 }
                 .navigationDestination(for: ScoreItem.self) { item in
                     readerDestination(item)
@@ -101,6 +111,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         } message: {
             Text("library.tag.create.message", bundle: .module)
         }
+        .libraryRootDeleteAlerts(
+            viewModel: viewModel,
+            pendingDeletePlaylist: $pendingDeletePlaylist,
+            pendingDeleteTag: $pendingDeleteTag,
+            pendingDeleteScore: $pendingDeleteScore
+        )
         .alert(
             Text("library.import.duplicate.title", bundle: .module),
             isPresented: duplicateAlertBinding,
@@ -218,11 +234,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 browseSection(items: items)
                 LibraryRootPlaylistsSection(
                     allPlaylists: viewModel.repository.playlists,
-                    scoreItems: items
+                    scoreItems: items,
+                    onRequestDelete: { pendingDeletePlaylist = $0 }
                 )
                 LibraryRootTagsSection(
                     allTags: viewModel.repository.tags,
-                    scoreItems: items
+                    scoreItems: items,
+                    onRequestDelete: { pendingDeleteTag = $0 }
                 )
                 recentsSection(recents)
             }
@@ -283,6 +301,32 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.Common.more)
         }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                Task { await viewModel.toggleFavorite(item) }
+            } label: {
+                Label {
+                    let key: LocalizedStringKey = item.isFavorite
+                        ? "library.score.unfavorite.action"
+                        : "library.score.favorite.action"
+                    Text(key, bundle: .module)
+                } icon: {
+                    Image(systemName: item.isFavorite ? "star.slash.fill" : "star.fill")
+                }
+            }
+            .tint(.yellow)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                pendingDeleteScore = item
+            } label: {
+                Label {
+                    L10n.Common.delete
+                } icon: {
+                    Image(systemName: "trash")
+                }
+            }
+        }
         .contextMenu {
             scoreRowMenu(
                 item: item,
@@ -306,66 +350,6 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             Spacer()
             Text(count, format: .number)
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private func destination(for route: LibraryRoute) -> some View {
-        switch route {
-        case .allScores:
-            AllScoresScreen(
-                library: viewModel,
-                onOpen: onOpenScore,
-                onEditTags: { editTagsTarget = $0 },
-                onAddToPlaylist: { addToPlaylistTarget = $0 }
-            )
-        case .favorites:
-            FavoritesScreen(
-                library: viewModel,
-                onOpen: onOpenScore,
-                onEditTags: { editTagsTarget = $0 },
-                onAddToPlaylist: { addToPlaylistTarget = $0 }
-            )
-        case .tags:
-            TagsListScreen(library: viewModel)
-        case let .tagDetail(tagID):
-            if let tag = viewModel.repository.tags.first(where: { $0.id == tagID }) {
-                TagDetailScreen(
-                    tag: tag,
-                    library: viewModel,
-                    onOpen: onOpenScore,
-                    onEditTags: { editTagsTarget = $0 },
-                    onAddToPlaylist: { addToPlaylistTarget = $0 },
-                    onTagDeleted: { /* NavigationStack pops automatically when destination renders 'Tag not found' */ }
-                )
-            } else {
-                ContentUnavailableView {
-                    Label {
-                        Text("library.tag.notFound", bundle: .module)
-                    } icon: {
-                        Image(systemName: "tag.slash")
-                    }
-                }
-            }
-        case .playlists:
-            PlaylistsListScreen(library: viewModel)
-        case let .playlistDetail(playlistID):
-            if let playlist = viewModel.repository.playlists.first(where: { $0.id == playlistID }) {
-                PlaylistDetailScreen(
-                    playlist: playlist,
-                    library: viewModel,
-                    onOpen: onOpenScore,
-                    onPlaylistDeleted: { /* same comment as tag */ }
-                )
-            } else {
-                ContentUnavailableView {
-                    Label {
-                        Text("library.playlist.notFound", bundle: .module)
-                    } icon: {
-                        Image(systemName: "music.note.list")
-                    }
-                }
-            }
         }
     }
 
