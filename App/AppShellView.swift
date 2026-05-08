@@ -161,9 +161,11 @@ private struct ReadyShell: View {
                   item.id == newID else { return }
             libraryVM.pendingScoreToOpen = nil
             if horizontalSizeClass == .regular {
+                sidebarPath = NavigationPath()
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             } else {
+                compactPath = NavigationPath()
                 compactPath.append(item)
             }
         }
