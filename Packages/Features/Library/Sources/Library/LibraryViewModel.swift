@@ -94,6 +94,23 @@ public final class LibraryViewModel {
         }
     }
 
+    public func bulkAddToPlaylist(
+        _ orderedIDs: [ScoreItemID],
+        to playlist: Playlist
+    ) async {
+        guard !orderedIDs.isEmpty else { return }
+        let existing = Set(playlist.orderedScoreItemIDs)
+        let toAppend = orderedIDs.filter { !existing.contains($0) }
+        guard !toAppend.isEmpty else { return }
+        var updated = playlist
+        updated.orderedScoreItemIDs.append(contentsOf: toAppend)
+        do {
+            try await repository.savePlaylist(updated)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
     public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
         isPreparingShare = true
         defer { isPreparingShare = false }

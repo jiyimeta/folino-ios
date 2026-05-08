@@ -99,4 +99,45 @@ struct LibraryViewModelBulkTests {
 
         #expect(f.repo.savedPlaylists.isEmpty)
     }
+
+    // MARK: - bulkAddToPlaylist
+
+    @Test func bulkAddToPlaylistAppendsMissingPreservesOrder() async {
+        let a = Self.makeItem(title: "A")
+        let b = Self.makeItem(title: "B")
+        let c = Self.makeItem(title: "C")
+        let f = Self.makeVM(scoreItems: [a, b, c])
+        let playlist = Playlist(
+            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base
+        )
+        f.repo.playlists = [playlist]
+
+        await f.vm.bulkAddToPlaylist([b.id, a.id, c.id], to: playlist)
+
+        // a already present; b and c appended in caller order, a not duplicated.
+        #expect(f.repo.savedPlaylists.last?.orderedScoreItemIDs == [a.id, b.id, c.id])
+    }
+
+    @Test func bulkAddToPlaylistAllPresentIsNoOp() async {
+        let a = Self.makeItem(title: "A")
+        let f = Self.makeVM(scoreItems: [a])
+        let playlist = Playlist(
+            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base
+        )
+        f.repo.playlists = [playlist]
+
+        await f.vm.bulkAddToPlaylist([a.id], to: playlist)
+
+        #expect(f.repo.savedPlaylists.isEmpty)
+    }
+
+    @Test func bulkAddToPlaylistEmptyIsNoOp() async {
+        let f = Self.makeVM()
+        let playlist = Playlist(name: "P", orderedScoreItemIDs: [], createdAt: Self.base)
+        f.repo.playlists = [playlist]
+
+        await f.vm.bulkAddToPlaylist([], to: playlist)
+
+        #expect(f.repo.savedPlaylists.isEmpty)
+    }
 }
