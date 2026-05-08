@@ -5,6 +5,9 @@ import UtilityUI
 struct PlaylistsListView: View {
     let playlists: [Playlist]
     let onCreate: (String) -> Void
+    let onDelete: (Playlist) -> Void
+
+    @State private var pendingDelete: Playlist?
 
     var body: some View {
         Group {
@@ -32,12 +35,50 @@ struct PlaylistsListView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                pendingDelete = playlist
+                            } label: {
+                                Label {
+                                    L10n.Common.delete
+                                } icon: {
+                                    Image(systemName: "trash")
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
         .navigationTitle(Text("library.playlists", bundle: .module))
         .createEntityToolbar(copy: .playlist, onCreate: onCreate)
+        .alert(
+            Text(String(
+                localized: "library.score.delete.title",
+                defaultValue: "Delete \"\(pendingDelete?.name ?? "")\"?",
+                bundle: .module
+            )),
+            isPresented: deleteAlertBinding,
+            presenting: pendingDelete
+        ) { playlist in
+            Button(role: .destructive) {
+                onDelete(playlist)
+            } label: {
+                L10n.Common.delete
+            }
+            Button(role: .cancel) {} label: {
+                L10n.Common.cancel
+            }
+        } message: { _ in
+            Text("library.playlist.delete.message", bundle: .module)
+        }
+    }
+
+    private var deleteAlertBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDelete != nil },
+            set: { isPresented in if !isPresented { pendingDelete = nil } }
+        )
     }
 }
 
@@ -46,7 +87,11 @@ struct PlaylistsListView: View {
         let playlists: [Playlist]
         var body: some View {
             NavigationStack {
-                PlaylistsListView(playlists: playlists, onCreate: { _ in })
+                PlaylistsListView(
+                    playlists: playlists,
+                    onCreate: { _ in },
+                    onDelete: { _ in }
+                )
             }
         }
     }

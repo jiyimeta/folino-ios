@@ -103,6 +103,44 @@ struct LibraryViewModelTests {
         await f.vm.createTag(name: "")
         #expect(f.repo.savedTags.isEmpty)
     }
+
+    @Test func deletePlaylistCallsRepository() async {
+        let f = Self.makeVM()
+        let playlist = Playlist(name: "P", orderedScoreItemIDs: [], createdAt: Self.base)
+        f.repo.playlists = [playlist]
+        await f.vm.deletePlaylist(playlist)
+        #expect(f.repo.deletedPlaylistIDs == [playlist.id])
+        #expect(f.repo.playlists.isEmpty)
+        #expect(f.vm.errorAlertMessage == nil)
+    }
+
+    @Test func deletePlaylistSurfacesPersistenceErrorOnAlert() async {
+        let f = Self.makeVM()
+        let playlist = Playlist(name: "P", orderedScoreItemIDs: [], createdAt: Self.base)
+        f.repo.playlists = [playlist]
+        f.repo.deletePlaylistError = .persistenceFailed(reason: "io error")
+        await f.vm.deletePlaylist(playlist)
+        #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
+    }
+
+    @Test func deleteTagCallsRepository() async {
+        let f = Self.makeVM()
+        let tag = Tag(name: "T", colorHex: "#5856D6")
+        f.repo.tags = [tag]
+        await f.vm.deleteTag(tag)
+        #expect(f.repo.deletedTagIDs == [tag.id])
+        #expect(f.repo.tags.isEmpty)
+        #expect(f.vm.errorAlertMessage == nil)
+    }
+
+    @Test func deleteTagSurfacesPersistenceErrorOnAlert() async {
+        let f = Self.makeVM()
+        let tag = Tag(name: "T", colorHex: "#5856D6")
+        f.repo.tags = [tag]
+        f.repo.deleteTagError = .persistenceFailed(reason: "io error")
+        await f.vm.deleteTag(tag)
+        #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
+    }
 }
 
 extension LibraryViewModelTests {

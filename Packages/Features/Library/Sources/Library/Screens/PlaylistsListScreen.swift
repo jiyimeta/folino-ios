@@ -9,6 +9,9 @@ struct PlaylistsListScreen: View {
             playlists: sortedPlaylists,
             onCreate: { name in
                 Task { await library.createPlaylist(name: name) }
+            },
+            onDelete: { playlist in
+                Task { await library.deletePlaylist(playlist) }
             }
         )
     }
