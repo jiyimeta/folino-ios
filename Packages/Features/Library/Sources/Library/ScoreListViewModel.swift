@@ -8,6 +8,7 @@ import Observation
 public final class ScoreListViewModel {
     public enum Source: Hashable, Sendable {
         case all
+        case favorites
         case taggedWith(TagID)
         case playlist(orderedIDs: [ScoreItemID])
     }
@@ -30,7 +31,7 @@ public final class ScoreListViewModel {
         self.source = source
         self.repository = repository
         switch source {
-        case .all, .taggedWith:
+        case .all, .favorites, .taggedWith:
             sort = .dateAddedDesc
             manualOrder = false
         case .playlist:
@@ -64,6 +65,8 @@ public final class ScoreListViewModel {
         switch source {
         case .all:
             return items
+        case .favorites:
+            return items.filter(\.isFavorite)
         case let .taggedWith(tagID):
             return items.filter { $0.tagIDs.contains(tagID) }
         case let .playlist(orderedIDs):

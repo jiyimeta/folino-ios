@@ -107,4 +107,16 @@ struct ScoreListViewModelTests {
         vm.searchQuery = ""
         #expect(vm.displayedItems.count == 2)
     }
+
+    @Test func sourceFavoritesFiltersByIsFavoriteFlag() {
+        var fav = Self.makeItem(title: "Fav")
+        fav.isFavorite = true
+        let plain = Self.makeItem(title: "Plain")
+        var fav2 = Self.makeItem(title: "Fav2")
+        fav2.isFavorite = true
+        let repo = Self.makeRepo(items: [plain, fav, fav2])
+        let vm = ScoreListViewModel(source: .favorites, repository: repo)
+        vm.sort = .titleAsc
+        #expect(vm.displayedItems.map(\.title) == ["Fav", "Fav2"])
+    }
 }
