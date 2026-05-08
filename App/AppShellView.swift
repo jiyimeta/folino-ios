@@ -200,6 +200,10 @@ private struct ReadyShell: View {
                 onBack: { columnVisibility = .doubleColumn },
                 hidesBackButton: columnVisibility == .doubleColumn
             )
+            // Force a fresh view identity per score so ReaderRootScreen's
+            // @State (viewModel seeded from scoreItem in init) is rebuilt
+            // when the user opens a different score from the iPad sidebar.
+            .id(item.id)
         } else {
             emptyDetail
         }
