@@ -348,42 +348,44 @@ private enum InspectorTab: Hashable {
     case visual
 }
 
-#Preview {
-    let score = Score(
-        division: 480,
-        parts: [
-            Part(
-                id: "P0",
-                trackName: "Violin",
-                instrument: Instrument(
-                    id: "violin",
-                    channels: [InstrumentChannel(program: 40)] // GM 40 = Violin
+#if DEBUG
+    #Preview {
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0",
+                    trackName: "Violin",
+                    instrument: Instrument(
+                        id: "violin",
+                        channels: [InstrumentChannel(program: 40)] // GM 40 = Violin
+                    ),
+                    staves: [Staff()]
                 ),
-                staves: [Staff()]
-            ),
-            Part(
-                id: "P1",
-                trackName: "Piano",
-                instrument: Instrument(
-                    id: "piano",
-                    channels: [InstrumentChannel(program: 0)] // GM 0 = Acoustic Grand Piano
+                Part(
+                    id: "P1",
+                    trackName: "Piano",
+                    instrument: Instrument(
+                        id: "piano",
+                        channels: [InstrumentChannel(program: 0)] // GM 0 = Acoustic Grand Piano
+                    ),
+                    staves: [Staff(), Staff()]
                 ),
-                staves: [Staff(), Staff()]
-            ),
-        ],
-        metaTags: [:]
-    )
-    let repo = PreviewFakeRepository()
-    let vm = ReaderViewModel(
-        scoreItem: PreviewFakeRepository.sampleItem,
-        repository: repo,
-        gateway: PreviewFakeGateway(score: score),
-        scoresDirectory: URL(filePath: "/tmp")
-    )
-    Text("Contents")
-        .task { await vm.load() }
-        .sheet(isPresented: .constant(true)) {
-            InspectorView(viewModel: vm, score: score)
-                .presentationDetents([.medium, .large])
-        }
-}
+            ],
+            metaTags: [:]
+        )
+        let repo = PreviewFakeRepository()
+        let vm = ReaderViewModel(
+            scoreItem: PreviewFakeRepository.sampleItem,
+            repository: repo,
+            gateway: PreviewFakeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp")
+        )
+        Text("Contents")
+            .task { await vm.load() }
+            .sheet(isPresented: .constant(true)) {
+                InspectorView(viewModel: vm, score: score)
+                    .presentationDetents([.medium, .large])
+            }
+    }
+#endif
