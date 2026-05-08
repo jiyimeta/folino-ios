@@ -591,7 +591,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最近開いた"
+            "value" : "最近開いた楽譜"
           }
         }
       }
@@ -833,22 +833,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "並び替え"
-          }
-        }
-      }
-    },
-    "library.tab.browse" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Browse"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "閲覧"
           }
         }
       }

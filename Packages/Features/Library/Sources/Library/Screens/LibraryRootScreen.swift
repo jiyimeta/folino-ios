@@ -235,15 +235,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         let favoriteCount = items.filter(\.isFavorite).count
         Section {
             NavigationLink(value: LibraryRoute.allScores) {
-                browseRow(title: "library.allScores", systemImage: "music.note", count: items.count)
+                browseRow(title: "library.allScores", systemImage: "list.bullet", count: items.count)
             }
             if favoriteCount > 0 {
                 NavigationLink(value: LibraryRoute.favorites) {
                     browseRow(title: "library.favorites", systemImage: "heart.fill", count: favoriteCount)
                 }
             }
-        } header: {
-            Text("library.tab.browse", bundle: .module)
         }
     }
 
@@ -303,6 +301,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 Text(title, bundle: .module)
             } icon: {
                 Image(systemName: systemImage)
+                    .foregroundStyle(.tint)
             }
             Spacer()
             Text(count, format: .number)

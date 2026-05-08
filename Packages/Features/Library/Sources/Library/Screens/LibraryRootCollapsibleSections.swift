@@ -16,8 +16,11 @@ struct LibraryRootPlaylistsSection: View {
                     ForEach(topN) { playlist in
                         NavigationLink(value: LibraryRoute.playlistDetail(playlist.id)) {
                             HStack {
-                                Image(systemName: "music.note.list").foregroundStyle(.tint)
-                                Text(playlist.name).foregroundStyle(.primary)
+                                Label {
+                                    Text(playlist.name)
+                                } icon: {
+                                    Image(systemName: "music.note.list").foregroundStyle(.tint)
+                                }
                                 Spacer()
                                 Text(playlist.orderedScoreItemIDs.count, format: .number)
                                     .foregroundStyle(.secondary)
@@ -59,8 +62,11 @@ struct LibraryRootTagsSection: View {
                     ForEach(topN) { tag in
                         NavigationLink(value: LibraryRoute.tagDetail(tag.id)) {
                             HStack {
-                                Image(systemName: "tag.fill").foregroundStyle(.tint)
-                                Text(tag.name).foregroundStyle(.primary)
+                                Label {
+                                    Text(tag.name).foregroundStyle(.primary)
+                                } icon: {
+                                    Image(systemName: "tag").foregroundStyle(.tint)
+                                }
                                 Spacer()
                                 Text(memberCount(of: tag), format: .number)
                                     .foregroundStyle(.secondary)
