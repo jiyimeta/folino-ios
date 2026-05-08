@@ -81,26 +81,25 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 }
             }
 
-            Picker(selection: $layoutModeRaw) {
-                Label {
-                    Text("settings.reader.layout.vertical", bundle: .module)
-                } icon: {
-                    Image(systemName: "arrow.up.and.down")
-                }
-                .tag(ReaderLayoutMode.vertical.rawValue)
-
-                Label {
-                    Text("settings.reader.layout.horizontal", bundle: .module)
-                } icon: {
-                    Image(systemName: "arrow.left.and.right")
-                }
-                .tag(ReaderLayoutMode.horizontal.rawValue)
-            } label: {
+            HStack {
                 Label {
                     Text("settings.reader.layout.title", bundle: .module)
                 } icon: {
                     Image(systemName: "rectangle.split.1x2")
                 }
+                Spacer()
+                Picker(selection: $layoutModeRaw) {
+                    Image(systemName: "arrow.up.and.down")
+                        .tag(ReaderLayoutMode.vertical.rawValue)
+                    Image(systemName: "arrow.left.and.right")
+                        .tag(ReaderLayoutMode.horizontal.rawValue)
+                } label: {
+                    Text("settings.reader.layout.title", bundle: .module)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 92)
+                .fixedSize()
             }
         } header: {
             Text("settings.reader.title", bundle: .module)
