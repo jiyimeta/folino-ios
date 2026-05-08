@@ -100,3 +100,27 @@ These plugins run automatically on every `xcodebuild` / Xcode build — no manua
 - **No GPL dependencies.** Hard constraint.
 - Bumping a SwiftPM dependency means updating both the relevant `Package.swift` AND the `from:` entry under `packages:` in `project.yml` to the same version.
 - Localization for `Info.plist` strings goes in `App/Resources/InfoPlist.xcstrings`.
+
+## Autonomous-task ground rules
+
+When the user hands off a long-running task and steps away, default to **proceed without asking** for routine work, and **stop to confirm** only at the boundaries below. The y/n prompts the user actually sees should all be ones where the answer might genuinely be "no".
+
+**Proceed without confirmation:**
+- Reading, editing, writing files inside this repo.
+- Running builds, tests, previews (`xcodebuild`, `swift test`, `xcrun simctl`, `mcp__xcode__*`).
+- Routine git: `add`, `commit`, `checkout`, `switch`, `stash`, `restore`, `fetch`, `pull --ff-only`, status / diff / log / show / blame.
+- SwiftLint / SwiftFormat / pre-commit fix-and-restage cycles.
+- Bumping a SwiftPM dependency version when the task explicitly asks for it (still update both `Package.swift` and `project.yml`).
+
+**Stop and confirm — these are not auto-approved by `.claude/settings.json` and never should be:**
+- Spec / product behavior changes — anything that alters what `docs/product/` describes, user-visible copy, or feature scope.
+- Module-architecture changes — new packages, new layer boundaries, anything in `docs/engineering/module-architecture.md`.
+- Public API changes to a Domain protocol that ripples across multiple Features.
+- Adding, removing, or replacing a SwiftPM dependency (vs. version bump of an existing one).
+- Destructive git: `push`, `push --force`, `reset --hard`, `clean -f*`, `branch -D`, `worktree remove`, history rewrites.
+- Destructive shell: `rm -rf` of the repo root, `$HOME`, or any worktree.
+- GitHub side effects: `gh pr merge`, `gh pr close`, `gh pr edit`, `gh release create/delete`, `gh repo delete/archive`.
+- Editing `.claude/settings.json`, `.claude/settings.local.json`, `~/.claude/settings.json`, or this "Autonomous-task ground rules" section — anything that would relax my own auto-approval rules.
+- Touching paths outside this repo (`../OtherProject`, other worktrees, `~/Library/...` beyond Xcode DerivedData cleanup that's clearly necessary for the task).
+
+If something falls between these — e.g. a refactor that *might* qualify as architectural — surface the question before doing the work, not after.
