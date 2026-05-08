@@ -137,7 +137,8 @@ struct ScoreListView<RowMenu: View>: View {
                     Image(systemName: "ellipsis")
                         .font(.title3)
                         .foregroundStyle(.secondary)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 34)
+                        .frame(maxHeight: .infinity)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

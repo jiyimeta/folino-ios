@@ -229,7 +229,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 44, minHeight: 44)
+                    .frame(minWidth: 34)
+                    .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
