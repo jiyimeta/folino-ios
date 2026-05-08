@@ -1,6 +1,11 @@
 import Domain
 import SwiftUI
 
+enum BulkContext {
+    case scores
+    case playlist
+}
+
 struct ScoreListView<RowMenu: View>: View {
     let items: [ScoreItem]
     @Binding var searchText: String
@@ -13,32 +18,85 @@ struct ScoreListView<RowMenu: View>: View {
     let onConfirmDelete: (ScoreItem) -> Void
     let onSelectSort: (ScoreItemSort) -> Void
     let onSelectManualOrder: () -> Void
+    #if os(iOS)
+        @Binding var editMode: EditMode
+    #endif
+    @Binding var selectedIDs: Set<ScoreItemID>
+    let bulkContext: BulkContext
+    let onBulkAddToPlaylist: () -> Void
+    let onBulkEditTags: () -> Void
+    let onBulkDelete: () -> Void
     @ViewBuilder let rowMenu: (ScoreItem) -> RowMenu
 
     var body: some View {
-        List {
+        list
+            .searchable(text: $searchText)
+            .toolbar { sortToolbarItem }
+            .toolbar { editToolbarItem }
+        #if os(iOS)
+            .environment(\.editMode, $editMode)
+        #endif
+            .navigationTitle(navigationTitleText)
+            .safeAreaInset(edge: .bottom) {
+                if isEditing {
+                    BulkActionBar(
+                        selectionCount: selectedIDs.count,
+                        onAddToPlaylist: onBulkAddToPlaylist,
+                        onEditTags: onBulkEditTags,
+                        onDelete: onBulkDelete
+                    )
+                }
+            }
+            .alert(
+                Text("Delete \"\(pendingDelete?.title ?? "")\"?", bundle: .module),
+                isPresented: deleteAlertBinding,
+                presenting: pendingDelete
+            ) { item in
+                Button(role: .destructive) {
+                    onConfirmDelete(item)
+                } label: {
+                    Text("Delete", bundle: .module)
+                }
+                Button(role: .cancel) {} label: {
+                    Text("Cancel", bundle: .module)
+                }
+            } message: { _ in
+                Text("This will remove the score and its file from this device.", bundle: .module)
+            }
+    }
+
+    @ViewBuilder
+    private var list: some View {
+        List(selection: $selectedIDs) {
             ForEach(items) { item in
                 row(for: item)
+                    .tag(item.id)
             }
         }
-        .searchable(text: $searchText)
-        .toolbar { sortToolbarItem }
-        .alert(
-            Text("Delete \"\(pendingDelete?.title ?? "")\"?", bundle: .module),
-            isPresented: deleteAlertBinding,
-            presenting: pendingDelete
-        ) { item in
-            Button(role: .destructive) {
-                onConfirmDelete(item)
-            } label: {
-                Text("Delete", bundle: .module)
-            }
-            Button(role: .cancel) {} label: {
-                Text("Cancel", bundle: .module)
-            }
-        } message: { _ in
-            Text("This will remove the score and its file from this device.", bundle: .module)
+    }
+
+    private var isEditing: Bool {
+        #if os(iOS)
+            return editMode.isEditing
+        #else
+            return false
+        #endif
+    }
+
+    private var navigationTitleText: Text {
+        if isEditing, !selectedIDs.isEmpty {
+            return Text("\(selectedIDs.count) selected", bundle: .module)
         }
+        return Text("")
+    }
+
+    @ToolbarContentBuilder
+    private var editToolbarItem: some ToolbarContent {
+        #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) { EditButton() }
+        #else
+            ToolbarItem(placement: .automatic) { EmptyView() }
+        #endif
     }
 
     @ViewBuilder
@@ -136,7 +194,7 @@ struct ScoreListView<RowMenu: View>: View {
     }
 }
 
-#if DEBUG
+#if DEBUG && os(iOS)
     private enum ScoreListViewPreview {
         static func item(
             title: String,
@@ -174,6 +232,10 @@ struct ScoreListView<RowMenu: View>: View {
         @State private var pendingDelete: ScoreItem?
         @State private var sort: ScoreItemSort = .dateAddedDesc
         @State private var isManualOrderActive: Bool = false
+        #if os(iOS)
+            @State private var editMode: EditMode = .inactive
+        #endif
+        @State private var selectedIDs: Set<ScoreItemID> = []
 
         let items: [ScoreItem]
         let showsManualOrderOption: Bool
@@ -191,7 +253,13 @@ struct ScoreListView<RowMenu: View>: View {
                     onToggleFavorite: { _ in },
                     onConfirmDelete: { _ in },
                     onSelectSort: { sort = $0; isManualOrderActive = false },
-                    onSelectManualOrder: { isManualOrderActive = true }
+                    onSelectManualOrder: { isManualOrderActive = true },
+                    editMode: $editMode,
+                    selectedIDs: $selectedIDs,
+                    bulkContext: .scores,
+                    onBulkAddToPlaylist: {},
+                    onBulkEditTags: {},
+                    onBulkDelete: {}
                 ) { _ in
                     Button("Open") {}
                     Button("Delete", role: .destructive) {}
