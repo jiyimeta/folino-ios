@@ -166,6 +166,28 @@ public final class LibraryViewModel {
         await save(updated)
     }
 
+    public func createPlaylist(name: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let playlist = Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date())
+        do {
+            try await repository.savePlaylist(playlist)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
+    public func createTag(name: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let tag = Tag(name: trimmed, colorHex: "#5856D6")
+        do {
+            try await repository.saveTag(tag)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
     func save(_ scoreItem: ScoreItem) async {
         do {
             try await repository.saveScoreItem(scoreItem)
