@@ -52,22 +52,11 @@ struct AddToPlaylistSheet: View {
                 }
             }
             Section {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.tint)
-                    TextField(text: $newPlaylistName) {
-                        Text("library.playlist.create.placeholder", bundle: .module)
-                    }
-                    .submitLabel(.done)
-                    .onSubmit { commitNewPlaylist() }
-                    Button {
-                        commitNewPlaylist()
-                    } label: {
-                        L10n.Common.create
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(trimmedNewPlaylistName.isEmpty)
-                }
+                InlineCreateRow(
+                    name: $newPlaylistName,
+                    placeholder: "library.playlist.create.placeholder",
+                    onCreate: onCreate
+                )
             }
         }
     }
@@ -83,17 +72,6 @@ struct AddToPlaylistSheet: View {
                 Button { dismiss() } label: { L10n.Common.done }
             }
         #endif
-    }
-
-    private var trimmedNewPlaylistName: String {
-        newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func commitNewPlaylist() {
-        let trimmed = trimmedNewPlaylistName
-        guard !trimmed.isEmpty else { return }
-        onCreate(trimmed)
-        newPlaylistName = ""
     }
 }
 

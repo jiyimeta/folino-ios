@@ -34,13 +34,11 @@ struct EditTagsSheet: View {
                     }
                 }
                 Section {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.tint)
-                        TextField(text: $newTagName) { Text("library.tag.create.placeholder", bundle: .module) }
-                            .submitLabel(.done)
-                            .onSubmit { commitNewTag() }
-                    }
+                    InlineCreateRow(
+                        name: $newTagName,
+                        placeholder: "library.tag.create.placeholder",
+                        onCreate: onCreate
+                    )
                 }
             }
             .navigationTitle(Text(String(
@@ -66,13 +64,6 @@ struct EditTagsSheet: View {
                 Button { dismiss() } label: { L10n.Common.done }
             }
         #endif
-    }
-
-    private func commitNewTag() {
-        let trimmed = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        onCreate(trimmed)
-        newTagName = ""
     }
 }
 

@@ -52,18 +52,11 @@ struct BulkEditTagsSheet: View {
     @ViewBuilder
     private var createSection: some View {
         Section {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundStyle(.tint)
-                TextField(text: $newTagName) { Text("library.tag.create.placeholder", bundle: .module) }
-                    .submitLabel(.done)
-                    .onSubmit { commitNewTag() }
-                Button { commitNewTag() } label: {
-                    L10n.Common.create
-                }
-                .buttonStyle(.borderless)
-                .disabled(trimmedNewTagName.isEmpty)
-            }
+            InlineCreateRow(
+                name: $newTagName,
+                placeholder: "library.tag.create.placeholder",
+                onCreate: onCreateTag
+            )
         }
     }
 
@@ -86,17 +79,6 @@ struct BulkEditTagsSheet: View {
                     .disabled(checked.isEmpty)
             }
         #endif
-    }
-
-    private var trimmedNewTagName: String {
-        newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func commitNewTag() {
-        let trimmed = trimmedNewTagName
-        guard !trimmed.isEmpty else { return }
-        onCreateTag(trimmed)
-        newTagName = ""
     }
 }
 
