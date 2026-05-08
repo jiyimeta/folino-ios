@@ -20,7 +20,7 @@ struct ScoreRow: View {
             if scoreItem.isFavorite {
                 Image(systemName: "star.fill")
                     .foregroundStyle(.tint)
-                    .accessibilityLabel(Text("Favorite", bundle: .module))
+                    .accessibilityLabel(Text("library.score.favorite.action", bundle: .module))
             }
         }
         .contentShape(Rectangle())

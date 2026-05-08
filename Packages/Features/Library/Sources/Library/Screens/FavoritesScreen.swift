@@ -32,6 +32,6 @@ struct FavoritesScreen: View {
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist
         )
-        .navigationTitle(Text("Favorites", bundle: .module))
+        .navigationTitle(Text("library.favorites", bundle: .module))
     }
 }

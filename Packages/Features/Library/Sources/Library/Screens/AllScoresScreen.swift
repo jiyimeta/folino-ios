@@ -32,6 +32,6 @@ struct AllScoresScreen: View {
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist
         )
-        .navigationTitle(Text("All Scores", bundle: .module))
+        .navigationTitle(Text("library.allScores", bundle: .module))
     }
 }

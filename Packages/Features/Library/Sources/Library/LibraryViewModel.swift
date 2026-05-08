@@ -231,11 +231,11 @@ public final class LibraryViewModel {
         if let domain = error as? DomainError {
             switch domain {
             case .unsupportedFormat:
-                return String(localized: "folino can't open this file type.")
+                return String(localized: "library.import.error.unsupported", bundle: .module)
             case .scoreParseFailed:
-                return String(localized: "This file looks corrupted or isn't a valid score.")
+                return String(localized: "library.import.error.invalidFile", bundle: .module)
             case .persistenceFailed:
-                return String(localized: "There was a problem saving the score. Check available storage.")
+                return String(localized: "library.import.error.saveFailed", bundle: .module)
             case .scoreFileNotFound, .scoreWriteFailed,
                  .soundfontDownloadFailed, .syncFailed, .audioEngineFailed:
                 return domain.errorDescription ?? "\(domain)"

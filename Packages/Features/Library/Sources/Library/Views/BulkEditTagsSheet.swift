@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct BulkEditTagsSheet: View {
     let selectionCount: Int
@@ -17,11 +18,15 @@ struct BulkEditTagsSheet: View {
                 tagsSection
                 createSection
             }
-            .navigationTitle(Text("Tags for \(selectionCount) scores", bundle: .module))
+            .navigationTitle(Text(String(
+                localized: "library.tags.editBulk.title",
+                defaultValue: "Tags for \(selectionCount) scores",
+                bundle: .module
+            )))
             #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline)
             #endif
-                .toolbar { toolbarItems }
+            .toolbar { toolbarItems }
         }
     }
 
@@ -50,11 +55,11 @@ struct BulkEditTagsSheet: View {
             HStack {
                 Image(systemName: "plus.circle.fill")
                     .foregroundStyle(.tint)
-                TextField(text: $newTagName) { Text("New tag", bundle: .module) }
+                TextField(text: $newTagName) { Text("library.tag.create.placeholder", bundle: .module) }
                     .submitLabel(.done)
                     .onSubmit { commitNewTag() }
                 Button { commitNewTag() } label: {
-                    Text("Create", bundle: .module)
+                    L10n.Common.create
                 }
                 .buttonStyle(.borderless)
                 .disabled(trimmedNewTagName.isEmpty)
@@ -66,18 +71,18 @@ struct BulkEditTagsSheet: View {
     private var toolbarItems: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: { Text("Cancel", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.cancel }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { onCommit(checked) } label: { Text("Done", bundle: .module) }
+                Button { onCommit(checked) } label: { L10n.Common.done }
                     .disabled(checked.isEmpty)
             }
         #else
             ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { Text("Cancel", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.cancel }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button { onCommit(checked) } label: { Text("Done", bundle: .module) }
+                Button { onCommit(checked) } label: { L10n.Common.done }
                     .disabled(checked.isEmpty)
             }
         #endif

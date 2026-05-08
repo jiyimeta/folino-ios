@@ -39,7 +39,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     public var body: some View {
         NavigationStack(path: $path) {
             rootList
-                .navigationTitle(Text("Library", bundle: .module))
+                .navigationTitle(Text("library.title", bundle: .module))
                 .toolbar { leadingToolbar }
                 .toolbar { importToolbar }
                 .fileImporter(
@@ -69,40 +69,40 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             AddToPlaylistScreen(scoreItem: item, library: viewModel)
         }
         .alert(
-            Text("Library", bundle: .module),
+            Text("library.title", bundle: .module),
             isPresented: errorAlertBinding,
             presenting: viewModel.errorAlertMessage
         ) { _ in
             Button { viewModel.errorAlertMessage = nil } label: {
-                Text("OK", bundle: .module)
+                L10n.Common.ok
             }
         } message: { msg in
             Text(msg)
         }
-        .alert(Text("New Playlist", bundle: .module), isPresented: $isCreatingPlaylist) {
-            TextField(text: $newPlaylistName) { Text("Playlist name", bundle: .module) }
+        .alert(Text("library.playlist.create.title", bundle: .module), isPresented: $isCreatingPlaylist) {
+            TextField(text: $newPlaylistName) { Text("library.playlist.namePlaceholder", bundle: .module) }
             Button {
                 let name = newPlaylistName
                 newPlaylistName = ""
                 Task { await viewModel.createPlaylist(name: name) }
-            } label: { Text("Add", bundle: .module) }
-            Button(role: .cancel) { newPlaylistName = "" } label: { Text("Cancel", bundle: .module) }
+            } label: { L10n.Common.add }
+            Button(role: .cancel) { newPlaylistName = "" } label: { L10n.Common.cancel }
         } message: {
-            Text("Enter a name for the new playlist.", bundle: .module)
+            Text("library.playlist.create.message", bundle: .module)
         }
-        .alert(Text("New Tag", bundle: .module), isPresented: $isCreatingTag) {
-            TextField(text: $newTagName) { Text("Tag name", bundle: .module) }
+        .alert(Text("library.tag.create.title", bundle: .module), isPresented: $isCreatingTag) {
+            TextField(text: $newTagName) { Text("library.tag.namePlaceholder", bundle: .module) }
             Button {
                 let name = newTagName
                 newTagName = ""
                 Task { await viewModel.createTag(name: name) }
-            } label: { Text("Add", bundle: .module) }
-            Button(role: .cancel) { newTagName = "" } label: { Text("Cancel", bundle: .module) }
+            } label: { L10n.Common.add }
+            Button(role: .cancel) { newTagName = "" } label: { L10n.Common.cancel }
         } message: {
-            Text("Enter a name for the new tag.", bundle: .module)
+            Text("library.tag.create.message", bundle: .module)
         }
         .alert(
-            Text("Already in Your Library", bundle: .module),
+            Text("library.import.duplicate.title", bundle: .module),
             isPresented: duplicateAlertBinding,
             presenting: viewModel.duplicatePrompt
         ) { prompt in
@@ -110,25 +110,29 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 viewModel.duplicatePrompt = nil
                 Task { await viewModel.commit(plan: prompt.plan, decision: .openExisting(prompt.existing.id)) }
             } label: {
-                Text("Open", bundle: .module)
+                L10n.Common.open
             }
             Button {
                 viewModel.duplicatePrompt = nil
                 Task { await viewModel.commit(plan: prompt.plan, decision: .importAsNew) }
             } label: {
-                Text("Import as Duplicate", bundle: .module)
+                Text("library.import.duplicate.importAsDuplicate", bundle: .module)
             }
             Button(role: .cancel) {
                 viewModel.duplicatePrompt = nil
             } label: {
-                Text("Cancel", bundle: .module)
+                L10n.Common.cancel
             }
         } message: { prompt in
-            Text("\"\(prompt.existing.title)\" is already imported. What do you want to do?", bundle: .module)
+            Text(String(
+                localized: "library.import.duplicate.message",
+                defaultValue: "\"\(prompt.existing.title)\" is already imported. What do you want to do?",
+                bundle: .module
+            ))
         }
         .overlay {
             if viewModel.isPreparingShare {
-                ProgressView { Text("Preparing…", bundle: .module) }
+                ProgressView { Text("library.score.preparing", bundle: .module) }
                     .padding()
                     .background(.regularMaterial, in: .rect(cornerRadius: 12))
             }
@@ -164,7 +168,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 viewModel.isFileImporterPresented = true
             } label: {
                 Label {
-                    Text("Import Score", bundle: .module)
+                    Text("library.import.title", bundle: .module)
                 } icon: {
                     Image(systemName: "square.and.arrow.down")
                 }
@@ -174,7 +178,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 isCreatingPlaylist = true
             } label: {
                 Label {
-                    Text("New Playlist", bundle: .module)
+                    Text("library.playlist.create.title", bundle: .module)
                 } icon: {
                     Image(systemName: "music.note.list")
                 }
@@ -184,13 +188,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 isCreatingTag = true
             } label: {
                 Label {
-                    Text("New Tag", bundle: .module)
+                    Text("library.tag.create.title", bundle: .module)
                 } icon: {
                     Image(systemName: "tag")
                 }
             }
         } label: {
-            Image(systemName: "plus").accessibilityLabel(Text("Add", bundle: .module))
+            Image(systemName: "plus").accessibilityLabel(L10n.Common.add)
         }
     }
 
@@ -202,12 +206,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         if items.isEmpty && viewModel.repository.tags.isEmpty && viewModel.repository.playlists.isEmpty {
             ContentUnavailableView {
                 Label {
-                    Text("No Scores Yet", bundle: .module)
+                    Text("library.allScores.empty.title", bundle: .module)
                 } icon: {
                     Image(systemName: "music.note")
                 }
             } description: {
-                Text("Import your first score to get started.", bundle: .module)
+                Text("library.allScores.empty.hint", bundle: .module)
             }
         } else {
             List {
@@ -231,15 +235,15 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         let favoriteCount = items.filter(\.isFavorite).count
         Section {
             NavigationLink(value: LibraryRoute.allScores) {
-                browseRow(title: "All Scores", systemImage: "music.note", count: items.count)
+                browseRow(title: "library.allScores", systemImage: "music.note", count: items.count)
             }
             if favoriteCount > 0 {
                 NavigationLink(value: LibraryRoute.favorites) {
-                    browseRow(title: "Favorites", systemImage: "heart.fill", count: favoriteCount)
+                    browseRow(title: "library.favorites", systemImage: "heart.fill", count: favoriteCount)
                 }
             }
         } header: {
-            Text("Browse", bundle: .module)
+            Text("library.tab.browse", bundle: .module)
         }
     }
 
@@ -251,7 +255,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     sectionRow(for: item)
                 }
             } header: {
-                Text("Recently Opened", bundle: .module)
+                Text("library.recentlyOpened", bundle: .module)
             }
         }
     }
@@ -279,7 +283,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("More", bundle: .module))
+            .accessibilityLabel(L10n.Common.more)
         }
         .contextMenu {
             scoreRowMenu(
@@ -338,7 +342,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             } else {
                 ContentUnavailableView {
                     Label {
-                        Text("Tag not found", bundle: .module)
+                        Text("library.tag.notFound", bundle: .module)
                     } icon: {
                         Image(systemName: "tag.slash")
                     }
@@ -357,7 +361,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             } else {
                 ContentUnavailableView {
                     Label {
-                        Text("Playlist not found", bundle: .module)
+                        Text("library.playlist.notFound", bundle: .module)
                     } icon: {
                         Image(systemName: "music.note.list")
                     }

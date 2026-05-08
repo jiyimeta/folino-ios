@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 /// Pure menu builder used by the trailing ellipsis menus and context-menus
 /// across the Library feature. Takes plain Domain values and closures so it
@@ -19,28 +20,28 @@ func scoreRowMenu(
 ) -> some View {
     Button { onOpen(item) } label: {
         Label {
-            Text("Open", bundle: .module)
+            L10n.Common.open
         } icon: {
             Image(systemName: "music.note")
         }
     }
     Button { onToggleFavorite(item) } label: {
         Label {
-            Text(item.isFavorite ? "Unfavorite" : "Favorite", bundle: .module)
+            Text(item.isFavorite ? "library.score.unfavorite.action" : "library.score.favorite.action", bundle: .module)
         } icon: {
             Image(systemName: item.isFavorite ? "star.slash" : "star")
         }
     }
     Button { onEditTags(item) } label: {
         Label {
-            Text("Edit Tags…", bundle: .module)
+            Text("library.tags.edit.action", bundle: .module)
         } icon: {
             Image(systemName: "tag")
         }
     }
     Button { onAddToPlaylist(item) } label: {
         Label {
-            Text("Add to Playlist…", bundle: .module)
+            Text("library.playlist.add.actionEllipsis", bundle: .module)
         } icon: {
             Image(systemName: "music.note.list")
         }
@@ -57,7 +58,7 @@ func scoreRowMenu(
         Divider()
         Button(role: .destructive) { onRequestDelete(item) } label: {
             Label {
-                Text("Delete", bundle: .module)
+                L10n.Common.delete
             } icon: {
                 Image(systemName: "trash")
             }
@@ -82,7 +83,7 @@ private func shareSubmenu(
         }
     } label: {
         Label {
-            Text("Share…", bundle: .module)
+            L10n.Common.share
         } icon: {
             Image(systemName: "square.and.arrow.up")
         }
@@ -99,17 +100,21 @@ private func shareMenuLabel(
     case .sourceFormat:
         switch resolvedSourceFormat {
         case .mscz, .mscx:
-            Label("MuseScore (.mscz)", systemImage: "doc.zipper")
+            Label { Text("library.format.musescore", bundle: .module) } icon: { Image(systemName: "doc.zipper") }
         case .musicXML:
-            Label("MusicXML (.musicxml)", systemImage: "doc.text")
+            Label { Text("library.format.musicxml", bundle: .module) } icon: { Image(systemName: "doc.text") }
         case .mxl:
-            Label("MusicXML (.mxl)", systemImage: "doc.zipper")
+            Label {
+                Text("library.format.musicxmlCompressed", bundle: .module)
+            } icon: {
+                Image(systemName: "doc.zipper")
+            }
         case .midi:
-            Label("MIDI", systemImage: "pianokeys")
+            Label { Text("library.format.midi", bundle: .module) } icon: { Image(systemName: "pianokeys") }
         }
     case .pdf:
-        Label("PDF", systemImage: "doc.richtext")
+        Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "doc.richtext") }
     case .midi:
-        Label("MIDI", systemImage: "pianokeys")
+        Label { Text("library.format.midi", bundle: .module) } icon: { Image(systemName: "pianokeys") }
     }
 }

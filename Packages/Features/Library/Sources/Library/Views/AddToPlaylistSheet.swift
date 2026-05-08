@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct AddToPlaylistSheet: View {
     let scoreTitle: String
@@ -13,42 +14,8 @@ struct AddToPlaylistSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    ForEach(allPlaylists) { playlist in
-                        Button {
-                            onToggle(playlist)
-                        } label: {
-                            HStack {
-                                Image(systemName: playlist.orderedScoreItemIDs.contains(scoreItemID)
-                                    ? "checkmark.circle.fill"
-                                    : "circle")
-                                    .foregroundStyle(.tint)
-                                Text(playlist.name)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                            }
-                        }
-                    }
-                }
-                Section {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.tint)
-                        TextField(text: $newPlaylistName) { Text("New playlist", bundle: .module) }
-                            .submitLabel(.done)
-                            .onSubmit { commitNewPlaylist() }
-                        Button {
-                            commitNewPlaylist()
-                        } label: {
-                            Text("Create", bundle: .module)
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(trimmedNewPlaylistName.isEmpty)
-                    }
-                }
-            }
-            .navigationTitle(Text("Add \"\(scoreTitle)\" to Playlist", bundle: .module))
+            content
+                .navigationTitle(Text(navigationTitleText))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -56,15 +23,64 @@ struct AddToPlaylistSheet: View {
         }
     }
 
+    private var navigationTitleText: String {
+        String(
+            localized: "library.playlist.addOne.title",
+            defaultValue: "Add \"\(scoreTitle)\" to Playlist",
+            bundle: .module
+        )
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        List {
+            Section {
+                ForEach(allPlaylists) { playlist in
+                    Button {
+                        onToggle(playlist)
+                    } label: {
+                        HStack {
+                            Image(systemName: playlist.orderedScoreItemIDs.contains(scoreItemID)
+                                ? "checkmark.circle.fill"
+                                : "circle")
+                                .foregroundStyle(.tint)
+                            Text(playlist.name)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            Section {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.tint)
+                    TextField(text: $newPlaylistName) {
+                        Text("library.playlist.create.placeholder", bundle: .module)
+                    }
+                    .submitLabel(.done)
+                    .onSubmit { commitNewPlaylist() }
+                    Button {
+                        commitNewPlaylist()
+                    } label: {
+                        L10n.Common.create
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(trimmedNewPlaylistName.isEmpty)
+                }
+            }
+        }
+    }
+
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button { dismiss() } label: { Text("Done", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.done }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button { dismiss() } label: { Text("Done", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.done }
             }
         #endif
     }

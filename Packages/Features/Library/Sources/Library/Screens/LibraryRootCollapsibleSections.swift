@@ -27,7 +27,7 @@ struct LibraryRootPlaylistsSection: View {
                     if total > 5 {
                         NavigationLink(value: LibraryRoute.playlists) {
                             HStack {
-                                Text("See All", bundle: .module).foregroundStyle(.secondary)
+                                Text("library.seeAll", bundle: .module).foregroundStyle(.secondary)
                                 Spacer()
                             }
                         }
@@ -35,7 +35,7 @@ struct LibraryRootPlaylistsSection: View {
                 }
             } header: {
                 CollapsibleSectionHeader(
-                    title: Text("Playlists", bundle: .module),
+                    title: Text("library.playlists", bundle: .module),
                     count: total,
                     expanded: $expanded
                 )
@@ -70,7 +70,7 @@ struct LibraryRootTagsSection: View {
                     if total > 5 {
                         NavigationLink(value: LibraryRoute.tags) {
                             HStack {
-                                Text("See All", bundle: .module).foregroundStyle(.secondary)
+                                Text("library.seeAll", bundle: .module).foregroundStyle(.secondary)
                                 Spacer()
                             }
                         }
@@ -78,7 +78,7 @@ struct LibraryRootTagsSection: View {
                 }
             } header: {
                 CollapsibleSectionHeader(
-                    title: Text("Tags", bundle: .module),
+                    title: Text("library.tags", bundle: .module),
                     count: total,
                     expanded: $expanded
                 )

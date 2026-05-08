@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct EditTagsSheet: View {
     let scoreTitle: String
@@ -36,17 +37,21 @@ struct EditTagsSheet: View {
                     HStack {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(.tint)
-                        TextField(text: $newTagName) { Text("New tag", bundle: .module) }
+                        TextField(text: $newTagName) { Text("library.tag.create.placeholder", bundle: .module) }
                             .submitLabel(.done)
                             .onSubmit { commitNewTag() }
                     }
                 }
             }
-            .navigationTitle(Text("Tags for \"\(scoreTitle)\"", bundle: .module))
+            .navigationTitle(Text(String(
+                localized: "library.tags.editScore.title",
+                defaultValue: "Tags for \"\(scoreTitle)\"",
+                bundle: .module
+            )))
             #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline)
             #endif
-                .toolbar { doneToolbar }
+            .toolbar { doneToolbar }
         }
     }
 
@@ -54,11 +59,11 @@ struct EditTagsSheet: View {
     private var doneToolbar: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button { dismiss() } label: { Text("Done", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.done }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button { dismiss() } label: { Text("Done", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.done }
             }
         #endif
     }

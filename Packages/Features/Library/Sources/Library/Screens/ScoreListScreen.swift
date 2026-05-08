@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct ScoreListScreen: View {
     @Bindable var viewModel: ScoreListViewModel
@@ -52,7 +53,11 @@ struct ScoreListScreen: View {
                 }
             }
             .alert(
-                Text("Delete \(bulkDeletePrompt?.count ?? 0) scores?", bundle: .module),
+                Text(String(
+                    localized: "library.score.deleteBulk.title",
+                    defaultValue: "Delete \(bulkDeletePrompt?.count ?? 0) scores?",
+                    bundle: .module
+                )),
                 isPresented: bulkDeleteAlertBinding,
                 presenting: bulkDeletePrompt
             ) { _ in
@@ -63,11 +68,11 @@ struct ScoreListScreen: View {
                         exitSelectionMode()
                     }
                 } label: {
-                    Text("Delete", bundle: .module)
+                    L10n.Common.delete
                 }
-                Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
             } message: { _ in
-                Text("This will remove the scores and their files from this device.", bundle: .module)
+                Text("library.score.deleteBulk.message", bundle: .module)
             }
     }
 

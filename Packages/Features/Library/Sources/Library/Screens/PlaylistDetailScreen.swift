@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import SwiftUI
+import UtilityUI
 
 struct PlaylistDetailScreen: View {
     let playlist: Playlist
@@ -62,7 +63,11 @@ struct PlaylistDetailScreen: View {
             }
         }
         .confirmationDialog(
-            Text("Delete \(bulkDeletePrompt?.count ?? 0) scores?", bundle: .module),
+            Text(String(
+                localized: "library.score.deleteBulk.title",
+                defaultValue: "Delete \(bulkDeletePrompt?.count ?? 0) scores?",
+                bundle: .module
+            )),
             isPresented: bulkDeleteAlertBinding,
             presenting: bulkDeletePrompt
         ) { _ in
@@ -73,7 +78,7 @@ struct PlaylistDetailScreen: View {
                     selectedIDs = []
                 }
             } label: {
-                Text("Remove from playlist", bundle: .module)
+                Text("library.playlist.removeScore.action", bundle: .module)
             }
             Button(role: .destructive) {
                 let ids = selectedIDs
@@ -82,9 +87,9 @@ struct PlaylistDetailScreen: View {
                     selectedIDs = []
                 }
             } label: {
-                Text("Delete completely", bundle: .module)
+                Text("library.playlist.deleteScoreCompletely.action", bundle: .module)
             }
-            Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+            Button(role: .cancel) {} label: { L10n.Common.cancel }
         }
     }
 

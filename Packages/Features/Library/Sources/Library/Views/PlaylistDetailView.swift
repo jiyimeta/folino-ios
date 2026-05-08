@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct PlaylistDetailView: View {
     let playlistName: String
@@ -28,12 +29,12 @@ struct PlaylistDetailView: View {
             if items.isEmpty {
                 ContentUnavailableView {
                     Label {
-                        Text("No Scores in This Playlist", bundle: .module)
+                        Text("library.playlist.empty.title", bundle: .module)
                     } icon: {
                         Image(systemName: "music.note.list")
                     }
                 } description: {
-                    Text("Add scores from the context menu of any score row.", bundle: .module)
+                    Text("library.playlist.empty.hint", bundle: .module)
                 }
             } else {
                 List(selection: $selectedIDs) {
@@ -53,7 +54,7 @@ struct PlaylistDetailView: View {
                                     onRemoveFromPlaylist(item)
                                 } label: {
                                     Label {
-                                        Text("Remove from playlist", bundle: .module)
+                                        Text("library.playlist.removeScore.action", bundle: .module)
                                     } icon: {
                                         Image(systemName: "minus.circle")
                                     }
@@ -83,27 +84,31 @@ struct PlaylistDetailView: View {
             .environment(\.editMode, $editMode)
         #endif
             .toolbar { editToolbar }
-            .alert(Text("Rename Playlist", bundle: .module), isPresented: $isRenaming) {
-                TextField(text: $renameText) { Text("Playlist name", bundle: .module) }
+            .alert(Text("library.playlist.rename.title", bundle: .module), isPresented: $isRenaming) {
+                TextField(text: $renameText) { Text("library.playlist.namePlaceholder", bundle: .module) }
                 Button {
                     let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty, trimmed != playlistName else { return }
                     onRename(trimmed)
-                } label: { Text("Save", bundle: .module) }
-                Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+                } label: { L10n.Common.save }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
             }
             .alert(
-                Text("Delete \"\(playlistName)\"?", bundle: .module),
+                Text(String(
+                    localized: "library.score.delete.title",
+                    defaultValue: "Delete \"\(playlistName)\"?",
+                    bundle: .module
+                )),
                 isPresented: $isConfirmingDelete
             ) {
                 Button(role: .destructive) {
                     onDelete()
                 } label: {
-                    Text("Delete", bundle: .module)
+                    L10n.Common.delete
                 }
-                Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
             } message: {
-                Text("Scores keep their data; only the playlist and its order are removed.", bundle: .module)
+                Text("library.playlist.delete.message", bundle: .module)
             }
     }
 
@@ -122,10 +127,10 @@ struct PlaylistDetailView: View {
                     }
                 } label: {
                     if editMode.isEditing {
-                        Text("Cancel", bundle: .module)
+                        L10n.Common.cancel
                             .transition(.identity)
                     } else {
-                        Text("Select", bundle: .module)
+                        L10n.Common.select
                             .transition(.identity)
                     }
                 }
@@ -159,7 +164,7 @@ struct PlaylistDetailView: View {
                 isRenaming = true
             } label: {
                 Label {
-                    Text("Rename…", bundle: .module)
+                    L10n.Common.rename
                 } icon: {
                     Image(systemName: "pencil")
                 }
@@ -168,14 +173,14 @@ struct PlaylistDetailView: View {
                 isConfirmingDelete = true
             } label: {
                 Label {
-                    Text("Delete Playlist", bundle: .module)
+                    Text("library.playlist.delete.action", bundle: .module)
                 } icon: {
                     Image(systemName: "trash")
                 }
             }
         } label: {
             Image(systemName: "ellipsis")
-                .accessibilityLabel(Text("Edit Playlist", bundle: .module))
+                .accessibilityLabel(Text("library.playlist.edit.title", bundle: .module))
         }
     }
 }

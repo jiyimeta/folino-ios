@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct TagsListView: View {
     let tags: [Tag]
@@ -14,12 +15,12 @@ struct TagsListView: View {
             if tags.isEmpty {
                 ContentUnavailableView {
                     Label {
-                        Text("No Tags", bundle: .module)
+                        Text("library.tags.empty.title", bundle: .module)
                     } icon: {
                         Image(systemName: "tag")
                     }
                 } description: {
-                    Text("Add tags from a score's context menu, or tap + above.", bundle: .module)
+                    Text("library.tags.empty.hint", bundle: .module)
                 }
             } else {
                 List {
@@ -39,21 +40,21 @@ struct TagsListView: View {
                 }
             }
         }
-        .navigationTitle(Text("Tags", bundle: .module))
+        .navigationTitle(Text("library.tags", bundle: .module))
         .toolbar { newTagToolbar }
-        .alert(Text("New Tag", bundle: .module), isPresented: $isCreating) {
-            TextField(text: $newTagName) { Text("Tag name", bundle: .module) }
+        .alert(Text("library.tag.create.title", bundle: .module), isPresented: $isCreating) {
+            TextField(text: $newTagName) { Text("library.tag.namePlaceholder", bundle: .module) }
             Button {
                 let trimmed = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 onCreate(trimmed)
                 newTagName = ""
             } label: {
-                Text("Add", bundle: .module)
+                L10n.Common.add
             }
-            Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+            Button(role: .cancel) {} label: { L10n.Common.cancel }
         } message: {
-            Text("Enter a name for the new tag.", bundle: .module)
+            Text("library.tag.create.message", bundle: .module)
         }
     }
 
@@ -71,7 +72,7 @@ struct TagsListView: View {
             newTagName = ""
             isCreating = true
         } label: {
-            Image(systemName: "plus").accessibilityLabel(Text("New Tag", bundle: .module))
+            Image(systemName: "plus").accessibilityLabel(Text("library.tag.create.title", bundle: .module))
         }
     }
 }

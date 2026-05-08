@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct PlaylistsListView: View {
     let playlists: [Playlist]
@@ -13,12 +14,12 @@ struct PlaylistsListView: View {
             if playlists.isEmpty {
                 ContentUnavailableView {
                     Label {
-                        Text("No Playlists", bundle: .module)
+                        Text("library.playlists.empty.title", bundle: .module)
                     } icon: {
                         Image(systemName: "music.note.list")
                     }
                 } description: {
-                    Text("Create a playlist with the + button above.", bundle: .module)
+                    Text("library.playlists.empty.hint", bundle: .module)
                 }
             } else {
                 List {
@@ -38,21 +39,21 @@ struct PlaylistsListView: View {
                 }
             }
         }
-        .navigationTitle(Text("Playlists", bundle: .module))
+        .navigationTitle(Text("library.playlists", bundle: .module))
         .toolbar { newPlaylistToolbar }
-        .alert(Text("New Playlist", bundle: .module), isPresented: $isCreating) {
-            TextField(text: $newPlaylistName) { Text("Playlist name", bundle: .module) }
+        .alert(Text("library.playlist.create.title", bundle: .module), isPresented: $isCreating) {
+            TextField(text: $newPlaylistName) { Text("library.playlist.namePlaceholder", bundle: .module) }
             Button {
                 let trimmed = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 onCreate(trimmed)
                 newPlaylistName = ""
             } label: {
-                Text("Add", bundle: .module)
+                L10n.Common.add
             }
-            Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+            Button(role: .cancel) {} label: { L10n.Common.cancel }
         } message: {
-            Text("Enter a name for the new playlist.", bundle: .module)
+            Text("library.playlist.create.message", bundle: .module)
         }
     }
 
@@ -70,7 +71,7 @@ struct PlaylistsListView: View {
             newPlaylistName = ""
             isCreating = true
         } label: {
-            Image(systemName: "plus").accessibilityLabel(Text("New Playlist", bundle: .module))
+            Image(systemName: "plus").accessibilityLabel(Text("library.playlist.create.title", bundle: .module))
         }
     }
 }

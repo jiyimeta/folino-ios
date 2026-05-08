@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct BulkAddToPlaylistSheet: View {
     let selectionCount: Int
@@ -17,11 +18,15 @@ struct BulkAddToPlaylistSheet: View {
                 playlistsSection
                 createSection
             }
-            .navigationTitle(Text("Add \(selectionCount) scores to playlist", bundle: .module))
+            .navigationTitle(Text(String(
+                localized: "library.playlist.addBulk.title",
+                defaultValue: "Add \(selectionCount) scores to playlist",
+                bundle: .module
+            )))
             #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline)
             #endif
-                .toolbar { cancelToolbarItem }
+            .toolbar { cancelToolbarItem }
         }
     }
 
@@ -54,11 +59,11 @@ struct BulkAddToPlaylistSheet: View {
             HStack {
                 Image(systemName: "plus.circle.fill")
                     .foregroundStyle(.tint)
-                TextField(text: $newPlaylistName) { Text("New playlist", bundle: .module) }
+                TextField(text: $newPlaylistName) { Text("library.playlist.create.placeholder", bundle: .module) }
                     .submitLabel(.done)
                     .onSubmit { commitNewPlaylist() }
                 Button { commitNewPlaylist() } label: {
-                    Text("Create", bundle: .module)
+                    L10n.Common.create
                 }
                 .buttonStyle(.borderless)
                 .disabled(trimmedNewPlaylistName.isEmpty)
@@ -70,11 +75,11 @@ struct BulkAddToPlaylistSheet: View {
     private var cancelToolbarItem: some ToolbarContent {
         #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
-                Button { dismiss() } label: { Text("Cancel", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.cancel }
             }
         #else
             ToolbarItem(placement: .automatic) {
-                Button { dismiss() } label: { Text("Cancel", bundle: .module) }
+                Button { dismiss() } label: { L10n.Common.cancel }
             }
         #endif
     }

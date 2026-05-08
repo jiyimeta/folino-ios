@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct BulkActionBar: View {
     let selectionCount: Int
@@ -28,7 +29,7 @@ struct BulkActionBar: View {
                         .frame(width: 48, height: 48)
                 }
                 .tint(.primary)
-                .accessibilityLabel(Text("More", bundle: .module))
+                .accessibilityLabel(L10n.Common.more)
                 .glassEffect(.regular.interactive())
 
                 Spacer(minLength: 0)
@@ -38,7 +39,7 @@ struct BulkActionBar: View {
                         .frame(width: 48, height: 48)
                 }
                 .tint(.red)
-                .accessibilityLabel(Text("Delete", bundle: .module))
+                .accessibilityLabel(L10n.Common.delete)
                 .glassEffect(.regular.interactive())
             }
             .padding(.horizontal, 28)
@@ -60,14 +61,14 @@ struct BulkActionBar: View {
             }
             Button(action: onAddToPlaylist) {
                 Label {
-                    Text("Add to Playlist…", bundle: .module)
+                    Text("library.playlist.add.actionEllipsis", bundle: .module)
                 } icon: {
                     Image(systemName: "music.note.list")
                 }
             }
             Button(action: onEditTags) {
                 Label {
-                    Text("Add Tags…", bundle: .module)
+                    Text("library.tags.add.action", bundle: .module)
                 } icon: {
                     Image(systemName: "tag")
                 }
@@ -77,12 +78,20 @@ struct BulkActionBar: View {
         @ViewBuilder
         private var macOSBody: some View {
             HStack {
-                Menu("More") {
-                    Button("Add to Playlist", action: onAddToPlaylist)
-                    Button("Add Tags", action: onEditTags)
+                Menu {
+                    Button(action: onAddToPlaylist) {
+                        Text("library.playlist.add.action", bundle: .module)
+                    }
+                    Button(action: onEditTags) {
+                        Text("library.tags.add.action", bundle: .module)
+                    }
+                } label: {
+                    L10n.Common.more
                 }
                 Spacer()
-                Button("Delete", role: .destructive, action: onDelete)
+                Button(role: .destructive, action: onDelete) {
+                    L10n.Common.delete
+                }
             }
             .padding()
             .disabled(selectionCount == 0)
@@ -96,14 +105,14 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
     switch format {
     case .sourceFormat:
         Label {
-            Text("Original Format", bundle: .module)
+            Text("library.format.original", bundle: .module)
         } icon: {
             Image(systemName: "doc")
         }
     case .pdf:
-        Label("PDF", systemImage: "doc.richtext")
+        Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "doc.richtext") }
     case .midi:
-        Label("MIDI", systemImage: "pianokeys")
+        Label { Text("library.format.midi", bundle: .module) } icon: { Image(systemName: "pianokeys") }
     }
 }
 

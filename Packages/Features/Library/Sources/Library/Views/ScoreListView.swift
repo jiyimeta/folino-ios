@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 enum BulkContext {
     case scores
@@ -12,7 +13,12 @@ private struct SelectionTitleModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         if isShowingSelectionCount {
-            content.navigationTitle(Text("\(selectionCount) selected", bundle: .module))
+            let title = String(
+                localized: "library.selection.count",
+                defaultValue: "\(selectionCount) selected",
+                bundle: .module
+            )
+            content.navigationTitle(Text(title))
         } else {
             content
         }
@@ -72,20 +78,24 @@ struct ScoreListView<RowMenu: View>: View {
                 }
             }
             .alert(
-                Text("Delete \"\(pendingDelete?.title ?? "")\"?", bundle: .module),
+                Text(String(
+                    localized: "library.score.delete.title",
+                    defaultValue: "Delete \"\(pendingDelete?.title ?? "")\"?",
+                    bundle: .module
+                )),
                 isPresented: deleteAlertBinding,
                 presenting: pendingDelete
             ) { item in
                 Button(role: .destructive) {
                     onConfirmDelete(item)
                 } label: {
-                    Text("Delete", bundle: .module)
+                    L10n.Common.delete
                 }
                 Button(role: .cancel) {} label: {
-                    Text("Cancel", bundle: .module)
+                    L10n.Common.cancel
                 }
             } message: { _ in
-                Text("This will remove the score and its file from this device.", bundle: .module)
+                Text("library.score.delete.message", bundle: .module)
             }
     }
 
@@ -127,7 +137,7 @@ struct ScoreListView<RowMenu: View>: View {
                         }
                     }
                 } label: {
-                    Text(editMode.isEditing ? "Cancel" : "Select", bundle: .module)
+                    (editMode.isEditing ? L10n.Common.cancel : L10n.Common.select)
                         .contentTransition(.identity)
                 }
             }
@@ -160,7 +170,7 @@ struct ScoreListView<RowMenu: View>: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("More", bundle: .module))
+                .accessibilityLabel(L10n.Common.more)
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -168,7 +178,10 @@ struct ScoreListView<RowMenu: View>: View {
                 onToggleFavorite(item)
             } label: {
                 Label {
-                    Text(item.isFavorite ? "Unfavorite" : "Favorite", bundle: .module)
+                    let key: LocalizedStringKey = item.isFavorite
+                        ? "library.score.unfavorite.action"
+                        : "library.score.favorite.action"
+                    Text(key, bundle: .module)
                 } icon: {
                     Image(systemName: item.isFavorite ? "star.slash.fill" : "star.fill")
                 }
@@ -180,7 +193,7 @@ struct ScoreListView<RowMenu: View>: View {
                 pendingDelete = item
             } label: {
                 Label {
-                    Text("Delete", bundle: .module)
+                    L10n.Common.delete
                 } icon: {
                     Image(systemName: "trash")
                 }
@@ -213,7 +226,7 @@ struct ScoreListView<RowMenu: View>: View {
                     onSelectManualOrder()
                 } label: {
                     Label {
-                        Text("Manual Order", bundle: .module)
+                        Text("library.sort.manualOrder", bundle: .module)
                     } icon: {
                         Image(systemName: isManualOrderActive ? "checkmark" : "")
                     }
@@ -234,7 +247,7 @@ struct ScoreListView<RowMenu: View>: View {
             }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
-                .accessibilityLabel(Text("Sort", bundle: .module))
+                .accessibilityLabel(Text("library.sort.menu", bundle: .module))
         }
     }
 }
@@ -308,10 +321,10 @@ struct ScoreListView<RowMenu: View>: View {
                     onBulkEditTags: {},
                     onBulkDelete: {}
                 ) { _ in
-                    Button("Open") {}
-                    Button("Delete", role: .destructive) {}
+                    Button {} label: { L10n.Common.open }
+                    Button(role: .destructive) {} label: { L10n.Common.delete }
                 }
-                .navigationTitle("All Scores")
+                .navigationTitle(Text("library.allScores", bundle: .module))
             }
         }
     }

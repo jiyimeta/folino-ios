@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct TagDetailView<Content: View>: View {
     let tagName: String
@@ -15,27 +16,31 @@ struct TagDetailView<Content: View>: View {
         content()
             .navigationTitle(tagName)
             .toolbar { editMenuToolbar }
-            .alert(Text("Rename Tag", bundle: .module), isPresented: $isRenaming) {
-                TextField(text: $renameText) { Text("Tag name", bundle: .module) }
+            .alert(Text("library.tag.rename.title", bundle: .module), isPresented: $isRenaming) {
+                TextField(text: $renameText) { Text("library.tag.namePlaceholder", bundle: .module) }
                 Button {
                     let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty, trimmed != tagName else { return }
                     onRename(trimmed)
-                } label: { Text("Save", bundle: .module) }
-                Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+                } label: { L10n.Common.save }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
             }
             .alert(
-                Text("Delete \"\(tagName)\"?", bundle: .module),
+                Text(String(
+                    localized: "library.score.delete.title",
+                    defaultValue: "Delete \"\(tagName)\"?",
+                    bundle: .module
+                )),
                 isPresented: $isConfirmingDelete
             ) {
                 Button(role: .destructive) {
                     onDelete()
                 } label: {
-                    Text("Delete", bundle: .module)
+                    L10n.Common.delete
                 }
-                Button(role: .cancel) {} label: { Text("Cancel", bundle: .module) }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
             } message: {
-                Text("Scores keep their data; only the tag and its assignments are removed.", bundle: .module)
+                Text("library.tag.delete.message", bundle: .module)
             }
     }
 
@@ -55,7 +60,7 @@ struct TagDetailView<Content: View>: View {
                 isRenaming = true
             } label: {
                 Label {
-                    Text("Rename…", bundle: .module)
+                    L10n.Common.rename
                 } icon: {
                     Image(systemName: "pencil")
                 }
@@ -64,14 +69,14 @@ struct TagDetailView<Content: View>: View {
                 isConfirmingDelete = true
             } label: {
                 Label {
-                    Text("Delete Tag", bundle: .module)
+                    Text("library.tag.delete.action", bundle: .module)
                 } icon: {
                     Image(systemName: "trash")
                 }
             }
         } label: {
             Image(systemName: "ellipsis")
-                .accessibilityLabel(Text("Edit Tag", bundle: .module))
+                .accessibilityLabel(Text("library.tag.edit.title", bundle: .module))
         }
     }
 }

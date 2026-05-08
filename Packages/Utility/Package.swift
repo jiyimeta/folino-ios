@@ -7,6 +7,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 
 let package = Package(
     name: "Utility",
+    defaultLocalization: "en",
     platforms: [.iOS(.v26), .macOS(.v15)],
     products: [
         .library(name: "UtilityCore", targets: ["UtilityCore"]),
@@ -18,7 +19,12 @@ let package = Package(
     ],
     targets: [
         .target(name: "UtilityCore", dependencies: [], plugins: swiftLintPlugins),
-        .target(name: "UtilityUI", dependencies: ["UtilityCore"], plugins: swiftLintPlugins),
+        .target(
+            name: "UtilityUI",
+            dependencies: ["UtilityCore"],
+            resources: [.process("Resources")],
+            plugins: swiftLintPlugins
+        ),
         .target(name: "Navigation", dependencies: ["UtilityCore"], plugins: swiftLintPlugins),
         .testTarget(name: "UtilityCoreTests", dependencies: ["UtilityCore"]),
     ]
