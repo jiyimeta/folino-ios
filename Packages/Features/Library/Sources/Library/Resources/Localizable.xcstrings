@@ -2,7 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "" : {
-
+      "shouldTranslate" : false
     },
     "\"%@\" is already imported. What do you want to do?" : {
       "localizations" : {
@@ -139,6 +139,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "楽譜のコンテキストメニューから、または上の + ボタンからタグを追加できます。"
+          }
+        }
+      }
+    },
+    "Add Tags…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Tags…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タグを追加"
           }
         }
       }
@@ -801,6 +817,16 @@
         }
       }
     },
+    "Original Format" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "元の形式"
+          }
+        }
+      }
+    },
     "PDF" : {
       "localizations" : {
         "ja" : {
@@ -1004,7 +1030,6 @@
       }
     },
     "Select" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
