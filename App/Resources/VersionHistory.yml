@@ -1,3 +1,7 @@
+- version: 1.1.1
+  descriptions:
+    - en: Fixed an issue where some files could not be loaded
+      ja: 一部のファイルが読み込めない問題を修正
 - version: 1.1.0
   descriptions:
     - en: Added support for importing MIDI files

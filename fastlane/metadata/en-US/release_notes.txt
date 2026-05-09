@@ -1,3 +1,1 @@
-- Added support for importing MIDI files
-- Improved score recognition accuracy
-- Overall UI/UX refinements
+- Fixed an issue where some files could not be loaded
