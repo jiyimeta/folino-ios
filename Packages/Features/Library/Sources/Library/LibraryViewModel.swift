@@ -13,6 +13,12 @@ public final class LibraryViewModel {
     public var shareTarget: ShareTarget?
     public var isPreparingShare: Bool = false
 
+    /// True while a file import is in flight (prepare or commit). Driven by
+    /// `defer` blocks in `startImport` and `commit` so it clears on success,
+    /// duplicate detection, and any thrown error. The App composition root
+    /// uses this to show a loading HUD over the whole shell.
+    public var isImporting: Bool = false
+
     public struct ShareTarget: Identifiable, Equatable, Sendable {
         public let id: UUID
         public let urls: [URL]
@@ -216,6 +222,8 @@ public final class LibraryViewModel {
     /// access, prepareImport, and either commits immediately or stages a
     /// duplicate prompt.
     public func startImport(from sourceURL: URL) async {
+        isImporting = true
+        defer { isImporting = false }
         let scoped = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if scoped { sourceURL.stopAccessingSecurityScopedResource() }
@@ -235,6 +243,8 @@ public final class LibraryViewModel {
     }
 
     public func commit(plan: ImportPlan, decision: ImportDecision) async {
+        isImporting = true
+        defer { isImporting = false }
         do {
             let item = try await importer.commitImport(plan, decision: decision)
             pendingScoreToOpen = item

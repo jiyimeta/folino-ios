@@ -244,3 +244,54 @@ extension LibraryViewModelTests {
         #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
 }
+
+extension LibraryViewModelTests {
+    @Test func isImportingStartsFalse() {
+        let f = Self.makeVM()
+        #expect(f.vm.isImporting == false)
+    }
+
+    @Test func startImportClearsIsImportingOnSuccess() async {
+        let f = Self.makeVM()
+        f.importer.preparedPlans = [Self.makePlan()]
+        let imported = Self.makeItem(title: "Imported")
+        f.importer.commitFactory = { _, _ in imported }
+        await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
+        #expect(f.vm.isImporting == false)
+    }
+
+    @Test func startImportClearsIsImportingOnDuplicate() async {
+        let f = Self.makeVM()
+        let existing = Self.makeItem(title: "Existing")
+        f.importer.preparedPlans = [Self.makePlan(duplicates: [existing])]
+        await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
+        #expect(f.vm.duplicatePrompt != nil)
+        #expect(f.vm.isImporting == false)
+    }
+
+    @Test func startImportClearsIsImportingOnPrepareError() async {
+        let f = Self.makeVM()
+        f.importer.prepareImportErrors = [.scoreParseFailed(reason: "bad")]
+        await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
+        #expect(f.vm.errorAlertMessage != nil)
+        #expect(f.vm.isImporting == false)
+    }
+
+    @Test func commitClearsIsImportingOnSuccess() async {
+        let f = Self.makeVM()
+        let plan = Self.makePlan()
+        let item = Self.makeItem(title: "X")
+        f.importer.commitFactory = { _, _ in item }
+        await f.vm.commit(plan: plan, decision: .importAsNew)
+        #expect(f.vm.isImporting == false)
+    }
+
+    @Test func commitClearsIsImportingOnError() async {
+        let f = Self.makeVM()
+        let plan = Self.makePlan()
+        f.importer.commitImportError = .persistenceFailed(reason: "x")
+        await f.vm.commit(plan: plan, decision: .importAsNew)
+        #expect(f.vm.errorAlertMessage != nil)
+        #expect(f.vm.isImporting == false)
+    }
+}
