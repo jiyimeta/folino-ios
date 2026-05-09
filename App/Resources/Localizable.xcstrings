@@ -33,6 +33,22 @@
         }
       }
     },
+    "app.import.loading.label" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開いています…"
+          }
+        }
+      }
+    },
     "app.review.preprompt.message" : {
       "localizations" : {
         "en" : {
