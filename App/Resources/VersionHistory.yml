@@ -1,7 +1,9 @@
 - version: 1.1.1
   descriptions:
-    - en: Fixed an issue where some files could not be loaded
-      ja: 一部のファイルが読み込めない問題を修正
+    - en: Fixed an import error that occurred with some files
+      ja: 一部のファイルで発生する取り込みエラーを修正
+    - en: Improved score display and playback
+      ja: 楽譜の表示・再生を改善
 - version: 1.1.0
   descriptions:
     - en: Added support for importing MIDI files

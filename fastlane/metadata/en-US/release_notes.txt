@@ -1,1 +1,2 @@
-- Fixed an issue where some files could not be loaded
+- Fixed an import error that occurred with some files
+- Improved score display and playback
