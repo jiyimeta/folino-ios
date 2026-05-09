@@ -111,6 +111,20 @@ private struct ReadyShell: View {
         )
     }
 
+    /// Snap the user back to library root before an incoming-URL import
+    /// starts. Called from both the warm-reentry handler and the cold-launch
+    /// task so the UI matches the "import in flight" state immediately,
+    /// rather than waiting for the import to finish.
+    private func resetNavigationForIncomingURL() {
+        if horizontalSizeClass == .regular {
+            sidebarPath = NavigationPath()
+            detailScoreItem = nil
+            columnVisibility = .doubleColumn
+        } else {
+            compactPath = NavigationPath()
+        }
+    }
+
     var body: some View {
         Group {
             if horizontalSizeClass == .regular {
@@ -172,6 +186,7 @@ private struct ReadyShell: View {
         .task {
             // Cold-launch: drain a URL that .onOpenURL queued before this view appeared.
             if let url = bootstrap.consumePendingIncomingURL() {
+                resetNavigationForIncomingURL()
                 await libraryVM.startImport(from: url)
             }
         }
@@ -182,6 +197,7 @@ private struct ReadyShell: View {
             // slot is cleared, surfacing as a persistenceFailed alert.
             guard newValue != nil,
                   let url = bootstrap.consumePendingIncomingURL() else { return }
+            resetNavigationForIncomingURL()
             Task { await libraryVM.startImport(from: url) }
         }
         .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
