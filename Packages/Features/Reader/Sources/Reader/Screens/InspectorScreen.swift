@@ -82,7 +82,7 @@ struct InspectorScreen: View {
                     Text(part.instrument.longName ?? part.trackName ?? "-")
                         .font(.headline)
 
-                    programPicker(partIndex: partIndex)
+                    ProgramPicker(viewModel: viewModel, partIndex: partIndex)
                 }
                 .padding(.bottom, -8)
             }
@@ -105,6 +105,24 @@ struct InspectorScreen: View {
             breakPolicyRow
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+        }
+
+        ForEach(score.parts.indices, id: \.self) { partIndex in
+            let part = score.parts[partIndex]
+            Section {
+                ForEach(part.staves.indices, id: \.self) { staffIndex in
+                    visualStaffRow(address: StaffAddress(
+                        partIndex: partIndex,
+                        staffIndexInPart: staffIndex
+                    ))
+                }
+            } header: {
+                Text(part.instrument.longName ?? part.trackName ?? "-")
+                    .font(.headline)
+                    .padding(.bottom, -8)
+            }
+            .headerProminence(.increased)
+            .padding(.bottom, -8)
         }
     }
 
@@ -266,7 +284,6 @@ struct InspectorScreen: View {
                         .frame(width: 24, height: 24)
                         .padding(.horizontal, 4)
                 }
-                visibilityButton(address: address)
             }
         }
         .listRowBackground(Color.clear)
@@ -274,61 +291,19 @@ struct InspectorScreen: View {
     }
 
     @ViewBuilder
-    private func resetProgramButton(partIndex: Int) -> some View {
-        Button {
-            Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
-        } label: {
-            Label {
-                Text("reader.preferences.resetDefault", bundle: .module)
-            } icon: {
-                Image(systemName: "arrow.uturn.backward")
-            }
+    private func visualStaffRow(address: StaffAddress) -> some View {
+        HStack(spacing: 8) {
+            Spacer()
+            clefMenu(address: address)
+            visibilityButton(address: address)
         }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     @ViewBuilder
-    private func programPicker(partIndex: Int) -> some View {
-        let program = viewModel.effectiveProgram(forPartIndex: partIndex)
-        let hasOverride = viewModel.hasProgramOverride(forPartIndex: partIndex)
-        HStack(spacing: 6) {
-            Image(systemName: "music.note.list")
-                .foregroundStyle(.secondary)
-            Menu {
-                if hasOverride {
-                    resetProgramButton(partIndex: partIndex)
-                    Divider()
-                }
-                ForEach(GMInstrument.Family.allCases, id: \.self) { family in
-                    Section(family.rawValue) {
-                        ForEach(family.programs) { instrument in
-                            Button {
-                                Task {
-                                    await viewModel.setPartProgram(
-                                        Int(instrument.program), forPartIndex: partIndex
-                                    )
-                                }
-                            } label: {
-                                Text(instrument.name)
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(GMInstrument.instrument(for: UInt8(clamping: program)).name)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .menuIndicator(.hidden)
-        }
-        .font(.caption)
-        .padding(.top, 2)
-        .padding(.bottom, 4)
+    private func clefMenu(address: StaffAddress) -> some View {
+        ClefMenu(viewModel: viewModel, address: address)
     }
 
     @ViewBuilder
