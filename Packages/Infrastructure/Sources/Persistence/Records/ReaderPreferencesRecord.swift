@@ -15,6 +15,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     var hiddenStaffIds: String
     var staffProgramOverrides: String
     var staffVolumeOverrides: String
+    var staffClefOverrides: String
     var honorLayoutBreaks: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -24,6 +25,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         case hiddenStaffIds = "hidden_staff_ids"
         case staffProgramOverrides = "staff_program_overrides"
         case staffVolumeOverrides = "staff_volume_overrides"
+        case staffClefOverrides = "staff_clef_overrides"
         case honorLayoutBreaks = "honor_layout_breaks"
     }
 
@@ -46,6 +48,13 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             .map { Self.encodeVolumeTriple(address: $0.key, volume: $0.value) }
         let volumeOverridesData = try? JSONEncoder().encode(sortedVolumeOverrides)
         staffVolumeOverrides = volumeOverridesData.flatMap {
+            String(data: $0, encoding: .utf8)
+        } ?? "[]"
+        let sortedClefOverrides = prefs.staffClefOverrides
+            .sorted { $0.key < $1.key }
+            .map { Self.encodeClefTriple(address: $0.key, rawType: $0.value) }
+        let clefOverridesData = try? JSONEncoder().encode(sortedClefOverrides)
+        staffClefOverrides = clefOverridesData.flatMap {
             String(data: $0, encoding: .utf8)
         } ?? "[]"
         honorLayoutBreaks = prefs.honorLayoutBreaks
@@ -85,6 +94,23 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             )
             volumeOverrides[address] = triple[2]
         }
+        struct ClefTripleRow: Decodable {
+            let partIndex: Int
+            let staffIndexInPart: Int
+            let rawType: String
+        }
+        let decodedClefOverrides: [ClefTripleRow] = (try? JSONDecoder().decode(
+            [ClefTripleRow].self,
+            from: Data(staffClefOverrides.utf8)
+        )) ?? []
+        var clefOverrides: [StaffAddress: String] = [:]
+        for row in decodedClefOverrides {
+            let address = StaffAddress(
+                partIndex: row.partIndex,
+                staffIndexInPart: row.staffIndexInPart
+            )
+            clefOverrides[address] = row.rawType
+        }
         return ReaderPreferences(
             id: ReaderPreferencesID(rawValue: idUUID),
             scoreItemID: ScoreItemID(rawValue: scoreUUID),
@@ -92,6 +118,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             hiddenStaves: Set(decodedHidden),
             staffProgramOverrides: overrides,
             staffVolumeOverrides: volumeOverrides,
+            staffClefOverrides: clefOverrides,
             honorLayoutBreaks: honorLayoutBreaks
         )
     }
@@ -102,5 +129,21 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
 
     private static func encodeVolumeTriple(address: StaffAddress, volume: Double) -> [Double] {
         [Double(address.partIndex), Double(address.staffIndexInPart), volume]
+    }
+
+    private static func encodeClefTriple(
+        address: StaffAddress, rawType: String
+    ) -> ClefTripleEncoded {
+        ClefTripleEncoded(
+            partIndex: address.partIndex,
+            staffIndexInPart: address.staffIndexInPart,
+            rawType: rawType
+        )
+    }
+
+    private struct ClefTripleEncoded: Encodable {
+        let partIndex: Int
+        let staffIndexInPart: Int
+        let rawType: String
     }
 }
