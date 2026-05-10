@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Picker vocabulary for the Reader's per-staff clef override menu.
-/// Constrains the v1 UI to ten clefs; the underlying override map
-/// stores any `NotatedClef.rawType` string, so future expansion is
-/// purely additive here.
+/// Picker vocabulary for the Reader's per-staff clef override popover.
+/// Each case carries its `NotatedClef.rawType`, its SMuFL codepoint
+/// (Bravura PUA), and the staff line (1 = bottom, 5 = top) the clef
+/// anchors to. The override map stores any rawType string, so future
+/// expansion is purely additive here.
 enum ClefMenuChoice: Hashable, CaseIterable {
     case trebleG, trebleG8va, trebleG8vb, trebleG15ma, trebleG15mb
     case bassF, bassF8va, bassF8vb
@@ -24,11 +25,24 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         }
     }
 
-    /// Localized label shown on the menu button and inside each
-    /// menu row. Treble / Bass / Alto / Tenor are the conventional
-    /// English names; the `8va` / `8vb` / `15ma` / `15mb` modifiers
-    /// stay as universal music-notation symbols even when the rest
-    /// of the string is localized.
+    /// SMuFL Private Use Area codepoint (Bravura). Source:
+    /// https://www.smufl.org/version/latest/range/clefs/
+    var smuflGlyph: Character {
+        switch self {
+        case .trebleG: "\u{E050}" // gClef
+        case .trebleG8va: "\u{E053}" // gClef8va
+        case .trebleG8vb: "\u{E052}" // gClef8vb
+        case .trebleG15ma: "\u{E054}" // gClef15ma
+        case .trebleG15mb: "\u{E051}" // gClef15mb
+        case .bassF: "\u{E062}" // fClef
+        case .bassF8va: "\u{E065}" // fClef8va
+        case .bassF8vb: "\u{E064}" // fClef8vb
+        case .altoC3, .tenorC4: "\u{E05C}" // cClef (movable)
+        }
+    }
+
+    /// Localized accessibility label. Picker tiles render glyphs only;
+    /// this label is what VoiceOver announces.
     var displayLabel: LocalizedStringKey {
         switch self {
         case .trebleG: "reader.preferences.clef.choice.treble"
@@ -55,9 +69,7 @@ enum ClefMenuChoice: Hashable, CaseIterable {
     ]
 
     /// Looks up the menu choice for an arbitrary rawType. Returns
-    /// `nil` for rawTypes outside the v1 picker (e.g. `"PERC"`) — the
-    /// menu renders these as a fallback label without highlighting any
-    /// item.
+    /// `nil` for rawTypes outside the v1 picker (e.g. `"PERC"`).
     static func from(rawType: String) -> ClefMenuChoice? {
         allCases.first { $0.rawType == rawType }
     }

@@ -1,83 +1,168 @@
 import Domain
+import SheetMusicUI
 import SwiftUI
 
-/// Per-staff clef override Menu shown on the Reader Inspector's Visual tab.
-/// Lives outside `InspectorScreen` so the screen file stays under length
-/// limits.
+/// Per-staff clef override picker shown on the Reader Inspector's Visual
+/// tab. The trigger button shows the current clef glyph; tapping opens a
+/// popover with a grid of SMuFL clef tiles grouped by family
+/// (treble / bass / C). Modeled after the swift-sheet-music macOS
+/// example's `ClefPopover`.
 struct ClefMenu: View {
     @Bindable var viewModel: ReaderViewModel
     let address: StaffAddress
+    @State private var isPresented = false
 
     var body: some View {
         let effective = viewModel.effectiveClef(for: address)
         let hasOverride = viewModel.hasClefOverride(for: address)
-        Menu {
-            menuContent(hasOverride: hasOverride)
+        // Touch BravuraFont.register so previews and first-render paths
+        // get the SMuFL font even when the score view hasn't been
+        // resolved yet.
+        _ = BravuraFont.register
+        return Button {
+            isPresented = true
         } label: {
-            menuLabel(rawType: effective, hasOverride: hasOverride)
+            triggerLabel(rawType: effective, hasOverride: hasOverride)
         }
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
         .accessibilityLabel(Text("reader.preferences.clef", bundle: .module))
+        .popover(isPresented: $isPresented) {
+            popoverContent(currentRawType: effective, hasOverride: hasOverride)
+                .presentationCompactAdaptation(.popover)
+        }
     }
 
     @ViewBuilder
-    private func menuContent(hasOverride: Bool) -> some View {
-        if hasOverride {
-            resetButton
-            Divider()
+    private func triggerLabel(rawType: String, hasOverride: Bool) -> some View {
+        HStack(spacing: 4) {
+            triggerGlyph(rawType: rawType, hasOverride: hasOverride)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
-        familyButtons(ClefMenuChoice.trebleFamily)
-        Divider()
-        familyButtons(ClefMenuChoice.bassFamily)
-        Divider()
-        familyButtons(ClefMenuChoice.cFamily)
+        .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder
+    private func triggerGlyph(rawType: String, hasOverride: Bool) -> some View {
+        let tint: Color = hasOverride ? .accentColor : .primary
+        if let choice = ClefMenuChoice.from(rawType: rawType) {
+            Text(String(choice.smuflGlyph))
+                .font(.custom(BravuraFont.familyName, fixedSize: 22))
+                .foregroundStyle(tint)
+                .frame(minWidth: 18, alignment: .center)
+        } else {
+            Text(rawType)
+                .font(.callout)
+                .foregroundStyle(tint)
+        }
+    }
+
+    @ViewBuilder
+    private func popoverContent(currentRawType: String, hasOverride: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if hasOverride { resetButton }
+            tileRow(ClefMenuChoice.trebleFamily, current: currentRawType)
+            Divider()
+            tileRow(ClefMenuChoice.bassFamily, current: currentRawType)
+            Divider()
+            tileRow(ClefMenuChoice.cFamily, current: currentRawType)
+        }
+        .padding(12)
     }
 
     @ViewBuilder
     private var resetButton: some View {
         Button {
             Task { await viewModel.clearClefOverride(for: address) }
+            isPresented = false
         } label: {
             Label {
                 Text("reader.preferences.clef.resetDefault", bundle: .module)
             } icon: {
                 Image(systemName: "arrow.uturn.backward")
             }
+            .font(.callout)
         }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
-    private func familyButtons(_ choices: [ClefMenuChoice]) -> some View {
-        ForEach(choices, id: \.self) { choice in
-            Button {
-                Task {
-                    await viewModel.setClefOverride(choice.rawType, for: address)
-                }
-            } label: {
-                Text(choice.displayLabel, bundle: .module)
+    private func tileRow(_ choices: [ClefMenuChoice], current: String) -> some View {
+        HStack(spacing: 8) {
+            ForEach(choices, id: \.self) { choice in
+                tile(choice, current: current)
             }
         }
     }
 
     @ViewBuilder
-    private func menuLabel(rawType: String, hasOverride: Bool) -> some View {
-        HStack(spacing: 4) {
-            labelText(rawType: rawType)
-                .lineLimit(1)
-                .foregroundStyle(hasOverride ? Color.accentColor : Color.primary)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    private func tile(_ choice: ClefMenuChoice, current: String) -> some View {
+        let isCurrent = choice.rawType == current
+        Button {
+            Task { await viewModel.setClefOverride(choice.rawType, for: address) }
+            isPresented = false
+        } label: {
+            Canvas { ctx, size in
+                drawTile(ctx: ctx, size: size, choice: choice)
+            }
+            .frame(width: 56, height: 60)
+            .background(
+                isCurrent
+                    ? Color.accentColor.opacity(0.18)
+                    : Color.clear
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        isCurrent ? Color.accentColor : Color.gray.opacity(0.3),
+                        lineWidth: isCurrent ? 2 : 1
+                    )
+            )
+            .contentShape(Rectangle())
         }
-        .font(.callout)
-        .padding(.horizontal, 4)
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(choice.displayLabel, bundle: .module))
     }
 
-    private func labelText(rawType: String) -> Text {
-        if let choice = ClefMenuChoice.from(rawType: rawType) {
-            Text(choice.displayLabel, bundle: .module)
-        } else {
-            Text(rawType)
+    private func drawTile(
+        ctx: GraphicsContext,
+        size: CGSize,
+        choice: ClefMenuChoice
+    ) {
+        let sp: CGFloat = 4
+        let staffHeight = sp * 4 // 5 lines = 4 spaces
+        let staffTop = (size.height - staffHeight) / 2
+        let leftPad: CGFloat = 6
+        let rightPad: CGFloat = 6
+        for index in 0 ..< 5 {
+            let y = staffTop + sp * CGFloat(index)
+            var path = Path()
+            path.move(to: CGPoint(x: leftPad, y: y))
+            path.addLine(to: CGPoint(x: size.width - rightPad, y: y))
+            ctx.stroke(path, with: .color(.primary.opacity(0.6)), lineWidth: 0.5)
         }
+        // Mirror upstream `ClefRenderer` Y-anchor convention: origin Y is
+        // staff middle line; treble is +sp (G line, line 2 from bottom),
+        // bass is -sp (F line, line 4 from bottom), C clef is 0 (centered
+        // on middle line). swift-sheet-music's score renderer treats both
+        // alto and tenor the same here; preview tiles match that.
+        let middleY = staffTop + sp * 2
+        let yOffset: CGFloat = switch choice {
+        case .trebleG, .trebleG8va, .trebleG8vb, .trebleG15ma, .trebleG15mb:
+            sp
+        case .bassF, .bassF8va, .bassF8vb:
+            -sp
+        case .altoC3, .tenorC4:
+            0
+        }
+        let glyphText = Text(String(choice.smuflGlyph))
+            .font(.custom(BravuraFont.familyName, fixedSize: sp * 4))
+            .foregroundColor(.primary)
+        ctx.draw(
+            ctx.resolve(glyphText),
+            at: CGPoint(x: size.width / 2, y: middleY + yOffset),
+            anchor: .center
+        )
     }
 }
