@@ -32,7 +32,6 @@ struct ClefMenu: View {
         }
     }
 
-    @ViewBuilder
     private func triggerLabel(rawType: String, hasOverride: Bool) -> some View {
         HStack(spacing: 4) {
             triggerGlyph(rawType: rawType, hasOverride: hasOverride)
@@ -58,7 +57,6 @@ struct ClefMenu: View {
         }
     }
 
-    @ViewBuilder
     private func popoverContent(currentRawType: String, hasOverride: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if hasOverride { resetButton }
@@ -75,7 +73,6 @@ struct ClefMenu: View {
         .frame(width: 280)
     }
 
-    @ViewBuilder
     private var resetButton: some View {
         Button {
             Task { await viewModel.clearClefOverride(for: address) }
@@ -91,7 +88,6 @@ struct ClefMenu: View {
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
     private func tileRow(_ choices: [ClefMenuChoice], current: String) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -116,14 +112,17 @@ struct ClefMenu: View {
             .background(
                 isCurrent
                     ? Color.accentColor.opacity(0.18)
-                    : Color.clear
+                    : Color.clear,
             )
             .overlay(
+                // strokeBorder (vs stroke) keeps the line entirely inside
+                // the tile so the 1pt edge stays pixel-aligned instead of
+                // straddling the frame boundary at half-pixel offsets.
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(
+                    .strokeBorder(
                         isCurrent ? Color.accentColor : Color.gray.opacity(0.3),
-                        lineWidth: isCurrent ? 2 : 1
-                    )
+                        lineWidth: isCurrent ? 2 : 1,
+                    ),
             )
             .contentShape(Rectangle())
         }
@@ -134,7 +133,7 @@ struct ClefMenu: View {
     private func drawTile(
         ctx: GraphicsContext,
         size: CGSize,
-        choice: ClefMenuChoice
+        choice: ClefMenuChoice,
     ) {
         let sp: CGFloat = 4
         let staffHeight = sp * 4 // 5 lines = 4 spaces
@@ -172,7 +171,7 @@ struct ClefMenu: View {
         ctx.draw(
             ctx.resolve(glyphText),
             at: CGPoint(x: size.width / 2, y: middleY + yOffset),
-            anchor: .center
+            anchor: .center,
         )
     }
 }
