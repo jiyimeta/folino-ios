@@ -83,7 +83,7 @@ This mirrors how the upstream layout engine resolves the staff's opening clef ("
 
 Mid-score clef changes (explicit clef voice elements at element index ≥ 1, or in measures ≥ 1) are **not** touched.
 
-The transformation is a pure function over a value-typed `Score`. Calling sites apply it in `ReaderRootScreen` after the existing `score.filtered(hidingStaves:)` step, before passing to `VerticalScoreContainer` / `HorizontalScoreContainer`.
+The transformation is a pure function over a value-typed `Score`. Calling sites apply it in `ReaderRootScreen` **before** the existing `score.filtered(hidingStaves:)` step, so the override map's `StaffAddress` keys still index against the un-filtered score (`filtered` reindexes surviving staves and would invalidate the keys otherwise). The filter then drops hidden staves from the already-overridden score.
 
 We do not go through the `EditCommand` / undo machinery — `ReaderPreferences` is the system of record for the override, and undo is not meaningful here (the user toggles via the inspector, the inspector itself is the undo target).
 
@@ -182,7 +182,7 @@ The clef rawType strings themselves (`G`, `G8vb`, `F`, `F8va`, `Alto`, `Tenor`, 
 - **Staff has no opening clef event AND no `defaultClefType`.** Layout falls back to `"G"`. Setting `defaultClefType` via the override fixes this case implicitly.
 - **Score has an explicit measure-0 clef on staff X but the override matches it.** Rewrite is a no-op write; harmless.
 - **Override rawType becomes invalid** (e.g., user data restored from a future version with a clef we no longer support). `NotatedClef(rawType:)` defaults to `.treble` for unknown types; the picker clears the override on next mutation. Initializer's defensive drop covers persisted-data load.
-- **Hidden staff with an override.** `score.filtered(hidingStaves:)` removes the staff before `applying(clefOverrides:)` runs; orphan override entries simply do nothing for now and persist (cheap, and they re-activate the moment the user shows the staff again).
+- **Hidden staff with an override.** Override is applied first, then `filtered(hidingStaves:)` drops the staff. The persisted override entry is preserved across show/hide and re-activates the moment the user shows the staff again.
 - **Mid-score clef change preceded by an override.** Override changes the opening clef; the mid-score change still applies at its measure. Note positions before the change use the new opening clef, after the change use the authored mid-piece clef. This is the expected and useful behavior.
 
 ## Testing
