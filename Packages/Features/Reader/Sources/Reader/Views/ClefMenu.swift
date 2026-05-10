@@ -69,6 +69,10 @@ struct ClefMenu: View {
             tileRow(ClefMenuChoice.cFamily, current: currentRawType)
         }
         .padding(20)
+        // Cap the popover width so the 5-tile treble row scrolls
+        // horizontally, giving the surrounding padding room to breathe
+        // on small devices.
+        .frame(width: 280)
     }
 
     @ViewBuilder
@@ -89,9 +93,11 @@ struct ClefMenu: View {
 
     @ViewBuilder
     private func tileRow(_ choices: [ClefMenuChoice], current: String) -> some View {
-        HStack(spacing: 8) {
-            ForEach(choices, id: \.self) { choice in
-                tile(choice, current: current)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(choices, id: \.self) { choice in
+                    tile(choice, current: current)
+                }
             }
         }
     }
