@@ -83,6 +83,27 @@ import Testing
         }
     }
 
+    @Test func overrideClearsTransposingClefType() {
+        var score = makeScore(staffDefaultClefs: [nil])
+        score.parts[0].staves[0].measures = [
+            Measure(voices: [
+                Voice(elements: [
+                    .clef(Clef(
+                        concertClefType: "G",
+                        transposingClefType: "G8vb"
+                    )),
+                ]),
+            ]),
+        ]
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let result = score.applying(clefOverrides: [address: "F"])
+        guard case let .clef(rewritten) =
+            result.parts[0].staves[0].measures[0].voices[0].elements[0]
+        else { Issue.record("expected rewritten clef"); return }
+        #expect(rewritten.concertClefType == "F")
+        #expect(rewritten.transposingClefType == nil)
+    }
+
     @Test func overrideForNonExistentStaffIsNoOp() {
         let score = makeScore(staffDefaultClefs: ["G"])
         let result = score.applying(clefOverrides: [
