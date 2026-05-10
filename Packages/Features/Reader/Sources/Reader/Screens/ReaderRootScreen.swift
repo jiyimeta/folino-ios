@@ -112,7 +112,8 @@ public struct ReaderRootScreen: View {
         case .loading:
             ProgressView().controlSize(.large)
         case let .loaded(score):
-            let visible = score.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
+            let withClefs = score.applying(clefOverrides: viewModel.preferences.staffClefOverrides)
+            let visible = withClefs.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
             switch layoutMode {
             case .vertical:
                 VerticalScoreContainer(
