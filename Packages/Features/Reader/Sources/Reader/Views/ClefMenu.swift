@@ -68,7 +68,7 @@ struct ClefMenu: View {
             Divider()
             tileRow(ClefMenuChoice.cFamily, current: currentRawType)
         }
-        .padding(12)
+        .padding(20)
     }
 
     @ViewBuilder
@@ -142,19 +142,23 @@ struct ClefMenu: View {
             path.addLine(to: CGPoint(x: size.width - rightPad, y: y))
             ctx.stroke(path, with: .color(.primary.opacity(0.6)), lineWidth: 0.5)
         }
-        // Mirror upstream `ClefRenderer` Y-anchor convention: origin Y is
-        // staff middle line; treble is +sp (G line, line 2 from bottom),
-        // bass is -sp (F line, line 4 from bottom), C clef is 0 (centered
-        // on middle line). swift-sheet-music's score renderer treats both
-        // alto and tenor the same here; preview tiles match that.
+        // Anchor convention: origin Y is the staff's middle line. Treble
+        // is +sp (G line, line 2 from bottom), bass is -sp (F line, line
+        // 4), Alto C is 0 (line 3, middle), Tenor C is -sp (line 4).
+        // The Tenor anchor here intentionally diverges from upstream's
+        // shared alto/tenor `yOffset = 0` so the picker tile shows the
+        // musically-correct C-line for tenor — the score renderer's
+        // tenor positioning is a separate upstream concern.
         let middleY = staffTop + sp * 2
         let yOffset: CGFloat = switch choice {
         case .trebleG, .trebleG8va, .trebleG8vb, .trebleG15ma, .trebleG15mb:
             sp
         case .bassF, .bassF8va, .bassF8vb:
             -sp
-        case .altoC3, .tenorC4:
+        case .altoC3:
             0
+        case .tenorC4:
+            -sp
         }
         let glyphText = Text(String(choice.smuflGlyph))
             .font(.custom(BravuraFont.familyName, fixedSize: sp * 4))
