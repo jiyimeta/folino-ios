@@ -10,6 +10,8 @@ struct ScoreListScreen: View {
     let onAddToPlaylist: (ScoreItem) -> Void
 
     @State private var pendingDelete: ScoreItem?
+    @State private var pendingRename: ScoreItem?
+    @State private var renameText: String = ""
     @State private var editMode: EditMode = .inactive
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var bulkSheet: BulkSheet?
@@ -33,6 +35,20 @@ struct ScoreListScreen: View {
 
     var body: some View {
         listContent
+            .alert(
+                Text("library.score.rename.title", bundle: .module),
+                isPresented: renameAlertBinding,
+                presenting: pendingRename
+            ) { item in
+                TextField(text: $renameText) {
+                    Text("library.score.rename.placeholder", bundle: .module)
+                }
+                Button {
+                    let newTitle = renameText
+                    Task { await library.rename(item, to: newTitle) }
+                } label: { L10n.Common.save }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
+            }
             .sheet(item: $bulkSheet) { which in
                 switch which {
                 case .addToPlaylist:
@@ -101,11 +117,22 @@ struct ScoreListScreen: View {
                 item: item,
                 library: library,
                 onOpen: onOpen,
+                onRename: { item in
+                    renameText = item.title
+                    pendingRename = item
+                },
                 onEditTags: onEditTags,
                 onAddToPlaylist: onAddToPlaylist,
                 onRequestDelete: { pendingDelete = $0 }
             )
         }
+    }
+
+    private var renameAlertBinding: Binding<Bool> {
+        Binding(
+            get: { pendingRename != nil },
+            set: { isPresented in if !isPresented { pendingRename = nil } }
+        )
     }
 
     private var isPlaylistSource: Bool {

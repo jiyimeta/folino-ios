@@ -12,6 +12,7 @@ func scoreRowMenu(
     loadShareFormats: @escaping @Sendable () async -> [ScoreShareFormatOption],
     onOpen: @escaping (ScoreItem) -> Void,
     onToggleFavorite: @escaping (ScoreItem) -> Void,
+    onRename: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,
     onAddToPlaylist: @escaping (ScoreItem) -> Void,
     onShare: @escaping (ScoreShareFormat) -> Void,
@@ -29,6 +30,13 @@ func scoreRowMenu(
             Text(item.isFavorite ? "library.score.unfavorite.action" : "library.score.favorite.action", bundle: .module)
         } icon: {
             Image(systemName: item.isFavorite ? "star.slash" : "star")
+        }
+    }
+    Button { onRename(item) } label: {
+        Label {
+            L10n.Common.rename
+        } icon: {
+            Image(systemName: "pencil")
         }
     }
     Button { onEditTags(item) } label: {

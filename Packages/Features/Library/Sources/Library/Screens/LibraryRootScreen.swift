@@ -23,6 +23,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var pendingDeletePlaylist: Playlist?
     @State private var pendingDeleteTag: Tag?
     @State private var pendingDeleteScore: ScoreItem?
+    @State private var pendingRenameScore: ScoreItem?
+    @State private var renameScoreText: String = ""
 
     public init(
         viewModel: LibraryViewModel,
@@ -72,6 +74,11 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     readerDestination(item)
                 }
         }
+        .libraryRootRenameScoreAlert(
+            viewModel: viewModel,
+            pending: $pendingRenameScore,
+            text: $renameScoreText
+        )
         .sheet(item: $editTagsTarget) { item in
             EditTagsScreen(scoreItem: item, library: viewModel)
         }
@@ -267,20 +274,29 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     }
 
     @ViewBuilder
+    private func sectionRowMenu(for item: ScoreItem) -> some View {
+        scoreRowMenu(
+            item: item,
+            library: viewModel,
+            onOpen: onOpenScore,
+            onRename: { item in
+                renameScoreText = item.title
+                pendingRenameScore = item
+            },
+            onEditTags: { editTagsTarget = $0 },
+            onAddToPlaylist: { addToPlaylistTarget = $0 },
+            onRequestDelete: nil
+        )
+    }
+
+    @ViewBuilder
     private func sectionRow(for item: ScoreItem) -> some View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
                 .onTapGesture { onOpenScore(item) }
             Menu {
-                scoreRowMenu(
-                    item: item,
-                    library: viewModel,
-                    onOpen: onOpenScore,
-                    onEditTags: { editTagsTarget = $0 },
-                    onAddToPlaylist: { addToPlaylistTarget = $0 },
-                    onRequestDelete: nil
-                )
+                sectionRowMenu(for: item)
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
@@ -318,14 +334,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             }
         }
         .contextMenu {
-            scoreRowMenu(
-                item: item,
-                library: viewModel,
-                onOpen: onOpenScore,
-                onEditTags: { editTagsTarget = $0 },
-                onAddToPlaylist: { addToPlaylistTarget = $0 },
-                onRequestDelete: nil
-            )
+            sectionRowMenu(for: item)
         }
     }
 

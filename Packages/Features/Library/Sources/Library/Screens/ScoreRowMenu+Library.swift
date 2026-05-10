@@ -9,6 +9,7 @@ func scoreRowMenu(
     item: ScoreItem,
     library: LibraryViewModel,
     onOpen: @escaping (ScoreItem) -> Void,
+    onRename: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,
     onAddToPlaylist: @escaping (ScoreItem) -> Void,
     onRequestDelete: ((ScoreItem) -> Void)?
@@ -20,6 +21,7 @@ func scoreRowMenu(
         },
         onOpen: onOpen,
         onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
+        onRename: onRename,
         onEditTags: onEditTags,
         onAddToPlaylist: onAddToPlaylist,
         onShare: { format in Task { await library.requestShare(item, format: format) } },

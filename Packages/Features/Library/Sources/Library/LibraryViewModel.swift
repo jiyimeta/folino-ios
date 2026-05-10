@@ -66,6 +66,14 @@ public final class LibraryViewModel {
         await save(updated)
     }
 
+    public func rename(_ scoreItem: ScoreItem, to newTitle: String) async {
+        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != scoreItem.title else { return }
+        var updated = scoreItem
+        updated.title = trimmed
+        await save(updated)
+    }
+
     public func delete(_ scoreItem: ScoreItem) async {
         do {
             try await repository.deleteScoreItem(id: scoreItem.id)
