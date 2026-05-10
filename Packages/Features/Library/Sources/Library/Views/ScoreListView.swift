@@ -176,8 +176,9 @@ struct ScoreListView<RowMenu: View>: View {
             }
             .tint(.yellow)
         }
+        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
+            Button {
                 pendingDelete = item
             } label: {
                 Label {
@@ -186,6 +187,7 @@ struct ScoreListView<RowMenu: View>: View {
                     Image(systemName: "trash")
                 }
             }
+            .tint(.red)
         }
         .contextMenu {
             rowMenu(item)

@@ -28,8 +28,9 @@ struct LibraryRootPlaylistsSection: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
+                            Button {
                                 onRequestDelete(playlist)
                             } label: {
                                 Label {
@@ -38,6 +39,7 @@ struct LibraryRootPlaylistsSection: View {
                                     Image(systemName: "trash")
                                 }
                             }
+                            .tint(.red)
                         }
                     }
                     if total > 5 {
@@ -86,8 +88,9 @@ struct LibraryRootTagsSection: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
+                            Button {
                                 onRequestDelete(tag)
                             } label: {
                                 Label {
@@ -96,6 +99,7 @@ struct LibraryRootTagsSection: View {
                                     Image(systemName: "trash")
                                 }
                             }
+                            .tint(.red)
                         }
                     }
                     if total > 5 {

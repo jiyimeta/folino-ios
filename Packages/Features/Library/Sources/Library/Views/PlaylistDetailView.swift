@@ -44,8 +44,9 @@ struct PlaylistDetailView: View {
                                 }
                             }
                             .tag(item.id)
+                            // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
+                                Button {
                                     onRemoveFromPlaylist(item)
                                 } label: {
                                     Label {
@@ -54,6 +55,7 @@ struct PlaylistDetailView: View {
                                         Image(systemName: "minus.circle")
                                     }
                                 }
+                                .tint(.red)
                             }
                     }
                     .onMove(perform: onMove)

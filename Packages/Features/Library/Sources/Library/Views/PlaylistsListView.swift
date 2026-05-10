@@ -35,8 +35,9 @@ struct PlaylistsListView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
+                            Button {
                                 pendingDelete = playlist
                             } label: {
                                 Label {
@@ -45,6 +46,7 @@ struct PlaylistsListView: View {
                                     Image(systemName: "trash")
                                 }
                             }
+                            .tint(.red)
                         }
                     }
                 }

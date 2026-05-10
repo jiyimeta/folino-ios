@@ -36,8 +36,9 @@ struct TagsListView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
+                            Button {
                                 pendingDelete = tag
                             } label: {
                                 Label {
@@ -46,6 +47,7 @@ struct TagsListView: View {
                                     Image(systemName: "trash")
                                 }
                             }
+                            .tint(.red)
                         }
                     }
                 }

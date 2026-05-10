@@ -322,8 +322,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             }
             .tint(.yellow)
         }
+        // No `role: .destructive`: it would make SwiftUI hide the row
+        // immediately on tap (same contract as `.onDelete`), which fights
+        // our confirm-then-delete flow and crashes multi-section Lists
+        // ("Invalid update: invalid number of items in section N").
+        // `.tint(.red)` keeps the red colour.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
+            Button {
                 pendingDeleteScore = item
             } label: {
                 Label {
@@ -332,6 +337,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     Image(systemName: "trash")
                 }
             }
+            .tint(.red)
         }
         .contextMenu {
             sectionRowMenu(for: item)
