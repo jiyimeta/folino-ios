@@ -298,6 +298,47 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         return score.parts[address.partIndex].instrument.channel.bank
     }
 
+    /// Returns the rawType the renderer will use for this staff: the
+    /// override if one is set, otherwise the score's authored opening
+    /// clef (explicit measure-0 clef, else `Staff.defaultClefType`),
+    /// falling back to `"G"` if neither exists or the staff isn't in
+    /// the score.
+    public func effectiveClef(for address: StaffAddress) -> String {
+        if let override = preferences.staffClefOverrides[address] {
+            return override
+        }
+        return authoredClef(for: address) ?? "G"
+    }
+
+    public func hasClefOverride(for address: StaffAddress) -> Bool {
+        preferences.staffClefOverrides[address] != nil
+    }
+
+    public func setClefOverride(_ rawType: String, for address: StaffAddress) async {
+        await mutatePreferences { $0.staffClefOverrides[address] = rawType }
+    }
+
+    public func clearClefOverride(for address: StaffAddress) async {
+        await mutatePreferences {
+            $0.staffClefOverrides.removeValue(forKey: address)
+        }
+    }
+
+    private func authoredClef(for address: StaffAddress) -> String? {
+        guard case let .loaded(score) = loadState,
+              score.parts.indices.contains(address.partIndex),
+              score.parts[address.partIndex].staves.indices
+                  .contains(address.staffIndexInPart)
+        else { return nil }
+        let staff = score.parts[address.partIndex].staves[address.staffIndexInPart]
+        if let first = staff.measures.first?.voices.first?.elements.first,
+           case let .clef(c) = first
+        {
+            return c.concertClefType
+        }
+        return staff.defaultClefType
+    }
+
     /// CC7 (Channel Volume) from the part's first channel, mapped from
     /// MIDI's 0…127 to the slider's 0…1. Returns nil when the score has no
     /// matching part — callers fall back to `defaultStaffVolume`. Mirrors
@@ -576,6 +617,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             hiddenStaves: copy.hiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
             staffVolumeOverrides: copy.staffVolumeOverrides,
+            staffClefOverrides: copy.staffClefOverrides,
             tempoMultiplier: copy.tempoMultiplier,
             honorLayoutBreaks: copy.honorLayoutBreaks,
             repeatMode: copy.repeatMode,
