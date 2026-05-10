@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Per-staff clef override Menu shown on the Reader Inspector's Visual tab.
 /// Lives outside `InspectorScreen` so the screen file stays under length
-/// limits and the menu's three-section structure is easier to scan.
+/// limits.
 struct ClefMenu: View {
     @Bindable var viewModel: ReaderViewModel
     let address: StaffAddress
@@ -11,11 +11,10 @@ struct ClefMenu: View {
     var body: some View {
         let effective = viewModel.effectiveClef(for: address)
         let hasOverride = viewModel.hasClefOverride(for: address)
-        let label = ClefMenuChoice.from(rawType: effective)?.displayLabel ?? effective
         Menu {
             menuContent(hasOverride: hasOverride)
         } label: {
-            menuLabel(label: label, hasOverride: hasOverride)
+            menuLabel(rawType: effective, hasOverride: hasOverride)
         }
         .menuIndicator(.hidden)
         .accessibilityLabel(Text("reader.preferences.clef", bundle: .module))
@@ -27,9 +26,11 @@ struct ClefMenu: View {
             resetButton
             Divider()
         }
-        familySection(ClefMenuChoice.trebleFamily, headerKey: "reader.preferences.clef.section.treble")
-        familySection(ClefMenuChoice.bassFamily, headerKey: "reader.preferences.clef.section.bass")
-        familySection(ClefMenuChoice.cFamily, headerKey: "reader.preferences.clef.section.cClefs")
+        familyButtons(ClefMenuChoice.trebleFamily)
+        Divider()
+        familyButtons(ClefMenuChoice.bassFamily)
+        Divider()
+        familyButtons(ClefMenuChoice.cFamily)
     }
 
     @ViewBuilder
@@ -46,27 +47,22 @@ struct ClefMenu: View {
     }
 
     @ViewBuilder
-    private func familySection(
-        _ choices: [ClefMenuChoice],
-        headerKey: LocalizedStringKey
-    ) -> some View {
-        Section {
-            ForEach(choices, id: \.self) { choice in
-                Button(choice.displayLabel) {
-                    Task {
-                        await viewModel.setClefOverride(choice.rawType, for: address)
-                    }
+    private func familyButtons(_ choices: [ClefMenuChoice]) -> some View {
+        ForEach(choices, id: \.self) { choice in
+            Button {
+                Task {
+                    await viewModel.setClefOverride(choice.rawType, for: address)
                 }
+            } label: {
+                Text(choice.displayLabel, bundle: .module)
             }
-        } header: {
-            Text(headerKey, bundle: .module)
         }
     }
 
     @ViewBuilder
-    private func menuLabel(label: String, hasOverride: Bool) -> some View {
+    private func menuLabel(rawType: String, hasOverride: Bool) -> some View {
         HStack(spacing: 4) {
-            Text(label)
+            labelText(rawType: rawType)
                 .lineLimit(1)
                 .foregroundStyle(hasOverride ? Color.accentColor : Color.primary)
             Image(systemName: "chevron.up.chevron.down")
@@ -75,5 +71,13 @@ struct ClefMenu: View {
         }
         .font(.callout)
         .padding(.horizontal, 4)
+    }
+
+    private func labelText(rawType: String) -> Text {
+        if let choice = ClefMenuChoice.from(rawType: rawType) {
+            Text(choice.displayLabel, bundle: .module)
+        } else {
+            Text(rawType)
+        }
     }
 }

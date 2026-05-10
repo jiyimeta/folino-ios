@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 /// Picker vocabulary for the Reader's per-staff clef override menu.
 /// Constrains the v1 UI to ten clefs; the underlying override map
@@ -24,12 +24,23 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         }
     }
 
-    /// Short label shown in the menu row and on the menu's button label.
-    var displayLabel: String {
+    /// Localized label shown on the menu button and inside each
+    /// menu row. Treble / Bass / Alto / Tenor are the conventional
+    /// English names; the `8va` / `8vb` / `15ma` / `15mb` modifiers
+    /// stay as universal music-notation symbols even when the rest
+    /// of the string is localized.
+    var displayLabel: LocalizedStringKey {
         switch self {
-        case .altoC3: "Alto"
-        case .tenorC4: "Tenor"
-        default: rawType
+        case .trebleG: "reader.preferences.clef.choice.treble"
+        case .trebleG8va: "reader.preferences.clef.choice.treble8va"
+        case .trebleG8vb: "reader.preferences.clef.choice.treble8vb"
+        case .trebleG15ma: "reader.preferences.clef.choice.treble15ma"
+        case .trebleG15mb: "reader.preferences.clef.choice.treble15mb"
+        case .bassF: "reader.preferences.clef.choice.bass"
+        case .bassF8va: "reader.preferences.clef.choice.bass8va"
+        case .bassF8vb: "reader.preferences.clef.choice.bass8vb"
+        case .altoC3: "reader.preferences.clef.choice.alto"
+        case .tenorC4: "reader.preferences.clef.choice.tenor"
         }
     }
 

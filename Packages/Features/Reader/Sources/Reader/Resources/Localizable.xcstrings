@@ -183,6 +183,166 @@
         }
       }
     },
+    "reader.preferences.clef.choice.alto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アルト"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.bass" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bass"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘ音"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.bass8va" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bass 8va"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘ音 8va"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.bass8vb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bass 8vb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘ音 8vb"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.tenor" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tenor"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テナー"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble15ma" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 15ma"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 15ma"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble15mb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 15mb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 15mb"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble8va" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 8va"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 8va"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble8vb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 8vb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 8vb"
+          }
+        }
+      }
+    },
     "reader.preferences.clef.resetDefault" : {
       "localizations" : {
         "en" : {
@@ -195,54 +355,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "スコアの音部記号を使う"
-          }
-        }
-      }
-    },
-    "reader.preferences.clef.section.bass" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bass"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bass"
-          }
-        }
-      }
-    },
-    "reader.preferences.clef.section.cClefs" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "C"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "C"
-          }
-        }
-      }
-    },
-    "reader.preferences.clef.section.treble" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Treble"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Treble"
           }
         }
       }
