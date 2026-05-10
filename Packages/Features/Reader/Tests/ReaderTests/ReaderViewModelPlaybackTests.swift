@@ -47,6 +47,35 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.playbackCursor == nil)
     }
 
+    @Test func cursorBecomingNilAfterPlayResetsIsPlaying() async {
+        // The engine emits a nil cursor when playback finishes naturally
+        // (`PlaybackEngine.stop()` clears `currentCursor` once
+        // `tickCursor` reaches `totalTicks`). The toolbar's play/pause
+        // glyph is bound to `isPlaying`, so it must flip back to "play"
+        // when that signal arrives.
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
+            metaTags: [:]
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller
+        )
+        await vm.load()
+        vm.startObservingCursor()
+        await vm.togglePlayback()
+        #expect(vm.isPlaying)
+
+        controller.emitCursor(nil)
+        #expect(!vm.isPlaying)
+    }
+
     @Test func togglePlaybackLoadsPlaysThenPauses() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()

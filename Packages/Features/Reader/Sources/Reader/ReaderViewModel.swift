@@ -135,6 +135,14 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             guard let self else { return }
             rawPlaybackCursor = value
             playbackCursor = translateCursorForHiddenStaves(value)
+            // The engine emits a nil cursor only when playback hits the
+            // end of the score (`PlaybackEngine.stop()` clears it; explicit
+            // `pause()` does not). Use that signal to flip the toolbar's
+            // play/pause glyph back to "play" — without this, isPlaying
+            // stays true forever after the score finishes naturally.
+            if value == nil, isPlaying {
+                isPlaying = false
+            }
         }
     }
 
