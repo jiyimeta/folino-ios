@@ -12,10 +12,15 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let minTempoMultiplier: Double = 0.5
     public static let maxTempoMultiplier: Double = 2.0
 
-    /// Allow-list of `NotatedClef.rawType` values the Domain initializer
-    /// accepts. Mirrors `NotatedClef`'s parseable forms in
-    /// `swift-sheet-music`. Kept here as a literal set so Domain stays
-    /// `SheetMusicCore`-only.
+    /// Allow-list of canonical `NotatedClef.rawType` values the Domain
+    /// initializer accepts. Mirrors the 11 forms `NotatedClef.rawType`
+    /// emits in `swift-sheet-music`. Aliases that `NotatedClef(rawType:)`
+    /// accepts as inputs but never emits (e.g. `"treble"`, `"bass"`,
+    /// `"alto"`, `"tenor"`, `"G1"`, `"G2"`, `"PERC2"`, `"percussion"`)
+    /// are intentionally excluded so override values stay canonical and
+    /// round-trip equality is preserved. If `swift-sheet-music` adds a
+    /// new emitted rawType, audit `NotatedClef.rawType`'s switch and
+    /// extend this set.
     public static let knownClefRawTypes: Set<String> = [
         "G", "G8va", "G8vb", "G15ma", "G15mb",
         "F", "F8va", "F8vb",
@@ -40,7 +45,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public var staffVolumeOverrides: [StaffAddress: Double]
     /// User-chosen display-only clef per staff that overrides the score's
     /// authored opening clef. Values are `NotatedClef.rawType` strings
-    /// (e.g. `"G"`, `"G8vb"`, `"F8va"`, `"alto"`). Stored as `String` to
+    /// (e.g. `"G"`, `"G8vb"`, `"F8va"`, `"C3"`). Stored as `String` to
     /// avoid pulling `SheetMusicLayout` into Domain — the Reader feature
     /// converts via `NotatedClef(rawType:)` at the use site. Unknown
     /// rawTypes are dropped by the initializer.
