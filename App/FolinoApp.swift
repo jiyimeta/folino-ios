@@ -4,6 +4,7 @@ import SwiftUI
 struct FolinoApp: App {
     @State private var bootstrap = AppBootstrap()
     @State private var reviewPrompt = ReviewPromptCoordinator()
+    @State private var versionHistoryPresenter = VersionHistoryPresenter()
 
     init() {
         EdwinFontLoader.registerOnce()
@@ -11,12 +12,19 @@ struct FolinoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppShellView(bootstrap: bootstrap, reviewPrompt: reviewPrompt)
-                .task {
-                    bootstrap.start()
-                    reviewPrompt.registerColdLaunchIfNeeded()
-                }
-                .onOpenURL { bootstrap.acceptIncomingURL($0) }
+            AppShellView(
+                bootstrap: bootstrap,
+                reviewPrompt: reviewPrompt,
+                versionHistoryPresenter: versionHistoryPresenter,
+            )
+            .task {
+                bootstrap.start()
+                versionHistoryPresenter.registerColdLaunchIfNeeded()
+                reviewPrompt.registerColdLaunchIfNeeded(
+                    suppressDisplay: versionHistoryPresenter.isSheetPresented,
+                )
+            }
+            .onOpenURL { bootstrap.acceptIncomingURL($0) }
         }
     }
 }

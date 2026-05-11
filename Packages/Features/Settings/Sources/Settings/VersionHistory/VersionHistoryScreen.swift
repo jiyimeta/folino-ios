@@ -1,6 +1,19 @@
 import Domain
 import SwiftUI
 
+/// Typed accessors for Settings-module localized strings that need to be
+/// resolved from outside the module (e.g. App composition root). Routing
+/// through `LocalizedStringResource` with an explicit bundle URL ensures the
+/// lookup hits Settings's resource bundle rather than the caller's `.module`.
+public enum VersionHistoryStrings {
+    public static var title: LocalizedStringResource {
+        LocalizedStringResource(
+            "settings.versionHistory.title",
+            bundle: .atURL(Bundle.module.bundleURL),
+        )
+    }
+}
+
 public struct VersionHistoryScreen: View {
     private let viewModel: VersionHistoryViewModel
     @Environment(\.colorScheme) private var colorScheme

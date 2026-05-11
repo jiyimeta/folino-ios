@@ -5,10 +5,12 @@ import Reader
 import Settings
 import StoreKit
 import SwiftUI
+import UtilityUI
 
 struct AppShellView: View {
     let bootstrap: AppBootstrap
     @Bindable var reviewPrompt: ReviewPromptCoordinator
+    @Bindable var versionHistoryPresenter: VersionHistoryPresenter
     @Environment(\.requestReview) private var requestReview
 
     var body: some View {
@@ -25,7 +27,8 @@ struct AppShellView: View {
                     importer: importer,
                     gateway: gateway,
                     shareService: shareService,
-                    scoresDirectory: AppPaths.scoresDirectory
+                    scoresDirectory: AppPaths.scoresDirectory,
+                    versionHistoryPresenter: versionHistoryPresenter,
                 )
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {
@@ -47,6 +50,27 @@ struct AppShellView: View {
         } message: {
             Text("app.review.preprompt.message")
         }
+        .sheet(isPresented: $versionHistoryPresenter.isSheetPresented) {
+            if let viewModel = versionHistoryPresenter.sheetViewModel {
+                NavigationStack {
+                    VersionHistoryScreen(
+                        viewModel: viewModel,
+                        onAppear: { versionHistoryPresenter.markCurrentVersionAsSeen() },
+                    )
+                    .navigationTitle(Text(VersionHistoryStrings.title))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                versionHistoryPresenter.isSheetPresented = false
+                            } label: {
+                                L10n.Common.done
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -57,6 +81,7 @@ private struct ReadyShell: View {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let scoresDirectory: URL
+    let versionHistoryPresenter: VersionHistoryPresenter
 
     @State private var libraryVM: LibraryViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -73,7 +98,8 @@ private struct ReadyShell: View {
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
-        scoresDirectory: URL
+        scoresDirectory: URL,
+        versionHistoryPresenter: VersionHistoryPresenter,
     ) {
         self.bootstrap = bootstrap
         self.repository = repository
@@ -81,13 +107,14 @@ private struct ReadyShell: View {
         self.gateway = gateway
         self.shareService = shareService
         self.scoresDirectory = scoresDirectory
+        self.versionHistoryPresenter = versionHistoryPresenter
         _libraryVM = State(
             wrappedValue: LibraryViewModel(
                 repository: repository,
                 importer: importer,
                 gateway: gateway,
-                shareService: shareService
-            )
+                shareService: shareService,
+            ),
         )
 
         let store = NavigationStateStore()
@@ -99,7 +126,7 @@ private struct ReadyShell: View {
         _sidebarPath = State(wrappedValue: restoredSidebar)
         _detailScoreItem = State(wrappedValue: restoredDetail)
         _columnVisibility = State(
-            wrappedValue: restoredDetail != nil ? .detailOnly : .doubleColumn
+            wrappedValue: restoredDetail != nil ? .detailOnly : .doubleColumn,
         )
     }
 
@@ -107,7 +134,7 @@ private struct ReadyShell: View {
         navStateStore.save(
             compact: compactPath,
             sidebar: sidebarPath,
-            detailScoreID: detailScoreItem?.id
+            detailScoreID: detailScoreItem?.id,
         )
     }
 
@@ -150,11 +177,11 @@ private struct ReadyShell: View {
                             gateway: gateway,
                             scoresDirectory: scoresDirectory,
                             playbackController: bootstrap.playbackController,
-                            reachability: bootstrap.reachability
+                            reachability: bootstrap.reachability,
                         )
                     },
                     licenseContent: { LicenseListView() },
-                    leadingToolbarItem: { settingsButton }
+                    leadingToolbarItem: { settingsButton },
                 )
                 #if DEBUG
                 .debuggable()
@@ -164,7 +191,8 @@ private struct ReadyShell: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(
                 soundfontResolver: bootstrap.soundfontResolver,
-                presetCatalog: bootstrap.presetCatalog
+                presetCatalog: bootstrap.presetCatalog,
+                onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
             ) {
                 LicenseListView()
             }
@@ -222,7 +250,7 @@ private struct ReadyShell: View {
                 playbackController: bootstrap.playbackController,
                 reachability: bootstrap.reachability,
                 onBack: { columnVisibility = .doubleColumn },
-                hidesBackButton: columnVisibility == .doubleColumn
+                hidesBackButton: columnVisibility == .doubleColumn,
             )
             // Force a fresh view identity per score so ReaderRootScreen's
             // @State (viewModel seeded from scoreItem in init) is rebuilt
@@ -233,7 +261,6 @@ private struct ReadyShell: View {
         }
     }
 
-    @ViewBuilder
     private var sidebar: some View {
         LibraryRootScreen(
             viewModel: libraryVM,
@@ -247,11 +274,11 @@ private struct ReadyShell: View {
                     scoreItem: item,
                     repository: repository,
                     gateway: gateway,
-                    scoresDirectory: scoresDirectory
+                    scoresDirectory: scoresDirectory,
                 )
             },
             licenseContent: { LicenseListView() },
-            leadingToolbarItem: { settingsButton }
+            leadingToolbarItem: { settingsButton },
         )
     }
 
