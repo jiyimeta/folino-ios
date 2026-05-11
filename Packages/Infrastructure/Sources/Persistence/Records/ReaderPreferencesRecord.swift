@@ -17,6 +17,9 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     var staffVolumeOverrides: String
     var staffClefOverrides: String
     var honorLayoutBreaks: Bool
+    var repeatMode: String
+    var tempoMultiplier: Double?
+    var abRepeat: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -27,6 +30,9 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         case staffVolumeOverrides = "staff_volume_overrides"
         case staffClefOverrides = "staff_clef_overrides"
         case honorLayoutBreaks = "honor_layout_breaks"
+        case repeatMode = "repeat_mode"
+        case tempoMultiplier = "tempo_multiplier"
+        case abRepeat = "ab_repeat"
     }
 
     init(domain prefs: ReaderPreferences) {
@@ -58,69 +64,111 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             String(data: $0, encoding: .utf8)
         } ?? "[]"
         honorLayoutBreaks = prefs.honorLayoutBreaks
+        repeatMode = prefs.repeatMode.rawValue
+        tempoMultiplier = prefs.tempoMultiplier
+        if let range = prefs.abRepeat,
+           let data = try? JSONEncoder().encode(range)
+        {
+            abRepeat = String(data: data, encoding: .utf8)
+        } else {
+            abRepeat = nil
+        }
     }
 
     func toDomain() throws -> ReaderPreferences {
         guard let idUUID = UUID(uuidString: id) else {
             throw DomainError.persistenceFailed(
-                reason: "reader_preferences.id is not a valid UUID: \(id)")
+                reason: "reader_preferences.id is not a valid UUID: \(id)",
+            )
         }
         guard let scoreUUID = UUID(uuidString: scoreItemId) else {
             throw DomainError.persistenceFailed(
-                reason: "reader_preferences.score_item_id is not a valid UUID: \(scoreItemId)")
-        }
-        let decodedHidden: [StaffAddress] = (try? JSONDecoder().decode(
-            [StaffAddress].self,
-            from: Data(hiddenStaffIds.utf8)
-        )) ?? []
-        let decodedOverrides: [[Int]] = (try? JSONDecoder().decode(
-            [[Int]].self,
-            from: Data(staffProgramOverrides.utf8)
-        )) ?? []
-        var overrides: [StaffAddress: Int] = [:]
-        for triple in decodedOverrides where triple.count == 3 {
-            let address = StaffAddress(partIndex: triple[0], staffIndexInPart: triple[1])
-            overrides[address] = triple[2]
-        }
-        let decodedVolumeOverrides: [[Double]] = (try? JSONDecoder().decode(
-            [[Double]].self,
-            from: Data(staffVolumeOverrides.utf8)
-        )) ?? []
-        var volumeOverrides: [StaffAddress: Double] = [:]
-        for triple in decodedVolumeOverrides where triple.count == 3 {
-            let address = StaffAddress(
-                partIndex: Int(triple[0]),
-                staffIndexInPart: Int(triple[1])
+                reason: "reader_preferences.score_item_id is not a valid UUID: \(scoreItemId)",
             )
-            volumeOverrides[address] = triple[2]
         }
-        struct ClefTripleRow: Decodable {
-            let partIndex: Int
-            let staffIndexInPart: Int
-            let rawType: String
-        }
-        let decodedClefOverrides: [ClefTripleRow] = (try? JSONDecoder().decode(
-            [ClefTripleRow].self,
-            from: Data(staffClefOverrides.utf8)
-        )) ?? []
-        var clefOverrides: [StaffAddress: String] = [:]
-        for row in decodedClefOverrides {
-            let address = StaffAddress(
-                partIndex: row.partIndex,
-                staffIndexInPart: row.staffIndexInPart
-            )
-            clefOverrides[address] = row.rawType
+        // Unknown repeat mode strings (e.g. SQL column hand-edited or a
+        // future value rolled back to an older binary) fall back to
+        // `.off` — preserves the row instead of failing the whole
+        // fetch.
+        let decodedRepeatMode = RepeatMode(rawValue: repeatMode) ?? .off
+        let decodedAbRepeat: ABRepeatRange? = abRepeat.flatMap { json in
+            try? JSONDecoder().decode(ABRepeatRange.self, from: Data(json.utf8))
         }
         return ReaderPreferences(
             id: ReaderPreferencesID(rawValue: idUUID),
             scoreItemID: ScoreItemID(rawValue: scoreUUID),
             staffSize: CGFloat(staffSize),
-            hiddenStaves: Set(decodedHidden),
-            staffProgramOverrides: overrides,
-            staffVolumeOverrides: volumeOverrides,
-            staffClefOverrides: clefOverrides,
-            honorLayoutBreaks: honorLayoutBreaks
+            hiddenStaves: Self.decodeHidden(hiddenStaffIds),
+            staffProgramOverrides: Self.decodeProgramOverrides(staffProgramOverrides),
+            staffVolumeOverrides: Self.decodeVolumeOverrides(staffVolumeOverrides),
+            staffClefOverrides: Self.decodeClefOverrides(staffClefOverrides),
+            tempoMultiplier: tempoMultiplier,
+            honorLayoutBreaks: honorLayoutBreaks,
+            repeatMode: decodedRepeatMode,
+            abRepeat: decodedAbRepeat,
         )
+    }
+
+    private static func decodeHidden(_ json: String) -> Set<StaffAddress> {
+        let decoded = (try? JSONDecoder().decode(
+            [StaffAddress].self, from: Data(json.utf8),
+        )) ?? []
+        return Set(decoded)
+    }
+
+    private static func decodeProgramOverrides(
+        _ json: String,
+    ) -> [StaffAddress: Int] {
+        let triples = (try? JSONDecoder().decode(
+            [[Int]].self, from: Data(json.utf8),
+        )) ?? []
+        var result: [StaffAddress: Int] = [:]
+        for triple in triples where triple.count == 3 {
+            let address = StaffAddress(
+                partIndex: triple[0], staffIndexInPart: triple[1],
+            )
+            result[address] = triple[2]
+        }
+        return result
+    }
+
+    private static func decodeVolumeOverrides(
+        _ json: String,
+    ) -> [StaffAddress: Double] {
+        let triples = (try? JSONDecoder().decode(
+            [[Double]].self, from: Data(json.utf8),
+        )) ?? []
+        var result: [StaffAddress: Double] = [:]
+        for triple in triples where triple.count == 3 {
+            let address = StaffAddress(
+                partIndex: Int(triple[0]),
+                staffIndexInPart: Int(triple[1]),
+            )
+            result[address] = triple[2]
+        }
+        return result
+    }
+
+    private static func decodeClefOverrides(
+        _ json: String,
+    ) -> [StaffAddress: String] {
+        struct ClefTripleRow: Decodable {
+            let partIndex: Int
+            let staffIndexInPart: Int
+            let rawType: String
+        }
+        let rows = (try? JSONDecoder().decode(
+            [ClefTripleRow].self, from: Data(json.utf8),
+        )) ?? []
+        var result: [StaffAddress: String] = [:]
+        for row in rows {
+            let address = StaffAddress(
+                partIndex: row.partIndex,
+                staffIndexInPart: row.staffIndexInPart,
+            )
+            result[address] = row.rawType
+        }
+        return result
     }
 
     private static func encodeTriple(address: StaffAddress, program: Int) -> [Int] {
@@ -132,12 +180,12 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     }
 
     private static func encodeClefTriple(
-        address: StaffAddress, rawType: String
+        address: StaffAddress, rawType: String,
     ) -> ClefTripleEncoded {
         ClefTripleEncoded(
             partIndex: address.partIndex,
             staffIndexInPart: address.staffIndexInPart,
-            rawType: rawType
+            rawType: rawType,
         )
     }
 

@@ -5,7 +5,7 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct ReaderViewModelTests {
     private static func makeItem() -> ScoreItem {
         ScoreItem(
@@ -13,11 +13,11 @@ struct ReaderViewModelTests {
             localFileName: "test.mscx", contentHash: "hash",
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
-    @Test func successfulLoadTransitionsToLoadedAndUpdatesLastOpened() async {
+    @Test func `successful load transitions to loaded and updates last opened`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -26,7 +26,7 @@ struct ReaderViewModelTests {
             scoreItem: item,
             repository: repo,
             gateway: gateway,
-            scoresDirectory: URL(filePath: "/tmp")
+            scoresDirectory: URL(filePath: "/tmp"),
         )
 
         await vm.load()
@@ -37,18 +37,18 @@ struct ReaderViewModelTests {
         #expect(repo.savedScoreItems.first?.lastOpenedAt != nil)
     }
 
-    @Test func loadFailureTransitionsToFailedAndDoesNotSave() async {
+    @Test func `load failure transitions to failed and does not save`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let gateway = FakeScoreFileGateway(
-            loadScoreResult: .failure(.scoreFileNotFound(name: "test.mscx"))
+            loadScoreResult: .failure(.scoreFileNotFound(name: "test.mscx")),
         )
         let vm = ReaderViewModel(
             scoreItem: item,
             repository: repo,
             gateway: gateway,
-            scoresDirectory: URL(filePath: "/tmp")
+            scoresDirectory: URL(filePath: "/tmp"),
         )
 
         await vm.load()
@@ -58,18 +58,18 @@ struct ReaderViewModelTests {
         #expect(repo.savedScoreItems.isEmpty)
     }
 
-    @Test func reloadAfterFailureSucceeds() async {
+    @Test func `reload after failure succeeds`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let gateway = FakeScoreFileGateway(
-            loadScoreResult: .failure(.scoreParseFailed(reason: "bad"))
+            loadScoreResult: .failure(.scoreParseFailed(reason: "bad")),
         )
         let vm = ReaderViewModel(
             scoreItem: item,
             repository: repo,
             gateway: gateway,
-            scoresDirectory: URL(filePath: "/tmp")
+            scoresDirectory: URL(filePath: "/tmp"),
         )
         await vm.load()
         if case .failed = vm.loadState {} else {
@@ -80,8 +80,8 @@ struct ReaderViewModelTests {
             score: Score(division: 480, parts: [], metaTags: [:]),
             summary: ScoreFileSummary(
                 title: "Test", composer: nil, instrumentationSummary: "",
-                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-            )
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            ),
         ))
         await vm.load()
         if case .loaded = vm.loadState {} else {
@@ -89,7 +89,7 @@ struct ReaderViewModelTests {
         }
     }
 
-    @Test func firstOpenPopulatesDeviceClassDefaultStaffSize() async {
+    @Test func `first open populates device class default staff size`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -97,7 +97,7 @@ struct ReaderViewModelTests {
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: gateway,
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 11 // simulates iPhone compact
+            defaultStaffSize: 11, // simulates iPhone compact
         )
 
         await vm.load()
@@ -106,19 +106,19 @@ struct ReaderViewModelTests {
         #expect(repo.savedReaderPreferences.count == 1)
     }
 
-    @Test func loadUsesPersistedPreferencesWhenPresent() async {
+    @Test func `load uses persisted preferences when present`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let hidden: Set<StaffAddress> = [StaffAddress(partIndex: 1, staffIndexInPart: 0)]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 18, hiddenStaves: hidden
+            scoreItemID: item.id, staffSize: 18, hiddenStaves: hidden,
         )
         let gateway = FakeScoreFileGateway()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: gateway,
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
 
         await vm.load()
@@ -128,18 +128,18 @@ struct ReaderViewModelTests {
         #expect(repo.savedReaderPreferences.isEmpty)
     }
 
-    @Test func incrementAndDecrementStaffSizePersist() async {
+    @Test func `increment and decrement staff size persist`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: [],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         await vm.incrementStaffSize()
@@ -151,38 +151,40 @@ struct ReaderViewModelTests {
         #expect(repo.savedReaderPreferences.count == 3)
     }
 
-    @Test func staffSizeIsClampedToMinAndMax() async {
+    @Test func `staff size is clamped to min and max`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 8, hiddenStaves: []
+            scoreItemID: item.id, staffSize: 8, hiddenStaves: [],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         await vm.decrementStaffSize()
         #expect(vm.preferences.staffSize == 8) // already at min, stays at min
-        for _ in 0 ..< 25 { await vm.incrementStaffSize() }
+        for _ in 0 ..< 25 {
+            await vm.incrementStaffSize()
+        }
         #expect(vm.preferences.staffSize == 28) // capped
     }
 
-    @Test func toggleStaffFlipsMembership() async {
+    @Test func `toggle staff flips membership`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: [],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         let address = StaffAddress(partIndex: 1, staffIndexInPart: 0)
@@ -192,13 +194,13 @@ struct ReaderViewModelTests {
         #expect(vm.preferences.hiddenStaves.isEmpty)
     }
 
-    @Test func volumeFallsBackToOneWhenLoadStateHasNoParts() {
+    @Test func `volume falls back to one when load state has no parts`() {
         let vm = makeVMNoLoad()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
         #expect(vm.volume(for: address) == 1.0)
     }
 
-    @Test func setVolumeClampsOutOfRangeValues() {
+    @Test func `set volume clamps out of range values`() {
         let vm = makeVMNoLoad()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
@@ -209,7 +211,7 @@ struct ReaderViewModelTests {
         #expect(vm.liveStaffVolumes[address] == 1)
     }
 
-    @Test func volumeUsesScoreCC7WhenNoOverride() async {
+    @Test func `volume uses score CC 7 when no override`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -219,10 +221,10 @@ struct ReaderViewModelTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 64)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -230,11 +232,11 @@ struct ReaderViewModelTests {
                 score: score,
                 summary: ScoreFileSummary(
                     title: "T", composer: nil, instrumentationSummary: "",
-                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-                )
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                ),
             ))),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
@@ -242,7 +244,7 @@ struct ReaderViewModelTests {
         #expect(abs(value - 64.0 / 127.0) < 0.0001)
     }
 
-    @Test func volumeUsesPersistedOverrideWhenPresent() async {
+    @Test func `volume uses persisted override when present`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -251,7 +253,7 @@ struct ReaderViewModelTests {
             scoreItemID: item.id,
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 0.3]
+            staffVolumeOverrides: [address: 0.3],
         )
         let score = Score(
             division: 480,
@@ -259,10 +261,10 @@ struct ReaderViewModelTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 100)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -270,24 +272,24 @@ struct ReaderViewModelTests {
                 score: score,
                 summary: ScoreFileSummary(
                     title: "T", composer: nil, instrumentationSummary: "",
-                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-                )
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                ),
             ))),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         #expect(vm.volume(for: address) == 0.3)
     }
 
-    @Test func resetZoomReturnsToUnit() {
+    @Test func `reset zoom returns to unit`() {
         let vm = makeVMNoLoad()
         vm.viewportZoom = 2.5
         vm.resetZoom()
         #expect(vm.viewportZoom == 1.0)
     }
 
-    @Test func toggleZoomGoesFromUnitToTargetThenBack() {
+    @Test func `toggle zoom goes from unit to target then back`() {
         let vm = makeVMNoLoad()
         #expect(vm.viewportZoom == 1.0)
         vm.toggleZoom(targetIfZoomedOut: 2.0)
@@ -296,7 +298,7 @@ struct ReaderViewModelTests {
         #expect(vm.viewportZoom == 1.0)
     }
 
-    @Test func toggleZoomRestoresLastNonUnitZoom() {
+    @Test func `toggle zoom restores last non unit zoom`() {
         let vm = makeVMNoLoad()
         vm.viewportZoom = 3.5
         vm.captureCurrentZoomAsLast()
@@ -305,25 +307,32 @@ struct ReaderViewModelTests {
         #expect(vm.viewportZoom == 3.5) // last remembered, not the default arg
     }
 
-    @Test func inspectorIsToggleable() {
+    @Test func `playback inspector is toggleable`() {
         let vm = makeVMNoLoad()
-        #expect(!vm.isInspectorPresented)
-        vm.isInspectorPresented = true
-        #expect(vm.isInspectorPresented)
+        #expect(!vm.isPlaybackInspectorPresented)
+        vm.isPlaybackInspectorPresented = true
+        #expect(vm.isPlaybackInspectorPresented)
     }
 
-    @Test func setHonorLayoutBreaksPersistsAndUpdatesPreferences() async {
+    @Test func `visual inspector is toggleable`() {
+        let vm = makeVMNoLoad()
+        #expect(!vm.isVisualInspectorPresented)
+        vm.isVisualInspectorPresented = true
+        #expect(vm.isVisualInspectorPresented)
+    }
+
+    @Test func `set honor layout breaks persists and updates preferences`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: [],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         #expect(vm.preferences.honorLayoutBreaks == true)
@@ -337,7 +346,7 @@ struct ReaderViewModelTests {
         #expect(repo.savedReaderPreferences.last?.honorLayoutBreaks == true)
     }
 
-    @Test func setVolumeUpdatesLiveDictWithoutPersisting() async {
+    @Test func `set volume updates live dict without persisting`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -348,10 +357,10 @@ struct ReaderViewModelTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 100)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -359,11 +368,11 @@ struct ReaderViewModelTests {
                 score: score,
                 summary: ScoreFileSummary(
                     title: "T", composer: nil, instrumentationSummary: "",
-                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-                )
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                ),
             ))),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         let savesBefore = repo.savedReaderPreferences.count
@@ -376,7 +385,7 @@ struct ReaderViewModelTests {
         #expect(repo.savedReaderPreferences.count == savesBefore)
     }
 
-    @Test func commitVolumePersistsOverrideAndClearsLiveValue() async {
+    @Test func `commit volume persists override and clears live value`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -387,10 +396,10 @@ struct ReaderViewModelTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 100)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -398,11 +407,11 @@ struct ReaderViewModelTests {
                 score: score,
                 summary: ScoreFileSummary(
                     title: "T", composer: nil, instrumentationSummary: "",
-                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-                )
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                ),
             ))),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
         vm.setVolume(0.4, for: address)
@@ -416,7 +425,7 @@ struct ReaderViewModelTests {
         #expect(repo.savedReaderPreferences.count == savesBefore + 1)
     }
 
-    @Test func commitVolumeClampsOutOfRangeValues() async {
+    @Test func `commit volume clamps out of range values`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -426,10 +435,10 @@ struct ReaderViewModelTests {
             parts: [
                 Part(
                     id: "P0", trackName: "Vn",
-                    instrument: Instrument(id: "v"), staves: [Staff()]
+                    instrument: Instrument(id: "v"), staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
@@ -437,11 +446,11 @@ struct ReaderViewModelTests {
                 score: score,
                 summary: ScoreFileSummary(
                     title: "T", composer: nil, instrumentationSummary: "",
-                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-                )
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                ),
             ))),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
         await vm.load()
 
@@ -460,7 +469,7 @@ struct ReaderViewModelTests {
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            defaultStaffSize: 14
+            defaultStaffSize: 14,
         )
     }
 
@@ -474,10 +483,10 @@ struct ReaderViewModelTests {
                     staves: [
                         Staff(measures: [Measure(voices: [Voice(elements: [])])]),
                         Staff(measures: [Measure(voices: [Voice(elements: [])])]),
-                    ]
+                    ],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
     }
 
@@ -486,19 +495,19 @@ struct ReaderViewModelTests {
             score: score,
             summary: ScoreFileSummary(
                 title: "Test", composer: nil, instrumentationSummary: "",
-                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-            )
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            ),
         )))
     }
 
-    @Test func setClefOverrideUpdatesPreferencesAndPersists() async throws {
+    @Test func `set clef override updates preferences and persists`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         let score = makeTwoStaffScore()
         let gateway = makeGateway(score: score)
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: gateway,
-            scoresDirectory: URL(filePath: "/tmp")
+            scoresDirectory: URL(filePath: "/tmp"),
         )
         await vm.load()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
@@ -508,14 +517,14 @@ struct ReaderViewModelTests {
         #expect(vm.hasClefOverride(for: address))
     }
 
-    @Test func clearClefOverrideRemovesEntry() async throws {
+    @Test func `clear clef override removes entry`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         let score = makeTwoStaffScore()
         let gateway = makeGateway(score: score)
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: gateway,
-            scoresDirectory: URL(filePath: "/tmp")
+            scoresDirectory: URL(filePath: "/tmp"),
         )
         await vm.load()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
@@ -525,7 +534,7 @@ struct ReaderViewModelTests {
         #expect(!vm.hasClefOverride(for: address))
     }
 
-    @Test func effectiveClefReturnsOverrideThenAuthored() async throws {
+    @Test func `effective clef returns override then authored`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         var score = makeTwoStaffScore()
@@ -537,7 +546,7 @@ struct ReaderViewModelTests {
         let gateway = makeGateway(score: score)
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: gateway,
-            scoresDirectory: URL(filePath: "/tmp")
+            scoresDirectory: URL(filePath: "/tmp"),
         )
         await vm.load()
         #expect(vm.effectiveClef(for: StaffAddress(partIndex: 0, staffIndexInPart: 0)) == "G")

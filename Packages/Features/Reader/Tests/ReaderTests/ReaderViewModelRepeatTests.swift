@@ -4,7 +4,7 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct ReaderViewModelRepeatTests {
     private static func makeItem() -> ScoreItem {
         ScoreItem(
@@ -12,13 +12,13 @@ struct ReaderViewModelRepeatTests {
             localFileName: "test.mscx", contentHash: "hash",
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
     private static func makeVM(
         controller: FakePlaybackController = FakePlaybackController(),
-        repo: FakeScoreLibraryRepository = FakeScoreLibraryRepository()
+        repo: FakeScoreLibraryRepository = FakeScoreLibraryRepository(),
     ) -> (ReaderViewModel, FakePlaybackController, FakeScoreLibraryRepository) {
         let item = Self.makeItem()
         repo.scoreItems = [item]
@@ -27,35 +27,35 @@ struct ReaderViewModelRepeatTests {
             repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         return (vm, controller, repo)
     }
 
-    @Test func repeatModeDefaultsToOff() async {
+    @Test func `repeat mode defaults to off`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
         #expect(vm.repeatMode == .off)
     }
 
-    @Test func advanceRepeatModeCyclesAndPersists() async {
+    @Test func `set repeat mode persists`() async {
         let (vm, _, repo) = Self.makeVM()
         await vm.load()
 
-        await vm.advanceRepeatMode()
+        await vm.setRepeatMode(.loopAll)
         #expect(vm.repeatMode == .loopAll)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .loopAll)
 
-        await vm.advanceRepeatMode()
+        await vm.setRepeatMode(.abLoop)
         #expect(vm.repeatMode == .abLoop)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .abLoop)
 
-        await vm.advanceRepeatMode()
+        await vm.setRepeatMode(.off)
         #expect(vm.repeatMode == .off)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .off)
     }
 
-    @Test func setRepeatASnapsToCursorMeasureHead() async {
+    @Test func `set repeat A snaps to cursor measure head`() async {
         let (vm, _, repo) = Self.makeVM()
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 4, tickInMeasure: 0))
@@ -70,7 +70,7 @@ struct ReaderViewModelRepeatTests {
         #expect(repo.savedReaderPreferences.last?.abRepeat == nil)
     }
 
-    @Test func setRepeatBSnapsToCursorMeasureEnd() async {
+    @Test func `set repeat B snaps to cursor measure end`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
@@ -86,7 +86,7 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.abRepeat == nil)
     }
 
-    @Test func setRepeatAReplacesPreviousAValue() async {
+    @Test func `set repeat A replaces previous A value`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
 
@@ -101,7 +101,7 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.abRepeat == nil)
     }
 
-    @Test func clearRepeatARemovesStartButKeepsEnd() async {
+    @Test func `clear repeat A removes start but keeps end`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
@@ -118,7 +118,7 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.pendingRepeatB?.measureIndex == 1)
     }
 
-    @Test func clearRepeatBRemovesEndButKeepsStart() async {
+    @Test func `clear repeat B removes end but keeps start`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
@@ -131,25 +131,24 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.pendingRepeatA?.measureIndex == 1)
     }
 
-    @Test func advanceRepeatModeForwardsLoopRange() async {
+    @Test func `set repeat mode forwards loop range`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
 
-        await vm.advanceRepeatMode() // .off -> .loopAll
+        await vm.setRepeatMode(.loopAll)
         #expect(controller.loopRangeCalls.last??.start.measureIndex == 0)
 
-        await vm.advanceRepeatMode() // .loopAll -> .abLoop with no markers
+        await vm.setRepeatMode(.abLoop)
         #expect(controller.loopRangeCalls.last == .some(nil))
 
-        await vm.advanceRepeatMode() // .abLoop -> .off
+        await vm.setRepeatMode(.off)
         #expect(controller.loopRangeCalls.last == .some(nil))
     }
 
-    @Test func setRepeatAOnlyDoesNotForwardLoopRangeYet() async {
+    @Test func `set repeat A only does not forward loop range yet`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
-        await vm.advanceRepeatMode() // .loopAll
-        await vm.advanceRepeatMode() // .abLoop
+        await vm.setRepeatMode(.abLoop)
         let countBefore = controller.loopRangeCalls.count
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
 
@@ -160,11 +159,10 @@ struct ReaderViewModelRepeatTests {
         #expect(controller.loopRangeCalls.last == .some(nil))
     }
 
-    @Test func bothMarkersSetForwardsTheNormalizedRange() async {
+    @Test func `both markers set forwards the normalized range`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
-        await vm.advanceRepeatMode() // .loopAll
-        await vm.advanceRepeatMode() // .abLoop
+        await vm.setRepeatMode(.abLoop)
         vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
         await vm.setRepeatA()
         vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
@@ -174,12 +172,12 @@ struct ReaderViewModelRepeatTests {
         // Auto-swap: B at m0 + A at m2 -> normalized start=m0, end=m2.
         // loopRangeCalls is [ABRepeatRange?]; .last is (ABRepeatRange?)?
         // flatMap collapses to ABRepeatRange? (outer=no calls, inner=nil call).
-        let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap { $0 }
+        let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
         #expect(last?.start.measureIndex == 0)
         #expect(last?.end.measureIndex == 2)
     }
 
-    @Test func persistedAbRepeatIsSeededIntoControllerOnPlaybackPrep() async {
+    @Test func `persisted ab repeat is seeded into controller on playback prep`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -190,7 +188,7 @@ struct ReaderViewModelRepeatTests {
             staffSize: 14,
             hiddenStaves: [],
             repeatMode: .abLoop,
-            abRepeat: ABRepeatRange(start: chord, end: endChord)
+            abRepeat: ABRepeatRange(start: chord, end: endChord),
         )
         repo.storedReaderPreferences[item.id] = stored
         let controller = FakePlaybackController()
@@ -199,7 +197,7 @@ struct ReaderViewModelRepeatTests {
             repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
 
         await vm.load()

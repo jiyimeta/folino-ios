@@ -13,6 +13,7 @@ enum AppMigrations {
         m.registerMigration("v4", migrate: migrateV4)
         m.registerMigration("v5", migrate: migrateV5)
         m.registerMigration("v6", migrate: migrateV6)
+        m.registerMigration("v7", migrate: migrateV7)
         return m
     }()
 
@@ -66,6 +67,20 @@ enum AppMigrations {
         m.registerMigration("v3", migrate: migrateV3)
         m.registerMigration("v4", migrate: migrateV4)
         m.registerMigration("v5", migrate: migrateV5)
+        return m
+    }()
+
+    /// Migrator that registers v1 … v6 only — useful for tests that want
+    /// to exercise the v7 upgrade against rows already inserted at the
+    /// previous schema.
+    static let upToV6: DatabaseMigrator = {
+        var m = DatabaseMigrator()
+        m.registerMigration("v1", migrate: migrateV1)
+        m.registerMigration("v2", migrate: migrateV2)
+        m.registerMigration("v3", migrate: migrateV3)
+        m.registerMigration("v4", migrate: migrateV4)
+        m.registerMigration("v5", migrate: migrateV5)
+        m.registerMigration("v6", migrate: migrateV6)
         return m
     }()
 
@@ -193,6 +208,29 @@ enum AppMigrations {
         try db.execute(sql: """
         ALTER TABLE reader_preferences
         ADD COLUMN staff_clef_overrides TEXT NOT NULL DEFAULT '[]'
+        """)
+    }
+
+    // MARK: - v7
+
+    /// Adds the three playback-shape columns that `ReaderPreferences`
+    /// has always carried in-memory but the record schema dropped:
+    /// `repeat_mode` (cycle state), `tempo_multiplier` (override, null
+    /// = native tempo), `ab_repeat` (JSON-encoded `ABRepeatRange?`,
+    /// null = no range). Existing rows fall back to "off / no override
+    /// / no range" via column defaults.
+    private static func migrateV7(_ db: Database) throws {
+        try db.execute(sql: """
+        ALTER TABLE reader_preferences
+        ADD COLUMN repeat_mode TEXT NOT NULL DEFAULT 'off'
+        """)
+        try db.execute(sql: """
+        ALTER TABLE reader_preferences
+        ADD COLUMN tempo_multiplier REAL
+        """)
+        try db.execute(sql: """
+        ALTER TABLE reader_preferences
+        ADD COLUMN ab_repeat TEXT
         """)
     }
 }
