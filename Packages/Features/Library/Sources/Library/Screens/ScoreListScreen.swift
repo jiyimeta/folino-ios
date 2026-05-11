@@ -11,7 +11,7 @@ struct ScoreListScreen: View {
 
     @State private var pendingDelete: ScoreItem?
     @State private var pendingRename: ScoreItem?
-    @State private var renameText: String = ""
+    @State private var renameText = ""
     @State private var editMode: EditMode = .inactive
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var bulkSheet: BulkSheet?

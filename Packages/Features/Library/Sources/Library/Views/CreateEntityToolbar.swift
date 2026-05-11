@@ -27,7 +27,7 @@ private struct CreateEntityToolbarModifier: ViewModifier {
     let onCreate: (String) -> Void
 
     @State private var isCreating = false
-    @State private var newName: String = ""
+    @State private var newName = ""
 
     func body(content: Content) -> some View {
         content

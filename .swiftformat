@@ -4,6 +4,7 @@
 --disable opaqueGenericParameters
 --ifdef no-indent
 --lineaftermarks false
+--property-types inferred
 --swiftversion 6.3
 --wraparguments before-first
 --wrapcollections before-first

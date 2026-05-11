@@ -35,7 +35,7 @@ private struct ManageEntityToolbarModifier: ViewModifier {
     let onDelete: () -> Void
 
     @State private var isRenaming = false
-    @State private var renameText: String = ""
+    @State private var renameText = ""
     @State private var isConfirmingDelete = false
 
     func body(content: Content) -> some View {

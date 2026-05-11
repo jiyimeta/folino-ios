@@ -7,7 +7,7 @@ struct LibraryRootPlaylistsSection: View {
     let scoreItems: [ScoreItem]
     let onRequestDelete: (Playlist) -> Void
 
-    @AppStorage("library.section.playlists.expanded") private var expanded: Bool = true
+    @AppStorage("library.section.playlists.expanded") private var expanded = true
 
     var body: some View {
         if !allPlaylists.isEmpty {
@@ -67,7 +67,7 @@ struct LibraryRootTagsSection: View {
     let scoreItems: [ScoreItem]
     let onRequestDelete: (Tag) -> Void
 
-    @AppStorage("library.section.tags.expanded") private var expanded: Bool = true
+    @AppStorage("library.section.tags.expanded") private var expanded = true
 
     var body: some View {
         if !allTags.isEmpty {

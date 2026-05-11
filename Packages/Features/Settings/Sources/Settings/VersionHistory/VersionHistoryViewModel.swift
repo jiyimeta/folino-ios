@@ -7,7 +7,7 @@ public final class VersionHistoryViewModel {
     let isHistorySplit: Bool
     let recentChanges: [VersionHistoryEntry]
     let pastChanges: [VersionHistoryEntry]
-    var isPastChangesShown: Bool = false
+    var isPastChangesShown = false
 
     public init(entries: [VersionHistoryEntry], baseline: AppVersion, isHistorySplit: Bool) {
         self.isHistorySplit = isHistorySplit

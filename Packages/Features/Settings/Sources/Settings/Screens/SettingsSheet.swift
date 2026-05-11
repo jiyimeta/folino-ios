@@ -16,7 +16,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @State private var isMailFailedAlertPresented = false
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
-    private var isMetronomeEnabled: Bool = false
+    private var isMetronomeEnabled = false
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue

@@ -16,7 +16,7 @@ final class ScoreListViewModel {
     let source: Source
     let repository: any ScoreLibraryRepository
     var sort: ScoreItemSort
-    var searchQuery: String = ""
+    var searchQuery = ""
 
     /// `true` when `source == .playlist(...)` and the current sort is the
     /// playlist's manual order (i.e. no explicit sort was picked).

@@ -5,7 +5,7 @@ import Testing
 @MainActor
 private final class FakePlaybackController: PlaybackController {
     var loadedScores = 0
-    var lastTempo: Double = 1.0
+    var lastTempo = 1.0
     var lastCursor: ScoreCursor?
     private var cursorHandler: ((ScoreCursor?) -> Void)?
 

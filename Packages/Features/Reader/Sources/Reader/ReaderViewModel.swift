@@ -27,7 +27,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         case offline
     }
 
-    static let defaultStaffVolume: Double = 1.0
+    static let defaultStaffVolume = 1.0
 
     private(set) var loadState: LoadState = .loading
     private(set) var scoreItem: ScoreItem
@@ -38,13 +38,13 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
     private(set) var mutedStaves: Set<StaffAddress> = []
     private(set) var soloStaves: Set<StaffAddress> = []
-    private(set) var isPlaying: Bool = false
+    private(set) var isPlaying = false
     private(set) var soundfontAlertKind: SoundfontAlertKind?
     private(set) var playbackCursor: ScoreCursor?
     var viewportZoom: CGFloat = 1.0
     var lastNonUnitZoom: CGFloat = 1.0
-    var isPlaybackInspectorPresented: Bool = false
-    var isVisualInspectorPresented: Bool = false
+    var isPlaybackInspectorPresented = false
+    var isVisualInspectorPresented = false
 
     /// Convenience for tests and previews — true while the "loading
     /// playback sounds…" copy is showing.

@@ -273,10 +273,10 @@ private enum ScoreListViewPreview {
 }
 
 private struct ScoreListViewPreviewHost: View {
-    @State private var searchText: String = ""
+    @State private var searchText = ""
     @State private var pendingDelete: ScoreItem?
     @State private var sort: ScoreItemSort = .dateAddedDesc
-    @State private var isManualOrderActive: Bool = false
+    @State private var isManualOrderActive = false
     @State private var editMode: EditMode = .inactive
     @State private var selectedIDs: Set<ScoreItemID> = []
 

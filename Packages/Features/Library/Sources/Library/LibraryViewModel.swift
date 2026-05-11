@@ -11,13 +11,13 @@ public final class LibraryViewModel {
     let shareService: any ScoreShareService
 
     var shareTarget: ShareTarget?
-    var isPreparingShare: Bool = false
+    var isPreparingShare = false
 
     /// True while a file import is in flight (prepare or commit). Driven by
     /// `defer` blocks in `startImport` and `commit` so it clears on success,
     /// duplicate detection, and any thrown error. The App composition root
     /// uses this to show a loading HUD over the whole shell.
-    public var isImporting: Bool = false
+    public var isImporting = false
 
     struct ShareTarget: Identifiable, Equatable {
         let id: UUID

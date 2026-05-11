@@ -14,7 +14,7 @@ public struct ReaderRootScreen: View {
     private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
-    private var isMetronomeEnabled: Bool = false
+    private var isMetronomeEnabled = false
 
     private var layoutMode: ReaderLayoutMode {
         ReaderLayoutMode(rawValue: layoutModeRaw) ?? .vertical

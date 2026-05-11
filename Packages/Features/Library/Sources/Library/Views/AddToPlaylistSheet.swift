@@ -10,7 +10,7 @@ struct AddToPlaylistSheet: View {
     let onCreate: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var newPlaylistName: String = ""
+    @State private var newPlaylistName = ""
 
     var body: some View {
         NavigationStack {

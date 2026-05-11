@@ -9,8 +9,8 @@ import SheetMusicCore
 public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let minStaffSize: CGFloat = 8
     public static let maxStaffSize: CGFloat = 28
-    static let minTempoMultiplier: Double = 0.5
-    static let maxTempoMultiplier: Double = 2.0
+    static let minTempoMultiplier = 0.5
+    static let maxTempoMultiplier = 2.0
 
     /// Allow-list of canonical `NotatedClef.rawType` values the Domain
     /// initializer accepts. Mirrors the 14 forms `NotatedClef.rawType`
@@ -21,7 +21,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// stay canonical and round-trip equality is preserved. If
     /// `swift-sheet-music` adds a new emitted rawType, audit
     /// `NotatedClef.rawType`'s switch and extend this set.
-    static let knownClefRawTypes: Set<String> = [
+    static let knownClefRawTypes: Set = [
         "G", "G8va", "G8vb", "G15ma", "G15mb",
         "F", "F8va", "F8vb",
         "C1", "C3", "C4", "C5",

@@ -20,11 +20,11 @@ final class FakePlaybackController: PlaybackController {
     var playError: Error?
     /// When true, `load` suspends until `Task.cancel()` fires, throwing
     /// `CancellationError`. Lets tests exercise the "loading" alert flow.
-    var blocksLoadUntilCancelled: Bool = false
+    var blocksLoadUntilCancelled = false
     /// What `areSoundfontsAvailableLocally` reports back. Defaults to
     /// `false` — the Reader treats that as "may need to fetch" and shows
     /// the alert, matching the existing tests' expectations.
-    var soundfontsAvailableLocally: Bool = false
+    var soundfontsAvailableLocally = false
 
     private var cursorHandler: ((ScoreCursor?) -> Void)?
 
@@ -59,7 +59,7 @@ final class FakePlaybackController: PlaybackController {
     /// When true, `prefetchSoundfont` suspends until `Task.cancel()`
     /// fires, throwing `CancellationError`. Mirrors
     /// `blocksLoadUntilCancelled` for the per-patch path.
-    var blocksPrefetchUntilCancelled: Bool = false
+    var blocksPrefetchUntilCancelled = false
     var prefetchError: Error?
 
     func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) -> Bool {

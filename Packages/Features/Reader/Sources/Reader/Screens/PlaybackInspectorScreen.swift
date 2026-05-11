@@ -7,12 +7,12 @@ struct PlaybackInspectorScreen: View {
     @Bindable var viewModel: ReaderViewModel
     let score: Score
 
-    @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled: Bool = false
+    @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
     /// Slider's local edit value. Syncs from `viewModel.effectiveTempoMultiplier`
     /// when the user is not dragging — keeps the UI consistent after a reset
     /// from outside the slider (e.g. the % label tap).
-    @State private var sliderValue: Double = 1.0
-    @State private var isEditingTempo: Bool = false
+    @State private var sliderValue = 1.0
+    @State private var isEditingTempo = false
 
     var body: some View {
         List {

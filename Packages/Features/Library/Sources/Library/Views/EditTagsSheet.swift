@@ -10,7 +10,7 @@ struct EditTagsSheet: View {
     let onCreate: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var newTagName: String = ""
+    @State private var newTagName = ""
 
     var body: some View {
         NavigationStack {

@@ -15,16 +15,16 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var editTagsTarget: ScoreItem?
     @State private var addToPlaylistTarget: ScoreItem?
 
-    @State private var isCreatingPlaylist: Bool = false
-    @State private var newPlaylistName: String = ""
-    @State private var isCreatingTag: Bool = false
-    @State private var newTagName: String = ""
+    @State private var isCreatingPlaylist = false
+    @State private var newPlaylistName = ""
+    @State private var isCreatingTag = false
+    @State private var newTagName = ""
 
     @State private var pendingDeletePlaylist: Playlist?
     @State private var pendingDeleteTag: Tag?
     @State private var pendingDeleteScore: ScoreItem?
     @State private var pendingRenameScore: ScoreItem?
-    @State private var renameScoreText: String = ""
+    @State private var renameScoreText = ""
 
     public init(
         viewModel: LibraryViewModel,
