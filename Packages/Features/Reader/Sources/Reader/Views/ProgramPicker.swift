@@ -2,7 +2,7 @@ import SheetMusicAudio
 import SwiftUI
 
 /// Per-Part GM program override Menu shown in the Reader Inspector's Playback
-/// tab header. Lives outside `InspectorScreen` so the screen file stays under
+/// tab header. Lives outside `PlaybackInspectorScreen` so the screen file stays under
 /// length limits — semantics match the prior inline `programPicker` exactly.
 struct ProgramPicker: View {
     @Bindable var viewModel: ReaderViewModel
@@ -11,40 +11,39 @@ struct ProgramPicker: View {
     var body: some View {
         let program = viewModel.effectiveProgram(forPartIndex: partIndex)
         let hasOverride = viewModel.hasProgramOverride(forPartIndex: partIndex)
-        HStack(spacing: 6) {
-            Image(systemName: "music.note.list")
-                .foregroundStyle(.secondary)
-            Menu {
-                if hasOverride {
-                    resetButton
-                    Divider()
-                }
-                ForEach(GMInstrument.Family.allCases, id: \.self) { family in
-                    Section(family.rawValue) {
-                        ForEach(family.programs) { instrument in
-                            Button {
-                                Task {
-                                    await viewModel.setPartProgram(
-                                        Int(instrument.program), forPartIndex: partIndex
-                                    )
-                                }
-                            } label: {
-                                Text(instrument.name)
+        Menu {
+            if hasOverride {
+                resetButton
+                Divider()
+            }
+            ForEach(GMInstrument.Family.allCases, id: \.self) { family in
+                Section(family.rawValue) {
+                    ForEach(family.programs) { instrument in
+                        Button {
+                            Task {
+                                await viewModel.setPartProgram(
+                                    Int(instrument.program), forPartIndex: partIndex,
+                                )
                             }
+                        } label: {
+                            Text(instrument.name)
                         }
                     }
                 }
-            } label: {
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "pianokeys")
+                    .foregroundStyle(.secondary)
                 menuLabel(program: program)
             }
-            .menuIndicator(.hidden)
         }
+        .menuIndicator(.hidden)
         .font(.caption)
         .padding(.top, 2)
         .padding(.bottom, 4)
     }
 
-    @ViewBuilder
     private var resetButton: some View {
         Button {
             Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
@@ -57,7 +56,6 @@ struct ProgramPicker: View {
         }
     }
 
-    @ViewBuilder
     private func menuLabel(program: Int) -> some View {
         HStack(spacing: 4) {
             Text(GMInstrument.instrument(for: UInt8(clamping: program)).name)

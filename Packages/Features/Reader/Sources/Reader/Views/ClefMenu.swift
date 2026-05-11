@@ -46,8 +46,7 @@ struct ClefMenu: View {
     private func triggerGlyph(rawType: String, hasOverride: Bool) -> some View {
         let tint: Color = hasOverride ? .accentColor : .primary
         if let choice = ClefMenuChoice.from(rawType: rawType) {
-            Text(String(choice.smuflGlyph))
-                .font(.custom(BravuraFont.familyName, fixedSize: 22))
+            clefPreview(choice: choice)
                 .foregroundStyle(tint)
                 .frame(minWidth: 18, alignment: .center)
         } else {
@@ -58,19 +57,23 @@ struct ClefMenu: View {
     }
 
     private func popoverContent(currentRawType: String, hasOverride: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if hasOverride { resetButton }
+        VStack(alignment: .leading, spacing: 8) {
             tileRow(ClefMenuChoice.trebleFamily, current: currentRawType)
             Divider()
             tileRow(ClefMenuChoice.bassFamily, current: currentRawType)
             Divider()
             tileRow(ClefMenuChoice.cFamily, current: currentRawType)
+            if hasOverride {
+                Divider()
+                resetButton
+                    .padding(.horizontal, 16)
+            }
         }
-        .padding(20)
+        .padding(.vertical, 16)
         // Cap the popover width so the 5-tile treble row scrolls
         // horizontally, giving the surrounding padding room to breathe
         // on small devices.
-        .frame(width: 280)
+        .frame(width: 260)
     }
 
     private var resetButton: some View {
@@ -78,14 +81,10 @@ struct ClefMenu: View {
             Task { await viewModel.clearClefOverride(for: address) }
             isPresented = false
         } label: {
-            Label {
-                Text("reader.preferences.clef.resetDefault", bundle: .module)
-            } icon: {
-                Image(systemName: "arrow.uturn.backward")
-            }
-            .font(.callout)
+            Text("reader.preferences.clef.resetDefault", bundle: .module)
+                .font(.callout)
+                .foregroundStyle(.tint)
         }
-        .buttonStyle(.plain)
     }
 
     private func tileRow(_ choices: [ClefMenuChoice], current: String) -> some View {
@@ -95,6 +94,7 @@ struct ClefMenu: View {
                     tile(choice, current: current)
                 }
             }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -105,29 +105,37 @@ struct ClefMenu: View {
             Task { await viewModel.setClefOverride(choice.rawType, for: address) }
             isPresented = false
         } label: {
-            Canvas { ctx, size in
-                drawTile(ctx: ctx, size: size, choice: choice)
-            }
-            .frame(width: 56, height: 60)
-            .background(
-                isCurrent
-                    ? Color.accentColor.opacity(0.18)
-                    : Color.clear,
-            )
-            .overlay(
-                // strokeBorder (vs stroke) keeps the line entirely inside
-                // the tile so the 1pt edge stays pixel-aligned instead of
-                // straddling the frame boundary at half-pixel offsets.
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(
-                        isCurrent ? Color.accentColor : Color.gray.opacity(0.3),
-                        lineWidth: isCurrent ? 2 : 1,
-                    ),
-            )
-            .contentShape(Rectangle())
+            clefPreview(choice: choice)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 8)
+                .background(
+                    isCurrent
+                        ? Color.accentColor.opacity(0.18)
+                        : Color.clear,
+                )
+                .clipShape(.rect(cornerRadius: 6))
+                .overlay(
+                    // strokeBorder (vs stroke) keeps the line entirely inside
+                    // the tile so the 1pt edge stays pixel-aligned instead of
+                    // straddling the frame boundary at half-pixel offsets.
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(
+                            isCurrent ? Color.accentColor : Color.gray.opacity(0.3),
+                            lineWidth: isCurrent ? 2 : 1,
+                        ),
+                )
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(choice.displayLabel, bundle: .module))
+    }
+
+    private func clefPreview(choice: ClefMenuChoice) -> some View {
+        Canvas { ctx, size in
+            drawTile(ctx: ctx, size: size, choice: choice)
+        }
+        .frame(width: 40, height: 52)
+        .padding(.vertical, -8)
     }
 
     private func drawTile(
@@ -138,13 +146,11 @@ struct ClefMenu: View {
         let sp: CGFloat = 4
         let staffHeight = sp * 4 // 5 lines = 4 spaces
         let staffTop = (size.height - staffHeight) / 2
-        let leftPad: CGFloat = 6
-        let rightPad: CGFloat = 6
         for index in 0 ..< 5 {
             let y = staffTop + sp * CGFloat(index)
             var path = Path()
-            path.move(to: CGPoint(x: leftPad, y: y))
-            path.addLine(to: CGPoint(x: size.width - rightPad, y: y))
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
             ctx.stroke(path, with: .color(.primary.opacity(0.6)), lineWidth: 0.5)
         }
         // Anchor convention: origin Y is the staff's middle line. Treble
@@ -174,4 +180,17 @@ struct ClefMenu: View {
             anchor: .center,
         )
     }
+}
+
+#Preview {
+    @Previewable @State var viewModel = ReaderViewModel(
+        scoreItem: PreviewFakeRepository.sampleItem,
+        repository: PreviewFakeRepository(),
+        gateway: PreviewFakeGateway(),
+        scoresDirectory: URL(filePath: "/dev/null"),
+    )
+    ClefMenu(
+        viewModel: viewModel,
+        address: StaffAddress(partIndex: 1, staffIndexInPart: 1),
+    )
 }

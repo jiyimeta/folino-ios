@@ -103,50 +103,34 @@
         }
       }
     },
-    "reader.inspector.tab.playback" : {
+    "reader.inspector.repeatMode" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Playback"
+            "value" : "Repeat"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "再生"
+            "value" : "リピート"
           }
         }
       }
     },
-    "reader.inspector.tab.visual" : {
+    "reader.inspector.section.parts" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Visual"
+            "value" : "Parts"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "表示"
-          }
-        }
-      }
-    },
-    "reader.inspector.tabPicker" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inspector tab"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "インスペクタタブ"
+            "value" : "パート"
           }
         }
       }
@@ -279,38 +263,6 @@
         }
       }
     },
-    "reader.preferences.clef.choice.treble15ma" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Treble 15ma"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ト音 15ma"
-          }
-        }
-      }
-    },
-    "reader.preferences.clef.choice.treble15mb" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Treble 15mb"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ト音 15mb"
-          }
-        }
-      }
-    },
     "reader.preferences.clef.choice.treble8va" : {
       "localizations" : {
         "en" : {
@@ -343,18 +295,50 @@
         }
       }
     },
-    "reader.preferences.clef.resetDefault" : {
+    "reader.preferences.clef.choice.treble15ma" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use score's clef"
+            "value" : "Treble 15ma"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "スコアの音部記号を使う"
+            "value" : "ト音 15ma"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble15mb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 15mb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 15mb"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.resetDefault" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "リセット"
           }
         }
       }
@@ -551,21 +535,46 @@
         }
       }
     },
-    "reader.toolbar.showStaves" : {
+    "reader.toolbar.showDisplaySettings" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show staves panel"
+            "value" : "Display settings"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "譜表パネルを表示"
+            "value" : "表示設定"
           }
         }
       }
+    },
+    "reader.toolbar.showPlaybackSettings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback settings"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生設定"
+          }
+        }
+      }
+    },
+    "Repeat mode" : {
+
+    },
+    "パート" : {
+
+    },
+    "全体" : {
+
     }
   },
   "version" : "1.1"

@@ -1,3 +1,4 @@
+import SheetMusicCore
 import SwiftUI
 
 /// Top overlay hosting Back / Play / Inspector buttons. Rendered inside
@@ -28,61 +29,83 @@ struct ReaderTopOverlay: View {
                 overlayButton(
                     systemImage: "chevron.backward",
                     label: Text("reader.toolbar.back", bundle: .module),
-                    action: onBack
+                    action: onBack,
                 )
                 .glassEffect(.regular.interactive())
             }
             Spacer()
-            HStack(spacing: 4) {
-                let playLabelKey: LocalizedStringKey = viewModel.isPlaying
-                    ? "reader.toolbar.pause"
-                    : "reader.toolbar.play"
-                overlayButton(
-                    systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill",
-                    label: Text(playLabelKey, bundle: .module)
-                ) {
-                    Task { await viewModel.togglePlayback() }
-                }
-                overlayButton(
-                    systemImage: "slider.horizontal.3",
-                    label: Text("reader.toolbar.showStaves", bundle: .module)
-                ) {
-                    viewModel.isInspectorPresented.toggle()
-                }
-                .popover(isPresented: $viewModel.isInspectorPresented) {
-                    inspectorPopoverContent
-                }
+
+            if case let .loaded(score) = viewModel.loadState {
+                loadedActions(score: score)
             }
-            .glassEffect(.regular.interactive())
         }
+        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
         .padding(.horizontal)
         .padding(.top, 4)
     }
 
-    /// Inspector content rendered as a popover on iPad (anchored to the
-    /// slider button) and adapted to a sheet on iPhone — keeps the score's
-    /// width fixed so opening the inspector doesn't trigger a reflow.
-    @ViewBuilder
-    private var inspectorPopoverContent: some View {
-        if case let .loaded(score) = viewModel.loadState {
-            InspectorScreen(viewModel: viewModel, score: score)
-                .frame(idealWidth: 380, idealHeight: 600)
-                .presentationDetents([.medium, .large])
-                .presentationCompactAdaptation(.sheet)
-        } else {
-            Color.clear
+    /// Right-side buttons that depend on a loaded score: play/pause plus
+    /// the paired inspector pill. Extracted from `body` to keep the outer
+    /// HStack closure under SwiftLint's body-length limit.
+    private func loadedActions(score: Score) -> some View {
+        HStack(spacing: 12) {
+            overlayButton(
+                systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill",
+                label: Text(
+                    viewModel.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
+                    bundle: .module,
+                ),
+            ) {
+                Task { await viewModel.togglePlayback() }
+            }
+            .glassEffect(.regular.interactive())
+
+            inspectorButtons(score: score)
+                .glassEffect(.regular.interactive())
         }
     }
 
-    @ViewBuilder
+    /// Paired playback / visual inspector buttons sharing a single
+    /// glass-pill background. Each button owns its own popover anchored
+    /// to itself so the popover arrow points at the tapped icon.
+    private func inspectorButtons(score: Score) -> some View {
+        HStack(spacing: 0) {
+            overlayButton(
+                systemImage: "slider.vertical.3",
+                label: Text("reader.toolbar.showPlaybackSettings", bundle: .module),
+            ) {
+                viewModel.isPlaybackInspectorPresented.toggle()
+            }
+            .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
+                PlaybackInspectorScreen(viewModel: viewModel, score: score)
+                    .frame(idealWidth: 380, idealHeight: 600)
+                    .presentationDetents([.medium, .large])
+                    .presentationCompactAdaptation(.sheet)
+            }
+
+            overlayButton(
+                systemImage: "text.page",
+                label: Text("reader.toolbar.showDisplaySettings", bundle: .module),
+            ) {
+                viewModel.isVisualInspectorPresented.toggle()
+            }
+            .popover(isPresented: $viewModel.isVisualInspectorPresented) {
+                VisualInspectorScreen(viewModel: viewModel, score: score)
+                    .frame(idealWidth: 380, idealHeight: 600)
+                    .presentationDetents([.medium, .large])
+                    .presentationCompactAdaptation(.sheet)
+            }
+        }
+    }
+
     private func overlayButton(
         systemImage: String,
         label: Text,
-        action: @escaping () -> Void
+        action: @escaping () -> Void,
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 20, weight: .medium))
                 .frame(width: 44, height: 44)
         }
         .tint(.primary)
@@ -115,13 +138,13 @@ struct ReaderBottomOverlay: View {
                 endpointButton(
                     label: "A",
                     isSet: viewModel.pendingRepeatA != nil,
-                    onSet: { Task { await viewModel.setRepeatA() } }
+                    onSet: { Task { await viewModel.setRepeatA() } },
                 )
 
                 endpointButton(
                     label: "B",
                     isSet: viewModel.pendingRepeatB != nil,
-                    onSet: { Task { await viewModel.setRepeatB() } }
+                    onSet: { Task { await viewModel.setRepeatB() } },
                 )
             }
         }
@@ -131,7 +154,7 @@ struct ReaderBottomOverlay: View {
     private func endpointButton(
         label: String,
         isSet: Bool,
-        onSet: @escaping () -> Void
+        onSet: @escaping () -> Void,
     ) -> some View {
         Button(action: onSet) {
             Text(verbatim: label)
@@ -141,4 +164,17 @@ struct ReaderBottomOverlay: View {
         }
         .glassEffect(.regular.tint(isSet ? .clear : .accentColor).interactive())
     }
+}
+
+#Preview {
+    let vm = ReaderViewModel(
+        scoreItem: PreviewFakeRepository.sampleItem,
+        repository: PreviewFakeRepository(),
+        gateway: PreviewFakeGateway(),
+        scoresDirectory: URL(filePath: "/tmp"),
+    )
+    ReaderTopOverlay(viewModel: vm, onBack: {})
+        .task {
+            await vm.load()
+        }
 }
