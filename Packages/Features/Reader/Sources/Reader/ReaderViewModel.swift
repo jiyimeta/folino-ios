@@ -320,6 +320,19 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         preferences.staffClefOverrides[address] != nil
     }
 
+    /// True only when an override is set AND its rawType differs from the
+    /// score's authored opening clef. The picker uses this to gate the
+    /// "Use score's clef" button — when the override happens to match
+    /// the authored value (e.g. user picked the same Treble that was
+    /// already there) clearing it would be visibly a no-op, so the
+    /// reset affordance would just be noise.
+    public func isClefOverrideEffective(for address: StaffAddress) -> Bool {
+        guard let override = preferences.staffClefOverrides[address] else {
+            return false
+        }
+        return override != (authoredClef(for: address) ?? "G")
+    }
+
     public func setClefOverride(_ rawType: String, for address: StaffAddress) async {
         await mutatePreferences { $0.staffClefOverrides[address] = rawType }
     }

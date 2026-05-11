@@ -15,6 +15,7 @@ struct ClefMenu: View {
     var body: some View {
         let effective = viewModel.effectiveClef(for: address)
         let hasOverride = viewModel.hasClefOverride(for: address)
+        let canReset = viewModel.isClefOverrideEffective(for: address)
         // Touch BravuraFont.register so previews and first-render paths
         // get the SMuFL font even when the score view hasn't been
         // resolved yet.
@@ -27,7 +28,7 @@ struct ClefMenu: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text("reader.preferences.clef", bundle: .module))
         .popover(isPresented: $isPresented) {
-            popoverContent(currentRawType: effective, hasOverride: hasOverride)
+            popoverContent(currentRawType: effective, canReset: canReset)
                 .presentationCompactAdaptation(.popover)
         }
     }
@@ -56,7 +57,7 @@ struct ClefMenu: View {
         }
     }
 
-    private func popoverContent(currentRawType: String, hasOverride: Bool) -> some View {
+    private func popoverContent(currentRawType: String, canReset: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Percussion staves stay on percussion clefs; pitched staves
             // stay on pitched clefs. Mixing the two would produce
@@ -72,7 +73,7 @@ struct ClefMenu: View {
                 Divider()
                 tileRow(ClefMenuChoice.cFamily, current: currentRawType)
             }
-            if hasOverride {
+            if canReset {
                 Divider()
                 resetButton
                     .padding(.horizontal, 16)
