@@ -103,14 +103,13 @@ struct VerticalScoreContainer: View {
             scrollContent(viewport: proxy.size)
                 .task(id: TaskKey(
                     score: score, size: staffSize, width: layoutWidth,
-                    honorLayoutBreaks: honorLayoutBreaks
+                    honorLayoutBreaks: honorLayoutBreaks,
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }
         }
     }
 
-    @ViewBuilder
     private func scrollContent(viewport: CGSize) -> some View {
         ScoreScrollHost(
             contentOffset: $liveScrollOffset,
@@ -128,9 +127,9 @@ struct VerticalScoreContainer: View {
                 commitPinch(
                     magnification: magnification,
                     startLocation: startLocation,
-                    currentOffset: currentOffset
+                    currentOffset: currentOffset,
                 )
-            }
+            },
         ) {
             zoomedSurface(viewport: viewport)
         }
@@ -163,7 +162,7 @@ struct VerticalScoreContainer: View {
                 .frame(
                     width: framedWidth,
                     height: framedHeight,
-                    alignment: .topLeading
+                    alignment: .topLeading,
                 )
                 .simultaneousGesture(doubleTapGesture)
         } else {
@@ -179,7 +178,7 @@ struct VerticalScoreContainer: View {
     /// actual `doc.size.width` and shrink to fit when it exceeds the
     /// viewport — the user-visible behaviour is "zoom 1.0 = fit width".
     private func effectiveZoom(
-        for doc: LayoutDocument, viewport: CGSize
+        for doc: LayoutDocument, viewport: CGSize,
     ) -> CGFloat {
         let fit = doc.size.width > 0
             ? min(1.0, viewport.width / doc.size.width)
@@ -187,12 +186,11 @@ struct VerticalScoreContainer: View {
         return viewModel.viewportZoom * fit
     }
 
-    @ViewBuilder
     private func scoreSurface(document doc: LayoutDocument) -> some View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
-                playbackCursor: playbackCursor, playbackCursorColor: .accentColor
+                playbackCursor: playbackCursor, playbackCursorColor: .accentColor,
             )
             .coordinateSpace(name: "scoreSurface")
             .gesture(tapSeekGesture(document: doc))
@@ -203,7 +201,7 @@ struct VerticalScoreContainer: View {
                 LoopBoundaryMarkers(
                     document: doc,
                     start: viewModel.pendingRepeatA,
-                    end: viewModel.pendingRepeatB
+                    end: viewModel.pendingRepeatB,
                 )
             }
         }
@@ -238,7 +236,7 @@ struct VerticalScoreContainer: View {
     private func commitPinch(
         magnification: CGFloat,
         startLocation: CGPoint,
-        currentOffset: CGPoint
+        currentOffset: CGPoint,
     ) {
         let session = pinchSession ?? PinchSession(baseZoom: viewModel.viewportZoom)
         pinchSession = nil
@@ -249,7 +247,7 @@ struct VerticalScoreContainer: View {
 
         let scrollToTarget = CGPoint(
             x: max(0, currentOffset.x + startLocation.x * (ratio - 1)),
-            y: max(0, currentOffset.y + startLocation.y * (ratio - 1))
+            y: max(0, currentOffset.y + startLocation.y * (ratio - 1)),
         )
 
         let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
@@ -306,20 +304,20 @@ struct VerticalScoreContainer: View {
             staffSize: staffSize, systemGap: staffSize * 1.25,
             wrapToViewWidth: true, includeTitleFrame: true,
             breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
-            showBreakIndicators: false
+            showBreakIndicators: false,
         )
     }
 
     private func rebuildLayout(width: CGFloat) {
         document = LayoutEngine.layout(
-            score: score, options: scoreOptions, availableWidth: width
+            score: score, options: scoreOptions, availableWidth: width,
         )
         lastWidth = width
     }
 
     private func autoScroll(
         cursor: ScoreCursor?,
-        viewport: CGSize
+        viewport: CGSize,
     ) {
         guard let cursor, let doc = document,
               let rect = doc.cursorFrame(for: cursor, in: score)
@@ -344,12 +342,12 @@ struct VerticalScoreContainer: View {
         let newX = adjustedScrollOffset(
             currentOffset: curX,
             targetMin: minX, targetMax: maxX,
-            viewportSize: viewport.width, pad: pad
+            viewportSize: viewport.width, pad: pad,
         )
         let newY = adjustedScrollOffset(
             currentOffset: curY,
             targetMin: minY, targetMax: maxY,
-            viewportSize: viewport.height, pad: pad
+            viewportSize: viewport.height, pad: pad,
         )
 
         if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 { return }
@@ -366,7 +364,7 @@ struct VerticalScoreContainer: View {
         targetMin: CGFloat,
         targetMax: CGFloat,
         viewportSize: CGFloat,
-        pad: CGFloat
+        pad: CGFloat,
     ) -> CGFloat {
         let viewMin = cur
         let viewMax = cur + viewportSize
@@ -392,10 +390,14 @@ struct VerticalScoreContainer: View {
 
         init(score: Score, size: CGFloat, width: CGFloat, honorLayoutBreaks: Bool) {
             // `Score` is Equatable but not Hashable. Use a cheap
-            // identity proxy: parts.count + total staves + division.
+            // identity proxy: structural shape + opening clefs. The
+            // opening-clef hash is what makes a clef override (a
+            // field-level edit that leaves parts.count / staff count
+            // unchanged) re-trigger this `.task(id:)`.
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)
+                ^ score.openingClefSignature
             self.size = size
             self.width = width
             self.honorLayoutBreaks = honorLayoutBreaks

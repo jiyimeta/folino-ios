@@ -38,25 +38,24 @@ struct HorizontalScoreContainer: View {
                         autoScroll(
                             cursor: newCursor,
                             viewport: proxy.size,
-                            proxy: scrollProxy
+                            proxy: scrollProxy,
                         )
                     }
             }
             .task(id: TaskKey(
                 score: score, size: staffSize,
-                honorLayoutBreaks: honorLayoutBreaks
+                honorLayoutBreaks: honorLayoutBreaks,
             )) {
                 rebuildLayout()
             }
         }
     }
 
-    // Pin the leading edge so the score doesn't open half-way across the page.
-    // See `VerticalScoreContainer` for the fuller diagnosis — same root cause:
-    // the ScrollView's content grows from `nil` to the full natural width once
-    // `rebuildLayout` finishes, and the default anchor preserves the *centre*
-    // across that change.
-    @ViewBuilder
+    /// Pin the leading edge so the score doesn't open half-way across the page.
+    /// See `VerticalScoreContainer` for the fuller diagnosis — same root cause:
+    /// the ScrollView's content grows from `nil` to the full natural width once
+    /// `rebuildLayout` finishes, and the default anchor preserves the *centre*
+    /// across that change.
     private func scrollContent(minHeight: CGFloat) -> some View {
         ScrollView(.horizontal) {
             if let doc = document {
@@ -64,7 +63,7 @@ struct HorizontalScoreContainer: View {
                     ScoreView(
                         document: doc, score: score, options: scoreOptions,
                         playbackCursor: playbackCursor,
-                        playbackCursorColor: .accentColor
+                        playbackCursorColor: .accentColor,
                     )
                     .coordinateSpace(name: "scoreSurface")
                     .gesture(tapSeekGesture(document: doc))
@@ -75,7 +74,7 @@ struct HorizontalScoreContainer: View {
                         LoopBoundaryMarkers(
                             document: doc,
                             start: viewModel.pendingRepeatA,
-                            end: viewModel.pendingRepeatB
+                            end: viewModel.pendingRepeatB,
                         )
                     }
 
@@ -101,15 +100,15 @@ struct HorizontalScoreContainer: View {
             }
     }
 
-    // Horizontal mode: lay out at natural content width so systems
-    // never wrap. Title frame is omitted — it'd push the score
-    // down inside what is essentially a single long row.
+    /// Horizontal mode: lay out at natural content width so systems
+    /// never wrap. Title frame is omitted — it'd push the score
+    /// down inside what is essentially a single long row.
     private var scoreOptions: ScoreViewOptions {
         ScoreViewOptions(
             staffSize: staffSize, systemGap: staffSize * 1.25,
             wrapToViewWidth: false, includeTitleFrame: false,
             breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
-            showBreakIndicators: false
+            showBreakIndicators: false,
         )
     }
 
@@ -122,7 +121,7 @@ struct HorizontalScoreContainer: View {
     private func autoScroll(
         cursor: ScoreCursor?,
         viewport: CGSize,
-        proxy: ScrollViewProxy
+        proxy: ScrollViewProxy,
     ) {
         guard viewModel.isPlaying,
               let cursor, let doc = document
@@ -132,7 +131,7 @@ struct HorizontalScoreContainer: View {
         if isAnchorFullyVisible(
             anchorMin: frame.minX, anchorMax: frame.maxX,
             anchorSize: frame.width,
-            viewportSize: viewport.width
+            viewportSize: viewport.width,
         ) { return }
 
         // Both off-right (cursor overflowing the trailing edge) and
@@ -146,12 +145,12 @@ struct HorizontalScoreContainer: View {
             anchorSize: frame.width,
             viewportSize: viewport.width,
             pad: pad,
-            horizontal: true
+            horizontal: true,
         )
         withAnimation(.easeInOut(duration: 0.25)) {
             proxy.scrollTo(
                 HorizontalMeasureAnchorID(measureIndex: mi),
-                anchor: unit
+                anchor: unit,
             )
         }
     }
@@ -162,9 +161,15 @@ struct HorizontalScoreContainer: View {
         let honorLayoutBreaks: Bool
 
         init(score: Score, size: CGFloat, honorLayoutBreaks: Bool) {
+            // Structural shape + opening clefs. The opening-clef hash is
+            // what makes a clef override (a field-level edit that leaves
+            // parts.count / staff count unchanged) re-trigger this
+            // `.task(id:)`. See `VerticalScoreContainer.TaskKey` for the
+            // matching rationale.
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)
+                ^ score.openingClefSignature
             self.size = size
             self.honorLayoutBreaks = honorLayoutBreaks
         }
