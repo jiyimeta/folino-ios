@@ -130,6 +130,8 @@ public struct SettingsSheet<LicenseContent: View>: View {
         Section {
             NavigationLink {
                 versionHistoryDestination
+                    .navigationTitle(Text("settings.versionHistory.title", bundle: .module))
+                    .navigationBarTitleDisplayMode(.inline)
             } label: {
                 Label {
                     Text("settings.versionHistory.title", bundle: .module)
@@ -176,8 +178,6 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 ),
                 onAppear: onVersionHistoryViewed,
             )
-            .navigationTitle(Text("settings.versionHistory.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
         } else {
             ContentUnavailableView {
                 Label {
@@ -186,8 +186,6 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     Image(systemName: "exclamationmark.triangle")
                 }
             }
-            .navigationTitle(Text("settings.versionHistory.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
