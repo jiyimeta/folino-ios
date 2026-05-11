@@ -17,7 +17,7 @@ extension [ScoreItem] {
     }
 
     /// Favorited items only, ordered by `addedAt` desc, capped at `limit`.
-    public func favorites(limit: Int) -> [ScoreItem] {
+    func favorites(limit: Int) -> [ScoreItem] {
         guard limit > 0 else { return [] }
         return Array(
             filter(\.isFavorite)

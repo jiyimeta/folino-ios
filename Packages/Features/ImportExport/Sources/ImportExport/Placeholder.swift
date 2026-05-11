@@ -1,3 +1,3 @@
-public enum ImportExportModule {
-    public static let isLinked = true
+enum ImportExportModule {
+    static let isLinked = true
 }

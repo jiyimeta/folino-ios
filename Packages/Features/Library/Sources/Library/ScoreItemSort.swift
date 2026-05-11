@@ -2,17 +2,17 @@ import Domain
 import Foundation
 
 /// Sort options for any score list view (All / Tag-filtered / Playlist).
-public enum ScoreItemSort: String, CaseIterable, Sendable, Identifiable {
+enum ScoreItemSort: String, CaseIterable, Identifiable {
     case dateAddedDesc
     case titleAsc
     case composerAsc
     case lastOpenedDesc
 
-    public var id: String {
+    var id: String {
         rawValue
     }
 
-    public var labelKey: LocalizedStringResource {
+    var labelKey: LocalizedStringResource {
         switch self {
         case .dateAddedDesc:
             LocalizedStringResource("library.sort.byDateAdded", bundle: .atURL(Bundle.module.bundleURL))
@@ -25,7 +25,7 @@ public enum ScoreItemSort: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    public func apply(to items: [ScoreItem]) -> [ScoreItem] {
+    func apply(to items: [ScoreItem]) -> [ScoreItem] {
         switch self {
         case .dateAddedDesc:
             items.sorted(by: Self.dateAddedDescComparator)

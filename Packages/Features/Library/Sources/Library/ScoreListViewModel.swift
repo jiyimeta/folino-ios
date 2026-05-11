@@ -5,29 +5,29 @@ import Observation
 /// Drives any of the three leaf score list views (All / Tag-filtered / Playlist).
 @MainActor
 @Observable
-public final class ScoreListViewModel {
-    public enum Source: Hashable, Sendable {
+final class ScoreListViewModel {
+    enum Source: Hashable {
         case all
         case favorites
         case taggedWith(TagID)
         case playlist(orderedIDs: [ScoreItemID])
     }
 
-    public let source: Source
-    public let repository: any ScoreLibraryRepository
-    public var sort: ScoreItemSort
-    public var searchQuery: String = ""
+    let source: Source
+    let repository: any ScoreLibraryRepository
+    var sort: ScoreItemSort
+    var searchQuery: String = ""
 
     /// `true` when `source == .playlist(...)` and the current sort is the
     /// playlist's manual order (i.e. no explicit sort was picked).
-    public var isManualOrderActive: Bool {
+    var isManualOrderActive: Bool {
         if case .playlist = source { return manualOrder }
         return false
     }
 
     private var manualOrder: Bool
 
-    public init(source: Source, repository: any ScoreLibraryRepository) {
+    init(source: Source, repository: any ScoreLibraryRepository) {
         self.source = source
         self.repository = repository
         switch source {
@@ -41,18 +41,18 @@ public final class ScoreListViewModel {
     }
 
     /// Switches off manual order; further reads honour `sort`.
-    public func selectSort(_ next: ScoreItemSort) {
+    func selectSort(_ next: ScoreItemSort) {
         sort = next
         manualOrder = false
     }
 
     /// Returns to the playlist's manual order. Only valid for `.playlist`.
-    public func selectManualOrder() {
+    func selectManualOrder() {
         guard case .playlist = source else { return }
         manualOrder = true
     }
 
-    public var displayedItems: [ScoreItem] {
+    var displayedItems: [ScoreItem] {
         let scoped = scope(repository.scoreItems)
         let filtered = applySearch(scoped)
         if isManualOrderActive {

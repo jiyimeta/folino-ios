@@ -1,3 +1,3 @@
-public enum CloudSyncModule {
-    public static let isLinked = true
+enum CloudSyncModule {
+    static let isLinked = true
 }

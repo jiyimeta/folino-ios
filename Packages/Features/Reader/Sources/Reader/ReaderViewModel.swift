@@ -7,8 +7,8 @@ import SheetMusicCore
 
 @MainActor
 @Observable
-public final class ReaderViewModel { // swiftlint:disable:this type_body_length
-    public enum LoadState {
+final class ReaderViewModel { // swiftlint:disable:this type_body_length
+    enum LoadState {
         case loading
         case loaded(Score)
         case failed(message: String)
@@ -17,7 +17,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// Which copy the playback-prep alert should show. The view binds
     /// presentation to whether this is non-nil and renders the title
     /// from the case.
-    public enum SoundfontAlertKind: Sendable {
+    enum SoundfontAlertKind {
         /// Soundfonts are still being prepared and the user pressed
         /// play before the work finished.
         case loading
@@ -27,34 +27,34 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         case offline
     }
 
-    public static let defaultStaffVolume: Double = 1.0
+    static let defaultStaffVolume: Double = 1.0
 
-    public private(set) var loadState: LoadState = .loading
-    public private(set) var scoreItem: ScoreItem
-    public private(set) var preferences: ReaderPreferences
+    private(set) var loadState: LoadState = .loading
+    private(set) var scoreItem: ScoreItem
+    private(set) var preferences: ReaderPreferences
     /// Transient per-staff volume during a slider drag. Populated by
     /// `setVolume`, cleared by `commitVolume`. Lives on the VM so SwiftUI
     /// re-renders the slider as the value moves.
-    public private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
-    public private(set) var mutedStaves: Set<StaffAddress> = []
-    public private(set) var soloStaves: Set<StaffAddress> = []
-    public private(set) var isPlaying: Bool = false
-    public private(set) var soundfontAlertKind: SoundfontAlertKind?
-    public private(set) var playbackCursor: ScoreCursor?
-    public var viewportZoom: CGFloat = 1.0
-    public var lastNonUnitZoom: CGFloat = 1.0
-    public var isPlaybackInspectorPresented: Bool = false
-    public var isVisualInspectorPresented: Bool = false
+    private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
+    private(set) var mutedStaves: Set<StaffAddress> = []
+    private(set) var soloStaves: Set<StaffAddress> = []
+    private(set) var isPlaying: Bool = false
+    private(set) var soundfontAlertKind: SoundfontAlertKind?
+    private(set) var playbackCursor: ScoreCursor?
+    var viewportZoom: CGFloat = 1.0
+    var lastNonUnitZoom: CGFloat = 1.0
+    var isPlaybackInspectorPresented: Bool = false
+    var isVisualInspectorPresented: Bool = false
 
     /// Convenience for tests and previews — true while the "loading
     /// playback sounds…" copy is showing.
-    public var isLoadingSoundfonts: Bool {
+    var isLoadingSoundfonts: Bool {
         soundfontAlertKind == .loading
     }
 
     /// Convenience for tests and previews — true while the offline
     /// copy is showing.
-    public var isOfflineAlertPresented: Bool {
+    var isOfflineAlertPresented: Bool {
         soundfontAlertKind == .offline
     }
 
@@ -102,7 +102,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         let task: Task<Void, Error>
     }
 
-    public init(
+    init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
         gateway: any ScoreFileGateway,
@@ -135,7 +135,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// throwaway VMs all register handlers that capture themselves
     /// weakly, the last one wins, and once it's deallocated the engine's
     /// cursor changes land on a `[weak self]` that's already nil.
-    public func startObservingCursor() {
+    func startObservingCursor() {
         guard let controller = playbackController else { return }
         controller.observeCursor { [weak self] value in
             guard let self else { return }
@@ -172,7 +172,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         return .beat(measureIndex: id.measureIndex, tickInMeasure: tick)
     }
 
-    public func load() async {
+    func load() async {
         loadState = .loading
         let url = scoresDirectory.appending(path: scoreItem.localFileName)
         do {
@@ -186,7 +186,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         }
     }
 
-    public func incrementStaffSize() async {
+    func incrementStaffSize() async {
         let next = min(
             preferences.staffSize + 1,
             ReaderPreferences.maxStaffSize,
@@ -194,7 +194,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         await mutatePreferences { $0.staffSize = next }
     }
 
-    public func decrementStaffSize() async {
+    func decrementStaffSize() async {
         let next = max(
             preferences.staffSize - 1,
             ReaderPreferences.minStaffSize,
@@ -202,18 +202,18 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         await mutatePreferences { $0.staffSize = next }
     }
 
-    public func setHonorLayoutBreaks(_ value: Bool) async {
+    func setHonorLayoutBreaks(_ value: Bool) async {
         await mutatePreferences { $0.honorLayoutBreaks = value }
     }
 
-    public func volume(for address: StaffAddress) -> Double {
+    func volume(for address: StaffAddress) -> Double {
         liveStaffVolumes[address]
             ?? preferences.staffVolumeOverrides[address]
             ?? scoreDefaultVolume(for: address)
             ?? Self.defaultStaffVolume
     }
 
-    public func setVolume(_ value: Double, for address: StaffAddress) {
+    func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
         liveStaffVolumes[address] = clamped
         guard let flatIndex = flattenedStaffIndex(for: address) else { return }
@@ -223,7 +223,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// Slider release: persist the value as the per-score override and
     /// clear the transient drag entry. Forwards to the engine so the
     /// post-clamp value is what gets played.
-    public func commitVolume(_ value: Double, for address: StaffAddress) async {
+    func commitVolume(_ value: Double, for address: StaffAddress) async {
         let clamped = min(max(value, 0), 1)
         await mutatePreferences { $0.staffVolumeOverrides[address] = clamped }
         liveStaffVolumes[address] = nil
@@ -231,7 +231,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
     }
 
-    public func toggleStaffMute(address: StaffAddress) {
+    func toggleStaffMute(address: StaffAddress) {
         if mutedStaves.contains(address) {
             mutedStaves.remove(address)
         } else {
@@ -243,7 +243,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         }
     }
 
-    public func toggleStaffSolo(address: StaffAddress) {
+    func toggleStaffSolo(address: StaffAddress) {
         if soloStaves.contains(address) {
             soloStaves.remove(address)
         } else {
@@ -257,18 +257,18 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
 
     /// Returns the GM program (0…127) currently driving the staff: the user's
     /// override if one is set, otherwise the score's declared instrument program.
-    public func effectiveProgram(for address: StaffAddress) -> Int {
+    func effectiveProgram(for address: StaffAddress) -> Int {
         if let override = preferences.staffProgramOverrides[address] {
             return override
         }
         return scoreDefaultProgram(for: address) ?? 0
     }
 
-    public func hasProgramOverride(for address: StaffAddress) -> Bool {
+    func hasProgramOverride(for address: StaffAddress) -> Bool {
         preferences.staffProgramOverrides[address] != nil
     }
 
-    public func setStaffProgram(_ program: Int, for address: StaffAddress) async {
+    func setStaffProgram(_ program: Int, for address: StaffAddress) async {
         await mutatePreferences { $0.staffProgramOverrides[address] = program }
         guard let flatIndex = flattenedStaffIndex(for: address) else { return }
         await playbackController?.setStaffInstrument(
@@ -278,7 +278,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         )
     }
 
-    public func clearStaffProgramOverride(for address: StaffAddress) async {
+    func clearStaffProgramOverride(for address: StaffAddress) async {
         await mutatePreferences { $0.staffProgramOverrides.removeValue(forKey: address) }
         guard let flatIndex = flattenedStaffIndex(for: address) else { return }
         await playbackController?.setStaffInstrument(
@@ -309,14 +309,14 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// clef (explicit measure-0 clef, else `Staff.defaultClefType`),
     /// falling back to `"G"` if neither exists or the staff isn't in
     /// the score.
-    public func effectiveClef(for address: StaffAddress) -> String {
+    func effectiveClef(for address: StaffAddress) -> String {
         if let override = preferences.staffClefOverrides[address] {
             return override
         }
         return authoredClef(for: address) ?? "G"
     }
 
-    public func hasClefOverride(for address: StaffAddress) -> Bool {
+    func hasClefOverride(for address: StaffAddress) -> Bool {
         preferences.staffClefOverrides[address] != nil
     }
 
@@ -326,18 +326,18 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// the authored value (e.g. user picked the same Treble that was
     /// already there) clearing it would be visibly a no-op, so the
     /// reset affordance would just be noise.
-    public func isClefOverrideEffective(for address: StaffAddress) -> Bool {
+    func isClefOverrideEffective(for address: StaffAddress) -> Bool {
         guard let override = preferences.staffClefOverrides[address] else {
             return false
         }
         return override != (authoredClef(for: address) ?? "G")
     }
 
-    public func setClefOverride(_ rawType: String, for address: StaffAddress) async {
+    func setClefOverride(_ rawType: String, for address: StaffAddress) async {
         await mutatePreferences { $0.staffClefOverrides[address] = rawType }
     }
 
-    public func clearClefOverride(for address: StaffAddress) async {
+    func clearClefOverride(for address: StaffAddress) async {
         await mutatePreferences {
             $0.staffClefOverrides.removeValue(forKey: address)
         }
@@ -385,7 +385,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// the score is open, so the user usually finds soundfonts ready by
     /// the time they tap play. Idempotent — re-entry while a preload is
     /// in flight or already finished is a no-op.
-    public func prepareForPlayback() async {
+    func prepareForPlayback() async {
         guard let controller = playbackController,
               case let .loaded(score) = loadState,
               !hasLoadedIntoPlayback,
@@ -413,7 +413,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         preloadTask = nil
     }
 
-    public func togglePlayback() async {
+    func togglePlayback() async {
         guard let controller = playbackController,
               case let .loaded(score) = loadState,
               soundfontAlertKind == nil
@@ -479,12 +479,12 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
 
     /// Cancels an in-flight `load` on the playback controller. Safe to call
     /// when no load is in flight — the cancel is a no-op.
-    public func cancelLoadingSoundfonts() {
+    func cancelLoadingSoundfonts() {
         preloadTask?.cancel()
         pendingInstrumentLoad?.task.cancel()
     }
 
-    public func toggleStaff(address: StaffAddress) async {
+    func toggleStaff(address: StaffAddress) async {
         await mutatePreferences { prefs in
             if prefs.hiddenStaves.contains(address) {
                 prefs.hiddenStaves.remove(address)
@@ -498,19 +498,19 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         playbackCursor = translateCursorForHiddenStaves(rawPlaybackCursor)
     }
 
-    public func resetZoom() {
+    func resetZoom() {
         viewportZoom = 1.0
     }
 
     /// Records the current zoom as the value to restore on the next
     /// `toggleZoom`. Called from the gesture layer at the end of a pinch.
-    public func captureCurrentZoomAsLast() {
+    func captureCurrentZoomAsLast() {
         if viewportZoom > 1.0 {
             lastNonUnitZoom = viewportZoom
         }
     }
 
-    public func toggleZoom(targetIfZoomedOut: CGFloat) {
+    func toggleZoom(targetIfZoomedOut: CGFloat) {
         if viewportZoom > 1.0 {
             resetZoom()
         } else {
@@ -518,7 +518,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         }
     }
 
-    public func setManualCursor(_ cursor: ScoreCursor) {
+    func setManualCursor(_ cursor: ScoreCursor) {
         let engineCursor = engineCursorForFilteredTap(cursor)
         rawPlaybackCursor = engineCursor
         playbackCursor = cursor
@@ -576,20 +576,20 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// Effective playback rate multiplier — falls back to 1.0 when no
     /// override is set. The InspectorView slider uses this to seed its
     /// local edit state.
-    public var effectiveTempoMultiplier: Double {
+    var effectiveTempoMultiplier: Double {
         preferences.tempoMultiplier ?? 1.0
     }
 
     /// While the user is dragging the slider: forward the new rate to
     /// the engine immediately for audible feedback. Does NOT persist —
     /// the View calls `commitTempoMultiplier` on slider release.
-    public func setTempoMultiplier(_ value: Double) {
+    func setTempoMultiplier(_ value: Double) {
         Task { await playbackController?.setTempoMultiplier(value) }
     }
 
     /// On slider release: persist the override (normalizing 1.0 → nil)
     /// and forward to the engine.
-    public func commitTempoMultiplier(_ value: Double) async {
+    func commitTempoMultiplier(_ value: Double) async {
         // Snap "100% to display" back to the no-override state. Slider can stop
         // at e.g. 0.9999999... when visually centred; without this, the override
         // persists as a near-1.0 value the user thought they cleared.
@@ -600,7 +600,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     }
 
     /// Reset to native tempo. Clears the saved override and forwards 1.0.
-    public func resetTempoMultiplier() async {
+    func resetTempoMultiplier() async {
         await mutatePreferences { $0.tempoMultiplier = nil }
         await playbackController?.setTempoMultiplier(1.0)
     }
@@ -608,7 +608,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// Forward metronome on/off to the engine. Persistence is owned by
     /// the View layer via @AppStorage("readerMetronomeEnabled") so it
     /// survives across scores.
-    public func setMetronomeEnabled(_ enabled: Bool) async {
+    func setMetronomeEnabled(_ enabled: Bool) async {
         await playbackController?.setMetronomeEnabled(enabled)
     }
 
@@ -626,7 +626,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// the controller happen on the spawned `Task`. Tests should call
     /// `setRepeatMode(_:)` directly to await both side effects
     /// deterministically.
-    public var repeatMode: RepeatMode {
+    var repeatMode: RepeatMode {
         get { preferences.repeatMode }
         set {
             guard newValue != preferences.repeatMode else { return }
@@ -640,7 +640,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// the playback controller. Use this from tests or any async
     /// context that needs to observe those side effects before
     /// continuing.
-    public func setRepeatMode(_ value: RepeatMode) async {
+    func setRepeatMode(_ value: RepeatMode) async {
         guard value != preferences.repeatMode else { return }
         preferences.repeatMode = value
         await persistRepeatModeAndPushLoopRange()
@@ -652,15 +652,15 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         await forwardLoopRangeToController()
     }
 
-    public var abRepeat: ABRepeatRange? {
+    var abRepeat: ABRepeatRange? {
         preferences.abRepeat
     }
 
-    public var pendingRepeatA: ChordPath? {
+    var pendingRepeatA: ChordPath? {
         pendingA ?? preferences.abRepeat?.start
     }
 
-    public var pendingRepeatB: ChordPath? {
+    var pendingRepeatB: ChordPath? {
         pendingB ?? preferences.abRepeat?.end
     }
 
@@ -765,7 +765,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
 // MARK: - Repeat / loop mutators
 
 extension ReaderViewModel {
-    public func setRepeatA() async {
+    func setRepeatA() async {
         if let pendingRepeatA, pendingRepeatA.measureIndex == playbackCursor?.measureIndex {
             await clearRepeatA()
             return
@@ -780,7 +780,7 @@ extension ReaderViewModel {
         await forwardLoopRangeToController()
     }
 
-    public func setRepeatB() async {
+    func setRepeatB() async {
         if let pendingRepeatB, pendingRepeatB.measureIndex == playbackCursor?.measureIndex {
             await clearRepeatB()
             return
@@ -851,12 +851,12 @@ extension ReaderViewModel {
     /// Effective GM program for a part. All staves under a part share the
     /// part's instrument, so we report the first staff's effective program
     /// (or the score default when no override exists).
-    public func effectiveProgram(forPartIndex partIndex: Int) -> Int {
+    func effectiveProgram(forPartIndex partIndex: Int) -> Int {
         let firstAddress = StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
         return effectiveProgram(for: firstAddress)
     }
 
-    public func hasProgramOverride(forPartIndex partIndex: Int) -> Bool {
+    func hasProgramOverride(forPartIndex partIndex: Int) -> Bool {
         partStaffAddresses(forPartIndex: partIndex)
             .contains { preferences.staffProgramOverrides[$0] != nil }
     }
@@ -864,7 +864,7 @@ extension ReaderViewModel {
     /// Set a program override for every staff under the part. Each staff has
     /// its own engine voice, so we have to fan out — but to the user it
     /// reads as one "this part's instrument" choice.
-    public func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
+    func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
         let addresses = partStaffAddresses(forPartIndex: partIndex)
         guard !addresses.isEmpty,
               case let .loaded(score) = loadState,
@@ -991,7 +991,7 @@ extension ReaderViewModel {
         pendingInstrumentLoad = nil
     }
 
-    public func clearPartProgramOverride(forPartIndex partIndex: Int) async {
+    func clearPartProgramOverride(forPartIndex partIndex: Int) async {
         let addresses = partStaffAddresses(forPartIndex: partIndex)
         guard !addresses.isEmpty else { return }
         await mutatePreferences { prefs in

@@ -27,18 +27,18 @@ public struct PlaylistID: Hashable, Sendable, Codable {
     }
 }
 
-public struct AnnotationID: Hashable, Sendable, Codable {
-    public let rawValue: UUID
+struct AnnotationID: Hashable, Codable {
+    let rawValue: UUID
 
-    public init(rawValue: UUID = UUID()) {
+    init(rawValue: UUID = UUID()) {
         self.rawValue = rawValue
     }
 }
 
-public struct AnnotationLayerID: Hashable, Sendable, Codable {
-    public let rawValue: UUID
+struct AnnotationLayerID: Hashable, Codable {
+    let rawValue: UUID
 
-    public init(rawValue: UUID = UUID()) {
+    init(rawValue: UUID = UUID()) {
         self.rawValue = rawValue
     }
 }

@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-public enum UtilityUILocalization {
-    public static let bundle: Bundle = .module
+enum UtilityUILocalization {
+    static let bundle: Bundle = .module
 }
 
 public enum L10n {

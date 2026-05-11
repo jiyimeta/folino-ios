@@ -7,7 +7,7 @@ public enum RepeatMode: String, Hashable, Sendable, Codable, CaseIterable {
     case abLoop
 
     /// Cycle order shown on the Inspector's mode button.
-    public var next: RepeatMode {
+    var next: RepeatMode {
         switch self {
         case .off: .loopAll
         case .loopAll: .abLoop

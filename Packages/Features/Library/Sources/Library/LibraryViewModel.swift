@@ -5,13 +5,13 @@ import Observation
 @MainActor
 @Observable
 public final class LibraryViewModel {
-    public let repository: any ScoreLibraryRepository
-    public let importer: any ScoreFileImporter
-    public let gateway: any ScoreFileGateway
-    public let shareService: any ScoreShareService
+    let repository: any ScoreLibraryRepository
+    let importer: any ScoreFileImporter
+    let gateway: any ScoreFileGateway
+    let shareService: any ScoreShareService
 
-    public var shareTarget: ShareTarget?
-    public var isPreparingShare: Bool = false
+    var shareTarget: ShareTarget?
+    var isPreparingShare: Bool = false
 
     /// True while a file import is in flight (prepare or commit). Driven by
     /// `defer` blocks in `startImport` and `commit` so it clears on success,
@@ -19,33 +19,33 @@ public final class LibraryViewModel {
     /// uses this to show a loading HUD over the whole shell.
     public var isImporting: Bool = false
 
-    public struct ShareTarget: Identifiable, Equatable, Sendable {
-        public let id: UUID
-        public let urls: [URL]
-        public init(urls: [URL]) {
+    struct ShareTarget: Identifiable, Equatable {
+        let id: UUID
+        let urls: [URL]
+        init(urls: [URL]) {
             id = UUID()
             self.urls = urls
         }
     }
 
-    public var errorAlertMessage: String?
+    var errorAlertMessage: String?
 
     /// Set when an import succeeds; the App composition root watches this and
     /// pushes the Reader. Cleared by the watcher after handling.
     public var pendingScoreToOpen: ScoreItem?
 
     /// Drives the `.fileImporter` sheet.
-    public var isFileImporterPresented = false
+    var isFileImporterPresented = false
 
     /// Set when `prepareImport` returns at least one duplicate. The view
     /// presents a 3-button alert; choosing one of the buttons drives
     /// `commitImport`.
-    public var duplicatePrompt: DuplicatePrompt?
+    var duplicatePrompt: DuplicatePrompt?
 
-    public struct DuplicatePrompt: Identifiable, Equatable {
-        public let id = UUID()
-        public let plan: ImportPlan
-        public let existing: ScoreItem
+    struct DuplicatePrompt: Identifiable, Equatable {
+        let id = UUID()
+        let plan: ImportPlan
+        let existing: ScoreItem
     }
 
     public init(
@@ -60,13 +60,13 @@ public final class LibraryViewModel {
         self.shareService = shareService
     }
 
-    public func toggleFavorite(_ scoreItem: ScoreItem) async {
+    func toggleFavorite(_ scoreItem: ScoreItem) async {
         var updated = scoreItem
         updated.isFavorite.toggle()
         await save(updated)
     }
 
-    public func rename(_ scoreItem: ScoreItem, to newTitle: String) async {
+    func rename(_ scoreItem: ScoreItem, to newTitle: String) async {
         let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != scoreItem.title else { return }
         var updated = scoreItem
@@ -74,7 +74,7 @@ public final class LibraryViewModel {
         await save(updated)
     }
 
-    public func delete(_ scoreItem: ScoreItem) async {
+    func delete(_ scoreItem: ScoreItem) async {
         do {
             try await repository.deleteScoreItem(id: scoreItem.id)
         } catch {
@@ -82,7 +82,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func deletePlaylist(_ playlist: Playlist) async {
+    func deletePlaylist(_ playlist: Playlist) async {
         do {
             try await repository.deletePlaylist(id: playlist.id)
         } catch {
@@ -90,7 +90,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func deleteTag(_ tag: Tag) async {
+    func deleteTag(_ tag: Tag) async {
         do {
             try await repository.deleteTag(id: tag.id)
         } catch {
@@ -98,7 +98,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func bulkDelete(_ ids: Set<ScoreItemID>) async {
+    func bulkDelete(_ ids: Set<ScoreItemID>) async {
         for id in ids {
             do {
                 try await repository.deleteScoreItem(id: id)
@@ -109,7 +109,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func bulkRemoveFromPlaylist(
+    func bulkRemoveFromPlaylist(
         _ ids: Set<ScoreItemID>,
         from playlist: Playlist,
     ) async {
@@ -124,7 +124,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func bulkAddToPlaylist(
+    func bulkAddToPlaylist(
         _ orderedIDs: [ScoreItemID],
         to playlist: Playlist,
     ) async {
@@ -141,7 +141,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func bulkAddTags(
+    func bulkAddTags(
         _ ids: Set<ScoreItemID>,
         tagIDs: Set<TagID>,
     ) async {
@@ -161,7 +161,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
+    func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
         isPreparingShare = true
         defer { isPreparingShare = false }
         do {
@@ -172,7 +172,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func requestBulkShare(_ items: [ScoreItem], format: ScoreShareFormat) async {
+    func requestBulkShare(_ items: [ScoreItem], format: ScoreShareFormat) async {
         guard !items.isEmpty else { return }
         isPreparingShare = true
         defer { isPreparingShare = false }
@@ -190,13 +190,13 @@ public final class LibraryViewModel {
         shareTarget = ShareTarget(urls: urls)
     }
 
-    public func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {
+    func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {
         var updated = scoreItem
         updated.tagIDs = tagIDs
         await save(updated)
     }
 
-    public func createPlaylist(name: String) async {
+    func createPlaylist(name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let playlist = Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date())
@@ -207,7 +207,7 @@ public final class LibraryViewModel {
         }
     }
 
-    public func createTag(name: String) async {
+    func createTag(name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let tag = Tag(name: trimmed, colorHex: "#5856D6")
@@ -250,7 +250,7 @@ public final class LibraryViewModel {
         await commit(plan: plan, decision: .importAsNew)
     }
 
-    public func commit(plan: ImportPlan, decision: ImportDecision) async {
+    func commit(plan: ImportPlan, decision: ImportDecision) async {
         isImporting = true
         defer { isImporting = false }
         do {

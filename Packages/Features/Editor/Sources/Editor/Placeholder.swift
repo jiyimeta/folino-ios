@@ -1,3 +1,3 @@
-public enum EditorModule {
-    public static let isLinked = true
+enum EditorModule {
+    static let isLinked = true
 }

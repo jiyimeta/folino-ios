@@ -4,10 +4,10 @@ import Observation
 @Observable
 @MainActor
 public final class VersionHistoryViewModel {
-    public let isHistorySplit: Bool
-    public let recentChanges: [VersionHistoryEntry]
-    public let pastChanges: [VersionHistoryEntry]
-    public var isPastChangesShown: Bool = false
+    let isHistorySplit: Bool
+    let recentChanges: [VersionHistoryEntry]
+    let pastChanges: [VersionHistoryEntry]
+    var isPastChangesShown: Bool = false
 
     public init(entries: [VersionHistoryEntry], baseline: AppVersion, isHistorySplit: Bool) {
         self.isHistorySplit = isHistorySplit
@@ -15,7 +15,7 @@ public final class VersionHistoryViewModel {
         pastChanges = entries.filter { $0.version <= baseline }
     }
 
-    public func showMoreButtonDidTap() {
+    func showMoreButtonDidTap() {
         isPastChangesShown = true
     }
 }

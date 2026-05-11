@@ -15,7 +15,7 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
     /// Inject a `Locale` into `Decoder.userInfo` under this key to override
     /// the default `Locale.current` lookup. Tests use this; production code
     /// can leave `userInfo` empty.
-    public static let localeUserInfoKey: CodingUserInfoKey = // swiftlint:disable:next force_unwrapping
+    static let localeUserInfoKey: CodingUserInfoKey = // swiftlint:disable:next force_unwrapping
         .init(rawValue: "VersionHistoryEntry.locale")!
 
     private enum CodingKeys: String, CodingKey {

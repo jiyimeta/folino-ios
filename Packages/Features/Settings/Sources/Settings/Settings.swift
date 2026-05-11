@@ -1,5 +1,5 @@
-public enum SettingsModule {
-    public static var isLinked: Bool {
+enum SettingsModule {
+    static var isLinked: Bool {
         true
     }
 }
