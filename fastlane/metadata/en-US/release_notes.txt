@@ -1,2 +1,4 @@
-- Fixed an import error that occurred with some files
-- Improved score display and playback
+- Fixed a crash that occurred when deleting a score
+- Added the ability to change clefs per staff
+- Added the ability to rename files
+- Improved scroll and zoom controls for scores

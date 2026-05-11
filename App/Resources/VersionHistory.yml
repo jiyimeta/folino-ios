@@ -1,3 +1,13 @@
+- version: 1.2.0
+  descriptions:
+    - en: Fixed a crash that occurred when deleting a score
+      ja: 楽譜削除でクラッシュする不具合を修正
+    - en: Added the ability to change clefs per staff
+      ja: 譜表ごとの音部記号変更機能を追加
+    - en: Added the ability to rename files
+      ja: ファイル名変更機能を追加
+    - en: Improved scroll and zoom controls for scores
+      ja: 楽譜のスクロール・ズームの操作性を改善
 - version: 1.1.1
   descriptions:
     - en: Fixed an import error that occurred with some files
