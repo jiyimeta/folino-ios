@@ -205,15 +205,17 @@ struct ClefMenu: View {
     }
 }
 
-#Preview {
-    @Previewable @State var viewModel = ReaderViewModel(
-        scoreItem: PreviewFakeRepository.sampleItem,
-        repository: PreviewFakeRepository(),
-        gateway: PreviewFakeGateway(),
-        scoresDirectory: URL(filePath: "/dev/null"),
-    )
-    ClefMenu(
-        viewModel: viewModel,
-        address: StaffAddress(partIndex: 1, staffIndexInPart: 1),
-    )
-}
+#if DEBUG
+    #Preview {
+        @Previewable @State var viewModel = ReaderViewModel(
+            scoreItem: PreviewFakeRepository.sampleItem,
+            repository: PreviewFakeRepository(),
+            gateway: PreviewFakeGateway(),
+            scoresDirectory: URL(filePath: "/dev/null"),
+        )
+        ClefMenu(
+            viewModel: viewModel,
+            address: StaffAddress(partIndex: 1, staffIndexInPart: 1),
+        )
+    }
+#endif
