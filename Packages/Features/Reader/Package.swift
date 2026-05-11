@@ -18,7 +18,7 @@ let package = Package(
         .package(path: "../../Utility"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            revision: "8f96b11096869fc3ebdf1bd84aae8f235d305fc6"
+            revision: "406dde6e4073c77b1345cad549c388cc84088ee3",
         ),
     ],
     targets: [
@@ -32,8 +32,8 @@ let package = Package(
                 .product(name: "SheetMusicUI", package: "swift-sheet-music"),
             ],
             resources: [.process("Resources")],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .testTarget(name: "ReaderTests", dependencies: ["Reader"]),
-    ]
+    ],
 )

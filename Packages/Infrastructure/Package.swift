@@ -20,7 +20,7 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            revision: "8f96b11096869fc3ebdf1bd84aae8f235d305fc6"
+            revision: "406dde6e4073c77b1345cad549c388cc84088ee3",
         ),
         .package(path: "../Domain"),
     ],
@@ -31,7 +31,7 @@ let package = Package(
                 "Domain",
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .target(name: "CloudSync", dependencies: ["Domain"], plugins: swiftLintPlugins),
         .target(
@@ -40,7 +40,7 @@ let package = Package(
                 "Domain",
                 .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
             ],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .target(
             name: "Audio",
@@ -48,7 +48,7 @@ let package = Package(
                 "Domain",
                 .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
             ],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .target(
             name: "ScoreFiles",
@@ -57,12 +57,12 @@ let package = Package(
                 .product(name: "SheetMusic", package: "swift-sheet-music"),
                 .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
             ],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .testTarget(
             name: "InfrastructureTests",
             dependencies: ["Persistence", "CloudSync", "Soundfonts", "Audio", "ScoreFiles"],
-            resources: [.process("Resources")]
+            resources: [.process("Resources")],
         ),
-    ]
+    ],
 )

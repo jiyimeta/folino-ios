@@ -43,14 +43,20 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public private(set) var playbackCursor: ScoreCursor?
     public var viewportZoom: CGFloat = 1.0
     public var lastNonUnitZoom: CGFloat = 1.0
-    public var isInspectorPresented: Bool = false
+    public var isPlaybackInspectorPresented: Bool = false
+    public var isVisualInspectorPresented: Bool = false
 
     /// Convenience for tests and previews — true while the "loading
     /// playback sounds…" copy is showing.
-    public var isLoadingSoundfonts: Bool { soundfontAlertKind == .loading }
+    public var isLoadingSoundfonts: Bool {
+        soundfontAlertKind == .loading
+    }
+
     /// Convenience for tests and previews — true while the offline
     /// copy is showing.
-    public var isOfflineAlertPresented: Bool { soundfontAlertKind == .offline }
+    public var isOfflineAlertPresented: Bool {
+        soundfontAlertKind == .offline
+    }
 
     @ObservationIgnored
     private let repository: any ScoreLibraryRepository
@@ -103,7 +109,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         scoresDirectory: URL,
         defaultStaffSize: CGFloat = 14,
         playbackController: (any PlaybackController)? = nil,
-        reachability: (any NetworkReachability)? = nil
+        reachability: (any NetworkReachability)? = nil,
     ) {
         self.scoreItem = scoreItem
         self.repository = repository
@@ -115,7 +121,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         preferences = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
-            hiddenStaves: []
+            hiddenStaves: [],
         )
     }
 
@@ -153,7 +159,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// against the surviving columns. `.beat` and visible-staff `.item`
     /// values pass through unchanged.
     private func translateCursorForHiddenStaves(
-        _ cursor: ScoreCursor?
+        _ cursor: ScoreCursor?,
     ) -> ScoreCursor? {
         guard let cursor else { return nil }
         let hidden = preferences.hiddenStaves
@@ -183,7 +189,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public func incrementStaffSize() async {
         let next = min(
             preferences.staffSize + 1,
-            ReaderPreferences.maxStaffSize
+            ReaderPreferences.maxStaffSize,
         )
         await mutatePreferences { $0.staffSize = next }
     }
@@ -191,7 +197,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     public func decrementStaffSize() async {
         let next = max(
             preferences.staffSize - 1,
-            ReaderPreferences.minStaffSize
+            ReaderPreferences.minStaffSize,
         )
         await mutatePreferences { $0.staffSize = next }
     }
@@ -268,7 +274,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         await playbackController?.setStaffInstrument(
             staff: flatIndex,
             bank: scoreDefaultBank(for: address) ?? 0,
-            program: program
+            program: program,
         )
     }
 
@@ -278,7 +284,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         await playbackController?.setStaffInstrument(
             staff: flatIndex,
             bank: scoreDefaultBank(for: address) ?? 0,
-            program: scoreDefaultProgram(for: address) ?? 0
+            program: scoreDefaultProgram(for: address) ?? 0,
         )
     }
 
@@ -296,6 +302,47 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             score.parts.indices.contains(address.partIndex)
         else { return nil }
         return score.parts[address.partIndex].instrument.channel.bank
+    }
+
+    /// Returns the rawType the renderer will use for this staff: the
+    /// override if one is set, otherwise the score's authored opening
+    /// clef (explicit measure-0 clef, else `Staff.defaultClefType`),
+    /// falling back to `"G"` if neither exists or the staff isn't in
+    /// the score.
+    public func effectiveClef(for address: StaffAddress) -> String {
+        if let override = preferences.staffClefOverrides[address] {
+            return override
+        }
+        return authoredClef(for: address) ?? "G"
+    }
+
+    public func hasClefOverride(for address: StaffAddress) -> Bool {
+        preferences.staffClefOverrides[address] != nil
+    }
+
+    public func setClefOverride(_ rawType: String, for address: StaffAddress) async {
+        await mutatePreferences { $0.staffClefOverrides[address] = rawType }
+    }
+
+    public func clearClefOverride(for address: StaffAddress) async {
+        await mutatePreferences {
+            $0.staffClefOverrides.removeValue(forKey: address)
+        }
+    }
+
+    private func authoredClef(for address: StaffAddress) -> String? {
+        guard case let .loaded(score) = loadState,
+              score.parts.indices.contains(address.partIndex),
+              score.parts[address.partIndex].staves.indices
+                  .contains(address.staffIndexInPart)
+        else { return nil }
+        let staff = score.parts[address.partIndex].staves[address.staffIndexInPart]
+        if let first = staff.measures.first?.voices.first?.elements.first,
+           case let .clef(c) = first
+        {
+            return c.concertClefType
+        }
+        return staff.defaultClefType
     }
 
     /// CC7 (Channel Volume) from the part's first channel, mapped from
@@ -470,7 +517,9 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// Effective playback rate multiplier — falls back to 1.0 when no
     /// override is set. The InspectorView slider uses this to seed its
     /// local edit state.
-    public var effectiveTempoMultiplier: Double { preferences.tempoMultiplier ?? 1.0 }
+    public var effectiveTempoMultiplier: Double {
+        preferences.tempoMultiplier ?? 1.0
+    }
 
     /// While the user is dragging the slider: forward the new rate to
     /// the engine immediately for audible feedback. Does NOT persist —
@@ -511,10 +560,22 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// Staged B endpoint not yet committed (incomplete loop).
     private var pendingB: ChordPath?
 
-    public var repeatMode: RepeatMode { preferences.repeatMode }
-    public var abRepeat: ABRepeatRange? { preferences.abRepeat }
-    public var pendingRepeatA: ChordPath? { pendingA ?? preferences.abRepeat?.start }
-    public var pendingRepeatB: ChordPath? { pendingB ?? preferences.abRepeat?.end }
+    public var repeatMode: RepeatMode {
+        get { preferences.repeatMode }
+        set { preferences.repeatMode = newValue }
+    }
+
+    public var abRepeat: ABRepeatRange? {
+        preferences.abRepeat
+    }
+
+    public var pendingRepeatA: ChordPath? {
+        pendingA ?? preferences.abRepeat?.start
+    }
+
+    public var pendingRepeatB: ChordPath? {
+        pendingB ?? preferences.abRepeat?.end
+    }
 
     // MARK: - Private
 
@@ -524,9 +585,11 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
                 ? score.parts[entry.address.partIndex].instrument.channel.bank
                 : 0
             let program = preferences.staffProgramOverrides[entry.address]
-                ?? (score.parts.indices.contains(entry.address.partIndex)
-                    ? score.parts[entry.address.partIndex].instrument.channel.program
-                    : 0)
+                ?? (
+                    score.parts.indices.contains(entry.address.partIndex)
+                        ? score.parts[entry.address.partIndex].instrument.channel.program
+                        : 0
+                )
             return StaffMixerState(
                 staffIndex: idx,
                 volume: preferences.staffVolumeOverrides[entry.address]
@@ -535,14 +598,14 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
                 isMuted: false,
                 isSolo: false,
                 gmBank: bank,
-                gmProgram: program
+                gmProgram: program,
             )
         }
         return PlaybackPreferences(
             scoreItemID: scoreItem.id,
             perStaff: states,
             tempoMultiplier: preferences.tempoMultiplier ?? 1.0,
-            abRepeat: preferences.abRepeat
+            abRepeat: preferences.abRepeat,
         )
     }
 
@@ -558,7 +621,7 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
         let seeded = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
-            hiddenStaves: []
+            hiddenStaves: [],
         )
         preferences = seeded
         try? await repository.saveReaderPreferences(seeded)
@@ -576,10 +639,11 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
             hiddenStaves: copy.hiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
             staffVolumeOverrides: copy.staffVolumeOverrides,
+            staffClefOverrides: copy.staffClefOverrides,
             tempoMultiplier: copy.tempoMultiplier,
             honorLayoutBreaks: copy.honorLayoutBreaks,
             repeatMode: copy.repeatMode,
-            abRepeat: copy.abRepeat
+            abRepeat: copy.abRepeat,
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)
@@ -614,12 +678,6 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
 // MARK: - Repeat / loop mutators
 
 extension ReaderViewModel {
-    public func advanceRepeatMode() async {
-        let next = preferences.repeatMode.next
-        await mutatePreferences { $0.repeatMode = next }
-        await forwardLoopRangeToController()
-    }
-
     public func setRepeatA() async {
         if let pendingRepeatA, pendingRepeatA.measureIndex == playbackCursor?.measureIndex {
             await clearRepeatA()
@@ -731,13 +789,13 @@ extension ReaderViewModel {
 
         if let controller = playbackController,
            await controller.isSoundfontCached(
-               bank: bank, program: program, isDrums: isDrums
+               bank: bank, program: program, isDrums: isDrums,
            ) == false
         {
             await runUncachedPartProgramSwap(
                 program: program, partIndex: partIndex,
                 addresses: addresses, bank: bank, isDrums: isDrums,
-                controller: controller
+                controller: controller,
             )
             return
         }
@@ -754,7 +812,7 @@ extension ReaderViewModel {
             await playbackController?.setStaffInstrument(
                 staff: flatIndex,
                 bank: scoreDefaultBank(for: address) ?? 0,
-                program: program
+                program: program,
             )
         }
     }
@@ -766,7 +824,7 @@ extension ReaderViewModel {
         addresses: [StaffAddress],
         bank: Int,
         isDrums: Bool,
-        controller: any PlaybackController
+        controller: any PlaybackController,
     ) async {
         // 1. Latest pick wins on the same part: cancel any in-flight pick
         //    and inherit its wasPlaying — without inheritance the new pick
@@ -804,12 +862,12 @@ extension ReaderViewModel {
 
         let task = Task<Void, Error> {
             try await controller.prefetchSoundfont(
-                bank: bank, program: program, isDrums: isDrums
+                bank: bank, program: program, isDrums: isDrums,
             )
         }
         let pending = PendingInstrumentLoad(
             partIndex: partIndex, bank: bank, program: program, isDrums: isDrums,
-            previousOverrides: snapshot, wasPlaying: wasPlaying, task: task
+            previousOverrides: snapshot, wasPlaying: wasPlaying, task: task,
         )
         pendingInstrumentLoad = pending
 
@@ -818,7 +876,7 @@ extension ReaderViewModel {
             for address in addresses {
                 guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
                 await controller.setStaffInstrument(
-                    staff: flatIndex, bank: bank, program: program
+                    staff: flatIndex, bank: bank, program: program,
                 )
             }
             soundfontAlertKind = nil
@@ -859,7 +917,7 @@ extension ReaderViewModel {
             await playbackController?.setStaffInstrument(
                 staff: flatIndex,
                 bank: scoreDefaultBank(for: address) ?? 0,
-                program: scoreDefaultProgram(for: address) ?? 0
+                program: scoreDefaultProgram(for: address) ?? 0,
             )
         }
     }

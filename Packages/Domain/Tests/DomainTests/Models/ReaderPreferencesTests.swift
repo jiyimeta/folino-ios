@@ -191,6 +191,50 @@ import Testing
         #expect(decoded.staffVolumeOverrides == prefs.staffVolumeOverrides)
     }
 
+    @Test func clefOverrideRoundTripsThroughCodable() throws {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffClefOverrides: [address: "G8vb"]
+        )
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
+        #expect(decoded.staffClefOverrides == [address: "G8vb"])
+    }
+
+    @Test func clefOverrideDecodesAsEmptyWhenAbsentFromJSON() throws {
+        // Hand-crafted JSON missing `staffClefOverrides` (legacy shape).
+        let scoreID = ScoreItemID()
+        let prefsID = ReaderPreferencesID()
+        let json = """
+        {
+          "id": { "rawValue": "\(prefsID.rawValue.uuidString)" },
+          "scoreItemID": { "rawValue": "\(scoreID.rawValue.uuidString)" },
+          "staffSize": 14,
+          "hiddenStaves": [],
+          "staffProgramOverrides": [],
+          "staffVolumeOverrides": []
+        }
+        """
+        let decoded = try JSONDecoder().decode(
+            ReaderPreferences.self, from: Data(json.utf8)
+        )
+        #expect(decoded.staffClefOverrides.isEmpty)
+    }
+
+    @Test func clefOverrideInitializerDropsUnknownRawType() {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            staffClefOverrides: [address: "not-a-real-clef"]
+        )
+        #expect(prefs.staffClefOverrides.isEmpty)
+    }
+
     @Test func legacyJSONWithoutTempoMultiplierKeyDecodesAsNil() throws {
         // Ensures additive-only schema change: rows persisted before
         // tempoMultiplier landed must still load. We synthesize the

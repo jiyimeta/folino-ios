@@ -12,6 +12,22 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let minTempoMultiplier: Double = 0.5
     public static let maxTempoMultiplier: Double = 2.0
 
+    /// Allow-list of canonical `NotatedClef.rawType` values the Domain
+    /// initializer accepts. Mirrors the 14 forms `NotatedClef.rawType`
+    /// emits in `swift-sheet-music`. Aliases that `NotatedClef(rawType:)`
+    /// accepts as inputs but never emits (e.g. `"treble"`, `"bass"`,
+    /// `"soprano"`, `"alto"`, `"tenor"`, `"baritone"`, `"G1"`, `"G2"`,
+    /// `"percussion"`) are intentionally excluded so override values
+    /// stay canonical and round-trip equality is preserved. If
+    /// `swift-sheet-music` adds a new emitted rawType, audit
+    /// `NotatedClef.rawType`'s switch and extend this set.
+    public static let knownClefRawTypes: Set<String> = [
+        "G", "G8va", "G8vb", "G15ma", "G15mb",
+        "F", "F8va", "F8vb",
+        "C1", "C3", "C4", "C5",
+        "PERC", "PERC2",
+    ]
+
     public let id: ReaderPreferencesID
     public let scoreItemID: ScoreItemID
     public var staffSize: CGFloat
@@ -27,6 +43,13 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// matching part. Matches the override-overlay shape of
     /// `staffProgramOverrides`.
     public var staffVolumeOverrides: [StaffAddress: Double]
+    /// User-chosen display-only clef per staff that overrides the score's
+    /// authored opening clef. Values are `NotatedClef.rawType` strings
+    /// (e.g. `"G"`, `"G8vb"`, `"F8va"`, `"C3"`). Stored as `String` to
+    /// avoid pulling `SheetMusicLayout` into Domain — the Reader feature
+    /// converts via `NotatedClef(rawType:)` at the use site. Unknown
+    /// rawTypes are dropped by the initializer.
+    public var staffClefOverrides: [StaffAddress: String]
     /// Per-score playback rate override. `nil` means "no override" — the
     /// engine plays at the score's native tempo. Set values are clamped to
     /// `[minTempoMultiplier, maxTempoMultiplier]`. The Reader's view model
@@ -53,10 +76,11 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         hiddenStaves: Set<StaffAddress>,
         staffProgramOverrides: [StaffAddress: Int] = [:],
         staffVolumeOverrides: [StaffAddress: Double] = [:],
+        staffClefOverrides: [StaffAddress: String] = [:],
         tempoMultiplier: Double? = nil,
         honorLayoutBreaks: Bool = true,
         repeatMode: RepeatMode = .off,
-        abRepeat: ABRepeatRange? = nil
+        abRepeat: ABRepeatRange? = nil,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -64,6 +88,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.hiddenStaves = hiddenStaves
         self.staffProgramOverrides = staffProgramOverrides.mapValues { min(max($0, 0), 127) }
         self.staffVolumeOverrides = staffVolumeOverrides.mapValues { min(max($0, 0), 1) }
+        self.staffClefOverrides = staffClefOverrides.filter { _, raw in
+            Self.knownClefRawTypes.contains(raw)
+        }
         self.tempoMultiplier = tempoMultiplier.map {
             min(max($0, Self.minTempoMultiplier), Self.maxTempoMultiplier)
         }
@@ -76,6 +103,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         case id, scoreItemID, staffSize, hiddenStaves, staffProgramOverrides
         case staffVolumeOverrides, tempoMultiplier, honorLayoutBreaks
         case repeatMode, abRepeat
+        case staffClefOverrides
     }
 
     public init(from decoder: Decoder) throws {
@@ -85,10 +113,13 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let staffSize = try c.decode(CGFloat.self, forKey: .staffSize)
         let hiddenStaves = try c.decode(Set<StaffAddress>.self, forKey: .hiddenStaves)
         let programOverrides = try c.decodeIfPresent(
-            [StaffAddress: Int].self, forKey: .staffProgramOverrides
+            [StaffAddress: Int].self, forKey: .staffProgramOverrides,
         ) ?? [:]
         let volumeOverrides = try c.decodeIfPresent(
-            [StaffAddress: Double].self, forKey: .staffVolumeOverrides
+            [StaffAddress: Double].self, forKey: .staffVolumeOverrides,
+        ) ?? [:]
+        let clefOverrides = try c.decodeIfPresent(
+            [StaffAddress: String].self, forKey: .staffClefOverrides,
         ) ?? [:]
         let tempo = try c.decodeIfPresent(Double.self, forKey: .tempoMultiplier)
         let honorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks) ?? true
@@ -97,8 +128,10 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
             hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
-            staffVolumeOverrides: volumeOverrides, tempoMultiplier: tempo,
-            honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab
+            staffVolumeOverrides: volumeOverrides,
+            staffClefOverrides: clefOverrides,
+            tempoMultiplier: tempo,
+            honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab,
         )
     }
 }

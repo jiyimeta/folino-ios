@@ -463,6 +463,89 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14
         )
     }
+
+    private func makeTwoStaffScore() -> Score {
+        Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0",
+                    instrument: Instrument(id: "x"),
+                    staves: [
+                        Staff(measures: [Measure(voices: [Voice(elements: [])])]),
+                        Staff(measures: [Measure(voices: [Voice(elements: [])])]),
+                    ]
+                ),
+            ],
+            metaTags: [:]
+        )
+    }
+
+    private func makeGateway(score: Score) -> FakeScoreFileGateway {
+        FakeScoreFileGateway(loadScoreResult: .success((
+            score: score,
+            summary: ScoreFileSummary(
+                title: "Test", composer: nil, instrumentationSummary: "",
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
+            )
+        )))
+    }
+
+    @Test func setClefOverrideUpdatesPreferencesAndPersists() async throws {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        let score = makeTwoStaffScore()
+        let gateway = makeGateway(score: score)
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: gateway,
+            scoresDirectory: URL(filePath: "/tmp")
+        )
+        await vm.load()
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
+        await vm.setClefOverride("G8vb", for: address)
+        #expect(vm.preferences.staffClefOverrides == [address: "G8vb"])
+        #expect(repo.savedReaderPreferences.last?.staffClefOverrides == [address: "G8vb"])
+        #expect(vm.hasClefOverride(for: address))
+    }
+
+    @Test func clearClefOverrideRemovesEntry() async throws {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        let score = makeTwoStaffScore()
+        let gateway = makeGateway(score: score)
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: gateway,
+            scoresDirectory: URL(filePath: "/tmp")
+        )
+        await vm.load()
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        await vm.setClefOverride("F", for: address)
+        await vm.clearClefOverride(for: address)
+        #expect(vm.preferences.staffClefOverrides.isEmpty)
+        #expect(!vm.hasClefOverride(for: address))
+    }
+
+    @Test func effectiveClefReturnsOverrideThenAuthored() async throws {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        var score = makeTwoStaffScore()
+        // Authored opening clef on staff (0,0) is "G" via an explicit
+        // measure-0 clef element; on (0,1) is `nil` with defaultClefType "F".
+        let openingClefVoice = Voice(elements: [.clef(Clef(concertClefType: "G"))])
+        score.parts[0].staves[0].measures = [Measure(voices: [openingClefVoice])]
+        score.parts[0].staves[1].defaultClefType = "F"
+        let gateway = makeGateway(score: score)
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: gateway,
+            scoresDirectory: URL(filePath: "/tmp")
+        )
+        await vm.load()
+        #expect(vm.effectiveClef(for: StaffAddress(partIndex: 0, staffIndexInPart: 0)) == "G")
+        #expect(vm.effectiveClef(for: StaffAddress(partIndex: 0, staffIndexInPart: 1)) == "F")
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        await vm.setClefOverride("G8vb", for: address)
+        #expect(vm.effectiveClef(for: address) == "G8vb")
+    }
 }
 
 // swiftlint:enable file_length type_body_length

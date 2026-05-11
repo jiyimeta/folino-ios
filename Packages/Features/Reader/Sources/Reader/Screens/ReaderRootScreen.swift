@@ -28,7 +28,7 @@ public struct ReaderRootScreen: View {
         playbackController: (any PlaybackController)? = nil,
         reachability: (any NetworkReachability)? = nil,
         onBack: (() -> Void)? = nil,
-        hidesBackButton: Bool = false
+        hidesBackButton: Bool = false,
     ) {
         // Seed the device-class default at construction time. The view
         // model only uses this if no persisted record exists.
@@ -41,8 +41,8 @@ public struct ReaderRootScreen: View {
                 scoresDirectory: scoresDirectory,
                 defaultStaffSize: initialDefault,
                 playbackController: playbackController,
-                reachability: reachability
-            )
+                reachability: reachability,
+            ),
         )
         self.onBack = onBack
         self.hidesBackButton = hidesBackButton
@@ -55,7 +55,7 @@ public struct ReaderRootScreen: View {
             VStack(spacing: 0) {
                 ReaderTopOverlay(
                     viewModel: viewModel,
-                    onBack: hidesBackButton ? nil : (onBack ?? { dismiss() })
+                    onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
                 )
                 Spacer()
                 ReaderBottomOverlay(viewModel: viewModel)
@@ -69,8 +69,8 @@ public struct ReaderRootScreen: View {
                 get: { viewModel.soundfontAlertKind != nil },
                 set: { newValue in
                     if !newValue { viewModel.cancelLoadingSoundfonts() }
-                }
-            )
+                },
+            ),
         ) {
             Button(role: .cancel) {
                 viewModel.cancelLoadingSoundfonts()
@@ -96,7 +96,7 @@ public struct ReaderRootScreen: View {
     }
 
     private func soundfontAlertTitle(
-        for kind: ReaderViewModel.SoundfontAlertKind?
+        for kind: ReaderViewModel.SoundfontAlertKind?,
     ) -> String {
         switch kind {
         case .offline:
@@ -112,7 +112,8 @@ public struct ReaderRootScreen: View {
         case .loading:
             ProgressView().controlSize(.large)
         case let .loaded(score):
-            let visible = score.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
+            let withClefs = score.applying(clefOverrides: viewModel.preferences.staffClefOverrides)
+            let visible = withClefs.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
             switch layoutMode {
             case .vertical:
                 VerticalScoreContainer(
@@ -120,7 +121,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.preferences.staffSize,
                     honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
-                    viewModel: viewModel
+                    viewModel: viewModel,
                 )
             case .horizontal:
                 HorizontalScoreContainer(
@@ -128,7 +129,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.preferences.staffSize,
                     honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
-                    viewModel: viewModel
+                    viewModel: viewModel,
                 )
             }
         case let .failed(message):
@@ -154,13 +155,13 @@ public struct ReaderRootScreen: View {
     /// Documents the shape of a real Score fixture. Not used by the previews
     /// below — building a `ReaderRootScreen` preview requires wiring a fake gateway
     /// that returns a real `Score`, which is too brittle for a preview. See
-    /// `InspectorScreen` for a productive Score-shaped preview.
+    /// `PlaybackInspectorScreen` for a productive Score-shaped preview.
     @MainActor
     private func previewScore() -> Score {
         Score(
             division: 480,
             parts: [],
-            metaTags: ["workTitle": "Sample"]
+            metaTags: ["workTitle": "Sample"],
         )
     }
 
@@ -172,7 +173,7 @@ public struct ReaderRootScreen: View {
         // A real assembled-ReaderRootScreen preview would need a fake gateway
         // returning a non-empty Score plus persistence wiring. Snapshot the
         // chrome-only intent here; productive Score shape lives in
-        // `InspectorScreen`'s preview.
+        // `PlaybackInspectorScreen`'s preview.
         Text("Run via xcode preview to see the assembled view")
     }
 #endif

@@ -103,50 +103,34 @@
         }
       }
     },
-    "reader.inspector.tab.playback" : {
+    "reader.inspector.repeatMode" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Playback"
+            "value" : "Repeat"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "再生"
+            "value" : "リピート"
           }
         }
       }
     },
-    "reader.inspector.tab.visual" : {
+    "reader.inspector.section.parts" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Visual"
+            "value" : "Parts"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "表示"
-          }
-        }
-      }
-    },
-    "reader.inspector.tabPicker" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inspector tab"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "インスペクタタブ"
+            "value" : "パート"
           }
         }
       }
@@ -163,6 +147,262 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生音源をロード中"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clef"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音部記号"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.alto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アルト"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.bass" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bass"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘ音"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.bass8va" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bass 8va"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘ音 8va"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.bass8vb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bass 8vb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘ音 8vb"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.percussion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Percussion"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パーカッション"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.percussion2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Percussion (alt)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パーカッション (代替)"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.baritone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baritone"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バリトン"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.soprano" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soprano"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ソプラノ"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.tenor" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tenor"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テナー"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble8va" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 8va"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 8va"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble8vb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 8vb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 8vb"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble15ma" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 15ma"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 15ma"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble15mb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 15mb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 15mb"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.resetDefault" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "リセット"
           }
         }
       }
@@ -359,21 +599,46 @@
         }
       }
     },
-    "reader.toolbar.showStaves" : {
+    "reader.toolbar.showDisplaySettings" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show staves panel"
+            "value" : "Display settings"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "譜表パネルを表示"
+            "value" : "表示設定"
           }
         }
       }
+    },
+    "reader.toolbar.showPlaybackSettings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback settings"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生設定"
+          }
+        }
+      }
+    },
+    "Repeat mode" : {
+
+    },
+    "パート" : {
+
+    },
+    "全体" : {
+
     }
   },
   "version" : "1.1"
