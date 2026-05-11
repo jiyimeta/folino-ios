@@ -49,17 +49,11 @@ struct VerticalScoreContainer: View {
     @State private var lastManualCursor: ScoreCursor?
     @State private var liveScrollOffset: CGPoint = .zero
     @State private var pinchSession: PinchSession?
-    /// Scroll target queued at pinch-end to be applied once
-    /// `viewportZoom`'s state change has propagated to a new framed
-    /// `intrinsicContentSize` (and therefore a new `UIScrollView.contentSize`).
-    /// Applying the offset in the same transaction as a `viewportZoom`
-    /// change clamps it to the *old* `maxScroll`, so for zoom-in the
-    /// anchor lands ~`(framedHeight_pre - framedHeight_post)/2` below the
-    /// user's pinch — visible as a "1-staff drift down."
-    @State private var pendingPinchScroll: CGPoint?
     /// Programmatic scroll command consumed by `ScoreScrollHost`. The
-    /// host applies the offset on the next `updateUIView` and clears
-    /// the binding.
+    /// host applies the offset synchronously inside `updateUIView`
+    /// (after forcing `layoutIfNeeded()` so the new `contentSize`
+    /// derived from `viewportZoom` is in place) and clears the binding
+    /// on the next runloop tick.
     @State private var pendingScroll: ScoreScrollCommand?
     /// `UIScrollView.adjustedContentInset.top` — kept around for any
     /// cursor-frame math that needs to know how much of the viewport
@@ -139,17 +133,6 @@ struct VerticalScoreContainer: View {
         // overlays sit in a ZStack on top, so letting the score slide
         // under them is the intended look.
         .ignoresSafeArea()
-        .onChange(of: viewModel.viewportZoom) { _, _ in
-            // After a pinch zoom commit, apply the queued scroll once
-            // the new `viewportZoom` has produced a new framed size
-            // (and therefore a new `UIScrollView.contentSize`).
-            // Applying it in the same transaction would clamp the
-            // offset to the old `maxScroll`.
-            if let target = pendingPinchScroll {
-                pendingPinchScroll = nil
-                pendingScroll = .immediate(target)
-            }
-        }
         .onChange(of: playbackCursor) { _, newCursor in
             autoScroll(cursor: newCursor, viewport: viewport)
         }
@@ -277,16 +260,15 @@ struct VerticalScoreContainer: View {
                 liveMagnification = 1.0
             }
         } else {
-            // Real zoom commit (in or out from a non-unit base). Queue
-            // the scroll target — the `onChange(of: viewportZoom)`
-            // handler applies it once the framed size has propagated
-            // to the scroll host's `contentSize`, so the offset isn't
-            // clamped to the pre-zoom `maxScroll`. `viewportZoom`,
-            // `liveMagnification`, and `liveMagAnchor` still commit
-            // atomically here so outer-scale grows by `ratio` while
-            // inner-scale drops to identity in the same render — no
-            // visible flicker around the pinch anchor.
-            pendingPinchScroll = scrollToTarget
+            // Real zoom commit (in or out from a non-unit base).
+            // `viewportZoom`, `pendingScroll`, `liveMagnification`, and
+            // `liveMagAnchor` all commit in one SwiftUI transaction so
+            // outer-scale grows by `ratio`, inner-scale drops to
+            // identity, and `ScoreScrollHost.updateUIView` applies the
+            // offset synchronously (after `layoutIfNeeded()` propagates
+            // the new framed size to `UIScrollView.contentSize`) — all
+            // visible in the same render. No 1-frame anchor jump.
+            pendingScroll = .immediate(scrollToTarget)
             if targetZoom <= 1.0 {
                 viewModel.resetZoom()
             } else {

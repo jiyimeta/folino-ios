@@ -105,10 +105,26 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         context.coordinator.host?.rootView = content()
 
         if let command = pendingScroll {
-            // Defer to avoid mutating bindings during a view update.
+            // Force the just-assigned `rootView`'s intrinsic content
+            // size to flow into `UIScrollView.contentSize` *before* we
+            // set the offset. Otherwise a pinch-end commit applied in
+            // the same SwiftUI transaction as a `viewportZoom` increase
+            // would clamp to the old `maxScroll`, leaving the pinch
+            // anchor visibly drifted by ~`(framedSize_post -
+            // framedSize_pre)/2` for one frame.
+            uiView.layoutIfNeeded()
+            // Apply offset synchronously so the new offset paints in
+            // the same frame as the new `viewportZoom`. The flag
+            // suppresses the resulting `scrollViewDidScroll` from
+            // mutating `parent.contentOffset` mid-update (which would
+            // trigger the "Modifying state during view update" warning).
+            context.coordinator.isApplyingProgrammaticScroll = true
+            uiView.setContentOffset(command.point, animated: command.isAnimated)
+            context.coordinator.isApplyingProgrammaticScroll = false
+            // Clear the binding on the next runloop tick — mutating it
+            // here would still warn.
             let bindingClear = $pendingScroll
             DispatchQueue.main.async {
-                uiView.setContentOffset(command.point, animated: command.isAnimated)
                 if bindingClear.wrappedValue == command {
                     bindingClear.wrappedValue = nil
                 }
@@ -128,6 +144,10 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         var host: UIHostingController<Content>?
         weak var scrollView: UIScrollView?
         weak var pinch: UIPinchGestureRecognizer?
+        /// Set by `updateUIView` while applying a `pendingScroll`
+        /// command synchronously, so `scrollViewDidScroll`'s binding
+        /// write-back doesn't fire during a SwiftUI view update.
+        var isApplyingProgrammaticScroll = false
         private var pinchStartLocation: CGPoint = .zero
 
         init(parent: ScoreScrollHost) {
@@ -137,6 +157,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // MARK: UIScrollViewDelegate
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard !isApplyingProgrammaticScroll else { return }
             let offset = scrollView.contentOffset
             if parent.contentOffset != offset {
                 parent.contentOffset = offset
