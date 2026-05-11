@@ -7,6 +7,8 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private let licenseContent: () -> LicenseContent
     private let soundfontResolver: (any SoundfontResolver)?
     private let presetCatalog: (any SoundfontPresetCatalog)?
+    private let versionHistoryLoader: any VersionHistoryLoader
+    private let onVersionHistoryViewed: @MainActor () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var isFeedbackMailPresented = false
     @State private var feedbackMailResult: FeedbackMailComposeResult?
@@ -22,10 +24,14 @@ public struct SettingsSheet<LicenseContent: View>: View {
     public init(
         soundfontResolver: (any SoundfontResolver)? = nil,
         presetCatalog: (any SoundfontPresetCatalog)? = nil,
-        @ViewBuilder licenseContent: @escaping () -> LicenseContent
+        versionHistoryLoader: any VersionHistoryLoader = DefaultVersionHistoryLoader(),
+        onVersionHistoryViewed: @escaping @MainActor () -> Void = {},
+        @ViewBuilder licenseContent: @escaping () -> LicenseContent,
     ) {
         self.soundfontResolver = soundfontResolver
         self.presetCatalog = presetCatalog
+        self.versionHistoryLoader = versionHistoryLoader
+        self.onVersionHistoryViewed = onVersionHistoryViewed
         self.licenseContent = licenseContent
     }
 
@@ -46,13 +52,13 @@ public struct SettingsSheet<LicenseContent: View>: View {
             }
             .alert(
                 Text("settings.feedback.saved.title", bundle: .module),
-                isPresented: $isMailSavedAlertPresented
+                isPresented: $isMailSavedAlertPresented,
             ) {
                 Button(role: .cancel) {} label: { L10n.Common.ok }
             }
             .alert(
                 Text("settings.feedback.failed.title", bundle: .module),
-                isPresented: $isMailFailedAlertPresented
+                isPresented: $isMailFailedAlertPresented,
             ) {
                 Button(role: .cancel) {} label: { L10n.Common.ok }
             }
@@ -123,6 +129,16 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private var aboutSection: some View {
         Section {
             NavigationLink {
+                versionHistoryDestination
+            } label: {
+                Label {
+                    Text("settings.versionHistory.title", bundle: .module)
+                } icon: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+            }
+
+            NavigationLink {
                 licenseContent()
                     .navigationTitle(Text("settings.about.licenses", bundle: .module))
                     .navigationBarTitleDisplayMode(.inline)
@@ -149,6 +165,32 @@ public struct SettingsSheet<LicenseContent: View>: View {
         }
     }
 
+    @ViewBuilder
+    private var versionHistoryDestination: some View {
+        if let entries = try? versionHistoryLoader.load() {
+            VersionHistoryScreen(
+                viewModel: VersionHistoryViewModel(
+                    entries: entries,
+                    baseline: .zero,
+                    isHistorySplit: false,
+                ),
+                onAppear: onVersionHistoryViewed,
+            )
+            .navigationTitle(Text("settings.versionHistory.title", bundle: .module))
+            .navigationBarTitleDisplayMode(.inline)
+        } else {
+            ContentUnavailableView {
+                Label {
+                    Text("settings.versionHistory.empty", bundle: .module)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+            }
+            .navigationTitle(Text("settings.versionHistory.title", bundle: .module))
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
@@ -172,8 +214,14 @@ private struct PreviewResolver: SoundfontResolver {
         URL(fileURLWithPath: "/dev/null")
     }
 
-    func cachedPatches() throws -> [SoundfontPatch] { [] }
-    func totalCacheSizeBytes() throws -> Int64 { 0 }
+    func cachedPatches() throws -> [SoundfontPatch] {
+        []
+    }
+
+    func totalCacheSizeBytes() throws -> Int64 {
+        0
+    }
+
     func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
     func clearCache() throws {}
 }
