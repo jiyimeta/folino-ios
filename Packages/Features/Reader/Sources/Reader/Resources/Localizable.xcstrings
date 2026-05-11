@@ -231,6 +231,38 @@
         }
       }
     },
+    "reader.preferences.clef.choice.percussion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Percussion"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パーカッション"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.percussion2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Percussion (alt)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パーカッション (代替)"
+          }
+        }
+      }
+    },
     "reader.preferences.clef.choice.tenor" : {
       "localizations" : {
         "en" : {

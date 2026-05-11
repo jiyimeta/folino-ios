@@ -9,6 +9,7 @@ enum ClefMenuChoice: Hashable, CaseIterable {
     case trebleG, trebleG8va, trebleG8vb, trebleG15ma, trebleG15mb
     case bassF, bassF8va, bassF8vb
     case altoC3, tenorC4
+    case percussion, percussion2
 
     var rawType: String {
         switch self {
@@ -22,6 +23,8 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         case .bassF8vb: "F8vb"
         case .altoC3: "C3"
         case .tenorC4: "C4"
+        case .percussion: "PERC"
+        case .percussion2: "PERC2"
         }
     }
 
@@ -38,6 +41,8 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         case .bassF8va: "\u{E065}" // fClef8va
         case .bassF8vb: "\u{E064}" // fClef8vb
         case .altoC3, .tenorC4: "\u{E05C}" // cClef (movable)
+        case .percussion: "\u{E069}" // unpitchedPercussionClef1
+        case .percussion2: "\u{E06A}" // unpitchedPercussionClef2
         }
     }
 
@@ -55,6 +60,8 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         case .bassF8vb: "reader.preferences.clef.choice.bass8vb"
         case .altoC3: "reader.preferences.clef.choice.alto"
         case .tenorC4: "reader.preferences.clef.choice.tenor"
+        case .percussion: "reader.preferences.clef.choice.percussion"
+        case .percussion2: "reader.preferences.clef.choice.percussion2"
         }
     }
 
@@ -67,9 +74,23 @@ enum ClefMenuChoice: Hashable, CaseIterable {
     static let cFamily: [ClefMenuChoice] = [
         .altoC3, .tenorC4,
     ]
+    static let percussionFamily: [ClefMenuChoice] = [
+        .percussion, .percussion2,
+    ]
+
+    /// True if this choice belongs to the percussion family. The picker
+    /// uses this to keep percussion staves on percussion clefs and keep
+    /// pitched staves on pitched clefs — overriding across families
+    /// would produce nonsensical playback / engraving.
+    var isPercussion: Bool {
+        switch self {
+        case .percussion, .percussion2: true
+        default: false
+        }
+    }
 
     /// Looks up the menu choice for an arbitrary rawType. Returns
-    /// `nil` for rawTypes outside the v1 picker (e.g. `"PERC"`).
+    /// `nil` for rawTypes outside the v1 picker.
     static func from(rawType: String) -> ClefMenuChoice? {
         allCases.first { $0.rawType == rawType }
     }

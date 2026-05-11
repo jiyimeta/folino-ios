@@ -58,11 +58,20 @@ struct ClefMenu: View {
 
     private func popoverContent(currentRawType: String, hasOverride: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            tileRow(ClefMenuChoice.trebleFamily, current: currentRawType)
-            Divider()
-            tileRow(ClefMenuChoice.bassFamily, current: currentRawType)
-            Divider()
-            tileRow(ClefMenuChoice.cFamily, current: currentRawType)
+            // Percussion staves stay on percussion clefs; pitched staves
+            // stay on pitched clefs. Mixing the two would produce
+            // nonsensical engraving (a kick drum line under a treble G,
+            // or a melody under `||`), so the picker hides the family
+            // the staff doesn't belong to.
+            if isPercussionStaff(rawType: currentRawType) {
+                tileRow(ClefMenuChoice.percussionFamily, current: currentRawType)
+            } else {
+                tileRow(ClefMenuChoice.trebleFamily, current: currentRawType)
+                Divider()
+                tileRow(ClefMenuChoice.bassFamily, current: currentRawType)
+                Divider()
+                tileRow(ClefMenuChoice.cFamily, current: currentRawType)
+            }
             if hasOverride {
                 Divider()
                 resetButton
@@ -74,6 +83,10 @@ struct ClefMenu: View {
         // horizontally, giving the surrounding padding room to breathe
         // on small devices.
         .frame(width: 260)
+    }
+
+    private func isPercussionStaff(rawType: String) -> Bool {
+        ClefMenuChoice.from(rawType: rawType)?.isPercussion ?? false
     }
 
     private var resetButton: some View {
@@ -170,6 +183,10 @@ struct ClefMenu: View {
             0
         case .tenorC4:
             -sp
+        case .percussion, .percussion2:
+            // Percussion clefs are vertically centred on the staff (line
+            // 3) — same as upstream `ClefRenderer`'s `yOffset = 0`.
+            0
         }
         let glyphText = Text(String(choice.smuflGlyph))
             .font(.custom(BravuraFont.familyName, fixedSize: sp * 4))
