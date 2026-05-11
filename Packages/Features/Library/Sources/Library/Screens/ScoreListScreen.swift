@@ -38,7 +38,7 @@ struct ScoreListScreen: View {
             .alert(
                 Text("library.score.rename.title", bundle: .module),
                 isPresented: renameAlertBinding,
-                presenting: pendingRename
+                presenting: pendingRename,
             ) { item in
                 TextField(text: $renameText) {
                     Text("library.score.rename.placeholder", bundle: .module)
@@ -56,13 +56,13 @@ struct ScoreListScreen: View {
                         selectedIDs: selectedIDs,
                         orderedSelectedIDs: orderedSelectedIDs,
                         library: library,
-                        onCommit: { exitSelectionMode(); bulkSheet = nil }
+                        onCommit: { exitSelectionMode(); bulkSheet = nil },
                     )
                 case .editTags:
                     BulkEditTagsScreen(
                         selectedIDs: selectedIDs,
                         library: library,
-                        onCommit: { exitSelectionMode(); bulkSheet = nil }
+                        onCommit: { exitSelectionMode(); bulkSheet = nil },
                     )
                 }
             }
@@ -70,10 +70,10 @@ struct ScoreListScreen: View {
                 Text(String(
                     localized: "library.score.deleteBulk.title",
                     defaultValue: "Delete \(bulkDeletePrompt?.count ?? 0) scores?",
-                    bundle: .module
+                    bundle: .module,
                 )),
                 isPresented: bulkDeleteAlertBinding,
-                presenting: bulkDeletePrompt
+                presenting: bulkDeletePrompt,
             ) { _ in
                 Button(role: .destructive) {
                     let ids = selectedIDs
@@ -90,7 +90,6 @@ struct ScoreListScreen: View {
             }
     }
 
-    @ViewBuilder
     private var listContent: some View {
         ScoreListView(
             items: viewModel.displayedItems,
@@ -111,7 +110,7 @@ struct ScoreListScreen: View {
             onBulkShare: { format in performBulkShare(format) },
             onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
             onBulkEditTags: { bulkSheet = .editTags },
-            onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
+            onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) },
         ) { item in
             scoreRowMenu(
                 item: item,
@@ -123,7 +122,7 @@ struct ScoreListScreen: View {
                 },
                 onEditTags: onEditTags,
                 onAddToPlaylist: onAddToPlaylist,
-                onRequestDelete: { pendingDelete = $0 }
+                onRequestDelete: { pendingDelete = $0 },
             )
         }
     }
@@ -131,7 +130,7 @@ struct ScoreListScreen: View {
     private var renameAlertBinding: Binding<Bool> {
         Binding(
             get: { pendingRename != nil },
-            set: { isPresented in if !isPresented { pendingRename = nil } }
+            set: { isPresented in if !isPresented { pendingRename = nil } },
         )
     }
 
@@ -170,7 +169,7 @@ struct ScoreListScreen: View {
     private var bulkDeleteAlertBinding: Binding<Bool> {
         Binding(
             get: { bulkDeletePrompt != nil },
-            set: { isPresented in if !isPresented { bulkDeletePrompt = nil } }
+            set: { isPresented in if !isPresented { bulkDeletePrompt = nil } },
         )
     }
 

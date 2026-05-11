@@ -44,7 +44,7 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
                 case .midi:
                     try SheetMusic.loadScore(
                         midiData: data,
-                        sourceFilename: fileURL.deletingPathExtension().lastPathComponent
+                        sourceFilename: fileURL.deletingPathExtension().lastPathComponent,
                     )
                 }
                 return (score, ScoreFileSummary(score: score))

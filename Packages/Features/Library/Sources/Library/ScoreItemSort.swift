@@ -8,7 +8,9 @@ public enum ScoreItemSort: String, CaseIterable, Sendable, Identifiable {
     case composerAsc
     case lastOpenedDesc
 
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 
     public var labelKey: LocalizedStringResource {
         switch self {

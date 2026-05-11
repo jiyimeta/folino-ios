@@ -3,18 +3,18 @@ import Foundation
 @testable import Soundfonts
 import Testing
 
-// `.serialized` because the async download tests share `StubURLProtocol.next`
-// global state — running them in parallel would let one suite's stubbed
-// response leak into another.
+/// `.serialized` because the async download tests share `StubURLProtocol.next`
+/// global state — running them in parallel would let one suite's stubbed
+/// response leak into another.
 @Suite(.serialized) struct MuseScoreSF2ResolverTests {
     // MARK: - File naming
 
-    @Test func melodicFileNameUsesBankAndProgram() {
+    @Test func `melodic file name uses bank and program`() {
         #expect(MuseScoreSF2Resolver.fileName(bank: 0, program: 73, isDrums: false) == "000_073.sf2")
         #expect(MuseScoreSF2Resolver.fileName(bank: 8, program: 0, isDrums: false) == "008_000.sf2")
     }
 
-    @Test func drumFileNameAlwaysUsesBank128() {
+    @Test func `drum file name always uses bank 128`() {
         #expect(MuseScoreSF2Resolver.fileName(bank: 0, program: 0, isDrums: true) == "128_000.sf2")
         // Bank arg is ignored for drums — both produce 128_PPP.
         #expect(MuseScoreSF2Resolver.fileName(bank: 7, program: 25, isDrums: true) == "128_025.sf2")
@@ -22,7 +22,7 @@ import Testing
 
     // MARK: - Sync lookup chain
 
-    @Test func cacheHitWinsOverBundleAndFallback() throws {
+    @Test func `cache hit wins over bundle and fallback`() throws {
         let tmp = try TempDirectory()
         let cache = tmp.url
         // Pretend (0, 73, false) is in the cache.
@@ -31,7 +31,7 @@ import Testing
 
         let bundle = try makeFakeBundle(
             tmp: tmp,
-            files: ["Soundfonts/000_073.sf2": Data([0xBB])]
+            files: ["Soundfonts/000_073.sf2": Data([0xBB])],
         )
         let resolver = MuseScoreSF2Resolver(cacheDirectory: cache, bundle: bundle)
 
@@ -39,12 +39,12 @@ import Testing
         #expect(url == cachedFile)
     }
 
-    @Test func bundleHitWinsOverFallbackWhenCacheEmpty() throws {
+    @Test func `bundle hit wins over fallback when cache empty`() throws {
         let tmp = try TempDirectory()
         let bundleFile = "Soundfonts/008_000.sf2"
         let bundle = try makeFakeBundle(
             tmp: tmp,
-            files: [bundleFile: Data([0xBB])]
+            files: [bundleFile: Data([0xBB])],
         )
         let resolver = MuseScoreSF2Resolver(cacheDirectory: tmp.url, bundle: bundle)
 
@@ -53,11 +53,11 @@ import Testing
         #expect(url?.path.contains(tmp.url.path) == true)
     }
 
-    @Test func pitchedMissFallsBackToFlute() throws {
+    @Test func `pitched miss falls back to flute`() throws {
         let tmp = try TempDirectory()
         let bundle = try makeFakeBundle(
             tmp: tmp,
-            files: ["Soundfonts/000_073.sf2": Data([0xFF])]
+            files: ["Soundfonts/000_073.sf2": Data([0xFF])],
         )
         let resolver = MuseScoreSF2Resolver(cacheDirectory: tmp.url, bundle: bundle)
 
@@ -65,11 +65,11 @@ import Testing
         #expect(url?.lastPathComponent == "000_073.sf2")
     }
 
-    @Test func drumMissFallsBackToStandardKit() throws {
+    @Test func `drum miss falls back to standard kit`() throws {
         let tmp = try TempDirectory()
         let bundle = try makeFakeBundle(
             tmp: tmp,
-            files: ["Soundfonts/128_000.sf2": Data([0xCC])]
+            files: ["Soundfonts/128_000.sf2": Data([0xCC])],
         )
         let resolver = MuseScoreSF2Resolver(cacheDirectory: tmp.url, bundle: bundle)
 
@@ -77,17 +77,17 @@ import Testing
         #expect(url?.lastPathComponent == "128_000.sf2")
     }
 
-    @Test func defaultGMSoundfontURLIsNil() throws {
+    @Test func `default GM soundfont URL is nil`() throws {
         let tmp = try TempDirectory()
         let resolver = MuseScoreSF2Resolver(cacheDirectory: tmp.url)
         #expect(resolver.defaultGMSoundfontURL == nil)
     }
 
-    @Test func precisePathReturnsNilWhenNoCacheOrBundleHit() throws {
+    @Test func `precise path returns nil when no cache or bundle hit`() throws {
         let tmp = try TempDirectory()
         let bundle = try makeFakeBundle(
             tmp: tmp,
-            files: ["Soundfonts/128_000.sf2": Data([0xCC])]
+            files: ["Soundfonts/128_000.sf2": Data([0xCC])],
         )
         let resolver = MuseScoreSF2Resolver(cacheDirectory: tmp.url, bundle: bundle)
 
@@ -101,7 +101,7 @@ import Testing
 
     // MARK: - Async download path
 
-    @Test func resolveSoundfontReturnsCacheHit() async throws {
+    @Test func `resolve soundfont returns cache hit`() async throws {
         let tmp = try TempDirectory()
         let cached = tmp.url.appending(path: "000_073.sf2")
         try Data([0xAA]).write(to: cached)
@@ -111,29 +111,29 @@ import Testing
         #expect(url == cached)
     }
 
-    @Test func resolveSoundfontReturnsBundleHitWithoutDownload() async throws {
+    @Test func `resolve soundfont returns bundle hit without download`() async throws {
         let tmp = try TempDirectory()
         let bundle = try makeFakeBundle(
             tmp: tmp,
-            files: ["Soundfonts/000_073.sf2": Data([0xBB])]
+            files: ["Soundfonts/000_073.sf2": Data([0xBB])],
         )
         // Stub session would 500 if hit — assert it isn't.
         let resolver = MuseScoreSF2Resolver(
             cacheDirectory: tmp.url.appending(path: "cache"),
             session: stubSession(failing: true),
-            bundle: bundle
+            bundle: bundle,
         )
 
         let url = try await resolver.resolveSoundfont(bank: 0, program: 73, isDrums: false)
         #expect(url.lastPathComponent == "000_073.sf2")
     }
 
-    @Test func resolveSoundfontDownloadsToCacheOnMiss() async throws {
+    @Test func `resolve soundfont downloads to cache on miss`() async throws {
         let tmp = try TempDirectory()
         let payload = Data([0xDE, 0xAD, 0xBE, 0xEF])
         let resolver = MuseScoreSF2Resolver(
             cacheDirectory: tmp.url,
-            session: stubSession(payload: payload, status: 200)
+            session: stubSession(payload: payload, status: 200),
         )
 
         let url = try await resolver.resolveSoundfont(bank: 8, program: 0, isDrums: false)
@@ -142,11 +142,11 @@ import Testing
         #expect(written == payload)
     }
 
-    @Test func resolveSoundfontThrowsOnNon200() async throws {
+    @Test func `resolve soundfont throws on non 200`() async throws {
         let tmp = try TempDirectory()
         let resolver = MuseScoreSF2Resolver(
             cacheDirectory: tmp.url,
-            session: stubSession(payload: Data(), status: 404)
+            session: stubSession(payload: Data(), status: 404),
         )
         await #expect(throws: DomainError.self) {
             _ = try await resolver.resolveSoundfont(bank: 8, program: 0, isDrums: false)
@@ -164,7 +164,7 @@ private func makeFakeBundle(tmp: TempDirectory, files: [String: Data]) throws ->
     for (relative, data) in files {
         let target = bundleURL.appending(path: relative)
         try FileManager.default.createDirectory(
-            at: target.deletingLastPathComponent(), withIntermediateDirectories: true
+            at: target.deletingLastPathComponent(), withIntermediateDirectories: true,
         )
         try data.write(to: target)
     }
@@ -179,10 +179,10 @@ private func makeFakeBundle(tmp: TempDirectory, files: [String: Data]) throws ->
 private func stubSession(
     payload: Data = Data(),
     status: Int = 200,
-    failing: Bool = false
+    failing: Bool = false,
 ) -> URLSession {
     StubURLProtocol.next = StubURLProtocol.Response(
-        payload: payload, status: status, failing: failing
+        payload: payload, status: status, failing: failing,
     )
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [StubURLProtocol.self]
@@ -194,9 +194,15 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var next: Response?
 
     // swiftlint:disable:next static_over_final_class
-    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canInit(with _: URLRequest) -> Bool {
+        true
+    }
+
     // swiftlint:disable:next static_over_final_class
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
     override func startLoading() {
         guard let response = StubURLProtocol.next else {
             client?.urlProtocolDidFinishLoading(self)
@@ -209,7 +215,7 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         // swiftlint:disable force_unwrapping
         let httpResponse = HTTPURLResponse(
             url: request.url!, statusCode: response.status,
-            httpVersion: "HTTP/1.1", headerFields: nil
+            httpVersion: "HTTP/1.1", headerFields: nil,
         )!
         // swiftlint:enable force_unwrapping
         client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)

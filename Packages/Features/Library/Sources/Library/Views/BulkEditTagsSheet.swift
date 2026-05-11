@@ -21,14 +21,13 @@ struct BulkEditTagsSheet: View {
             .navigationTitle(Text(String(
                 localized: "library.tags.editBulk.title",
                 defaultValue: "Tags for \(selectionCount) scores",
-                bundle: .module
+                bundle: .module,
             )))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarItems }
         }
     }
 
-    @ViewBuilder
     private var tagsSection: some View {
         Section {
             ForEach(allTags) { tag in
@@ -47,13 +46,12 @@ struct BulkEditTagsSheet: View {
         }
     }
 
-    @ViewBuilder
     private var createSection: some View {
         Section {
             InlineCreateRow(
                 name: $newTagName,
                 placeholder: "library.tag.create.placeholder",
-                onCreate: onCreateTag
+                onCreate: onCreateTag,
             )
         }
     }
@@ -71,15 +69,15 @@ struct BulkEditTagsSheet: View {
 }
 
 #if DEBUG
-    #Preview {
-        BulkEditTagsSheet(
-            selectionCount: 3,
-            allTags: [
-                Tag(name: "Practice", colorHex: "#5856D6"),
-                Tag(name: "Recital", colorHex: "#FF9500"),
-            ],
-            onCommit: { _ in },
-            onCreateTag: { _ in }
-        )
-    }
+#Preview {
+    BulkEditTagsSheet(
+        selectionCount: 3,
+        allTags: [
+            Tag(name: "Practice", colorHex: "#5856D6"),
+            Tag(name: "Recital", colorHex: "#FF9500"),
+        ],
+        onCommit: { _ in },
+        onCreateTag: { _ in },
+    )
+}
 #endif

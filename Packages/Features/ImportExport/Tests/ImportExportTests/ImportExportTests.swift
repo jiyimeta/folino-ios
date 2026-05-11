@@ -1,8 +1,8 @@
 @testable import ImportExport
 import Testing
 
-@Suite struct ImportExportSmokeTests {
-    @Test func moduleLinks() {
+struct ImportExportSmokeTests {
+    @Test func `module links`() {
         #expect(ImportExportModule.isLinked)
     }
 }

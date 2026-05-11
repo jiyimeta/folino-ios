@@ -1,3 +1,5 @@
 public enum SettingsModule {
-    public static var isLinked: Bool { true }
+    public static var isLinked: Bool {
+        true
+    }
 }

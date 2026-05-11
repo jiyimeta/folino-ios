@@ -16,7 +16,7 @@ func scoreRowMenu(
     onEditTags: @escaping (ScoreItem) -> Void,
     onAddToPlaylist: @escaping (ScoreItem) -> Void,
     onShare: @escaping (ScoreShareFormat) -> Void,
-    onRequestDelete: ((ScoreItem) -> Void)?
+    onRequestDelete: ((ScoreItem) -> Void)?,
 ) -> some View {
     Button { onOpen(item) } label: {
         Label {
@@ -118,7 +118,6 @@ struct ShareSubmenu: View {
 }
 
 @MainActor
-@ViewBuilder
 private func shareMenuLabel(option: ScoreShareFormatOption) -> some View {
     Label {
         shareMenuTitle(for: option)

@@ -155,41 +155,41 @@ private enum InspectorTab: Hashable {
 }
 
 #if DEBUG
-    #Preview {
-        let score = Score(
-            division: 480,
-            parts: [
-                Part(
-                    id: "P0",
-                    trackName: "Violin",
-                    instrument: Instrument(
-                        id: "violin",
-                        channels: [InstrumentChannel(program: 40)], // GM 40 = Violin
-                    ),
-                    staves: [Staff()],
+#Preview {
+    let score = Score(
+        division: 480,
+        parts: [
+            Part(
+                id: "P0",
+                trackName: "Violin",
+                instrument: Instrument(
+                    id: "violin",
+                    channels: [InstrumentChannel(program: 40)], // GM 40 = Violin
                 ),
-                Part(
-                    id: "P1",
-                    trackName: "Piano",
-                    instrument: Instrument(
-                        id: "piano",
-                        channels: [InstrumentChannel(program: 0)], // GM 0 = Acoustic Grand Piano
-                    ),
-                    staves: [Staff(), Staff()],
+                staves: [Staff()],
+            ),
+            Part(
+                id: "P1",
+                trackName: "Piano",
+                instrument: Instrument(
+                    id: "piano",
+                    channels: [InstrumentChannel(program: 0)], // GM 0 = Acoustic Grand Piano
                 ),
-            ],
-            metaTags: [:],
-        )
-        let vm = ReaderViewModel(
-            scoreItem: PreviewFakeRepository.sampleItem,
-            repository: PreviewFakeRepository(),
-            gateway: PreviewFakeGateway(score: score),
-            scoresDirectory: URL(filePath: "/tmp"),
-        )
-        Text("Contents")
-            .task { await vm.load() }
-            .sheet(isPresented: .constant(true)) {
-                PlaybackInspectorScreen(viewModel: vm, score: score)
-            }
-    }
+                staves: [Staff(), Staff()],
+            ),
+        ],
+        metaTags: [:],
+    )
+    let vm = ReaderViewModel(
+        scoreItem: PreviewFakeRepository.sampleItem,
+        repository: PreviewFakeRepository(),
+        gateway: PreviewFakeGateway(score: score),
+        scoresDirectory: URL(filePath: "/tmp"),
+    )
+    Text("Contents")
+        .task { await vm.load() }
+        .sheet(isPresented: .constant(true)) {
+            PlaybackInspectorScreen(viewModel: vm, score: score)
+        }
+}
 #endif

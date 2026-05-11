@@ -26,7 +26,7 @@ public struct SoundfontPatch: Hashable, Sendable, Codable, Identifiable {
         downloadedAt: Date,
         lastUsedAt: Date,
         isBundled: Bool = false,
-        isDrums: Bool = false
+        isDrums: Bool = false,
     ) {
         self.bank = bank
         self.program = program

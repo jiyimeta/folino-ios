@@ -13,14 +13,14 @@ struct FavoritesScreen: View {
         library: LibraryViewModel,
         onOpen: @escaping (ScoreItem) -> Void,
         onEditTags: @escaping (ScoreItem) -> Void,
-        onAddToPlaylist: @escaping (ScoreItem) -> Void
+        onAddToPlaylist: @escaping (ScoreItem) -> Void,
     ) {
         self.library = library
         self.onOpen = onOpen
         self.onEditTags = onEditTags
         self.onAddToPlaylist = onAddToPlaylist
         _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .favorites, repository: library.repository)
+            wrappedValue: ScoreListViewModel(source: .favorites, repository: library.repository),
         )
     }
 
@@ -30,7 +30,7 @@ struct FavoritesScreen: View {
             library: library,
             onOpen: onOpen,
             onEditTags: onEditTags,
-            onAddToPlaylist: onAddToPlaylist
+            onAddToPlaylist: onAddToPlaylist,
         )
         .navigationTitle(Text("library.favorites", bundle: .module))
     }

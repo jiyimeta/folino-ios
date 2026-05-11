@@ -3,7 +3,7 @@ import Foundation
 @testable import Library
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct LibraryViewModelShareTests {
     private static let base = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -13,7 +13,7 @@ struct LibraryViewModelShareTests {
             localFileName: "T.mscz", contentHash: "h",
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120,
             primaryKey: nil, addedAt: base, lastOpenedAt: nil,
-            tagIDs: [], isFavorite: false
+            tagIDs: [], isFavorite: false,
         )
     }
 
@@ -23,12 +23,12 @@ struct LibraryViewModelShareTests {
         let gateway = FakeScoreFileGateway()
         let share = FakeScoreShareService()
         let vm = LibraryViewModel(
-            repository: repo, importer: importer, gateway: gateway, shareService: share
+            repository: repo, importer: importer, gateway: gateway, shareService: share,
         )
         return (vm, share)
     }
 
-    @Test func requestShareSuccessSetsShareTarget() async {
+    @Test func `request share success sets share target`() async {
         let (vm, share) = Self.makeVM()
         share.prepareShareReturnURL = URL(fileURLWithPath: "/tmp/share/T.mscz")
         await vm.requestShare(Self.makeItem(), format: .museScoreV4)
@@ -38,7 +38,7 @@ struct LibraryViewModelShareTests {
         #expect(share.prepareShareCalls.first?.format == .museScoreV4)
     }
 
-    @Test func requestShareFailureSetsErrorAlert() async {
+    @Test func `request share failure sets error alert`() async {
         let (vm, share) = Self.makeVM()
         share.prepareShareError = .scoreParseFailed(reason: "boom")
         await vm.requestShare(Self.makeItem(), format: .pdf)
@@ -46,7 +46,7 @@ struct LibraryViewModelShareTests {
         #expect(vm.errorAlertMessage == "This file looks corrupted or isn't a valid score.")
     }
 
-    @Test func isPreparingShareTogglesAroundTheCall() async {
+    @Test func `is preparing share toggles around the call`() async {
         let (vm, share) = Self.makeVM()
         let observed: LockIsolated<[Bool]> = .init([])
         share.inFlightHook = { @Sendable in
@@ -57,7 +57,7 @@ struct LibraryViewModelShareTests {
         #expect(vm.isPreparingShare == false)
     }
 
-    @Test func requestBulkShareCollectsURLsForEachItem() async {
+    @Test func `request bulk share collects UR ls for each item`() async {
         let (vm, share) = Self.makeVM()
         share.prepareShareReturnURL = URL(fileURLWithPath: "/tmp/share/T.pdf")
         let items = [Self.makeItem(), Self.makeItem(), Self.makeItem()]
@@ -70,14 +70,14 @@ struct LibraryViewModelShareTests {
         #expect(vm.errorAlertMessage == nil)
     }
 
-    @Test func requestBulkShareEmptyIsNoOp() async {
+    @Test func `request bulk share empty is no op`() async {
         let (vm, share) = Self.makeVM()
         await vm.requestBulkShare([], format: .pdf)
         #expect(share.prepareShareCalls.isEmpty)
         #expect(vm.shareTarget == nil)
     }
 
-    @Test func requestBulkShareAbortsOnError() async {
+    @Test func `request bulk share aborts on error`() async {
         let (vm, share) = Self.makeVM()
         share.prepareShareError = .scoreParseFailed(reason: "boom")
         await vm.requestBulkShare([Self.makeItem(), Self.makeItem()], format: .pdf)
@@ -91,8 +91,14 @@ struct LibraryViewModelShareTests {
 private final class LockIsolated<Value>: @unchecked Sendable {
     private let lock = NSLock()
     private var _value: Value
-    init(_ value: Value) { _value = value }
-    var value: Value { lock.lock(); defer { lock.unlock() }; return _value }
+    init(_ value: Value) {
+        _value = value
+    }
+
+    var value: Value {
+        lock.lock(); defer { lock.unlock() }; return _value
+    }
+
     func withValue(_ body: (inout Value) -> Void) {
         lock.lock(); defer { lock.unlock() }; body(&_value)
     }

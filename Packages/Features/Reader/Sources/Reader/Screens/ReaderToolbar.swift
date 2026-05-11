@@ -167,16 +167,16 @@ struct ReaderBottomOverlay: View {
 }
 
 #if DEBUG
-    #Preview {
-        let vm = ReaderViewModel(
-            scoreItem: PreviewFakeRepository.sampleItem,
-            repository: PreviewFakeRepository(),
-            gateway: PreviewFakeGateway(),
-            scoresDirectory: URL(filePath: "/tmp"),
-        )
-        ReaderTopOverlay(viewModel: vm, onBack: {})
-            .task {
-                await vm.load()
-            }
-    }
+#Preview {
+    let vm = ReaderViewModel(
+        scoreItem: PreviewFakeRepository.sampleItem,
+        repository: PreviewFakeRepository(),
+        gateway: PreviewFakeGateway(),
+        scoresDirectory: URL(filePath: "/tmp"),
+    )
+    ReaderTopOverlay(viewModel: vm, onBack: {})
+        .task {
+            await vm.load()
+        }
+}
 #endif

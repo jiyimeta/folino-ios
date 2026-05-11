@@ -23,7 +23,7 @@ struct EditTagsSheet: View {
                             HStack {
                                 Image(
                                     systemName: assignedTagIDs.contains(tag.id)
-                                        ? "checkmark.circle.fill" : "circle"
+                                        ? "checkmark.circle.fill" : "circle",
                                 )
                                 .foregroundStyle(.tint)
                                 Text(tag.name)
@@ -37,14 +37,14 @@ struct EditTagsSheet: View {
                     InlineCreateRow(
                         name: $newTagName,
                         placeholder: "library.tag.create.placeholder",
-                        onCreate: onCreate
+                        onCreate: onCreate,
                     )
                 }
             }
             .navigationTitle(Text(String(
                 localized: "library.tags.editScore.title",
                 defaultValue: "Tags for \"\(scoreTitle)\"",
-                bundle: .module
+                bundle: .module,
             )))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { doneToolbar }
@@ -60,32 +60,32 @@ struct EditTagsSheet: View {
 }
 
 #if DEBUG
-    #Preview("Mixed selection") {
-        struct Host: View {
-            @State private var assigned: Set<TagID>
-            let tags: [Tag]
-            init() {
-                let tags = [
-                    Tag(name: "Practice", colorHex: "#5856D6"),
-                    Tag(name: "Recital", colorHex: "#FF9500"),
-                    Tag(name: "Sight reading", colorHex: "#34C759"),
-                ]
-                self.tags = tags
-                _assigned = State(initialValue: [tags[0].id])
-            }
-
-            var body: some View {
-                EditTagsSheet(
-                    scoreTitle: "Clair de Lune",
-                    assignedTagIDs: assigned,
-                    allTags: tags,
-                    onToggle: { tag in
-                        if assigned.contains(tag.id) { assigned.remove(tag.id) } else { assigned.insert(tag.id) }
-                    },
-                    onCreate: { _ in }
-                )
-            }
+#Preview("Mixed selection") {
+    struct Host: View {
+        @State private var assigned: Set<TagID>
+        let tags: [Tag]
+        init() {
+            let tags = [
+                Tag(name: "Practice", colorHex: "#5856D6"),
+                Tag(name: "Recital", colorHex: "#FF9500"),
+                Tag(name: "Sight reading", colorHex: "#34C759"),
+            ]
+            self.tags = tags
+            _assigned = State(initialValue: [tags[0].id])
         }
-        return Host()
+
+        var body: some View {
+            EditTagsSheet(
+                scoreTitle: "Clair de Lune",
+                assignedTagIDs: assigned,
+                allTags: tags,
+                onToggle: { tag in
+                    if assigned.contains(tag.id) { assigned.remove(tag.id) } else { assigned.insert(tag.id) }
+                },
+                onCreate: { _ in },
+            )
+        }
     }
+    return Host()
+}
 #endif

@@ -65,7 +65,7 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
         scoreItemID: ScoreItemID,
         perStaff: [StaffMixerState],
         tempoMultiplier: Double,
-        abRepeat: ABRepeatRange?
+        abRepeat: ABRepeatRange?,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID

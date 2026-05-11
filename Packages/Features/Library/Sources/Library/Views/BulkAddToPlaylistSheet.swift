@@ -21,14 +21,13 @@ struct BulkAddToPlaylistSheet: View {
             .navigationTitle(Text(String(
                 localized: "library.playlist.addBulk.title",
                 defaultValue: "Add \(selectionCount) scores to playlist",
-                bundle: .module
+                bundle: .module,
             )))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { cancelToolbarItem }
         }
     }
 
-    @ViewBuilder
     private var playlistsSection: some View {
         Section {
             ForEach(allPlaylists) { playlist in
@@ -39,7 +38,7 @@ struct BulkAddToPlaylistSheet: View {
                         Text(playlist.name)
                             .foregroundStyle(.primary)
                         Spacer()
-                        let already = playlist.orderedScoreItemIDs.filter { selectedIDs.contains($0) }.count
+                        let already = playlist.orderedScoreItemIDs.count(where: { selectedIDs.contains($0) })
                         if already > 0 {
                             Text("\(already)/\(selectionCount)")
                                 .font(.caption)
@@ -51,13 +50,12 @@ struct BulkAddToPlaylistSheet: View {
         }
     }
 
-    @ViewBuilder
     private var createSection: some View {
         Section {
             InlineCreateRow(
                 name: $newPlaylistName,
                 placeholder: "library.playlist.create.placeholder",
-                onCreate: onCreate
+                onCreate: onCreate,
             )
         }
     }
@@ -71,23 +69,23 @@ struct BulkAddToPlaylistSheet: View {
 }
 
 #if DEBUG
-    #Preview {
-        struct Host: View {
-            let scoreA = ScoreItemID()
-            let scoreB = ScoreItemID()
-            var body: some View {
-                BulkAddToPlaylistSheet(
-                    selectionCount: 2,
-                    selectedIDs: [scoreA, scoreB],
-                    allPlaylists: [
-                        Playlist(name: "Daily warm-up", orderedScoreItemIDs: [scoreA], createdAt: Date()),
-                        Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
-                    ],
-                    onPick: { _ in },
-                    onCreate: { _ in }
-                )
-            }
+#Preview {
+    struct Host: View {
+        let scoreA = ScoreItemID()
+        let scoreB = ScoreItemID()
+        var body: some View {
+            BulkAddToPlaylistSheet(
+                selectionCount: 2,
+                selectedIDs: [scoreA, scoreB],
+                allPlaylists: [
+                    Playlist(name: "Daily warm-up", orderedScoreItemIDs: [scoreA], createdAt: Date()),
+                    Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
+                ],
+                onPick: { _ in },
+                onCreate: { _ in },
+            )
         }
-        return Host()
     }
+    return Host()
+}
 #endif

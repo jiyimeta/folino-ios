@@ -29,7 +29,7 @@ struct PlaylistRecord: FetchableRecord, PersistableRecord, Codable {
             id: PlaylistID(rawValue: uuid),
             name: name,
             orderedScoreItemIDs: orderedScoreItemIDs,
-            createdAt: Date(timeIntervalSince1970: createdAt)
+            createdAt: Date(timeIntervalSince1970: createdAt),
         )
     }
 }

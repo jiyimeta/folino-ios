@@ -11,7 +11,7 @@ struct AddToPlaylistScreen: View {
             scoreItemID: scoreItem.id,
             allPlaylists: library.repository.playlists,
             onToggle: { playlist in Task { await toggle(playlist) } },
-            onCreate: { name in Task { await commitNewPlaylist(name) } }
+            onCreate: { name in Task { await commitNewPlaylist(name) } },
         )
     }
 
@@ -34,7 +34,7 @@ struct AddToPlaylistScreen: View {
         let playlist = Playlist(
             name: name,
             orderedScoreItemIDs: [scoreItem.id],
-            createdAt: Date()
+            createdAt: Date(),
         )
         do {
             try await library.repository.savePlaylist(playlist)

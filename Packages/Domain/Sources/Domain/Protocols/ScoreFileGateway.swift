@@ -19,7 +19,7 @@ public struct ScoreFileSummary: Hashable, Sendable {
         instrumentationSummary: String,
         lengthBeats: Int,
         defaultTempoBpm: Int,
-        primaryKey: String?
+        primaryKey: String?,
     ) {
         self.title = title
         self.subtitle = subtitle

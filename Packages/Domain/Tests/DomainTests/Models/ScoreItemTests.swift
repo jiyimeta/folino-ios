@@ -2,7 +2,7 @@
 import Foundation
 import Testing
 
-@Suite struct ScoreItemTests {
+struct ScoreItemTests {
     private func sample() -> ScoreItem {
         ScoreItem(
             id: ScoreItemID(),
@@ -18,18 +18,18 @@ import Testing
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
             lastOpenedAt: nil,
             tagIDs: [],
-            isFavorite: false
+            isFavorite: false,
         )
     }
 
-    @Test func roundTripsThroughCodable() throws {
+    @Test func `round trips through codable`() throws {
         let item = sample()
         let data = try JSONEncoder().encode(item)
         let decoded = try JSONDecoder().decode(ScoreItem.self, from: data)
         #expect(decoded == item)
     }
 
-    @Test func canHoldOptionalMetadata() {
+    @Test func `can hold optional metadata`() {
         let item = ScoreItem(
             id: ScoreItemID(),
             title: "Untitled",
@@ -44,18 +44,18 @@ import Testing
             addedAt: Date(),
             lastOpenedAt: nil,
             tagIDs: [],
-            isFavorite: false
+            isFavorite: false,
         )
         #expect(item.composer == nil)
         #expect(item.primaryKey == nil)
     }
 
-    @Test func conformsToIdentifiable() {
+    @Test func `conforms to identifiable`() {
         let item = sample()
         let _: ScoreItemID = item.id
     }
 
-    @Test func tagIDsAreOrderIndependent() {
+    @Test func `tag I ds are order independent`() {
         let t1 = TagID()
         let t2 = TagID()
         let base = sample()
@@ -64,7 +64,7 @@ import Testing
         #expect(a == b)
     }
 
-    @Test func contentHashIsCarriedThroughCodable() throws {
+    @Test func `content hash is carried through codable`() throws {
         let item = sample()
         let data = try JSONEncoder().encode(item)
         let decoded = try JSONDecoder().decode(ScoreItem.self, from: data)
@@ -88,7 +88,7 @@ extension ScoreItem {
             addedAt: addedAt,
             lastOpenedAt: lastOpenedAt,
             tagIDs: tagIDs,
-            isFavorite: isFavorite
+            isFavorite: isFavorite,
         )
     }
 }

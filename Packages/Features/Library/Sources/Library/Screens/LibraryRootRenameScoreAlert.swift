@@ -15,7 +15,7 @@ struct LibraryRootRenameScoreAlert: ViewModifier {
         content.alert(
             Text("library.score.rename.title", bundle: .module),
             isPresented: presentationBinding,
-            presenting: pending
+            presenting: pending,
         ) { item in
             TextField(text: $text) {
                 Text("library.score.rename.placeholder", bundle: .module)
@@ -31,7 +31,7 @@ struct LibraryRootRenameScoreAlert: ViewModifier {
     private var presentationBinding: Binding<Bool> {
         Binding(
             get: { pending != nil },
-            set: { isPresented in if !isPresented { pending = nil } }
+            set: { isPresented in if !isPresented { pending = nil } },
         )
     }
 }
@@ -41,12 +41,12 @@ extension View {
     func libraryRootRenameScoreAlert(
         viewModel: LibraryViewModel,
         pending: Binding<ScoreItem?>,
-        text: Binding<String>
+        text: Binding<String>,
     ) -> some View {
         modifier(LibraryRootRenameScoreAlert(
             viewModel: viewModel,
             pending: pending,
-            text: text
+            text: text,
         ))
     }
 }

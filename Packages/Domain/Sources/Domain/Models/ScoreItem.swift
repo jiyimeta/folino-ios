@@ -42,7 +42,7 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         addedAt: Date,
         lastOpenedAt: Date?,
         tagIDs: Set<TagID>,
-        isFavorite: Bool
+        isFavorite: Bool,
     ) {
         self.id = id
         self.title = title

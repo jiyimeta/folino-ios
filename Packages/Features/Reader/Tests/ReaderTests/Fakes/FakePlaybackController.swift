@@ -81,7 +81,9 @@ final class FakePlaybackController: PlaybackController {
         playCount += 1
     }
 
-    func pause() { pauseCount += 1 }
+    func pause() {
+        pauseCount += 1
+    }
 
     func setStaffVolume(staff: Int, volume: Double) {
         staffVolumes[staff] = volume

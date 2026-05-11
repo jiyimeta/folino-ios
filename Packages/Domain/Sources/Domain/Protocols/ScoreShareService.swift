@@ -51,6 +51,6 @@ public protocol ScoreShareService: Sendable {
     /// (preserving the source's container extension).
     func prepareShare(
         item: ScoreItem,
-        format: ScoreShareFormat
+        format: ScoreShareFormat,
     ) async throws -> URL
 }

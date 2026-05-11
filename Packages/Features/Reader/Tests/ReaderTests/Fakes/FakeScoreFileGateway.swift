@@ -2,8 +2,8 @@ import Domain
 import Foundation
 import SheetMusicCore
 
-// A 6-measure score fixture used by RepeatTests.
-// Each measure has one voice with two quarter-note chords (index 0 and 1).
+/// A 6-measure score fixture used by RepeatTests.
+/// Each measure has one voice with two quarter-note chords (index 0 and 1).
 private func makeFixtureScore() -> Score {
     func measure() -> Measure {
         Measure(voices: [
@@ -21,19 +21,22 @@ private func makeFixtureScore() -> Score {
 final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     var loadScoreResult: Result<(score: Score, summary: ScoreFileSummary), DomainError>
 
-    init(loadScoreResult: Result<(score: Score, summary: ScoreFileSummary), DomainError> =
-        .success((
-            score: makeFixtureScore(),
-            summary: ScoreFileSummary(
-                title: "Test", composer: nil, instrumentationSummary: "",
-                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-            )
-        )))
-    {
+    init(
+        loadScoreResult: Result<(score: Score, summary: ScoreFileSummary), DomainError> =
+            .success((
+                score: makeFixtureScore(),
+                summary: ScoreFileSummary(
+                    title: "Test", composer: nil, instrumentationSummary: "",
+                    lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+                ),
+            )),
+    ) {
         self.loadScoreResult = loadScoreResult
     }
 
-    func detectFormat(fileName: String) -> ScoreFormat? { .mscx }
+    func detectFormat(fileName: String) -> ScoreFormat? {
+        .mscx
+    }
 
     func loadFileMetadata(fileURL: URL) throws -> ScoreFileSummary {
         throw DomainError.unsupportedFormat("test")

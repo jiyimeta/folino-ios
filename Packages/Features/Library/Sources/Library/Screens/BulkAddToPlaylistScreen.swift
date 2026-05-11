@@ -13,7 +13,7 @@ struct BulkAddToPlaylistScreen: View {
             selectedIDs: selectedIDs,
             allPlaylists: library.repository.playlists,
             onPick: { playlist in Task { await commitPick(playlist) } },
-            onCreate: { name in Task { await commitCreate(name) } }
+            onCreate: { name in Task { await commitCreate(name) } },
         )
     }
 
@@ -26,7 +26,7 @@ struct BulkAddToPlaylistScreen: View {
         let playlist = Playlist(
             name: name,
             orderedScoreItemIDs: orderedSelectedIDs,
-            createdAt: Date()
+            createdAt: Date(),
         )
         do {
             try await library.repository.savePlaylist(playlist)

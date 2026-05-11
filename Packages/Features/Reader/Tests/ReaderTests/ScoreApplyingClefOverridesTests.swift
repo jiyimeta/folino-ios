@@ -2,14 +2,14 @@
 import SheetMusicCore
 import Testing
 
-@Suite struct ScoreApplyingClefOverridesTests {
-    @Test func emptyOverridesReturnsEqualScore() {
+struct ScoreApplyingClefOverridesTests {
+    @Test func `empty overrides returns equal score`() {
         let score = makeScore(staffDefaultClefs: ["G", "F"])
         let result = score.applying(clefOverrides: [:])
         #expect(result == score)
     }
 
-    @Test func overrideRewritesExplicitMeasure0Clef() {
+    @Test func `override rewrites explicit measure 0 clef`() {
         // Staff with an explicit measure-0 clef change as the very first
         // voice element on voice 0.
         var score = makeScore(staffDefaultClefs: [nil])
@@ -28,7 +28,7 @@ import Testing
         #expect(rewritten.concertClefType == "G8vb")
     }
 
-    @Test func overrideSetsDefaultClefWhenNoExplicitMeasure0Clef() {
+    @Test func `override sets default clef when no explicit measure 0 clef`() {
         var score = makeScore(staffDefaultClefs: [nil])
         // Voice 0 starts with a chord, not a clef.
         score.parts[0].staves[0].measures = [
@@ -47,7 +47,7 @@ import Testing
         }
     }
 
-    @Test func midScoreClefChangePreserved() {
+    @Test func `mid score clef change preserved`() {
         var score = makeScore(staffDefaultClefs: [nil])
         score.parts[0].staves[0].measures = [
             Measure(voices: [
@@ -83,14 +83,14 @@ import Testing
         }
     }
 
-    @Test func overrideClearsTransposingClefType() {
+    @Test func `override clears transposing clef type`() {
         var score = makeScore(staffDefaultClefs: [nil])
         score.parts[0].staves[0].measures = [
             Measure(voices: [
                 Voice(elements: [
                     .clef(Clef(
                         concertClefType: "G",
-                        transposingClefType: "G8vb"
+                        transposingClefType: "G8vb",
                     )),
                 ]),
             ]),
@@ -104,7 +104,7 @@ import Testing
         #expect(rewritten.transposingClefType == nil)
     }
 
-    @Test func overrideForNonExistentStaffIsNoOp() {
+    @Test func `override for non existent staff is no op`() {
         let score = makeScore(staffDefaultClefs: ["G"])
         let result = score.applying(clefOverrides: [
             StaffAddress(partIndex: 99, staffIndexInPart: 0): "G8vb",
@@ -112,14 +112,14 @@ import Testing
         #expect(result == score)
     }
 
-    // Builds a Score with N staves under one Part. Each entry in
-    // `staffDefaultClefs` becomes one staff with that defaultClefType
-    // and one empty measure (so layout has something to anchor to).
+    /// Builds a Score with N staves under one Part. Each entry in
+    /// `staffDefaultClefs` becomes one staff with that defaultClefType
+    /// and one empty measure (so layout has something to anchor to).
     private func makeScore(staffDefaultClefs: [String?]) -> Score {
         let staves = staffDefaultClefs.map { rawType in
             Staff(
                 defaultClefType: rawType,
-                measures: [Measure(voices: [Voice(elements: [])])]
+                measures: [Measure(voices: [Voice(elements: [])])],
             )
         }
         return Score(
@@ -128,10 +128,10 @@ import Testing
                 Part(
                     id: "P0",
                     instrument: Instrument(id: "x", channels: []),
-                    staves: staves
+                    staves: staves,
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
     }
 }

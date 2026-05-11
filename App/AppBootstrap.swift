@@ -30,25 +30,25 @@ final class AppBootstrap {
     func start() {
         do {
             try FileManager.default.createDirectory(
-                at: AppPaths.scoresDirectory, withIntermediateDirectories: true
+                at: AppPaths.scoresDirectory, withIntermediateDirectories: true,
             )
             try FileManager.default.createDirectory(
-                at: AppPaths.soundfontCacheDirectory, withIntermediateDirectories: true
+                at: AppPaths.soundfontCacheDirectory, withIntermediateDirectories: true,
             )
             try? FileManager.default.removeItem(at: AppPaths.shareTempDirectory)
             try FileManager.default.createDirectory(
-                at: AppPaths.shareTempDirectory, withIntermediateDirectories: true
+                at: AppPaths.shareTempDirectory, withIntermediateDirectories: true,
             )
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
             let repository = LiveScoreLibraryRepository(
                 database: database,
-                scoresDirectory: AppPaths.scoresDirectory
+                scoresDirectory: AppPaths.scoresDirectory,
             )
             let gateway = LiveScoreFileGateway()
             let importer = LiveScoreFileImporter(
                 gateway: gateway,
                 repository: repository,
-                scoresDirectory: AppPaths.scoresDirectory
+                scoresDirectory: AppPaths.scoresDirectory,
             )
 
             self.database = database
@@ -58,24 +58,24 @@ final class AppBootstrap {
             shareService = LiveScoreShareService(
                 scoresDirectory: AppPaths.scoresDirectory,
                 shareTempDirectory: AppPaths.shareTempDirectory,
-                gateway: gateway
+                gateway: gateway,
             )
             // `MuseScoreSF2Resolver` conforms to all three protocols
             // (`SheetMusicAudio.SoundfontResolver`, `Domain.SoundfontResolver`,
             // `Domain.PrecisePatchProbe`); one instance satisfies every slot.
             let soundfontResolver = MuseScoreSF2Resolver(
-                cacheDirectory: AppPaths.soundfontCacheDirectory
+                cacheDirectory: AppPaths.soundfontCacheDirectory,
             )
             self.soundfontResolver = soundfontResolver
             if let bundleSF2URL = Bundle.main.url(
-                forResource: "MuseScore_General", withExtension: "sf2", subdirectory: "Sounds"
+                forResource: "MuseScore_General", withExtension: "sf2", subdirectory: "Sounds",
             ) {
                 presetCatalog = try? BundledSF2PresetCatalog(sf2URL: bundleSF2URL)
             }
             playbackController = LivePlaybackController(
                 soundfontResolver: soundfontResolver,
                 domainResolver: soundfontResolver,
-                precisionProbe: soundfontResolver
+                precisionProbe: soundfontResolver,
             )
             reachability = LiveNetworkReachability()
 

@@ -4,8 +4,8 @@ import Foundation
 import SheetMusic
 import Testing
 
-@Suite struct LiveScoreFileGatewayTests {
-    @Test func detectsKnownExtensions() {
+struct LiveScoreFileGatewayTests {
+    @Test func `detects known extensions`() {
         let gateway = LiveScoreFileGateway()
         #expect(gateway.detectFormat(fileName: "x.mscz") == .mscz)
         #expect(gateway.detectFormat(fileName: "x.MSCZ") == .mscz)
@@ -14,10 +14,10 @@ import Testing
         #expect(gateway.detectFormat(fileName: "x.txt") == nil)
     }
 
-    @Test func loadFileMetadataReturnsSummaryForMSCX() async throws {
+    @Test func `load file metadata returns summary for MSCX`() async throws {
         let tmp = try TempDirectory()
         let mscxURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url
+            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url,
         )
         let gateway = LiveScoreFileGateway()
         let summary = try await gateway.loadFileMetadata(fileURL: mscxURL)
@@ -27,7 +27,7 @@ import Testing
         #expect(summary.lengthBeats >= 0)
     }
 
-    @Test func loadFileMetadataThrowsForPDF() async throws {
+    @Test func `load file metadata throws for PDF`() async throws {
         let tmp = try TempDirectory()
         let pdfURL = try Fixtures.writeToTempFile(Data(), ext: "pdf", in: tmp.url)
         let gateway = LiveScoreFileGateway()
@@ -41,47 +41,47 @@ import Testing
         }
     }
 
-    @Test func loadScoreReturnsScoreAndSummary() async throws {
+    @Test func `load score returns score and summary`() async throws {
         let tmp = try TempDirectory()
         let mscxURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url
+            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url,
         )
         let gateway = LiveScoreFileGateway()
         let result = try await gateway.loadScore(fileURL: mscxURL)
         #expect(result.score.parts.isEmpty == false)
     }
 
-    @Test func loadFileMetadataRoundTripsMSCZ() async throws {
+    @Test func `load file metadata round trips MSCZ`() async throws {
         let tmp = try TempDirectory()
         let msczURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCZData(), ext: "mscz", in: tmp.url
+            Fixtures.minimalMSCZData(), ext: "mscz", in: tmp.url,
         )
         let gateway = LiveScoreFileGateway()
         let summary = try await gateway.loadFileMetadata(fileURL: msczURL)
         #expect(summary.lengthBeats >= 0)
     }
 
-    @Test func loadFileMetadataReadsMIDI() async throws {
+    @Test func `load file metadata reads MIDI`() async throws {
         let tmp = try TempDirectory()
         let midURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMIDIData(), ext: "mid", in: tmp.url
+            Fixtures.minimalMIDIData(), ext: "mid", in: tmp.url,
         )
         let gateway = LiveScoreFileGateway()
         let summary = try await gateway.loadFileMetadata(fileURL: midURL)
         #expect(summary.lengthBeats >= 0)
     }
 
-    @Test func loadScoreParsesMIDI() async throws {
+    @Test func `load score parses MIDI`() async throws {
         let tmp = try TempDirectory()
         let midURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMIDIData(), ext: "mid", in: tmp.url
+            Fixtures.minimalMIDIData(), ext: "mid", in: tmp.url,
         )
         let gateway = LiveScoreFileGateway()
         let result = try await gateway.loadScore(fileURL: midURL)
         #expect(result.score.parts.isEmpty == false)
     }
 
-    @Test func saveScoreThrowsUnsupportedFormatInV1() async throws {
+    @Test func `save score throws unsupported format in V 1`() async throws {
         let tmp = try TempDirectory()
         let gateway = LiveScoreFileGateway()
         let score = try SheetMusic.loadScore(mscxData: Fixtures.minimalMSCXData())

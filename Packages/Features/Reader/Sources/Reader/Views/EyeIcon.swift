@@ -34,7 +34,7 @@ struct EyeIcon: View {
                     .blendMode(.destinationOut)
                     .frame(
                         width: fitted.width * Constants.eyeballScale,
-                        height: fitted.width * Constants.eyeballScale
+                        height: fitted.width * Constants.eyeballScale,
                     )
                     .position(x: size.width / 2, y: size.height / 2)
             }
@@ -54,12 +54,12 @@ struct EyeIcon: View {
 
         let scale = min(
             size.width / base.width,
-            size.height / base.height
+            size.height / base.height,
         )
 
         return CGSize(
             width: base.width * scale,
-            height: base.height * scale
+            height: base.height * scale,
         )
     }
 }
@@ -77,7 +77,7 @@ private struct EyeShape: Shape {
 
         let scale = min(
             rect.width / base.width,
-            rect.height / base.height
+            rect.height / base.height,
         )
 
         let width = base.width * scale
@@ -98,13 +98,13 @@ private struct EyeShape: Shape {
             path.addCurve(
                 to: CGPoint(x: offsetX + width, y: midY),
                 control1: CGPoint(x: offsetX + x, y: midY + y),
-                control2: CGPoint(x: offsetX + width - x, y: midY + y)
+                control2: CGPoint(x: offsetX + width - x, y: midY + y),
             )
 
             path.addCurve(
                 to: CGPoint(x: offsetX, y: midY),
                 control1: CGPoint(x: offsetX + width - x, y: topY),
-                control2: CGPoint(x: offsetX + x, y: topY)
+                control2: CGPoint(x: offsetX + x, y: topY),
             )
         }
     }
@@ -116,7 +116,7 @@ private struct EyeLowerCurve: Shape {
 
         let scale = min(
             rect.width / base.width,
-            rect.height / base.height
+            rect.height / base.height,
         )
 
         let width = base.width * scale
@@ -135,7 +135,7 @@ private struct EyeLowerCurve: Shape {
             path.addCurve(
                 to: CGPoint(x: offsetX + width, y: midY),
                 control1: CGPoint(x: offsetX + x, y: midY + y),
-                control2: CGPoint(x: offsetX + width - x, y: midY + y)
+                control2: CGPoint(x: offsetX + width - x, y: midY + y),
             )
         }
     }

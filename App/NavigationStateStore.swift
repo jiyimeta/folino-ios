@@ -48,7 +48,7 @@ final class NavigationStateStore {
         guard let data = defaults.data(forKey: key) else { return nil }
         guard let representation = try? decoder.decode(
             NavigationPath.CodableRepresentation.self,
-            from: data
+            from: data,
         ) else { return nil }
         return NavigationPath(representation)
     }

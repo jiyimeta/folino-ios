@@ -15,24 +15,24 @@ struct TagDetailView<Content: View>: View {
                 entityName: tagName,
                 copy: .tag,
                 onRename: onRename,
-                onDelete: onDelete
+                onDelete: onDelete,
             )
     }
 }
 
 #if DEBUG
-    #Preview {
-        NavigationStack {
-            TagDetailView(
-                tagName: "Practice",
-                onRename: { _ in },
-                onDelete: {}
-            ) {
-                List {
-                    Text("Score A")
-                    Text("Score B")
-                }
+#Preview {
+    NavigationStack {
+        TagDetailView(
+            tagName: "Practice",
+            onRename: { _ in },
+            onDelete: {},
+        ) {
+            List {
+                Text("Score A")
+                Text("Score B")
             }
         }
     }
+}
 #endif

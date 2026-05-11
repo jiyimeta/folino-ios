@@ -5,7 +5,7 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct ReaderViewModelPlaybackTests {
     private static func makeItem() -> ScoreItem {
         ScoreItem(
@@ -13,7 +13,7 @@ struct ReaderViewModelPlaybackTests {
             localFileName: "test.mscx", contentHash: "hash",
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
@@ -22,12 +22,12 @@ struct ReaderViewModelPlaybackTests {
             score: score,
             summary: ScoreFileSummary(
                 title: "Test", composer: nil, instrumentationSummary: "",
-                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-            )
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            ),
         )))
     }
 
-    @Test func playbackCursorMirrorsControllerStream() {
+    @Test func `playback cursor mirrors controller stream`() {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -36,7 +36,7 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         vm.startObservingCursor()
         let target = ScoreCursor.beat(measureIndex: 4, tickInMeasure: 240)
@@ -47,7 +47,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.playbackCursor == nil)
     }
 
-    @Test func cursorBecomingNilAfterPlayResetsIsPlaying() async {
+    @Test func `cursor becoming nil after play resets is playing`() async {
         // The engine emits a nil cursor when playback finishes naturally
         // (`PlaybackEngine.stop()` clears `currentCursor` once
         // `tickCursor` reaches `totalTicks`). The toolbar's play/pause
@@ -59,13 +59,13 @@ struct ReaderViewModelPlaybackTests {
         let score = Score(
             division: 480,
             parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
         vm.startObservingCursor()
@@ -76,20 +76,20 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.isPlaying)
     }
 
-    @Test func togglePlaybackLoadsPlaysThenPauses() async {
+    @Test func `toggle playback loads plays then pauses`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let score = Score(
             division: 480,
             parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -104,26 +104,28 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.isPlaying)
     }
 
-    @Test func cancelLoadingSoundfontsAbortsTogglePlayback() async {
+    @Test func `cancel loading soundfonts aborts toggle playback`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let score = Score(
             division: 480,
             parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.blocksLoadUntilCancelled = true
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
         let toggle = Task { await vm.togglePlayback() }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(vm.isLoadingSoundfonts)
         #expect(!vm.isPlaying)
         #expect(controller.loadCount == 0)
@@ -135,20 +137,20 @@ struct ReaderViewModelPlaybackTests {
         #expect(controller.playCount == 0)
     }
 
-    @Test func prepareForPlaybackPrimesEngineWithoutShowingAlert() async {
+    @Test func `prepare for playback primes engine without showing alert`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let score = Score(
             division: 480,
             parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
         await vm.prepareForPlayback()
@@ -165,14 +167,14 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.isPlaying)
     }
 
-    @Test func togglePlaybackShowsOfflineAlertWhenOfflineAndUncached() async {
+    @Test func `toggle playback shows offline alert when offline and uncached`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let score = Score(
             division: 480,
             parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.soundfontsAvailableLocally = false
@@ -182,12 +184,14 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: reachability
+            reachability: reachability,
         )
         await vm.load()
 
         let toggle = Task { await vm.togglePlayback() }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(vm.soundfontAlertKind == .offline)
         #expect(!vm.isLoadingSoundfonts)
 
@@ -196,14 +200,14 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.soundfontAlertKind == nil)
     }
 
-    @Test func togglePlaybackShowsLoadingAlertWhenOnlineAndUncached() async {
+    @Test func `toggle playback shows loading alert when online and uncached`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let score = Score(
             division: 480,
             parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.soundfontsAvailableLocally = false
@@ -213,12 +217,14 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: reachability
+            reachability: reachability,
         )
         await vm.load()
 
         let toggle = Task { await vm.togglePlayback() }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(vm.soundfontAlertKind == .loading)
 
         vm.cancelLoadingSoundfonts()
@@ -226,14 +232,14 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.soundfontAlertKind == nil)
     }
 
-    @Test func togglePlaybackSkipsAlertWhenSoundfontsAreCached() async {
+    @Test func `toggle playback skips alert when soundfonts are cached`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let score = Score(
             division: 480,
             parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.soundfontsAvailableLocally = true
@@ -241,12 +247,14 @@ struct ReaderViewModelPlaybackTests {
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
         let toggle = Task { await vm.togglePlayback() }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         // Even though `load` is blocked, the alert never shows because the
         // controller reports the cache covers the score.
         #expect(!vm.isLoadingSoundfonts)
@@ -257,7 +265,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.isPlaying)
     }
 
-    @Test func togglePlaybackIsNoOpWhenScoreNotLoaded() async {
+    @Test func `toggle playback is no op when score not loaded`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -266,7 +274,7 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         // No `await vm.load()`.
         await vm.togglePlayback()
@@ -275,7 +283,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.isPlaying)
     }
 
-    @Test func toggleStaffSoloFlipsMembershipAndForwardsToController() async {
+    @Test func `toggle staff solo flips membership and forwards to controller`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -285,13 +293,13 @@ struct ReaderViewModelPlaybackTests {
                 Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()]),
                 Part(id: "P1", trackName: "Pno", instrument: Instrument(id: "p"), staves: [Staff(), Staff()]),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -299,16 +307,20 @@ struct ReaderViewModelPlaybackTests {
         let pianoTop = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         vm.toggleStaffSolo(address: pianoTop)
         #expect(vm.soloStaves == [pianoTop])
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(controller.staffSoloStates[1] == true)
 
         vm.toggleStaffSolo(address: pianoTop)
         #expect(vm.soloStaves.isEmpty)
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(controller.staffSoloStates[1] == false)
     }
 
-    @Test func toggleStaffSoloIsNoOpWhenScoreNotLoaded() async {
+    @Test func `toggle staff solo is no op when score not loaded`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -317,18 +329,20 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         // No load: flat index lookup fails, controller is never called,
         // but the in-memory set still tracks the user's intent.
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         vm.toggleStaffSolo(address: address)
         #expect(vm.soloStaves == [address])
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(controller.staffSoloStates.isEmpty)
     }
 
-    @Test func effectiveProgramFallsBackToScoreInstrumentChannel() async {
+    @Test func `effective program falls back to score instrument channel`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -340,19 +354,19 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [violinChannel]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
                 Part(
                     id: "P1", trackName: "Pno",
                     instrument: Instrument(id: "p", channels: [pianoChannel]),
-                    staves: [Staff(), Staff()]
+                    staves: [Staff(), Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
-            scoresDirectory: URL(filePath: "/tmp")
+            scoresDirectory: URL(filePath: "/tmp"),
         )
         await vm.load()
 
@@ -363,7 +377,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.hasProgramOverride(for: violinAddress))
     }
 
-    @Test func setStaffProgramPersistsOverrideAndForwardsToController() async {
+    @Test func `set staff program persists override and forwards to controller`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -373,16 +387,16 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -401,7 +415,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(call?.program == 6)
     }
 
-    @Test func clearStaffProgramOverrideRevertsToScoreDefault() async {
+    @Test func `clear staff program override reverts to score default`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -411,16 +425,16 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -435,14 +449,14 @@ struct ReaderViewModelPlaybackTests {
         #expect(lastCall?.program == 40) // reset call uses score default
     }
 
-    @Test func initialPlaybackPreferencesUseOverridesAndScoreDefaults() async throws {
+    @Test func `initial playback preferences use overrides and score defaults`() async throws {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
         let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
             scoreItemID: item.id, staffSize: 14, hiddenStaves: [],
-            staffProgramOverrides: [address2: 24] // Acoustic Guitar
+            staffProgramOverrides: [address2: 24], // Acoustic Guitar
         )
         let score = Score(
             division: 480,
@@ -450,21 +464,21 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
                 Part(
                     id: "P1", trackName: "Pno",
                     instrument: Instrument(id: "p", channels: [InstrumentChannel(program: 0)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
         await vm.togglePlayback()
@@ -474,7 +488,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(prefs.perStaff[1].gmProgram == 24) // piano uses override
     }
 
-    @Test func setVolumeForwardsToControllerByFlatStaffIndex() async {
+    @Test func `set volume forwards to controller by flat staff index`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -484,13 +498,13 @@ struct ReaderViewModelPlaybackTests {
                 Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()]),
                 Part(id: "P1", trackName: "Pno", instrument: Instrument(id: "p"), staves: [Staff(), Staff()]),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -503,7 +517,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(controller.staffVolumes[2] == 0.3)
     }
 
-    @Test func setPartProgramWithCachedPatchSkipsPrefetch() async {
+    @Test func `set part program with cached patch skips prefetch`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -513,17 +527,17 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.cachedPatches = [SoundfontPatchKey(bank: 0, program: 6, isDrums: false)]
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -535,7 +549,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(calls.count == 1)
     }
 
-    @Test func setPartProgramWithUncachedPatchPrefetchesSilentlyWhenNotPlaying() async {
+    @Test func `set part program with uncached patch prefetches silently when not playing`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -545,17 +559,17 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         // cachedPatches deliberately empty — every pick is a miss.
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -563,17 +577,17 @@ struct ReaderViewModelPlaybackTests {
 
         #expect(vm.soundfontAlertKind == nil)
         #expect(controller.prefetchedPatches.contains(
-            SoundfontPatchKey(bank: 0, program: 6, isDrums: false)
+            SoundfontPatchKey(bank: 0, program: 6, isDrums: false),
         ))
         // Engine reflection happens after prefetch resolves.
         let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
         #expect(calls.count == 1)
         #expect(vm.preferences.staffProgramOverrides[
-            StaffAddress(partIndex: 0, staffIndexInPart: 0)
+            StaffAddress(partIndex: 0, staffIndexInPart: 0),
         ] == 6)
     }
 
-    @Test func setPartProgramDuringPlaybackPausesAndShowsLoadingAlert() async {
+    @Test func `set part program during playback pauses and shows loading alert`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -583,10 +597,10 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.cachedPatches = [SoundfontPatchKey(bank: 0, program: 40, isDrums: false)]
@@ -596,7 +610,7 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: reachability
+            reachability: reachability,
         )
         await vm.load()
         controller.soundfontsAvailableLocally = true
@@ -604,7 +618,9 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.isPlaying)
 
         let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(!vm.isPlaying)
         #expect(vm.soundfontAlertKind == .loading)
         #expect(controller.pauseCount == 1)
@@ -614,7 +630,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.soundfontAlertKind == nil)
     }
 
-    @Test func setPartProgramDuringPlaybackResumesAfterPrefetchSucceeds() async {
+    @Test func `set part program during playback resumes after prefetch succeeds`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -624,10 +640,10 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.cachedPatches = [SoundfontPatchKey(bank: 0, program: 40, isDrums: false)]
@@ -636,7 +652,7 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: reachability
+            reachability: reachability,
         )
         await vm.load()
         controller.soundfontsAvailableLocally = true
@@ -653,7 +669,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(calls.count == 1)
     }
 
-    @Test func setPartProgramDuringPlaybackShowsOfflineAlertWhenOffline() async {
+    @Test func `set part program during playback shows offline alert when offline`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -663,10 +679,10 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.cachedPatches = [SoundfontPatchKey(bank: 0, program: 40, isDrums: false)]
@@ -676,21 +692,23 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: reachability
+            reachability: reachability,
         )
         await vm.load()
         controller.soundfontsAvailableLocally = true
         await vm.togglePlayback()
 
         let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(vm.soundfontAlertKind == .offline)
 
         vm.cancelLoadingSoundfonts()
         _ = await pick.value
     }
 
-    @Test func cancelDuringInstrumentPrefetchRevertsProgramOverride() async {
+    @Test func `cancel during instrument prefetch reverts program override`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -700,23 +718,25 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.blocksPrefetchUntilCancelled = true
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(vm.preferences.staffProgramOverrides[address] == 6)
 
         vm.cancelLoadingSoundfonts()
@@ -728,7 +748,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(calls.isEmpty)
     }
 
-    @Test func secondInstrumentPickCancelsFirstAndKeepsOriginalAsRevertTarget() async {
+    @Test func `second instrument pick cancels first and keeps original as revert target`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -738,25 +758,29 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.blocksPrefetchUntilCancelled = true
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
         let firstPick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
 
         let secondPick = Task { await vm.setPartProgram(24, forPartIndex: 0) }
-        for _ in 0 ..< 10 { await Task.yield() }
+        for _ in 0 ..< 10 {
+            await Task.yield()
+        }
         _ = await firstPick.value
 
         vm.cancelLoadingSoundfonts()
@@ -767,7 +791,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.effectiveProgram(forPartIndex: 0) == 40)
     }
 
-    @Test func secondInstrumentPickInheritsWasPlayingFromFirstPick() async {
+    @Test func `second instrument pick inherits was playing from first pick`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -777,10 +801,10 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.cachedPatches = [SoundfontPatchKey(bank: 0, program: 40, isDrums: false)]
@@ -789,7 +813,7 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: FakeNetworkReachability(online: true)
+            reachability: FakeNetworkReachability(online: true),
         )
         await vm.load()
         await vm.togglePlayback()
@@ -797,7 +821,9 @@ struct ReaderViewModelPlaybackTests {
 
         controller.blocksPrefetchUntilCancelled = true
         let firstPick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(!vm.isPlaying)
         #expect(vm.soundfontAlertKind == .loading)
 
@@ -811,7 +837,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(calls.count == 1)
     }
 
-    @Test func togglePlaybackDuringSilentInstrumentPrefetchShowsLoadingAlert() async {
+    @Test func `toggle playback during silent instrument prefetch shows loading alert`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -821,10 +847,10 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.soundfontsAvailableLocally = true
@@ -834,16 +860,20 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: reachability
+            reachability: reachability,
         )
         await vm.load()
 
         let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(vm.soundfontAlertKind == nil)
 
         let toggle = Task { await vm.togglePlayback() }
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(vm.soundfontAlertKind == .loading)
 
         vm.cancelLoadingSoundfonts()
@@ -852,7 +882,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.soundfontAlertKind == nil)
     }
 
-    @Test func togglePlaybackAfterSilentPrefetchSucceedsBeginsPlayback() async {
+    @Test func `toggle playback after silent prefetch succeeds begins playback`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -862,10 +892,10 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         controller.soundfontsAvailableLocally = true
@@ -873,7 +903,7 @@ struct ReaderViewModelPlaybackTests {
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
-            reachability: FakeNetworkReachability(online: true)
+            reachability: FakeNetworkReachability(online: true),
         )
         await vm.load()
         await vm.setPartProgram(6, forPartIndex: 0)
@@ -883,7 +913,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(controller.playCount == 1)
     }
 
-    @Test func engineSeedUsesPersistedOverrideOverMscx() async throws {
+    @Test func `engine seed uses persisted override over mscx`() async throws {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -892,7 +922,7 @@ struct ReaderViewModelPlaybackTests {
             scoreItemID: item.id,
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 0.3]
+            staffVolumeOverrides: [address: 0.3],
         )
         let score = Score(
             division: 480,
@@ -900,16 +930,16 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 100)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
         await vm.prepareForPlayback()
@@ -919,7 +949,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(staff0.volume == 0.3)
     }
 
-    @Test func engineSeedUsesMscxWhenNoOverride() async throws {
+    @Test func `engine seed uses mscx when no override`() async throws {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -929,16 +959,16 @@ struct ReaderViewModelPlaybackTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(volume: 80)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
         await vm.prepareForPlayback()

@@ -7,11 +7,11 @@ import Foundation
 func playlistsByRecentlyUsed(
     _ playlists: [Playlist],
     scoreItems: [ScoreItem],
-    limit: Int
+    limit: Int,
 ) -> [Playlist] {
     guard limit > 0 else { return [] }
     let lookup: [ScoreItemID: ScoreItem] = Dictionary(
-        uniqueKeysWithValues: scoreItems.map { ($0.id, $0) }
+        uniqueKeysWithValues: scoreItems.map { ($0.id, $0) },
     )
     let keyed: [(Playlist, Date)] = playlists.map { playlist in
         let dates: [Date] = playlist.orderedScoreItemIDs
@@ -32,7 +32,7 @@ func playlistsByRecentlyUsed(
 func tagsByRecentlyUsed(
     _ tags: [Tag],
     scoreItems: [ScoreItem],
-    limit: Int
+    limit: Int,
 ) -> [Tag] {
     guard limit > 0 else { return [] }
     var maxByTag: [TagID: Date] = [:]

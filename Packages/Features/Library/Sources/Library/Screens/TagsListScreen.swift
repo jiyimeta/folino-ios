@@ -13,7 +13,7 @@ struct TagsListScreen: View {
             },
             onDelete: { tag in
                 Task { await library.deleteTag(tag) }
-            }
+            },
         )
     }
 

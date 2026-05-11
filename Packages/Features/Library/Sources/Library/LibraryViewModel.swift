@@ -52,7 +52,7 @@ public final class LibraryViewModel {
         repository: any ScoreLibraryRepository,
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
-        shareService: any ScoreShareService
+        shareService: any ScoreShareService,
     ) {
         self.repository = repository
         self.importer = importer
@@ -111,7 +111,7 @@ public final class LibraryViewModel {
 
     public func bulkRemoveFromPlaylist(
         _ ids: Set<ScoreItemID>,
-        from playlist: Playlist
+        from playlist: Playlist,
     ) async {
         guard !ids.isEmpty else { return }
         var updated = playlist
@@ -126,7 +126,7 @@ public final class LibraryViewModel {
 
     public func bulkAddToPlaylist(
         _ orderedIDs: [ScoreItemID],
-        to playlist: Playlist
+        to playlist: Playlist,
     ) async {
         guard !orderedIDs.isEmpty else { return }
         let existing = Set(playlist.orderedScoreItemIDs)
@@ -143,7 +143,7 @@ public final class LibraryViewModel {
 
     public func bulkAddTags(
         _ ids: Set<ScoreItemID>,
-        tagIDs: Set<TagID>
+        tagIDs: Set<TagID>,
     ) async {
         guard !ids.isEmpty, !tagIDs.isEmpty else { return }
         for id in ids {

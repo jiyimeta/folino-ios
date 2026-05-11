@@ -6,7 +6,7 @@ import SheetMusicCore
 import Testing
 
 @MainActor
-@Suite struct LivePlaybackControllerTests {
+struct LivePlaybackControllerTests {
     /// Resolver probe that reports a fixed set of `(bank, program, isDrums)`
     /// triples as "precisely available", everything else as missing.
     private struct StubProbe: PrecisePatchProbe {
@@ -20,7 +20,7 @@ import Testing
         }
     }
 
-    @Test func pitchedStaffWithMissingPatchRewritesToFlute() {
+    @Test func `pitched staff with missing patch rewrites to flute`() {
         let score = makeScore(parts: [.pitched(bank: 5, program: 42)])
         let probe = StubProbe(available: [])
 
@@ -30,7 +30,7 @@ import Testing
         #expect(channel.program == 73)
     }
 
-    @Test func drumStaffWithMissingPatchRewritesToStandardKit() {
+    @Test func `drum staff with missing patch rewrites to standard kit`() {
         let score = makeScore(parts: [.drums(bank: 0, program: 0)])
         let probe = StubProbe(available: [])
 
@@ -42,7 +42,7 @@ import Testing
         #expect(result.parts[0].instrument.useDrumset)
     }
 
-    @Test func availablePatchPassesThrough() {
+    @Test func `available patch passes through`() {
         let score = makeScore(parts: [.pitched(bank: 8, program: 0)])
         let probe = StubProbe(available: [.init(bank: 8, program: 0, isDrums: false)])
 
@@ -54,11 +54,11 @@ import Testing
 
     // MARK: - Loop bounds
 
-    @Test func loopBoundsResolvesToFirstAndLastItemIDsAcrossMeasures() {
+    @Test func `loop bounds resolves to first and last item I ds across measures`() {
         let score = makeMeasureScore(measureCount: 4)
         let range = ABRepeatRange(
             start: ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 0),
-            end: ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0)
+            end: ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0),
         )
 
         let bounds = LivePlaybackController.loopBounds(for: range, in: score)
@@ -79,20 +79,20 @@ import Testing
         }
     }
 
-    @Test func loopBoundsReturnsNilWhenEndMeasurePastScore() {
+    @Test func `loop bounds returns nil when end measure past score`() {
         let score = makeMeasureScore(measureCount: 2)
         let range = ABRepeatRange(
             start: ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0),
-            end: ChordPath(systemIndex: 0, measureIndex: 5, voiceIndex: 0, chordIndex: 0)
+            end: ChordPath(systemIndex: 0, measureIndex: 5, voiceIndex: 0, chordIndex: 0),
         )
 
         #expect(LivePlaybackController.loopBounds(for: range, in: score) == nil)
     }
 
-    @Test func firstScoreItemIDReturnsNoteIDForChordWithNotes() {
+    @Test func `first score item ID returns note ID for chord with notes`() {
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let measure = Measure(voices: [
             Voice(elements: [.chord(chord), .rest(duration: .quarter)]),
@@ -110,14 +110,14 @@ import Testing
         }
     }
 
-    @Test func lastScoreItemIDReturnsNoteIDForChordWithNotes() {
+    @Test func `last score item ID returns note ID for chord with notes`() {
         // MIDI 60 = middle C, TPC 14 = "C natural" in MuseScore's tonal pitch
         // class numbering. Concrete values don't matter — we only need a
         // `Chord` whose `notes` is non-empty so `lastScoreItemID` returns
         // `.note(...)` rather than `.rest(...)`.
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let measure = Measure(voices: [
             Voice(elements: [.rest(duration: .quarter), .chord(chord)]),
@@ -135,7 +135,7 @@ import Testing
         }
     }
 
-    @Test func lastScoreItemIDReturnsNilForMeasureWithNoChordElements() {
+    @Test func `last score item ID returns nil for measure with no chord elements`() {
         let measure = Measure(voices: [Voice(elements: [])])
         let score = makeSingleMeasureScore(measure: measure)
 
@@ -145,14 +145,14 @@ import Testing
 
     // MARK: - Soundfont cache
 
-    @Test func isSoundfontCachedReturnsTrueWhenResolverListsPatch() async {
+    @Test func `is soundfont cached returns true when resolver lists patch`() async {
         let resolver = FakeDomainSoundfontResolver(cached: [
             SoundfontPatchKey(bank: 0, program: 73, isDrums: false),
         ])
         let controller = LivePlaybackController(
             soundfontResolver: NoopAudioResolver(),
             domainResolver: resolver,
-            precisionProbe: StubProbe(available: [])
+            precisionProbe: StubProbe(available: []),
         )
 
         let cached = await controller.isSoundfontCached(bank: 0, program: 73, isDrums: false)
@@ -161,24 +161,24 @@ import Testing
         #expect(!missing)
     }
 
-    @Test func isSoundfontCachedReturnsFalseWhenResolverThrows() async {
+    @Test func `is soundfont cached returns false when resolver throws`() async {
         let resolver = FakeDomainSoundfontResolver(cachedPatchesError: TestError.boom)
         let controller = LivePlaybackController(
             soundfontResolver: NoopAudioResolver(),
             domainResolver: resolver,
-            precisionProbe: StubProbe(available: [])
+            precisionProbe: StubProbe(available: []),
         )
 
         let result = await controller.isSoundfontCached(bank: 0, program: 0, isDrums: false)
         #expect(!result)
     }
 
-    @Test func prefetchSoundfontDelegatesToResolver() async throws {
+    @Test func `prefetch soundfont delegates to resolver`() async throws {
         let resolver = FakeDomainSoundfontResolver()
         let controller = LivePlaybackController(
             soundfontResolver: NoopAudioResolver(),
             domainResolver: resolver,
-            precisionProbe: StubProbe(available: [])
+            precisionProbe: StubProbe(available: []),
         )
 
         try await controller.prefetchSoundfont(bank: 8, program: 0, isDrums: false)
@@ -189,12 +189,12 @@ import Testing
         #expect(calls.first?.isDrums == false)
     }
 
-    @Test func prefetchSoundfontPropagatesResolverError() async {
+    @Test func `prefetch soundfont propagates resolver error`() async {
         let resolver = FakeDomainSoundfontResolver(resolveError: TestError.boom)
         let controller = LivePlaybackController(
             soundfontResolver: NoopAudioResolver(),
             domainResolver: resolver,
-            precisionProbe: StubProbe(available: [])
+            precisionProbe: StubProbe(available: []),
         )
 
         await #expect(throws: TestError.boom) {
@@ -226,19 +226,19 @@ private func makeScore(parts specs: [PartSpec]) -> Score {
             return Part(
                 id: "P\(index)",
                 instrument: instrument,
-                staves: [Staff()]
+                staves: [Staff()],
             )
         case let .drums(bank, program):
             let channel = InstrumentChannel(program: program, bank: bank)
             let instrument = Instrument(
                 id: "drums-\(index)",
                 channels: [channel],
-                useDrumset: true
+                useDrumset: true,
             )
             return Part(
                 id: "P\(index)",
                 instrument: instrument,
-                staves: [Staff(group: "percussion")]
+                staves: [Staff(group: "percussion")],
             )
         }
     }
@@ -264,7 +264,7 @@ private func makeMeasureScore(measureCount: Int) -> Score {
     let part = Part(
         id: "P0",
         instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
-        staves: [staff]
+        staves: [staff],
     )
     return Score(division: 480, parts: [part])
 }
@@ -277,7 +277,7 @@ private func makeSingleMeasureScore(measure: Measure) -> Score {
     let part = Part(
         id: "P0",
         instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
-        staves: [staff]
+        staves: [staff],
     )
     return Score(division: 480, parts: [part])
 }
@@ -292,7 +292,9 @@ private struct NoopAudioResolver: SheetMusicAudio.SoundfontResolver {
         nil
     }
 
-    var defaultGMSoundfontURL: URL? { nil }
+    var defaultGMSoundfontURL: URL? {
+        nil
+    }
 }
 
 /// Records `resolveSoundfont` calls and returns either a fake URL or the
@@ -307,7 +309,7 @@ private actor FakeDomainSoundfontResolver: Domain.SoundfontResolver {
     init(
         cached: Set<SoundfontPatchKey> = [],
         cachedPatchesError: Error? = nil,
-        resolveError: Error? = nil
+        resolveError: Error? = nil,
     ) {
         self.cached = cached
         self.cachedPatchesError = cachedPatchesError
@@ -329,12 +331,15 @@ private actor FakeDomainSoundfontResolver: Domain.SoundfontResolver {
                 bank: $0.bank, program: $0.program,
                 localFileName: "fake.sf2", sizeBytes: 0,
                 downloadedAt: now, lastUsedAt: now,
-                isBundled: false, isDrums: $0.isDrums
+                isBundled: false, isDrums: $0.isDrums,
             )
         }
     }
 
-    func totalCacheSizeBytes() throws -> Int64 { 0 }
+    func totalCacheSizeBytes() throws -> Int64 {
+        0
+    }
+
     func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
     func clearCache() throws {}
 }

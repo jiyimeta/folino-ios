@@ -50,7 +50,7 @@ extension LivePlaybackController {
     /// Returns `nil` when the start measure or end measure has no
     /// chord/rest elements to anchor on, or when the range is inverted.
     static func loopBounds(
-        for range: ABRepeatRange, in score: Score
+        for range: ABRepeatRange, in score: Score,
     ) -> LoopBounds? {
         let measureCount = score.parts.first?.staves.first?.measures.count ?? 0
         guard measureCount > 0,
@@ -58,10 +58,10 @@ extension LivePlaybackController {
               range.end.measureIndex < measureCount,
               range.start.measureIndex <= range.end.measureIndex,
               let start = firstScoreItemID(
-                  inMeasure: range.start.measureIndex, of: score
+                  inMeasure: range.start.measureIndex, of: score,
               ),
               let last = lastScoreItemID(
-                  inMeasure: range.end.measureIndex, of: score
+                  inMeasure: range.end.measureIndex, of: score,
               )
         else { return nil }
         return LoopBounds(start: start, last: last)
@@ -73,7 +73,7 @@ extension LivePlaybackController {
     /// (empty chords). `nil` when the measure has no `.chord` elements
     /// at all.
     static func firstScoreItemID(
-        inMeasure measureIndex: Int, of score: Score
+        inMeasure measureIndex: Int, of score: Score,
     ) -> SheetMusicCore.ScoreItemID? {
         guard let part = score.parts.first,
               let staff = part.staves.first,
@@ -87,7 +87,7 @@ extension LivePlaybackController {
                 forChord: chord,
                 staff: staffAddress,
                 measureIndex: measureIndex,
-                elementIndex: idx
+                elementIndex: idx,
             )
         }
         return nil
@@ -96,7 +96,7 @@ extension LivePlaybackController {
     /// Last `.chord` element in the given measure. Same shape as
     /// `firstScoreItemID` but walks to the end.
     static func lastScoreItemID(
-        inMeasure measureIndex: Int, of score: Score
+        inMeasure measureIndex: Int, of score: Score,
     ) -> SheetMusicCore.ScoreItemID? {
         guard let part = score.parts.first,
               let staff = part.staves.first,
@@ -111,7 +111,7 @@ extension LivePlaybackController {
                 forChord: chord,
                 staff: staffAddress,
                 measureIndex: measureIndex,
-                elementIndex: idx
+                elementIndex: idx,
             )
         }
         return lastID
@@ -121,14 +121,14 @@ extension LivePlaybackController {
         forChord chord: Chord,
         staff: StaffAddress,
         measureIndex: Int,
-        elementIndex: Int
+        elementIndex: Int,
     ) -> SheetMusicCore.ScoreItemID {
         if chord.notes.isEmpty {
             return .rest(RestID(
                 staff: staff,
                 measureIndex: measureIndex,
                 voiceIndex: 0,
-                elementIndex: elementIndex
+                elementIndex: elementIndex,
             ))
         }
         return .note(NoteID(
@@ -136,7 +136,7 @@ extension LivePlaybackController {
             measureIndex: measureIndex,
             voiceIndex: 0,
             elementIndex: elementIndex,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         ))
     }
 }

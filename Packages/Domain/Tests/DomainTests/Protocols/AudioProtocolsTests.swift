@@ -17,16 +17,28 @@ private final class FakePlaybackController: PlaybackController {
         loadedScores += 1
     }
 
-    func areSoundfontsAvailableLocally(for _: Score) -> Bool { true }
-    func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) -> Bool { true }
+    func areSoundfontsAvailableLocally(for _: Score) -> Bool {
+        true
+    }
+
+    func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) -> Bool {
+        true
+    }
+
     func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) throws {}
 
     func play() throws {}
     func pause() {}
-    func setCursor(to cursor: ScoreCursor) { lastCursor = cursor }
+    func setCursor(to cursor: ScoreCursor) {
+        lastCursor = cursor
+    }
+
     func setLoopRange(_ range: ABRepeatRange?) {}
     func setMetronomeEnabled(_ enabled: Bool) {}
-    func setTempoMultiplier(_ value: Double) { lastTempo = value }
+    func setTempoMultiplier(_ value: Double) {
+        lastTempo = value
+    }
+
     func setStaffVolume(staff: Int, volume: Double) {}
     func setStaffMute(staff: Int, isMuted: Bool) {}
     func setStaffSolo(staff: Int, isSolo: Bool) {}
@@ -42,17 +54,25 @@ private actor FakeSoundfontResolver: SoundfontResolver {
         return URL(fileURLWithPath: "/tmp/fake.sf2")
     }
 
-    func cachedPatches() throws -> [SoundfontPatch] { cache }
-    func totalCacheSizeBytes() throws -> Int64 { cache.reduce(0) { $0 + $1.sizeBytes } }
+    func cachedPatches() throws -> [SoundfontPatch] {
+        cache
+    }
+
+    func totalCacheSizeBytes() throws -> Int64 {
+        cache.reduce(0) { $0 + $1.sizeBytes }
+    }
+
     func deletePatch(bank: Int, program: Int, isDrums: Bool) throws {
         cache.removeAll { $0.bank == bank && $0.program == program }
     }
 
-    func clearCache() throws { cache.removeAll() }
+    func clearCache() throws {
+        cache.removeAll()
+    }
 }
 
-@Suite struct AudioProtocolsTests {
-    @MainActor @Test func playbackControllerSetsCursorAndTempo() async throws {
+struct AudioProtocolsTests {
+    @MainActor @Test func `playback controller sets cursor and tempo`() async {
         let controller = FakePlaybackController()
         let target = ScoreCursor.beat(measureIndex: 2, tickInMeasure: 240)
         await controller.setCursor(to: target)
@@ -61,7 +81,7 @@ private actor FakeSoundfontResolver: SoundfontResolver {
         #expect(controller.lastTempo == 0.75)
     }
 
-    @Test func soundfontResolverRecordsCalls() async throws {
+    @Test func `soundfont resolver records calls`() async throws {
         let resolver = FakeSoundfontResolver()
         _ = try await resolver.resolveSoundfont(bank: 0, program: 4, isDrums: false)
         _ = try await resolver.resolveSoundfont(bank: 128, program: 0, isDrums: true)

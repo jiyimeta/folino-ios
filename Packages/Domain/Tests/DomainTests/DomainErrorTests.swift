@@ -2,13 +2,13 @@
 import Foundation
 import Testing
 
-@Suite struct DomainErrorTests {
-    @Test func conformsToError() {
+struct DomainErrorTests {
+    @Test func `conforms to error`() {
         let error: any Error = DomainError.scoreFileNotFound(name: "x.mscz")
         _ = error
     }
 
-    @Test func equatableCases() {
+    @Test func `equatable cases`() {
         let notFoundA1 = DomainError.scoreFileNotFound(name: "a")
         let notFoundA2 = DomainError.scoreFileNotFound(name: "a")
         #expect(notFoundA1 == notFoundA2)
@@ -19,7 +19,7 @@ import Testing
         #expect(download1 == download2)
     }
 
-    @Test func providesLocalizedDescription() {
+    @Test func `provides localized description`() {
         let error = DomainError.unsupportedFormat("rtf")
         #expect(!error.localizedDescription.isEmpty)
     }

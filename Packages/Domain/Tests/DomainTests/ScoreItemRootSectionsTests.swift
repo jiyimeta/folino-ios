@@ -2,14 +2,14 @@
 import Foundation
 import Testing
 
-@Suite struct ScoreItemRootSectionsTests {
+struct ScoreItemRootSectionsTests {
     private static let base = Date(timeIntervalSince1970: 1_700_000_000)
 
     private static func makeItem(
         title: String,
         addedAtOffset: TimeInterval,
         lastOpenedOffset: TimeInterval?,
-        isFavorite: Bool = false
+        isFavorite: Bool = false,
     ) -> ScoreItem {
         ScoreItem(
             title: title,
@@ -24,11 +24,11 @@ import Testing
             addedAt: base.addingTimeInterval(addedAtOffset),
             lastOpenedAt: lastOpenedOffset.map { base.addingTimeInterval($0) },
             tagIDs: [],
-            isFavorite: isFavorite
+            isFavorite: isFavorite,
         )
     }
 
-    @Test func mostRecentlyOpenedExcludesNilAndOrdersDesc() {
+    @Test func `most recently opened excludes nil and orders desc`() {
         let items: [ScoreItem] = [
             Self.makeItem(title: "A", addedAtOffset: 0, lastOpenedOffset: 100),
             Self.makeItem(title: "B", addedAtOffset: 0, lastOpenedOffset: nil),
@@ -39,7 +39,7 @@ import Testing
         #expect(result.map(\.title) == ["C", "D", "A"])
     }
 
-    @Test func mostRecentlyOpenedRespectsLimit() {
+    @Test func `most recently opened respects limit`() {
         let items: [ScoreItem] = [
             Self.makeItem(title: "A", addedAtOffset: 0, lastOpenedOffset: 100),
             Self.makeItem(title: "B", addedAtOffset: 0, lastOpenedOffset: 200),
@@ -48,7 +48,7 @@ import Testing
         #expect(items.mostRecentlyOpened(limit: 2).map(\.title) == ["C", "B"])
     }
 
-    @Test func favoritesFiltersAndSortsByAddedAtDesc() {
+    @Test func `favorites filters and sorts by added at desc`() {
         let items: [ScoreItem] = [
             Self.makeItem(title: "A", addedAtOffset: 100, lastOpenedOffset: nil, isFavorite: true),
             Self.makeItem(title: "B", addedAtOffset: 200, lastOpenedOffset: nil, isFavorite: false),
@@ -59,7 +59,7 @@ import Testing
         #expect(result.map(\.title) == ["C", "A", "D"])
     }
 
-    @Test func favoritesRespectsLimit() {
+    @Test func `favorites respects limit`() {
         let items: [ScoreItem] = [
             Self.makeItem(title: "A", addedAtOffset: 100, lastOpenedOffset: nil, isFavorite: true),
             Self.makeItem(title: "B", addedAtOffset: 200, lastOpenedOffset: nil, isFavorite: true),
@@ -68,7 +68,7 @@ import Testing
         #expect(items.favorites(limit: 2).map(\.title) == ["C", "B"])
     }
 
-    @Test func emptyInputReturnsEmpty() {
+    @Test func `empty input returns empty`() {
         let items: [ScoreItem] = []
         #expect(items.mostRecentlyOpened(limit: 5).isEmpty)
         #expect(items.favorites(limit: 5).isEmpty)

@@ -4,7 +4,7 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct ReaderViewModelTempoTests {
     private static func makeItem() -> ScoreItem {
         ScoreItem(
@@ -12,13 +12,13 @@ struct ReaderViewModelTempoTests {
             localFileName: "test.mscx", contentHash: "hash",
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
     private static func makeVM(
         controller: FakePlaybackController = FakePlaybackController(),
-        repo: FakeScoreLibraryRepository = FakeScoreLibraryRepository()
+        repo: FakeScoreLibraryRepository = FakeScoreLibraryRepository(),
     ) -> (ReaderViewModel, FakePlaybackController, FakeScoreLibraryRepository) {
         let item = Self.makeItem()
         repo.scoreItems = [item]
@@ -27,17 +27,17 @@ struct ReaderViewModelTempoTests {
             repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         return (vm, controller, repo)
     }
 
-    @Test func effectiveTempoMultiplierDefaultsToOne() {
+    @Test func `effective tempo multiplier defaults to one`() {
         let (vm, _, _) = Self.makeVM()
         #expect(vm.effectiveTempoMultiplier == 1.0)
     }
 
-    @Test func setTempoMultiplierForwardsToControllerWithoutPersisting() async {
+    @Test func `set tempo multiplier forwards to controller without persisting`() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
         let savedBefore = repo.savedReaderPreferences.count
@@ -54,7 +54,7 @@ struct ReaderViewModelTempoTests {
         #expect(vm.effectiveTempoMultiplier == 1.0) // not yet committed
     }
 
-    @Test func commitTempoMultiplierPersistsAndForwards() async {
+    @Test func `commit tempo multiplier persists and forwards`() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
 
@@ -65,7 +65,7 @@ struct ReaderViewModelTempoTests {
         #expect(vm.effectiveTempoMultiplier == 0.75)
     }
 
-    @Test func commitTempoMultiplierNormalizesOneToNil() async {
+    @Test func `commit tempo multiplier normalizes one to nil`() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
 
@@ -76,7 +76,7 @@ struct ReaderViewModelTempoTests {
         #expect(vm.effectiveTempoMultiplier == 1.0)
     }
 
-    @Test func commitTempoMultiplierClampsOutOfRangeValues() async {
+    @Test func `commit tempo multiplier clamps out of range values`() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
 
@@ -87,7 +87,7 @@ struct ReaderViewModelTempoTests {
         #expect(controller.tempoMultiplierCalls.last == 2.0)
     }
 
-    @Test func resetTempoMultiplierClearsOverrideAndForwardsOne() async {
+    @Test func `reset tempo multiplier clears override and forwards one`() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
         await vm.commitTempoMultiplier(1.5)
@@ -99,7 +99,7 @@ struct ReaderViewModelTempoTests {
         #expect(vm.effectiveTempoMultiplier == 1.0)
     }
 
-    @Test func persistedOverrideIsSeededIntoEngineOnPlaybackPrep() async {
+    @Test func `persisted override is seeded into engine on playback prep`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -108,7 +108,7 @@ struct ReaderViewModelTempoTests {
             scoreItemID: item.id,
             staffSize: 14,
             hiddenStaves: [],
-            tempoMultiplier: 0.75
+            tempoMultiplier: 0.75,
         )
         repo.storedReaderPreferences[item.id] = stored
         let controller = FakePlaybackController()
@@ -117,7 +117,7 @@ struct ReaderViewModelTempoTests {
             repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
 
         await vm.load()
@@ -126,7 +126,7 @@ struct ReaderViewModelTempoTests {
         #expect(controller.lastLoadedPreferences?.tempoMultiplier == 0.75)
     }
 
-    @Test func commitTempoMultiplierNormalizesNear1ToNil() async {
+    @Test func `commit tempo multiplier normalizes near 1 to nil`() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
 
@@ -139,7 +139,7 @@ struct ReaderViewModelTempoTests {
         #expect(vm.effectiveTempoMultiplier == 1.0)
     }
 
-    @Test func setMetronomeEnabledForwardsWithoutPersisting() async {
+    @Test func `set metronome enabled forwards without persisting`() async {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
         let savedBefore = repo.savedReaderPreferences.count

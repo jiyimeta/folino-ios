@@ -11,7 +11,7 @@ func libraryRootDestination(
     viewModel: LibraryViewModel,
     onOpenScore: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,
-    onAddToPlaylist: @escaping (ScoreItem) -> Void
+    onAddToPlaylist: @escaping (ScoreItem) -> Void,
 ) -> some View {
     switch route {
     case .allScores:
@@ -19,14 +19,14 @@ func libraryRootDestination(
             library: viewModel,
             onOpen: onOpenScore,
             onEditTags: onEditTags,
-            onAddToPlaylist: onAddToPlaylist
+            onAddToPlaylist: onAddToPlaylist,
         )
     case .favorites:
         FavoritesScreen(
             library: viewModel,
             onOpen: onOpenScore,
             onEditTags: onEditTags,
-            onAddToPlaylist: onAddToPlaylist
+            onAddToPlaylist: onAddToPlaylist,
         )
     case .tags:
         TagsListScreen(library: viewModel)
@@ -38,7 +38,7 @@ func libraryRootDestination(
                 onOpen: onOpenScore,
                 onEditTags: onEditTags,
                 onAddToPlaylist: onAddToPlaylist,
-                onTagDeleted: { /* NavigationStack pops automatically when destination renders 'Tag not found' */ }
+                onTagDeleted: { /* NavigationStack pops automatically when destination renders 'Tag not found' */ },
             )
         } else {
             ContentUnavailableView {
@@ -57,7 +57,7 @@ func libraryRootDestination(
                 playlist: playlist,
                 library: viewModel,
                 onOpen: onOpenScore,
-                onPlaylistDeleted: { /* same comment as tag */ }
+                onPlaylistDeleted: { /* same comment as tag */ },
             )
         } else {
             ContentUnavailableView {

@@ -24,8 +24,8 @@ let package = Package(
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
             ],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .testTarget(name: "EditorTests", dependencies: ["Editor"]),
-    ]
+    ],
 )

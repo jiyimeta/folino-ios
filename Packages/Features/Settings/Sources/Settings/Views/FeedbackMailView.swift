@@ -3,80 +3,82 @@ import Foundation
 import SwiftUI
 
 #if canImport(MessageUI) && os(iOS)
-    import MessageUI
+import MessageUI
 
-    enum FeedbackMailComposeResult: Equatable {
-        case cancelled
-        case saved
-        case sent
-        case failed
+enum FeedbackMailComposeResult: Equatable {
+    case cancelled
+    case saved
+    case sent
+    case failed
+}
+
+struct FeedbackMailView: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var result: FeedbackMailComposeResult?
+
+    static var canSendMail: Bool {
+        MFMailComposeViewController.canSendMail()
     }
 
-    struct FeedbackMailView: UIViewControllerRepresentable {
-        @Environment(\.dismiss) private var dismiss
-        @Binding var result: FeedbackMailComposeResult?
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dismiss: dismiss, result: $result)
+    }
 
-        static var canSendMail: Bool {
-            MFMailComposeViewController.canSendMail()
+    func makeUIViewController(context: Context) -> MFMailComposeViewController {
+        let controller = MFMailComposeViewController()
+        controller.mailComposeDelegate = context.coordinator
+        controller.setSubject("folino Feedback")
+        controller.setToRecipients([FeedbackMailConfiguration.recipient])
+        controller.setMessageBody(FeedbackMailConfiguration.messageBody, isHTML: false)
+        return controller
+    }
+
+    func updateUIViewController(_: MFMailComposeViewController, context _: Context) {}
+
+    final class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+        private let dismiss: DismissAction
+        @Binding private var result: FeedbackMailComposeResult?
+
+        init(dismiss: DismissAction, result: Binding<FeedbackMailComposeResult?>) {
+            self.dismiss = dismiss
+            _result = result
         }
 
-        func makeCoordinator() -> Coordinator {
-            Coordinator(dismiss: dismiss, result: $result)
-        }
-
-        func makeUIViewController(context: Context) -> MFMailComposeViewController {
-            let controller = MFMailComposeViewController()
-            controller.mailComposeDelegate = context.coordinator
-            controller.setSubject("folino Feedback")
-            controller.setToRecipients([FeedbackMailConfiguration.recipient])
-            controller.setMessageBody(FeedbackMailConfiguration.messageBody, isHTML: false)
-            return controller
-        }
-
-        func updateUIViewController(_: MFMailComposeViewController, context _: Context) {}
-
-        final class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
-            private let dismiss: DismissAction
-            @Binding private var result: FeedbackMailComposeResult?
-
-            init(dismiss: DismissAction, result: Binding<FeedbackMailComposeResult?>) {
-                self.dismiss = dismiss
-                _result = result
+        func mailComposeController(
+            _: MFMailComposeViewController,
+            didFinishWith result: MFMailComposeResult,
+            error _: Error?,
+        ) {
+            self.result = switch result {
+            case .cancelled: .cancelled
+            case .saved: .saved
+            case .sent: .sent
+            case .failed: .failed
+            @unknown default: .failed
             }
-
-            func mailComposeController(
-                _: MFMailComposeViewController,
-                didFinishWith result: MFMailComposeResult,
-                error _: Error?
-            ) {
-                self.result = switch result {
-                case .cancelled: .cancelled
-                case .saved: .saved
-                case .sent: .sent
-                case .failed: .failed
-                @unknown default: .failed
-                }
-                dismiss()
-            }
+            dismiss()
         }
     }
+}
 #else
-    enum FeedbackMailComposeResult: Equatable {
-        case cancelled
-        case saved
-        case sent
-        case failed
+enum FeedbackMailComposeResult: Equatable {
+    case cancelled
+    case saved
+    case sent
+    case failed
+}
+
+struct FeedbackMailView: View {
+    @Binding var result: FeedbackMailComposeResult?
+
+    static var canSendMail: Bool {
+        false
     }
 
-    struct FeedbackMailView: View {
-        @Binding var result: FeedbackMailComposeResult?
-
-        static var canSendMail: Bool { false }
-
-        var body: some View {
-            EmptyView()
-        }
+    var body: some View {
+        EmptyView()
     }
+}
 #endif
 
 private enum FeedbackMailConfiguration {

@@ -31,7 +31,7 @@ public struct MuseScoreSF2Resolver:
     SheetMusicAudio.SoundfontResolver
 {
     public static let defaultBaseURL = URL(
-        string: "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/1.0.0"
+        string: "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/1.0.0",
     )! // swiftlint:disable:this force_unwrapping
 
     /// Subdirectory inside `Bundle.main` that hosts committed
@@ -52,7 +52,7 @@ public struct MuseScoreSF2Resolver:
         cacheDirectory: URL,
         baseURL: URL = MuseScoreSF2Resolver.defaultBaseURL,
         session: URLSession = .shared,
-        bundle: Bundle = .main
+        bundle: Bundle = .main,
     ) {
         self.cacheDirectory = cacheDirectory
         self.baseURL = baseURL
@@ -71,7 +71,9 @@ public struct MuseScoreSF2Resolver:
         return bundleURL(name: fallbackName)
     }
 
-    public var defaultGMSoundfontURL: URL? { nil }
+    public var defaultGMSoundfontURL: URL? {
+        nil
+    }
 
     /// Sync resolver path that returns `nil` if neither cache nor
     /// bundle has a precise file — used by `LivePlaybackController`
@@ -96,7 +98,7 @@ public struct MuseScoreSF2Resolver:
         return bundle.url(
             forResource: stem,
             withExtension: "sf2",
-            subdirectory: Self.bundleSubdirectory
+            subdirectory: Self.bundleSubdirectory,
         )
     }
 
@@ -113,7 +115,7 @@ public struct MuseScoreSF2Resolver:
         let (data, response) = try await session.data(from: remote)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DomainError.soundfontDownloadFailed(
-                SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
+                SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums),
             )
         }
         try data.write(to: local, options: .atomic)
@@ -125,7 +127,7 @@ public struct MuseScoreSF2Resolver:
         let urls = try FileManager.default.contentsOfDirectory(
             at: cacheDirectory,
             includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles],
         )
         return urls.compactMap { url -> SoundfontPatch? in
             guard url.pathExtension.lowercased() == "sf2",
@@ -141,7 +143,7 @@ public struct MuseScoreSF2Resolver:
                 downloadedAt: modified,
                 lastUsedAt: modified,
                 isBundled: false,
-                isDrums: parsed.isDrums
+                isDrums: parsed.isDrums,
             )
         }
     }
@@ -161,7 +163,7 @@ public struct MuseScoreSF2Resolver:
     public func clearCache() throws {
         guard FileManager.default.fileExists(atPath: cacheDirectory.path) else { return }
         let urls = try FileManager.default.contentsOfDirectory(
-            at: cacheDirectory, includingPropertiesForKeys: nil
+            at: cacheDirectory, includingPropertiesForKeys: nil,
         )
         for url in urls where url.pathExtension.lowercased() == "sf2" {
             try? FileManager.default.removeItem(at: url)
@@ -200,7 +202,7 @@ public struct MuseScoreSF2Resolver:
     private func createCacheDirectoryIfNeeded() throws {
         if !FileManager.default.fileExists(atPath: cacheDirectory.path) {
             try FileManager.default.createDirectory(
-                at: cacheDirectory, withIntermediateDirectories: true
+                at: cacheDirectory, withIntermediateDirectories: true,
             )
         }
     }

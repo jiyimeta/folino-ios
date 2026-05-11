@@ -17,7 +17,7 @@ struct TagDetailScreen: View {
         onOpen: @escaping (ScoreItem) -> Void,
         onEditTags: @escaping (ScoreItem) -> Void,
         onAddToPlaylist: @escaping (ScoreItem) -> Void,
-        onTagDeleted: @escaping () -> Void
+        onTagDeleted: @escaping () -> Void,
     ) {
         self.tag = tag
         self.library = library
@@ -26,7 +26,7 @@ struct TagDetailScreen: View {
         self.onAddToPlaylist = onAddToPlaylist
         self.onTagDeleted = onTagDeleted
         _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .taggedWith(tag.id), repository: library.repository)
+            wrappedValue: ScoreListViewModel(source: .taggedWith(tag.id), repository: library.repository),
         )
     }
 
@@ -34,14 +34,14 @@ struct TagDetailScreen: View {
         TagDetailView(
             tagName: tag.name,
             onRename: { newName in Task { await commitRename(newName) } },
-            onDelete: { Task { await commitDelete() } }
+            onDelete: { Task { await commitDelete() } },
         ) {
             ScoreListScreen(
                 viewModel: listVM,
                 library: library,
                 onOpen: onOpen,
                 onEditTags: onEditTags,
-                onAddToPlaylist: onAddToPlaylist
+                onAddToPlaylist: onAddToPlaylist,
             )
         }
     }

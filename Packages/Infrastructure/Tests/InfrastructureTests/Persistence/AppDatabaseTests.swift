@@ -2,8 +2,8 @@ import GRDB
 @testable import Persistence
 import Testing
 
-@Suite struct AppDatabaseTests {
-    @Test func migratesEmptyDatabaseToV1() throws {
+struct AppDatabaseTests {
+    @Test func `migrates empty database to V 1`() throws {
         let queue = try DatabaseQueue()
         try AppMigrations.v1.migrate(queue)
 
@@ -22,7 +22,7 @@ import Testing
         }
     }
 
-    @Test func migrationIsIdempotent() throws {
+    @Test func `migration is idempotent`() throws {
         let queue = try DatabaseQueue()
         try AppMigrations.v1.migrate(queue)
         try AppMigrations.v1.migrate(queue)
@@ -31,7 +31,7 @@ import Testing
         }
     }
 
-    @Test func appDatabaseFactoryReturnsUsableConnection() throws {
+    @Test func `app database factory returns usable connection`() throws {
         let tmp = try TempDirectory()
         let db = try AppDatabase(databaseURL: tmp.url.appending(path: "f.sqlite"))
         try db.pool.read { db in
@@ -40,7 +40,7 @@ import Testing
         }
     }
 
-    @Test func migratesEmptyDatabaseThroughV2() throws {
+    @Test func `migrates empty database through V 2`() throws {
         let queue = try DatabaseQueue()
         try AppMigrations.all.migrate(queue)
 
@@ -55,7 +55,7 @@ import Testing
         }
     }
 
-    @Test func v2MigrationIsIdempotent() throws {
+    @Test func `v 2 migration is idempotent`() throws {
         let queue = try DatabaseQueue()
         try AppMigrations.all.migrate(queue)
         try AppMigrations.all.migrate(queue)
@@ -64,7 +64,7 @@ import Testing
         }
     }
 
-    @Test func v3AddsStaffProgramOverridesColumn() throws {
+    @Test func `v 3 adds staff program overrides column`() throws {
         let queue = try DatabaseQueue()
         try AppMigrations.all.migrate(queue)
 
@@ -74,7 +74,7 @@ import Testing
         }
     }
 
-    @Test func v3DefaultsExistingRowsToEmptyOverridesJSON() throws {
+    @Test func `v 3 defaults existing rows to empty overrides JSON`() throws {
         // Insert a row before v3 has been registered, then run the full
         // migrator. The `DEFAULT` on the new column should backfill the
         // pre-existing row.
@@ -101,7 +101,7 @@ import Testing
         }
     }
 
-    @Test func migratingToV4DefaultsHonorLayoutBreaksToTrue() throws {
+    @Test func `migrating to V 4 defaults honor layout breaks to true`() throws {
         let queue = try DatabaseQueue()
         try AppMigrations.upToV3.migrate(queue)
 
@@ -116,7 +116,7 @@ import Testing
                     size_bytes, length_beats, default_tempo_bpm, added_at)
                 VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
                 """,
-                arguments: [scoreID]
+                arguments: [scoreID],
             )
             try db.execute(
                 sql: """
@@ -124,7 +124,7 @@ import Testing
                     (id, score_item_id, staff_size, hidden_staff_ids, staff_program_overrides)
                 VALUES (?, ?, 14, '[]', '[]')
                 """,
-                arguments: [prefsID, scoreID]
+                arguments: [prefsID, scoreID],
             )
         }
 
@@ -135,13 +135,13 @@ import Testing
             try Int.fetchOne(
                 db,
                 sql: "SELECT honor_layout_breaks FROM reader_preferences WHERE id = ?",
-                arguments: [prefsID]
+                arguments: [prefsID],
             )
         }
         #expect(value == 1)
     }
 
-    @Test func v5AddsStaffVolumeOverridesColumn() throws {
+    @Test func `v 5 adds staff volume overrides column`() throws {
         let queue = try DatabaseQueue()
         try AppMigrations.all.migrate(queue)
 
@@ -151,7 +151,7 @@ import Testing
         }
     }
 
-    @Test func v5DefaultsExistingRowsToEmptyVolumeOverridesJSON() throws {
+    @Test func `v 5 defaults existing rows to empty volume overrides JSON`() throws {
         // Insert a row at the v4 schema, then run v5. The new column's
         // DEFAULT '[]' should backfill the pre-existing row.
         let queue = try DatabaseQueue()
@@ -165,7 +165,7 @@ import Testing
                     size_bytes, length_beats, default_tempo_bpm, added_at)
                 VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
                 """,
-                arguments: [scoreID]
+                arguments: [scoreID],
             )
             try db.execute(
                 sql: """
@@ -174,7 +174,7 @@ import Testing
                      staff_program_overrides, honor_layout_breaks)
                 VALUES (?, ?, 14, '[]', '[]', 1)
                 """,
-                arguments: [prefsID, scoreID]
+                arguments: [prefsID, scoreID],
             )
         }
         try AppMigrations.all.migrate(queue)

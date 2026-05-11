@@ -59,10 +59,10 @@ struct TagsListView: View {
             Text(String(
                 localized: "library.score.delete.title",
                 defaultValue: "Delete \"\(pendingDelete?.name ?? "")\"?",
-                bundle: .module
+                bundle: .module,
             )),
             isPresented: deleteAlertBinding,
-            presenting: pendingDelete
+            presenting: pendingDelete,
         ) { tag in
             Button(role: .destructive) {
                 onDelete(tag)
@@ -80,35 +80,35 @@ struct TagsListView: View {
     private var deleteAlertBinding: Binding<Bool> {
         Binding(
             get: { pendingDelete != nil },
-            set: { isPresented in if !isPresented { pendingDelete = nil } }
+            set: { isPresented in if !isPresented { pendingDelete = nil } },
         )
     }
 }
 
 #if DEBUG
-    private struct TagsListViewPreviewHost: View {
-        let tags: [Tag]
-        var body: some View {
-            NavigationStack {
-                TagsListView(
-                    tags: tags,
-                    memberCount: { _ in Int.random(in: 0 ... 12) },
-                    onCreate: { _ in },
-                    onDelete: { _ in }
-                )
-            }
+private struct TagsListViewPreviewHost: View {
+    let tags: [Tag]
+    var body: some View {
+        NavigationStack {
+            TagsListView(
+                tags: tags,
+                memberCount: { _ in Int.random(in: 0 ... 12) },
+                onCreate: { _ in },
+                onDelete: { _ in },
+            )
         }
     }
+}
 
-    #Preview("Filled") {
-        TagsListViewPreviewHost(tags: [
-            Tag(name: "Practice", colorHex: "#5856D6"),
-            Tag(name: "Recital", colorHex: "#FF9500"),
-            Tag(name: "Sight reading", colorHex: "#34C759"),
-        ])
-    }
+#Preview("Filled") {
+    TagsListViewPreviewHost(tags: [
+        Tag(name: "Practice", colorHex: "#5856D6"),
+        Tag(name: "Recital", colorHex: "#FF9500"),
+        Tag(name: "Sight reading", colorHex: "#34C759"),
+    ])
+}
 
-    #Preview("Empty") {
-        TagsListViewPreviewHost(tags: [])
-    }
+#Preview("Empty") {
+    TagsListViewPreviewHost(tags: [])
+}
 #endif

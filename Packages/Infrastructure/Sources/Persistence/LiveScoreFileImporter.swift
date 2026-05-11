@@ -13,7 +13,7 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
     public init(
         gateway: any ScoreFileGateway,
         repository: any ScoreLibraryRepository,
-        scoresDirectory: URL
+        scoresDirectory: URL,
     ) {
         self.gateway = gateway
         self.repository = repository
@@ -47,7 +47,7 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
         let stagingDir = scoresDirectory.appending(path: ".staging", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
         let stagedURL = stagingDir.appending(
-            path: "\(UUID().uuidString).\(format.canonicalExtension)"
+            path: "\(UUID().uuidString).\(format.canonicalExtension)",
         )
         do {
             try FileManager.default.copyItem(at: sourceURL, to: stagedURL)
@@ -62,7 +62,7 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
             summary: summary,
             contentHash: hash,
             sizeBytes: size,
-            duplicates: duplicates
+            duplicates: duplicates,
         )
     }
 
@@ -119,7 +119,7 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
                 addedAt: Date(),
                 lastOpenedAt: nil,
                 tagIDs: [],
-                isFavorite: false
+                isFavorite: false,
             )
 
             try await repository.saveScoreItem(item)

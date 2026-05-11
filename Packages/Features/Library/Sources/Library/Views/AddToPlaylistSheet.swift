@@ -25,11 +25,10 @@ struct AddToPlaylistSheet: View {
         String(
             localized: "library.playlist.addOne.title",
             defaultValue: "Add \"\(scoreTitle)\" to Playlist",
-            bundle: .module
+            bundle: .module,
         )
     }
 
-    @ViewBuilder
     private var content: some View {
         List {
             Section {
@@ -38,10 +37,12 @@ struct AddToPlaylistSheet: View {
                         onToggle(playlist)
                     } label: {
                         HStack {
-                            Image(systemName: playlist.orderedScoreItemIDs.contains(scoreItemID)
-                                ? "checkmark.circle.fill"
-                                : "circle")
-                                .foregroundStyle(.tint)
+                            Image(
+                                systemName: playlist.orderedScoreItemIDs.contains(scoreItemID)
+                                    ? "checkmark.circle.fill"
+                                    : "circle",
+                            )
+                            .foregroundStyle(.tint)
                             Text(playlist.name)
                                 .foregroundStyle(.primary)
                             Spacer()
@@ -53,7 +54,7 @@ struct AddToPlaylistSheet: View {
                 InlineCreateRow(
                     name: $newPlaylistName,
                     placeholder: "library.playlist.create.placeholder",
-                    onCreate: onCreate
+                    onCreate: onCreate,
                 )
             }
         }
@@ -68,29 +69,29 @@ struct AddToPlaylistSheet: View {
 }
 
 #if DEBUG
-    #Preview {
-        struct Host: View {
-            @State private var playlists: [Playlist]
-            let scoreID: ScoreItemID
-            init() {
-                let scoreID = ScoreItemID()
-                self.scoreID = scoreID
-                _playlists = State(initialValue: [
-                    Playlist(name: "Daily warm-up", orderedScoreItemIDs: [scoreID], createdAt: Date()),
-                    Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
-                ])
-            }
-
-            var body: some View {
-                AddToPlaylistSheet(
-                    scoreTitle: "Clair de Lune",
-                    scoreItemID: scoreID,
-                    allPlaylists: playlists,
-                    onToggle: { _ in },
-                    onCreate: { _ in }
-                )
-            }
+#Preview {
+    struct Host: View {
+        @State private var playlists: [Playlist]
+        let scoreID: ScoreItemID
+        init() {
+            let scoreID = ScoreItemID()
+            self.scoreID = scoreID
+            _playlists = State(initialValue: [
+                Playlist(name: "Daily warm-up", orderedScoreItemIDs: [scoreID], createdAt: Date()),
+                Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
+            ])
         }
-        return Host()
+
+        var body: some View {
+            AddToPlaylistSheet(
+                scoreTitle: "Clair de Lune",
+                scoreItemID: scoreID,
+                allPlaylists: playlists,
+                onToggle: { _ in },
+                onCreate: { _ in },
+            )
+        }
     }
+    return Host()
+}
 #endif

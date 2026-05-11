@@ -21,15 +21,21 @@ private final class FailingRepository: ScoreLibraryRepository {
     func deleteTag(id: TagID) throws {}
     func savePlaylist(_ playlist: Playlist) throws {}
     func deletePlaylist(id: PlaylistID) throws {}
-    func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] { [] }
-    // Reader preferences: no-op stubs — this fake exists to fail score-item
-    // saves; reader-pref methods aren't exercised by these tests.
-    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? { nil }
+    func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] {
+        []
+    }
+
+    /// Reader preferences: no-op stubs — this fake exists to fail score-item
+    /// saves; reader-pref methods aren't exercised by these tests.
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
+        nil
+    }
+
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
 }
 
 @MainActor
-@Suite struct LiveScoreFileImporterTests {
+struct LiveScoreFileImporterTests {
     private struct Rig {
         let db: AppDatabase
         let repo: LiveScoreLibraryRepository
@@ -38,7 +44,9 @@ private final class FailingRepository: ScoreLibraryRepository {
         let lifetime: TempDirectory
         let scoresLifetime: TempDirectory
 
-        var tmp: URL { lifetime.url }
+        var tmp: URL {
+            lifetime.url
+        }
     }
 
     private func makeRig() async throws -> Rig {
@@ -51,20 +59,20 @@ private final class FailingRepository: ScoreLibraryRepository {
         let importer = LiveScoreFileImporter(
             gateway: LiveScoreFileGateway(),
             repository: repo,
-            scoresDirectory: scoresDir
+            scoresDirectory: scoresDir,
         )
         return Rig(
             db: db, repo: repo, scoresDir: scoresDir,
-            importer: importer, lifetime: lifetime, scoresLifetime: scoresLifetime
+            importer: importer, lifetime: lifetime, scoresLifetime: scoresLifetime,
         )
     }
 
-    @Test func prepareImportReturnsZeroDuplicatesForFreshFile() async throws {
+    @Test func `prepare import returns zero duplicates for fresh file`() async throws {
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
         let mscxURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp
+            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp,
         )
         let plan = try await rig.importer.prepareImport(sourceURL: mscxURL)
         #expect(plan.duplicates.isEmpty)
@@ -73,7 +81,7 @@ private final class FailingRepository: ScoreLibraryRepository {
         #expect(plan.sizeBytes > 0)
     }
 
-    @Test func prepareImportThrowsForPDF() async throws {
+    @Test func `prepare import throws for PDF`() async throws {
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
@@ -88,7 +96,7 @@ private final class FailingRepository: ScoreLibraryRepository {
         }
     }
 
-    @Test func prepareImportThrowsForExtensionLessFile() async throws {
+    @Test func `prepare import throws for extension less file`() async throws {
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
@@ -104,12 +112,12 @@ private final class FailingRepository: ScoreLibraryRepository {
         }
     }
 
-    @Test func commitImportAsNewCopiesFileAndPersistsRow() async throws {
+    @Test func `commit import as new copies file and persists row`() async throws {
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
         let mscxURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp
+            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp,
         )
         let plan = try await rig.importer.prepareImport(sourceURL: mscxURL)
         let item = try await rig.importer.commitImport(plan, decision: .importAsNew)
@@ -123,12 +131,12 @@ private final class FailingRepository: ScoreLibraryRepository {
         try await waitFor { rig.repo.scoreItems.contains { $0.id == item.id } }
     }
 
-    @Test func reimportSameBytesYieldsOneDuplicate() async throws {
+    @Test func `reimport same bytes yields one duplicate`() async throws {
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
         let mscxURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp
+            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp,
         )
         let firstPlan = try await rig.importer.prepareImport(sourceURL: mscxURL)
         _ = try await rig.importer.commitImport(firstPlan, decision: .importAsNew)
@@ -138,12 +146,12 @@ private final class FailingRepository: ScoreLibraryRepository {
         #expect(secondPlan.duplicates.count == 1)
     }
 
-    @Test func openExistingDoesNotWriteNewRowOrFile() async throws {
+    @Test func `open existing does not write new row or file`() async throws {
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
         let mscxURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp
+            Fixtures.minimalMSCXData(), ext: "mscx", in: rig.tmp,
         )
         let firstPlan = try await rig.importer.prepareImport(sourceURL: mscxURL)
         let original = try await rig.importer.commitImport(firstPlan, decision: .importAsNew)
@@ -151,18 +159,18 @@ private final class FailingRepository: ScoreLibraryRepository {
 
         let secondPlan = try await rig.importer.prepareImport(sourceURL: mscxURL)
         let resolved = try await rig.importer.commitImport(
-            secondPlan, decision: .openExisting(original.id)
+            secondPlan, decision: .openExisting(original.id),
         )
         #expect(resolved.id == original.id)
 
         let filesBefore = try FileManager.default.contentsOfDirectory(
-            at: rig.scoresDir, includingPropertiesForKeys: nil
-        ).filter { $0.lastPathComponent != ".staging" }.count
+            at: rig.scoresDir, includingPropertiesForKeys: nil,
+        ).count(where: { $0.lastPathComponent != ".staging" })
         #expect(filesBefore == 1)
         #expect(rig.repo.scoreItems.count == 1)
     }
 
-    @Test func saveFailureRollsBackCopiedFile() async throws {
+    @Test func `save failure rolls back copied file`() async throws {
         let tmp = try TempDirectory()
         let scoresDir = tmp.url.appending(path: "Scores")
         try FileManager.default.createDirectory(at: scoresDir, withIntermediateDirectories: true)
@@ -171,10 +179,10 @@ private final class FailingRepository: ScoreLibraryRepository {
         let importer = LiveScoreFileImporter(
             gateway: LiveScoreFileGateway(),
             repository: FailingRepository(),
-            scoresDirectory: scoresDir
+            scoresDirectory: scoresDir,
         )
         let mscxURL = try Fixtures.writeToTempFile(
-            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url
+            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url,
         )
         let plan = try await importer.prepareImport(sourceURL: mscxURL)
 
@@ -188,7 +196,7 @@ private final class FailingRepository: ScoreLibraryRepository {
         }
 
         let leftovers = try FileManager.default.contentsOfDirectory(
-            at: scoresDir, includingPropertiesForKeys: nil
+            at: scoresDir, includingPropertiesForKeys: nil,
         ).filter { $0.lastPathComponent != ".staging" }
         #expect(leftovers.isEmpty)
     }

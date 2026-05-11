@@ -16,7 +16,7 @@ private struct SelectionTitleModifier: ViewModifier {
             let title = String(
                 localized: "library.selection.count",
                 defaultValue: "\(selectionCount) selected",
-                bundle: .module
+                bundle: .module,
             )
             content.navigationTitle(Text(title))
         } else {
@@ -51,11 +51,10 @@ struct ScoreListView<RowMenu: View>: View {
         listWithChrome
             .modifier(SelectionTitleModifier(
                 isShowingSelectionCount: isShowingSelectionCount,
-                selectionCount: selectedIDs.count
+                selectionCount: selectedIDs.count,
             ))
     }
 
-    @ViewBuilder
     private var listWithChrome: some View {
         list
             .searchable(text: $searchText)
@@ -69,7 +68,7 @@ struct ScoreListView<RowMenu: View>: View {
                         onShare: onBulkShare,
                         onAddToPlaylist: onBulkAddToPlaylist,
                         onEditTags: onBulkEditTags,
-                        onDelete: onBulkDelete
+                        onDelete: onBulkDelete,
                     )
                 }
             }
@@ -77,10 +76,10 @@ struct ScoreListView<RowMenu: View>: View {
                 Text(String(
                     localized: "library.score.delete.title",
                     defaultValue: "Delete \"\(pendingDelete?.title ?? "")\"?",
-                    bundle: .module
+                    bundle: .module,
                 )),
                 isPresented: deleteAlertBinding,
-                presenting: pendingDelete
+                presenting: pendingDelete,
             ) { item in
                 Button(role: .destructive) {
                     onConfirmDelete(item)
@@ -95,7 +94,6 @@ struct ScoreListView<RowMenu: View>: View {
             }
     }
 
-    @ViewBuilder
     private var list: some View {
         List(selection: $selectedIDs) {
             ForEach(items) { item in
@@ -134,7 +132,6 @@ struct ScoreListView<RowMenu: View>: View {
         }
     }
 
-    @ViewBuilder
     private func row(for item: ScoreItem) -> some View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
@@ -205,7 +202,7 @@ struct ScoreListView<RowMenu: View>: View {
     private var deleteAlertBinding: Binding<Bool> {
         Binding(
             get: { pendingDelete != nil },
-            set: { isPresented in if !isPresented { pendingDelete = nil } }
+            set: { isPresented in if !isPresented { pendingDelete = nil } },
         )
     }
 
@@ -243,89 +240,89 @@ struct ScoreListView<RowMenu: View>: View {
 }
 
 #if DEBUG
-    private enum ScoreListViewPreview {
-        static func item(
-            title: String,
-            composer: String?,
-            isFavorite: Bool = false,
-            addedDaysAgo: Int = 0
-        ) -> ScoreItem {
-            ScoreItem(
-                title: title,
-                composer: composer,
-                instrumentationSummary: "Piano",
-                localFileName: "\(UUID().uuidString).musicxml",
-                contentHash: String(repeating: "0", count: 64),
-                sizeBytes: 1024,
-                lengthBeats: 256,
-                defaultTempoBpm: 120,
-                primaryKey: nil,
-                addedAt: Date().addingTimeInterval(TimeInterval(-addedDaysAgo * 86400)),
-                lastOpenedAt: nil,
-                tagIDs: [],
-                isFavorite: isFavorite
-            )
-        }
-
-        static let sample: [ScoreItem] = [
-            item(title: "Clair de Lune", composer: "Debussy", isFavorite: true, addedDaysAgo: 1),
-            item(title: "Gymnopédie No. 1", composer: "Satie", addedDaysAgo: 3),
-            item(title: "Prelude in C Major", composer: "Bach", addedDaysAgo: 7),
-            item(title: "Untitled Sketch", composer: nil, addedDaysAgo: 12),
-        ]
+private enum ScoreListViewPreview {
+    static func item(
+        title: String,
+        composer: String?,
+        isFavorite: Bool = false,
+        addedDaysAgo: Int = 0,
+    ) -> ScoreItem {
+        ScoreItem(
+            title: title,
+            composer: composer,
+            instrumentationSummary: "Piano",
+            localFileName: "\(UUID().uuidString).musicxml",
+            contentHash: String(repeating: "0", count: 64),
+            sizeBytes: 1024,
+            lengthBeats: 256,
+            defaultTempoBpm: 120,
+            primaryKey: nil,
+            addedAt: Date().addingTimeInterval(TimeInterval(-addedDaysAgo * 86400)),
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: isFavorite,
+        )
     }
 
-    private struct ScoreListViewPreviewHost: View {
-        @State private var searchText: String = ""
-        @State private var pendingDelete: ScoreItem?
-        @State private var sort: ScoreItemSort = .dateAddedDesc
-        @State private var isManualOrderActive: Bool = false
-        @State private var editMode: EditMode = .inactive
-        @State private var selectedIDs: Set<ScoreItemID> = []
+    static let sample: [ScoreItem] = [
+        item(title: "Clair de Lune", composer: "Debussy", isFavorite: true, addedDaysAgo: 1),
+        item(title: "Gymnopédie No. 1", composer: "Satie", addedDaysAgo: 3),
+        item(title: "Prelude in C Major", composer: "Bach", addedDaysAgo: 7),
+        item(title: "Untitled Sketch", composer: nil, addedDaysAgo: 12),
+    ]
+}
 
-        let items: [ScoreItem]
-        let showsManualOrderOption: Bool
+private struct ScoreListViewPreviewHost: View {
+    @State private var searchText: String = ""
+    @State private var pendingDelete: ScoreItem?
+    @State private var sort: ScoreItemSort = .dateAddedDesc
+    @State private var isManualOrderActive: Bool = false
+    @State private var editMode: EditMode = .inactive
+    @State private var selectedIDs: Set<ScoreItemID> = []
 
-        var body: some View {
-            NavigationStack {
-                ScoreListView(
-                    items: items,
-                    searchText: $searchText,
-                    sort: sort,
-                    isManualOrderActive: isManualOrderActive,
-                    showsManualOrderOption: showsManualOrderOption,
-                    pendingDelete: $pendingDelete,
-                    onTap: { _ in },
-                    onToggleFavorite: { _ in },
-                    onConfirmDelete: { _ in },
-                    onSelectSort: { sort = $0; isManualOrderActive = false },
-                    onSelectManualOrder: { isManualOrderActive = true },
-                    editMode: $editMode,
-                    selectedIDs: $selectedIDs,
-                    bulkContext: .scores,
-                    availableShareFormats: [],
-                    onBulkShare: { _ in },
-                    onBulkAddToPlaylist: {},
-                    onBulkEditTags: {},
-                    onBulkDelete: {}
-                ) { _ in
-                    Button {} label: { L10n.Common.open }
-                    Button(role: .destructive) {} label: { L10n.Common.delete }
-                }
-                .navigationTitle(Text("library.allScores", bundle: .module))
+    let items: [ScoreItem]
+    let showsManualOrderOption: Bool
+
+    var body: some View {
+        NavigationStack {
+            ScoreListView(
+                items: items,
+                searchText: $searchText,
+                sort: sort,
+                isManualOrderActive: isManualOrderActive,
+                showsManualOrderOption: showsManualOrderOption,
+                pendingDelete: $pendingDelete,
+                onTap: { _ in },
+                onToggleFavorite: { _ in },
+                onConfirmDelete: { _ in },
+                onSelectSort: { sort = $0; isManualOrderActive = false },
+                onSelectManualOrder: { isManualOrderActive = true },
+                editMode: $editMode,
+                selectedIDs: $selectedIDs,
+                bulkContext: .scores,
+                availableShareFormats: [],
+                onBulkShare: { _ in },
+                onBulkAddToPlaylist: {},
+                onBulkEditTags: {},
+                onBulkDelete: {},
+            ) { _ in
+                Button {} label: { L10n.Common.open }
+                Button(role: .destructive) {} label: { L10n.Common.delete }
             }
+            .navigationTitle(Text("library.allScores", bundle: .module))
         }
     }
+}
 
-    #Preview("Filled") {
-        ScoreListViewPreviewHost(items: ScoreListViewPreview.sample, showsManualOrderOption: false)
-    }
+#Preview("Filled") {
+    ScoreListViewPreviewHost(items: ScoreListViewPreview.sample, showsManualOrderOption: false)
+}
 
-    #Preview("Empty") {
-        ScoreListViewPreviewHost(items: [], showsManualOrderOption: false)
-    }
+#Preview("Empty") {
+    ScoreListViewPreviewHost(items: [], showsManualOrderOption: false)
+}
 
-    #Preview("Playlist") {
-        ScoreListViewPreviewHost(items: ScoreListViewPreview.sample, showsManualOrderOption: true)
-    }
+#Preview("Playlist") {
+    ScoreListViewPreviewHost(items: ScoreListViewPreview.sample, showsManualOrderOption: true)
+}
 #endif

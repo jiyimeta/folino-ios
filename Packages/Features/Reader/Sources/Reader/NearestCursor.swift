@@ -15,7 +15,7 @@ func nearestCursor(at point: CGPoint, in document: LayoutDocument) -> ScoreCurso
     }
     let sp = system.sp
     guard let staffMidY = chooseStaffMidY(
-        forY: point.y, system: system, sp: sp
+        forY: point.y, system: system, sp: sp,
     ) else {
         return nil
     }
@@ -24,13 +24,13 @@ func nearestCursor(at point: CGPoint, in document: LayoutDocument) -> ScoreCurso
     }
     return chooseEvent(
         in: measure, system: system,
-        staffMidY: staffMidY, point: point, sp: sp
+        staffMidY: staffMidY, point: point, sp: sp,
     )
 }
 
 @available(macOS 15.0, iOS 16.0, *)
 private func chooseSystem(
-    forY y: CGFloat, in systems: [LayoutSystem]
+    forY y: CGFloat, in systems: [LayoutSystem],
 ) -> LayoutSystem? {
     guard !systems.isEmpty else { return nil }
     if let containing = systems.first(where: {
@@ -56,7 +56,7 @@ private func verticalDistance(y: CGFloat, system: LayoutSystem) -> CGFloat {
 /// `staffOrigins[i].y`.
 @available(macOS 15.0, iOS 16.0, *)
 private func chooseStaffMidY(
-    forY y: CGFloat, system: LayoutSystem, sp: CGFloat
+    forY y: CGFloat, system: LayoutSystem, sp: CGFloat,
 ) -> CGFloat? {
     guard !system.staffOrigins.isEmpty else { return nil }
     let mids = system.staffOrigins.map { system.origin.y + $0.y + 2 * sp }
@@ -65,7 +65,7 @@ private func chooseStaffMidY(
 
 @available(macOS 15.0, iOS 16.0, *)
 private func chooseMeasure(
-    forX x: CGFloat, system: LayoutSystem
+    forX x: CGFloat, system: LayoutSystem,
 ) -> LayoutMeasure? {
     guard !system.measures.isEmpty else { return nil }
     if let containing = system.measures.first(where: { measure in
@@ -83,7 +83,7 @@ private func chooseMeasure(
 
 @available(macOS 15.0, iOS 16.0, *)
 private func horizontalDistance(
-    x: CGFloat, system: LayoutSystem, measure: LayoutMeasure
+    x: CGFloat, system: LayoutSystem, measure: LayoutMeasure,
 ) -> CGFloat {
     let lo = system.origin.x + measure.origin.x
     let hi = lo + measure.width
@@ -98,7 +98,7 @@ private func chooseEvent(
     system: LayoutSystem,
     staffMidY: CGFloat,
     point: CGPoint,
-    sp: CGFloat
+    sp: CGFloat,
 ) -> ScoreCursor? {
     let baseX = system.origin.x + measure.origin.x
     let baseY = system.origin.y + measure.origin.y

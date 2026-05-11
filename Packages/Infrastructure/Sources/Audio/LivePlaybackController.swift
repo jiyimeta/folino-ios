@@ -16,8 +16,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
     let engine: PlaybackEngine
     private let domainResolver: any Domain.SoundfontResolver
     private let precisionProbe: any Domain.PrecisePatchProbe
-    // Internal (not private) so the +LoopBounds extension file can reach
-    // it when forwarding to engine.play(in:) after a setLoop / clearLoop.
+    /// Internal (not private) so the +LoopBounds extension file can reach
+    /// it when forwarding to engine.play(in:) after a setLoop / clearLoop.
     var loadedScore: Score?
     /// Cursor the user picked while the engine's sequencer wasn't yet
     /// built (it's lazy — first `play(from:in:)` builds it). `seek` early-
@@ -46,7 +46,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     public init(
         soundfontResolver: any SheetMusicAudio.SoundfontResolver,
         domainResolver: any Domain.SoundfontResolver,
-        precisionProbe: any Domain.PrecisePatchProbe
+        precisionProbe: any Domain.PrecisePatchProbe,
     ) {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
         self.domainResolver = domainResolver
@@ -97,13 +97,13 @@ public final class LivePlaybackController: Domain.PlaybackController {
         updateNowPlayingMetadata(for: prepared)
         for state in preferences.perStaff {
             engine.setVolume(
-                forChannel: .staff(state.staffIndex), to: Float(state.volume)
+                forChannel: .staff(state.staffIndex), to: Float(state.volume),
             )
             engine.setMuted(
-                forChannel: .staff(state.staffIndex), to: state.isMuted
+                forChannel: .staff(state.staffIndex), to: state.isMuted,
             )
             engine.setSoloed(
-                forChannel: .staff(state.staffIndex), to: state.isSolo
+                forChannel: .staff(state.staffIndex), to: state.isSolo,
             )
         }
         engine.setRate(Float(preferences.tempoMultiplier))
@@ -115,14 +115,14 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// Patches that fail outright are handled later by
     /// `scoreWithFallbackRewrites` rewriting the staff channel.
     private static func prefetchSoundfonts(
-        score: Score, resolver: any Domain.SoundfontResolver
+        score: Score, resolver: any Domain.SoundfontResolver,
     ) async {
         let keys = distinctPatchKeys(in: score)
         await withTaskGroup(of: Void.self) { group in
             for key in keys {
                 group.addTask {
                     _ = try? await resolver.resolveSoundfont(
-                        bank: key.bank, program: key.program, isDrums: key.isDrums
+                        bank: key.bank, program: key.program, isDrums: key.isDrums,
                     )
                 }
             }
@@ -164,7 +164,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) async throws {
         _ = try await domainResolver.resolveSoundfont(
-            bank: bank, program: program, isDrums: isDrums
+            bank: bank, program: program, isDrums: isDrums,
         )
     }
 
@@ -175,7 +175,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
             let channel = part.instrument.channels.first ?? InstrumentChannel()
             let isDrums = part.instrument.useDrumset
             keys.insert(SoundfontPatchKey(
-                bank: channel.bank, program: channel.program, isDrums: isDrums
+                bank: channel.bank, program: channel.program, isDrums: isDrums,
             ))
         }
         return keys
@@ -191,7 +191,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// mutator — `parts` is a public mutable array — so this rewrites
     /// the part by index lookup off `StaffAddress.partIndex`.
     static func scoreWithFallbackRewrites(
-        _ score: Score, probe: any Domain.PrecisePatchProbe
+        _ score: Score, probe: any Domain.PrecisePatchProbe,
     ) -> Score {
         var rewritten = score
         // Multi-staff parts (e.g. piano) yield multiple `allStaves` entries
@@ -206,7 +206,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
             let channel = part.instrument.channels.first ?? InstrumentChannel()
             let isDrums = part.instrument.useDrumset
             if probe.precisePath(
-                forBank: channel.bank, program: channel.program, isDrums: isDrums
+                forBank: channel.bank, program: channel.program, isDrums: isDrums,
             ) != nil {
                 continue
             }
@@ -252,7 +252,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func setStaffInstrument(staff: Int, bank _: Int, program: Int) {
         engine.setProgram(
-            forChannel: .staff(staff), to: UInt8(clamping: program)
+            forChannel: .staff(staff), to: UInt8(clamping: program),
         )
     }
 
@@ -431,5 +431,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
 }
 
 extension String {
-    fileprivate var nonEmpty: String? { isEmpty ? nil : self }
+    fileprivate var nonEmpty: String? {
+        isEmpty ? nil : self
+    }
 }

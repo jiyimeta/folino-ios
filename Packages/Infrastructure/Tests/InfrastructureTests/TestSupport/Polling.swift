@@ -8,7 +8,7 @@ import Testing
 @MainActor
 func waitFor(
     timeout: Duration = .seconds(2),
-    _ predicate: @MainActor () -> Bool
+    _ predicate: @MainActor () -> Bool,
 ) async throws {
     let deadline = ContinuousClock.now.advanced(by: timeout)
     while ContinuousClock.now < deadline {

@@ -12,7 +12,7 @@ struct BulkEditTagsScreen: View {
             selectionCount: selectedIDs.count,
             allTags: library.repository.tags,
             onCommit: { tagIDs in Task { await commitUnion(tagIDs) } },
-            onCreateTag: { name in Task { await commitCreate(name) } }
+            onCreateTag: { name in Task { await commitCreate(name) } },
         )
     }
 

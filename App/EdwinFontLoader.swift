@@ -18,7 +18,7 @@ enum EdwinFontLoader {
             Bundle.main.url(
                 forResource: $0,
                 withExtension: "otf",
-                subdirectory: "Fonts"
+                subdirectory: "Fonts",
             )
         }
         SheetMusicFonts.register(urls: urls)

@@ -33,7 +33,7 @@ struct LoopBoundaryMarkers: View {
                 measureIndex: start.measureIndex,
                 triangleHeight: triangleHeight,
                 lineThickness: lineThickness,
-                triangleWidth: triangleWidth
+                triangleWidth: triangleWidth,
             ) {
                 context.fill(Path(a.line), with: .color(.accentColor))
                 context.fill(a.triangle, with: .color(.accentColor))
@@ -43,7 +43,7 @@ struct LoopBoundaryMarkers: View {
                 measureIndex: end.measureIndex,
                 triangleHeight: triangleHeight,
                 lineThickness: lineThickness,
-                triangleWidth: triangleWidth
+                triangleWidth: triangleWidth,
             ) {
                 context.fill(Path(b.line), with: .color(.accentColor))
                 context.fill(b.triangle, with: .color(.accentColor))
@@ -52,7 +52,7 @@ struct LoopBoundaryMarkers: View {
         .frame(
             width: document.size.width,
             height: document.size.height,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -67,7 +67,7 @@ func aMarkerGeometry(
     measureIndex: Int,
     triangleHeight: CGFloat,
     lineThickness: CGFloat,
-    triangleWidth: CGFloat
+    triangleWidth: CGFloat,
 ) -> (line: CGRect, triangle: Path)? {
     guard let hit = locate(document: document, measureIndex: measureIndex) else {
         return nil
@@ -79,14 +79,14 @@ func aMarkerGeometry(
         x: lineCenterX - lineThickness / 2,
         y: systemTop - triangleHeight,
         width: lineThickness,
-        height: (systemBottom - systemTop) + triangleHeight
+        height: (systemBottom - systemTop) + triangleHeight,
     )
     var triangle = Path()
     let baseTop = CGPoint(x: lineCenterX, y: systemTop - triangleHeight)
     let baseBottom = CGPoint(x: lineCenterX, y: systemTop)
     let apex = CGPoint(
         x: lineCenterX + triangleWidth,
-        y: systemTop - triangleHeight / 2
+        y: systemTop - triangleHeight / 2,
     )
     triangle.move(to: baseTop)
     triangle.addLine(to: apex)
@@ -103,7 +103,7 @@ func bMarkerGeometry(
     measureIndex: Int,
     triangleHeight: CGFloat,
     lineThickness: CGFloat,
-    triangleWidth: CGFloat
+    triangleWidth: CGFloat,
 ) -> (line: CGRect, triangle: Path)? {
     guard let hit = locate(document: document, measureIndex: measureIndex) else {
         return nil
@@ -115,14 +115,14 @@ func bMarkerGeometry(
         x: lineCenterX - lineThickness / 2,
         y: systemTop - triangleHeight,
         width: lineThickness,
-        height: (systemBottom - systemTop) + triangleHeight
+        height: (systemBottom - systemTop) + triangleHeight,
     )
     var triangle = Path()
     let baseTop = CGPoint(x: lineCenterX, y: systemTop - triangleHeight)
     let baseBottom = CGPoint(x: lineCenterX, y: systemTop)
     let apex = CGPoint(
         x: lineCenterX - triangleWidth,
-        y: systemTop - triangleHeight / 2
+        y: systemTop - triangleHeight / 2,
     )
     triangle.move(to: baseTop)
     triangle.addLine(to: apex)
@@ -132,7 +132,7 @@ func bMarkerGeometry(
 }
 
 private func locate(
-    document: LayoutDocument, measureIndex: Int
+    document: LayoutDocument, measureIndex: Int,
 ) -> (system: LayoutSystem, measure: LayoutMeasure)? {
     for system in document.systems {
         if let measure = system.measures.first(where: { $0.measureIndex == measureIndex }) {

@@ -58,10 +58,10 @@ struct PlaylistsListView: View {
             Text(String(
                 localized: "library.score.delete.title",
                 defaultValue: "Delete \"\(pendingDelete?.name ?? "")\"?",
-                bundle: .module
+                bundle: .module,
             )),
             isPresented: deleteAlertBinding,
-            presenting: pendingDelete
+            presenting: pendingDelete,
         ) { playlist in
             Button(role: .destructive) {
                 onDelete(playlist)
@@ -79,33 +79,33 @@ struct PlaylistsListView: View {
     private var deleteAlertBinding: Binding<Bool> {
         Binding(
             get: { pendingDelete != nil },
-            set: { isPresented in if !isPresented { pendingDelete = nil } }
+            set: { isPresented in if !isPresented { pendingDelete = nil } },
         )
     }
 }
 
 #if DEBUG
-    private struct PlaylistsListViewPreviewHost: View {
-        let playlists: [Playlist]
-        var body: some View {
-            NavigationStack {
-                PlaylistsListView(
-                    playlists: playlists,
-                    onCreate: { _ in },
-                    onDelete: { _ in }
-                )
-            }
+private struct PlaylistsListViewPreviewHost: View {
+    let playlists: [Playlist]
+    var body: some View {
+        NavigationStack {
+            PlaylistsListView(
+                playlists: playlists,
+                onCreate: { _ in },
+                onDelete: { _ in },
+            )
         }
     }
+}
 
-    #Preview("Filled") {
-        PlaylistsListViewPreviewHost(playlists: [
-            Playlist(name: "Daily warm-up", orderedScoreItemIDs: [], createdAt: Date()),
-            Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
-        ])
-    }
+#Preview("Filled") {
+    PlaylistsListViewPreviewHost(playlists: [
+        Playlist(name: "Daily warm-up", orderedScoreItemIDs: [], createdAt: Date()),
+        Playlist(name: "Recital set", orderedScoreItemIDs: [], createdAt: Date()),
+    ])
+}
 
-    #Preview("Empty") {
-        PlaylistsListViewPreviewHost(playlists: [])
-    }
+#Preview("Empty") {
+    PlaylistsListViewPreviewHost(playlists: [])
+}
 #endif

@@ -6,11 +6,13 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     var loadFileMetadataResult: Result<ScoreFileSummary, DomainError> =
         .success(ScoreFileSummary(
             title: "Untitled", composer: nil, instrumentationSummary: "",
-            lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
+            lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
         ))
     var loadScoreError: DomainError?
 
-    func detectFormat(fileName: String) -> ScoreFormat? { detectedFormat }
+    func detectFormat(fileName: String) -> ScoreFormat? {
+        detectedFormat
+    }
 
     func loadFileMetadata(fileURL: URL) throws -> ScoreFileSummary {
         switch loadFileMetadataResult {

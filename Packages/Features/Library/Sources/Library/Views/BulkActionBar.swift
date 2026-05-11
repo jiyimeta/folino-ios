@@ -82,33 +82,33 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
 }
 
 #if DEBUG
-    #Preview("Enabled") {
-        NavigationStack {
-            List {
-                Text("Foo")
-            }
-            .safeAreaInset(edge: .bottom) {
-                BulkActionBar(
-                    selectionCount: 3,
-                    availableShareFormats: [.pdf, .midi],
-                    onShare: { _ in },
-                    onAddToPlaylist: {},
-                    onEditTags: {},
-                    onDelete: {}
-                )
-            }
-            .searchable(text: .constant("Foo"))
+#Preview("Enabled") {
+    NavigationStack {
+        List {
+            Text("Foo")
         }
+        .safeAreaInset(edge: .bottom) {
+            BulkActionBar(
+                selectionCount: 3,
+                availableShareFormats: [.pdf, .midi],
+                onShare: { _ in },
+                onAddToPlaylist: {},
+                onEditTags: {},
+                onDelete: {},
+            )
+        }
+        .searchable(text: .constant("Foo"))
     }
+}
 
-    #Preview("Disabled") {
-        BulkActionBar(
-            selectionCount: 0,
-            availableShareFormats: [],
-            onShare: { _ in },
-            onAddToPlaylist: {},
-            onEditTags: {},
-            onDelete: {}
-        )
-    }
+#Preview("Disabled") {
+    BulkActionBar(
+        selectionCount: 0,
+        availableShareFormats: [],
+        onShare: { _ in },
+        onAddToPlaylist: {},
+        onEditTags: {},
+        onDelete: {},
+    )
+}
 #endif

@@ -37,7 +37,7 @@ func snapMeasureEnd(measureIndex: Int, in score: Score) -> ChordPath? {
     guard let chordIndex = lastChordIdx else { return nil }
     return ChordPath(
         systemIndex: 0, measureIndex: measureIndex,
-        voiceIndex: 0, chordIndex: chordIndex
+        voiceIndex: 0, chordIndex: chordIndex,
     )
 }
 

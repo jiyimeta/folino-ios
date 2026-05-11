@@ -2,8 +2,8 @@
 import Foundation
 import Testing
 
-@Suite struct PlaylistTests {
-    @Test func preservesScoreOrder() {
+struct PlaylistTests {
+    @Test func `preserves score order`() {
         let s1 = ScoreItemID()
         let s2 = ScoreItemID()
         let s3 = ScoreItemID()
@@ -11,12 +11,12 @@ import Testing
             id: PlaylistID(),
             name: "Recital 1",
             orderedScoreItemIDs: [s1, s2, s3],
-            createdAt: Date()
+            createdAt: Date(),
         )
         #expect(p.orderedScoreItemIDs == [s1, s2, s3])
     }
 
-    @Test func isOrderSensitiveInEquality() {
+    @Test func `is order sensitive in equality`() {
         let s1 = ScoreItemID()
         let s2 = ScoreItemID()
         let id = PlaylistID()
@@ -26,12 +26,12 @@ import Testing
         #expect(a != b)
     }
 
-    @Test func roundTripsThroughCodable() throws {
+    @Test func `round trips through codable`() throws {
         let p = Playlist(
             id: PlaylistID(),
             name: "Recital 1",
             orderedScoreItemIDs: [ScoreItemID(), ScoreItemID()],
-            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
         )
         let data = try JSONEncoder().encode(p)
         let decoded = try JSONDecoder().decode(Playlist.self, from: data)

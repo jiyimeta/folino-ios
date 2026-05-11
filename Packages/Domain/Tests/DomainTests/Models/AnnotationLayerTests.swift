@@ -2,24 +2,24 @@
 import Foundation
 import Testing
 
-@Suite struct AnnotationLayerTests {
+struct AnnotationLayerTests {
     private func anchor(system: Int = 0) -> MusicalAnchor {
         MusicalAnchor(systemIndex: system, normalizedFrame: UnitRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2))
     }
 
-    @Test func emptyLayerHasNoEntries() {
+    @Test func `empty layer has no entries`() {
         let layer = AnnotationLayer(
             id: AnnotationLayerID(),
             scoreItemID: ScoreItemID(),
             drawings: [],
             textBoxes: [],
-            updatedAt: Date()
+            updatedAt: Date(),
         )
         #expect(layer.drawings.isEmpty)
         #expect(layer.textBoxes.isEmpty)
     }
 
-    @Test func roundTripsThroughCodable() throws {
+    @Test func `round trips through codable`() throws {
         let layer = AnnotationLayer(
             id: AnnotationLayerID(),
             scoreItemID: ScoreItemID(),
@@ -30,20 +30,20 @@ import Testing
             textBoxes: [
                 TextBoxAnchor(id: AnnotationID(), anchor: anchor(system: 1), text: "fingering"),
             ],
-            updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
         )
         let data = try JSONEncoder().encode(layer)
         let decoded = try JSONDecoder().decode(AnnotationLayer.self, from: data)
         #expect(decoded == layer)
     }
 
-    @Test func drawingAnchorIsIdentifiable() {
+    @Test func `drawing anchor is identifiable`() {
         let id = AnnotationID()
         let d = DrawingAnchor(id: id, anchor: anchor(), encodedDrawing: Data())
         #expect(d.id == id)
     }
 
-    @Test func textBoxAnchorIsIdentifiable() {
+    @Test func `text box anchor is identifiable`() {
         let id = AnnotationID()
         let t = TextBoxAnchor(id: id, anchor: anchor(), text: "x")
         #expect(t.id == id)

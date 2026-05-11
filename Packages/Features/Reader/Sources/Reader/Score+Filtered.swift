@@ -23,7 +23,7 @@ extension Score {
         for (partIndex, part) in parts.enumerated() {
             let keep: [Bool] = part.staves.indices.map { staffIndex in
                 !addresses.contains(StaffAddress(
-                    partIndex: partIndex, staffIndexInPart: staffIndex
+                    partIndex: partIndex, staffIndexInPart: staffIndex,
                 ))
             }
             guard keep.contains(true) else { continue }
@@ -41,7 +41,7 @@ extension Score {
                 for bracket in staff.brackets {
                     let endOriginal = min(
                         origIndex + bracket.span - 1,
-                        part.staves.count - 1
+                        part.staves.count - 1,
                     )
                     let surviving = (origIndex ... endOriginal).filter { keep[$0] }
                     guard let firstOriginal = surviving.first,

@@ -43,7 +43,7 @@ public struct AnnotationLayer: Hashable, Sendable, Codable, Identifiable {
         scoreItemID: ScoreItemID,
         drawings: [DrawingAnchor],
         textBoxes: [TextBoxAnchor],
-        updatedAt: Date
+        updatedAt: Date,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID

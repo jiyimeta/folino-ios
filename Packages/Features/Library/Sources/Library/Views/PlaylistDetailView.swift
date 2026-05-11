@@ -70,7 +70,7 @@ struct PlaylistDetailView: View {
                     onShare: onBulkShare,
                     onAddToPlaylist: onBulkAddToPlaylist,
                     onEditTags: onBulkEditTags,
-                    onDelete: onBulkDelete
+                    onDelete: onBulkDelete,
                 )
             }
         }
@@ -102,7 +102,7 @@ struct PlaylistDetailView: View {
             entityName: playlistName,
             copy: .playlist,
             onRename: onRename,
-            onDelete: onDelete
+            onDelete: onDelete,
         )
     }
 
@@ -120,60 +120,60 @@ struct PlaylistDetailView: View {
 }
 
 #if DEBUG
-    private enum PlaylistDetailViewPreview {
-        static let items: [ScoreItem] = (1 ... 4).map { idx in
-            ScoreItem(
-                title: "Score \(idx)",
-                composer: "Composer \(idx)",
-                instrumentationSummary: "Piano",
-                localFileName: "\(UUID().uuidString).musicxml",
-                contentHash: String(repeating: "0", count: 64),
-                sizeBytes: 1024,
-                lengthBeats: 256,
-                defaultTempoBpm: 120,
-                primaryKey: nil,
-                addedAt: Date(),
-                lastOpenedAt: nil,
-                tagIDs: [],
-                isFavorite: false
+private enum PlaylistDetailViewPreview {
+    static let items: [ScoreItem] = (1 ... 4).map { idx in
+        ScoreItem(
+            title: "Score \(idx)",
+            composer: "Composer \(idx)",
+            instrumentationSummary: "Piano",
+            localFileName: "\(UUID().uuidString).musicxml",
+            contentHash: String(repeating: "0", count: 64),
+            sizeBytes: 1024,
+            lengthBeats: 256,
+            defaultTempoBpm: 120,
+            primaryKey: nil,
+            addedAt: Date(),
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+        )
+    }
+}
+
+private struct PlaylistDetailViewPreviewHost: View {
+    let playlistName: String
+    let items: [ScoreItem]
+    @State private var selectedIDs: Set<ScoreItemID> = []
+
+    var body: some View {
+        NavigationStack {
+            PlaylistDetailView(
+                playlistName: playlistName,
+                items: items,
+                onOpen: { _ in },
+                onMove: { _, _ in },
+                onRemoveFromPlaylist: { (_: ScoreItem) in },
+                onRename: { _ in },
+                onDelete: {},
+                selectedIDs: $selectedIDs,
+                availableShareFormats: [],
+                onBulkShare: { _ in },
+                onBulkAddToPlaylist: {},
+                onBulkEditTags: {},
+                onBulkDelete: {},
             )
         }
     }
+}
 
-    private struct PlaylistDetailViewPreviewHost: View {
-        let playlistName: String
-        let items: [ScoreItem]
-        @State private var selectedIDs: Set<ScoreItemID> = []
+#Preview("Filled") {
+    PlaylistDetailViewPreviewHost(
+        playlistName: "Daily warm-up",
+        items: PlaylistDetailViewPreview.items,
+    )
+}
 
-        var body: some View {
-            NavigationStack {
-                PlaylistDetailView(
-                    playlistName: playlistName,
-                    items: items,
-                    onOpen: { _ in },
-                    onMove: { _, _ in },
-                    onRemoveFromPlaylist: { (_: ScoreItem) in },
-                    onRename: { _ in },
-                    onDelete: {},
-                    selectedIDs: $selectedIDs,
-                    availableShareFormats: [],
-                    onBulkShare: { _ in },
-                    onBulkAddToPlaylist: {},
-                    onBulkEditTags: {},
-                    onBulkDelete: {}
-                )
-            }
-        }
-    }
-
-    #Preview("Filled") {
-        PlaylistDetailViewPreviewHost(
-            playlistName: "Daily warm-up",
-            items: PlaylistDetailViewPreview.items
-        )
-    }
-
-    #Preview("Empty") {
-        PlaylistDetailViewPreviewHost(playlistName: "Empty Set", items: [])
-    }
+#Preview("Empty") {
+    PlaylistDetailViewPreviewHost(playlistName: "Empty Set", items: [])
+}
 #endif

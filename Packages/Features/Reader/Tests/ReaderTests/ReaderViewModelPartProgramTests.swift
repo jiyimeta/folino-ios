@@ -4,7 +4,7 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct ReaderViewModelPartProgramTests {
     private static func makeItem() -> ScoreItem {
         ScoreItem(
@@ -12,7 +12,7 @@ struct ReaderViewModelPartProgramTests {
             localFileName: "test.mscx", contentHash: "hash",
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
@@ -21,12 +21,12 @@ struct ReaderViewModelPartProgramTests {
             score: score,
             summary: ScoreFileSummary(
                 title: "Test", composer: nil, instrumentationSummary: "",
-                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
-            )
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            ),
         )))
     }
 
-    @Test func setPartProgramAppliesOverrideToEveryStaffUnderThePart() async {
+    @Test func `set part program applies override to every staff under the part`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -36,21 +36,21 @@ struct ReaderViewModelPartProgramTests {
                 Part(
                     id: "P0", trackName: "Vn",
                     instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()]
+                    staves: [Staff()],
                 ),
                 Part(
                     id: "P1", trackName: "Pno",
                     instrument: Instrument(id: "p", channels: [InstrumentChannel(program: 0)]),
-                    staves: [Staff(), Staff()]
+                    staves: [Staff(), Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 
@@ -74,7 +74,7 @@ struct ReaderViewModelPartProgramTests {
         #expect(Set(pianoCalls.map(\.staff)) == [1, 2])
     }
 
-    @Test func clearPartProgramOverrideRevertsEveryStaffToScoreDefault() async {
+    @Test func `clear part program override reverts every staff to score default`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -84,16 +84,16 @@ struct ReaderViewModelPartProgramTests {
                 Part(
                     id: "P0", trackName: "Pno",
                     instrument: Instrument(id: "p", channels: [InstrumentChannel(program: 0)]),
-                    staves: [Staff(), Staff()]
+                    staves: [Staff(), Staff()],
                 ),
             ],
-            metaTags: [:]
+            metaTags: [:],
         )
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         await vm.load()
 

@@ -76,7 +76,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
             addedAt: Date(timeIntervalSince1970: addedAt),
             lastOpenedAt: lastOpenedAt.map(Date.init(timeIntervalSince1970:)),
             tagIDs: tagIDs,
-            isFavorite: isFavorite
+            isFavorite: isFavorite,
         )
     }
 }

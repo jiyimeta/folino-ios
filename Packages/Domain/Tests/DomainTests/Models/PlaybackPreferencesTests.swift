@@ -2,7 +2,7 @@
 import Foundation
 import Testing
 
-@Suite struct ChordPathTests {
+struct ChordPathTests {
     @Test func equatable() {
         let a = ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 2)
         let b = ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 2)
@@ -11,7 +11,7 @@ import Testing
         #expect(a != c)
     }
 
-    @Test func roundTripsThroughCodable() throws {
+    @Test func `round trips through codable`() throws {
         let path = ChordPath(systemIndex: 1, measureIndex: 2, voiceIndex: 3, chordIndex: 4)
         let data = try JSONEncoder().encode(path)
         let decoded = try JSONDecoder().decode(ChordPath.self, from: data)
@@ -19,17 +19,17 @@ import Testing
     }
 }
 
-@Suite struct StaffMixerStateTests {
-    @Test func volumeIsClampedToUnitInterval() {
+struct StaffMixerStateTests {
+    @Test func `volume is clamped to unit interval`() {
         let state = StaffMixerState(staffIndex: 0, volume: 1.5, isMuted: false, isSolo: false, gmBank: 0, gmProgram: 0)
         #expect(state.volume == 1)
         let state2 = StaffMixerState(
-            staffIndex: 0, volume: -0.1, isMuted: false, isSolo: false, gmBank: 0, gmProgram: 0
+            staffIndex: 0, volume: -0.1, isMuted: false, isSolo: false, gmBank: 0, gmProgram: 0,
         )
         #expect(state2.volume == 0)
     }
 
-    @Test func gmProgramIsClampedTo0Through127() {
+    @Test func `gm program is clamped to 0 through 127`() {
         let state = StaffMixerState(staffIndex: 0, volume: 1, isMuted: false, isSolo: false, gmBank: 0, gmProgram: 200)
         #expect(state.gmProgram == 127)
         let state2 = StaffMixerState(staffIndex: 0, volume: 1, isMuted: false, isSolo: false, gmBank: 0, gmProgram: -1)
@@ -37,8 +37,8 @@ import Testing
     }
 }
 
-@Suite struct ABRepeatRangeTests {
-    @Test func rangeKeepsBothEndpoints() {
+struct ABRepeatRangeTests {
+    @Test func `range keeps both endpoints`() {
         let start = ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0)
         let end = ChordPath(systemIndex: 1, measureIndex: 4, voiceIndex: 0, chordIndex: 2)
         let range = ABRepeatRange(start: start, end: end)
@@ -47,14 +47,14 @@ import Testing
     }
 }
 
-@Suite struct PlaybackPreferencesTests {
-    @Test func tempoMultiplierIsClampedToHalfThroughTwo() {
+struct PlaybackPreferencesTests {
+    @Test func `tempo multiplier is clamped to half through two`() {
         let prefs = PlaybackPreferences(
             id: PlaybackPreferencesID(),
             scoreItemID: ScoreItemID(),
             perStaff: [],
             tempoMultiplier: 5.0,
-            abRepeat: nil
+            abRepeat: nil,
         )
         #expect(prefs.tempoMultiplier == 2.0)
         let prefs2 = PlaybackPreferences(
@@ -62,7 +62,7 @@ import Testing
             scoreItemID: ScoreItemID(),
             perStaff: [],
             tempoMultiplier: 0.1,
-            abRepeat: nil
+            abRepeat: nil,
         )
         #expect(prefs2.tempoMultiplier == 0.5)
     }
@@ -76,8 +76,8 @@ import Testing
             tempoMultiplier: 1.0,
             abRepeat: ABRepeatRange(
                 start: ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0),
-                end: ChordPath(systemIndex: 0, measureIndex: 4, voiceIndex: 0, chordIndex: 0)
-            )
+                end: ChordPath(systemIndex: 0, measureIndex: 4, voiceIndex: 0, chordIndex: 0),
+            ),
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(PlaybackPreferences.self, from: data)

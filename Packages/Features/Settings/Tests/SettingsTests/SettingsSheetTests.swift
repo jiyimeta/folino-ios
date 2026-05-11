@@ -4,15 +4,15 @@ import Foundation
 import SwiftUI
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct SettingsSheetTests {
-    @Test func sheetConstructsWithStubLicenseContent() {
+    @Test func `sheet constructs with stub license content`() {
         let sheet = SettingsSheet { Text("License placeholder") }
         // The view is a value; if it constructs, this test passes.
         _ = sheet.body
     }
 
-    @Test func sheetConstructsWithStubResolver() {
+    @Test func `sheet constructs with stub resolver`() {
         let sheet = SettingsSheet(soundfontResolver: StubSoundfontResolver()) {
             Text("License placeholder")
         }
@@ -25,8 +25,14 @@ private struct StubSoundfontResolver: SoundfontResolver {
         URL(fileURLWithPath: "/dev/null")
     }
 
-    func cachedPatches() throws -> [SoundfontPatch] { [] }
-    func totalCacheSizeBytes() throws -> Int64 { 0 }
+    func cachedPatches() throws -> [SoundfontPatch] {
+        []
+    }
+
+    func totalCacheSizeBytes() throws -> Int64 {
+        0
+    }
+
     func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
     func clearCache() throws {}
 }

@@ -3,60 +3,60 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-@Suite struct ReaderPreferencesTests {
-    @Test func staffSizeIsClampedToValidRange() {
+struct ReaderPreferencesTests {
+    @Test func `staff size is clamped to valid range`() {
         let tooSmall = ReaderPreferences(
-            scoreItemID: ScoreItemID(), staffSize: 1, hiddenStaves: []
+            scoreItemID: ScoreItemID(), staffSize: 1, hiddenStaves: [],
         )
         #expect(tooSmall.staffSize == 8)
 
         let tooBig = ReaderPreferences(
-            scoreItemID: ScoreItemID(), staffSize: 999, hiddenStaves: []
+            scoreItemID: ScoreItemID(), staffSize: 999, hiddenStaves: [],
         )
         #expect(tooBig.staffSize == 28)
 
         let inRange = ReaderPreferences(
-            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: []
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
         )
         #expect(inRange.staffSize == 14)
     }
 
-    @Test func defaultIDIsFresh() {
+    @Test func `default ID is fresh`() {
         let a = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [])
         let b = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [])
         #expect(a.id != b.id)
     }
 
-    @Test func roundTripsThroughCodable() throws {
+    @Test func `round trips through codable`() throws {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 12,
             hiddenStaves: [
                 StaffAddress(partIndex: 0, staffIndexInPart: 1),
                 StaffAddress(partIndex: 1, staffIndexInPart: 0),
-            ]
+            ],
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded == prefs)
     }
 
-    @Test func programOverridesDefaultToEmpty() {
+    @Test func `program overrides default to empty`() {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
-            hiddenStaves: []
+            hiddenStaves: [],
         )
         #expect(prefs.staffProgramOverrides.isEmpty)
     }
 
-    @Test func programOverridesAreClampedTo0Through127() {
+    @Test func `program overrides are clamped to 0 through 127`() {
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let belowRange = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffProgramOverrides: [address: -5]
+            staffProgramOverrides: [address: -5],
         )
         #expect(belowRange.staffProgramOverrides[address] == 0)
 
@@ -64,40 +64,40 @@ import Testing
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffProgramOverrides: [address: 999]
+            staffProgramOverrides: [address: 999],
         )
         #expect(aboveRange.staffProgramOverrides[address] == 127)
     }
 
-    @Test func programOverridesRoundTripThroughCodable() throws {
+    @Test func `program overrides round trip through codable`() throws {
         let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffProgramOverrides: [address1: 6, address2: 40]
+            staffProgramOverrides: [address1: 6, address2: 40],
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded.staffProgramOverrides == prefs.staffProgramOverrides)
     }
 
-    @Test func tempoMultiplierDefaultsToNil() {
+    @Test func `tempo multiplier defaults to nil`() {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
-            hiddenStaves: []
+            hiddenStaves: [],
         )
         #expect(prefs.tempoMultiplier == nil)
     }
 
-    @Test func tempoMultiplierIsClampedToHalfThroughDouble() {
+    @Test func `tempo multiplier is clamped to half through double`() {
         let tooSlow = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            tempoMultiplier: 0.1
+            tempoMultiplier: 0.1,
         )
         #expect(tooSlow.tempoMultiplier == 0.5)
 
@@ -105,7 +105,7 @@ import Testing
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            tempoMultiplier: 5.0
+            tempoMultiplier: 5.0,
         )
         #expect(tooFast.tempoMultiplier == 2.0)
 
@@ -113,50 +113,50 @@ import Testing
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            tempoMultiplier: 0.75
+            tempoMultiplier: 0.75,
         )
         #expect(inRange.tempoMultiplier == 0.75)
     }
 
-    @Test func tempoMultiplierNilRoundTripsThroughCodable() throws {
+    @Test func `tempo multiplier nil round trips through codable`() throws {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
-            hiddenStaves: []
+            hiddenStaves: [],
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded.tempoMultiplier == nil)
     }
 
-    @Test func tempoMultiplierRoundTripsThroughCodable() throws {
+    @Test func `tempo multiplier round trips through codable`() throws {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            tempoMultiplier: 1.25
+            tempoMultiplier: 1.25,
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded.tempoMultiplier == 1.25)
     }
 
-    @Test func staffVolumeOverridesDefaultToEmpty() {
+    @Test func `staff volume overrides default to empty`() {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
-            hiddenStaves: []
+            hiddenStaves: [],
         )
         #expect(prefs.staffVolumeOverrides.isEmpty)
     }
 
-    @Test func staffVolumeOverridesAreClampedToZeroThroughOne() {
+    @Test func `staff volume overrides are clamped to zero through one`() {
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let belowRange = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: -0.5]
+            staffVolumeOverrides: [address: -0.5],
         )
         #expect(belowRange.staffVolumeOverrides[address] == 0)
 
@@ -164,7 +164,7 @@ import Testing
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 2.0]
+            staffVolumeOverrides: [address: 2.0],
         )
         #expect(aboveRange.staffVolumeOverrides[address] == 1)
 
@@ -172,39 +172,39 @@ import Testing
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 0.42]
+            staffVolumeOverrides: [address: 0.42],
         )
         #expect(inRange.staffVolumeOverrides[address] == 0.42)
     }
 
-    @Test func staffVolumeOverridesRoundTripThroughCodable() throws {
+    @Test func `staff volume overrides round trip through codable`() throws {
         let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address1: 0.25, address2: 0.8]
+            staffVolumeOverrides: [address1: 0.25, address2: 0.8],
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded.staffVolumeOverrides == prefs.staffVolumeOverrides)
     }
 
-    @Test func clefOverrideRoundTripsThroughCodable() throws {
+    @Test func `clef override round trips through codable`() throws {
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffClefOverrides: [address: "G8vb"]
+            staffClefOverrides: [address: "G8vb"],
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
         #expect(decoded.staffClefOverrides == [address: "G8vb"])
     }
 
-    @Test func clefOverrideDecodesAsEmptyWhenAbsentFromJSON() throws {
+    @Test func `clef override decodes as empty when absent from JSON`() throws {
         // Hand-crafted JSON missing `staffClefOverrides` (legacy shape).
         let scoreID = ScoreItemID()
         let prefsID = ReaderPreferencesID()
@@ -219,23 +219,23 @@ import Testing
         }
         """
         let decoded = try JSONDecoder().decode(
-            ReaderPreferences.self, from: Data(json.utf8)
+            ReaderPreferences.self, from: Data(json.utf8),
         )
         #expect(decoded.staffClefOverrides.isEmpty)
     }
 
-    @Test func clefOverrideInitializerDropsUnknownRawType() {
+    @Test func `clef override initializer drops unknown raw type`() {
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffClefOverrides: [address: "not-a-real-clef"]
+            staffClefOverrides: [address: "not-a-real-clef"],
         )
         #expect(prefs.staffClefOverrides.isEmpty)
     }
 
-    @Test func legacyJSONWithoutTempoMultiplierKeyDecodesAsNil() throws {
+    @Test func `legacy JSON without tempo multiplier key decodes as nil`() throws {
         // Ensures additive-only schema change: rows persisted before
         // tempoMultiplier landed must still load. We synthesize the
         // "legacy" shape by encoding the current struct and stripping
@@ -244,7 +244,7 @@ import Testing
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
-            hiddenStaves: []
+            hiddenStaves: [],
         )
         let encoded = try JSONEncoder().encode(prefs)
         let jsonObject = try JSONSerialization.jsonObject(with: encoded)

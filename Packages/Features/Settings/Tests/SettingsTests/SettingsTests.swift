@@ -1,8 +1,8 @@
 @testable import Settings
 import Testing
 
-@Suite struct SettingsSmokeTests {
-    @Test func moduleLinks() {
+struct SettingsSmokeTests {
+    @Test func `module links`() {
         #expect(SettingsModule.isLinked)
     }
 }

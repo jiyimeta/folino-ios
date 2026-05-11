@@ -12,7 +12,7 @@ struct PlaylistsListScreen: View {
             },
             onDelete: { playlist in
                 Task { await library.deletePlaylist(playlist) }
-            }
+            },
         )
     }
 

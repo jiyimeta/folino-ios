@@ -32,7 +32,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         onOpenScore: @escaping (ScoreItem) -> Void,
         @ViewBuilder readerDestination: @escaping (ScoreItem) -> ReaderContent,
         @ViewBuilder licenseContent: @escaping () -> LicenseContent,
-        @ViewBuilder leadingToolbarItem: @escaping () -> LeadingToolbar = { EmptyView() }
+        @ViewBuilder leadingToolbarItem: @escaping () -> LeadingToolbar = { EmptyView() },
     ) {
         self.viewModel = viewModel
         _path = path
@@ -51,7 +51,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 .fileImporter(
                     isPresented: $viewModel.isFileImporterPresented,
                     allowedContentTypes: ScoreFileTypes.allowed,
-                    allowsMultipleSelection: false
+                    allowsMultipleSelection: false,
                 ) { result in
                     switch result {
                     case let .success(urls):
@@ -67,7 +67,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                         viewModel: viewModel,
                         onOpenScore: onOpenScore,
                         onEditTags: { editTagsTarget = $0 },
-                        onAddToPlaylist: { addToPlaylistTarget = $0 }
+                        onAddToPlaylist: { addToPlaylistTarget = $0 },
                     )
                 }
                 .navigationDestination(for: ScoreItem.self) { item in
@@ -77,7 +77,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         .libraryRootRenameScoreAlert(
             viewModel: viewModel,
             pending: $pendingRenameScore,
-            text: $renameScoreText
+            text: $renameScoreText,
         )
         .sheet(item: $editTagsTarget) { item in
             EditTagsScreen(scoreItem: item, library: viewModel)
@@ -88,7 +88,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         .alert(
             Text("library.title", bundle: .module),
             isPresented: errorAlertBinding,
-            presenting: viewModel.errorAlertMessage
+            presenting: viewModel.errorAlertMessage,
         ) { _ in
             Button { viewModel.errorAlertMessage = nil } label: {
                 L10n.Common.ok
@@ -122,12 +122,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             viewModel: viewModel,
             pendingDeletePlaylist: $pendingDeletePlaylist,
             pendingDeleteTag: $pendingDeleteTag,
-            pendingDeleteScore: $pendingDeleteScore
+            pendingDeleteScore: $pendingDeleteScore,
         )
         .alert(
             Text("library.import.duplicate.title", bundle: .module),
             isPresented: duplicateAlertBinding,
-            presenting: viewModel.duplicatePrompt
+            presenting: viewModel.duplicatePrompt,
         ) { prompt in
             Button {
                 viewModel.duplicatePrompt = nil
@@ -150,7 +150,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             Text(String(
                 localized: "library.import.duplicate.message",
                 defaultValue: "\"\(prompt.existing.title)\" is already imported. What do you want to do?",
-                bundle: .module
+                bundle: .module,
             ))
         }
         .overlay {
@@ -232,12 +232,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 LibraryRootPlaylistsSection(
                     allPlaylists: viewModel.repository.playlists,
                     scoreItems: items,
-                    onRequestDelete: { pendingDeletePlaylist = $0 }
+                    onRequestDelete: { pendingDeletePlaylist = $0 },
                 )
                 LibraryRootTagsSection(
                     allTags: viewModel.repository.tags,
                     scoreItems: items,
-                    onRequestDelete: { pendingDeleteTag = $0 }
+                    onRequestDelete: { pendingDeleteTag = $0 },
                 )
                 recentsSection(recents)
             }
@@ -273,7 +273,6 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         }
     }
 
-    @ViewBuilder
     private func sectionRowMenu(for item: ScoreItem) -> some View {
         scoreRowMenu(
             item: item,
@@ -285,11 +284,10 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             },
             onEditTags: { editTagsTarget = $0 },
             onAddToPlaylist: { addToPlaylistTarget = $0 },
-            onRequestDelete: nil
+            onRequestDelete: nil,
         )
     }
 
-    @ViewBuilder
     private func sectionRow(for item: ScoreItem) -> some View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
@@ -361,14 +359,14 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     private var errorAlertBinding: Binding<Bool> {
         Binding(
             get: { viewModel.errorAlertMessage != nil },
-            set: { isPresented in if !isPresented { viewModel.errorAlertMessage = nil } }
+            set: { isPresented in if !isPresented { viewModel.errorAlertMessage = nil } },
         )
     }
 
     private var duplicateAlertBinding: Binding<Bool> {
         Binding(
             get: { viewModel.duplicatePrompt != nil },
-            set: { isPresented in if !isPresented { viewModel.duplicatePrompt = nil } }
+            set: { isPresented in if !isPresented { viewModel.duplicatePrompt = nil } },
         )
     }
 }

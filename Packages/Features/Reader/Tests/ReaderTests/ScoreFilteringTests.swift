@@ -3,26 +3,28 @@ import SheetMusicCore
 import Testing
 
 extension Instrument {
-    fileprivate static var empty: Instrument { Instrument(id: "") }
+    fileprivate static var empty: Instrument {
+        Instrument(id: "")
+    }
 }
 
-@Suite struct ScoreFilteringTests {
+struct ScoreFilteringTests {
     private func makeScore() -> Score {
         let part0 = Part(
             id: "P0", trackName: "Violin", instrument: .empty,
-            staves: [Staff(staffType: "stdNormal", group: "pitched")]
+            staves: [Staff(staffType: "stdNormal", group: "pitched")],
         )
         let part1 = Part(
             id: "P1", trackName: "Piano", instrument: .empty,
             staves: [
                 Staff(staffType: "stdNormal", group: "pitched"),
                 Staff(staffType: "stdNormal", group: "pitched"),
-            ]
+            ],
         )
         return Score(
             division: 480,
             parts: [part0, part1],
-            metaTags: [:]
+            metaTags: [:],
         )
     }
 
@@ -30,14 +32,14 @@ extension Instrument {
         StaffAddress(partIndex: part, staffIndexInPart: staff)
     }
 
-    @Test func emptyHiddenSetReturnsTheSameScore() {
+    @Test func `empty hidden set returns the same score`() {
         let score = makeScore()
         let result = score.filtered(hidingStaves: [])
         #expect(result.totalStaffCount == 3)
         #expect(result.parts.count == 2)
     }
 
-    @Test func droppingOneStaffPreservesItsParentPart() {
+    @Test func `dropping one staff preserves its parent part`() {
         let score = makeScore()
         let result = score.filtered(hidingStaves: [address(1, 0)])
         // Part 0 keeps its single staff; Part 1's first staff is dropped,
@@ -47,17 +49,17 @@ extension Instrument {
         #expect(result.parts[1].staves.count == 1)
     }
 
-    @Test func droppingAllStavesOfAPartDropsThePart() {
+    @Test func `dropping all staves of A part drops the part`() {
         let score = makeScore()
         let result = score.filtered(hidingStaves: [address(1, 0), address(1, 1)])
         #expect(result.parts.map(\.id) == ["P0"])
         #expect(result.totalStaffCount == 1)
     }
 
-    @Test func droppingAllStavesReturnsEmptyButValidScore() {
+    @Test func `dropping all staves returns empty but valid score`() {
         let score = makeScore()
         let result = score.filtered(
-            hidingStaves: [address(0, 0), address(1, 0), address(1, 1)]
+            hidingStaves: [address(0, 0), address(1, 0), address(1, 1)],
         )
         #expect(result.parts.isEmpty)
         #expect(result.totalStaffCount == 0)
@@ -78,15 +80,15 @@ extension Instrument {
                 Staff(
                     staffType: "stdNormal",
                     group: "pitched",
-                    brackets: [brace(span: 2)]
+                    brackets: [brace(span: 2)],
                 ),
                 Staff(staffType: "stdNormal", group: "pitched"),
-            ]
+            ],
         )
         return Score(division: 480, parts: [piano], metaTags: [:])
     }
 
-    @Test func hidingTopStaffReanchorsBraceOnNewTop() {
+    @Test func `hiding top staff reanchors brace on new top`() {
         let score = makePianoScore()
         let result = score.filtered(hidingStaves: [address(0, 0)])
         // Part survives with one staff. The brace originally on the
@@ -98,7 +100,7 @@ extension Instrument {
         #expect(result.parts[0].staves[0].brackets.map(\.span) == [1])
     }
 
-    @Test func hidingBottomStaffShrinksBraceSpan() {
+    @Test func `hiding bottom staff shrinks brace span`() {
         let score = makePianoScore()
         let result = score.filtered(hidingStaves: [address(0, 1)])
         // Top staff still carries the brace, but its span has shrunk
@@ -115,16 +117,16 @@ extension Instrument {
                 Staff(
                     staffType: "stdNormal",
                     group: "pitched",
-                    brackets: [BracketItem(type: .normal, span: 3)]
+                    brackets: [BracketItem(type: .normal, span: 3)],
                 ),
                 Staff(staffType: "stdNormal", group: "pitched"),
                 Staff(staffType: "stdNormal", group: "pitched"),
-            ]
+            ],
         )
         return Score(division: 480, parts: [part], metaTags: [:])
     }
 
-    @Test func hidingMiddleStaffShrinksBracketSpanByOne() {
+    @Test func `hiding middle staff shrinks bracket span by one`() {
         let score = makeThreeStaffBracketScore()
         let result = score.filtered(hidingStaves: [address(0, 1)])
         // Bracket originally covered three staves; after hiding the
@@ -134,7 +136,7 @@ extension Instrument {
         #expect(result.parts[0].staves[1].brackets.isEmpty)
     }
 
-    @Test func hidingTopOfThreeReanchorsBracketWithReducedSpan() {
+    @Test func `hiding top of three reanchors bracket with reduced span`() {
         let score = makeThreeStaffBracketScore()
         let result = score.filtered(hidingStaves: [address(0, 0)])
         // After hiding the top, the bracket should re-anchor on the
@@ -144,7 +146,7 @@ extension Instrument {
         #expect(result.parts[0].staves[0].brackets.map(\.span) == [2])
     }
 
-    @Test func bracketDoesNotLeakOntoStavesOutsideOriginalSpan() {
+    @Test func `bracket does not leak onto staves outside original span`() {
         // Two parts, each with its own brace. Hiding the bottom staff
         // of part 0 must not extend part 0's brace into part 1.
         let part0 = Part(
@@ -152,11 +154,11 @@ extension Instrument {
             staves: [
                 Staff(brackets: [brace(span: 2)]),
                 Staff(),
-            ]
+            ],
         )
         let part1 = Part(
             id: "P1", trackName: "Organ", instrument: .empty,
-            staves: [Staff(), Staff()]
+            staves: [Staff(), Staff()],
         )
         let score = Score(division: 480, parts: [part0, part1], metaTags: [:])
         let result = score.filtered(hidingStaves: [address(0, 1)])

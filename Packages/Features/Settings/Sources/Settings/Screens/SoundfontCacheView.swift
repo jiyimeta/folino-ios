@@ -49,7 +49,7 @@ struct SoundfontCacheView: View {
         .confirmationDialog(
             Text("settings.soundfont.deleteAll.title", bundle: .module),
             isPresented: $showDeleteAllConfirmation,
-            titleVisibility: .visible
+            titleVisibility: .visible,
         ) {
             Button(role: .destructive) {
                 Task { await deleteAll() }
@@ -141,7 +141,7 @@ struct SoundfontCacheView: View {
         let targets = offsets.map { patches[$0] }
         for patch in targets {
             try? await resolver.deletePatch(
-                bank: patch.bank, program: patch.program, isDrums: patch.isDrums
+                bank: patch.bank, program: patch.program, isDrums: patch.isDrums,
             )
         }
         await reload()
@@ -157,7 +157,7 @@ struct SoundfontCacheView: View {
     NavigationStack {
         SoundfontCacheView(
             resolver: PreviewSoundfontResolver(),
-            presetCatalog: PreviewPresetCatalog()
+            presetCatalog: PreviewPresetCatalog(),
         )
     }
 }
@@ -181,24 +181,27 @@ private struct PreviewSoundfontResolver: SoundfontResolver {
         return [
             SoundfontPatch(
                 bank: 0, program: 0, localFileName: "000_000.sf2",
-                sizeBytes: 3_412_009, downloadedAt: now, lastUsedAt: now
+                sizeBytes: 3_412_009, downloadedAt: now, lastUsedAt: now,
             ),
             SoundfontPatch(
                 bank: 0, program: 24, localFileName: "000_024.sf2",
-                sizeBytes: 1_204_882, downloadedAt: now, lastUsedAt: now
+                sizeBytes: 1_204_882, downloadedAt: now, lastUsedAt: now,
             ),
             SoundfontPatch(
                 bank: 128, program: 0, localFileName: "128_000.sf2",
-                sizeBytes: 8_122_044, downloadedAt: now, lastUsedAt: now
+                sizeBytes: 8_122_044, downloadedAt: now, lastUsedAt: now,
             ),
             SoundfontPatch(
                 bank: 17, program: 43, localFileName: "017_043.sf2",
-                sizeBytes: 740_512, downloadedAt: now, lastUsedAt: now
+                sizeBytes: 740_512, downloadedAt: now, lastUsedAt: now,
             ),
         ]
     }
 
-    func totalCacheSizeBytes() throws -> Int64 { 12_738_935 }
+    func totalCacheSizeBytes() throws -> Int64 {
+        12_738_935
+    }
+
     func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
     func clearCache() throws {}
 }

@@ -3,7 +3,7 @@ import Foundation
 @testable import Library
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct LibraryViewModelTests {
     private static let base = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -12,7 +12,7 @@ struct LibraryViewModelTests {
             title: title, composer: nil, instrumentationSummary: nil,
             localFileName: "\(title).mscx", contentHash: title,
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-            addedAt: base, lastOpenedAt: nil, tagIDs: [], isFavorite: isFavorite
+            addedAt: base, lastOpenedAt: nil, tagIDs: [], isFavorite: isFavorite,
         )
     }
 
@@ -31,12 +31,12 @@ struct LibraryViewModelTests {
         let gateway = FakeScoreFileGateway()
         let share = FakeScoreShareService()
         let vm = LibraryViewModel(
-            repository: repo, importer: importer, gateway: gateway, shareService: share
+            repository: repo, importer: importer, gateway: gateway, shareService: share,
         )
         return VMFixture(vm: vm, repo: repo, importer: importer, gateway: gateway, share: share)
     }
 
-    @Test func toggleFavoriteFlipsAndSaves() async {
+    @Test func `toggle favorite flips and saves`() async {
         let original = Self.makeItem(isFavorite: false)
         let f = Self.makeVM(scoreItems: [original])
         await f.vm.toggleFavorite(original)
@@ -44,7 +44,7 @@ struct LibraryViewModelTests {
         #expect(f.repo.scoreItems.first?.isFavorite == true)
     }
 
-    @Test func deleteCallsRepository() async {
+    @Test func `delete calls repository`() async {
         let item = Self.makeItem()
         let f = Self.makeVM(scoreItems: [item])
         await f.vm.delete(item)
@@ -52,7 +52,7 @@ struct LibraryViewModelTests {
         #expect(f.repo.scoreItems.isEmpty)
     }
 
-    @Test func setTagIDsResyncsAndSaves() async {
+    @Test func `set tag I ds resyncs and saves`() async {
         let item = Self.makeItem()
         let f = Self.makeVM(scoreItems: [item])
         let tagID = TagID()
@@ -60,7 +60,7 @@ struct LibraryViewModelTests {
         #expect(f.repo.savedScoreItems.last?.tagIDs == [tagID])
     }
 
-    @Test func saveSurfacesPersistenceErrorOnAlert() async {
+    @Test func `save surfaces persistence error on alert`() async {
         let item = Self.makeItem()
         let f = Self.makeVM(scoreItems: [item])
         f.repo.saveScoreItemError = .persistenceFailed(reason: "disk full")
@@ -68,7 +68,7 @@ struct LibraryViewModelTests {
         #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
 
-    @Test func deleteSurfacesPersistenceErrorOnAlert() async {
+    @Test func `delete surfaces persistence error on alert`() async {
         let item = Self.makeItem()
         let f = Self.makeVM(scoreItems: [item])
         f.repo.deleteScoreItemError = .persistenceFailed(reason: "io error")
@@ -76,7 +76,7 @@ struct LibraryViewModelTests {
         #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
 
-    @Test func createPlaylistTrimmedNonEmptyPersists() async {
+    @Test func `create playlist trimmed non empty persists`() async {
         let f = Self.makeVM()
         await f.vm.createPlaylist(name: "  Recital  ")
         #expect(f.repo.savedPlaylists.count == 1)
@@ -84,13 +84,13 @@ struct LibraryViewModelTests {
         #expect(f.repo.savedPlaylists.first?.orderedScoreItemIDs.isEmpty == true)
     }
 
-    @Test func createPlaylistEmptyNameNoOp() async {
+    @Test func `create playlist empty name no op`() async {
         let f = Self.makeVM()
         await f.vm.createPlaylist(name: "   ")
         #expect(f.repo.savedPlaylists.isEmpty)
     }
 
-    @Test func createTagTrimmedNonEmptyPersistsWithDefaultColor() async {
+    @Test func `create tag trimmed non empty persists with default color`() async {
         let f = Self.makeVM()
         await f.vm.createTag(name: "  Practice  ")
         #expect(f.repo.savedTags.count == 1)
@@ -98,13 +98,13 @@ struct LibraryViewModelTests {
         #expect(f.repo.savedTags.first?.colorHex == "#5856D6")
     }
 
-    @Test func createTagEmptyNameNoOp() async {
+    @Test func `create tag empty name no op`() async {
         let f = Self.makeVM()
         await f.vm.createTag(name: "")
         #expect(f.repo.savedTags.isEmpty)
     }
 
-    @Test func deletePlaylistCallsRepository() async {
+    @Test func `delete playlist calls repository`() async {
         let f = Self.makeVM()
         let playlist = Playlist(name: "P", orderedScoreItemIDs: [], createdAt: Self.base)
         f.repo.playlists = [playlist]
@@ -114,7 +114,7 @@ struct LibraryViewModelTests {
         #expect(f.vm.errorAlertMessage == nil)
     }
 
-    @Test func deletePlaylistSurfacesPersistenceErrorOnAlert() async {
+    @Test func `delete playlist surfaces persistence error on alert`() async {
         let f = Self.makeVM()
         let playlist = Playlist(name: "P", orderedScoreItemIDs: [], createdAt: Self.base)
         f.repo.playlists = [playlist]
@@ -123,7 +123,7 @@ struct LibraryViewModelTests {
         #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
     }
 
-    @Test func deleteTagCallsRepository() async {
+    @Test func `delete tag calls repository`() async {
         let f = Self.makeVM()
         let tag = Tag(name: "T", colorHex: "#5856D6")
         f.repo.tags = [tag]
@@ -133,7 +133,7 @@ struct LibraryViewModelTests {
         #expect(f.vm.errorAlertMessage == nil)
     }
 
-    @Test func deleteTagSurfacesPersistenceErrorOnAlert() async {
+    @Test func `delete tag surfaces persistence error on alert`() async {
         let f = Self.makeVM()
         let tag = Tag(name: "T", colorHex: "#5856D6")
         f.repo.tags = [tag]
@@ -152,15 +152,15 @@ extension LibraryViewModelTests {
             summary: ScoreFileSummary(
                 title: "Imported", composer: nil,
                 instrumentationSummary: "", lengthBeats: 0,
-                defaultTempoBpm: 120, primaryKey: nil
+                defaultTempoBpm: 120, primaryKey: nil,
             ),
             contentHash: "hash",
             sizeBytes: 100,
-            duplicates: duplicates
+            duplicates: duplicates,
         )
     }
 
-    @Test func happyPathImportPushesPendingOpen() async {
+    @Test func `happy path import pushes pending open`() async {
         let f = Self.makeVM()
         let plan = Self.makePlan()
         f.importer.preparedPlans = [plan]
@@ -177,7 +177,7 @@ extension LibraryViewModelTests {
         #expect(f.vm.errorAlertMessage == nil)
     }
 
-    @Test func duplicateStagesPromptInsteadOfCommitting() async {
+    @Test func `duplicate stages prompt instead of committing`() async {
         let f = Self.makeVM()
         let existing = Self.makeItem(title: "Existing")
         let plan = Self.makePlan(duplicates: [existing])
@@ -192,7 +192,7 @@ extension LibraryViewModelTests {
 }
 
 extension LibraryViewModelTests {
-    @Test func commitOpenExistingReturnsExistingItem() async {
+    @Test func `commit open existing returns existing item`() async {
         let f = Self.makeVM()
         let existing = Self.makeItem(title: "Existing")
         let plan = Self.makePlan(duplicates: [existing])
@@ -206,7 +206,7 @@ extension LibraryViewModelTests {
         #expect(f.vm.pendingScoreToOpen?.id == existing.id)
     }
 
-    @Test func commitImportAsNewProducesNewItem() async {
+    @Test func `commit import as new produces new item`() async {
         let f = Self.makeVM()
         let existing = Self.makeItem(title: "Existing")
         let plan = Self.makePlan(duplicates: [existing])
@@ -222,21 +222,21 @@ extension LibraryViewModelTests {
 }
 
 extension LibraryViewModelTests {
-    @Test func unsupportedFormatErrorMessage() async {
+    @Test func `unsupported format error message`() async {
         let f = Self.makeVM()
         f.importer.prepareImportErrors = [.unsupportedFormat("xyz")]
         await f.vm.startImport(from: URL(filePath: "/tmp/x.xyz"))
         #expect(f.vm.errorAlertMessage == "folino can't open this file type.")
     }
 
-    @Test func parseErrorMessage() async {
+    @Test func `parse error message`() async {
         let f = Self.makeVM()
         f.importer.prepareImportErrors = [.scoreParseFailed(reason: "bad bytes")]
         await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
         #expect(f.vm.errorAlertMessage == "This file looks corrupted or isn't a valid score.")
     }
 
-    @Test func persistenceErrorMessage() async {
+    @Test func `persistence error message`() async {
         let f = Self.makeVM()
         f.importer.preparedPlans = [Self.makePlan()]
         f.importer.commitImportError = .persistenceFailed(reason: "disk full")
@@ -246,12 +246,12 @@ extension LibraryViewModelTests {
 }
 
 extension LibraryViewModelTests {
-    @Test func isImportingStartsFalse() {
+    @Test func `is importing starts false`() {
         let f = Self.makeVM()
         #expect(f.vm.isImporting == false)
     }
 
-    @Test func startImportClearsIsImportingOnSuccess() async {
+    @Test func `start import clears is importing on success`() async {
         let f = Self.makeVM()
         f.importer.preparedPlans = [Self.makePlan()]
         let imported = Self.makeItem(title: "Imported")
@@ -260,7 +260,7 @@ extension LibraryViewModelTests {
         #expect(f.vm.isImporting == false)
     }
 
-    @Test func startImportClearsIsImportingOnDuplicate() async {
+    @Test func `start import clears is importing on duplicate`() async {
         let f = Self.makeVM()
         let existing = Self.makeItem(title: "Existing")
         f.importer.preparedPlans = [Self.makePlan(duplicates: [existing])]
@@ -269,7 +269,7 @@ extension LibraryViewModelTests {
         #expect(f.vm.isImporting == false)
     }
 
-    @Test func startImportClearsIsImportingOnPrepareError() async {
+    @Test func `start import clears is importing on prepare error`() async {
         let f = Self.makeVM()
         f.importer.prepareImportErrors = [.scoreParseFailed(reason: "bad")]
         await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
@@ -277,7 +277,7 @@ extension LibraryViewModelTests {
         #expect(f.vm.isImporting == false)
     }
 
-    @Test func commitClearsIsImportingOnSuccess() async {
+    @Test func `commit clears is importing on success`() async {
         let f = Self.makeVM()
         let plan = Self.makePlan()
         let item = Self.makeItem(title: "X")
@@ -286,7 +286,7 @@ extension LibraryViewModelTests {
         #expect(f.vm.isImporting == false)
     }
 
-    @Test func commitClearsIsImportingOnError() async {
+    @Test func `commit clears is importing on error`() async {
         let f = Self.makeVM()
         let plan = Self.makePlan()
         f.importer.commitImportError = .persistenceFailed(reason: "x")

@@ -152,28 +152,28 @@ public struct ReaderRootScreen: View {
 }
 
 #if DEBUG
-    /// Documents the shape of a real Score fixture. Not used by the previews
-    /// below — building a `ReaderRootScreen` preview requires wiring a fake gateway
-    /// that returns a real `Score`, which is too brittle for a preview. See
-    /// `PlaybackInspectorScreen` for a productive Score-shaped preview.
-    @MainActor
-    private func previewScore() -> Score {
-        Score(
-            division: 480,
-            parts: [],
-            metaTags: ["workTitle": "Sample"],
-        )
-    }
+/// Documents the shape of a real Score fixture. Not used by the previews
+/// below — building a `ReaderRootScreen` preview requires wiring a fake gateway
+/// that returns a real `Score`, which is too brittle for a preview. See
+/// `PlaybackInspectorScreen` for a productive Score-shaped preview.
+@MainActor
+private func previewScore() -> Score {
+    Score(
+        division: 480,
+        parts: [],
+        metaTags: ["workTitle": "Sample"],
+    )
+}
 
-    #Preview("Loading") {
-        ProgressView().controlSize(.large)
-    }
+#Preview("Loading") {
+    ProgressView().controlSize(.large)
+}
 
-    #Preview("Loaded · vertical · iPhone") {
-        // A real assembled-ReaderRootScreen preview would need a fake gateway
-        // returning a non-empty Score plus persistence wiring. Snapshot the
-        // chrome-only intent here; productive Score shape lives in
-        // `PlaybackInspectorScreen`'s preview.
-        Text("Run via xcode preview to see the assembled view")
-    }
+#Preview("Loaded · vertical · iPhone") {
+    // A real assembled-ReaderRootScreen preview would need a fake gateway
+    // returning a non-empty Score plus persistence wiring. Snapshot the
+    // chrome-only intent here; productive Score shape lives in
+    // `PlaybackInspectorScreen`'s preview.
+    Text("Run via xcode preview to see the assembled view")
+}
 #endif

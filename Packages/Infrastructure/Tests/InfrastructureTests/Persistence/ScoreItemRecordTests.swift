@@ -4,7 +4,7 @@ import GRDB
 @testable import Persistence
 import Testing
 
-@Suite struct ScoreItemRecordTests {
+struct ScoreItemRecordTests {
     private func makeQueue() throws -> DatabaseQueue {
         let q = try DatabaseQueue()
         try AppMigrations.v1.migrate(q)
@@ -25,11 +25,11 @@ import Testing
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
             lastOpenedAt: nil,
             tagIDs: [],
-            isFavorite: true
+            isFavorite: true,
         )
     }
 
-    @Test func roundTripsThroughGRDB() throws {
+    @Test func `round trips through GRDB`() throws {
         let queue = try makeQueue()
         let item = sampleItem()
         try queue.write { db in

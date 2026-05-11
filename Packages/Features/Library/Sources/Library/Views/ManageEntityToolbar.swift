@@ -16,7 +16,7 @@ struct ManageEntityCopy {
         renameTitleKey: "library.playlist.rename.title",
         renamePlaceholderKey: "library.playlist.namePlaceholder",
         deleteActionKey: "library.playlist.delete.action",
-        deleteMessageKey: "library.playlist.delete.message"
+        deleteMessageKey: "library.playlist.delete.message",
     )
 
     nonisolated(unsafe) static let tag = ManageEntityCopy(
@@ -24,7 +24,7 @@ struct ManageEntityCopy {
         renameTitleKey: "library.tag.rename.title",
         renamePlaceholderKey: "library.tag.namePlaceholder",
         deleteActionKey: "library.tag.delete.action",
-        deleteMessageKey: "library.tag.delete.message"
+        deleteMessageKey: "library.tag.delete.message",
     )
 }
 
@@ -43,7 +43,7 @@ private struct ManageEntityToolbarModifier: ViewModifier {
             .toolbar { manageToolbar }
             .alert(
                 Text(copy.renameTitleKey, bundle: .module),
-                isPresented: $isRenaming
+                isPresented: $isRenaming,
             ) {
                 TextField(text: $renameText) {
                     Text(copy.renamePlaceholderKey, bundle: .module)
@@ -59,9 +59,9 @@ private struct ManageEntityToolbarModifier: ViewModifier {
                 Text(String(
                     localized: "library.score.delete.title",
                     defaultValue: "Delete \"\(entityName)\"?",
-                    bundle: .module
+                    bundle: .module,
                 )),
-                isPresented: $isConfirmingDelete
+                isPresented: $isConfirmingDelete,
             ) {
                 Button(role: .destructive) {
                     onDelete()
@@ -110,13 +110,13 @@ extension View {
         entityName: String,
         copy: ManageEntityCopy,
         onRename: @escaping (String) -> Void,
-        onDelete: @escaping () -> Void
+        onDelete: @escaping () -> Void,
     ) -> some View {
         modifier(ManageEntityToolbarModifier(
             entityName: entityName,
             copy: copy,
             onRename: onRename,
-            onDelete: onDelete
+            onDelete: onDelete,
         ))
     }
 }

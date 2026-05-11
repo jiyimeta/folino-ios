@@ -12,7 +12,7 @@ extension [ScoreItem] {
             }
             .sorted { $0.1 > $1.1 }
             .prefix(limit)
-            .map(\.0)
+            .map(\.0),
         )
     }
 
@@ -22,7 +22,7 @@ extension [ScoreItem] {
         return Array(
             filter(\.isFavorite)
                 .sorted { $0.addedAt > $1.addedAt }
-                .prefix(limit)
+                .prefix(limit),
         )
     }
 }

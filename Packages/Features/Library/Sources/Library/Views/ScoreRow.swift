@@ -48,14 +48,14 @@ struct ScoreRow: View {
         instrumentationSummary: "Piano",
         localFileName: "x.mscx", contentHash: "x", sizeBytes: 0,
         lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-        addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: true
+        addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: true,
     )
     let onlyTitle = ScoreItem(
         title: "Untitled Score", composer: nil,
         instrumentationSummary: nil,
         localFileName: "y.mscx", contentHash: "y", sizeBytes: 0,
         lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-        addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+        addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
     )
     return List {
         ScoreRow(scoreItem: withComposer)

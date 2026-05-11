@@ -10,11 +10,11 @@ private final class FakeImporter: ScoreFileImporter {
             format: .midi,
             summary: ScoreFileSummary(
                 title: "x", composer: nil, instrumentationSummary: "Piano",
-                lengthBeats: 4, defaultTempoBpm: 120, primaryKey: nil
+                lengthBeats: 4, defaultTempoBpm: 120, primaryKey: nil,
             ),
             contentHash: "deadbeef",
             sizeBytes: 1,
-            duplicates: []
+            duplicates: [],
         )
     }
 
@@ -32,37 +32,37 @@ private final class FakeImporter: ScoreFileImporter {
             addedAt: Date(timeIntervalSince1970: 0),
             lastOpenedAt: nil,
             tagIDs: [],
-            isFavorite: false
+            isFavorite: false,
         )
     }
 }
 
-@Suite struct ScoreFileImporterTests {
-    @Test func importPlanIsHashableAndSendable() {
+struct ScoreFileImporterTests {
+    @Test func `import plan is hashable and sendable`() {
         let plan = ImportPlan(
             sourceURL: URL(fileURLWithPath: "/tmp/x.mid"),
             stagedURL: URL(fileURLWithPath: "/tmp/staged-x.mid"),
             format: .midi,
             summary: ScoreFileSummary(
                 title: nil, composer: nil, instrumentationSummary: "",
-                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil
+                lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             ),
             contentHash: "h",
             sizeBytes: 0,
-            duplicates: []
+            duplicates: [],
         )
         var set: Set<ImportPlan> = []
         set.insert(plan)
         #expect(set.contains(plan))
     }
 
-    @Test func importDecisionIsHashable() {
+    @Test func `import decision is hashable`() {
         let id = ScoreItemID()
         let decisions: Set<ImportDecision> = [.importAsNew, .openExisting(id), .openExisting(id)]
         #expect(decisions.count == 2)
     }
 
-    @Test func fakeImporterPrepareReturnsZeroDuplicates() async throws {
+    @Test func `fake importer prepare returns zero duplicates`() async throws {
         let importer: any ScoreFileImporter = FakeImporter()
         let plan = try await importer.prepareImport(sourceURL: URL(fileURLWithPath: "/tmp/x.mid"))
         #expect(plan.duplicates.isEmpty)

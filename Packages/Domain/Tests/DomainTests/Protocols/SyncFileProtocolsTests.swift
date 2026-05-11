@@ -15,9 +15,17 @@ private final class FakeCloudSync: CloudSync, @unchecked Sendable {
         stateContinuation = c
     }
 
-    func start() { startCount += 1 }
-    func stop() { stopCount += 1 }
-    func syncNow() throws { syncNowCount += 1 }
+    func start() {
+        startCount += 1
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+
+    func syncNow() throws {
+        syncNowCount += 1
+    }
 }
 
 private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
@@ -40,8 +48,8 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
     }
 }
 
-@Suite struct CloudSyncProtocolTests {
-    @Test func recordsLifecycleCalls() async {
+struct CloudSyncProtocolTests {
+    @Test func `records lifecycle calls`() async {
         let sync = FakeCloudSync()
         await sync.start()
         await sync.start()
@@ -52,7 +60,7 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
         #expect(sync.syncNowCount == 1)
     }
 
-    @Test func cloudSyncStateValuesAreDistinct() {
+    @Test func `cloud sync state values are distinct`() {
         let cases: [CloudSyncState] = [
             .idle, .syncing, .failed(error: "x"), .unavailable,
         ]
@@ -61,14 +69,14 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
     }
 }
 
-@Suite struct ScoreFileGatewayProtocolTests {
-    @Test func detectFormatDelegatesToScoreFormat() async {
+struct ScoreFileGatewayProtocolTests {
+    @Test func `detect format delegates to score format`() async {
         let gateway = FakeScoreFileGateway()
         let result = await gateway.detectFormat(fileName: "x.mscz")
         #expect(result == .mscz)
     }
 
-    @Test func loadScoreThrowsOnFakeFiles() async {
+    @Test func `load score throws on fake files`() async {
         let gateway = FakeScoreFileGateway()
         do {
             _ = try await gateway.loadScore(fileURL: URL(fileURLWithPath: "/dev/null"))
@@ -84,7 +92,7 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
         }
     }
 
-    @Test func loadFileMetadataThrowsOnFakeFiles() async {
+    @Test func `load file metadata throws on fake files`() async {
         let gateway = FakeScoreFileGateway()
         do {
             _ = try await gateway.loadFileMetadata(fileURL: URL(fileURLWithPath: "/dev/null"))

@@ -5,7 +5,7 @@ import GRDB
 import Testing
 
 @MainActor
-@Suite struct LiveScoreLibraryRepositoryTests {
+struct LiveScoreLibraryRepositoryTests {
     /// Returns a database AND a lifetime anchor that keeps the temp directory
     /// alive for the duration of the test. Both must be retained together.
     private func makeDatabase() throws -> (AppDatabase, TempDirectory) {
@@ -14,7 +14,7 @@ import Testing
         return (db, tmp)
     }
 
-    @Test func refreshOnEmptyDatabaseProducesEmptyArrays() async throws {
+    @Test func `refresh on empty database produces empty arrays`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -24,7 +24,7 @@ import Testing
         #expect(repo.playlists.isEmpty)
     }
 
-    @Test func saveScoreItemRoundTripsViaObservation() async throws {
+    @Test func `save score item round trips via observation`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -38,7 +38,7 @@ import Testing
             localFileName: "x.mscz", contentHash: "h1", sizeBytes: 100,
             lengthBeats: 16, defaultTempoBpm: 80, primaryKey: "C",
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [tag.id], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [tag.id], isFavorite: false,
         )
         try await repo.saveScoreItem(item)
 
@@ -48,7 +48,7 @@ import Testing
         #expect(stored.title == "Prelude")
     }
 
-    @Test func deleteScoreItemRemovesFromArray() async throws {
+    @Test func `delete score item removes from array`() async throws {
         let (db, lifetime) = try makeDatabase()
         let scoresDir = try TempDirectory()
         defer { withExtendedLifetime((lifetime, scoresDir)) {} }
@@ -59,7 +59,7 @@ import Testing
             title: "x", composer: nil, instrumentationSummary: nil,
             localFileName: "x.mid", contentHash: "h", sizeBytes: 0,
             lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
         try await repo.saveScoreItem(item)
         try await waitFor { repo.scoreItems.contains { $0.id == item.id } }
@@ -68,7 +68,7 @@ import Testing
         try await waitFor { !repo.scoreItems.contains { $0.id == item.id } }
     }
 
-    @Test func saveTagAppearsInObservedArray() async throws {
+    @Test func `save tag appears in observed array`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -79,7 +79,7 @@ import Testing
         try await waitFor { repo.tags.contains { $0.id == tag.id } }
     }
 
-    @Test func deleteTagCascadesToItemTagIDs() async throws {
+    @Test func `delete tag cascades to item tag I ds`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -91,7 +91,7 @@ import Testing
             title: "x", composer: nil, instrumentationSummary: nil,
             localFileName: "x.mid", contentHash: "h", sizeBytes: 0,
             lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-            addedAt: Date(), lastOpenedAt: nil, tagIDs: [tag.id], isFavorite: false
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [tag.id], isFavorite: false,
         )
         try await repo.saveScoreItem(item)
         try await waitFor { repo.scoreItems.first { $0.id == item.id }?.tagIDs == [tag.id] }
@@ -100,7 +100,7 @@ import Testing
         try await waitFor { repo.scoreItems.first { $0.id == item.id }?.tagIDs.isEmpty == true }
     }
 
-    @Test func contentHashLookupReturnsAllMatches() async throws {
+    @Test func `content hash lookup returns all matches`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -112,7 +112,7 @@ import Testing
                 title: "x", composer: nil, instrumentationSummary: nil,
                 localFileName: "\(UUID().uuidString).mid", contentHash: h, sizeBytes: 0,
                 lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-                addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+                addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
             )
         }
         try await repo.saveScoreItem(make())
@@ -123,7 +123,7 @@ import Testing
             instrumentationSummary: nil, localFileName: unique.localFileName,
             contentHash: "different", sizeBytes: 0, lengthBeats: 0,
             defaultTempoBpm: 120, primaryKey: nil,
-            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
         try await repo.saveScoreItem(renamed)
 
@@ -131,7 +131,7 @@ import Testing
         #expect(dups.count == 2)
     }
 
-    @Test func playlistOrderingRoundTripsThroughObservation() async throws {
+    @Test func `playlist ordering round trips through observation`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -142,7 +142,7 @@ import Testing
                 title: "x", composer: nil, instrumentationSummary: nil,
                 localFileName: "\(UUID().uuidString).mid", contentHash: "h", sizeBytes: 0,
                 lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-                addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+                addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
             )
         }
         let a = make(); let b = make(); let c = make()
@@ -154,7 +154,7 @@ import Testing
         let pl = Playlist(
             name: "Practice",
             orderedScoreItemIDs: [c.id, a.id, b.id],
-            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
         )
         try await repo.savePlaylist(pl)
         try await waitFor {
@@ -163,7 +163,7 @@ import Testing
         #expect(repo.playlists.count == 1)
     }
 
-    @Test func deletePlaylistRemovesIt() async throws {
+    @Test func `delete playlist removes it`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -178,7 +178,7 @@ import Testing
 
     // MARK: - Reader preferences
 
-    @Test func loadReaderPreferencesReturnsNilWhenAbsent() async throws {
+    @Test func `load reader preferences returns nil when absent`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -186,7 +186,7 @@ import Testing
         #expect(result == nil)
     }
 
-    @Test func saveThenLoadRoundTripsReaderPreferences() async throws {
+    @Test func `save then load round trips reader preferences`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -195,7 +195,7 @@ import Testing
             localFileName: "x.mscz", contentHash: "h1", sizeBytes: 100,
             lengthBeats: 16, defaultTempoBpm: 80, primaryKey: "C",
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
         try await repo.refresh()
         try await repo.saveScoreItem(item)
@@ -205,7 +205,7 @@ import Testing
             StaffAddress(partIndex: 2, staffIndexInPart: 0),
         ]
         let prefs = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 18, hiddenStaves: hidden
+            scoreItemID: item.id, staffSize: 18, hiddenStaves: hidden,
         )
         try await repo.saveReaderPreferences(prefs)
 
@@ -215,7 +215,7 @@ import Testing
         #expect(loaded?.scoreItemID == item.id)
     }
 
-    @Test func saveReaderPreferencesUpsertsExisting() async throws {
+    @Test func `save reader preferences upserts existing`() async throws {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
@@ -224,13 +224,13 @@ import Testing
             localFileName: "x.mscz", contentHash: "h1", sizeBytes: 100,
             lengthBeats: 16, defaultTempoBpm: 80, primaryKey: "C",
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
         try await repo.refresh()
         try await repo.saveScoreItem(item)
 
         let first = ReaderPreferences(
-            scoreItemID: item.id, staffSize: 14, hiddenStaves: []
+            scoreItemID: item.id, staffSize: 14, hiddenStaves: [],
         )
         try await repo.saveReaderPreferences(first)
 

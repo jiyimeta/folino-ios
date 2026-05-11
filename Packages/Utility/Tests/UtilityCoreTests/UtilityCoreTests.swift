@@ -1,8 +1,8 @@
 import Testing
 @testable import UtilityCore
 
-@Suite struct UtilityCoreSmokeTests {
-    @Test func moduleLinks() {
+struct UtilityCoreSmokeTests {
+    @Test func `module links`() {
         #expect(UtilityCoreModule.isLinked)
     }
 }

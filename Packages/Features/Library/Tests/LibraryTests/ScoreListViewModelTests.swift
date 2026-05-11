@@ -3,7 +3,7 @@ import Foundation
 @testable import Library
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct ScoreListViewModelTests {
     private static let base = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -12,7 +12,7 @@ struct ScoreListViewModelTests {
         title: String,
         composer: String? = nil,
         addedOffset: TimeInterval = 0,
-        tagIDs: Set<TagID> = []
+        tagIDs: Set<TagID> = [],
     ) -> ScoreItem {
         ScoreItem(
             id: id,
@@ -20,7 +20,7 @@ struct ScoreListViewModelTests {
             localFileName: "\(title).mscx", contentHash: title,
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: base.addingTimeInterval(addedOffset),
-            lastOpenedAt: nil, tagIDs: tagIDs, isFavorite: false
+            lastOpenedAt: nil, tagIDs: tagIDs, isFavorite: false,
         )
     }
 
@@ -30,7 +30,7 @@ struct ScoreListViewModelTests {
         return repo
     }
 
-    @Test func sourceAllReturnsEverythingSorted() {
+    @Test func `source all returns everything sorted`() {
         let repo = Self.makeRepo(items: [
             Self.makeItem(title: "B", addedOffset: 100),
             Self.makeItem(title: "A", addedOffset: 200),
@@ -40,7 +40,7 @@ struct ScoreListViewModelTests {
         #expect(vm.displayedItems.map(\.title) == ["A", "B"])
     }
 
-    @Test func sourceTaggedFiltersByTagID() {
+    @Test func `source tagged filters by tag ID`() {
         let tagID = TagID()
         let repo = Self.makeRepo(items: [
             Self.makeItem(title: "A", tagIDs: [tagID]),
@@ -52,7 +52,7 @@ struct ScoreListViewModelTests {
         #expect(vm.displayedItems.map(\.title) == ["A", "C"])
     }
 
-    @Test func sourcePlaylistPreservesOrderingByDefault() {
+    @Test func `source playlist preserves ordering by default`() {
         let id1 = ScoreItemID()
         let id2 = ScoreItemID()
         let id3 = ScoreItemID()
@@ -63,13 +63,13 @@ struct ScoreListViewModelTests {
         ])
         let vm = ScoreListViewModel(
             source: .playlist(orderedIDs: [id1, id2, id3]),
-            repository: repo
+            repository: repo,
         )
         // Default sort for playlists is .manual; items follow orderedIDs.
         #expect(vm.displayedItems.map(\.title) == ["A", "B", "C"])
     }
 
-    @Test func sourcePlaylistSortOverrideIgnoresManualOrder() {
+    @Test func `source playlist sort override ignores manual order`() {
         let id1 = ScoreItemID()
         let id2 = ScoreItemID()
         let repo = Self.makeRepo(items: [
@@ -78,13 +78,13 @@ struct ScoreListViewModelTests {
         ])
         let vm = ScoreListViewModel(
             source: .playlist(orderedIDs: [id1, id2]),
-            repository: repo
+            repository: repo,
         )
         vm.selectSort(.titleAsc)
         #expect(vm.displayedItems.map(\.title) == ["A", "B"])
     }
 
-    @Test func searchMatchesTitleAndComposerCaseAndDiacriticInsensitively() {
+    @Test func `search matches title and composer case and diacritic insensitively`() {
         let repo = Self.makeRepo(items: [
             Self.makeItem(title: "Étude Op.10", composer: "Chopin"),
             Self.makeItem(title: "Sonata", composer: "Mozart"),
@@ -98,7 +98,7 @@ struct ScoreListViewModelTests {
         #expect(chopins == ["Étude Op.10", "Prelude"])
     }
 
-    @Test func emptySearchQueryReturnsAll() {
+    @Test func `empty search query returns all`() {
         let repo = Self.makeRepo(items: [
             Self.makeItem(title: "A"),
             Self.makeItem(title: "B"),
@@ -108,7 +108,7 @@ struct ScoreListViewModelTests {
         #expect(vm.displayedItems.count == 2)
     }
 
-    @Test func sourceFavoritesFiltersByIsFavoriteFlag() {
+    @Test func `source favorites filters by is favorite flag`() {
         var fav = Self.makeItem(title: "Fav")
         fav.isFavorite = true
         let plain = Self.makeItem(title: "Plain")

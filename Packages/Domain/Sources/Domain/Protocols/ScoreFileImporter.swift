@@ -25,7 +25,7 @@ public struct ImportPlan: Hashable, Sendable {
         summary: ScoreFileSummary,
         contentHash: String,
         sizeBytes: Int64,
-        duplicates: [ScoreItem]
+        duplicates: [ScoreItem],
     ) {
         self.sourceURL = sourceURL
         self.stagedURL = stagedURL

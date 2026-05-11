@@ -83,6 +83,9 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
         scoreItems.filter { $0.contentHash == contentHash }
     }
 
-    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? { nil }
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
+        nil
+    }
+
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
 }

@@ -4,7 +4,7 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct ReaderViewModelManualCursorTests {
     private static func makeItem() -> ScoreItem {
         ScoreItem(
@@ -12,11 +12,11 @@ struct ReaderViewModelManualCursorTests {
             localFileName: "t.mscx", contentHash: "h",
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
-    @Test func setManualCursorUpdatesPlaybackCursorImmediately() {
+    @Test func `set manual cursor updates playback cursor immediately`() {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -25,14 +25,14 @@ struct ReaderViewModelManualCursorTests {
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         let cursor = ScoreCursor.beat(measureIndex: 3, tickInMeasure: 120)
         vm.setManualCursor(cursor)
         #expect(vm.playbackCursor == cursor)
     }
 
-    @Test func setManualCursorForwardsToControllerExactlyOnce() async {
+    @Test func `set manual cursor forwards to controller exactly once`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -41,15 +41,17 @@ struct ReaderViewModelManualCursorTests {
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller
+            playbackController: controller,
         )
         let cursor = ScoreCursor.beat(measureIndex: 1, tickInMeasure: 0)
         vm.setManualCursor(cursor)
-        for _ in 0 ..< 5 { await Task.yield() }
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
         #expect(controller.recordedSetCursorCalls == [cursor])
     }
 
-    @Test func setManualCursorWithNoControllerOnlyUpdatesLocalCursor() {
+    @Test func `set manual cursor with no controller only updates local cursor`() {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -57,7 +59,7 @@ struct ReaderViewModelManualCursorTests {
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: nil
+            playbackController: nil,
         )
         let cursor = ScoreCursor.beat(measureIndex: 7, tickInMeasure: 0)
         vm.setManualCursor(cursor)

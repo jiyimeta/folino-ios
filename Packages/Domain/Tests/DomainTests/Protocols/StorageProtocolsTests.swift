@@ -35,7 +35,9 @@ private final class FakeScoreLibraryRepository: ScoreLibraryRepository {
         }
     }
 
-    func deleteTag(id: TagID) throws { tags.removeAll { $0.id == id } }
+    func deleteTag(id: TagID) throws {
+        tags.removeAll { $0.id == id }
+    }
 
     func savePlaylist(_ playlist: Playlist) throws {
         if let idx = playlists.firstIndex(where: { $0.id == playlist.id }) {
@@ -53,7 +55,10 @@ private final class FakeScoreLibraryRepository: ScoreLibraryRepository {
         scoreItems.filter { $0.contentHash == contentHash }
     }
 
-    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? { nil }
+    func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
+        nil
+    }
+
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
 }
 
@@ -73,17 +78,17 @@ private actor FakeAnnotationStore: AnnotationStore {
     }
 }
 
-@Suite @MainActor struct StorageProtocolsTests {
+@MainActor struct StorageProtocolsTests {
     private func sampleItem(hash: String = String(repeating: "0", count: 64)) -> ScoreItem {
         ScoreItem(
             title: "x", composer: nil, instrumentationSummary: nil,
             localFileName: "x.mid", contentHash: hash, sizeBytes: 0,
             lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
-    @Test func libraryRepositoryRoundTripsItems() async throws {
+    @Test func `library repository round trips items`() async throws {
         let repo: any ScoreLibraryRepository = FakeScoreLibraryRepository()
         let item = sampleItem()
         try await repo.saveScoreItem(item)
@@ -92,7 +97,7 @@ private actor FakeAnnotationStore: AnnotationStore {
         #expect(repo.scoreItems.isEmpty)
     }
 
-    @Test func contentHashLookupReturnsAllMatches() async throws {
+    @Test func `content hash lookup returns all matches`() async throws {
         let repo: any ScoreLibraryRepository = FakeScoreLibraryRepository()
         let h = "abc123"
         try await repo.saveScoreItem(sampleItem(hash: h))
@@ -103,13 +108,13 @@ private actor FakeAnnotationStore: AnnotationStore {
     }
 }
 
-@Suite struct AnnotationStoreProtocolTests {
-    @Test func annotationStoreRoundTripsLayers() async throws {
+struct AnnotationStoreProtocolTests {
+    @Test func `annotation store round trips layers`() async throws {
         let store: any AnnotationStore = FakeAnnotationStore()
         let scoreID = ScoreItemID()
         let layer = AnnotationLayer(
             scoreItemID: scoreID, drawings: [], textBoxes: [],
-            updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
         )
         try await store.saveAnnotationLayer(layer)
         let fetched = try await store.annotationLayer(forScoreItem: scoreID)

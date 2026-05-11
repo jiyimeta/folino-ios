@@ -12,7 +12,7 @@ public struct Playlist: Hashable, Sendable, Codable, Identifiable {
         id: PlaylistID = PlaylistID(),
         name: String,
         orderedScoreItemIDs: [ScoreItemID],
-        createdAt: Date
+        createdAt: Date,
     ) {
         self.id = id
         self.name = name

@@ -3,7 +3,6 @@ import Domain
 import SheetMusicCore
 import Testing
 
-@Suite
 struct RepeatLoopHelpersTests {
     /// One quarter-note element used to populate measure fixtures.
     /// `VoiceElement.rest(duration:)` is sugar for
@@ -22,26 +21,26 @@ struct RepeatLoopHelpersTests {
         let part = Part(
             id: "P0",
             instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
-            staves: [staff]
+            staves: [staff],
         )
         return Score(division: 480, parts: [part])
     }
 
-    @Test func measureIndexOfBeatCursorReturnsItsField() {
+    @Test func `measure index of beat cursor returns its field`() {
         let cursor = ScoreCursor.beat(measureIndex: 4, tickInMeasure: 240)
         #expect(measureIndex(of: cursor) == 4)
     }
 
-    @Test func measureIndexOfItemCursorReadsItDirectlyFromTheID() {
+    @Test func `measure index of item cursor reads it directly from the ID`() {
         let staffAddress = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let restID = RestID(
-            staff: staffAddress, measureIndex: 7, voiceIndex: 0, elementIndex: 0
+            staff: staffAddress, measureIndex: 7, voiceIndex: 0, elementIndex: 0,
         )
         let cursor = ScoreCursor.item(.rest(restID))
         #expect(measureIndex(of: cursor) == 7)
     }
 
-    @Test func snapMeasureHeadProducesFirstChordInMeasure() {
+    @Test func `snap measure head produces first chord in measure`() {
         let score = Self.makeScore()
         let head = snapMeasureHead(measureIndex: 1, in: score)
         #expect(head.measureIndex == 1)
@@ -49,7 +48,7 @@ struct RepeatLoopHelpersTests {
         #expect(head.chordIndex == 0)
     }
 
-    @Test func snapMeasureEndProducesLastChordInMeasure() {
+    @Test func `snap measure end produces last chord in measure`() {
         let score = Self.makeScore()
         let end = snapMeasureEnd(measureIndex: 1, in: score)
         #expect(end?.measureIndex == 1)
@@ -58,19 +57,19 @@ struct RepeatLoopHelpersTests {
         #expect(end?.chordIndex == 2)
     }
 
-    @Test func snapMeasureEndIsNilForEmptyMeasure() {
+    @Test func `snap measure end is nil for empty measure`() {
         let emptyMeasure = Measure(voices: [Voice(elements: [])])
         let staff = Staff(measures: [emptyMeasure])
         let part = Part(
             id: "P0",
             instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         #expect(snapMeasureEnd(measureIndex: 0, in: score) == nil)
     }
 
-    @Test func scoreFullRangeSpansFirstChordOfMeasure0ToLastChordOfFinalMeasure() {
+    @Test func `score full range spans first chord of measure 0 to last chord of final measure`() {
         let score = Self.makeScore()
         let range = scoreFullRange(in: score)
         #expect(range?.start.measureIndex == 0)
@@ -80,7 +79,7 @@ struct RepeatLoopHelpersTests {
         #expect(range?.end.chordIndex == 0)
     }
 
-    @Test func normalizeSwapsRangeWhenStartIsAfterEnd() {
+    @Test func `normalize swaps range when start is after end`() {
         let early = ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0)
         let late = ChordPath(systemIndex: 0, measureIndex: 5, voiceIndex: 0, chordIndex: 1)
         let inverted = ABRepeatRange(start: late, end: early)

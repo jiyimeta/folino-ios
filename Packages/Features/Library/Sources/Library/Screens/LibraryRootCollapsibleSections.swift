@@ -55,7 +55,7 @@ struct LibraryRootPlaylistsSection: View {
                 CollapsibleSectionHeader(
                     title: Text("library.playlists", bundle: .module),
                     count: total,
-                    expanded: $expanded
+                    expanded: $expanded,
                 )
             }
         }
@@ -115,7 +115,7 @@ struct LibraryRootTagsSection: View {
                 CollapsibleSectionHeader(
                     title: Text("library.tags", bundle: .module),
                     count: total,
-                    expanded: $expanded
+                    expanded: $expanded,
                 )
             }
             .animation(.default, value: expanded)
@@ -159,7 +159,7 @@ private struct CollapsibleSectionHeader: View {
                 Playlist(name: "Recital", orderedScoreItemIDs: [], createdAt: .now),
             ],
             scoreItems: [],
-            onRequestDelete: { _ in }
+            onRequestDelete: { _ in },
         )
         LibraryRootTagsSection(
             allTags: [
@@ -167,7 +167,7 @@ private struct CollapsibleSectionHeader: View {
                 Tag(name: "Chopin", colorHex: "#00FF00"),
             ],
             scoreItems: [],
-            onRequestDelete: { _ in }
+            onRequestDelete: { _ in },
         )
     }
     .listStyle(.sidebar)

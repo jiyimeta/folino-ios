@@ -2,8 +2,8 @@
 import Foundation
 import Testing
 
-@Suite struct ScoreFormatTests {
-    @Test func detectsExtensionsCaseInsensitively() {
+struct ScoreFormatTests {
+    @Test func `detects extensions case insensitively`() {
         #expect(ScoreFormat.detect(filename: "song.mscz") == .mscz)
         #expect(ScoreFormat.detect(filename: "song.MSCZ") == .mscz)
         #expect(ScoreFormat.detect(filename: "song.mscx") == .mscx)
@@ -15,23 +15,23 @@ import Testing
         #expect(ScoreFormat.detect(filename: "song.smf") == .midi)
     }
 
-    @Test func returnsNilForPDFInV1() {
+    @Test func `returns nil for PDF in V 1`() {
         #expect(ScoreFormat.detect(filename: "song.pdf") == nil)
         #expect(ScoreFormat.detect(filename: "song.PDF") == nil)
     }
 
-    @Test func returnsNilForUnknownExtension() {
+    @Test func `returns nil for unknown extension`() {
         #expect(ScoreFormat.detect(filename: "song.txt") == nil)
         #expect(ScoreFormat.detect(filename: "song") == nil)
         #expect(ScoreFormat.detect(filename: "") == nil)
     }
 
-    @Test func handlesPathsWithDirectories() {
+    @Test func `handles paths with directories`() {
         #expect(ScoreFormat.detect(filename: "/Documents/Scores/song.mscz") == .mscz)
         #expect(ScoreFormat.detect(filename: "subdir/song.mscz") == .mscz)
     }
 
-    @Test func roundTripsThroughCodable() throws {
+    @Test func `round trips through codable`() throws {
         for format in ScoreFormat.allCases {
             let data = try JSONEncoder().encode(format)
             let decoded = try JSONDecoder().decode(ScoreFormat.self, from: data)
@@ -39,7 +39,7 @@ import Testing
         }
     }
 
-    @Test func canonicalExtensionMatchesDetect() {
+    @Test func `canonical extension matches detect`() {
         for format in ScoreFormat.allCases {
             #expect(ScoreFormat.detect(filename: "song.\(format.canonicalExtension)") == format)
         }

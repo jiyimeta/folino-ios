@@ -14,7 +14,7 @@ public struct LiveScoreShareService: ScoreShareService {
     public init(
         scoresDirectory: URL,
         shareTempDirectory: URL,
-        gateway: any ScoreFileGateway
+        gateway: any ScoreFileGateway,
     ) {
         self.scoresDirectory = scoresDirectory
         self.shareTempDirectory = shareTempDirectory
@@ -39,7 +39,7 @@ public struct LiveScoreShareService: ScoreShareService {
 
     public func prepareShare(
         item: ScoreItem,
-        format: ScoreShareFormat
+        format: ScoreShareFormat,
     ) async throws -> URL {
         let title = Self.sanitize(title: item.title)
         let sourceURL = scoresDirectory.appending(path: item.localFileName)
@@ -92,7 +92,7 @@ public struct LiveScoreShareService: ScoreShareService {
     /// the item's source byte-for-byte.
     private func copyOriginalBytes(
         sourceURL: URL,
-        sanitizedTitle: String
+        sanitizedTitle: String,
     ) throws -> URL {
         let ext = sourceURL.pathExtension
         let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).\(ext)")
@@ -109,7 +109,7 @@ public struct LiveScoreShareService: ScoreShareService {
 
     private func writeMIDI(
         score: Score,
-        sanitizedTitle: String
+        sanitizedTitle: String,
     ) throws -> URL {
         let midiData: Data
         do {
@@ -130,7 +130,7 @@ public struct LiveScoreShareService: ScoreShareService {
     private func writePDF(
         score: Score,
         item: ScoreItem,
-        sanitizedTitle: String
+        sanitizedTitle: String,
     ) async throws -> URL {
         let pdfData = try await MainActor.run {
             try PDFExporter.export(score: score, options: PDFExporter.Options(title: item.title))
@@ -148,7 +148,7 @@ public struct LiveScoreShareService: ScoreShareService {
     private func writeMSCZ(
         score: Score,
         sanitizedTitle: String,
-        target: MSCXVersion
+        target: MSCXVersion,
     ) throws -> URL {
         let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).mscz")
         try? FileManager.default.removeItem(at: destination)
@@ -156,7 +156,7 @@ public struct LiveScoreShareService: ScoreShareService {
             try MSCZWriter.write(
                 score: score,
                 options: MSCXEncoderOptions(targetVersion: target),
-                to: destination
+                to: destination,
             )
         } catch {
             throw DomainError.scoreWriteFailed(reason: "\(error)")

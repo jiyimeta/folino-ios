@@ -26,8 +26,8 @@ let package = Package(
                 .product(name: "UtilityUI", package: "Utility"),
             ],
             resources: [.process("Resources")],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .testTarget(name: "LibraryTests", dependencies: ["Library"]),
-    ]
+    ],
 )

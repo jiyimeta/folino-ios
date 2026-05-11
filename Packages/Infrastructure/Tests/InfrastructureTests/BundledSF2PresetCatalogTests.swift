@@ -2,8 +2,8 @@ import Foundation
 import Soundfonts
 import Testing
 
-@Suite struct BundledSF2PresetCatalogTests {
-    @Test func parsesMinimalSyntheticSF2() throws {
+struct BundledSF2PresetCatalogTests {
+    @Test func `parses minimal synthetic SF 2`() throws {
         let url = try writeSyntheticSF2(presets: [
             (bank: 0, program: 0, name: "Acoustic Grand Piano"),
             (bank: 17, program: 43, name: "Contrabass Expr."),
@@ -18,12 +18,12 @@ import Testing
         #expect(catalog.presetName(bank: 99, program: 99) == nil)
     }
 
-    @Test func skipsOverInfoAndSdtaListsBeforePDTA() throws {
+    @Test func `skips over info and sdta lists before PDTA`() throws {
         // Realistic SF2 layout: INFO and sdta come before pdta — the parser
         // needs to step past them to find the preset table.
         let url = try writeSyntheticSF2(
             presets: [(bank: 8, program: 0, name: "Bright Piano")],
-            includeLeadingInfoAndSdta: true
+            includeLeadingInfoAndSdta: true,
         )
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -35,7 +35,7 @@ import Testing
 
     private func writeSyntheticSF2(
         presets: [(bank: Int, program: Int, name: String)],
-        includeLeadingInfoAndSdta: Bool = false
+        includeLeadingInfoAndSdta: Bool = false,
     ) throws -> URL {
         var phdr = Data()
         for preset in presets {

@@ -82,7 +82,7 @@ public struct BundledSF2PresetCatalog: SoundfontPresetCatalog {
         var cursor = 0
         while cursor + 8 <= pdta.count {
             let id = String(
-                bytes: pdta[cursor ..< cursor + 4], encoding: .utf8
+                bytes: pdta[cursor ..< cursor + 4], encoding: .utf8,
             ) ?? ""
             let size = Int(readLEUInt32(pdta, offset: cursor + 4))
             let paddedSize = size + (size & 1)

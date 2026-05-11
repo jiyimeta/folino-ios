@@ -1,24 +1,23 @@
 import Domain
 import Testing
 
-@Suite
 struct ReaderLayoutModeTests {
-    @Test func rawValuesAreStable() {
+    @Test func `raw values are stable`() {
         #expect(ReaderLayoutMode.vertical.rawValue == "vertical")
         #expect(ReaderLayoutMode.horizontal.rawValue == "horizontal")
     }
 
-    @Test func allCasesContainsBoth() {
+    @Test func `all cases contains both`() {
         #expect(ReaderLayoutMode.allCases == [.vertical, .horizontal])
     }
 
-    @Test func metronomeKeyMatchesLegacyAppStorage() {
+    @Test func `metronome key matches legacy app storage`() {
         // The string literal is load-bearing: existing user state lives under
         // this key, so changing it would silently reset every install.
         #expect(ReaderGlobalSettingsKey.metronomeEnabled == "readerMetronomeEnabled")
     }
 
-    @Test func layoutModeKeyIsStable() {
+    @Test func `layout mode key is stable`() {
         #expect(ReaderGlobalSettingsKey.layoutMode == "readerLayoutMode")
     }
 }

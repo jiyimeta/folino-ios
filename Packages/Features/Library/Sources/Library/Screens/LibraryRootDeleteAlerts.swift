@@ -30,10 +30,10 @@ private struct PlaylistAlert: ViewModifier {
             Text(String(
                 localized: "library.score.delete.title",
                 defaultValue: "Delete \"\(pending?.name ?? "")\"?",
-                bundle: .module
+                bundle: .module,
             )),
             isPresented: presentationBinding($pending),
-            presenting: pending
+            presenting: pending,
         ) { playlist in
             Button(role: .destructive) {
                 Task { await viewModel.deletePlaylist(playlist) }
@@ -55,10 +55,10 @@ private struct TagAlert: ViewModifier {
             Text(String(
                 localized: "library.score.delete.title",
                 defaultValue: "Delete \"\(pending?.name ?? "")\"?",
-                bundle: .module
+                bundle: .module,
             )),
             isPresented: presentationBinding($pending),
-            presenting: pending
+            presenting: pending,
         ) { tag in
             Button(role: .destructive) {
                 Task { await viewModel.deleteTag(tag) }
@@ -80,10 +80,10 @@ private struct ScoreAlert: ViewModifier {
             Text(String(
                 localized: "library.score.delete.title",
                 defaultValue: "Delete \"\(pending?.title ?? "")\"?",
-                bundle: .module
+                bundle: .module,
             )),
             isPresented: presentationBinding($pending),
-            presenting: pending
+            presenting: pending,
         ) { item in
             Button(role: .destructive) {
                 Task { await viewModel.delete(item) }
@@ -98,7 +98,7 @@ private struct ScoreAlert: ViewModifier {
 private func presentationBinding<Value>(_ source: Binding<Value?>) -> Binding<Bool> {
     Binding(
         get: { source.wrappedValue != nil },
-        set: { isPresented in if !isPresented { source.wrappedValue = nil } }
+        set: { isPresented in if !isPresented { source.wrappedValue = nil } },
     )
 }
 
@@ -108,13 +108,13 @@ extension View {
         viewModel: LibraryViewModel,
         pendingDeletePlaylist: Binding<Playlist?>,
         pendingDeleteTag: Binding<Tag?>,
-        pendingDeleteScore: Binding<ScoreItem?>
+        pendingDeleteScore: Binding<ScoreItem?>,
     ) -> some View {
         modifier(LibraryRootDeleteAlerts(
             viewModel: viewModel,
             pendingDeletePlaylist: pendingDeletePlaylist,
             pendingDeleteTag: pendingDeleteTag,
-            pendingDeleteScore: pendingDeleteScore
+            pendingDeleteScore: pendingDeleteScore,
         ))
     }
 }

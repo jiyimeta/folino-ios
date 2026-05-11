@@ -7,7 +7,7 @@ enum GMProgramName {
                 localized: "settings.soundfont.drumKit.label",
                 defaultValue: "Drum Kit (Program \(program))",
                 bundle: Bundle.module,
-                comment: "Soundfont cache row label for a percussion patch"
+                comment: "Soundfont cache row label for a percussion patch",
             )
         }
         if bank == 0, melodicNames.indices.contains(program) {
@@ -17,7 +17,7 @@ enum GMProgramName {
             localized: "settings.soundfont.patch.label",
             defaultValue: "Bank \(bank) · Program \(program)",
             bundle: Bundle.module,
-            comment: "Soundfont cache row label for a non-GM patch"
+            comment: "Soundfont cache row label for a non-GM patch",
         )
     }
 

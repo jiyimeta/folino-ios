@@ -11,7 +11,7 @@ struct EditTagsScreen: View {
             assignedTagIDs: currentScoreItem().tagIDs,
             allTags: library.repository.tags,
             onToggle: { tag in Task { await toggle(tag) } },
-            onCreate: { name in Task { await commitNewTag(name) } }
+            onCreate: { name in Task { await commitNewTag(name) } },
         )
     }
 

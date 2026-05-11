@@ -43,11 +43,13 @@ extension ScoreFileSummary {
             instrumentationSummary: instrumentationSummary,
             lengthBeats: lengthBeats,
             defaultTempoBpm: defaultTempoBpm,
-            primaryKey: nil
+            primaryKey: nil,
         )
     }
 }
 
 extension String {
-    fileprivate var nonEmpty: String? { isEmpty ? nil : self }
+    fileprivate var nonEmpty: String? {
+        isEmpty ? nil : self
+    }
 }

@@ -9,8 +9,8 @@ extension ScoreCursor {
     /// "did the cursor move into a different measure?".
     var measureIndex: Int {
         switch self {
-        case let .item(id): return id.measureIndex
-        case let .beat(mi, _): return mi
+        case let .item(id): id.measureIndex
+        case let .beat(mi, _): mi
         }
     }
 }
@@ -29,7 +29,7 @@ struct HorizontalMeasureFramesKey: PreferenceKey {
     static let defaultValue: [Int: CGRect] = [:]
     static func reduce(
         value: inout [Int: CGRect],
-        nextValue: () -> [Int: CGRect]
+        nextValue: () -> [Int: CGRect],
     ) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
@@ -57,7 +57,8 @@ struct HorizontalMeasureAnchors: View {
                 Color.clear
                     .frame(width: m.width, height: 1)
                     .id(HorizontalMeasureAnchorID(
-                        measureIndex: m.measureIndex))
+                        measureIndex: m.measureIndex,
+                    ))
                     .background(
                         GeometryReader { g in
                             Color.clear.preference(
@@ -65,16 +66,17 @@ struct HorizontalMeasureAnchors: View {
                                 value: [
                                     m.measureIndex:
                                         g.frame(in: .named("hScroll")),
-                                ]
+                                ],
                             )
-                        })
+                        },
+                    )
             }
             Spacer(minLength: 0)
         }
         .frame(
             width: document.size.width,
             height: document.size.height,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
         .allowsHitTesting(false)
     }
@@ -89,7 +91,7 @@ struct HorizontalMeasureAnchors: View {
                 result.append((
                     measureIndex: m.measureIndex,
                     docX: sys.origin.x + m.origin.x,
-                    width: m.width
+                    width: m.width,
                 ))
             }
         }
@@ -108,7 +110,7 @@ func isAnchorFullyVisible(
     anchorMin: CGFloat,
     anchorMax: CGFloat,
     anchorSize: CGFloat,
-    viewportSize: CGFloat
+    viewportSize: CGFloat,
 ) -> Bool {
     if anchorSize > viewportSize {
         return anchorMax > 0 && anchorMin < viewportSize
@@ -124,7 +126,7 @@ func paddedScrollAnchor(
     anchorSize: CGFloat,
     viewportSize: CGFloat,
     pad: CGFloat,
-    horizontal: Bool
+    horizontal: Bool,
 ) -> UnitPoint {
     let denom = viewportSize - anchorSize
     let frac: CGFloat = if denom <= pad {

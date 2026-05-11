@@ -24,11 +24,11 @@ struct LoopRegionOverlay: View {
                         x: system.origin.x + measure.origin.x,
                         y: system.origin.y,
                         width: measure.width,
-                        height: system.size.height
+                        height: system.size.height,
                     )
                     context.fill(
                         Path(rect),
-                        with: .color(.accentColor.opacity(0.15))
+                        with: .color(.accentColor.opacity(0.15)),
                     )
                 }
             }
@@ -36,7 +36,7 @@ struct LoopRegionOverlay: View {
         .frame(
             width: document.size.width,
             height: document.size.height,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
         .allowsHitTesting(false)
         .accessibilityHidden(true)

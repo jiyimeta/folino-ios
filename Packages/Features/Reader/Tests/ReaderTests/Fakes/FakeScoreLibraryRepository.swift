@@ -27,7 +27,9 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     func deleteTag(id: TagID) throws {}
     func savePlaylist(_ playlist: Playlist) throws {}
     func deletePlaylist(id: PlaylistID) throws {}
-    func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] { [] }
+    func scoreItems(matchingContentHash contentHash: String) throws -> [ScoreItem] {
+        []
+    }
 
     var storedReaderPreferences: [ScoreItemID: ReaderPreferences] = [:]
     var savedReaderPreferences: [ReaderPreferences] = []

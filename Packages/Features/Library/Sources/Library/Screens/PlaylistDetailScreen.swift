@@ -43,7 +43,7 @@ struct PlaylistDetailScreen: View {
             onBulkShare: { format in performBulkShare(format) },
             onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
             onBulkEditTags: { bulkSheet = .editTags },
-            onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) }
+            onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) },
         )
         .sheet(item: $bulkSheet) { which in
             switch which {
@@ -52,13 +52,13 @@ struct PlaylistDetailScreen: View {
                     selectedIDs: selectedIDs,
                     orderedSelectedIDs: orderedSelectedIDs,
                     library: library,
-                    onCommit: { selectedIDs = []; bulkSheet = nil }
+                    onCommit: { selectedIDs = []; bulkSheet = nil },
                 )
             case .editTags:
                 BulkEditTagsScreen(
                     selectedIDs: selectedIDs,
                     library: library,
-                    onCommit: { selectedIDs = []; bulkSheet = nil }
+                    onCommit: { selectedIDs = []; bulkSheet = nil },
                 )
             }
         }
@@ -66,10 +66,10 @@ struct PlaylistDetailScreen: View {
             Text(String(
                 localized: "library.score.deleteBulk.title",
                 defaultValue: "Delete \(bulkDeletePrompt?.count ?? 0) scores?",
-                bundle: .module
+                bundle: .module,
             )),
             isPresented: bulkDeleteAlertBinding,
-            presenting: bulkDeletePrompt
+            presenting: bulkDeletePrompt,
         ) { _ in
             Button {
                 let ids = selectedIDs
@@ -120,7 +120,7 @@ struct PlaylistDetailScreen: View {
     private var bulkDeleteAlertBinding: Binding<Bool> {
         Binding(
             get: { bulkDeletePrompt != nil },
-            set: { isPresented in if !isPresented { bulkDeletePrompt = nil } }
+            set: { isPresented in if !isPresented { bulkDeletePrompt = nil } },
         )
     }
 

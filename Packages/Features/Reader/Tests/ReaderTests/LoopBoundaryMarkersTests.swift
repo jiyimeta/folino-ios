@@ -6,7 +6,7 @@ import SheetMusicCore
 import SheetMusicLayout
 import Testing
 
-@Suite struct LoopBoundaryMarkersTests {
+struct LoopBoundaryMarkersTests {
     private static let sp: CGFloat = 14.0 / 4 // staffSize 14 → sp 3.5
     private static let triangleHeight: CGFloat = sp * LoopBoundaryMarkers.triangleHeightFactor
     private static let triangleWidth: CGFloat = sp * LoopBoundaryMarkers.triangleWidthFactor
@@ -21,7 +21,7 @@ import Testing
             measureIndex: 1,
             origin: CGPoint(x: 80, y: 0),
             width: 100,
-            elements: []
+            elements: [],
         )
         let system = LayoutSystem(
             origin: CGPoint(x: 10, y: 100),
@@ -29,23 +29,23 @@ import Testing
             measures: [m0, m1],
             staffOrigins: [.zero],
             staffAddresses: [staff],
-            partLabels: [], spanners: [], sp: sp
+            partLabels: [], spanners: [], sp: sp,
         )
         let metrics = StaffMetrics(staffSize: 14)
         return LayoutDocument(
             size: CGSize(width: 200, height: 200),
             systems: [system],
-            metrics: metrics
+            metrics: metrics,
         )
     }
 
-    @Test func aMarkerLineSitsAtMeasureLeftEdge() throws {
+    @Test func `a marker line sits at measure left edge`() throws {
         let doc = Self.makeDocument()
         let result = aMarkerGeometry(
             document: doc, measureIndex: 0,
             triangleHeight: Self.triangleHeight,
             lineThickness: Self.lineThickness,
-            triangleWidth: Self.triangleWidth
+            triangleWidth: Self.triangleWidth,
         )
         let line = try #require(result?.line)
         // Measure 0: system.origin.x (10) + measure.origin.x (0) = 10.
@@ -57,13 +57,13 @@ import Testing
         #expect(line.size.width == Self.lineThickness)
     }
 
-    @Test func bMarkerLineSitsAtMeasureRightEdge() throws {
+    @Test func `b marker line sits at measure right edge`() throws {
         let doc = Self.makeDocument()
         let result = bMarkerGeometry(
             document: doc, measureIndex: 1,
             triangleHeight: Self.triangleHeight,
             lineThickness: Self.lineThickness,
-            triangleWidth: Self.triangleWidth
+            triangleWidth: Self.triangleWidth,
         )
         let line = try #require(result?.line)
         // Measure 1: system.origin.x (10) + measure.origin.x (80) + width (100) = 190.
@@ -73,13 +73,13 @@ import Testing
         #expect(line.size.width == Self.lineThickness)
     }
 
-    @Test func aMarkerTrianglePointsRight() throws {
+    @Test func `a marker triangle points right`() throws {
         let doc = Self.makeDocument()
         let result = aMarkerGeometry(
             document: doc, measureIndex: 0,
             triangleHeight: Self.triangleHeight,
             lineThickness: Self.lineThickness,
-            triangleWidth: Self.triangleWidth
+            triangleWidth: Self.triangleWidth,
         )
         let bbox = try #require(result?.triangle.boundingRect)
         // Apex (max X) is to the right of the line center (x = 10).
@@ -91,13 +91,13 @@ import Testing
         #expect(bbox.minY == 100 - Self.triangleHeight)
     }
 
-    @Test func bMarkerTrianglePointsLeft() throws {
+    @Test func `b marker triangle points left`() throws {
         let doc = Self.makeDocument()
         let result = bMarkerGeometry(
             document: doc, measureIndex: 1,
             triangleHeight: Self.triangleHeight,
             lineThickness: Self.lineThickness,
-            triangleWidth: Self.triangleWidth
+            triangleWidth: Self.triangleWidth,
         )
         let bbox = try #require(result?.triangle.boundingRect)
         // Line center for measure 1 right edge = 190; apex (min X) is to its left.
@@ -107,25 +107,25 @@ import Testing
         #expect(bbox.minY == 100 - Self.triangleHeight)
     }
 
-    @Test func returnsNilWhenMeasureMissing() {
+    @Test func `returns nil when measure missing`() {
         let doc = Self.makeDocument()
         #expect(aMarkerGeometry(
             document: doc, measureIndex: 99,
             triangleHeight: Self.triangleHeight,
             lineThickness: Self.lineThickness,
-            triangleWidth: Self.triangleWidth
+            triangleWidth: Self.triangleWidth,
         ) == nil)
         #expect(bMarkerGeometry(
             document: doc, measureIndex: 99,
             triangleHeight: Self.triangleHeight,
             lineThickness: Self.lineThickness,
-            triangleWidth: Self.triangleWidth
+            triangleWidth: Self.triangleWidth,
         ) == nil)
     }
 }
 
-@MainActor @Suite struct LoopBoundaryMarkersWiringTests {
-    @Test func viewBuildsWithRange() {
+@MainActor struct LoopBoundaryMarkersWiringTests {
+    @Test func `view builds with range`() {
         // Smoke test: the view initializer accepts the same shape that
         // LoopRegionOverlay does, so the wiring blocks in
         // {Vertical,Horizontal}ScoreContainer compile.
@@ -135,11 +135,11 @@ import Testing
             origin: .zero, size: CGSize(width: 80, height: 60),
             measures: [m], staffOrigins: [.zero],
             staffAddresses: [staff], partLabels: [], spanners: [],
-            sp: 3.5
+            sp: 3.5,
         )
         let doc = LayoutDocument(
             size: CGSize(width: 80, height: 60),
-            systems: [system], metrics: StaffMetrics(staffSize: 14)
+            systems: [system], metrics: StaffMetrics(staffSize: 14),
         )
         let chord = ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0)
         // Both endpoints, A-only, B-only, and neither — every shape the

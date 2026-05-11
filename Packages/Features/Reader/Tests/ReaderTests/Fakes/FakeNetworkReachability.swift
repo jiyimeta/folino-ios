@@ -7,7 +7,11 @@ actor FakeNetworkReachability: NetworkReachability {
         self.online = online
     }
 
-    func isOnline() -> Bool { online }
+    func isOnline() -> Bool {
+        online
+    }
 
-    func setOnline(_ value: Bool) { online = value }
+    func setOnline(_ value: Bool) {
+        online = value
+    }
 }

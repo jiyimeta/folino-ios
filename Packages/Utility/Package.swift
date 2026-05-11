@@ -23,9 +23,9 @@ let package = Package(
             name: "UtilityUI",
             dependencies: ["UtilityCore"],
             resources: [.process("Resources")],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .target(name: "Navigation", dependencies: ["UtilityCore"], plugins: swiftLintPlugins),
         .testTarget(name: "UtilityCoreTests", dependencies: ["UtilityCore"]),
-    ]
+    ],
 )

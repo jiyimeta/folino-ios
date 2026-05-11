@@ -51,7 +51,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 .fetchAll(db)
             return Snapshot(
                 items: items, tags: tagsRows, playlists: playlistsRows,
-                itemTags: itemTagRows, playlistItems: playlistItemRows
+                itemTags: itemTagRows, playlistItems: playlistItemRows,
             )
         }
 
@@ -88,7 +88,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
 
     // MARK: - Snapshot translation
 
-    private struct Snapshot: Sendable {
+    private struct Snapshot {
         var items: [ScoreItemRecord]
         var tags: [TagRecord]
         var playlists: [PlaylistRecord]
@@ -96,7 +96,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         var playlistItems: [PlaylistItemRecord]
     }
 
-    private struct Materialized: Sendable {
+    private struct Materialized {
         var items: [ScoreItem]
         var tags: [Domain.Tag]
         var playlists: [Playlist]
@@ -138,7 +138,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 for tagID in item.tagIDs {
                     try ScoreItemTagRecord(
                         scoreItemID: item.id.rawValue.uuidString,
-                        tagID: tagID.rawValue.uuidString
+                        tagID: tagID.rawValue.uuidString,
                     ).insert(db)
                 }
             }
@@ -200,7 +200,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                     try PlaylistItemRecord(
                         playlistID: playlist.id.rawValue.uuidString,
                         scoreItemID: scoreItemID.rawValue.uuidString,
-                        position: position
+                        position: position,
                     ).insert(db)
                 }
             }

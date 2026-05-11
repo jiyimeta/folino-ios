@@ -3,7 +3,7 @@ import Foundation
 @testable import Library
 import Testing
 
-@Suite @MainActor
+@MainActor
 struct LibraryViewModelBulkTests {
     private static let base = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -12,7 +12,7 @@ struct LibraryViewModelBulkTests {
             title: title, composer: nil, instrumentationSummary: nil,
             localFileName: "\(title).mscx", contentHash: title,
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
-            addedAt: base, lastOpenedAt: nil, tagIDs: [], isFavorite: false
+            addedAt: base, lastOpenedAt: nil, tagIDs: [], isFavorite: false,
         )
     }
 
@@ -28,14 +28,14 @@ struct LibraryViewModelBulkTests {
             repository: repo,
             importer: FakeScoreFileImporter(),
             gateway: FakeScoreFileGateway(),
-            shareService: FakeScoreShareService()
+            shareService: FakeScoreShareService(),
         )
         return VMFixture(vm: vm, repo: repo)
     }
 
     // MARK: - bulkDelete
 
-    @Test func bulkDeleteRemovesAllPassedIDs() async {
+    @Test func `bulk delete removes all passed I ds`() async {
         let a = Self.makeItem(title: "A")
         let b = Self.makeItem(title: "B")
         let c = Self.makeItem(title: "C")
@@ -48,14 +48,14 @@ struct LibraryViewModelBulkTests {
         #expect(f.vm.errorAlertMessage == nil)
     }
 
-    @Test func bulkDeleteEmptyIsNoOp() async {
+    @Test func `bulk delete empty is no op`() async {
         let f = Self.makeVM(scoreItems: [Self.makeItem(title: "A")])
         await f.vm.bulkDelete([])
         #expect(f.repo.deletedScoreItemIDs.isEmpty)
         #expect(f.vm.errorAlertMessage == nil)
     }
 
-    @Test func bulkDeleteStopsAtFirstError() async {
+    @Test func `bulk delete stops at first error`() async {
         let a = Self.makeItem(title: "A")
         let b = Self.makeItem(title: "B")
         let f = Self.makeVM(scoreItems: [a, b])
@@ -69,7 +69,7 @@ struct LibraryViewModelBulkTests {
 
     // MARK: - bulkRemoveFromPlaylist
 
-    @Test func bulkRemoveFromPlaylistFiltersAndPreservesOrder() async {
+    @Test func `bulk remove from playlist filters and preserves order`() async {
         let a = Self.makeItem(title: "A")
         let b = Self.makeItem(title: "B")
         let c = Self.makeItem(title: "C")
@@ -77,7 +77,7 @@ struct LibraryViewModelBulkTests {
         let playlist = Playlist(
             name: "P",
             orderedScoreItemIDs: [a.id, b.id, c.id],
-            createdAt: Self.base
+            createdAt: Self.base,
         )
         f.repo.playlists = [playlist]
 
@@ -87,11 +87,11 @@ struct LibraryViewModelBulkTests {
         #expect(f.repo.scoreItems.count == 3) // scores stay
     }
 
-    @Test func bulkRemoveFromPlaylistEmptyIsNoOp() async {
+    @Test func `bulk remove from playlist empty is no op`() async {
         let a = Self.makeItem(title: "A")
         let f = Self.makeVM(scoreItems: [a])
         let playlist = Playlist(
-            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base
+            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base,
         )
         f.repo.playlists = [playlist]
 
@@ -102,13 +102,13 @@ struct LibraryViewModelBulkTests {
 
     // MARK: - bulkAddToPlaylist
 
-    @Test func bulkAddToPlaylistAppendsMissingPreservesOrder() async {
+    @Test func `bulk add to playlist appends missing preserves order`() async {
         let a = Self.makeItem(title: "A")
         let b = Self.makeItem(title: "B")
         let c = Self.makeItem(title: "C")
         let f = Self.makeVM(scoreItems: [a, b, c])
         let playlist = Playlist(
-            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base
+            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base,
         )
         f.repo.playlists = [playlist]
 
@@ -118,11 +118,11 @@ struct LibraryViewModelBulkTests {
         #expect(f.repo.savedPlaylists.last?.orderedScoreItemIDs == [a.id, b.id, c.id])
     }
 
-    @Test func bulkAddToPlaylistAllPresentIsNoOp() async {
+    @Test func `bulk add to playlist all present is no op`() async {
         let a = Self.makeItem(title: "A")
         let f = Self.makeVM(scoreItems: [a])
         let playlist = Playlist(
-            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base
+            name: "P", orderedScoreItemIDs: [a.id], createdAt: Self.base,
         )
         f.repo.playlists = [playlist]
 
@@ -131,7 +131,7 @@ struct LibraryViewModelBulkTests {
         #expect(f.repo.savedPlaylists.isEmpty)
     }
 
-    @Test func bulkAddToPlaylistEmptyIsNoOp() async {
+    @Test func `bulk add to playlist empty is no op`() async {
         let f = Self.makeVM()
         let playlist = Playlist(name: "P", orderedScoreItemIDs: [], createdAt: Self.base)
         f.repo.playlists = [playlist]
@@ -143,7 +143,7 @@ struct LibraryViewModelBulkTests {
 
     // MARK: - bulkAddTags
 
-    @Test func bulkAddTagsUnionsTagSets() async {
+    @Test func `bulk add tags unions tag sets`() async {
         let tagA = TagID()
         let tagB = TagID()
         var item1 = Self.makeItem(title: "1"); item1.tagIDs = [tagA]
@@ -158,7 +158,7 @@ struct LibraryViewModelBulkTests {
         #expect(saved2?.tagIDs == [tagB])
     }
 
-    @Test func bulkAddTagsSkipsWritesWhenAlreadyHasAll() async {
+    @Test func `bulk add tags skips writes when already has all`() async {
         let tagA = TagID()
         var item = Self.makeItem(title: "1"); item.tagIDs = [tagA]
         let f = Self.makeVM(scoreItems: [item])
@@ -168,7 +168,7 @@ struct LibraryViewModelBulkTests {
         #expect(f.repo.savedScoreItems.isEmpty)
     }
 
-    @Test func bulkAddTagsEmptyTagsIsNoOp() async {
+    @Test func `bulk add tags empty tags is no op`() async {
         let item = Self.makeItem(title: "1")
         let f = Self.makeVM(scoreItems: [item])
 

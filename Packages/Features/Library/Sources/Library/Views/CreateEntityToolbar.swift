@@ -12,13 +12,13 @@ struct CreateEntityCopy {
     nonisolated(unsafe) static let playlist = CreateEntityCopy(
         createTitleKey: "library.playlist.create.title",
         createMessageKey: "library.playlist.create.message",
-        placeholderKey: "library.playlist.namePlaceholder"
+        placeholderKey: "library.playlist.namePlaceholder",
     )
 
     nonisolated(unsafe) static let tag = CreateEntityCopy(
         createTitleKey: "library.tag.create.title",
         createMessageKey: "library.tag.create.message",
-        placeholderKey: "library.tag.namePlaceholder"
+        placeholderKey: "library.tag.namePlaceholder",
     )
 }
 
@@ -34,7 +34,7 @@ private struct CreateEntityToolbarModifier: ViewModifier {
             .toolbar { createToolbar }
             .alert(
                 Text(copy.createTitleKey, bundle: .module),
-                isPresented: $isCreating
+                isPresented: $isCreating,
             ) {
                 TextField(text: $newName) {
                     Text(copy.placeholderKey, bundle: .module)
@@ -72,7 +72,7 @@ private struct CreateEntityToolbarModifier: ViewModifier {
 extension View {
     func createEntityToolbar(
         copy: CreateEntityCopy,
-        onCreate: @escaping (String) -> Void
+        onCreate: @escaping (String) -> Void,
     ) -> some View {
         modifier(CreateEntityToolbarModifier(copy: copy, onCreate: onCreate))
     }
