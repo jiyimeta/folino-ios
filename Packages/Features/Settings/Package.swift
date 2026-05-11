@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
+        .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
@@ -26,10 +27,11 @@ let package = Package(
                 .product(name: "DeviceKit", package: "DeviceKit"),
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
+                .product(name: "Yams", package: "Yams"),
             ],
             resources: [.process("Resources")],
-            plugins: swiftLintPlugins
+            plugins: swiftLintPlugins,
         ),
         .testTarget(name: "SettingsTests", dependencies: ["Settings", "Domain"]),
-    ]
+    ],
 )

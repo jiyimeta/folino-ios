@@ -25,13 +25,18 @@ final class ReviewPromptCoordinator {
 
     /// Idempotent per-process. Safe to call from `.task` blocks that may run
     /// multiple times across iPad multi-window scenes.
-    func registerColdLaunchIfNeeded() {
+    ///
+    /// Pass `suppressDisplay: true` when another cold-launch sheet (e.g.
+    /// version history) is taking priority for this launch. The counter still
+    /// increments so the cadence keeps moving; the user just doesn't see the
+    /// pre-prompt this time around.
+    func registerColdLaunchIfNeeded(suppressDisplay: Bool = false) {
         guard !hasRegistered else { return }
         hasRegistered = true
 
         let count = defaults.integer(forKey: Self.coldLaunchCountKey) + 1
         defaults.set(count, forKey: Self.coldLaunchCountKey)
-        if shouldPrompt(at: count) {
+        if !suppressDisplay, shouldPrompt(at: count) {
             isPrePromptPresented = true
         }
     }
