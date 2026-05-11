@@ -2,7 +2,8 @@ import Domain
 import SwiftUI
 
 public struct VersionHistoryScreen: View {
-    @Bindable private var viewModel: VersionHistoryViewModel
+    private let viewModel: VersionHistoryViewModel
+    @Environment(\.colorScheme) private var colorScheme
     private let onAppear: @MainActor () -> Void
 
     public init(viewModel: VersionHistoryViewModel, onAppear: @escaping @MainActor () -> Void = {}) {
@@ -75,8 +76,6 @@ public struct VersionHistoryScreen: View {
         .padding(12)
         .background(rowBackground(for: entry.version), in: RoundedRectangle(cornerRadius: 10))
     }
-
-    @Environment(\.colorScheme) private var colorScheme
 
     private func rowBackground(for version: AppVersion) -> Color {
         let isMajorRelease = version.minor == 0 && version.patch == 0
