@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "•" : {
+
+    },
     "settings.about.licenses" : {
       "localizations" : {
         "en" : {

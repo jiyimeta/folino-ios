@@ -256,23 +256,6 @@
         }
       }
     },
-    "library.playlist.add.action" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add to Playlist"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "プレイリストに追加"
-          }
-        }
-      }
-    },
     "library.playlist.add.actionEllipsis" : {
       "localizations" : {
         "en" : {
@@ -673,6 +656,22 @@
         }
       }
     },
+    "library.score.preparing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "準備中…"
+          }
+        }
+      }
+    },
     "library.score.rename.placeholder" : {
       "localizations" : {
         "en" : {
@@ -701,22 +700,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "スコアの名前を変更"
-          }
-        }
-      }
-    },
-    "library.score.preparing" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparing…"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "準備中…"
           }
         }
       }

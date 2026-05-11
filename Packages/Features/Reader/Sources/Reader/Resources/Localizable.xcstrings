@@ -183,6 +183,22 @@
         }
       }
     },
+    "reader.preferences.clef.choice.baritone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baritone"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バリトン"
+          }
+        }
+      }
+    },
     "reader.preferences.clef.choice.bass" : {
       "localizations" : {
         "en" : {
@@ -259,22 +275,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "パーカッション (代替)"
-          }
-        }
-      }
-    },
-    "reader.preferences.clef.choice.baritone" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Baritone"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "バリトン"
           }
         }
       }
@@ -630,15 +630,6 @@
           }
         }
       }
-    },
-    "Repeat mode" : {
-
-    },
-    "パート" : {
-
-    },
-    "全体" : {
-
     }
   },
   "version" : "1.1"
