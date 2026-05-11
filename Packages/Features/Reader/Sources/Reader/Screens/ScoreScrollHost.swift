@@ -11,7 +11,7 @@ enum ScoreScrollCommand: Equatable {
     var point: CGPoint {
         switch self {
         case let .immediate(point), let .animated(point):
-            return point
+            point
         }
     }
 
@@ -63,7 +63,10 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // we leave delaysContentTouches at its default (true).
         scroll.delaysContentTouches = false
         scroll.canCancelContentTouches = true
-        scroll.contentInsetAdjustmentBehavior = .always
+        // SwiftUI side owns the top inset via `.safeAreaPadding` on the
+        // host view. `.always` would double-apply and leave margins
+        // above / below the score.
+        scroll.contentInsetAdjustmentBehavior = .never
         scroll.delegate = context.coordinator
 
         let host = UIHostingController(rootView: content())
@@ -83,7 +86,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
 
         let pinch = UIPinchGestureRecognizer(
             target: context.coordinator,
-            action: #selector(Coordinator.handlePinch(_:))
+            action: #selector(Coordinator.handlePinch(_:)),
         )
         pinch.delegate = context.coordinator
         scroll.addGestureRecognizer(pinch)
@@ -113,7 +116,9 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
 
     @MainActor
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
@@ -152,7 +157,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // promotion (and pan-during-pinch) works.
         func gestureRecognizer(
             _: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer
+            shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer,
         ) -> Bool {
             true
         }
@@ -168,7 +173,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 let bounds = hostView.bounds
                 let anchor = UnitPoint(
                     x: bounds.width > 0 ? pinchStartLocation.x / bounds.width : 0.5,
-                    y: bounds.height > 0 ? pinchStartLocation.y / bounds.height : 0.5
+                    y: bounds.height > 0 ? pinchStartLocation.y / bounds.height : 0.5,
                 )
                 parent.onPinchBegan(anchor, pinchStartLocation)
             case .changed:

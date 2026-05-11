@@ -133,6 +133,12 @@ struct VerticalScoreContainer: View {
         ) {
             zoomedSurface(viewport: viewport)
         }
+        // `UIViewRepresentable` resolves safe area by shrinking its UIView
+        // frame (SwiftUI's own `ScrollView` keeps the background full-bleed
+        // and represents safe area as `contentInsets` — we can't). The
+        // overlays sit in a ZStack on top, so letting the score slide
+        // under them is the intended look.
+        .ignoresSafeArea()
         .onChange(of: viewModel.viewportZoom) { _, _ in
             // After a pinch zoom commit, apply the queued scroll once
             // the new `viewportZoom` has produced a new framed size
