@@ -38,26 +38,19 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.repeatMode == .off)
     }
 
-    // TODO: regression introduced by 923e16b (inspector split) — the old
-    // `advanceRepeatMode()` async method persisted the new mode AND pushed
-    // the loop range to the controller. The replacement setter
-    // `repeatMode = ...` only mutates `preferences.repeatMode` in memory,
-    // so persistence and `forwardLoopRangeToController` no longer fire.
-    // Re-enable once that side-effect path is restored.
-    @Test(.disabled("regression: repeatMode setter no longer persists"))
-    func `repeat mode assignment persists`() async {
+    @Test func `set repeat mode persists`() async {
         let (vm, _, repo) = Self.makeVM()
         await vm.load()
 
-        vm.repeatMode = .loopAll
+        await vm.setRepeatMode(.loopAll)
         #expect(vm.repeatMode == .loopAll)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .loopAll)
 
-        vm.repeatMode = .abLoop
+        await vm.setRepeatMode(.abLoop)
         #expect(vm.repeatMode == .abLoop)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .abLoop)
 
-        vm.repeatMode = .off
+        await vm.setRepeatMode(.off)
         #expect(vm.repeatMode == .off)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .off)
     }
@@ -138,28 +131,24 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.pendingRepeatA?.measureIndex == 1)
     }
 
-    /// See note on `repeatModeAssignmentPersists` above — the setter no
-    /// longer pushes loop range, so this assertion can't be satisfied
-    /// without restoring the side effect.
-    @Test(.disabled("regression: repeatMode setter no longer pushes loop range"))
-    func `repeat mode assignment forwards loop range`() async {
+    @Test func `set repeat mode forwards loop range`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
 
-        vm.repeatMode = .loopAll
+        await vm.setRepeatMode(.loopAll)
         #expect(controller.loopRangeCalls.last??.start.measureIndex == 0)
 
-        vm.repeatMode = .abLoop
+        await vm.setRepeatMode(.abLoop)
         #expect(controller.loopRangeCalls.last == .some(nil))
 
-        vm.repeatMode = .off
+        await vm.setRepeatMode(.off)
         #expect(controller.loopRangeCalls.last == .some(nil))
     }
 
     @Test func `set repeat A only does not forward loop range yet`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
-        vm.repeatMode = .abLoop
+        await vm.setRepeatMode(.abLoop)
         let countBefore = controller.loopRangeCalls.count
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
 
@@ -173,7 +162,7 @@ struct ReaderViewModelRepeatTests {
     @Test func `both markers set forwards the normalized range`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
-        vm.repeatMode = .abLoop
+        await vm.setRepeatMode(.abLoop)
         vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
         await vm.setRepeatA()
         vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))

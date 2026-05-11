@@ -606,9 +606,37 @@ public final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// Staged B endpoint not yet committed (incomplete loop).
     private var pendingB: ChordPath?
 
+    /// Bridges the SwiftUI picker's `Binding<RepeatMode>` write into the
+    /// async `setRepeatMode(_:)` path. The in-memory value is updated
+    /// synchronously so the bound picker reads the new selection on the
+    /// next observation tick; persistence and the loop-range push to
+    /// the controller happen on the spawned `Task`. Tests should call
+    /// `setRepeatMode(_:)` directly to await both side effects
+    /// deterministically.
     public var repeatMode: RepeatMode {
         get { preferences.repeatMode }
-        set { preferences.repeatMode = newValue }
+        set {
+            guard newValue != preferences.repeatMode else { return }
+            preferences.repeatMode = newValue
+            Task { await persistRepeatModeAndPushLoopRange() }
+        }
+    }
+
+    /// Sets the repeat mode and awaits both side effects: persistence
+    /// of the updated `ReaderPreferences` AND the loop-range push to
+    /// the playback controller. Use this from tests or any async
+    /// context that needs to observe those side effects before
+    /// continuing.
+    public func setRepeatMode(_ value: RepeatMode) async {
+        guard value != preferences.repeatMode else { return }
+        preferences.repeatMode = value
+        await persistRepeatModeAndPushLoopRange()
+    }
+
+    private func persistRepeatModeAndPushLoopRange() async {
+        let value = preferences.repeatMode
+        await mutatePreferences { $0.repeatMode = value }
+        await forwardLoopRangeToController()
     }
 
     public var abRepeat: ABRepeatRange? {
