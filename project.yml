@@ -98,3 +98,16 @@ targets:
         product: SheetMusicLayout
       - package: LicenseList
         product: LicenseList
+  FolinoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/FolinoTests
+    dependencies:
+      - target: Folino
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.tests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/folino.app/folino
