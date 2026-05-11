@@ -8,7 +8,7 @@ import SwiftUI
 enum ClefMenuChoice: Hashable, CaseIterable {
     case trebleG, trebleG8va, trebleG8vb, trebleG15ma, trebleG15mb
     case bassF, bassF8va, bassF8vb
-    case altoC3, tenorC4
+    case sopranoC1, altoC3, tenorC4, baritoneC5
     case percussion, percussion2
 
     var rawType: String {
@@ -21,8 +21,10 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         case .bassF: "F"
         case .bassF8va: "F8va"
         case .bassF8vb: "F8vb"
+        case .sopranoC1: "C1"
         case .altoC3: "C3"
         case .tenorC4: "C4"
+        case .baritoneC5: "C5"
         case .percussion: "PERC"
         case .percussion2: "PERC2"
         }
@@ -40,7 +42,11 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         case .bassF: "\u{E062}" // fClef
         case .bassF8va: "\u{E065}" // fClef8va
         case .bassF8vb: "\u{E064}" // fClef8vb
-        case .altoC3, .tenorC4: "\u{E05C}" // cClef (movable)
+        // All four C clef variants share the movable cClef glyph; the
+        // staff-line position the glyph attaches to is what
+        // distinguishes Soprano (line 1) / Alto (3) / Tenor (4) /
+        // Baritone (5). The picker tile applies that yOffset itself.
+        case .sopranoC1, .altoC3, .tenorC4, .baritoneC5: "\u{E05C}" // cClef (movable)
         case .percussion: "\u{E069}" // unpitchedPercussionClef1
         case .percussion2: "\u{E06A}" // unpitchedPercussionClef2
         }
@@ -58,8 +64,10 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         case .bassF: "reader.preferences.clef.choice.bass"
         case .bassF8va: "reader.preferences.clef.choice.bass8va"
         case .bassF8vb: "reader.preferences.clef.choice.bass8vb"
+        case .sopranoC1: "reader.preferences.clef.choice.soprano"
         case .altoC3: "reader.preferences.clef.choice.alto"
         case .tenorC4: "reader.preferences.clef.choice.tenor"
+        case .baritoneC5: "reader.preferences.clef.choice.baritone"
         case .percussion: "reader.preferences.clef.choice.percussion"
         case .percussion2: "reader.preferences.clef.choice.percussion2"
         }
@@ -72,7 +80,7 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         .bassF, .bassF8va, .bassF8vb,
     ]
     static let cFamily: [ClefMenuChoice] = [
-        .altoC3, .tenorC4,
+        .sopranoC1, .altoC3, .tenorC4, .baritoneC5,
     ]
     static let percussionFamily: [ClefMenuChoice] = [
         .percussion, .percussion2,

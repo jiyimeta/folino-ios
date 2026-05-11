@@ -263,6 +263,38 @@
         }
       }
     },
+    "reader.preferences.clef.choice.baritone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baritone"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バリトン"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.soprano" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soprano"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ソプラノ"
+          }
+        }
+      }
+    },
     "reader.preferences.clef.choice.tenor" : {
       "localizations" : {
         "en" : {

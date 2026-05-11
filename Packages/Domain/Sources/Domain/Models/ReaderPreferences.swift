@@ -13,18 +13,18 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let maxTempoMultiplier: Double = 2.0
 
     /// Allow-list of canonical `NotatedClef.rawType` values the Domain
-    /// initializer accepts. Mirrors the 12 forms `NotatedClef.rawType`
+    /// initializer accepts. Mirrors the 14 forms `NotatedClef.rawType`
     /// emits in `swift-sheet-music`. Aliases that `NotatedClef(rawType:)`
     /// accepts as inputs but never emits (e.g. `"treble"`, `"bass"`,
-    /// `"alto"`, `"tenor"`, `"G1"`, `"G2"`, `"percussion"`) are
-    /// intentionally excluded so override values stay canonical and
-    /// round-trip equality is preserved. If `swift-sheet-music` adds a
-    /// new emitted rawType, audit `NotatedClef.rawType`'s switch and
-    /// extend this set.
+    /// `"soprano"`, `"alto"`, `"tenor"`, `"baritone"`, `"G1"`, `"G2"`,
+    /// `"percussion"`) are intentionally excluded so override values
+    /// stay canonical and round-trip equality is preserved. If
+    /// `swift-sheet-music` adds a new emitted rawType, audit
+    /// `NotatedClef.rawType`'s switch and extend this set.
     public static let knownClefRawTypes: Set<String> = [
         "G", "G8va", "G8vb", "G15ma", "G15mb",
         "F", "F8va", "F8vb",
-        "C3", "C4",
+        "C1", "C3", "C4", "C5",
         "PERC", "PERC2",
     ]
 

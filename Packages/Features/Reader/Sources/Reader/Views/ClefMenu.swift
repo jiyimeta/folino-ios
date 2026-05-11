@@ -166,26 +166,31 @@ struct ClefMenu: View {
             path.addLine(to: CGPoint(x: size.width, y: y))
             ctx.stroke(path, with: .color(.primary.opacity(0.6)), lineWidth: 0.5)
         }
-        // Anchor convention: origin Y is the staff's middle line. Treble
-        // is +sp (G line, line 2 from bottom), bass is -sp (F line, line
-        // 4), Alto C is 0 (line 3, middle), Tenor C is -sp (line 4).
-        // The Tenor anchor here intentionally diverges from upstream's
-        // shared alto/tenor `yOffset = 0` so the picker tile shows the
-        // musically-correct C-line for tenor — the score renderer's
-        // tenor positioning is a separate upstream concern.
+        // Anchor convention: origin Y is the staff's middle line, with
+        // +Y meaning down (toward the bottom line). Mirrors upstream
+        // `ClefRenderer`'s yOffset table exactly:
+        //   * Treble family: +sp (G line, line 2 from bottom)
+        //   * Bass   family: -sp (F line, line 4 from bottom)
+        //   * Soprano C:    +2sp (line 1, bottom)
+        //   * Alto    C:    0    (line 3, middle)
+        //   * Tenor   C:    -sp  (line 4)
+        //   * Baritone C:   -2sp (line 5, top)
+        //   * Percussion:   0    (centred)
         let middleY = staffTop + sp * 2
         let yOffset: CGFloat = switch choice {
         case .trebleG, .trebleG8va, .trebleG8vb, .trebleG15ma, .trebleG15mb:
             sp
         case .bassF, .bassF8va, .bassF8vb:
             -sp
+        case .sopranoC1:
+            2 * sp
         case .altoC3:
             0
         case .tenorC4:
             -sp
+        case .baritoneC5:
+            -2 * sp
         case .percussion, .percussion2:
-            // Percussion clefs are vertically centred on the staff (line
-            // 3) — same as upstream `ClefRenderer`'s `yOffset = 0`.
             0
         }
         let glyphText = Text(String(choice.smuflGlyph))
