@@ -6,8 +6,7 @@ public protocol VersionHistoryLoader: Sendable {
     func load() throws -> [VersionHistoryEntry]
 }
 
-public struct DefaultVersionHistoryLoader: VersionHistoryLoader, @unchecked Sendable {
-    /// Bundle is read-only after init; safe to send.
+public struct DefaultVersionHistoryLoader: VersionHistoryLoader {
     public enum LoadError: Error {
         case resourceNotFound(name: String)
         case unparseableRoot
@@ -36,9 +35,6 @@ public struct DefaultVersionHistoryLoader: VersionHistoryLoader, @unchecked Send
             throw LoadError.unparseableRoot
         }
         let decoder = YAMLDecoder()
-        return sequence.compactMap { node in
-            guard let yamlForEntry = try? Yams.serialize(node: node) else { return nil }
-            return try? decoder.decode(VersionHistoryEntry.self, from: yamlForEntry)
-        }
+        return sequence.compactMap { try? decoder.decode(VersionHistoryEntry.self, from: $0) }
     }
 }
