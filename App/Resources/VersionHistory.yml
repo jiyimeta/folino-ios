@@ -2,23 +2,50 @@
   descriptions:
     - en: Fixed a crash that occurred when deleting a score
       ja: 楽譜削除でクラッシュする不具合を修正
+      zh-Hans: 修复删除乐谱时崩溃的问题
+      zh-Hant: 修正刪除樂譜時的閃退問題
+      ko: 악보 삭제 시 발생하던 충돌 수정
     - en: Added the ability to change clefs per staff
       ja: 譜表ごとの音部記号変更機能を追加
+      zh-Hans: 新增按谱表更改谱号的功能
+      zh-Hant: 新增依譜表變更譜號的功能
+      ko: 보표별 음자리표 변경 기능 추가
     - en: Added the ability to rename files
       ja: ファイル名変更機能を追加
+      zh-Hans: 新增重命名文件的功能
+      zh-Hant: 新增重新命名檔案的功能
+      ko: 파일 이름 변경 기능 추가
     - en: Improved scroll and zoom controls for scores
       ja: 楽譜のスクロール・ズームの操作性を改善
+      zh-Hans: 改进乐谱滚动与缩放的操作
+      zh-Hant: 改善樂譜捲動與縮放的操作
+      ko: 악보 스크롤과 확대/축소 조작 개선
 - version: 1.1.1
   descriptions:
     - en: Fixed an import error that occurred with some files
       ja: 一部のファイルで発生する取り込みエラーを修正
+      zh-Hans: 修复部分文件导入时发生的错误
+      zh-Hant: 修正部分檔案匯入時發生的錯誤
+      ko: 일부 파일에서 발생하던 가져오기 오류 수정
     - en: Improved score display and playback
       ja: 楽譜の表示・再生を改善
+      zh-Hans: 改进乐谱显示与播放
+      zh-Hant: 改善樂譜顯示與播放
+      ko: 악보 표시와 재생 개선
 - version: 1.1.0
   descriptions:
     - en: Added support for importing MIDI files
       ja: MIDIファイルの取り込みに対応
+      zh-Hans: 新增 MIDI 文件导入支持
+      zh-Hant: 新增 MIDI 檔案匯入支援
+      ko: MIDI 파일 가져오기 지원 추가
     - en: Improved score recognition accuracy
       ja: 楽譜読み込み精度の向上
+      zh-Hans: 提升乐谱识别精度
+      zh-Hant: 提升樂譜辨識精度
+      ko: 악보 인식 정확도 향상
     - en: Overall UI/UX refinements
       ja: 全体的なUI/UXの改善
+      zh-Hans: 整体 UI/UX 优化
+      zh-Hant: 整體 UI/UX 改善
+      ko: 전반적인 UI/UX 개선

@@ -26,6 +26,20 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
     private struct LocalizedDescription: Decodable {
         let en: String
         let ja: String
+        // Newer locales are optional so a future entry that forgets a translation
+        // falls back to en instead of being silently dropped by the loader's
+        // `try?` decode.
+        let zhHans: String?
+        let zhHant: String?
+        let ko: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case en
+            case ja
+            case zhHans = "zh-Hans"
+            case zhHant = "zh-Hant"
+            case ko
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -42,7 +56,16 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
 
         let entries = try container.decode([LocalizedDescription].self, forKey: .descriptions)
         let locale = decoder.userInfo[Self.localeUserInfoKey] as? Locale ?? .current
-        let isJa = locale.language.languageCode?.identifier == "ja"
-        descriptions = entries.map { isJa ? $0.ja : $0.en }
+        let lang = locale.language.languageCode?.identifier
+        let script = locale.language.script?.identifier
+        descriptions = entries.map { entry in
+            switch (lang, script) {
+            case ("ja", _): entry.ja
+            case ("ko", _): entry.ko ?? entry.en
+            case ("zh", "Hans"): entry.zhHans ?? entry.en
+            case ("zh", "Hant"): entry.zhHant ?? entry.en
+            default: entry.en
+            }
+        }
     }
 }
