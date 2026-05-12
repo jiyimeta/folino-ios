@@ -30,6 +30,13 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var isPlayingHandler: (@MainActor (Bool) -> Void)?
     private var cancellables: Set<AnyCancellable> = []
+    /// Last engine time we observed on the cursor stream. Used to detect
+    /// backward jumps (A-B loop wrap) and re-publish `nowPlayingInfo` so
+    /// the lock-screen scrubber follows the wrap. iOS interpolates the
+    /// scrubber from the last published elapsed snapshot + rate, so
+    /// without an extra publish on wrap the lock screen keeps advancing
+    /// past B even though audio and in-app cursor jumped back to A.
+    private var lastObservedEngineTime: TimeInterval = 0
     /// Cached title / artist / default-rate for the loaded score. We
     /// rebuild the full `nowPlayingInfo` dictionary on every state
     /// change rather than mutating the live one in place — reading
@@ -64,7 +71,17 @@ public final class LivePlaybackController: Domain.PlaybackController {
                 // cursor positions before SwiftUI got a render slot
                 // between them — visible as the cursor "skipping" past
                 // chord onsets that the example app shows.
-                self?.cursorHandler?(value)
+                guard let self else { return }
+                let now = engine.currentTimeSeconds
+                if now < lastObservedEngineTime {
+                    // A-B loop wrap (or any other engine-driven backward
+                    // jump) — re-publish so the lock-screen scrubber
+                    // resets to the new elapsed time instead of
+                    // continuing to interpolate past B.
+                    publishNowPlayingInfo(seeking: true)
+                }
+                lastObservedEngineTime = now
+                cursorHandler?(value)
             }
             .store(in: &cancellables)
         engine.$state
@@ -252,7 +269,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func skip(bySeconds seconds: TimeInterval) {
         engine.skip(by: seconds)
-        publishNowPlayingInfo()
+        publishNowPlayingInfo(seeking: true)
     }
 
     public func setStaffVolume(staff: Int, volume: Double) {
@@ -360,7 +377,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
             else { return .commandFailed }
             MainActor.assumeIsolated {
                 self.engine.skip(by: skip.interval)
-                self.publishNowPlayingInfo()
+                self.publishNowPlayingInfo(seeking: true)
             }
             return .success
         }
@@ -370,7 +387,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
             else { return .commandFailed }
             MainActor.assumeIsolated {
                 self.engine.skip(by: -skip.interval)
-                self.publishNowPlayingInfo()
+                self.publishNowPlayingInfo(seeking: true)
             }
             return .success
         }
@@ -390,7 +407,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
             MainActor.assumeIsolated {
                 let delta = position.positionTime - self.engine.currentTimeSeconds
                 self.engine.skip(by: delta)
-                self.publishNowPlayingInfo()
+                self.publishNowPlayingInfo(seeking: true)
             }
             return .success
         }
@@ -440,19 +457,37 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// complete dictionary — partial updates that read `nowPlayingInfo` back
     /// have been observed to silently drop the rate change when the system
     /// returns nil mid-transition.
-    private func publishNowPlayingInfo() {
+    ///
+    /// `seeking` flag — for engine-driven backward jumps (A-B loop wrap)
+    /// and explicit seeks. iOS doesn't honour a decreasing
+    /// `elapsedPlaybackTime` with `playbackRate` held at 1.0 (the lock
+    /// screen scrubber keeps extrapolating forward from the previous
+    /// snapshot). The workaround is to publish with `rate = 0` first to
+    /// force iOS to commit the new elapsed value, then re-publish with
+    /// the real rate so playback continues. Apple's MusicKit /
+    /// AVPlayer-backed apps do this implicitly via `playbackState`
+    /// transitions, which third-party apps can't write directly.
+    private func publishNowPlayingInfo(seeking: Bool = false) {
         let isPlaying = engine.state == .playing
-        var info = nowPlayingMetadata
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-        // Duration + elapsed time drive the lock-screen scrubber. iOS
-        // interpolates between the elapsed snapshot and the rate, so a
-        // single publish on each state / skip change is enough — no
-        // per-tick republish needed.
-        info[MPMediaItemPropertyPlaybackDuration] = engine.totalTimeSeconds
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = engine.currentTimeSeconds
+        let elapsed = engine.currentTimeSeconds
         let center = MPNowPlayingInfoCenter.default()
+        var info = nowPlayingMetadata
+        info[MPMediaItemPropertyPlaybackDuration] = engine.totalTimeSeconds
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
+        if seeking, isPlaying {
+            // Two-step publish: first park the rate at 0 with the new
+            // elapsed so iOS records the snapshot, then resume rate = 1
+            // so extrapolation continues from the snapped position.
+            info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
+            center.nowPlayingInfo = info
+        }
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         center.nowPlayingInfo = info
         center.playbackState = isPlaying ? .playing : .paused
+        // Resync the cursor-sink's backward-jump detector so the next
+        // tick after an explicit publish (skip / seek / state change)
+        // doesn't re-trigger a redundant publish.
+        lastObservedEngineTime = elapsed
     }
 }
 
