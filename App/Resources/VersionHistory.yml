@@ -1,11 +1,3 @@
-- version: 1.3.0
-  descriptions:
-    - en: Added support for Picture in Picture
-      ja: ピクチャインピクチャに対応
-    - en: Added the ability to display multi-measure rests as a single bar
-      ja: 多小節休符をまとめて表示する機能を追加
-    - en: Minor bug fixes
-      ja: 軽微なバグを修正
 - version: 1.2.0
   descriptions:
     - en: Fixed a crash that occurred when deleting a score
