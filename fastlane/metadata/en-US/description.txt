@@ -13,6 +13,7 @@ Show or hide individual parts so you can focus on the staff you need, even on th
 Adjust volume per part, mute or solo individual staves, and change instruments for each part so you can focus on the line you want to hear.
 Use A-B repeat, a metronome, and tempo control to work through difficult phrases with repetition.
 Background playback is also supported, so you can keep listening while doing other things on your device.
+Picture in Picture keeps the score visible in a mini-player while another app is in use, so you can follow along without switching back.
 
 [Stay Organized]
 Use playlists and tags to organize your scores by ensemble, event, rehearsal set, or any other workflow that fits your music life.
