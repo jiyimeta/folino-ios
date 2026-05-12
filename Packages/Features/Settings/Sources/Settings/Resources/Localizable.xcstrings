@@ -315,7 +315,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keeps the score visible in a mini-player while another app is in use. Requires \"Start PiP Automatically\" to be enabled in device Settings."
+            "value" : "Keeps the score visible in a mini-player while another app is in use. Requires \"Start Picture in Picture Automatically\" to be enabled in device Settings."
           }
         },
         "ja" : {
@@ -327,7 +327,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "다른 앱을 사용하는 동안 미니 플레이어로 악보를 계속 표시합니다. 기기 설정에서 '자동으로 PiP 시작'도 켜야 합니다."
+            "value" : "다른 앱을 사용하는 동안 미니 플레이어로 악보를 계속 표시합니다. 기기 설정에서 '픽처 인 픽처 자동 시작'도 켜야 합니다."
           }
         },
         "zh-Hans" : {
