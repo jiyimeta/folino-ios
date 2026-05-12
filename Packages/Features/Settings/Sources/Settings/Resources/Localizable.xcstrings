@@ -586,7 +586,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Patches downloaded for playback will appear here."
+            "value" : "Downloaded soundfonts for playback will appear here."
           }
         },
         "ja" : {
