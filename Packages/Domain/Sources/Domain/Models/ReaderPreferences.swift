@@ -11,6 +11,10 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let maxStaffSize: CGFloat = 28
     public static let minTempoMultiplier = 0.5
     public static let maxTempoMultiplier = 2.0
+    /// Minimum run length (in measures) at which the Reader collapses
+    /// consecutive empty-rest measures into a single H-bar. Fixed —
+    /// not user-tunable in this iteration.
+    public static let multiMeasureRestThreshold = 2
 
     /// Allow-list of canonical `NotatedClef.rawType` values the Domain
     /// initializer accepts. Mirrors the 14 forms `NotatedClef.rawType`
