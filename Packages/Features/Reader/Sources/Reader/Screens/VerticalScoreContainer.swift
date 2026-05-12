@@ -207,11 +207,23 @@ struct VerticalScoreContainer: View {
             }
     }
 
-    /// Folds a finished pinch into `viewportZoom` and queues a scroll command
-    /// so the content point under the fingers at release stays at the same
-    /// screen position post-commit. Uses *current* offset (not pinch-start
-    /// offset) to preserve any pan that occurred during the gesture:
-    ///   `newOffset = startLocation * (ratio - 1) + currentOffset`
+    /// Folds a finished pinch into `viewportZoom` and queues a scroll
+    /// command so the content point under the user's fingers at
+    /// release lands on the same screen position post-commit.
+    ///
+    /// `currentOffset` is the scroll view's `contentOffset` at the
+    /// moment the gesture ended — using the *current* offset (instead
+    /// of the offset captured at pinch-start, as the SwiftUI version
+    /// did) preserves any pan that happened during the pinch:
+    ///
+    /// ```
+    /// pre-commit screen pos  = startLocation - currentOffset
+    /// post-commit screen pos = startLocation * ratio - newOffset
+    /// ⇒ newOffset = startLocation * (ratio - 1) + currentOffset
+    /// ```
+    ///
+    /// When pan-during-pinch is zero this collapses to the original
+    /// SwiftUI formula.
     private func commitPinch(
         magnification: CGFloat,
         startLocation: CGPoint,
@@ -336,8 +348,10 @@ struct VerticalScoreContainer: View {
         pendingScroll = .animated(CGPoint(x: newX, y: newY))
     }
 
-    /// Smallest offset that keeps `[targetMin, targetMax]` inside the viewport
-    /// with `pad` margin; unchanged when target is already fully visible.
+    /// Smallest scroll offset that keeps `[targetMin, targetMax]` inside
+    /// the viewport with `pad` margin. Returns `currentOffset` unchanged
+    /// when the target is already fully visible — preserves manual
+    /// horizontal panning while playback advances within the visible row.
     private func adjustedScrollOffset(
         currentOffset cur: CGFloat,
         targetMin: CGFloat,
@@ -357,34 +371,5 @@ struct VerticalScoreContainer: View {
             return max(0, targetMin - pad)
         }
         return targetMax - viewportSize + pad
-    }
-
-    /// Hashable key so `.task(id:)` re-runs only when layout inputs change.
-    private struct TaskKey: Hashable {
-        let scoreSignature: Int
-        let size: CGFloat
-        let width: CGFloat
-        let honorLayoutBreaks: Bool
-        let collapseMultiMeasureRests: Bool
-
-        init(
-            score: Score,
-            size: CGFloat,
-            width: CGFloat,
-            honorLayoutBreaks: Bool,
-            collapseMultiMeasureRests: Bool,
-        ) {
-            // Structural shape + opening clefs proxy for Hashable identity.
-            // Opening-clef hash re-triggers layout on clef overrides that
-            // leave parts.count / staff count unchanged.
-            scoreSignature = score.parts.count
-                ^ (score.totalStaffCount << 8)
-                ^ (score.division << 16)
-                ^ score.openingClefSignature
-            self.size = size
-            self.width = width
-            self.honorLayoutBreaks = honorLayoutBreaks
-            self.collapseMultiMeasureRests = collapseMultiMeasureRests
-        }
     }
 }
