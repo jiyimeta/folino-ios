@@ -148,6 +148,22 @@
         }
       }
     },
+    "settings.reader.pictureInPicture.footer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keeps the score visible in a mini-player while another app is in use. Requires \"Start PiP Automatically\" to be enabled in device Settings."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他のアプリを使っている間、ミニプレーヤーで楽譜の表示を継続します。デバイスの設定で「PiP を自動的に開始」もオンにする必要があります。"
+          }
+        }
+      }
+    },
     "settings.reader.title" : {
       "localizations" : {
         "en" : {

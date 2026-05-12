@@ -92,7 +92,12 @@ public struct SettingsSheet<LicenseContent: View>: View {
             }
             Toggle(isOn: $isPiPEnabled) {
                 Label {
-                    Text("settings.reader.pictureInPicture", bundle: .module)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("settings.reader.pictureInPicture", bundle: .module)
+                        Text("settings.reader.pictureInPicture.footer", bundle: .module)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 } icon: {
                     Image(systemName: "pip")
                 }
