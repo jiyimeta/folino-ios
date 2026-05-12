@@ -1,4 +1,3 @@
-// swiftlint:disable file_length type_body_length
 import Domain
 import Foundation
 @testable import Reader
@@ -556,5 +555,3 @@ struct ReaderViewModelTests {
         #expect(vm.effectiveClef(for: address) == "G8vb")
     }
 }
-
-// swiftlint:enable file_length type_body_length

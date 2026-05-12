@@ -1,4 +1,3 @@
-// swiftlint:disable file_length type_body_length
 import Domain
 import Foundation
 @testable import Reader
@@ -978,5 +977,3 @@ struct ReaderViewModelPlaybackTests {
         #expect(abs(staff0.volume - 80.0 / 127.0) < 0.0001)
     }
 }
-
-// swiftlint:enable file_length type_body_length
