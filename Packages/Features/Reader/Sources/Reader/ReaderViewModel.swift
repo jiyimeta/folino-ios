@@ -7,6 +7,7 @@ import SheetMusicCore
 
 @MainActor
 @Observable
+// swiftlint:disable:next type_body_length
 final class ReaderViewModel {
     enum LoadState {
         case loading
@@ -87,6 +88,8 @@ final class ReaderViewModel {
 
     @ObservationIgnored
     private var isPiPEnabled = false
+    @ObservationIgnored
+    private var collapseMultiMeasureRests = false
 
     /// Applies the user's Settings preference. Driven by the
     /// `readerPictureInPictureEnabled` `@AppStorage` value in
@@ -101,6 +104,14 @@ final class ReaderViewModel {
             pipCoordinator.dismissIfActive()
             pipCoordinator.disarm()
         }
+    }
+
+    func setCollapseMultiMeasureRests(_ enabled: Bool) {
+        guard collapseMultiMeasureRests != enabled else { return }
+        collapseMultiMeasureRests = enabled
+        // Re-arm PiP so the next frame batch picks up the new policy.
+        // No effect if PiP is currently disabled / not armed.
+        armPiPIfReady()
     }
 
     /// Called from `ReaderRootScreen`'s `scenePhase` observer when the
@@ -119,7 +130,11 @@ final class ReaderViewModel {
             .applying(clefOverrides: layoutModel.staffClefOverrides)
             .filtered(hidingStaves: layoutModel.hiddenStaves)
         do {
-            try pipCoordinator.arm(score: visible, playbackCursor: playbackCursor)
+            try pipCoordinator.arm(
+                score: visible,
+                playbackCursor: playbackCursor,
+                collapseMultiMeasureRests: collapseMultiMeasureRests,
+            )
         } catch {
             // Coordinator throws only when no display layer is attached
             // (the host view hasn't mounted yet). Arming will retry once

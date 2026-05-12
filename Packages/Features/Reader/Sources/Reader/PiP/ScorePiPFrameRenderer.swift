@@ -1,5 +1,6 @@
 import CoreGraphics
 import CoreVideo
+import Domain
 import QuartzCore
 import SheetMusicCore
 import SheetMusicLayout
@@ -44,7 +45,7 @@ final class ScorePiPFrameRenderer {
     /// the score would otherwise overflow the buffer's usable height.
     private let scoreScale: CGFloat
 
-    init(score: Score, staffSize: CGFloat) throws {
+    init(score: Score, staffSize: CGFloat, collapseMultiMeasureRests: Bool) throws {
         self.score = score
 
         let opts = ScoreViewOptions(
@@ -52,6 +53,9 @@ final class ScorePiPFrameRenderer {
             wrapToViewWidth: false, includeTitleFrame: false,
             breakPolicy: .ignoreAll,
             showBreakIndicators: false,
+            multiMeasureRest: collapseMultiMeasureRests
+                ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
+                : .disabled,
         )
         let naturalWidth = LayoutEngine.naturalContentWidth(score: score, options: opts)
         document = LayoutEngine.layout(

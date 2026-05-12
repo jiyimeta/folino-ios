@@ -95,6 +95,7 @@ public struct ReaderRootScreen: View {
         .task {
             viewModel.startObservingCursor()
             viewModel.setPiPEnabled(isPiPEnabled)
+            viewModel.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
             await viewModel.load()
             await viewModel.prepareForPlayback()
             // Initial sync: the engine starts up unaware of persisted state,
@@ -110,6 +111,9 @@ public struct ReaderRootScreen: View {
         }
         .onChange(of: isPiPEnabled) { _, newValue in
             viewModel.setPiPEnabled(newValue)
+        }
+        .onChange(of: collapseMultiMeasureRests) { _, newValue in
+            viewModel.setCollapseMultiMeasureRests(newValue)
         }
         .onChange(of: scenePhase) { _, newValue in
             // The Settings spec dismisses PiP whenever the app returns

@@ -121,7 +121,11 @@ final class ScorePiPCoordinator: NSObject {
     /// armed. Safe to call again to swap in a new score (e.g. when
     /// the user hides a staff or changes a clef override); the
     /// existing pump and queued samples are torn down first.
-    func arm(score: Score, playbackCursor: ScoreCursor?) throws {
+    func arm(
+        score: Score,
+        playbackCursor: ScoreCursor?,
+        collapseMultiMeasureRests: Bool,
+    ) throws {
         guard let displayLayer else {
             throw NSError(
                 domain: "ScorePiPCoordinator", code: 1,
@@ -130,7 +134,9 @@ final class ScorePiPCoordinator: NSObject {
         }
         stopPump()
         renderer = try ScorePiPFrameRenderer(
-            score: score, staffSize: Self.pipStaffSize,
+            score: score,
+            staffSize: Self.pipStaffSize,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
         )
         currentCursor = playbackCursor
         lastEnqueuedCursorHash = nil
