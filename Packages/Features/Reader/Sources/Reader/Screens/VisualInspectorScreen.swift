@@ -10,6 +10,9 @@ struct VisualInspectorScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
 
+    @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
+    private var collapseMultiMeasureRests = false
+
     var body: some View {
         List {
             // Top-of-list "general" controls intentionally render without
@@ -18,6 +21,7 @@ struct VisualInspectorScreen: View {
             layoutRow
             staffSizeRow
             breakPolicyRow
+            collapseRow
 
             Section {
                 ForEach(score.parts.indices, id: \.self) { partIndex in
@@ -72,6 +76,12 @@ struct VisualInspectorScreen: View {
         )
         Toggle(isOn: binding) {
             Text("reader.preferences.honorBreaks", bundle: .module)
+        }
+    }
+
+    private var collapseRow: some View {
+        Toggle(isOn: $collapseMultiMeasureRests) {
+            Text("reader.preferences.collapseMultiMeasureRests", bundle: .module)
         }
     }
 

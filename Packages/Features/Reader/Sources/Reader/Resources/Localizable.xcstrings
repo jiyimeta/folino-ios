@@ -407,6 +407,22 @@
         }
       }
     },
+    "reader.preferences.collapseMultiMeasureRests" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse multi-measure rests"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複数小節休符をまとめる"
+          }
+        }
+      }
+    },
     "reader.preferences.honorBreaks" : {
       "localizations" : {
         "en" : {
