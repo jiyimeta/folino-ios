@@ -45,6 +45,14 @@ final class ScorePiPFrameRenderer {
     /// instead, which produces crisp edges on stems/staff lines
     /// without changing the apparent size of the music.
     private static let pixelDensity: CGFloat = 2.0
+    /// Per-tick fraction of the remaining distance to consume during
+    /// auto-scroll animation. Tuned so ~0.25s of pump (15 ticks at
+    /// 60fps) closes ~90% of the gap, matching the on-screen
+    /// horizontal Reader's `easeInOut` feel.
+    private static let scrollSmoothingFactor: CGFloat = 0.14
+    /// Below this remaining-distance threshold (in document pt), the
+    /// scroll offset snaps to the target and the animation ends.
+    private static let scrollSnapThresholdPt: CGFloat = 0.5
 
     let pixelSize: CGSize
 
@@ -59,6 +67,21 @@ final class ScorePiPFrameRenderer {
     /// Uniform scale applied to the system layer (and cursor rect) when
     /// the score would otherwise overflow the buffer's usable height.
     private let scoreScale: CGFloat
+    /// Leading edge of the viewport in document X coordinates. Animates
+    /// toward `targetScrollOffsetDocX` so the visible window slides
+    /// smoothly when the cursor walks off the end.
+    private var scrollOffsetDocX: CGFloat = 0
+    /// Destination for the auto-scroll animation. Updated whenever the
+    /// cursor's measure overflows the viewport.
+    private var targetScrollOffsetDocX: CGFloat = 0
+
+    /// True while the viewport is still sliding toward its target.
+    /// The pump uses this to keep rendering frames between cursor
+    /// changes; otherwise the animation would freeze on the first
+    /// post-cursor tick.
+    var isAnimatingScroll: Bool {
+        abs(targetScrollOffsetDocX - scrollOffsetDocX) > Self.scrollSnapThresholdPt
+    }
 
     init(score: Score, staffSize: CGFloat, collapseMultiMeasureRests: Bool) throws {
         self.score = score
@@ -148,12 +171,12 @@ final class ScorePiPFrameRenderer {
         let cursorFrame = playbackCursor.flatMap {
             document.cursorFrame(for: $0, in: score)
         }
-        // Center the (scaled) system vertically; place the cursor's
-        // measure at a fixed leading inset horizontally.
+        advanceScroll(cursor: playbackCursor)
+        // Center the (scaled) system vertically; viewport's left edge
+        // sits at `scrollOffsetDocX` in document coords.
         let scaledSystemHeight = system.size.height * scoreScale
         let shiftY = (pointSize.height - scaledSystemHeight) / 2
-        let shiftX: CGFloat = cursorFrame
-            .map { -$0.minX * scoreScale + Self.cursorLeadingInsetPt } ?? 0
+        let shiftX = -scrollOffsetDocX * scoreScale
 
         ctx.saveGState()
         ctx.translateBy(x: shiftX, y: shiftY)
@@ -172,6 +195,50 @@ final class ScorePiPFrameRenderer {
             ))
         }
         return buffer
+    }
+
+    /// Update `targetScrollOffsetDocX` if the cursor's measure has
+    /// fallen outside the viewport, and lerp `scrollOffsetDocX` toward
+    /// the target. Idiom matches `HorizontalScoreContainer.autoScroll`.
+    private func advanceScroll(cursor: ScoreCursor?) {
+        if let cursor, let measureRect = measureDocRect(for: cursor) {
+            let viewportWidthDoc = pointSize.width / scoreScale
+            let anchorMin = measureRect.minX - scrollOffsetDocX
+            let anchorMax = measureRect.maxX - scrollOffsetDocX
+            if !isAnchorFullyVisible(
+                anchorMin: anchorMin,
+                anchorMax: anchorMax,
+                anchorSize: measureRect.width,
+                viewportSize: viewportWidthDoc,
+            ) {
+                let padDoc = 8 * document.metrics.sp
+                targetScrollOffsetDocX = max(0, measureRect.minX - padDoc)
+            }
+        }
+        let delta = targetScrollOffsetDocX - scrollOffsetDocX
+        if abs(delta) < Self.scrollSnapThresholdPt {
+            scrollOffsetDocX = targetScrollOffsetDocX
+        } else {
+            scrollOffsetDocX += delta * Self.scrollSmoothingFactor
+        }
+    }
+
+    /// Document-space rect of the measure the cursor is parked on,
+    /// regardless of `.item` vs `.beat`. Used to decide whether to
+    /// auto-scroll: the trigger is "the measure overflows the
+    /// viewport", not "the cursor itself crosses an edge".
+    private func measureDocRect(for cursor: ScoreCursor) -> CGRect? {
+        guard let firstSystem = document.systems.first,
+              let measure = firstSystem.measures.first(where: {
+                  $0.measureIndex == cursor.measureIndex
+              })
+        else { return nil }
+        return CGRect(
+            x: firstSystem.origin.x + measure.origin.x,
+            y: firstSystem.origin.y + measure.origin.y,
+            width: measure.width,
+            height: firstSystem.size.height,
+        )
     }
 
     private static func roundUpToEven(_ value: CGFloat) -> CGFloat {

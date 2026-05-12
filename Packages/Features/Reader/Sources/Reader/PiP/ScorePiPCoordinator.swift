@@ -7,10 +7,10 @@ import UIKit
 
 @MainActor
 final class ScorePiPCoordinator: NSObject {
-    private static let framesPerSecond = 20
+    private static let framesPerSecond = 60
     /// At least once per ~1s, re-enqueue even if the cursor is unchanged
     /// so AVKit doesn't stall on its sample buffer queue.
-    private static let forceEnqueueInterval = 20
+    private static let forceEnqueueInterval = framesPerSecond
 
     static var isSupported: Bool {
         AVPictureInPictureController.isPictureInPictureSupported()
@@ -243,8 +243,9 @@ final class ScorePiPCoordinator: NSObject {
         // at a paused timebase corrupts the layer (see comment above).
         let forceEnqueue = isPlaying
             && ticksSinceLastForceEnqueue >= Self.forceEnqueueInterval
+        let scrolling = renderer.isAnimatingScroll
 
-        guard cursorChanged || forceEnqueue else { return }
+        guard cursorChanged || forceEnqueue || scrolling else { return }
         guard displayLayer.isReadyForMoreMediaData else { return }
         guard let buffer = renderer.renderFrame(playbackCursor: currentCursor)
         else { return }
