@@ -206,4 +206,98 @@ struct ReaderViewModelRepeatTests {
         #expect(controller.lastLoadedPreferences?.abRepeat?.start == chord)
         #expect(controller.lastLoadedPreferences?.abRepeat?.end == endChord)
     }
+
+    @Test func `persisted ab loop forwards loop range to controller on prep`() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let chord = ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 0)
+        let endChord = ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0)
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id,
+            staffSize: 14,
+            hiddenStaves: [],
+            repeatMode: .abLoop,
+            abRepeat: ABRepeatRange(start: chord, end: endChord),
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item,
+            repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+        )
+
+        await vm.load()
+        await vm.prepareForPlayback()
+
+        let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
+        #expect(last?.start == chord)
+        #expect(last?.end == endChord)
+    }
+
+    @Test func `persisted loop all forwards full score range to controller on prep`() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id,
+            staffSize: 14,
+            hiddenStaves: [],
+            repeatMode: .loopAll,
+            abRepeat: nil,
+        )
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item,
+            repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+        )
+
+        await vm.load()
+        await vm.prepareForPlayback()
+
+        // Fixture: 6 measures, two chord-positions per measure.
+        // Full range = m0.chord0 .. m5.chord1.
+        let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
+        #expect(last?.start.measureIndex == 0)
+        #expect(last?.start.chordIndex == 0)
+        #expect(last?.end.measureIndex == 5)
+        #expect(last?.end.chordIndex == 1)
+    }
+
+    @Test func `toggling playback without prep also forwards persisted loop range`() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let chord = ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 0)
+        let endChord = ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0)
+        repo.storedReaderPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id,
+            staffSize: 14,
+            hiddenStaves: [],
+            repeatMode: .abLoop,
+            abRepeat: ABRepeatRange(start: chord, end: endChord),
+        )
+        let controller = FakePlaybackController()
+        controller.soundfontsAvailableLocally = true
+        let vm = ReaderViewModel(
+            scoreItem: item,
+            repository: repo,
+            gateway: FakeScoreFileGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+        )
+
+        await vm.load()
+        // Skip prepareForPlayback — exercise the lazy-load path inside togglePlayback.
+        await vm.togglePlayback()
+
+        let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
+        #expect(last?.start == chord)
+        #expect(last?.end == endChord)
+    }
 }

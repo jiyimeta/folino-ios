@@ -385,6 +385,14 @@ final class ReaderViewModel {
                 task.cancel()
             }
             hasLoadedIntoPlayback = true
+            // `PlaybackPreferences` carries `abRepeat` but the engine's
+            // load path doesn't consume it (and prefs has no field for
+            // `repeatMode`'s .off / .loopAll / .abLoop distinction).
+            // Push the active range now that the score is loaded —
+            // without this, a persisted repeat mode appears in the
+            // inspector but playback runs without looping until the
+            // user touches the picker.
+            await repeatModel.forwardLoopRangeToController()
         } catch {
             // Cancellation or controller error — leave the slot clear so
             // a subsequent toggle starts a fresh attempt.
@@ -435,6 +443,11 @@ final class ReaderViewModel {
                 preloadTask = nil
                 return
             }
+            // Same reason as in `prepareForPlayback`: push the persisted
+            // repeat state now that the engine has the score. Covers
+            // the case where the user taps play before
+            // `prepareForPlayback` ran (or while it's still in flight).
+            await repeatModel.forwardLoopRangeToController()
             soundfontAlertKind = nil
             preloadTask = nil
         }
