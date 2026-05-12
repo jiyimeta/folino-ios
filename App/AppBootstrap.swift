@@ -1,4 +1,5 @@
 import Audio
+import AVFoundation
 import Domain
 import Foundation
 import Observation
@@ -29,6 +30,7 @@ final class AppBootstrap {
 
     func start() {
         do {
+            configureAudioSession()
             try FileManager.default.createDirectory(
                 at: AppPaths.scoresDirectory, withIntermediateDirectories: true,
             )
@@ -90,6 +92,13 @@ final class AppBootstrap {
         } catch {
             failure = error
         }
+    }
+
+    private func configureAudioSession() {
+        try? AVAudioSession.sharedInstance().setCategory(
+            .playback, mode: .default, options: [],
+        )
+        try? AVAudioSession.sharedInstance().setActive(true)
     }
 
     func acceptIncomingURL(_ url: URL) {
