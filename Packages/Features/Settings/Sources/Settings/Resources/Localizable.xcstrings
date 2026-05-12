@@ -1,7 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "•" : {},
+    "•" : {
+
+    },
     "settings.about.licenses" : {
       "localizations" : {
         "en" : {
@@ -285,7 +287,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ピクチャー イン ピクチャー"
+            "value" : "ピクチャインピクチャ"
           }
         },
         "ko" : {
@@ -319,7 +321,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "他のアプリを使っている間、ミニプレーヤーで楽譜の表示を継続します。デバイスの設定で「PiP を自動的に開始」もオンにする必要があります。"
+            "value" : "他のアプリを使っている間、ミニプレーヤーで楽譜の表示を継続します。デバイスの設定で「ピクチャインピクチャを自動的に開始」もオンにする必要があります。"
           }
         },
         "ko" : {
