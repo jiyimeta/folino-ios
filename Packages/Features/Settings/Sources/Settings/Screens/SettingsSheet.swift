@@ -21,6 +21,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
 
+    @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
+    private var isPiPEnabled = false
+
     public init(
         soundfontResolver: (any SoundfontResolver)? = nil,
         presetCatalog: (any SoundfontPresetCatalog)? = nil,
@@ -82,6 +85,14 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     Text("settings.reader.metronome", bundle: .module)
                 } icon: {
                     Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
+                }
+            }
+
+            Toggle(isOn: $isPiPEnabled) {
+                Label {
+                    Text("settings.reader.pictureInPicture", bundle: .module)
+                } icon: {
+                    Image(systemName: "pip")
                 }
             }
 

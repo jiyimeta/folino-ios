@@ -116,6 +116,22 @@
         }
       }
     },
+    "settings.reader.pictureInPicture" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Picture in Picture"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ピクチャー イン ピクチャー"
+          }
+        }
+      }
+    },
     "settings.reader.title" : {
       "localizations" : {
         "en" : {
