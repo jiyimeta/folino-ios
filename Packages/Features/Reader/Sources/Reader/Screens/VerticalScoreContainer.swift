@@ -78,7 +78,12 @@ struct VerticalScoreContainer: View {
     /// Scales with the score because it's applied inside the
     /// `scaleEffect`. No horizontal counterpart: at zoom 1.0 we want the
     /// score to span the full viewport width edge-to-edge.
-    private let scoreVerticalPadding: CGFloat = 16
+    ///
+    /// Top is larger than bottom so the first system clears the nav
+    /// chrome / safe area when `ignoresSafeArea()` lets the score slide
+    /// underneath.
+    private let scoreTopPadding: CGFloat = 44
+    private let scoreBottomPadding: CGFloat = 16
 
     /// Captured at `onPinchBegan` so the gesture-end commit knows the
     /// zoom that was in effect at the start of the pinch (independent
@@ -145,9 +150,10 @@ struct VerticalScoreContainer: View {
         if let doc = document {
             let zoom = effectiveZoom(for: doc, viewport: viewport)
             let framedWidth = doc.size.width * zoom
-            let framedHeight = (doc.size.height + 2 * scoreVerticalPadding) * zoom
+            let framedHeight = (doc.size.height + scoreTopPadding + scoreBottomPadding) * zoom
             scoreSurface(document: doc)
-                .padding(.vertical, scoreVerticalPadding)
+                .padding(.top, scoreTopPadding)
+                .padding(.bottom, scoreBottomPadding)
                 .scaleEffect(liveMagnification, anchor: liveMagAnchor)
                 .scaleEffect(zoom, anchor: .topLeading)
                 .frame(
@@ -326,8 +332,8 @@ struct VerticalScoreContainer: View {
         // composition (no horizontal padding).
         let minX = rect.minX * zoom
         let maxX = rect.maxX * zoom
-        let minY = (rect.minY + scoreVerticalPadding) * zoom
-        let maxY = (rect.maxY + scoreVerticalPadding) * zoom
+        let minY = (rect.minY + scoreTopPadding) * zoom
+        let maxY = (rect.maxY + scoreTopPadding) * zoom
 
         let curX = liveScrollOffset.x
         let curY = liveScrollOffset.y
