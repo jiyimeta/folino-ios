@@ -1,40 +1,56 @@
-import AVFoundation
+import CoreGraphics
 import CoreVideo
+import QuartzCore
 import SheetMusicCore
-import SwiftUI
-import UIKit
+import SheetMusicLayout
+import SheetMusicUI
 
-/// SwiftUI off-screen rendering via `UIHostingController.layer.render(in:)`
-/// produces blank output when the controller isn't attached to a window —
-/// SwiftUI's display pass only runs against window-attached layers. We use
-/// `ImageRenderer` instead, which is built for window-less rasterisation.
+/// Renders a horizontal-mode frame of the score directly into a
+/// `CVPixelBuffer` via Core Graphics. No SwiftUI / UIKit / window
+/// dependency — `ScoreLayerBuilder.buildSystem(...)` produces a
+/// `CALayer` we can `render(in:)` into any CGContext, including
+/// off-screen pixel-buffer-backed ones.
+///
+/// Horizontal layout is single-system, so we lay out once at init,
+/// build the system layer once, and per-frame just blit + draw the
+/// cursor rectangle on top — fast and deterministic.
 @MainActor
 final class ScorePiPFrameRenderer {
+    private static let cursorLeadingInsetPt: CGFloat = 80
+
     private let score: Score
-    private let staffSize: CGFloat
     private let pixelSize: CGSize
     private let pool: CVPixelBufferPool
+    private let document: LayoutDocument
+    private let system: LayoutSystem
+    private let scoreLayer: CALayer
 
     init(score: Score, staffSize: CGFloat, pixelSize: CGSize) throws {
         self.score = score
-        self.staffSize = staffSize
         self.pixelSize = pixelSize
         pool = try Self.makePool(size: pixelSize)
+
+        let opts = ScoreViewOptions(
+            staffSize: staffSize, systemGap: staffSize * 1.25,
+            wrapToViewWidth: false, includeTitleFrame: false,
+            breakPolicy: .ignoreAll,
+            showBreakIndicators: false,
+        )
+        let naturalWidth = LayoutEngine.naturalContentWidth(score: score, options: opts)
+        document = LayoutEngine.layout(
+            score: score, options: opts, availableWidth: naturalWidth,
+        )
+        guard let firstSystem = document.systems.first else {
+            throw NSError(
+                domain: "ScorePiPFrameRenderer", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Layout produced no systems"],
+            )
+        }
+        system = firstSystem
+        scoreLayer = ScoreLayerBuilder.buildSystem(firstSystem, metrics: document.metrics)
     }
 
     func renderFrame(playbackCursor: ScoreCursor?) -> CVPixelBuffer? {
-        let canvas = PiPScoreCanvas(
-            score: score, staffSize: staffSize, playbackCursor: playbackCursor,
-        )
-        .frame(width: pixelSize.width, height: pixelSize.height)
-        .background(Color(.systemBackground))
-
-        let renderer = ImageRenderer(content: canvas)
-        renderer.proposedSize = ProposedViewSize(
-            width: pixelSize.width, height: pixelSize.height,
-        )
-        renderer.scale = 1
-
         var maybe: CVPixelBuffer?
         guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &maybe) == kCVReturnSuccess,
               let buffer = maybe else { return nil }
@@ -55,11 +71,45 @@ final class ScorePiPFrameRenderer {
             bitmapInfo: info,
         ) else { return nil }
 
-        // CGContext origin is bottom-left; ImageRenderer produces a CGImage
-        // with top-left origin. Flip Y so the score draws right-side-up.
+        // White background — overdraws whatever the pool returns.
+        ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+        ctx.fill(CGRect(origin: .zero, size: pixelSize))
+
+        // CGContext default is bottom-left; CALayer & cursor frames are
+        // top-left. Flip so positive Y goes downward.
         ctx.translateBy(x: 0, y: pixelSize.height)
         ctx.scaleBy(x: 1, y: -1)
-        renderer.render { _, draw in draw(ctx) }
+
+        // Horizontal shift: bring the cursor's measure to a fixed leading
+        // inset. Without a cursor, anchor the score at x=0.
+        let cursorFrame = playbackCursor.flatMap {
+            document.cursorFrame(for: $0, in: score)
+        }
+        if let cursor = playbackCursor {
+            print("[PiP] cursor=\(cursor) frame=\(cursorFrame ?? .zero)")
+        }
+        let shiftX: CGFloat = cursorFrame.map { -$0.minX + Self.cursorLeadingInsetPt } ?? 0
+        // Vertical: centre the system in the PiP window. The system's
+        // height is much smaller than 360pt for a single-staff score.
+        let shiftY = max(0, (pixelSize.height - system.size.height) / 2)
+
+        ctx.saveGState()
+        ctx.translateBy(x: shiftX, y: shiftY)
+        // The layer's internal (0,0) corresponds to the system's
+        // top-left in document coords, so render at the system's origin.
+        ctx.translateBy(x: system.origin.x, y: system.origin.y)
+        scoreLayer.render(in: ctx)
+        ctx.restoreGState()
+
+        if let frame = cursorFrame {
+            ctx.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.95, alpha: 0.25))
+            ctx.fill(CGRect(
+                x: frame.minX + shiftX,
+                y: frame.minY + shiftY,
+                width: frame.width,
+                height: frame.height,
+            ))
+        }
         return buffer
     }
 
