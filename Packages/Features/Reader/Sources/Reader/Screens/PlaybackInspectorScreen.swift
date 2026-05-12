@@ -8,7 +8,7 @@ struct PlaybackInspectorScreen: View {
     let score: Score
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
-    /// Slider's local edit value. Syncs from `viewModel.effectiveTempoMultiplier`
+    /// Slider's local edit value. Syncs from `viewModel.tempoModel.effectiveMultiplier`
     /// when the user is not dragging — keeps the UI consistent after a reset
     /// from outside the slider (e.g. the % label tap).
     @State private var sliderValue = 1.0
@@ -50,11 +50,11 @@ struct PlaybackInspectorScreen: View {
             }
         }
         .buttonStyle(.plain)
-        .task(id: viewModel.effectiveTempoMultiplier) {
+        .task(id: viewModel.tempoModel.effectiveMultiplier) {
             // Pull the persisted value into the slider whenever the model
             // changes from outside the gesture (initial load, % tap reset).
             if !isEditingTempo {
-                sliderValue = viewModel.effectiveTempoMultiplier
+                sliderValue = viewModel.tempoModel.effectiveMultiplier
             }
         }
     }
@@ -73,7 +73,7 @@ struct PlaybackInspectorScreen: View {
             }
 
             Button {
-                Task { await viewModel.resetTempoMultiplier() }
+                Task { await viewModel.tempoModel.resetMultiplier() }
             } label: {
                 Text("\(Int((sliderValue * 100).rounded()))%")
                     .font(.callout.monospacedDigit())
@@ -87,13 +87,13 @@ struct PlaybackInspectorScreen: View {
                 onEditingChanged: { editing in
                     isEditingTempo = editing
                     if !editing {
-                        Task { await viewModel.commitTempoMultiplier(sliderValue) }
+                        Task { await viewModel.tempoModel.commitMultiplier(sliderValue) }
                     }
                 },
             )
             .onChange(of: sliderValue) { _, newValue in
                 if isEditingTempo {
-                    viewModel.setTempoMultiplier(newValue)
+                    viewModel.tempoModel.setMultiplier(newValue)
                 }
             }
             .padding(.vertical, -8)

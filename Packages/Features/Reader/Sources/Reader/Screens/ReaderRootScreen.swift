@@ -84,14 +84,14 @@ public struct ReaderRootScreen: View {
             await viewModel.prepareForPlayback()
             // Initial sync: the engine starts up unaware of persisted state,
             // so seed it from the @AppStorage value at view start.
-            await viewModel.setMetronomeEnabled(isMetronomeEnabled)
+            await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
         }
         .onChange(of: isMetronomeEnabled) { _, newValue in
             // The iPad fix: if the user toggles metronome from the Settings
             // sheet while a Reader detail pane is alive in the same scene,
             // the running engine has to be reconfigured here — the
             // Inspector's button no longer drives that side effect.
-            Task { await viewModel.setMetronomeEnabled(newValue) }
+            Task { await viewModel.tempoModel.setMetronomeEnabled(newValue) }
         }
     }
 

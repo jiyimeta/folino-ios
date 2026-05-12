@@ -38,6 +38,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// `@Bindable` projections like `$viewModel.repeatModel.mode` type-check —
     /// the chain needs the intermediate path to be writable.
     var repeatModel = RepeatModel()
+    var tempoModel = TempoModel()
 
     private(set) var loadState: LoadState = .loading
     private(set) var scoreItem: ScoreItem
@@ -134,6 +135,17 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
             hiddenStaves: [],
         )
         wireRepeatModel()
+        wireTempoModel()
+    }
+
+    private func wireTempoModel() {
+        tempoModel.onChange = { [weak self] in
+            guard let self else { return }
+            await mutatePreferences { prefs in
+                prefs.tempoMultiplier = self.tempoModel.multiplier
+            }
+        }
+        tempoModel.controllerProvider = { [weak self] in self?.playbackController }
     }
 
     private func wireRepeatModel() {
@@ -495,47 +507,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         Task { await controller.setCursor(to: engineCursor) }
     }
 
-    // MARK: - Tempo & metronome
-
-    /// Effective playback rate multiplier — falls back to 1.0 when no
-    /// override is set. The InspectorView slider uses this to seed its
-    /// local edit state.
-    var effectiveTempoMultiplier: Double {
-        preferences.tempoMultiplier ?? 1.0
-    }
-
-    /// While the user is dragging the slider: forward the new rate to
-    /// the engine immediately for audible feedback. Does NOT persist —
-    /// the View calls `commitTempoMultiplier` on slider release.
-    func setTempoMultiplier(_ value: Double) {
-        Task { await playbackController?.setTempoMultiplier(value) }
-    }
-
-    /// On slider release: persist the override (normalizing 1.0 → nil)
-    /// and forward to the engine.
-    func commitTempoMultiplier(_ value: Double) async {
-        // Snap "100% to display" back to the no-override state. Slider can stop
-        // at e.g. 0.9999999... when visually centred; without this, the override
-        // persists as a near-1.0 value the user thought they cleared.
-        let normalized: Double? = abs(value - 1.0) < 0.005 ? nil : value
-        await mutatePreferences { $0.tempoMultiplier = normalized }
-        let effective = preferences.tempoMultiplier ?? 1.0
-        await playbackController?.setTempoMultiplier(effective)
-    }
-
-    /// Reset to native tempo. Clears the saved override and forwards 1.0.
-    func resetTempoMultiplier() async {
-        await mutatePreferences { $0.tempoMultiplier = nil }
-        await playbackController?.setTempoMultiplier(1.0)
-    }
-
-    /// Forward metronome on/off to the engine. Persistence is owned by
-    /// the View layer via @AppStorage("readerMetronomeEnabled") so it
-    /// survives across scores.
-    func setMetronomeEnabled(_ enabled: Bool) async {
-        await playbackController?.setMetronomeEnabled(enabled)
-    }
-
     // MARK: - Private
 
     private func loadOrSeedPreferences() async {
@@ -543,6 +514,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
             if let stored = try await repository.loadReaderPreferences(for: scoreItem.id) {
                 preferences = stored
                 repeatModel.sync(from: stored)
+                tempoModel.sync(from: stored)
                 return
             }
         } catch {
@@ -555,6 +527,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         )
         preferences = seeded
         repeatModel.sync(from: seeded)
+        tempoModel.sync(from: seeded)
         try? await repository.saveReaderPreferences(seeded)
     }
 

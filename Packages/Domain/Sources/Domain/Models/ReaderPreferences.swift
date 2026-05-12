@@ -9,8 +9,8 @@ import SheetMusicCore
 public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let minStaffSize: CGFloat = 8
     public static let maxStaffSize: CGFloat = 28
-    static let minTempoMultiplier = 0.5
-    static let maxTempoMultiplier = 2.0
+    public static let minTempoMultiplier = 0.5
+    public static let maxTempoMultiplier = 2.0
 
     /// Allow-list of canonical `NotatedClef.rawType` values the Domain
     /// initializer accepts. Mirrors the 14 forms `NotatedClef.rawType`
