@@ -52,6 +52,22 @@ final class ReaderViewModel {
     var lastNonUnitZoom: CGFloat = 1.0
     var isPlaybackInspectorPresented = false
     var isVisualInspectorPresented = false
+    var isPiPActive = false
+
+    var isPiPSupported: Bool {
+        ScorePiPCoordinator.isSupported
+    }
+
+    @ObservationIgnored
+    private var pipCoordinatorBacking: ScorePiPCoordinator?
+
+    var pipCoordinator: ScorePiPCoordinator {
+        if let c = pipCoordinatorBacking { return c }
+        let c = ScorePiPCoordinator()
+        c.onPiPStopped = { [weak self] in self?.isPiPActive = false }
+        pipCoordinatorBacking = c
+        return c
+    }
 
     /// Convenience for tests and previews — true while the "loading
     /// playback sounds…" copy is showing.
@@ -147,6 +163,7 @@ final class ReaderViewModel {
                 rawPlaybackCursor,
                 hiddenStaves: layoutModel.hiddenStaves,
             ) ?? rawPlaybackCursor
+            notifyPiPCursor()
         }
         layoutModel.scoreProvider = { [weak self] in self?.loadState.score }
     }
@@ -193,6 +210,7 @@ final class ReaderViewModel {
                 value,
                 hiddenStaves: layoutModel.hiddenStaves,
             ) ?? value
+            notifyPiPCursor()
             // The engine emits a nil cursor only when playback hits the
             // end of the score (`PlaybackEngine.stop()` clears it; explicit
             // `pause()` does not). Use that signal to flip the toolbar's
@@ -201,6 +219,31 @@ final class ReaderViewModel {
             if value == nil, isPlaying {
                 isPlaying = false
             }
+        }
+    }
+
+    private func notifyPiPCursor() {
+        pipCoordinatorBacking?.updatePlaybackCursor(playbackCursor)
+    }
+
+    func togglePiP() {
+        guard case let .loaded(score) = loadState else { return }
+        if isPiPActive {
+            pipCoordinator.stop()
+            isPiPActive = false
+            return
+        }
+        do {
+            try pipCoordinator.start(
+                score: score,
+                staffSize: layoutModel.staffSize,
+                playbackCursor: playbackCursor,
+            )
+            isPiPActive = true
+        } catch {
+            // Coordinator throws only when no display layer is attached
+            // (programmer error), and the button is gated on
+            // isPiPSupported — unreachable in practice.
         }
     }
 

@@ -52,6 +52,12 @@ public struct ReaderRootScreen: View {
         ZStack {
             content
                 .safeAreaPadding(.top, ReaderTopOverlay.height)
+            if viewModel.isPiPSupported {
+                ScorePiPHostView(coordinator: viewModel.pipCoordinator)
+                    .frame(width: 1, height: 1)
+                    .opacity(0)
+                    .allowsHitTesting(false)
+            }
             VStack(spacing: 0) {
                 ReaderTopOverlay(
                     viewModel: viewModel,
