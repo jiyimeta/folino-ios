@@ -1,4 +1,3 @@
-- Fixed a crash that occurred when deleting a score
-- Added the ability to change clefs per staff
-- Added the ability to rename files
-- Improved scroll and zoom controls for scores
+- Added support for Picture in Picture
+- Added the ability to display multi-measure rests as a single bar
+- Minor bug fixes
