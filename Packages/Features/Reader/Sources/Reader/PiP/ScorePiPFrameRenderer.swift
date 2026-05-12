@@ -19,6 +19,7 @@ final class ScorePiPFrameRenderer {
         let hc = UIHostingController(rootView: canvas)
         hc.view.backgroundColor = .systemBackground
         hc.view.frame = CGRect(origin: .zero, size: pixelSize)
+        hc.view.clipsToBounds = true
         if #available(iOS 16.4, *) { hc.safeAreaRegions = [] }
         hostingController = hc
     }
@@ -73,15 +74,5 @@ final class ScorePiPFrameRenderer {
             )
         }
         return pool
-    }
-}
-
-/// Stub — replaced in Task 2 with the real off-screen canvas.
-struct PiPScoreCanvas: View {
-    let score: Score
-    let staffSize: CGFloat
-    let playbackCursor: ScoreCursor?
-    var body: some View {
-        Color.clear
     }
 }
