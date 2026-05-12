@@ -34,7 +34,6 @@ struct DefaultVersionHistoryLoaderTests {
     @Test func `throws when resource missing`() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        // swiftlint:disable:next force_unwrapping
         let bundle = try #require(Bundle(url: dir))
         let loader = DefaultVersionHistoryLoader(bundle: bundle)
         #expect(throws: (any Error).self) { _ = try loader.load() }

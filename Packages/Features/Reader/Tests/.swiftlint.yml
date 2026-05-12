@@ -1,0 +1,5 @@
+parent_config: ../.swiftlint.yml
+
+disabled_rules:
+  - file_length
+  - type_body_length

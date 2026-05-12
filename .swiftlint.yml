@@ -4,7 +4,6 @@ disabled_rules:
   - multiple_closures_with_trailing_closure
   - nesting
   - opening_brace
-  - superfluous_disable_command
   - todo
   - trailing_whitespace
   - vertical_whitespace
