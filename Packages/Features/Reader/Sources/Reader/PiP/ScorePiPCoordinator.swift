@@ -7,11 +7,6 @@ import UIKit
 
 @MainActor
 final class ScorePiPCoordinator: NSObject {
-    /// Staff size used inside the PiP window. Deliberately larger than
-    /// the typical reading size so the score is legible in the small
-    /// floating window — the user's regular `staffSize` preference is
-    /// not used here.
-    private static let pipStaffSize: CGFloat = 28
     private static let framesPerSecond = 20
     /// At least once per ~1s, re-enqueue even if the cursor is unchanged
     /// so AVKit doesn't stall on its sample buffer queue.
@@ -118,11 +113,14 @@ final class ScorePiPCoordinator: NSObject {
 
     /// Arm the coordinator with a loaded score so AVKit's auto-start
     /// has frames ready when the app backgrounds. The pump runs while
-    /// armed. Safe to call again to swap in a new score (e.g. when
-    /// the user hides a staff or changes a clef override); the
-    /// existing pump and queued samples are torn down first.
+    /// armed. Safe to call again to swap in a new score, staff size,
+    /// or rest-collapse policy (e.g. when the user hides a staff,
+    /// changes a clef override, resizes via Visual Inspector, or
+    /// toggles multi-measure rest collapse); the existing pump and
+    /// queued samples are torn down first.
     func arm(
         score: Score,
+        staffSize: CGFloat,
         playbackCursor: ScoreCursor?,
         collapseMultiMeasureRests: Bool,
     ) throws {
@@ -135,7 +133,7 @@ final class ScorePiPCoordinator: NSObject {
         stopPump()
         renderer = try ScorePiPFrameRenderer(
             score: score,
-            staffSize: Self.pipStaffSize,
+            staffSize: staffSize,
             collapseMultiMeasureRests: collapseMultiMeasureRests,
         )
         currentCursor = playbackCursor

@@ -27,12 +27,24 @@ final class ScorePiPFrameRenderer {
     /// uniformly scaled down so it fits — keeps the PiP window from
     /// growing taller than wider screens want to support.
     private static let maxPixelHeightPt: CGFloat = 800
+    /// AVKit needs non-trivial dimensions; floor each pixel-buffer
+    /// axis here so very small scores don't degenerate the pipeline.
+    private static let minPixelDimensionPt: CGFloat = 80
     /// Lowest buffer aspect (most square / tall) we'll produce. Going
     /// narrower than this makes the PiP window awkwardly tall; instead
     /// we cap aspect here and let the renderer shrink the score
     /// uniformly to fit the resulting buffer height.
     private static let minAspect: CGFloat = 1.0
-    private static let maxAspect: CGFloat = 16.0 / 9.0
+    /// Widest buffer aspect we'll produce. Apple's HIG suggests
+    /// 1.78:1 as a guideline, but AVKit happily renders wider PiP
+    /// windows; a 4:1 cap gives single-staff scores a long horizontal
+    /// strip that fits more measures into view.
+    private static let maxAspect: CGFloat = 4.0
+    /// Pixels per content point. AVKit upscales the buffer to fit the
+    /// PiP window on screen; rendering at 2x means AVKit downscales
+    /// instead, which produces crisp edges on stems/staff lines
+    /// without changing the apparent size of the music.
+    private static let pixelDensity: CGFloat = 2.0
 
     let pixelSize: CGSize
 
@@ -41,6 +53,9 @@ final class ScorePiPFrameRenderer {
     private let document: LayoutDocument
     private let system: LayoutSystem
     private let scoreLayer: CALayer
+    /// Logical size of the renderable area, in CG points. The actual
+    /// pixel buffer is `pointSize × pixelDensity` — see init.
+    private let pointSize: CGSize
     /// Uniform scale applied to the system layer (and cursor rect) when
     /// the score would otherwise overflow the buffer's usable height.
     private let scoreScale: CGFloat
@@ -74,18 +89,22 @@ final class ScorePiPFrameRenderer {
         // orchestral scores) and an absolute height cap. When the
         // natural system is too tall to fit, `scoreScale` shrinks the
         // drawn music uniformly so it still fits inside the buffer.
+        // Lower-bound the dimensions just enough to keep AVKit happy
+        // — the rest is content-driven.
         let staffCount = max(1, firstSystem.staffOrigins.count)
         let rawHeight = ceil(firstSystem.size.height + Self.verticalPaddingPt * 2)
-        let pixelHeight = min(Self.maxPixelHeightPt, max(270, rawHeight))
+        let pointHeight = min(Self.maxPixelHeightPt, max(Self.minPixelDimensionPt, rawHeight))
         let aspect = max(Self.minAspect, min(Self.maxAspect, 4.0 / CGFloat(staffCount)))
-        let pixelWidth = max(480, ceil(pixelHeight * aspect))
-        // AVSampleBufferDisplayLayer accepts odd pixel sizes, but we round
-        // up to even for safety with downstream video pipelines.
+        let pointWidth = max(Self.minPixelDimensionPt, ceil(pointHeight * aspect))
+        pointSize = CGSize(width: pointWidth, height: pointHeight)
+        // Buffer pixels = points × density. AVKit downscales for the
+        // PiP window; the extra resolution prevents the stems and
+        // staff lines from blurring on the way through.
         pixelSize = CGSize(
-            width: Self.roundUpToEven(pixelWidth),
-            height: Self.roundUpToEven(pixelHeight),
+            width: Self.roundUpToEven(pointWidth * Self.pixelDensity),
+            height: Self.roundUpToEven(pointHeight * Self.pixelDensity),
         )
-        let usableHeight = pixelSize.height - Self.verticalPaddingPt * 2
+        let usableHeight = pointHeight - Self.verticalPaddingPt * 2
         scoreScale = min(1, usableHeight / firstSystem.size.height)
 
         pool = try Self.makePool(size: pixelSize)
@@ -117,9 +136,13 @@ final class ScorePiPFrameRenderer {
         ctx.setFillColor(CGColor(gray: 1, alpha: 1))
         ctx.fill(CGRect(origin: .zero, size: pixelSize))
 
+        // Scale into the point coordinate system; everything that
+        // follows can reason in points, with `pixelDensity` translating
+        // to pixel positions automatically.
+        ctx.scaleBy(x: Self.pixelDensity, y: Self.pixelDensity)
         // CGContext default is bottom-left; CALayer & cursor frames are
         // top-left. Flip so positive Y goes downward.
-        ctx.translateBy(x: 0, y: pixelSize.height)
+        ctx.translateBy(x: 0, y: pointSize.height)
         ctx.scaleBy(x: 1, y: -1)
 
         let cursorFrame = playbackCursor.flatMap {
@@ -128,7 +151,7 @@ final class ScorePiPFrameRenderer {
         // Center the (scaled) system vertically; place the cursor's
         // measure at a fixed leading inset horizontally.
         let scaledSystemHeight = system.size.height * scoreScale
-        let shiftY = (pixelSize.height - scaledSystemHeight) / 2
+        let shiftY = (pointSize.height - scaledSystemHeight) / 2
         let shiftX: CGFloat = cursorFrame
             .map { -$0.minX * scoreScale + Self.cursorLeadingInsetPt } ?? 0
 

@@ -133,6 +133,7 @@ final class ReaderViewModel {
         do {
             try pipCoordinator.arm(
                 score: visible,
+                staffSize: layoutModel.staffSize,
                 playbackCursor: playbackCursor,
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
             )
