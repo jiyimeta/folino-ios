@@ -15,6 +15,24 @@
             "state" : "translated",
             "value" : "folino"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
         }
       }
     },
@@ -33,21 +51,31 @@
             "state" : "needs_review",
             "value" : "folino"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
         }
       }
     },
-    "Compressed MusicXML Score" : {
-
-    },
-    "MuseScore Compressed Score (MSCZ)" : {
-
-    },
-    "MuseScore Score (MSCX)" : {
-
-    },
-    "MusicXML Score" : {
-
-    }
+    "Compressed MusicXML Score" : {},
+    "MuseScore Compressed Score (MSCZ)" : {},
+    "MuseScore Score (MSCX)" : {},
+    "MusicXML Score" : {}
   },
   "version" : "1.0"
 }

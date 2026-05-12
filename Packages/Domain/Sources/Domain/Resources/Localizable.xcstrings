@@ -14,6 +14,24 @@
             "state" : "translated",
             "value" : "オーディオエンジンエラー: %@"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "오디오 엔진 오류: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频引擎错误：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音訊引擎錯誤：%@"
+          }
         }
       }
     },
@@ -29,6 +47,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ライブラリの保存に失敗しました: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "라이브러리 저장에 실패했습니다: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存资料库失败：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "儲存資料庫失敗：%@"
           }
         }
       }
@@ -46,6 +82,24 @@
             "state" : "translated",
             "value" : "楽譜ファイルが見つかりません: %@"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보 파일을 찾을 수 없습니다: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到乐谱文件：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到樂譜檔案：%@"
+          }
         }
       }
     },
@@ -61,6 +115,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "楽譜ファイルを読み取れませんでした: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보 파일을 읽을 수 없습니다: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取乐谱文件：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法讀取樂譜檔案：%@"
           }
         }
       }
@@ -78,6 +150,24 @@
             "state" : "translated",
             "value" : "楽譜ファイルを書き込めませんでした: %@"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보 파일을 쓸 수 없습니다: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法写入乐谱文件：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法寫入樂譜檔案：%@"
+          }
         }
       }
     },
@@ -93,6 +183,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "SoundFont のダウンロードに失敗しました（バンク %1$lld、プログラム %2$lld）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SoundFont 다운로드에 실패했습니다 (뱅크 %1$lld, 프로그램 %2$lld)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SoundFont 下载失败（音色组 %1$lld、程序 %2$lld）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SoundFont 下載失敗（音色組 %1$lld、程式 %2$lld）"
           }
         }
       }
@@ -110,6 +218,24 @@
             "state" : "translated",
             "value" : "同期に失敗しました: %@"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동기화에 실패했습니다: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步失败：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步失敗：%@"
+          }
         }
       }
     },
@@ -125,6 +251,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未対応のファイル形式です: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지원하지 않는 파일 형식입니다: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持的文件格式：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支援的檔案格式：%@"
           }
         }
       }
