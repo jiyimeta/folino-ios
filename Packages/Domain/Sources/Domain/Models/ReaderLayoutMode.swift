@@ -26,4 +26,10 @@ public enum ReaderGlobalSettingsKey {
     /// down on return to the foreground. When false, PiP is never
     /// shown automatically.
     public static let pictureInPictureEnabled = "readerPictureInPictureEnabled"
+
+    /// Bool. When true, runs of two or more consecutive empty-rest
+    /// measures render as a single H-bar with a count, using
+    /// `MultiMeasureRestPolicy.collapse`. When false, measures
+    /// render individually.
+    public static let collapseMultiMeasureRests = "readerCollapseMultiMeasureRests"
 }

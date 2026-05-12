@@ -26,4 +26,11 @@ struct ReaderLayoutModeTests {
             ReaderGlobalSettingsKey.pictureInPictureEnabled == "readerPictureInPictureEnabled",
         )
     }
+
+    @Test func `collapse multi measure rests key is stable`() {
+        #expect(
+            ReaderGlobalSettingsKey.collapseMultiMeasureRests
+                == "readerCollapseMultiMeasureRests",
+        )
+    }
 }
