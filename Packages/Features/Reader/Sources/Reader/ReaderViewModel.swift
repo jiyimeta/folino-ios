@@ -7,7 +7,7 @@ import SheetMusicCore
 
 @MainActor
 @Observable
-final class ReaderViewModel { // swiftlint:disable:this type_body_length
+final class ReaderViewModel {
     enum LoadState {
         case loading
         case loaded(Score)
@@ -40,16 +40,11 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     var repeatModel = RepeatModel()
     var tempoModel = TempoModel()
     var layoutModel = LayoutSettingsModel()
+    var mixerModel = PlaybackMixerModel()
 
     private(set) var loadState: LoadState = .loading
     private(set) var scoreItem: ScoreItem
     private(set) var preferences: ReaderPreferences
-    /// Transient per-staff volume during a slider drag. Populated by
-    /// `setVolume`, cleared by `commitVolume`. Lives on the VM so SwiftUI
-    /// re-renders the slider as the value moves.
-    private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
-    private(set) var mutedStaves: Set<StaffAddress> = []
-    private(set) var soloStaves: Set<StaffAddress> = []
     private(set) var isPlaying = false
     private(set) var soundfontAlertKind: SoundfontAlertKind?
     private(set) var playbackCursor: ScoreCursor?
@@ -79,9 +74,9 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     @ObservationIgnored
     private let defaultStaffSize: CGFloat
     @ObservationIgnored
-    private let playbackController: (any PlaybackController)?
+    let playbackController: (any PlaybackController)?
     @ObservationIgnored
-    private let reachability: (any NetworkReachability)?
+    let reachability: (any NetworkReachability)?
     @ObservationIgnored
     private var hasUpdatedLastOpened = false
     @ObservationIgnored
@@ -94,25 +89,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// map to a different visible representation across toggles.
     @ObservationIgnored
     private var rawPlaybackCursor: ScoreCursor?
-
-    @ObservationIgnored
-    private var pendingInstrumentLoad: PendingInstrumentLoad?
-
-    private struct PendingInstrumentLoad {
-        let partIndex: Int
-        let bank: Int
-        let program: Int
-        let isDrums: Bool
-        /// Per-staff snapshot of the override map restricted to this part
-        /// at the moment the pick was registered. `nil` value means "no
-        /// override existed for that address; remove on revert".
-        let previousOverrides: [(address: StaffAddress, previous: Int?)]
-        /// True iff playback was running at the moment we registered the
-        /// pick (or was inherited from an earlier in-flight pick that we
-        /// just cancelled). Drives auto-resume on success.
-        let wasPlaying: Bool
-        let task: Task<Void, Error>
-    }
 
     init(
         scoreItem: ScoreItem,
@@ -138,6 +114,18 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         wireRepeatModel()
         wireTempoModel()
         wireLayoutModel()
+        wireMixerModel()
+    }
+
+    private func wireMixerModel() {
+        mixerModel.host = self
+        mixerModel.onChange = { [weak self] in
+            guard let self else { return }
+            await mutatePreferences { prefs in
+                prefs.staffProgramOverrides = self.mixerModel.staffProgramOverrides
+                prefs.staffVolumeOverrides = self.mixerModel.staffVolumeOverrides
+            }
+        }
     }
 
     private func wireLayoutModel() {
@@ -230,88 +218,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         }
     }
 
-    func volume(for address: StaffAddress) -> Double {
-        liveStaffVolumes[address]
-            ?? preferences.staffVolumeOverrides[address]
-            ?? loadState.score?.initialStaffVolume(at: address)
-            ?? Self.defaultStaffVolume
-    }
-
-    func setVolume(_ value: Double, for address: StaffAddress) {
-        let clamped = min(max(value, 0), 1)
-        liveStaffVolumes[address] = clamped
-        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
-        Task { await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped) }
-    }
-
-    /// Slider release: persist the value as the per-score override and
-    /// clear the transient drag entry. Forwards to the engine so the
-    /// post-clamp value is what gets played.
-    func commitVolume(_ value: Double, for address: StaffAddress) async {
-        let clamped = min(max(value, 0), 1)
-        await mutatePreferences { $0.staffVolumeOverrides[address] = clamped }
-        liveStaffVolumes[address] = nil
-        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
-        await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
-    }
-
-    func toggleStaffMute(address: StaffAddress) {
-        if mutedStaves.contains(address) {
-            mutedStaves.remove(address)
-        } else {
-            mutedStaves.insert(address)
-        }
-        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
-        Task {
-            await playbackController?.setStaffMute(staff: flatIndex, isMuted: mutedStaves.contains(address))
-        }
-    }
-
-    func toggleStaffSolo(address: StaffAddress) {
-        if soloStaves.contains(address) {
-            soloStaves.remove(address)
-        } else {
-            soloStaves.insert(address)
-        }
-        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
-        Task {
-            await playbackController?.setStaffSolo(staff: flatIndex, isSolo: soloStaves.contains(address))
-        }
-    }
-
-    /// Returns the GM program (0…127) currently driving the staff: the user's
-    /// override if one is set, otherwise the score's declared instrument program.
-    func effectiveProgram(for address: StaffAddress) -> Int {
-        if let override = preferences.staffProgramOverrides[address] {
-            return override
-        }
-        return loadState.score?.gmProgram(at: address) ?? 0
-    }
-
-    func hasProgramOverride(for address: StaffAddress) -> Bool {
-        preferences.staffProgramOverrides[address] != nil
-    }
-
-    func setStaffProgram(_ program: Int, for address: StaffAddress) async {
-        await mutatePreferences { $0.staffProgramOverrides[address] = program }
-        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
-        await playbackController?.setStaffInstrument(
-            staff: flatIndex,
-            bank: loadState.score?.gmBank(at: address) ?? 0,
-            program: program,
-        )
-    }
-
-    func clearStaffProgramOverride(for address: StaffAddress) async {
-        await mutatePreferences { $0.staffProgramOverrides.removeValue(forKey: address) }
-        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
-        await playbackController?.setStaffInstrument(
-            staff: flatIndex,
-            bank: loadState.score?.gmBank(at: address) ?? 0,
-            program: loadState.score?.gmProgram(at: address) ?? 0,
-        )
-    }
-
     /// Kick off the playback engine's `load` in the background as soon as
     /// the score is open, so the user usually finds soundfonts ready by
     /// the time they tap play. Idempotent — re-entry while a preload is
@@ -354,22 +260,10 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
               case let .loaded(score) = loadState,
               soundfontAlertKind == nil
         else { return }
-        if let pending = pendingInstrumentLoad, !pending.wasPlaying {
-            // Silent prefetch was kicked off when the user was not playing.
-            // Surface the existing alert copy and wait. The prefetch task's
-            // own success branch (in setPartProgram) fans setStaffInstrument
-            // out; we just need to block until the engine reflects the
-            // pick before kicking off play.
-            let online = await reachability?.isOnline() ?? true
-            soundfontAlertKind = online ? .loading : .offline
-            do {
-                try await pending.task.value
-                soundfontAlertKind = nil
-            } catch {
-                soundfontAlertKind = nil
-                return
-            }
-        }
+        // If a silent prefetch is in flight (the user picked an instrument
+        // while paused), wait for it before starting play. The mixer surfaces
+        // its own alert copy during the wait.
+        guard await mixerModel.awaitSilentPrefetch() else { return }
         if !hasLoadedIntoPlayback {
             let cached = await controller.areSoundfontsAvailableLocally(for: score)
             let online = await reachability?.isOnline() ?? true
@@ -422,7 +316,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// when no load is in flight — the cancel is a no-op.
     func cancelLoadingSoundfonts() {
         preloadTask?.cancel()
-        pendingInstrumentLoad?.task.cancel()
+        mixerModel.cancelLoadingSoundfonts()
     }
 
     func resetZoom() {
@@ -465,6 +359,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
                 repeatModel.sync(from: stored)
                 tempoModel.sync(from: stored)
                 layoutModel.sync(from: stored)
+                mixerModel.sync(from: stored)
                 return
             }
         } catch {
@@ -479,6 +374,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         repeatModel.sync(from: seeded)
         tempoModel.sync(from: seeded)
         layoutModel.sync(from: seeded)
+        mixerModel.sync(from: seeded)
         try? await repository.saveReaderPreferences(seeded)
     }
 
@@ -530,177 +426,26 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     }
 }
 
-// MARK: - Part instrument program overrides
+// MARK: - PlaybackMixerHost conformance
 
-extension ReaderViewModel {
-    /// Effective GM program for a part. All staves under a part share the
-    /// part's instrument, so we report the first staff's effective program
-    /// (or the score default when no override exists).
-    func effectiveProgram(forPartIndex partIndex: Int) -> Int {
-        let firstAddress = StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
-        return effectiveProgram(for: firstAddress)
+extension ReaderViewModel: PlaybackMixerHost {
+    func pausePlayback() async {
+        guard let controller = playbackController, isPlaying else { return }
+        await controller.pause()
+        isPlaying = false
     }
 
-    func hasProgramOverride(forPartIndex partIndex: Int) -> Bool {
-        partStaffAddresses(forPartIndex: partIndex)
-            .contains { preferences.staffProgramOverrides[$0] != nil }
-    }
-
-    /// Set a program override for every staff under the part. Each staff has
-    /// its own engine voice, so we have to fan out — but to the user it
-    /// reads as one "this part's instrument" choice.
-    func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
-        let addresses = partStaffAddresses(forPartIndex: partIndex)
-        guard !addresses.isEmpty,
-              case let .loaded(score) = loadState,
-              score.parts.indices.contains(partIndex)
-        else { return }
-        let part = score.parts[partIndex]
-        let bank = part.instrument.channel.bank
-        let isDrums = part.instrument.useDrumset
-
-        if let controller = playbackController,
-           await controller.isSoundfontCached(
-               bank: bank, program: program, isDrums: isDrums,
-           ) == false
-        {
-            await runUncachedPartProgramSwap(
-                program: program, partIndex: partIndex,
-                addresses: addresses, bank: bank, isDrums: isDrums,
-                controller: controller,
-            )
-            return
-        }
-
-        // Cache-hit (or no controller): preserve the original synchronous
-        // behaviour — persist the override and fan out to the engine.
-        await mutatePreferences { prefs in
-            for address in addresses {
-                prefs.staffProgramOverrides[address] = program
-            }
-        }
-        for address in addresses {
-            guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { continue }
-            await playbackController?.setStaffInstrument(
-                staff: flatIndex,
-                bank: loadState.score?.gmBank(at: address) ?? 0,
-                program: program,
-            )
-        }
-    }
-
-    // swiftlint:disable:next function_body_length
-    private func runUncachedPartProgramSwap(
-        program: Int,
-        partIndex: Int,
-        addresses: [StaffAddress],
-        bank: Int,
-        isDrums: Bool,
-        controller: any PlaybackController,
-    ) async {
-        // 1. Latest pick wins on the same part: cancel any in-flight pick
-        //    and inherit its wasPlaying — without inheritance the new pick
-        //    would never auto-resume because the previous one already
-        //    paused us.
-        var inheritedWasPlaying = false
-        if let existing = pendingInstrumentLoad, existing.partIndex == partIndex {
-            inheritedWasPlaying = existing.wasPlaying
-            existing.task.cancel()
-            // Block until the cancelled task's catch branch finishes its
-            // revert; otherwise our snapshot below captures the mid-flight
-            // state the previous pick mutated to.
-            _ = try? await existing.task.value
-        }
-
-        let wasPlaying = isPlaying || inheritedWasPlaying
-        if isPlaying {
-            await controller.pause()
+    func tryResumePlayback() async {
+        guard let controller = playbackController else { return }
+        do {
+            try await controller.play()
+            isPlaying = true
+        } catch {
             isPlaying = false
         }
-
-        let snapshot = addresses.map { address in
-            (address: address, previous: preferences.staffProgramOverrides[address])
-        }
-        await mutatePreferences { prefs in
-            for address in addresses {
-                prefs.staffProgramOverrides[address] = program
-            }
-        }
-
-        if wasPlaying {
-            let online = await reachability?.isOnline() ?? true
-            soundfontAlertKind = online ? .loading : .offline
-        }
-
-        let task = Task<Void, Error> {
-            try await controller.prefetchSoundfont(
-                bank: bank, program: program, isDrums: isDrums,
-            )
-        }
-        let pending = PendingInstrumentLoad(
-            partIndex: partIndex, bank: bank, program: program, isDrums: isDrums,
-            previousOverrides: snapshot, wasPlaying: wasPlaying, task: task,
-        )
-        pendingInstrumentLoad = pending
-
-        do {
-            try await task.value
-            for address in addresses {
-                guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { continue }
-                await controller.setStaffInstrument(
-                    staff: flatIndex, bank: bank, program: program,
-                )
-            }
-            soundfontAlertKind = nil
-            if wasPlaying {
-                do {
-                    try await controller.play()
-                    isPlaying = true
-                } catch {
-                    isPlaying = false
-                }
-            }
-        } catch {
-            await mutatePreferences { prefs in
-                for entry in snapshot {
-                    if let previous = entry.previous {
-                        prefs.staffProgramOverrides[entry.address] = previous
-                    } else {
-                        prefs.staffProgramOverrides.removeValue(forKey: entry.address)
-                    }
-                }
-            }
-            soundfontAlertKind = nil
-            // Q1 A: only auto-resume on success. Cancel leaves us paused.
-        }
-        pendingInstrumentLoad = nil
     }
 
-    func clearPartProgramOverride(forPartIndex partIndex: Int) async {
-        let addresses = partStaffAddresses(forPartIndex: partIndex)
-        guard !addresses.isEmpty else { return }
-        await mutatePreferences { prefs in
-            for address in addresses {
-                prefs.staffProgramOverrides.removeValue(forKey: address)
-            }
-        }
-        for address in addresses {
-            guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { continue }
-            await playbackController?.setStaffInstrument(
-                staff: flatIndex,
-                bank: loadState.score?.gmBank(at: address) ?? 0,
-                program: loadState.score?.gmProgram(at: address) ?? 0,
-            )
-        }
-    }
-
-    private func partStaffAddresses(forPartIndex partIndex: Int) -> [StaffAddress] {
-        guard
-            case let .loaded(score) = loadState,
-            score.parts.indices.contains(partIndex)
-        else { return [] }
-        return score.parts[partIndex].staves.indices.map { staffIndex in
-            StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
-        }
+    func setSoundfontAlertKind(_ kind: SoundfontAlertKind?) {
+        soundfontAlertKind = kind
     }
 }

@@ -304,15 +304,15 @@ struct ReaderViewModelPlaybackTests {
 
         // Piano top staff → flat index 1 (Vn=0, Pno-top=1, Pno-bottom=2).
         let pianoTop = StaffAddress(partIndex: 1, staffIndexInPart: 0)
-        vm.toggleStaffSolo(address: pianoTop)
-        #expect(vm.soloStaves == [pianoTop])
+        vm.mixerModel.toggleStaffSolo(pianoTop)
+        #expect(vm.mixerModel.soloStaves == [pianoTop])
         for _ in 0 ..< 5 {
             await Task.yield()
         }
         #expect(controller.staffSoloStates[1] == true)
 
-        vm.toggleStaffSolo(address: pianoTop)
-        #expect(vm.soloStaves.isEmpty)
+        vm.mixerModel.toggleStaffSolo(pianoTop)
+        #expect(vm.mixerModel.soloStaves.isEmpty)
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -333,8 +333,8 @@ struct ReaderViewModelPlaybackTests {
         // No load: flat index lookup fails, controller is never called,
         // but the in-memory set still tracks the user's intent.
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        vm.toggleStaffSolo(address: address)
-        #expect(vm.soloStaves == [address])
+        vm.mixerModel.toggleStaffSolo(address)
+        #expect(vm.mixerModel.soloStaves == [address])
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -371,9 +371,9 @@ struct ReaderViewModelPlaybackTests {
 
         let violinAddress = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let pianoTopAddress = StaffAddress(partIndex: 1, staffIndexInPart: 0)
-        #expect(vm.effectiveProgram(for: violinAddress) == 40)
-        #expect(vm.effectiveProgram(for: pianoTopAddress) == 0)
-        #expect(!vm.hasProgramOverride(for: violinAddress))
+        #expect(vm.mixerModel.effectiveProgram(for: violinAddress) == 40)
+        #expect(vm.mixerModel.effectiveProgram(for: pianoTopAddress) == 0)
+        #expect(!vm.mixerModel.hasProgramOverride(for: violinAddress))
     }
 
     @Test func `set staff program persists override and forwards to controller`() async {
@@ -400,10 +400,10 @@ struct ReaderViewModelPlaybackTests {
         await vm.load()
 
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        await vm.setStaffProgram(6, for: address) // Harpsichord
-        #expect(vm.effectiveProgram(for: address) == 6)
-        #expect(vm.hasProgramOverride(for: address))
-        #expect(vm.preferences.staffProgramOverrides[address] == 6)
+        await vm.mixerModel.setStaffProgram(6, for: address) // Harpsichord
+        #expect(vm.mixerModel.effectiveProgram(for: address) == 6)
+        #expect(vm.mixerModel.hasProgramOverride(for: address))
+        #expect(vm.mixerModel.staffProgramOverrides[address] == 6)
         // Saved to repository.
         let saved = try? #require(repo.savedReaderPreferences.last)
         #expect(saved?.staffProgramOverrides[address] == 6)
@@ -438,12 +438,12 @@ struct ReaderViewModelPlaybackTests {
         await vm.load()
 
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        await vm.setStaffProgram(6, for: address)
-        await vm.clearStaffProgramOverride(for: address)
+        await vm.mixerModel.setStaffProgram(6, for: address)
+        await vm.mixerModel.clearStaffProgramOverride(for: address)
 
-        #expect(!vm.hasProgramOverride(for: address))
-        #expect(vm.effectiveProgram(for: address) == 40)
-        #expect(vm.preferences.staffProgramOverrides[address] == nil)
+        #expect(!vm.mixerModel.hasProgramOverride(for: address))
+        #expect(vm.mixerModel.effectiveProgram(for: address) == 40)
+        #expect(vm.mixerModel.staffProgramOverrides[address] == nil)
         let lastCall = try? #require(controller.staffInstrumentCalls.last)
         #expect(lastCall?.program == 40) // reset call uses score default
     }
@@ -510,7 +510,7 @@ struct ReaderViewModelPlaybackTests {
         // Piano's lower staff is at (partIndex: 1, staffIndexInPart: 1)
         // → flat staff index 2 (Vn=0, Pno-top=1, Pno-bottom=2).
         let pianoBottom = StaffAddress(partIndex: 1, staffIndexInPart: 1)
-        vm.setVolume(0.3, for: pianoBottom)
+        vm.mixerModel.setVolume(0.3, for: pianoBottom)
         await Task.yield()
         await Task.yield()
         #expect(controller.staffVolumes[2] == 0.3)
@@ -540,7 +540,7 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        await vm.setPartProgram(6, forPartIndex: 0)
+        await vm.mixerModel.setPartProgram(6, forPartIndex: 0)
 
         #expect(controller.prefetchedPatches.isEmpty)
         #expect(vm.soundfontAlertKind == nil)
@@ -572,7 +572,7 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        await vm.setPartProgram(6, forPartIndex: 0)
+        await vm.mixerModel.setPartProgram(6, forPartIndex: 0)
 
         #expect(vm.soundfontAlertKind == nil)
         #expect(controller.prefetchedPatches.contains(
@@ -581,7 +581,7 @@ struct ReaderViewModelPlaybackTests {
         // Engine reflection happens after prefetch resolves.
         let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
         #expect(calls.count == 1)
-        #expect(vm.preferences.staffProgramOverrides[
+        #expect(vm.mixerModel.staffProgramOverrides[
             StaffAddress(partIndex: 0, staffIndexInPart: 0),
         ] == 6)
     }
@@ -616,7 +616,7 @@ struct ReaderViewModelPlaybackTests {
         await vm.togglePlayback()
         #expect(vm.isPlaying)
 
-        let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        let pick = Task { await vm.mixerModel.setPartProgram(6, forPartIndex: 0) }
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -659,7 +659,7 @@ struct ReaderViewModelPlaybackTests {
         let playsBefore = controller.playCount
         #expect(vm.isPlaying)
 
-        await vm.setPartProgram(6, forPartIndex: 0)
+        await vm.mixerModel.setPartProgram(6, forPartIndex: 0)
 
         #expect(vm.isPlaying)
         #expect(controller.playCount == playsBefore + 1)
@@ -697,7 +697,7 @@ struct ReaderViewModelPlaybackTests {
         controller.soundfontsAvailableLocally = true
         await vm.togglePlayback()
 
-        let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        let pick = Task { await vm.mixerModel.setPartProgram(6, forPartIndex: 0) }
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -732,17 +732,17 @@ struct ReaderViewModelPlaybackTests {
         await vm.load()
 
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        let pick = Task { await vm.mixerModel.setPartProgram(6, forPartIndex: 0) }
         for _ in 0 ..< 5 {
             await Task.yield()
         }
-        #expect(vm.preferences.staffProgramOverrides[address] == 6)
+        #expect(vm.mixerModel.staffProgramOverrides[address] == 6)
 
         vm.cancelLoadingSoundfonts()
         _ = await pick.value
 
-        #expect(vm.preferences.staffProgramOverrides[address] == nil)
-        #expect(vm.effectiveProgram(forPartIndex: 0) == 40)
+        #expect(vm.mixerModel.staffProgramOverrides[address] == nil)
+        #expect(vm.mixerModel.effectiveProgram(forPartIndex: 0) == 40)
         let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
         #expect(calls.isEmpty)
     }
@@ -771,12 +771,12 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        let firstPick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        let firstPick = Task { await vm.mixerModel.setPartProgram(6, forPartIndex: 0) }
         for _ in 0 ..< 5 {
             await Task.yield()
         }
 
-        let secondPick = Task { await vm.setPartProgram(24, forPartIndex: 0) }
+        let secondPick = Task { await vm.mixerModel.setPartProgram(24, forPartIndex: 0) }
         for _ in 0 ..< 10 {
             await Task.yield()
         }
@@ -786,8 +786,8 @@ struct ReaderViewModelPlaybackTests {
         _ = await secondPick.value
 
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        #expect(vm.preferences.staffProgramOverrides[address] == nil)
-        #expect(vm.effectiveProgram(forPartIndex: 0) == 40)
+        #expect(vm.mixerModel.staffProgramOverrides[address] == nil)
+        #expect(vm.mixerModel.effectiveProgram(forPartIndex: 0) == 40)
     }
 
     @Test func `second instrument pick inherits was playing from first pick`() async {
@@ -819,7 +819,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.isPlaying)
 
         controller.blocksPrefetchUntilCancelled = true
-        let firstPick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        let firstPick = Task { await vm.mixerModel.setPartProgram(6, forPartIndex: 0) }
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -827,7 +827,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(vm.soundfontAlertKind == .loading)
 
         controller.blocksPrefetchUntilCancelled = false
-        let secondPick = Task { await vm.setPartProgram(24, forPartIndex: 0) }
+        let secondPick = Task { await vm.mixerModel.setPartProgram(24, forPartIndex: 0) }
         _ = await firstPick.value
         _ = await secondPick.value
 
@@ -863,7 +863,7 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        let pick = Task { await vm.setPartProgram(6, forPartIndex: 0) }
+        let pick = Task { await vm.mixerModel.setPartProgram(6, forPartIndex: 0) }
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -905,7 +905,7 @@ struct ReaderViewModelPlaybackTests {
             reachability: FakeNetworkReachability(online: true),
         )
         await vm.load()
-        await vm.setPartProgram(6, forPartIndex: 0)
+        await vm.mixerModel.setPartProgram(6, forPartIndex: 0)
 
         await vm.togglePlayback()
         #expect(vm.isPlaying)

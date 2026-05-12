@@ -103,12 +103,12 @@ struct PlaybackInspectorScreen: View {
     @ViewBuilder
     private func staffRow(address: StaffAddress) -> some View {
         let volumeBinding = Binding<Double>(
-            get: { viewModel.volume(for: address) },
-            set: { viewModel.setVolume($0, for: address) },
+            get: { viewModel.mixerModel.volume(for: address) },
+            set: { viewModel.mixerModel.setVolume($0, for: address) },
         )
-        let isMuted = viewModel.mutedStaves.contains(address)
-        let isSolo = viewModel.soloStaves.contains(address)
-        let isDisabled = isMuted || !viewModel.soloStaves.isEmpty && !isSolo
+        let isMuted = viewModel.mixerModel.mutedStaves.contains(address)
+        let isSolo = viewModel.mixerModel.soloStaves.contains(address)
+        let isDisabled = isMuted || !viewModel.mixerModel.soloStaves.isEmpty && !isSolo
         HStack {
             Image(systemName: "speaker.wave.2.fill")
                 .foregroundStyle(isDisabled ? .gray.opacity(0.6) : .accentColor)
@@ -119,7 +119,7 @@ struct PlaybackInspectorScreen: View {
                 onEditingChanged: { editing in
                     if !editing {
                         let final = volumeBinding.wrappedValue
-                        Task { await viewModel.commitVolume(final, for: address) }
+                        Task { await viewModel.mixerModel.commitVolume(final, for: address) }
                     }
                 },
             )
@@ -127,7 +127,7 @@ struct PlaybackInspectorScreen: View {
             .disabled(isDisabled)
 
             Button {
-                viewModel.toggleStaffSolo(address: address)
+                viewModel.mixerModel.toggleStaffSolo(address)
             } label: {
                 Image(systemName: isSolo ? "s.circle.fill" : "s.circle")
                     .resizable()
@@ -137,7 +137,7 @@ struct PlaybackInspectorScreen: View {
             }
 
             Button {
-                viewModel.toggleStaffMute(address: address)
+                viewModel.mixerModel.toggleStaffMute(address)
             } label: {
                 Image(systemName: isMuted ? "m.circle.fill" : "m.circle")
                     .resizable()

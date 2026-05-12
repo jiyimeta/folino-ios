@@ -9,8 +9,8 @@ struct ProgramPicker: View {
     let partIndex: Int
 
     var body: some View {
-        let program = viewModel.effectiveProgram(forPartIndex: partIndex)
-        let hasOverride = viewModel.hasProgramOverride(forPartIndex: partIndex)
+        let program = viewModel.mixerModel.effectiveProgram(forPartIndex: partIndex)
+        let hasOverride = viewModel.mixerModel.hasProgramOverride(forPartIndex: partIndex)
         Menu {
             if hasOverride {
                 resetButton
@@ -21,7 +21,7 @@ struct ProgramPicker: View {
                     ForEach(family.programs) { instrument in
                         Button {
                             Task {
-                                await viewModel.setPartProgram(
+                                await viewModel.mixerModel.setPartProgram(
                                     Int(instrument.program), forPartIndex: partIndex,
                                 )
                             }
@@ -46,7 +46,7 @@ struct ProgramPicker: View {
 
     private var resetButton: some View {
         Button {
-            Task { await viewModel.clearPartProgramOverride(forPartIndex: partIndex) }
+            Task { await viewModel.mixerModel.clearPartProgramOverride(forPartIndex: partIndex) }
         } label: {
             Label {
                 Text("reader.preferences.resetDefault", bundle: .module)

@@ -54,19 +54,19 @@ struct ReaderViewModelPartProgramTests {
         )
         await vm.load()
 
-        await vm.setPartProgram(6, forPartIndex: 1) // Harpsichord on the piano part
+        await vm.mixerModel.setPartProgram(6, forPartIndex: 1) // Harpsichord on the piano part
 
         let pianoTop = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         let pianoBottom = StaffAddress(partIndex: 1, staffIndexInPart: 1)
         let violin = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-        #expect(vm.effectiveProgram(forPartIndex: 1) == 6)
-        #expect(vm.hasProgramOverride(forPartIndex: 1))
-        #expect(vm.preferences.staffProgramOverrides[pianoTop] == 6)
-        #expect(vm.preferences.staffProgramOverrides[pianoBottom] == 6)
+        #expect(vm.mixerModel.effectiveProgram(forPartIndex: 1) == 6)
+        #expect(vm.mixerModel.hasProgramOverride(forPartIndex: 1))
+        #expect(vm.mixerModel.staffProgramOverrides[pianoTop] == 6)
+        #expect(vm.mixerModel.staffProgramOverrides[pianoBottom] == 6)
         // The other part is untouched.
-        #expect(vm.preferences.staffProgramOverrides[violin] == nil)
-        #expect(!vm.hasProgramOverride(forPartIndex: 0))
+        #expect(vm.mixerModel.staffProgramOverrides[violin] == nil)
+        #expect(!vm.mixerModel.hasProgramOverride(forPartIndex: 0))
 
         // Engine got one call per staff under the part, with flat indices 1 and 2.
         let pianoCalls = controller.staffInstrumentCalls.filter { $0.program == 6 }
@@ -97,12 +97,12 @@ struct ReaderViewModelPartProgramTests {
         )
         await vm.load()
 
-        await vm.setPartProgram(6, forPartIndex: 0)
-        await vm.clearPartProgramOverride(forPartIndex: 0)
+        await vm.mixerModel.setPartProgram(6, forPartIndex: 0)
+        await vm.mixerModel.clearPartProgramOverride(forPartIndex: 0)
 
-        #expect(!vm.hasProgramOverride(forPartIndex: 0))
-        #expect(vm.effectiveProgram(forPartIndex: 0) == 0)
-        #expect(vm.preferences.staffProgramOverrides.isEmpty)
+        #expect(!vm.mixerModel.hasProgramOverride(forPartIndex: 0))
+        #expect(vm.mixerModel.effectiveProgram(forPartIndex: 0) == 0)
+        #expect(vm.mixerModel.staffProgramOverrides.isEmpty)
         // Last two engine calls reset both staves to the score default (0).
         let resetCalls = controller.staffInstrumentCalls.suffix(2)
         #expect(resetCalls.allSatisfy { $0.program == 0 })

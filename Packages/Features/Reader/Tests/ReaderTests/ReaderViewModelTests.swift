@@ -196,18 +196,18 @@ struct ReaderViewModelTests {
     @Test func `volume falls back to one when load state has no parts`() {
         let vm = makeVMNoLoad()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
-        #expect(vm.volume(for: address) == 1.0)
+        #expect(vm.mixerModel.volume(for: address) == 1.0)
     }
 
     @Test func `set volume clamps out of range values`() {
         let vm = makeVMNoLoad()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-        vm.setVolume(-0.5, for: address)
-        #expect(vm.liveStaffVolumes[address] == 0)
+        vm.mixerModel.setVolume(-0.5, for: address)
+        #expect(vm.mixerModel.liveStaffVolumes[address] == 0)
 
-        vm.setVolume(2.0, for: address)
-        #expect(vm.liveStaffVolumes[address] == 1)
+        vm.mixerModel.setVolume(2.0, for: address)
+        #expect(vm.mixerModel.liveStaffVolumes[address] == 1)
     }
 
     @Test func `volume uses score CC 7 when no override`() async {
@@ -239,7 +239,7 @@ struct ReaderViewModelTests {
         )
         await vm.load()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let value = vm.volume(for: address)
+        let value = vm.mixerModel.volume(for: address)
         #expect(abs(value - 64.0 / 127.0) < 0.0001)
     }
 
@@ -278,7 +278,7 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        #expect(vm.volume(for: address) == 0.3)
+        #expect(vm.mixerModel.volume(for: address) == 0.3)
     }
 
     @Test func `reset zoom returns to unit`() {
@@ -376,11 +376,11 @@ struct ReaderViewModelTests {
         await vm.load()
         let savesBefore = repo.savedReaderPreferences.count
 
-        vm.setVolume(0.4, for: address)
+        vm.mixerModel.setVolume(0.4, for: address)
 
-        #expect(vm.liveStaffVolumes[address] == 0.4)
-        #expect(vm.volume(for: address) == 0.4)
-        #expect(vm.preferences.staffVolumeOverrides[address] == nil)
+        #expect(vm.mixerModel.liveStaffVolumes[address] == 0.4)
+        #expect(vm.mixerModel.volume(for: address) == 0.4)
+        #expect(vm.mixerModel.staffVolumeOverrides[address] == nil)
         #expect(repo.savedReaderPreferences.count == savesBefore)
     }
 
@@ -413,14 +413,14 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        vm.setVolume(0.4, for: address)
+        vm.mixerModel.setVolume(0.4, for: address)
         let savesBefore = repo.savedReaderPreferences.count
 
-        await vm.commitVolume(0.4, for: address)
+        await vm.mixerModel.commitVolume(0.4, for: address)
 
-        #expect(vm.preferences.staffVolumeOverrides[address] == 0.4)
-        #expect(vm.liveStaffVolumes[address] == nil)
-        #expect(vm.volume(for: address) == 0.4)
+        #expect(vm.mixerModel.staffVolumeOverrides[address] == 0.4)
+        #expect(vm.mixerModel.liveStaffVolumes[address] == nil)
+        #expect(vm.mixerModel.volume(for: address) == 0.4)
         #expect(repo.savedReaderPreferences.count == savesBefore + 1)
     }
 
@@ -453,11 +453,11 @@ struct ReaderViewModelTests {
         )
         await vm.load()
 
-        await vm.commitVolume(-0.5, for: address)
-        #expect(vm.preferences.staffVolumeOverrides[address] == 0)
+        await vm.mixerModel.commitVolume(-0.5, for: address)
+        #expect(vm.mixerModel.staffVolumeOverrides[address] == 0)
 
-        await vm.commitVolume(2.0, for: address)
-        #expect(vm.preferences.staffVolumeOverrides[address] == 1)
+        await vm.mixerModel.commitVolume(2.0, for: address)
+        #expect(vm.mixerModel.staffVolumeOverrides[address] == 1)
     }
 
     private func makeVMNoLoad() -> ReaderViewModel {
