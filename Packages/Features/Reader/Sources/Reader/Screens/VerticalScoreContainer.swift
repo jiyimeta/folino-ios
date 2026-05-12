@@ -62,6 +62,11 @@ struct VerticalScoreContainer: View {
     /// expressed in `contentOffset` units (which already account for
     /// inset), so we don't add this back any more.
     @State private var contentInsetTop: CGFloat = 0
+    /// System top safe-area inset (status bar / notch). Parent
+    /// `ReaderRootScreen`'s `.safeAreaPadding(.top, ReaderTopOverlay.height)`
+    /// augmentation is subtracted back out below, so this carries the
+    /// system value only.
+    @State private var safeAreaTop: CGFloat = 0
 
     // Tracked as `@State` (not `@GestureState`) so they don't auto-reset
     // before `onEnded` runs — that auto-reset would visibly snap the
@@ -109,6 +114,18 @@ struct VerticalScoreContainer: View {
                     await rebuildLayout(width: layoutWidth)
                 }
         }
+        .background {
+            // Sibling reader extending beyond safe area (the main GR
+            // sits inside it and reports zero). Subtracts the parent
+            // overlay augmentation to leave just the system inset.
+            Color.clear
+                .ignoresSafeArea()
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    max(0, proxy.safeAreaInsets.top - ReaderTopOverlay.height)
+                } action: { newValue in
+                    safeAreaTop = newValue
+                }
+        }
     }
 
     private func scrollContent(viewport: CGSize) -> some View {
@@ -149,10 +166,11 @@ struct VerticalScoreContainer: View {
     private func zoomedSurface(viewport: CGSize) -> some View {
         if let doc = document {
             let zoom = effectiveZoom(for: doc, viewport: viewport)
+            let topPad = scoreTopPadding + safeAreaTop
             let framedWidth = doc.size.width * zoom
-            let framedHeight = (doc.size.height + scoreTopPadding + scoreBottomPadding) * zoom
+            let framedHeight = (doc.size.height + topPad + scoreBottomPadding) * zoom
             scoreSurface(document: doc)
-                .padding(.top, scoreTopPadding)
+                .padding(.top, topPad)
                 .padding(.bottom, scoreBottomPadding)
                 .scaleEffect(liveMagnification, anchor: liveMagAnchor)
                 .scaleEffect(zoom, anchor: .topLeading)
@@ -330,10 +348,11 @@ struct VerticalScoreContainer: View {
         // Cursor frame in scroll-content coords: vertical padding only,
         // then scaled from top-leading. Mirrors `zoomedSurface`'s
         // composition (no horizontal padding).
+        let topPad = scoreTopPadding + safeAreaTop
         let minX = rect.minX * zoom
         let maxX = rect.maxX * zoom
-        let minY = (rect.minY + scoreTopPadding) * zoom
-        let maxY = (rect.maxY + scoreTopPadding) * zoom
+        let minY = (rect.minY + topPad) * zoom
+        let maxY = (rect.maxY + topPad) * zoom
 
         let curX = liveScrollOffset.x
         let curY = liveScrollOffset.y
