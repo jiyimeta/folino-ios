@@ -1,2 +1,6 @@
 app_name: Folino
 history_yml: App/Resources/VersionHistory.yml
+extra_locales:
+  - ko
+  - zh-Hans
+  - zh-Hant
