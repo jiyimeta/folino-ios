@@ -353,8 +353,10 @@ final class ReaderViewModel {
             scoreItemID: scoreItem.id,
             defaultVolume: Self.defaultStaffVolume,
         )
-        let task = Task<Void, Error> {
-            try await controller.load(score: score, preferences: prefs)
+        let task = Task<Void, Error> { [scoreItem] in
+            try await controller.load(
+                score: score, displayTitle: scoreItem.title, preferences: prefs,
+            )
         }
         preloadTask = task
         do {
@@ -403,8 +405,10 @@ final class ReaderViewModel {
                 scoreItemID: scoreItem.id,
                 defaultVolume: Self.defaultStaffVolume,
             )
-            let task = preloadTask ?? Task<Void, Error> {
-                try await controller.load(score: score, preferences: prefs)
+            let task = preloadTask ?? Task<Void, Error> { [scoreItem] in
+                try await controller.load(
+                    score: score, displayTitle: scoreItem.title, preferences: prefs,
+                )
             }
             preloadTask = task
             do {

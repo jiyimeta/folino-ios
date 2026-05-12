@@ -6,7 +6,15 @@ import Foundation
 public protocol PlaybackController: Sendable {
     /// Set up the engine for a score and seed it with the user's saved
     /// preferences. Subsequent setter calls update the live engine state.
-    func load(score: Score, preferences: PlaybackPreferences) async throws
+    ///
+    /// `displayTitle` overrides the score's embedded title metadata for the
+    /// lock-screen / Control Center Now Playing title. The Library row's
+    /// filename-based title is passed here so users see the same name they
+    /// picked in the Library, not whatever the source file's `<work-title>`
+    /// happens to be (often missing or auto-generated).
+    func load(
+        score: Score, displayTitle: String?, preferences: PlaybackPreferences,
+    ) async throws
 
     /// Returns `true` when every sound source `load(score:preferences:)`
     /// would need is already on disk (bundled or in the on-disk cache).

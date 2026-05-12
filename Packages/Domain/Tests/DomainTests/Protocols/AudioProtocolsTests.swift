@@ -15,7 +15,9 @@ private final class FakePlaybackController: PlaybackController {
 
     func observeIsPlaying(_: @MainActor @escaping (Bool) -> Void) {}
 
-    func load(score: Score, preferences: PlaybackPreferences) throws {
+    func load(
+        score: Score, displayTitle _: String?, preferences: PlaybackPreferences,
+    ) throws {
         loadedScores += 1
     }
 

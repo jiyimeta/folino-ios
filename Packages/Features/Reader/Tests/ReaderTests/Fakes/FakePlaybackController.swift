@@ -8,6 +8,7 @@ final class FakePlaybackController: PlaybackController {
     private(set) var playCount = 0
     private(set) var pauseCount = 0
     private(set) var lastLoadedPreferences: PlaybackPreferences?
+    private(set) var lastLoadedDisplayTitle: String?
     private(set) var staffVolumes: [Int: Double] = [:]
     private(set) var staffSoloStates: [Int: Bool] = [:]
     private(set) var staffInstrumentCalls: [(staff: Int, bank: Int, program: Int)] = []
@@ -56,13 +57,16 @@ final class FakePlaybackController: PlaybackController {
         cursorHandler?(value)
     }
 
-    func load(score _: Score, preferences: PlaybackPreferences) async throws {
+    func load(
+        score _: Score, displayTitle: String?, preferences: PlaybackPreferences,
+    ) async throws {
         if blocksLoadUntilCancelled {
             try await Task.sleep(for: .seconds(60))
         }
         if let error = loadError { throw error }
         loadCount += 1
         lastLoadedPreferences = preferences
+        lastLoadedDisplayTitle = displayTitle
     }
 
     func areSoundfontsAvailableLocally(for _: Score) -> Bool {

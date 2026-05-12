@@ -76,7 +76,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         configureRemoteCommands()
     }
 
-    public func load(score: Score, preferences: PlaybackPreferences) async throws {
+    public func load(
+        score: Score, displayTitle: String?, preferences: PlaybackPreferences,
+    ) async throws {
         await Self.prefetchSoundfonts(score: score, resolver: domainResolver)
         // Prefetch's URLSession calls honor cancellation but the TaskGroup
         // returns regardless. Bail before the engine prepare so a cancel
@@ -96,7 +98,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine.pause()
         loadedScore = prepared
         pendingCursor = nil
-        updateNowPlayingMetadata(for: prepared)
+        updateNowPlayingMetadata(for: prepared, displayTitle: displayTitle)
         for state in preferences.perStaff {
             engine.setVolume(
                 forChannel: .staff(state.staffIndex), to: Float(state.volume),
@@ -394,9 +396,10 @@ public final class LivePlaybackController: Domain.PlaybackController {
         }
     }
 
-    private func updateNowPlayingMetadata(for score: Score) {
+    private func updateNowPlayingMetadata(for score: Score, displayTitle: String?) {
         let frameTexts = score.titleFrame?.texts ?? []
-        let title = frameTexts.first(where: { $0.style == .title })?.text.nonEmpty
+        let title = displayTitle?.nonEmpty
+            ?? frameTexts.first(where: { $0.style == .title })?.text.nonEmpty
             ?? score.metaTags["workTitle"]?.nonEmpty
             ?? "Untitled"
         let composer = frameTexts.first(where: { $0.style == .composer })?.text.nonEmpty
