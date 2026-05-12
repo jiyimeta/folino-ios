@@ -284,7 +284,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             },
             onEditTags: { editTagsTarget = $0 },
             onAddToPlaylist: { addToPlaylistTarget = $0 },
-            onRequestDelete: nil,
+            onRequestDelete: { pendingDeleteScore = $0 },
         )
     }
 
