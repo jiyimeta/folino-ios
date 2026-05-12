@@ -64,6 +64,7 @@ final class ReaderViewModel {
     var pipCoordinator: ScorePiPCoordinator {
         if let c = pipCoordinatorBacking { return c }
         let c = ScorePiPCoordinator()
+        c.onPiPStarted = { [weak self] in self?.isPiPActive = true }
         c.onPiPStopped = { [weak self] in self?.isPiPActive = false }
         c.isAppPlayingProvider = { [weak self] in self?.isPlaying ?? false }
         c.onSetPlaying = { [weak self] desired in
@@ -82,6 +83,44 @@ final class ReaderViewModel {
         }
         pipCoordinatorBacking = c
         return c
+    }
+
+    @ObservationIgnored
+    private var isPiPEnabled = false
+
+    /// Applies the user's Settings preference. Driven by the
+    /// `readerPictureInPictureEnabled` `@AppStorage` value in
+    /// `ReaderRootScreen`.
+    func setPiPEnabled(_ enabled: Bool) {
+        guard isPiPSupported else { return }
+        isPiPEnabled = enabled
+        pipCoordinator.setAutoStartFromBackground(enabled)
+        if enabled {
+            armPiPIfReady()
+        } else {
+            pipCoordinator.dismissIfActive()
+            pipCoordinator.disarm()
+        }
+    }
+
+    /// Called from `ReaderRootScreen`'s `scenePhase` observer when the
+    /// app returns to the foreground — the Settings spec dismisses PiP
+    /// on return regardless of why it started.
+    func dismissPiPOnForeground() {
+        guard isPiPActive else { return }
+        pipCoordinator.dismissIfActive()
+    }
+
+    private func armPiPIfReady() {
+        guard isPiPEnabled, case let .loaded(score) = loadState else { return }
+        do {
+            try pipCoordinator.arm(score: score, playbackCursor: playbackCursor)
+        } catch {
+            // Coordinator throws only when no display layer is attached
+            // (the host view hasn't mounted yet). Arming will retry once
+            // the view installs the layer and load() finishes — neither
+            // ordering is fatal.
+        }
     }
 
     /// Convenience for tests and previews — true while the "loading
@@ -248,26 +287,6 @@ final class ReaderViewModel {
         pipCoordinatorBacking?.updatePlaybackCursor(playbackCursor)
     }
 
-    func togglePiP() {
-        guard case let .loaded(score) = loadState else { return }
-        if isPiPActive {
-            pipCoordinator.stop()
-            isPiPActive = false
-            return
-        }
-        do {
-            try pipCoordinator.start(
-                score: score,
-                playbackCursor: playbackCursor,
-            )
-            isPiPActive = true
-        } catch {
-            // Coordinator throws only when no display layer is attached
-            // (programmer error), and the button is gated on
-            // isPiPSupported — unreachable in practice.
-        }
-    }
-
     func load() async {
         loadState = .loading
         let url = scoresDirectory.appending(path: scoreItem.localFileName)
@@ -275,6 +294,7 @@ final class ReaderViewModel {
             let (score, _) = try await gateway.loadScore(fileURL: url)
             await loadOrSeedPreferences()
             loadState = .loaded(score)
+            armPiPIfReady()
             await updateLastOpenedAtOnce()
         } catch {
             let message = describe(error)

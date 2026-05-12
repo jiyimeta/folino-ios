@@ -21,6 +21,12 @@ final class ScorePiPCoordinator: NSObject {
         AVPictureInPictureController.isPictureInPictureSupported()
     }
 
+    /// Fires when AVKit starts presenting the PiP window — either via
+    /// our explicit `dismissIfActive`/system foreground or via the
+    /// `canStartPictureInPictureAutomaticallyFromInline` auto-start
+    /// when the app backgrounds. The Reader VM uses this to mirror
+    /// `isPiPActive`.
+    var onPiPStarted: (() -> Void)?
     /// Called when the user dismisses the PiP window from the system UI.
     /// The Reader ViewModel uses this to flip its `isPiPActive` flag.
     var onPiPStopped: (() -> Void)?
@@ -76,7 +82,9 @@ final class ScorePiPCoordinator: NSObject {
             playbackDelegate: delegate,
         )
         let controller = AVPictureInPictureController(contentSource: source)
-        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        // Auto-start defaults to off; the Reader flips this based on
+        // the user's Settings toggle via `setAutoStartFromBackground`.
+        controller.canStartPictureInPictureAutomaticallyFromInline = false
         controller.delegate = self
         pipController = controller
 
@@ -102,8 +110,17 @@ final class ScorePiPCoordinator: NSObject {
         }
     }
 
-    func start(score: Score, playbackCursor: ScoreCursor?) throws {
-        guard let controller = pipController, displayLayer != nil else {
+    /// Sets whether AVKit may present PiP automatically when the app
+    /// backgrounds. Wired to the user's Settings toggle.
+    func setAutoStartFromBackground(_ enabled: Bool) {
+        pipController?.canStartPictureInPictureAutomaticallyFromInline = enabled
+    }
+
+    /// Arm the coordinator with a loaded score so AVKit's auto-start
+    /// has frames ready when the app backgrounds. The pump runs while
+    /// armed; idempotent for repeated calls with the same score.
+    func arm(score: Score, playbackCursor: ScoreCursor?) throws {
+        guard displayLayer != nil else {
             throw NSError(
                 domain: "ScorePiPCoordinator", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "No display layer attached"],
@@ -119,15 +136,13 @@ final class ScorePiPCoordinator: NSObject {
         lastReportedTotalTime = nil
 
         startPump()
-        pumpTick() // ensure first frame is enqueued
-
-        if controller.isPictureInPicturePossible {
-            controller.startPictureInPicture()
-        }
+        pumpTick() // seed the layer so AVKit has a frame at auto-start
     }
 
-    func stop() {
-        pipController?.stopPictureInPicture()
+    /// Stop pumping and release the renderer. Does NOT dismiss an
+    /// already-presenting PiP window — for that, call `dismissIfActive`
+    /// first.
+    func disarm() {
         stopPump()
         renderer = nil
         lastReportedPaused = nil
@@ -135,11 +150,17 @@ final class ScorePiPCoordinator: NSObject {
         lastEnqueuedCursorHash = nil
         ticksSinceLastForceEnqueue = 0
         displayLayer?.flush()
-        // Reset the timebase so the next start begins from time = 0
-        // rather than the stale engine position from the previous
-        // session.
         if let tb = displayLayer?.controlTimebase {
             CMTimebaseSetTime(tb, time: .zero)
+        }
+    }
+
+    /// Tell AVKit to dismiss the PiP window if one is active. No-op
+    /// otherwise. The `didStopPictureInPicture` callback runs as a
+    /// result; the VM's `onPiPStopped` fires from there.
+    func dismissIfActive() {
+        if delegate.isPiPActive {
+            pipController?.stopPictureInPicture()
         }
     }
 
@@ -293,6 +314,7 @@ extension ScorePiPCoordinator: AVPictureInPictureControllerDelegate {
     ) {
         Task { @MainActor in
             self.delegate.isPiPActive = true
+            self.onPiPStarted?()
         }
     }
 

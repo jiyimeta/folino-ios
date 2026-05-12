@@ -16,6 +16,11 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
     private var isMetronomeEnabled = false
 
+    @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
+    private var isPiPEnabled = false
+
+    @Environment(\.scenePhase) private var scenePhase
+
     private var layoutMode: ReaderLayoutMode {
         ReaderLayoutMode(rawValue: layoutModeRaw) ?? .vertical
     }
@@ -86,6 +91,7 @@ public struct ReaderRootScreen: View {
         }
         .task {
             viewModel.startObservingCursor()
+            viewModel.setPiPEnabled(isPiPEnabled)
             await viewModel.load()
             await viewModel.prepareForPlayback()
             // Initial sync: the engine starts up unaware of persisted state,
@@ -98,6 +104,16 @@ public struct ReaderRootScreen: View {
             // the running engine has to be reconfigured here — the
             // Inspector's button no longer drives that side effect.
             Task { await viewModel.tempoModel.setMetronomeEnabled(newValue) }
+        }
+        .onChange(of: isPiPEnabled) { _, newValue in
+            viewModel.setPiPEnabled(newValue)
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            // The Settings spec dismisses PiP whenever the app returns
+            // to the foreground, regardless of how it was started.
+            if newValue == .active {
+                viewModel.dismissPiPOnForeground()
+            }
         }
     }
 
