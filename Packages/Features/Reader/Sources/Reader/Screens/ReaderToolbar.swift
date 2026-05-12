@@ -134,17 +134,17 @@ struct ReaderBottomOverlay: View {
                 }
             }
             Spacer()
-            if viewModel.repeatMode == .abLoop {
+            if viewModel.repeatModel.mode == .abLoop {
                 endpointButton(
                     label: "A",
-                    isSet: viewModel.pendingRepeatA != nil,
-                    onSet: { Task { await viewModel.setRepeatA() } },
+                    isSet: viewModel.repeatModel.pendingRepeatA != nil,
+                    onSet: { Task { await viewModel.repeatModel.setA() } },
                 )
 
                 endpointButton(
                     label: "B",
-                    isSet: viewModel.pendingRepeatB != nil,
-                    onSet: { Task { await viewModel.setRepeatB() } },
+                    isSet: viewModel.repeatModel.pendingRepeatB != nil,
+                    onSet: { Task { await viewModel.repeatModel.setB() } },
                 )
             }
         }

@@ -35,23 +35,23 @@ struct ReaderViewModelRepeatTests {
     @Test func `repeat mode defaults to off`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
-        #expect(vm.repeatMode == .off)
+        #expect(vm.repeatModel.mode == .off)
     }
 
     @Test func `set repeat mode persists`() async {
         let (vm, _, repo) = Self.makeVM()
         await vm.load()
 
-        await vm.setRepeatMode(.loopAll)
-        #expect(vm.repeatMode == .loopAll)
+        await vm.repeatModel.setMode(.loopAll)
+        #expect(vm.repeatModel.mode == .loopAll)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .loopAll)
 
-        await vm.setRepeatMode(.abLoop)
-        #expect(vm.repeatMode == .abLoop)
+        await vm.repeatModel.setMode(.abLoop)
+        #expect(vm.repeatModel.mode == .abLoop)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .abLoop)
 
-        await vm.setRepeatMode(.off)
-        #expect(vm.repeatMode == .off)
+        await vm.repeatModel.setMode(.off)
+        #expect(vm.repeatModel.mode == .off)
         #expect(repo.savedReaderPreferences.last?.repeatMode == .off)
     }
 
@@ -60,13 +60,13 @@ struct ReaderViewModelRepeatTests {
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 4, tickInMeasure: 0))
 
-        await vm.setRepeatA()
+        await vm.repeatModel.setA()
 
         // A is set; B is not — loop is incomplete so abRepeat stays nil.
         // The pending marker is reflected in pendingRepeatA.
-        #expect(vm.pendingRepeatA?.measureIndex == 4)
-        #expect(vm.pendingRepeatA?.chordIndex == 0)
-        #expect(vm.abRepeat == nil)
+        #expect(vm.repeatModel.pendingRepeatA?.measureIndex == 4)
+        #expect(vm.repeatModel.pendingRepeatA?.chordIndex == 0)
+        #expect(vm.repeatModel.abRange == nil)
         #expect(repo.savedReaderPreferences.last?.abRepeat == nil)
     }
 
@@ -75,15 +75,15 @@ struct ReaderViewModelRepeatTests {
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
 
-        await vm.setRepeatB()
+        await vm.repeatModel.setB()
 
         // FakeScoreFileGateway loads a 6-measure score; m1 has 2 chord
         // positions (indices 0 and 1), so the snapped end ChordPath has
         // measureIndex == 1 and chordIndex == 1.
         // B-only → loop is incomplete; abRepeat is nil; pendingRepeatB reflects the snap.
-        #expect(vm.pendingRepeatB?.measureIndex == 1)
-        #expect(vm.pendingRepeatB?.chordIndex == 1)
-        #expect(vm.abRepeat == nil)
+        #expect(vm.repeatModel.pendingRepeatB?.measureIndex == 1)
+        #expect(vm.repeatModel.pendingRepeatB?.chordIndex == 1)
+        #expect(vm.repeatModel.abRange == nil)
     }
 
     @Test func `set repeat A replaces previous A value`() async {
@@ -91,68 +91,68 @@ struct ReaderViewModelRepeatTests {
         await vm.load()
 
         vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
-        await vm.setRepeatA()
+        await vm.repeatModel.setA()
         vm.setManualCursor(.beat(measureIndex: 5, tickInMeasure: 0))
-        await vm.setRepeatA()
+        await vm.repeatModel.setA()
 
         // Still no B set — loop incomplete, abRepeat is nil.
         // The pending A marker is updated to m5.
-        #expect(vm.pendingRepeatA?.measureIndex == 5)
-        #expect(vm.abRepeat == nil)
+        #expect(vm.repeatModel.pendingRepeatA?.measureIndex == 5)
+        #expect(vm.repeatModel.abRange == nil)
     }
 
     @Test func `clear repeat A removes start but keeps end`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
-        await vm.setRepeatA()
-        await vm.setRepeatB()
-        #expect(vm.abRepeat != nil)
+        await vm.repeatModel.setA()
+        await vm.repeatModel.setB()
+        #expect(vm.repeatModel.abRange != nil)
 
-        await vm.clearRepeatA()
+        await vm.repeatModel.clearA()
 
         // Once start is cleared and end remains, the persisted record drops
         // the range entirely (loop is incomplete) but keeps the B marker
         // for re-display via a separate `pendingB` accessor.
-        #expect(vm.abRepeat == nil)
-        #expect(vm.pendingRepeatB?.measureIndex == 1)
+        #expect(vm.repeatModel.abRange == nil)
+        #expect(vm.repeatModel.pendingRepeatB?.measureIndex == 1)
     }
 
     @Test func `clear repeat B removes end but keeps start`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
-        await vm.setRepeatA()
-        await vm.setRepeatB()
+        await vm.repeatModel.setA()
+        await vm.repeatModel.setB()
 
-        await vm.clearRepeatB()
+        await vm.repeatModel.clearB()
 
-        #expect(vm.abRepeat == nil)
-        #expect(vm.pendingRepeatA?.measureIndex == 1)
+        #expect(vm.repeatModel.abRange == nil)
+        #expect(vm.repeatModel.pendingRepeatA?.measureIndex == 1)
     }
 
     @Test func `set repeat mode forwards loop range`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
 
-        await vm.setRepeatMode(.loopAll)
+        await vm.repeatModel.setMode(.loopAll)
         #expect(controller.loopRangeCalls.last??.start.measureIndex == 0)
 
-        await vm.setRepeatMode(.abLoop)
+        await vm.repeatModel.setMode(.abLoop)
         #expect(controller.loopRangeCalls.last == .some(nil))
 
-        await vm.setRepeatMode(.off)
+        await vm.repeatModel.setMode(.off)
         #expect(controller.loopRangeCalls.last == .some(nil))
     }
 
     @Test func `set repeat A only does not forward loop range yet`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
-        await vm.setRepeatMode(.abLoop)
+        await vm.repeatModel.setMode(.abLoop)
         let countBefore = controller.loopRangeCalls.count
         vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
 
-        await vm.setRepeatA()
+        await vm.repeatModel.setA()
 
         // One additional call recorded, value is `nil` (B still unset).
         #expect(controller.loopRangeCalls.count == countBefore + 1)
@@ -162,12 +162,12 @@ struct ReaderViewModelRepeatTests {
     @Test func `both markers set forwards the normalized range`() async {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
-        await vm.setRepeatMode(.abLoop)
+        await vm.repeatModel.setMode(.abLoop)
         vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
-        await vm.setRepeatA()
+        await vm.repeatModel.setA()
         vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
 
-        await vm.setRepeatB()
+        await vm.repeatModel.setB()
 
         // Auto-swap: B at m0 + A at m2 -> normalized start=m0, end=m2.
         // loopRangeCalls is [ABRepeatRange?]; .last is (ABRepeatRange?)?

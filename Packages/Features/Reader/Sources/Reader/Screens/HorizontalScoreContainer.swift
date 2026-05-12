@@ -69,12 +69,12 @@ struct HorizontalScoreContainer: View {
                     .gesture(tapSeekGesture(document: doc))
                     .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
-                    if viewModel.repeatMode == .abLoop {
-                        LoopRegionOverlay(document: doc, range: viewModel.abRepeat)
+                    if viewModel.repeatModel.mode == .abLoop {
+                        LoopRegionOverlay(document: doc, range: viewModel.repeatModel.abRange)
                         LoopBoundaryMarkers(
                             document: doc,
-                            start: viewModel.pendingRepeatA,
-                            end: viewModel.pendingRepeatB,
+                            start: viewModel.repeatModel.pendingRepeatA,
+                            end: viewModel.repeatModel.pendingRepeatB,
                         )
                     }
 

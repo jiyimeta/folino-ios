@@ -23,7 +23,7 @@ struct PlaybackInspectorScreen: View {
             HStack {
                 Text("reader.inspector.repeatMode", bundle: .module)
                 Spacer()
-                RepeatModePicker(selection: $viewModel.repeatMode)
+                RepeatModePicker(selection: $viewModel.repeatModel.mode)
             }
 
             Section {
