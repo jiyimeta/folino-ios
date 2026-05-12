@@ -65,6 +65,21 @@ final class ReaderViewModel {
         if let c = pipCoordinatorBacking { return c }
         let c = ScorePiPCoordinator()
         c.onPiPStopped = { [weak self] in self?.isPiPActive = false }
+        c.isAppPlayingProvider = { [weak self] in self?.isPlaying ?? false }
+        c.onSetPlaying = { [weak self] desired in
+            guard let self, isPlaying != desired else { return }
+            Task { await self.togglePlayback() }
+        }
+        c.currentTimeProvider = { [weak self] in
+            self?.playbackController?.currentTimeSeconds ?? 0
+        }
+        c.totalTimeProvider = { [weak self] in
+            self?.playbackController?.totalTimeSeconds ?? 0
+        }
+        c.onSkip = { [weak self] seconds in
+            guard let controller = self?.playbackController else { return }
+            Task { await controller.skip(bySeconds: seconds) }
+        }
         pipCoordinatorBacking = c
         return c
     }
@@ -220,6 +235,13 @@ final class ReaderViewModel {
                 isPlaying = false
             }
         }
+        // Mirror the engine's play/pause state into the VM regardless of
+        // who flipped it (in-app toolbar, lock-screen Now Playing, audio
+        // session interruption, etc.) so PiP chrome and toolbar glyph
+        // stay accurate.
+        controller.observeIsPlaying { [weak self] playing in
+            self?.isPlaying = playing
+        }
     }
 
     private func notifyPiPCursor() {
@@ -236,7 +258,6 @@ final class ReaderViewModel {
         do {
             try pipCoordinator.start(
                 score: score,
-                staffSize: layoutModel.staffSize,
                 playbackCursor: playbackCursor,
             )
             isPiPActive = true

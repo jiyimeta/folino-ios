@@ -13,22 +13,26 @@ import SheetMusicUI
 ///
 /// Horizontal layout is single-system, so we lay out once at init,
 /// build the system layer once, and per-frame just blit + draw the
-/// cursor rectangle on top — fast and deterministic.
+/// cursor rectangle on top.
 @MainActor
 final class ScorePiPFrameRenderer {
+    /// Distance in pt from the left edge of the PiP window at which the
+    /// cursor's measure is parked when playback is running.
     private static let cursorLeadingInsetPt: CGFloat = 80
+    /// Vertical breathing room above & below the system inside the
+    /// PiP window.
+    private static let verticalPaddingPt: CGFloat = 16
+
+    let pixelSize: CGSize
 
     private let score: Score
-    private let pixelSize: CGSize
     private let pool: CVPixelBufferPool
     private let document: LayoutDocument
     private let system: LayoutSystem
     private let scoreLayer: CALayer
 
-    init(score: Score, staffSize: CGFloat, pixelSize: CGSize) throws {
+    init(score: Score, staffSize: CGFloat) throws {
         self.score = score
-        self.pixelSize = pixelSize
-        pool = try Self.makePool(size: pixelSize)
 
         let opts = ScoreViewOptions(
             staffSize: staffSize, systemGap: staffSize * 1.25,
@@ -47,6 +51,26 @@ final class ScorePiPFrameRenderer {
             )
         }
         system = firstSystem
+
+        // Adaptive PiP buffer size: height grows with the system (so
+        // 4-staff scores aren't crammed into a narrow strip), width
+        // chosen for an aspect ratio that yields ~4 measures across
+        // for single-staff content and ~2 measures for orchestral.
+        // Floor at 480×270 (16:9, AVKit-friendly minimum) — too-small
+        // buffers can stall the PiP system on some devices.
+        let staffCount = max(1, firstSystem.staffOrigins.count)
+        let rawHeight = ceil(firstSystem.size.height + Self.verticalPaddingPt * 2)
+        let pixelHeight = max(270, rawHeight)
+        let aspect = max(16.0 / 9.0, 4.0 / CGFloat(staffCount))
+        let pixelWidth = max(480, ceil(pixelHeight * aspect))
+        // AVSampleBufferDisplayLayer accepts odd pixel sizes, but we round
+        // up to even for safety with downstream video pipelines.
+        pixelSize = CGSize(
+            width: Self.roundUpToEven(pixelWidth),
+            height: Self.roundUpToEven(pixelHeight),
+        )
+
+        pool = try Self.makePool(size: pixelSize)
         scoreLayer = ScoreLayerBuilder.buildSystem(firstSystem, metrics: document.metrics)
     }
 
@@ -80,23 +104,15 @@ final class ScorePiPFrameRenderer {
         ctx.translateBy(x: 0, y: pixelSize.height)
         ctx.scaleBy(x: 1, y: -1)
 
-        // Horizontal shift: bring the cursor's measure to a fixed leading
-        // inset. Without a cursor, anchor the score at x=0.
         let cursorFrame = playbackCursor.flatMap {
             document.cursorFrame(for: $0, in: score)
         }
-        if let cursor = playbackCursor {
-            print("[PiP] cursor=\(cursor) frame=\(cursorFrame ?? .zero)")
-        }
-        let shiftX: CGFloat = cursorFrame.map { -$0.minX + Self.cursorLeadingInsetPt } ?? 0
-        // Vertical: centre the system in the PiP window. The system's
-        // height is much smaller than 360pt for a single-staff score.
-        let shiftY = max(0, (pixelSize.height - system.size.height) / 2)
+        let shiftX: CGFloat = cursorFrame
+            .map { -$0.minX + Self.cursorLeadingInsetPt } ?? 0
+        let shiftY = Self.verticalPaddingPt
 
         ctx.saveGState()
         ctx.translateBy(x: shiftX, y: shiftY)
-        // The layer's internal (0,0) corresponds to the system's
-        // top-left in document coords, so render at the system's origin.
         ctx.translateBy(x: system.origin.x, y: system.origin.y)
         scoreLayer.render(in: ctx)
         ctx.restoreGState()
@@ -111,6 +127,11 @@ final class ScorePiPFrameRenderer {
             ))
         }
         return buffer
+    }
+
+    private static func roundUpToEven(_ value: CGFloat) -> CGFloat {
+        let n = Int(value.rounded(.up))
+        return CGFloat(n + (n % 2))
     }
 
     private static func makePool(size: CGSize) throws -> CVPixelBufferPool {

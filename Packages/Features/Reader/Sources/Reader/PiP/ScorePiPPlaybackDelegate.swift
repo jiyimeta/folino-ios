@@ -5,49 +5,67 @@ import Foundation
 
 @MainActor
 final class ScorePiPPlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate {
-    /// Mirror of "is the system PiP control showing pause?". We do not
-    /// forward this to the app's playback engine — PiP is display-only.
-    /// The user toggles real playback via the main app chrome.
-    var isPlaying = true
+    /// Returns the app's current play state — the system pause/play
+    /// glyph mirrors this. Coordinator wires it to the ViewModel.
+    var isAppPlaying: () -> Bool = { false }
+    /// True only between `didStartPiP` and `didStopPiP`. Before PiP is
+    /// fully running we report "not paused" regardless of the app's
+    /// real state — AVKit refuses to start PiP on a live source that
+    /// reports paused at start time. Once PiP is up, mirror reality.
+    var isPiPActive = false
+    /// Fired when the user taps the PiP play/pause control. Passes the
+    /// new desired state (true = play, false = pause).
+    var onSetPlaying: (Bool) -> Void = { _ in }
+    /// Fired when the user taps the ±10s skip control in PiP. Forwarded
+    /// to the playback engine's skip API.
+    var onSkip: (TimeInterval) -> Void = { _ in }
+    /// Total score duration in seconds. Used for the PiP scrubber's
+    /// time range — finite range hides AVKit's "LIVE" badge.
+    var totalTimeSeconds: () -> TimeInterval = { 0 }
 
     nonisolated func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        setPlaying playing: Bool,
+        _: AVPictureInPictureController, setPlaying playing: Bool,
     ) {
-        Task { @MainActor in self.isPlaying = playing }
+        Task { @MainActor in self.onSetPlaying(playing) }
     }
 
     nonisolated func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        didTransitionToRenderSize newRenderSize: CMVideoDimensions,
+        _: AVPictureInPictureController,
+        didTransitionToRenderSize _: CMVideoDimensions,
     ) {
-        // PiP window resize. We render at a fixed aspect ratio, so ignore.
+        // PiP window resize. Buffer aspect ratio is fixed; AVKit
+        // letterboxes for us.
     }
 
     nonisolated func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        skipByInterval skipInterval: CMTime,
+        _: AVPictureInPictureController,
+        skipByInterval interval: CMTime,
         completion completionHandler: @escaping () -> Void,
     ) {
-        // No-op: time scrubber is hidden via `pictureInPictureControllerTimeRangeForPlayback`.
+        let seconds = CMTimeGetSeconds(interval)
+        Task { @MainActor in self.onSkip(seconds) }
         completionHandler()
     }
 
     nonisolated func pictureInPictureControllerTimeRangeForPlayback(
-        _ pictureInPictureController: AVPictureInPictureController,
+        _: AVPictureInPictureController,
     ) -> CMTimeRange {
-        // `positiveInfinity` is the AVKit-documented way to indicate
-        // a live source with no timeline — hides the seek scrubber.
-        CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
+        // Finite range = AVKit drops the "LIVE" badge and shows a real
+        // scrubber. Duration comes from the loaded score; floor at 1s
+        // so the range is never degenerate before the score finishes
+        // loading.
+        let total = MainActor.assumeIsolated { totalTimeSeconds() }
+        return CMTimeRange(
+            start: .zero,
+            duration: CMTime(seconds: max(1, total), preferredTimescale: 600),
+        )
     }
 
     nonisolated func pictureInPictureControllerIsPlaybackPaused(
-        _ pictureInPictureController: AVPictureInPictureController,
+        _: AVPictureInPictureController,
     ) -> Bool {
-        // Best-effort: access the actor-isolated property synchronously.
-        // For our display-only adapter, returning a stale value for one
-        // tick is acceptable. If this becomes a problem, mirror the
-        // state into a `nonisolated(unsafe)` shadow var.
-        MainActor.assumeIsolated { !self.isPlaying }
+        MainActor.assumeIsolated {
+            isPiPActive ? !isAppPlaying() : false
+        }
     }
 }
