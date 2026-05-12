@@ -65,13 +65,13 @@ public struct LiveScoreShareService: ScoreShareService {
 
     /// `ScoreSource` → matching `ScoreShareFormat`. Returns `nil` for
     /// sources we don't expose as shareable formats today (MusicXML,
-    /// PDF, unknown).
+    /// PDF, MuseScore 2, unknown).
     static func matchingFormat(for source: ScoreSource) -> ScoreShareFormat? {
         switch source {
         case .midi: .midi
         case .museScore(.v4): .museScoreV4
         case .museScore(.v3): .museScoreV3
-        case .musicXML, .pdf, .unknown: nil
+        case .museScore(.v2), .musicXML, .pdf, .unknown: nil
         }
     }
 

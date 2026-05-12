@@ -111,7 +111,7 @@ struct HorizontalScoreContainer: View {
             staffSize: staffSize, systemGap: staffSize * 1.25,
             wrapToViewWidth: false, includeTitleFrame: false,
             breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
-            showBreakIndicators: false,
+            breakIndicatorVisibility: .none,
             multiMeasureRest: collapseMultiMeasureRests
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,

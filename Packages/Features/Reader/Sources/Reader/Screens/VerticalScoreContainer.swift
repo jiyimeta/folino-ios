@@ -300,7 +300,7 @@ struct VerticalScoreContainer: View {
             staffSize: staffSize, systemGap: staffSize * 1.25,
             wrapToViewWidth: true, includeTitleFrame: true,
             breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
-            showBreakIndicators: false,
+            breakIndicatorVisibility: .none,
             multiMeasureRest: collapseMultiMeasureRests
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,

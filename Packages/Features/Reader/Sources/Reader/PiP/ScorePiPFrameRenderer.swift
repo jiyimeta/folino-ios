@@ -90,7 +90,7 @@ final class ScorePiPFrameRenderer {
             staffSize: staffSize, systemGap: staffSize * 1.25,
             wrapToViewWidth: false, includeTitleFrame: false,
             breakPolicy: .ignoreAll,
-            showBreakIndicators: false,
+            breakIndicatorVisibility: .none,
             multiMeasureRest: collapseMultiMeasureRests
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
