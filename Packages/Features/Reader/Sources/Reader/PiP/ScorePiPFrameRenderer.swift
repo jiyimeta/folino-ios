@@ -30,16 +30,45 @@ final class ScorePiPFrameRenderer {
     /// AVKit needs non-trivial dimensions; floor each pixel-buffer
     /// axis here so very small scores don't degenerate the pipeline.
     private static let minPixelDimensionPt: CGFloat = 80
+    /// Multiplier applied via `scoreScale` to shrink the drawn music
+    /// inside the PiP buffer. The PiP window's on-screen size is fixed
+    /// by the buffer's *aspect ratio* (not its pixel dimensions), so the
+    /// only way to land the staff at Reader-parity is to occupy a smaller
+    /// fraction of the buffer. The unavoidable consequence is more top/
+    /// bottom whitespace in the PiP window — that's a property of the
+    /// fixed-window-height invariant, not a bug.
+    /// Tune empirically. Paired with `aspectNumerator = 6` (flatter
+    /// PiP window) and `pointHeightMultiplier = 0.9` (tighter buffer):
+    /// 0.88 lands the staff a hair above Reader-parity while leaving
+    /// just enough room for the padding above & below. With the older
+    /// `aspectNumerator = 4`, 0.67 was the equivalent target.
+    private static let pipStaffShrinkFactor: CGFloat = 0.88
+    /// Multiplier applied to the buffer's "natural" point height
+    /// (system + verticalPadding*2). 1.0 leaves a margin equal to
+    /// `verticalPaddingPt` on each side of the system; values < 1
+    /// shave that margin (and proportionally the buffer width via
+    /// `aspect`), so the PiP window's on-screen real estate is less
+    /// dominated by whitespace. At 0.9 the buffer's natural margin
+    /// is consumed almost exactly by the `pipStaffShrinkFactor = 0.88`
+    /// shrink — the drawn music ends up filling the usable area.
+    private static let pointHeightMultiplier: CGFloat = 0.9
     /// Lowest buffer aspect (most square / tall) we'll produce. Going
     /// narrower than this makes the PiP window awkwardly tall; instead
     /// we cap aspect here and let the renderer shrink the score
     /// uniformly to fit the resulting buffer height.
     private static let minAspect: CGFloat = 1.0
-    /// Widest buffer aspect we'll produce. Apple's HIG suggests
-    /// 1.78:1 as a guideline, but AVKit happily renders wider PiP
-    /// windows; a 4:1 cap gives single-staff scores a long horizontal
-    /// strip that fits more measures into view.
-    private static let maxAspect: CGFloat = 4.0
+    /// Widest buffer aspect we'll produce. Pushed beyond Apple's
+    /// HIG 1.78:1 guideline because (a) AVKit happily renders the
+    /// wider window, and (b) wider buffer → flatter PiP window →
+    /// less vertical whitespace around the (deliberately shrunk)
+    /// staff. See `pipStaffShrinkFactor` for the other half of the
+    /// trade-off.
+    private static let maxAspect: CGFloat = 6.0
+    /// Numerator for the staff-count → aspect heuristic. Picked so
+    /// 1-staff scores hit `maxAspect`, 2-staff scores land at 3:1
+    /// (flat enough to keep on-screen whitespace modest), and
+    /// orchestral scores still degrade smoothly toward square.
+    private static let aspectNumerator: CGFloat = 6.0
     /// Pixels per content point. AVKit upscales the buffer to fit the
     /// PiP window on screen; rendering at 2x means AVKit downscales
     /// instead, which produces crisp edges on stems/staff lines
@@ -115,9 +144,14 @@ final class ScorePiPFrameRenderer {
         // Lower-bound the dimensions just enough to keep AVKit happy
         // — the rest is content-driven.
         let staffCount = max(1, firstSystem.staffOrigins.count)
-        let rawHeight = ceil(firstSystem.size.height + Self.verticalPaddingPt * 2)
+        let rawHeight = ceil(
+            (firstSystem.size.height + Self.verticalPaddingPt * 2) * Self.pointHeightMultiplier,
+        )
         let pointHeight = min(Self.maxPixelHeightPt, max(Self.minPixelDimensionPt, rawHeight))
-        let aspect = max(Self.minAspect, min(Self.maxAspect, 4.0 / CGFloat(staffCount)))
+        let aspect = max(
+            Self.minAspect,
+            min(Self.maxAspect, Self.aspectNumerator / CGFloat(staffCount)),
+        )
         let pointWidth = max(Self.minPixelDimensionPt, ceil(pointHeight * aspect))
         pointSize = CGSize(width: pointWidth, height: pointHeight)
         // Buffer pixels = points × density. AVKit downscales for the
@@ -127,8 +161,11 @@ final class ScorePiPFrameRenderer {
             width: Self.roundUpToEven(pointWidth * Self.pixelDensity),
             height: Self.roundUpToEven(pointHeight * Self.pixelDensity),
         )
+        // Shrink to the configured fraction by default; only fall back
+        // to a tighter fit-scale when even the shrunk system would
+        // overflow the buffer's usable height (orchestral edge case).
         let usableHeight = pointHeight - Self.verticalPaddingPt * 2
-        scoreScale = min(1, usableHeight / firstSystem.size.height)
+        scoreScale = min(Self.pipStaffShrinkFactor, usableHeight / firstSystem.size.height)
 
         pool = try Self.makePool(size: pixelSize)
         scoreLayer = ScoreLayerBuilder.buildSystem(firstSystem, metrics: document.metrics)
