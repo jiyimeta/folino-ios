@@ -5,12 +5,16 @@ import QuartzCore
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
+import SwiftUI
+import UIKit
 
 /// Renders a horizontal-mode frame of the score directly into a
-/// `CVPixelBuffer` via Core Graphics. No SwiftUI / UIKit / window
-/// dependency — `ScoreLayerBuilder.buildSystem(...)` produces a
+/// `CVPixelBuffer` via Core Graphics — no window or view-tree
+/// dependency. `ScoreLayerBuilder.buildSystem(...)` produces a
 /// `CALayer` we can `render(in:)` into any CGContext, including
-/// off-screen pixel-buffer-backed ones.
+/// off-screen pixel-buffer-backed ones. SwiftUI / UIKit are only
+/// reached at init to resolve `Color.accentColor` for the cursor
+/// fill so it matches what the Reader paints on-screen.
 ///
 /// Horizontal layout is single-system, so we lay out once at init,
 /// build the system layer once, and per-frame just blit + draw the
@@ -90,6 +94,13 @@ final class ScorePiPFrameRenderer {
     private let document: LayoutDocument
     private let system: LayoutSystem
     private let scoreLayer: CALayer
+    /// Resolved at init from `Color.accentColor` (the same color the
+    /// Reader passes to `ScoreView` as `playbackCursorColor`) so the
+    /// PiP cursor matches the on-screen one. Drawn fully opaque — the
+    /// PiP window is small enough that a translucent overlay reads as
+    /// a blurry smear instead of a distinct cursor. Kept as a `CGColor`
+    /// so the hot path in `renderFrame` doesn't reallocate per frame.
+    private let cursorFillColor: CGColor
     /// Logical size of the renderable area, in CG points. The actual
     /// pixel buffer is `pointSize × pixelDensity` — see init.
     private let pointSize: CGSize
@@ -169,6 +180,7 @@ final class ScorePiPFrameRenderer {
 
         pool = try Self.makePool(size: pixelSize)
         scoreLayer = ScoreLayerBuilder.buildSystem(firstSystem, metrics: document.metrics)
+        cursorFillColor = UIColor(Color.accentColor).cgColor
     }
 
     func renderFrame(playbackCursor: ScoreCursor?) -> CVPixelBuffer? {
@@ -223,7 +235,7 @@ final class ScorePiPFrameRenderer {
         ctx.restoreGState()
 
         if let frame = cursorFrame {
-            ctx.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.95, alpha: 0.25))
+            ctx.setFillColor(cursorFillColor)
             ctx.fill(CGRect(
                 x: shiftX + frame.minX * scoreScale,
                 y: shiftY + frame.minY * scoreScale,
