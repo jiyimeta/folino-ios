@@ -1,7 +1,7 @@
 import Domain
 @testable import folino
 import Foundation
-import Settings
+@testable import Settings
 import Testing
 
 @MainActor
