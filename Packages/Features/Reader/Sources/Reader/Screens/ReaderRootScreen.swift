@@ -19,6 +19,9 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
     private var isPiPEnabled = false
 
+    @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
+    private var collapseMultiMeasureRests = false
+
     @Environment(\.scenePhase) private var scenePhase
 
     private var layoutMode: ReaderLayoutMode {
@@ -142,6 +145,7 @@ public struct ReaderRootScreen: View {
                     score: visible,
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                    collapseMultiMeasureRests: collapseMultiMeasureRests,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel,
                 )
@@ -150,6 +154,7 @@ public struct ReaderRootScreen: View {
                     score: visible,
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                    collapseMultiMeasureRests: collapseMultiMeasureRests,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel,
                 )

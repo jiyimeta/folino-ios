@@ -24,6 +24,7 @@ import SwiftUI
         score: score,
         staffSize: 14,
         honorLayoutBreaks: false,
+        collapseMultiMeasureRests: false,
         playbackCursor: nil,
         viewModel: vm,
     )
@@ -50,6 +51,7 @@ private func abLoopPreview(prefs: ReaderPreferences) -> some View {
         score: score,
         staffSize: 14,
         honorLayoutBreaks: false,
+        collapseMultiMeasureRests: false,
         playbackCursor: nil,
         viewModel: vm,
     )

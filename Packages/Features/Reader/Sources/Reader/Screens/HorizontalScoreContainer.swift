@@ -1,3 +1,4 @@
+import Domain
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -18,6 +19,7 @@ struct HorizontalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
     let honorLayoutBreaks: Bool
+    let collapseMultiMeasureRests: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -45,6 +47,7 @@ struct HorizontalScoreContainer: View {
             .task(id: TaskKey(
                 score: score, size: staffSize,
                 honorLayoutBreaks: honorLayoutBreaks,
+                collapseMultiMeasureRests: collapseMultiMeasureRests,
             )) {
                 rebuildLayout()
             }
@@ -109,6 +112,9 @@ struct HorizontalScoreContainer: View {
             wrapToViewWidth: false, includeTitleFrame: false,
             breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
             showBreakIndicators: false,
+            multiMeasureRest: collapseMultiMeasureRests
+                ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
+                : .disabled,
         )
     }
 
@@ -159,8 +165,14 @@ struct HorizontalScoreContainer: View {
         let scoreSignature: Int
         let size: CGFloat
         let honorLayoutBreaks: Bool
+        let collapseMultiMeasureRests: Bool
 
-        init(score: Score, size: CGFloat, honorLayoutBreaks: Bool) {
+        init(
+            score: Score,
+            size: CGFloat,
+            honorLayoutBreaks: Bool,
+            collapseMultiMeasureRests: Bool,
+        ) {
             // Structural shape + opening clefs. The opening-clef hash is
             // what makes a clef override (a field-level edit that leaves
             // parts.count / staff count unchanged) re-trigger this
@@ -172,6 +184,7 @@ struct HorizontalScoreContainer: View {
                 ^ score.openingClefSignature
             self.size = size
             self.honorLayoutBreaks = honorLayoutBreaks
+            self.collapseMultiMeasureRests = collapseMultiMeasureRests
         }
     }
 }
