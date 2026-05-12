@@ -46,7 +46,13 @@ final class ReaderViewModel {
     private(set) var loadState: LoadState = .loading
     private(set) var scoreItem: ScoreItem
     private(set) var preferences: ReaderPreferences
-    private(set) var isPlaying = false
+    private(set) var isPlaying = false {
+        didSet {
+            guard oldValue != isPlaying else { return }
+            applyPiPAutoStart()
+        }
+    }
+
     private(set) var soundfontAlertKind: SoundfontAlertKind?
     private(set) var playbackCursor: ScoreCursor?
     var viewportZoom: CGFloat = 1.0
@@ -97,13 +103,23 @@ final class ReaderViewModel {
     func setPiPEnabled(_ enabled: Bool) {
         guard isPiPSupported else { return }
         isPiPEnabled = enabled
-        pipCoordinator.setAutoStartFromBackground(enabled)
+        applyPiPAutoStart()
         if enabled {
             armPiPIfReady()
         } else {
             pipCoordinator.dismissIfActive()
             pipCoordinator.disarm()
         }
+    }
+
+    /// Hands AVKit the current "may auto-present PiP on background"
+    /// permission. We gate on `isPlaying` so PiP only appears when the
+    /// user backgrounds *during playback* — matching YouTube's behavior.
+    /// An already-presenting PiP session is left intact when playback
+    /// pauses; only the auto-start permission is withdrawn.
+    private func applyPiPAutoStart() {
+        guard isPiPSupported else { return }
+        pipCoordinator.setAutoStartFromBackground(isPiPEnabled && isPlaying)
     }
 
     func setCollapseMultiMeasureRests(_ enabled: Bool) {
