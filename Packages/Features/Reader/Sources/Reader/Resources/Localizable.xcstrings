@@ -551,26 +551,6 @@
         }
       }
     },
-    "reader.toolbar.enterPiP" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Picture in Picture"
-          }
-        }
-      }
-    },
-    "reader.toolbar.exitPiP" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exit Picture in Picture"
-          }
-        }
-      }
-    },
     "reader.toolbar.pause" : {
       "localizations" : {
         "en" : {

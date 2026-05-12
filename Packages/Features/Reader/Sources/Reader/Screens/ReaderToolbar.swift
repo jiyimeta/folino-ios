@@ -60,21 +60,6 @@ struct ReaderTopOverlay: View {
             }
             .glassEffect(.regular.interactive())
 
-            if viewModel.isPiPSupported {
-                overlayButton(
-                    systemImage: viewModel.isPiPActive ? "pip.exit" : "pip.enter",
-                    label: Text(
-                        viewModel.isPiPActive
-                            ? "reader.toolbar.exitPiP"
-                            : "reader.toolbar.enterPiP",
-                        bundle: .module,
-                    ),
-                ) {
-                    viewModel.togglePiP()
-                }
-                .glassEffect(.regular.interactive())
-            }
-
             inspectorButtons(score: score)
                 .glassEffect(.regular.interactive())
         }
