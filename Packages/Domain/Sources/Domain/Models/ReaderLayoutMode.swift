@@ -20,4 +20,10 @@ public enum ReaderGlobalSettingsKey {
 
     /// `ReaderLayoutMode.rawValue` (String).
     public static let layoutMode = "readerLayoutMode"
+
+    /// Bool. When true, the Reader auto-presents a Picture-in-Picture
+    /// window of the score whenever the app backgrounds, and tears it
+    /// down on return to the foreground. When false, PiP is never
+    /// shown automatically.
+    public static let pictureInPictureEnabled = "readerPictureInPictureEnabled"
 }

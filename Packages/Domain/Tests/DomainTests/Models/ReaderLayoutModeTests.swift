@@ -20,4 +20,10 @@ struct ReaderLayoutModeTests {
     @Test func `layout mode key is stable`() {
         #expect(ReaderGlobalSettingsKey.layoutMode == "readerLayoutMode")
     }
+
+    @Test func `pip enabled key is stable`() {
+        #expect(
+            ReaderGlobalSettingsKey.pictureInPictureEnabled == "readerPictureInPictureEnabled",
+        )
+    }
 }
