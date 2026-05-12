@@ -24,6 +24,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
     private var isPiPEnabled = false
 
+    @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
+    private var collapseMultiMeasureRests = false
+
     public init(
         soundfontResolver: (any SoundfontResolver)? = nil,
         presetCatalog: (any SoundfontPresetCatalog)? = nil,
@@ -87,7 +90,6 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
                 }
             }
-
             Toggle(isOn: $isPiPEnabled) {
                 Label {
                     Text("settings.reader.pictureInPicture", bundle: .module)
@@ -95,29 +97,39 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     Image(systemName: "pip")
                 }
             }
-
-            HStack {
+            Toggle(isOn: $collapseMultiMeasureRests) {
                 Label {
-                    Text("settings.reader.layout.title", bundle: .module)
+                    Text("settings.reader.collapseMultiMeasureRests", bundle: .module)
                 } icon: {
-                    Image(systemName: "scroll")
+                    Image(systemName: "rectangle.compress.vertical")
                 }
-                Spacer()
-                Picker(selection: $layoutModeRaw) {
-                    Image(systemName: "arrow.up.and.down")
-                        .tag(ReaderLayoutMode.vertical.rawValue)
-                    Image(systemName: "arrow.left.and.right")
-                        .tag(ReaderLayoutMode.horizontal.rawValue)
-                } label: {
-                    Text("settings.reader.layout.title", bundle: .module)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 92)
-                .fixedSize()
             }
+            readerLayoutRow
         } header: {
             Text("settings.reader.title", bundle: .module)
+        }
+    }
+
+    private var readerLayoutRow: some View {
+        HStack {
+            Label {
+                Text("settings.reader.layout.title", bundle: .module)
+            } icon: {
+                Image(systemName: "scroll")
+            }
+            Spacer()
+            Picker(selection: $layoutModeRaw) {
+                Image(systemName: "arrow.up.and.down")
+                    .tag(ReaderLayoutMode.vertical.rawValue)
+                Image(systemName: "arrow.left.and.right")
+                    .tag(ReaderLayoutMode.horizontal.rawValue)
+            } label: {
+                Text("settings.reader.layout.title", bundle: .module)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 92)
+            .fixedSize()
         }
     }
 
