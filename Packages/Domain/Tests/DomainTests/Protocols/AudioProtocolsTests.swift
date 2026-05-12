@@ -13,6 +13,8 @@ private final class FakePlaybackController: PlaybackController {
         cursorHandler = handler
     }
 
+    func observeIsPlaying(_: @MainActor @escaping (Bool) -> Void) {}
+
     func load(score: Score, preferences: PlaybackPreferences) throws {
         loadedScores += 1
     }
@@ -29,6 +31,11 @@ private final class FakePlaybackController: PlaybackController {
 
     func play() throws {}
     func pause() {}
+
+    var currentTimeSeconds: TimeInterval = 0
+    var totalTimeSeconds: TimeInterval = 0
+    func skip(bySeconds _: TimeInterval) {}
+
     func setCursor(to cursor: ScoreCursor) {
         lastCursor = cursor
     }

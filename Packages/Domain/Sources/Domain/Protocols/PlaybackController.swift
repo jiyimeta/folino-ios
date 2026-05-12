@@ -30,6 +30,20 @@ public protocol PlaybackController: Sendable {
     func play() async throws
     func pause() async
 
+    /// Current playback position in seconds. Zero before a score is
+    /// loaded and prepared. Read main-actor synchronously — the engine
+    /// computes this from its sequencer state on the main thread, so
+    /// no actor hop is needed.
+    @MainActor var currentTimeSeconds: TimeInterval { get }
+    /// Total playable duration of the loaded score in seconds. Zero
+    /// before a score is loaded.
+    @MainActor var totalTimeSeconds: TimeInterval { get }
+
+    /// Skip playback forward (`seconds > 0`) or backward (`seconds < 0`)
+    /// relative to the current position, clamped to the score's range.
+    /// Preserves play / pause state.
+    func skip(bySeconds seconds: TimeInterval) async
+
     func setCursor(to cursor: ScoreCursor) async
     func setLoopRange(_ range: ABRepeatRange?) async
     func setMetronomeEnabled(_ enabled: Bool) async
@@ -52,4 +66,11 @@ public protocol PlaybackController: Sendable {
     /// opportunity between every change instead of seeing only the last
     /// value of a buffered burst.
     @MainActor func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void)
+
+    /// Register a handler invoked on every play/pause transition,
+    /// including pauses triggered from outside the app (lock-screen
+    /// control, headphone pause, audio interruption). Receives `true`
+    /// when playback is active, `false` otherwise. Replaces any
+    /// previously registered handler.
+    @MainActor func observeIsPlaying(_ handler: @MainActor @escaping (Bool) -> Void)
 }

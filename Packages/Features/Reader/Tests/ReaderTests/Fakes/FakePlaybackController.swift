@@ -25,13 +25,30 @@ final class FakePlaybackController: PlaybackController {
     /// `false` — the Reader treats that as "may need to fetch" and shows
     /// the alert, matching the existing tests' expectations.
     var soundfontsAvailableLocally = false
+    var currentTimeSeconds: TimeInterval = 0
+    var totalTimeSeconds: TimeInterval = 0
+    private(set) var skipBySecondsCalls: [TimeInterval] = []
+
+    func skip(bySeconds seconds: TimeInterval) {
+        skipBySecondsCalls.append(seconds)
+    }
 
     private var cursorHandler: ((ScoreCursor?) -> Void)?
+    private var isPlayingHandler: ((Bool) -> Void)?
 
     init() {}
 
     func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
         cursorHandler = handler
+    }
+
+    func observeIsPlaying(_ handler: @MainActor @escaping (Bool) -> Void) {
+        isPlayingHandler = handler
+    }
+
+    /// Test helper — drives the registered handler synchronously.
+    func emitIsPlaying(_ value: Bool) {
+        isPlayingHandler?(value)
     }
 
     /// Test helper — drives the registered handler synchronously.

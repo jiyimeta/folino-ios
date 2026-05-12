@@ -28,6 +28,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     private var pendingCursor: ScoreCursor?
 
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
+    private var isPlayingHandler: (@MainActor (Bool) -> Void)?
     private var cancellables: Set<AnyCancellable> = []
     /// Cached title / artist / default-rate for the loaded score. We
     /// rebuild the full `nowPlayingInfo` dictionary on every state
@@ -67,8 +68,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
             }
             .store(in: &cancellables)
         engine.$state
-            .sink { [weak self] _ in
+            .sink { [weak self] newState in
                 self?.publishNowPlayingInfo()
+                self?.isPlayingHandler?(newState == .playing)
             }
             .store(in: &cancellables)
         configureRemoteCommands()
@@ -238,6 +240,19 @@ public final class LivePlaybackController: Domain.PlaybackController {
         publishNowPlayingInfo()
     }
 
+    public var currentTimeSeconds: TimeInterval {
+        engine.currentTimeSeconds
+    }
+
+    public var totalTimeSeconds: TimeInterval {
+        engine.totalTimeSeconds
+    }
+
+    public func skip(bySeconds seconds: TimeInterval) {
+        engine.skip(by: seconds)
+        publishNowPlayingInfo()
+    }
+
     public func setStaffVolume(staff: Int, volume: Double) {
         engine.setVolume(forChannel: .staff(staff), to: Float(volume))
     }
@@ -281,6 +296,14 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void) {
         cursorHandler = handler
+    }
+
+    public func observeIsPlaying(_ handler: @MainActor @escaping (Bool) -> Void) {
+        isPlayingHandler = handler
+        // Seed with the current state so the consumer doesn't have to
+        // wait for the next engine transition to learn whether the
+        // engine is already playing.
+        handler(engine.state == .playing)
     }
 
     // setLoopRange lives in `LivePlaybackController+LoopBounds.swift`
