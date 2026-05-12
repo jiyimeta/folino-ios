@@ -313,8 +313,11 @@ extension ScorePiPCoordinator: AVPictureInPictureControllerDelegate {
     ) {
         Task { @MainActor in
             self.delegate.isPiPActive = false
-            self.stopPump()
             self.onPiPStopped?()
+            // The pump stays running — it's tied to the armed state
+            // (set up by `arm`, torn down by `disarm`), not to whether
+            // a PiP session is currently presenting. Stopping the pump
+            // here would leave AVKit's next auto-start without frames.
         }
     }
 
