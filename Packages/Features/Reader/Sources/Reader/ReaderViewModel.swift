@@ -109,8 +109,9 @@ final class ReaderViewModel {
     func setCollapseMultiMeasureRests(_ enabled: Bool) {
         guard collapseMultiMeasureRests != enabled else { return }
         collapseMultiMeasureRests = enabled
-        // Re-arm PiP so the next frame batch picks up the new policy.
-        // No effect if PiP is currently disabled / not armed.
+        // Re-arm PiP immediately so a currently-armed session re-lays
+        // out with the new policy. No-op when PiP is disabled or the
+        // score hasn't finished loading — `armPiPIfReady` guards both.
         armPiPIfReady()
     }
 
