@@ -101,6 +101,48 @@ struct ReaderViewModelHiddenStaffCursorTests {
         #expect(vm.playbackCursor == .beat(measureIndex: 0, tickInMeasure: 480))
     }
 
+    /// Engine-side cursor on a visible staff whose full-score address
+    /// differs from its filtered address (i.e. an earlier staff in the
+    /// same part is hidden). The `LayoutDocument` is built from the
+    /// filtered score, so its `NoteID`s carry filtered staff addresses.
+    /// If the cursor isn't re-stamped to the filtered address,
+    /// `PlaybackCursorView.itemFrame` fails to match any layout entry
+    /// and the cursor visually disappears during playback.
+    @Test func `engine cursor on visible staff re-stamps to filtered address when earlier staff is hidden`() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo,
+            gateway: Self.gateway(score: Self.makePianoLikeScore()),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+        )
+        await vm.load()
+        vm.startObservingCursor()
+
+        // Hide the FIRST staff so the visible staff's full address
+        // (0, 1) disagrees with its filtered address (0, 0).
+        let hiddenStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        await vm.layoutModel.toggleStaff(hiddenStaff)
+
+        // Engine emits the visible staff's note using its full address.
+        let fullID = NoteID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            measureIndex: 0, voiceIndex: 0,
+            elementIndex: 1, noteIndexInChord: 0,
+        )
+        controller.emitCursor(.item(.note(fullID)))
+
+        let filteredID = NoteID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0,
+            elementIndex: 1, noteIndexInChord: 0,
+        )
+        #expect(vm.playbackCursor == .item(.note(filteredID)))
+    }
+
     @Test func `unhiding staff restores item cursor without engine emit`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
