@@ -105,6 +105,14 @@ final class PlaybackMixerModel {
             ?? Self.defaultVolume
     }
 
+    /// Per-staff baseline used as the slider's reset target and tick
+    /// position — the score's authored initial volume when present,
+    /// otherwise the global default. Independent of any user override.
+    func defaultVolume(for address: StaffAddress) -> Double {
+        host?.loadState.score?.initialStaffVolume(at: address)
+            ?? Self.defaultVolume
+    }
+
     func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
         liveStaffVolumes[address] = clamped

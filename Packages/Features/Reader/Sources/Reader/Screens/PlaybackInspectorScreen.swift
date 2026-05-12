@@ -10,11 +10,6 @@ struct PlaybackInspectorScreen: View {
     let score: Score
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
-    /// Slider's local edit value. Syncs from `tempoModel.effectiveMultiplier`
-    /// when the user is not dragging — keeps the UI consistent after a reset
-    /// from outside the slider (e.g. the % label tap).
-    @State private var sliderValue = 1.0
-    @State private var isEditingTempo = false
 
     var body: some View {
         List {
@@ -52,16 +47,20 @@ struct PlaybackInspectorScreen: View {
             }
         }
         .buttonStyle(.plain)
-        .task(id: tempoModel.effectiveMultiplier) {
-            // Pull the persisted value into the slider whenever the model
-            // changes from outside the gesture (initial load, % tap reset).
-            if !isEditingTempo {
-                sliderValue = tempoModel.effectiveMultiplier
-            }
-        }
     }
 
+    @ViewBuilder
     private var tempoControls: some View {
+        // Route the slider's binding through `tempoModel` (like the per-staff
+        // volume sliders go through `mixerModel`) so the slider's release-
+        // time writeback lands in the model's transient `liveMultiplier` and
+        // `commitMultiplier` / `resetMultiplier` can authoritatively clear
+        // it — a slider double-tap reset against a plain `@Binding` to local
+        // `@State` is overwritten by the writeback and silently reverts.
+        let tempoBinding = Binding<Double>(
+            get: { tempoModel.displayMultiplier },
+            set: { tempoModel.setMultiplier($0) },
+        )
         HStack(spacing: 8) {
             Button {
                 isMetronomeEnabled.toggle()
@@ -77,28 +76,26 @@ struct PlaybackInspectorScreen: View {
             Button {
                 Task { await tempoModel.resetMultiplier() }
             } label: {
-                Text("\(Int((sliderValue * 100).rounded()))%")
+                Text("\(Int((tempoModel.displayMultiplier * 100).rounded()))%")
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.primary)
                     .frame(minWidth: 44, alignment: .trailing)
             }
 
-            Slider(
-                value: $sliderValue,
-                in: 0.5 ... 2.0,
+            ResettableSlider(
+                value: tempoBinding,
+                range: 0.5 ... 2.0,
+                defaultValue: 1.0,
                 onEditingChanged: { editing in
-                    isEditingTempo = editing
                     if !editing {
-                        Task { await tempoModel.commitMultiplier(sliderValue) }
+                        let final = tempoBinding.wrappedValue
+                        Task { await tempoModel.commitMultiplier(final) }
                     }
                 },
+                onReset: {
+                    Task { await tempoModel.resetMultiplier() }
+                },
             )
-            .onChange(of: sliderValue) { _, newValue in
-                if isEditingTempo {
-                    tempoModel.setMultiplier(newValue)
-                }
-            }
-            .padding(.vertical, -8)
         }
     }
 
@@ -111,18 +108,23 @@ struct PlaybackInspectorScreen: View {
         let isMuted = mixerModel.mutedStaves.contains(address)
         let isSolo = mixerModel.soloStaves.contains(address)
         let isDisabled = isMuted || !mixerModel.soloStaves.isEmpty && !isSolo
+        let defaultVolume = mixerModel.defaultVolume(for: address)
         HStack {
             Image(systemName: "speaker.wave.2.fill")
                 .foregroundStyle(isDisabled ? .gray.opacity(0.6) : .accentColor)
 
-            Slider(
+            ResettableSlider(
                 value: volumeBinding,
-                in: 0 ... 1,
+                range: 0 ... 1,
+                defaultValue: defaultVolume,
                 onEditingChanged: { editing in
                     if !editing {
                         let final = volumeBinding.wrappedValue
                         Task { await mixerModel.commitVolume(final, for: address) }
                     }
+                },
+                onReset: {
+                    Task { await mixerModel.commitVolume(defaultVolume, for: address) }
                 },
             )
             .tint(isDisabled ? .gray : Color.accentColor)

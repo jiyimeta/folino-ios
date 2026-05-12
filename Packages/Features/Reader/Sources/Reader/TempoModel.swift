@@ -14,23 +14,41 @@ final class TempoModel {
     /// without an extra projection layer.
     private(set) var multiplier: Double?
 
+    /// Transient slider write during a drag (or thumb-release writeback).
+    /// Populated by `setMultiplier`, cleared by `commitMultiplier` /
+    /// `resetMultiplier`. Lives here so the inspector slider can bind
+    /// directly to the model — without this, the slider's release-time
+    /// writeback would overwrite a programmatic reset because SwiftUI's
+    /// `@State` is too direct a target.
+    private(set) var liveMultiplier: Double?
+
     @ObservationIgnored var onChange: (() async -> Void)?
     @ObservationIgnored var controllerProvider: () -> (any PlaybackController)? = { nil }
 
     /// Convenience for views that don't care about the nil-vs-default
-    /// distinction — they just need the value to seed slider state.
+    /// distinction — they just need the value to seed slider state. Reads
+    /// only the committed multiplier so a mid-drag value doesn't leak out
+    /// (existing tests assert this).
     var effectiveMultiplier: Double {
         multiplier ?? 1.0
+    }
+
+    /// Value the inspector slider should render — picks up the in-flight
+    /// drag value when present so the thumb tracks the user's finger, and
+    /// falls back to the committed override otherwise.
+    var displayMultiplier: Double {
+        liveMultiplier ?? multiplier ?? 1.0
     }
 
     func sync(from prefs: ReaderPreferences) {
         multiplier = prefs.tempoMultiplier
     }
 
-    /// Drag-time slider write — forwards immediately to the engine for
-    /// audible feedback but does NOT persist. The View calls
-    /// `commitMultiplier(_:)` on slider release.
+    /// Drag-time slider write — stores the transient value, forwards to
+    /// the engine for audible feedback, and does NOT persist. The View
+    /// calls `commitMultiplier(_:)` on slider release.
     func setMultiplier(_ value: Double) {
+        liveMultiplier = value
         let controller = controllerProvider()
         Task { await controller?.setTempoMultiplier(value) }
     }
@@ -52,13 +70,16 @@ final class TempoModel {
             )
         }
         multiplier = normalized
+        liveMultiplier = nil
         await onChange?()
         await controllerProvider()?.setTempoMultiplier(effectiveMultiplier)
     }
 
-    /// Reset to native tempo. Clears the saved override and forwards 1.0.
+    /// Reset to native tempo. Clears both the saved override and any
+    /// transient drag value, then forwards 1.0.
     func resetMultiplier() async {
         multiplier = nil
+        liveMultiplier = nil
         await onChange?()
         await controllerProvider()?.setTempoMultiplier(1.0)
     }
