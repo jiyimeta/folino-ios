@@ -33,8 +33,8 @@ final class ScorePiPPlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPl
         _: AVPictureInPictureController,
         didTransitionToRenderSize _: CMVideoDimensions,
     ) {
-        // PiP window resize. Buffer aspect ratio is fixed; AVKit
-        // letterboxes for us.
+        // PiP window resize. We render at a fixed aspect ratio per
+        // session, so AVKit's letterbox handles the on-screen scaling.
     }
 
     nonisolated func pictureInPictureController(

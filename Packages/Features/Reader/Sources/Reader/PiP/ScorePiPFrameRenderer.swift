@@ -22,6 +22,16 @@ final class ScorePiPFrameRenderer {
     /// Vertical breathing room above & below the system inside the
     /// PiP window.
     private static let verticalPaddingPt: CGFloat = 16
+    /// Upper bound on buffer height. Beyond this, the score is
+    /// uniformly scaled down so it fits — keeps the PiP window from
+    /// growing taller than wider screens want to support.
+    private static let maxPixelHeightPt: CGFloat = 800
+    /// Lowest buffer aspect (most square / tall) we'll produce. Going
+    /// narrower than this makes the PiP window awkwardly tall; instead
+    /// we cap aspect here and let the renderer shrink the score
+    /// uniformly to fit the resulting buffer height.
+    private static let minAspect: CGFloat = 1.0
+    private static let maxAspect: CGFloat = 16.0 / 9.0
 
     let pixelSize: CGSize
 
@@ -30,6 +40,9 @@ final class ScorePiPFrameRenderer {
     private let document: LayoutDocument
     private let system: LayoutSystem
     private let scoreLayer: CALayer
+    /// Uniform scale applied to the system layer (and cursor rect) when
+    /// the score would otherwise overflow the buffer's usable height.
+    private let scoreScale: CGFloat
 
     init(score: Score, staffSize: CGFloat) throws {
         self.score = score
@@ -52,16 +65,15 @@ final class ScorePiPFrameRenderer {
         }
         system = firstSystem
 
-        // Adaptive PiP buffer size: height grows with the system (so
-        // 4-staff scores aren't crammed into a narrow strip), width
-        // chosen for an aspect ratio that yields ~4 measures across
-        // for single-staff content and ~2 measures for orchestral.
-        // Floor at 480×270 (16:9, AVKit-friendly minimum) — too-small
-        // buffers can stall the PiP system on some devices.
+        // Adaptive PiP buffer size driven by staff count, with both an
+        // aspect floor (so the window never gets uncomfortably tall on
+        // orchestral scores) and an absolute height cap. When the
+        // natural system is too tall to fit, `scoreScale` shrinks the
+        // drawn music uniformly so it still fits inside the buffer.
         let staffCount = max(1, firstSystem.staffOrigins.count)
         let rawHeight = ceil(firstSystem.size.height + Self.verticalPaddingPt * 2)
-        let pixelHeight = max(270, rawHeight)
-        let aspect = max(16.0 / 9.0, 4.0 / CGFloat(staffCount))
+        let pixelHeight = min(Self.maxPixelHeightPt, max(270, rawHeight))
+        let aspect = max(Self.minAspect, min(Self.maxAspect, 4.0 / CGFloat(staffCount)))
         let pixelWidth = max(480, ceil(pixelHeight * aspect))
         // AVSampleBufferDisplayLayer accepts odd pixel sizes, but we round
         // up to even for safety with downstream video pipelines.
@@ -69,6 +81,8 @@ final class ScorePiPFrameRenderer {
             width: Self.roundUpToEven(pixelWidth),
             height: Self.roundUpToEven(pixelHeight),
         )
+        let usableHeight = pixelSize.height - Self.verticalPaddingPt * 2
+        scoreScale = min(1, usableHeight / firstSystem.size.height)
 
         pool = try Self.makePool(size: pixelSize)
         scoreLayer = ScoreLayerBuilder.buildSystem(firstSystem, metrics: document.metrics)
@@ -107,12 +121,16 @@ final class ScorePiPFrameRenderer {
         let cursorFrame = playbackCursor.flatMap {
             document.cursorFrame(for: $0, in: score)
         }
+        // Center the (scaled) system vertically; place the cursor's
+        // measure at a fixed leading inset horizontally.
+        let scaledSystemHeight = system.size.height * scoreScale
+        let shiftY = (pixelSize.height - scaledSystemHeight) / 2
         let shiftX: CGFloat = cursorFrame
-            .map { -$0.minX + Self.cursorLeadingInsetPt } ?? 0
-        let shiftY = Self.verticalPaddingPt
+            .map { -$0.minX * scoreScale + Self.cursorLeadingInsetPt } ?? 0
 
         ctx.saveGState()
         ctx.translateBy(x: shiftX, y: shiftY)
+        ctx.scaleBy(x: scoreScale, y: scoreScale)
         ctx.translateBy(x: system.origin.x, y: system.origin.y)
         scoreLayer.render(in: ctx)
         ctx.restoreGState()
@@ -120,10 +138,10 @@ final class ScorePiPFrameRenderer {
         if let frame = cursorFrame {
             ctx.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.95, alpha: 0.25))
             ctx.fill(CGRect(
-                x: frame.minX + shiftX,
-                y: frame.minY + shiftY,
-                width: frame.width,
-                height: frame.height,
+                x: shiftX + frame.minX * scoreScale,
+                y: shiftY + frame.minY * scoreScale,
+                width: frame.width * scoreScale,
+                height: frame.height * scoreScale,
             ))
         }
         return buffer

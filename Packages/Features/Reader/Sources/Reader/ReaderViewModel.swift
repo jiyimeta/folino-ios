@@ -113,8 +113,13 @@ final class ReaderViewModel {
 
     private func armPiPIfReady() {
         guard isPiPEnabled, case let .loaded(score) = loadState else { return }
+        // Mirror the on-screen transformation so the PiP view sees the
+        // same staves and clefs as the main Reader pane.
+        let visible = score
+            .applying(clefOverrides: layoutModel.staffClefOverrides)
+            .filtered(hidingStaves: layoutModel.hiddenStaves)
         do {
-            try pipCoordinator.arm(score: score, playbackCursor: playbackCursor)
+            try pipCoordinator.arm(score: visible, playbackCursor: playbackCursor)
         } catch {
             // Coordinator throws only when no display layer is attached
             // (the host view hasn't mounted yet). Arming will retry once
@@ -207,6 +212,10 @@ final class ReaderViewModel {
                 prefs.hiddenStaves = self.layoutModel.hiddenStaves
                 prefs.staffClefOverrides = self.layoutModel.staffClefOverrides
             }
+            // Clef override edits land only through this path
+            // (hidden-staves changes also fire `onHiddenStavesChanged`),
+            // so rebuild the PiP renderer here to pick them up.
+            armPiPIfReady()
         }
         layoutModel.onHiddenStavesChanged = { [weak self] in
             guard let self else { return }
@@ -218,6 +227,15 @@ final class ReaderViewModel {
                 hiddenStaves: layoutModel.hiddenStaves,
             ) ?? rawPlaybackCursor
             notifyPiPCursor()
+            // AVKit fixes the PiP window's aspect ratio at session start
+            // and won't renegotiate when we feed buffers with new
+            // dimensions. Dismiss any active session so the next
+            // background auto-start opens at the right shape; the arm
+            // below leaves the coordinator ready to do so.
+            if isPiPActive {
+                pipCoordinator.dismissIfActive()
+            }
+            armPiPIfReady()
         }
         layoutModel.scoreProvider = { [weak self] in self?.loadState.score }
     }

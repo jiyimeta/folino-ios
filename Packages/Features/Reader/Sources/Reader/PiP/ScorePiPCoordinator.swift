@@ -118,14 +118,17 @@ final class ScorePiPCoordinator: NSObject {
 
     /// Arm the coordinator with a loaded score so AVKit's auto-start
     /// has frames ready when the app backgrounds. The pump runs while
-    /// armed; idempotent for repeated calls with the same score.
+    /// armed. Safe to call again to swap in a new score (e.g. when
+    /// the user hides a staff or changes a clef override); the
+    /// existing pump and queued samples are torn down first.
     func arm(score: Score, playbackCursor: ScoreCursor?) throws {
-        guard displayLayer != nil else {
+        guard let displayLayer else {
             throw NSError(
                 domain: "ScorePiPCoordinator", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "No display layer attached"],
             )
         }
+        stopPump()
         renderer = try ScorePiPFrameRenderer(
             score: score, staffSize: Self.pipStaffSize,
         )
@@ -134,6 +137,12 @@ final class ScorePiPCoordinator: NSObject {
         ticksSinceLastForceEnqueue = 0
         lastReportedPaused = nil
         lastReportedTotalTime = nil
+        // Clear queued frames sized for the previous score; the new
+        // renderer's pool may have different dimensions.
+        displayLayer.flush()
+        if let tb = displayLayer.controlTimebase {
+            CMTimebaseSetTime(tb, time: .zero)
+        }
 
         startPump()
         pumpTick() // seed the layer so AVKit has a frame at auto-start
