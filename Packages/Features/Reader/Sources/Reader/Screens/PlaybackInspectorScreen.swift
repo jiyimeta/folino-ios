@@ -13,14 +13,21 @@ struct PlaybackInspectorScreen: View {
 
     var body: some View {
         List {
-            // Top-of-list "general" controls intentionally render without
-            // a section header — they apply to the whole score and the
-            // header would only repeat that with no information value.
-            tempoControls
-            HStack {
-                Text("reader.inspector.repeatMode", bundle: .module)
-                Spacer()
-                RepeatModePicker(selection: $repeatModel.mode)
+            // Two unheadered sections separate the tempo/metronome group
+            // (which the slider belongs to) from repeat mode — the gap
+            // makes it visually obvious the slider is not a metronome
+            // volume control.
+            Section {
+                metronomeRow
+                tempoRow
+            }
+
+            Section {
+                HStack {
+                    Text("reader.inspector.repeatMode", bundle: .module)
+                    Spacer()
+                    RepeatModePicker(selection: $repeatModel.mode)
+                }
             }
 
             Section {
@@ -50,7 +57,7 @@ struct PlaybackInspectorScreen: View {
     }
 
     @ViewBuilder
-    private var tempoControls: some View {
+    private var tempoRow: some View {
         // Route the slider's binding through `tempoModel` (like the per-staff
         // volume sliders go through `mixerModel`) so the slider's release-
         // time writeback lands in the model's transient `liveMultiplier` and
@@ -62,16 +69,9 @@ struct PlaybackInspectorScreen: View {
             set: { tempoModel.setMultiplier($0) },
         )
         HStack(spacing: 8) {
-            Button {
-                isMetronomeEnabled.toggle()
-            } label: {
-                Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 24, height: 24)
-                    .padding(.horizontal, 4)
-            }
+            Image(systemName: "gauge.open.with.lines.needle.33percent")
+                .foregroundStyle(Color.accentColor)
+            Text("reader.inspector.tempo", bundle: .module)
 
             Button {
                 Task { await tempoModel.resetMultiplier() }
@@ -96,6 +96,16 @@ struct PlaybackInspectorScreen: View {
                     Task { await tempoModel.resetMultiplier() }
                 },
             )
+        }
+    }
+
+    private var metronomeRow: some View {
+        Toggle(isOn: $isMetronomeEnabled) {
+            HStack {
+                Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
+                    .foregroundStyle(Color.accentColor)
+                Text("reader.inspector.metronome", bundle: .module)
+            }
         }
     }
 
