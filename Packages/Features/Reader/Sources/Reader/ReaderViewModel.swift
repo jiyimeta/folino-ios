@@ -39,6 +39,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     /// the chain needs the intermediate path to be writable.
     var repeatModel = RepeatModel()
     var tempoModel = TempoModel()
+    var layoutModel = LayoutSettingsModel()
 
     private(set) var loadState: LoadState = .loading
     private(set) var scoreItem: ScoreItem
@@ -136,6 +137,30 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         )
         wireRepeatModel()
         wireTempoModel()
+        wireLayoutModel()
+    }
+
+    private func wireLayoutModel() {
+        layoutModel.onChange = { [weak self] in
+            guard let self else { return }
+            await mutatePreferences { prefs in
+                prefs.staffSize = self.layoutModel.staffSize
+                prefs.honorLayoutBreaks = self.layoutModel.honorLayoutBreaks
+                prefs.hiddenStaves = self.layoutModel.hiddenStaves
+                prefs.staffClefOverrides = self.layoutModel.staffClefOverrides
+            }
+        }
+        layoutModel.onHiddenStavesChanged = { [weak self] in
+            guard let self else { return }
+            // Re-translate against the new visibility so the cursor recovers
+            // immediately when the staff comes back, and falls back to .beat
+            // immediately when one is hidden mid-playback.
+            playbackCursor = loadState.score?.translateCursorForHiddenStaves(
+                rawPlaybackCursor,
+                hiddenStaves: layoutModel.hiddenStaves,
+            ) ?? rawPlaybackCursor
+        }
+        layoutModel.scoreProvider = { [weak self] in self?.loadState.score }
     }
 
     private func wireTempoModel() {
@@ -178,7 +203,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
             rawPlaybackCursor = value
             playbackCursor = loadState.score?.translateCursorForHiddenStaves(
                 value,
-                hiddenStaves: preferences.hiddenStaves,
+                hiddenStaves: layoutModel.hiddenStaves,
             ) ?? value
             // The engine emits a nil cursor only when playback hits the
             // end of the score (`PlaybackEngine.stop()` clears it; explicit
@@ -203,26 +228,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
             let message = describe(error)
             loadState = .failed(message: message)
         }
-    }
-
-    func incrementStaffSize() async {
-        let next = min(
-            preferences.staffSize + 1,
-            ReaderPreferences.maxStaffSize,
-        )
-        await mutatePreferences { $0.staffSize = next }
-    }
-
-    func decrementStaffSize() async {
-        let next = max(
-            preferences.staffSize - 1,
-            ReaderPreferences.minStaffSize,
-        )
-        await mutatePreferences { $0.staffSize = next }
-    }
-
-    func setHonorLayoutBreaks(_ value: Bool) async {
-        await mutatePreferences { $0.honorLayoutBreaks = value }
     }
 
     func volume(for address: StaffAddress) -> Double {
@@ -305,45 +310,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
             bank: loadState.score?.gmBank(at: address) ?? 0,
             program: loadState.score?.gmProgram(at: address) ?? 0,
         )
-    }
-
-    /// Returns the rawType the renderer will use for this staff: the
-    /// override if one is set, otherwise the score's authored opening
-    /// clef (explicit measure-0 clef, else `Staff.defaultClefType`),
-    /// falling back to `"G"` if neither exists or the staff isn't in
-    /// the score.
-    func effectiveClef(for address: StaffAddress) -> String {
-        if let override = preferences.staffClefOverrides[address] {
-            return override
-        }
-        return loadState.score?.authoredClef(at: address) ?? "G"
-    }
-
-    func hasClefOverride(for address: StaffAddress) -> Bool {
-        preferences.staffClefOverrides[address] != nil
-    }
-
-    /// True only when an override is set AND its rawType differs from the
-    /// score's authored opening clef. The picker uses this to gate the
-    /// "Use score's clef" button — when the override happens to match
-    /// the authored value (e.g. user picked the same Treble that was
-    /// already there) clearing it would be visibly a no-op, so the
-    /// reset affordance would just be noise.
-    func isClefOverrideEffective(for address: StaffAddress) -> Bool {
-        guard let override = preferences.staffClefOverrides[address] else {
-            return false
-        }
-        return override != (loadState.score?.authoredClef(at: address) ?? "G")
-    }
-
-    func setClefOverride(_ rawType: String, for address: StaffAddress) async {
-        await mutatePreferences { $0.staffClefOverrides[address] = rawType }
-    }
-
-    func clearClefOverride(for address: StaffAddress) async {
-        await mutatePreferences {
-            $0.staffClefOverrides.removeValue(forKey: address)
-        }
     }
 
     /// Kick off the playback engine's `load` in the background as soon as
@@ -459,23 +425,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         pendingInstrumentLoad?.task.cancel()
     }
 
-    func toggleStaff(address: StaffAddress) async {
-        await mutatePreferences { prefs in
-            if prefs.hiddenStaves.contains(address) {
-                prefs.hiddenStaves.remove(address)
-            } else {
-                prefs.hiddenStaves.insert(address)
-            }
-        }
-        // Re-translate against the new visibility so the cursor recovers
-        // immediately when the staff comes back, and falls back to .beat
-        // immediately when one is hidden mid-playback.
-        playbackCursor = loadState.score?.translateCursorForHiddenStaves(
-            rawPlaybackCursor,
-            hiddenStaves: preferences.hiddenStaves,
-        ) ?? rawPlaybackCursor
-    }
-
     func resetZoom() {
         viewportZoom = 1.0
     }
@@ -499,7 +448,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     func setManualCursor(_ cursor: ScoreCursor) {
         let engineCursor = loadState.score?.engineCursorForFilteredTap(
             cursor,
-            hiddenStaves: preferences.hiddenStaves,
+            hiddenStaves: layoutModel.hiddenStaves,
         ) ?? cursor
         rawPlaybackCursor = engineCursor
         playbackCursor = cursor
@@ -515,6 +464,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
                 preferences = stored
                 repeatModel.sync(from: stored)
                 tempoModel.sync(from: stored)
+                layoutModel.sync(from: stored)
                 return
             }
         } catch {
@@ -528,6 +478,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         preferences = seeded
         repeatModel.sync(from: seeded)
         tempoModel.sync(from: seeded)
+        layoutModel.sync(from: seeded)
         try? await repository.saveReaderPreferences(seeded)
     }
 

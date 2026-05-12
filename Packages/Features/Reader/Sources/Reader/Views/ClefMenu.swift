@@ -13,9 +13,9 @@ struct ClefMenu: View {
     @State private var isPresented = false
 
     var body: some View {
-        let effective = viewModel.effectiveClef(for: address)
-        let hasOverride = viewModel.hasClefOverride(for: address)
-        let canReset = viewModel.isClefOverrideEffective(for: address)
+        let effective = viewModel.layoutModel.effectiveClef(for: address)
+        let hasOverride = viewModel.layoutModel.hasClefOverride(for: address)
+        let canReset = viewModel.layoutModel.isClefOverrideEffective(for: address)
         // Touch BravuraFont.register so previews and first-render paths
         // get the SMuFL font even when the score view hasn't been
         // resolved yet.
@@ -92,7 +92,7 @@ struct ClefMenu: View {
 
     private var resetButton: some View {
         Button {
-            Task { await viewModel.clearClefOverride(for: address) }
+            Task { await viewModel.layoutModel.clearClefOverride(for: address) }
             isPresented = false
         } label: {
             Text("reader.preferences.clef.resetDefault", bundle: .module)
@@ -116,7 +116,7 @@ struct ClefMenu: View {
     private func tile(_ choice: ClefMenuChoice, current: String) -> some View {
         let isCurrent = choice.rawType == current
         Button {
-            Task { await viewModel.setClefOverride(choice.rawType, for: address) }
+            Task { await viewModel.layoutModel.setClefOverride(choice.rawType, for: address) }
             isPresented = false
         } label: {
             clefPreview(choice: choice)

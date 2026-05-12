@@ -112,22 +112,22 @@ public struct ReaderRootScreen: View {
         case .loading:
             ProgressView().controlSize(.large)
         case let .loaded(score):
-            let withClefs = score.applying(clefOverrides: viewModel.preferences.staffClefOverrides)
-            let visible = withClefs.filtered(hidingStaves: viewModel.preferences.hiddenStaves)
+            let withClefs = score.applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
+            let visible = withClefs.filtered(hidingStaves: viewModel.layoutModel.hiddenStaves)
             switch layoutMode {
             case .vertical:
                 VerticalScoreContainer(
                     score: visible,
-                    staffSize: viewModel.preferences.staffSize,
-                    honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
+                    staffSize: viewModel.layoutModel.staffSize,
+                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel,
                 )
             case .horizontal:
                 HorizontalScoreContainer(
                     score: visible,
-                    staffSize: viewModel.preferences.staffSize,
-                    honorLayoutBreaks: viewModel.preferences.honorLayoutBreaks,
+                    staffSize: viewModel.layoutModel.staffSize,
+                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel,
                 )

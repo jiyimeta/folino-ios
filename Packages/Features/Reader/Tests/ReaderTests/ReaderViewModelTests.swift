@@ -100,8 +100,8 @@ struct ReaderViewModelTests {
         )
 
         await vm.load()
-        #expect(vm.preferences.staffSize == 11)
-        #expect(vm.preferences.hiddenStaves.isEmpty)
+        #expect(vm.layoutModel.staffSize == 11)
+        #expect(vm.layoutModel.hiddenStaves.isEmpty)
         #expect(repo.savedReaderPreferences.count == 1)
     }
 
@@ -121,8 +121,8 @@ struct ReaderViewModelTests {
         )
 
         await vm.load()
-        #expect(vm.preferences.staffSize == 18)
-        #expect(vm.preferences.hiddenStaves == hidden)
+        #expect(vm.layoutModel.staffSize == 18)
+        #expect(vm.layoutModel.hiddenStaves == hidden)
         // No new save because the persisted record is reused as-is.
         #expect(repo.savedReaderPreferences.isEmpty)
     }
@@ -141,11 +141,11 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        await vm.incrementStaffSize()
-        #expect(vm.preferences.staffSize == 15)
-        await vm.decrementStaffSize()
-        await vm.decrementStaffSize()
-        #expect(vm.preferences.staffSize == 13)
+        await vm.layoutModel.incrementStaffSize()
+        #expect(vm.layoutModel.staffSize == 15)
+        await vm.layoutModel.decrementStaffSize()
+        await vm.layoutModel.decrementStaffSize()
+        #expect(vm.layoutModel.staffSize == 13)
         // 1 save from each mutator.
         #expect(repo.savedReaderPreferences.count == 3)
     }
@@ -164,12 +164,12 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        await vm.decrementStaffSize()
-        #expect(vm.preferences.staffSize == 8) // already at min, stays at min
+        await vm.layoutModel.decrementStaffSize()
+        #expect(vm.layoutModel.staffSize == 8) // already at min, stays at min
         for _ in 0 ..< 25 {
-            await vm.incrementStaffSize()
+            await vm.layoutModel.incrementStaffSize()
         }
-        #expect(vm.preferences.staffSize == 28) // capped
+        #expect(vm.layoutModel.staffSize == 28) // capped
     }
 
     @Test func `toggle staff flips membership`() async {
@@ -187,10 +187,10 @@ struct ReaderViewModelTests {
         )
         await vm.load()
         let address = StaffAddress(partIndex: 1, staffIndexInPart: 0)
-        await vm.toggleStaff(address: address)
-        #expect(vm.preferences.hiddenStaves == [address])
-        await vm.toggleStaff(address: address)
-        #expect(vm.preferences.hiddenStaves.isEmpty)
+        await vm.layoutModel.toggleStaff(address)
+        #expect(vm.layoutModel.hiddenStaves == [address])
+        await vm.layoutModel.toggleStaff(address)
+        #expect(vm.layoutModel.hiddenStaves.isEmpty)
     }
 
     @Test func `volume falls back to one when load state has no parts`() {
@@ -334,14 +334,14 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        #expect(vm.preferences.honorLayoutBreaks == true)
+        #expect(vm.layoutModel.honorLayoutBreaks == true)
 
-        await vm.setHonorLayoutBreaks(false)
-        #expect(vm.preferences.honorLayoutBreaks == false)
+        await vm.layoutModel.setHonorLayoutBreaks(false)
+        #expect(vm.layoutModel.honorLayoutBreaks == false)
         #expect(repo.savedReaderPreferences.last?.honorLayoutBreaks == false)
 
-        await vm.setHonorLayoutBreaks(true)
-        #expect(vm.preferences.honorLayoutBreaks == true)
+        await vm.layoutModel.setHonorLayoutBreaks(true)
+        #expect(vm.layoutModel.honorLayoutBreaks == true)
         #expect(repo.savedReaderPreferences.last?.honorLayoutBreaks == true)
     }
 
@@ -510,10 +510,10 @@ struct ReaderViewModelTests {
         )
         await vm.load()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
-        await vm.setClefOverride("G8vb", for: address)
-        #expect(vm.preferences.staffClefOverrides == [address: "G8vb"])
+        await vm.layoutModel.setClefOverride("G8vb", for: address)
+        #expect(vm.layoutModel.staffClefOverrides == [address: "G8vb"])
         #expect(repo.savedReaderPreferences.last?.staffClefOverrides == [address: "G8vb"])
-        #expect(vm.hasClefOverride(for: address))
+        #expect(vm.layoutModel.hasClefOverride(for: address))
     }
 
     @Test func `clear clef override removes entry`() async {
@@ -527,10 +527,10 @@ struct ReaderViewModelTests {
         )
         await vm.load()
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        await vm.setClefOverride("F", for: address)
-        await vm.clearClefOverride(for: address)
-        #expect(vm.preferences.staffClefOverrides.isEmpty)
-        #expect(!vm.hasClefOverride(for: address))
+        await vm.layoutModel.setClefOverride("F", for: address)
+        await vm.layoutModel.clearClefOverride(for: address)
+        #expect(vm.layoutModel.staffClefOverrides.isEmpty)
+        #expect(!vm.layoutModel.hasClefOverride(for: address))
     }
 
     @Test func `effective clef returns override then authored`() async {
@@ -548,10 +548,10 @@ struct ReaderViewModelTests {
             scoresDirectory: URL(filePath: "/tmp"),
         )
         await vm.load()
-        #expect(vm.effectiveClef(for: StaffAddress(partIndex: 0, staffIndexInPart: 0)) == "G")
-        #expect(vm.effectiveClef(for: StaffAddress(partIndex: 0, staffIndexInPart: 1)) == "F")
+        #expect(vm.layoutModel.effectiveClef(for: StaffAddress(partIndex: 0, staffIndexInPart: 0)) == "G")
+        #expect(vm.layoutModel.effectiveClef(for: StaffAddress(partIndex: 0, staffIndexInPart: 1)) == "F")
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        await vm.setClefOverride("G8vb", for: address)
-        #expect(vm.effectiveClef(for: address) == "G8vb")
+        await vm.layoutModel.setClefOverride("G8vb", for: address)
+        #expect(vm.layoutModel.effectiveClef(for: address) == "G8vb")
     }
 }

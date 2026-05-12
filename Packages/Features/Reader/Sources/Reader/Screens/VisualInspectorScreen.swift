@@ -65,9 +65,9 @@ struct VisualInspectorScreen: View {
     @ViewBuilder
     private var breakPolicyRow: some View {
         let binding = Binding<Bool>(
-            get: { viewModel.preferences.honorLayoutBreaks },
+            get: { viewModel.layoutModel.honorLayoutBreaks },
             set: { newValue in
-                Task { await viewModel.setHonorLayoutBreaks(newValue) }
+                Task { await viewModel.layoutModel.setHonorLayoutBreaks(newValue) }
             },
         )
         Toggle(isOn: binding) {
@@ -78,13 +78,13 @@ struct VisualInspectorScreen: View {
     @ViewBuilder
     private var staffSizeRow: some View {
         let staffSize = Binding<CGFloat>(
-            get: { viewModel.preferences.staffSize },
+            get: { viewModel.layoutModel.staffSize },
             set: { newValue in
-                let current = viewModel.preferences.staffSize
+                let current = viewModel.layoutModel.staffSize
                 if newValue > current {
-                    Task { await viewModel.incrementStaffSize() }
+                    Task { await viewModel.layoutModel.incrementStaffSize() }
                 } else if newValue < current {
-                    Task { await viewModel.decrementStaffSize() }
+                    Task { await viewModel.layoutModel.decrementStaffSize() }
                 }
             },
         )
@@ -95,7 +95,7 @@ struct VisualInspectorScreen: View {
         ) {
             Text(String(
                 localized: "reader.preferences.staffSize",
-                defaultValue: "Staff size: \(Int(viewModel.preferences.staffSize)) pt",
+                defaultValue: "Staff size: \(Int(viewModel.layoutModel.staffSize)) pt",
                 bundle: .module,
             ))
         }
@@ -117,10 +117,10 @@ struct VisualInspectorScreen: View {
 
     @ViewBuilder
     func visibilityButton(address: StaffAddress) -> some View {
-        let isVisible = !viewModel.preferences.hiddenStaves.contains(address)
+        let isVisible = !viewModel.layoutModel.hiddenStaves.contains(address)
 
         Button {
-            Task { await viewModel.toggleStaff(address: address) }
+            Task { await viewModel.layoutModel.toggleStaff(address) }
         } label: {
             EyeIcon(isOpen: isVisible, lineWidth: 2)
                 .foregroundStyle(Color.accentColor)
