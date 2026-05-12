@@ -4,35 +4,36 @@ import SheetMusicCore
 import SwiftUI
 import UIKit
 
+/// SwiftUI off-screen rendering via `UIHostingController.layer.render(in:)`
+/// produces blank output when the controller isn't attached to a window —
+/// SwiftUI's display pass only runs against window-attached layers. We use
+/// `ImageRenderer` instead, which is built for window-less rasterisation.
 @MainActor
 final class ScorePiPFrameRenderer {
+    private let score: Score
+    private let staffSize: CGFloat
     private let pixelSize: CGSize
     private let pool: CVPixelBufferPool
-    private let hostingController: UIHostingController<PiPScoreCanvas>
 
     init(score: Score, staffSize: CGFloat, pixelSize: CGSize) throws {
+        self.score = score
+        self.staffSize = staffSize
         self.pixelSize = pixelSize
         pool = try Self.makePool(size: pixelSize)
-        let canvas = PiPScoreCanvas(
-            score: score, staffSize: staffSize, playbackCursor: nil,
-        )
-        let hc = UIHostingController(rootView: canvas)
-        hc.view.backgroundColor = .systemBackground
-        hc.view.frame = CGRect(origin: .zero, size: pixelSize)
-        hc.view.clipsToBounds = true
-        if #available(iOS 16.4, *) { hc.safeAreaRegions = [] }
-        hostingController = hc
     }
 
     func renderFrame(playbackCursor: ScoreCursor?) -> CVPixelBuffer? {
-        let current = hostingController.rootView
-        hostingController.rootView = PiPScoreCanvas(
-            score: current.score,
-            staffSize: current.staffSize,
-            playbackCursor: playbackCursor,
+        let canvas = PiPScoreCanvas(
+            score: score, staffSize: staffSize, playbackCursor: playbackCursor,
         )
-        hostingController.view.setNeedsLayout()
-        hostingController.view.layoutIfNeeded()
+        .frame(width: pixelSize.width, height: pixelSize.height)
+        .background(Color(.systemBackground))
+
+        let renderer = ImageRenderer(content: canvas)
+        renderer.proposedSize = ProposedViewSize(
+            width: pixelSize.width, height: pixelSize.height,
+        )
+        renderer.scale = 1
 
         var maybe: CVPixelBuffer?
         guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &maybe) == kCVReturnSuccess,
@@ -53,7 +54,12 @@ final class ScorePiPFrameRenderer {
             space: cs,
             bitmapInfo: info,
         ) else { return nil }
-        hostingController.view.layer.render(in: ctx)
+
+        // CGContext origin is bottom-left; ImageRenderer produces a CGImage
+        // with top-left origin. Flip Y so the score draws right-side-up.
+        ctx.translateBy(x: 0, y: pixelSize.height)
+        ctx.scaleBy(x: 1, y: -1)
+        renderer.render { _, draw in draw(ctx) }
         return buffer
     }
 
