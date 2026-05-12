@@ -4,7 +4,7 @@ import SheetMusicCore
 import SwiftUI
 
 struct VisualInspectorScreen: View {
-    @Bindable var viewModel: ReaderViewModel
+    let layoutModel: LayoutSettingsModel
     let score: Score
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
@@ -65,9 +65,9 @@ struct VisualInspectorScreen: View {
     @ViewBuilder
     private var breakPolicyRow: some View {
         let binding = Binding<Bool>(
-            get: { viewModel.layoutModel.honorLayoutBreaks },
+            get: { layoutModel.honorLayoutBreaks },
             set: { newValue in
-                Task { await viewModel.layoutModel.setHonorLayoutBreaks(newValue) }
+                Task { await layoutModel.setHonorLayoutBreaks(newValue) }
             },
         )
         Toggle(isOn: binding) {
@@ -78,13 +78,13 @@ struct VisualInspectorScreen: View {
     @ViewBuilder
     private var staffSizeRow: some View {
         let staffSize = Binding<CGFloat>(
-            get: { viewModel.layoutModel.staffSize },
+            get: { layoutModel.staffSize },
             set: { newValue in
-                let current = viewModel.layoutModel.staffSize
+                let current = layoutModel.staffSize
                 if newValue > current {
-                    Task { await viewModel.layoutModel.incrementStaffSize() }
+                    Task { await layoutModel.incrementStaffSize() }
                 } else if newValue < current {
-                    Task { await viewModel.layoutModel.decrementStaffSize() }
+                    Task { await layoutModel.decrementStaffSize() }
                 }
             },
         )
@@ -95,7 +95,7 @@ struct VisualInspectorScreen: View {
         ) {
             Text(String(
                 localized: "reader.preferences.staffSize",
-                defaultValue: "Staff size: \(Int(viewModel.layoutModel.staffSize)) pt",
+                defaultValue: "Staff size: \(Int(layoutModel.staffSize)) pt",
                 bundle: .module,
             ))
         }
@@ -112,15 +112,15 @@ struct VisualInspectorScreen: View {
     }
 
     private func clefMenu(address: StaffAddress) -> some View {
-        ClefMenu(viewModel: viewModel, address: address)
+        ClefMenu(layoutModel: layoutModel, address: address)
     }
 
     @ViewBuilder
     func visibilityButton(address: StaffAddress) -> some View {
-        let isVisible = !viewModel.layoutModel.hiddenStaves.contains(address)
+        let isVisible = !layoutModel.hiddenStaves.contains(address)
 
         Button {
-            Task { await viewModel.layoutModel.toggleStaff(address) }
+            Task { await layoutModel.toggleStaff(address) }
         } label: {
             EyeIcon(isOpen: isVisible, lineWidth: 2)
                 .foregroundStyle(Color.accentColor)

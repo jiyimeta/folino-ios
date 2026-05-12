@@ -5,12 +5,12 @@ import SwiftUI
 /// tab header. Lives outside `PlaybackInspectorScreen` so the screen file stays under
 /// length limits — semantics match the prior inline `programPicker` exactly.
 struct ProgramPicker: View {
-    @Bindable var viewModel: ReaderViewModel
+    let mixerModel: PlaybackMixerModel
     let partIndex: Int
 
     var body: some View {
-        let program = viewModel.mixerModel.effectiveProgram(forPartIndex: partIndex)
-        let hasOverride = viewModel.mixerModel.hasProgramOverride(forPartIndex: partIndex)
+        let program = mixerModel.effectiveProgram(forPartIndex: partIndex)
+        let hasOverride = mixerModel.hasProgramOverride(forPartIndex: partIndex)
         Menu {
             if hasOverride {
                 resetButton
@@ -21,7 +21,7 @@ struct ProgramPicker: View {
                     ForEach(family.programs) { instrument in
                         Button {
                             Task {
-                                await viewModel.mixerModel.setPartProgram(
+                                await mixerModel.setPartProgram(
                                     Int(instrument.program), forPartIndex: partIndex,
                                 )
                             }
@@ -46,7 +46,7 @@ struct ProgramPicker: View {
 
     private var resetButton: some View {
         Button {
-            Task { await viewModel.mixerModel.clearPartProgramOverride(forPartIndex: partIndex) }
+            Task { await mixerModel.clearPartProgramOverride(forPartIndex: partIndex) }
         } label: {
             Label {
                 Text("reader.preferences.resetDefault", bundle: .module)

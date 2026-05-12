@@ -8,14 +8,14 @@ import SwiftUI
 /// (treble / bass / C). Modeled after the swift-sheet-music macOS
 /// example's `ClefPopover`.
 struct ClefMenu: View {
-    @Bindable var viewModel: ReaderViewModel
+    let layoutModel: LayoutSettingsModel
     let address: StaffAddress
     @State private var isPresented = false
 
     var body: some View {
-        let effective = viewModel.layoutModel.effectiveClef(for: address)
-        let hasOverride = viewModel.layoutModel.hasClefOverride(for: address)
-        let canReset = viewModel.layoutModel.isClefOverrideEffective(for: address)
+        let effective = layoutModel.effectiveClef(for: address)
+        let hasOverride = layoutModel.hasClefOverride(for: address)
+        let canReset = layoutModel.isClefOverrideEffective(for: address)
         // Touch BravuraFont.register so previews and first-render paths
         // get the SMuFL font even when the score view hasn't been
         // resolved yet.
@@ -92,7 +92,7 @@ struct ClefMenu: View {
 
     private var resetButton: some View {
         Button {
-            Task { await viewModel.layoutModel.clearClefOverride(for: address) }
+            Task { await layoutModel.clearClefOverride(for: address) }
             isPresented = false
         } label: {
             Text("reader.preferences.clef.resetDefault", bundle: .module)
@@ -116,7 +116,7 @@ struct ClefMenu: View {
     private func tile(_ choice: ClefMenuChoice, current: String) -> some View {
         let isCurrent = choice.rawType == current
         Button {
-            Task { await viewModel.layoutModel.setClefOverride(choice.rawType, for: address) }
+            Task { await layoutModel.setClefOverride(choice.rawType, for: address) }
             isPresented = false
         } label: {
             clefPreview(choice: choice)
@@ -214,7 +214,7 @@ struct ClefMenu: View {
         scoresDirectory: URL(filePath: "/dev/null"),
     )
     ClefMenu(
-        viewModel: viewModel,
+        layoutModel: viewModel.layoutModel,
         address: StaffAddress(partIndex: 1, staffIndexInPart: 1),
     )
 }

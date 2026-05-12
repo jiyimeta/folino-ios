@@ -77,10 +77,15 @@ struct ReaderTopOverlay: View {
                 viewModel.isPlaybackInspectorPresented.toggle()
             }
             .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
-                PlaybackInspectorScreen(viewModel: viewModel, score: score)
-                    .frame(idealWidth: 380, idealHeight: 600)
-                    .presentationDetents([.medium, .large])
-                    .presentationCompactAdaptation(.sheet)
+                PlaybackInspectorScreen(
+                    mixerModel: viewModel.mixerModel,
+                    tempoModel: viewModel.tempoModel,
+                    repeatModel: viewModel.repeatModel,
+                    score: score,
+                )
+                .frame(idealWidth: 380, idealHeight: 600)
+                .presentationDetents([.medium, .large])
+                .presentationCompactAdaptation(.sheet)
             }
 
             overlayButton(
@@ -90,10 +95,13 @@ struct ReaderTopOverlay: View {
                 viewModel.isVisualInspectorPresented.toggle()
             }
             .popover(isPresented: $viewModel.isVisualInspectorPresented) {
-                VisualInspectorScreen(viewModel: viewModel, score: score)
-                    .frame(idealWidth: 380, idealHeight: 600)
-                    .presentationDetents([.medium, .large])
-                    .presentationCompactAdaptation(.sheet)
+                VisualInspectorScreen(
+                    layoutModel: viewModel.layoutModel,
+                    score: score,
+                )
+                .frame(idealWidth: 380, idealHeight: 600)
+                .presentationDetents([.medium, .large])
+                .presentationCompactAdaptation(.sheet)
             }
         }
     }

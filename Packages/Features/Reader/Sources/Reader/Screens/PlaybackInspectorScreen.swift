@@ -4,11 +4,13 @@ import SheetMusicCore
 import SwiftUI
 
 struct PlaybackInspectorScreen: View {
-    @Bindable var viewModel: ReaderViewModel
+    let mixerModel: PlaybackMixerModel
+    let tempoModel: TempoModel
+    @Bindable var repeatModel: RepeatModel
     let score: Score
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
-    /// Slider's local edit value. Syncs from `viewModel.tempoModel.effectiveMultiplier`
+    /// Slider's local edit value. Syncs from `tempoModel.effectiveMultiplier`
     /// when the user is not dragging — keeps the UI consistent after a reset
     /// from outside the slider (e.g. the % label tap).
     @State private var sliderValue = 1.0
@@ -23,7 +25,7 @@ struct PlaybackInspectorScreen: View {
             HStack {
                 Text("reader.inspector.repeatMode", bundle: .module)
                 Spacer()
-                RepeatModePicker(selection: $viewModel.repeatModel.mode)
+                RepeatModePicker(selection: $repeatModel.mode)
             }
 
             Section {
@@ -34,7 +36,7 @@ struct PlaybackInspectorScreen: View {
                             Text(part.instrument.longName ?? part.trackName ?? "-")
                                 .font(.headline)
 
-                            ProgramPicker(viewModel: viewModel, partIndex: partIndex)
+                            ProgramPicker(mixerModel: mixerModel, partIndex: partIndex)
                         }
 
                         VStack {
@@ -50,11 +52,11 @@ struct PlaybackInspectorScreen: View {
             }
         }
         .buttonStyle(.plain)
-        .task(id: viewModel.tempoModel.effectiveMultiplier) {
+        .task(id: tempoModel.effectiveMultiplier) {
             // Pull the persisted value into the slider whenever the model
             // changes from outside the gesture (initial load, % tap reset).
             if !isEditingTempo {
-                sliderValue = viewModel.tempoModel.effectiveMultiplier
+                sliderValue = tempoModel.effectiveMultiplier
             }
         }
     }
@@ -73,7 +75,7 @@ struct PlaybackInspectorScreen: View {
             }
 
             Button {
-                Task { await viewModel.tempoModel.resetMultiplier() }
+                Task { await tempoModel.resetMultiplier() }
             } label: {
                 Text("\(Int((sliderValue * 100).rounded()))%")
                     .font(.callout.monospacedDigit())
@@ -87,13 +89,13 @@ struct PlaybackInspectorScreen: View {
                 onEditingChanged: { editing in
                     isEditingTempo = editing
                     if !editing {
-                        Task { await viewModel.tempoModel.commitMultiplier(sliderValue) }
+                        Task { await tempoModel.commitMultiplier(sliderValue) }
                     }
                 },
             )
             .onChange(of: sliderValue) { _, newValue in
                 if isEditingTempo {
-                    viewModel.tempoModel.setMultiplier(newValue)
+                    tempoModel.setMultiplier(newValue)
                 }
             }
             .padding(.vertical, -8)
@@ -103,12 +105,12 @@ struct PlaybackInspectorScreen: View {
     @ViewBuilder
     private func staffRow(address: StaffAddress) -> some View {
         let volumeBinding = Binding<Double>(
-            get: { viewModel.mixerModel.volume(for: address) },
-            set: { viewModel.mixerModel.setVolume($0, for: address) },
+            get: { mixerModel.volume(for: address) },
+            set: { mixerModel.setVolume($0, for: address) },
         )
-        let isMuted = viewModel.mixerModel.mutedStaves.contains(address)
-        let isSolo = viewModel.mixerModel.soloStaves.contains(address)
-        let isDisabled = isMuted || !viewModel.mixerModel.soloStaves.isEmpty && !isSolo
+        let isMuted = mixerModel.mutedStaves.contains(address)
+        let isSolo = mixerModel.soloStaves.contains(address)
+        let isDisabled = isMuted || !mixerModel.soloStaves.isEmpty && !isSolo
         HStack {
             Image(systemName: "speaker.wave.2.fill")
                 .foregroundStyle(isDisabled ? .gray.opacity(0.6) : .accentColor)
@@ -119,7 +121,7 @@ struct PlaybackInspectorScreen: View {
                 onEditingChanged: { editing in
                     if !editing {
                         let final = volumeBinding.wrappedValue
-                        Task { await viewModel.mixerModel.commitVolume(final, for: address) }
+                        Task { await mixerModel.commitVolume(final, for: address) }
                     }
                 },
             )
@@ -127,7 +129,7 @@ struct PlaybackInspectorScreen: View {
             .disabled(isDisabled)
 
             Button {
-                viewModel.mixerModel.toggleStaffSolo(address)
+                mixerModel.toggleStaffSolo(address)
             } label: {
                 Image(systemName: isSolo ? "s.circle.fill" : "s.circle")
                     .resizable()
@@ -137,7 +139,7 @@ struct PlaybackInspectorScreen: View {
             }
 
             Button {
-                viewModel.mixerModel.toggleStaffMute(address)
+                mixerModel.toggleStaffMute(address)
             } label: {
                 Image(systemName: isMuted ? "m.circle.fill" : "m.circle")
                     .resizable()
@@ -147,11 +149,6 @@ struct PlaybackInspectorScreen: View {
             }
         }
     }
-}
-
-private enum InspectorTab: Hashable {
-    case playback
-    case visual
 }
 
 #if DEBUG
@@ -189,7 +186,12 @@ private enum InspectorTab: Hashable {
     Text("Contents")
         .task { await vm.load() }
         .sheet(isPresented: .constant(true)) {
-            PlaybackInspectorScreen(viewModel: vm, score: score)
+            PlaybackInspectorScreen(
+                mixerModel: vm.mixerModel,
+                tempoModel: vm.tempoModel,
+                repeatModel: vm.repeatModel,
+                score: score,
+            )
         }
 }
 #endif
