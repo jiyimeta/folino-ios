@@ -107,6 +107,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     Text("settings.reader.collapseMultiMeasureRests", bundle: .module)
                 } icon: {
                     Image(systemName: "rectangle.compress.vertical")
+                        .rotationEffect(.degrees(90))
                 }
             }
             readerLayoutRow
