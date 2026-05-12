@@ -12,6 +12,11 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         case loading
         case loaded(Score)
         case failed(message: String)
+
+        var score: Score? {
+            if case let .loaded(score) = self { return score }
+            return nil
+        }
     }
 
     /// Which copy the playback-prep alert should show. The view binds
@@ -140,7 +145,10 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         controller.observeCursor { [weak self] value in
             guard let self else { return }
             rawPlaybackCursor = value
-            playbackCursor = translateCursorForHiddenStaves(value)
+            playbackCursor = loadState.score?.translateCursorForHiddenStaves(
+                value,
+                hiddenStaves: preferences.hiddenStaves,
+            ) ?? value
             // The engine emits a nil cursor only when playback hits the
             // end of the score (`PlaybackEngine.stop()` clears it; explicit
             // `pause()` does not). Use that signal to flip the toolbar's
@@ -150,26 +158,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
                 isPlaying = false
             }
         }
-    }
-
-    /// When the engine emits a `.item(id)` cursor whose staff is hidden,
-    /// the rendering side (`PlaybackCursorView.itemFrame`) can't resolve
-    /// it because `LayoutDocument` was built from a filtered Score.
-    /// Translate to `.beat` so the cursor falls back to interpolated X
-    /// against the surviving columns. `.beat` and visible-staff `.item`
-    /// values pass through unchanged.
-    private func translateCursorForHiddenStaves(
-        _ cursor: ScoreCursor?,
-    ) -> ScoreCursor? {
-        guard let cursor else { return nil }
-        let hidden = preferences.hiddenStaves
-        guard !hidden.isEmpty,
-              case let .item(id) = cursor,
-              hidden.contains(id.staff),
-              case let .loaded(score) = loadState,
-              let tick = score.resolveTickInMeasure(for: id)
-        else { return cursor }
-        return .beat(measureIndex: id.measureIndex, tickInMeasure: tick)
     }
 
     func load() async {
@@ -209,14 +197,14 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     func volume(for address: StaffAddress) -> Double {
         liveStaffVolumes[address]
             ?? preferences.staffVolumeOverrides[address]
-            ?? scoreDefaultVolume(for: address)
+            ?? loadState.score?.initialStaffVolume(at: address)
             ?? Self.defaultStaffVolume
     }
 
     func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
         liveStaffVolumes[address] = clamped
-        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
         Task { await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped) }
     }
 
@@ -227,7 +215,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         let clamped = min(max(value, 0), 1)
         await mutatePreferences { $0.staffVolumeOverrides[address] = clamped }
         liveStaffVolumes[address] = nil
-        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
         await playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
     }
 
@@ -237,7 +225,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         } else {
             mutedStaves.insert(address)
         }
-        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
         Task {
             await playbackController?.setStaffMute(staff: flatIndex, isMuted: mutedStaves.contains(address))
         }
@@ -249,7 +237,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         } else {
             soloStaves.insert(address)
         }
-        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
         Task {
             await playbackController?.setStaffSolo(staff: flatIndex, isSolo: soloStaves.contains(address))
         }
@@ -261,7 +249,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         if let override = preferences.staffProgramOverrides[address] {
             return override
         }
-        return scoreDefaultProgram(for: address) ?? 0
+        return loadState.score?.gmProgram(at: address) ?? 0
     }
 
     func hasProgramOverride(for address: StaffAddress) -> Bool {
@@ -270,38 +258,22 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
 
     func setStaffProgram(_ program: Int, for address: StaffAddress) async {
         await mutatePreferences { $0.staffProgramOverrides[address] = program }
-        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
         await playbackController?.setStaffInstrument(
             staff: flatIndex,
-            bank: scoreDefaultBank(for: address) ?? 0,
+            bank: loadState.score?.gmBank(at: address) ?? 0,
             program: program,
         )
     }
 
     func clearStaffProgramOverride(for address: StaffAddress) async {
         await mutatePreferences { $0.staffProgramOverrides.removeValue(forKey: address) }
-        guard let flatIndex = flattenedStaffIndex(for: address) else { return }
+        guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { return }
         await playbackController?.setStaffInstrument(
             staff: flatIndex,
-            bank: scoreDefaultBank(for: address) ?? 0,
-            program: scoreDefaultProgram(for: address) ?? 0,
+            bank: loadState.score?.gmBank(at: address) ?? 0,
+            program: loadState.score?.gmProgram(at: address) ?? 0,
         )
-    }
-
-    private func scoreDefaultProgram(for address: StaffAddress) -> Int? {
-        guard
-            case let .loaded(score) = loadState,
-            score.parts.indices.contains(address.partIndex)
-        else { return nil }
-        return score.parts[address.partIndex].instrument.channel.program
-    }
-
-    private func scoreDefaultBank(for address: StaffAddress) -> Int? {
-        guard
-            case let .loaded(score) = loadState,
-            score.parts.indices.contains(address.partIndex)
-        else { return nil }
-        return score.parts[address.partIndex].instrument.channel.bank
     }
 
     /// Returns the rawType the renderer will use for this staff: the
@@ -313,7 +285,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         if let override = preferences.staffClefOverrides[address] {
             return override
         }
-        return authoredClef(for: address) ?? "G"
+        return loadState.score?.authoredClef(at: address) ?? "G"
     }
 
     func hasClefOverride(for address: StaffAddress) -> Bool {
@@ -330,7 +302,7 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         guard let override = preferences.staffClefOverrides[address] else {
             return false
         }
-        return override != (authoredClef(for: address) ?? "G")
+        return override != (loadState.score?.authoredClef(at: address) ?? "G")
     }
 
     func setClefOverride(_ rawType: String, for address: StaffAddress) async {
@@ -343,44 +315,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         }
     }
 
-    private func authoredClef(for address: StaffAddress) -> String? {
-        guard case let .loaded(score) = loadState,
-              score.parts.indices.contains(address.partIndex),
-              score.parts[address.partIndex].staves.indices
-                  .contains(address.staffIndexInPart)
-        else { return nil }
-        let staff = score.parts[address.partIndex].staves[address.staffIndexInPart]
-        if let first = staff.measures.first?.voices.first?.elements.first,
-           case let .clef(c) = first
-        {
-            return c.concertClefType
-        }
-        return staff.defaultClefType
-    }
-
-    /// CC7 (Channel Volume) from the part's first channel, mapped from
-    /// MIDI's 0…127 to the slider's 0…1. Returns nil when the score has no
-    /// matching part — callers fall back to `defaultStaffVolume`. Mirrors
-    /// `swift-sheet-music`'s `PlaybackEngine.initialStaffVolume`.
-    private func scoreDefaultVolume(for address: StaffAddress) -> Double? {
-        guard
-            case let .loaded(score) = loadState,
-            score.parts.indices.contains(address.partIndex)
-        else { return nil }
-        let cc7 = score.parts[address.partIndex].instrument.channel.volume
-        let clamped = max(0, min(127, cc7))
-        return Double(clamped) / 127.0
-    }
-
-    private func flattenedStaffIndex(for address: StaffAddress) -> Int? {
-        guard
-            case let .loaded(score) = loadState,
-            let flatIndex = score.allStaves.firstIndex(where: { $0.address == address })
-        else { return nil }
-
-        return flatIndex
-    }
-
     /// Kick off the playback engine's `load` in the background as soon as
     /// the score is open, so the user usually finds soundfonts ready by
     /// the time they tap play. Idempotent — re-entry while a preload is
@@ -391,7 +325,12 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
               !hasLoadedIntoPlayback,
               preloadTask == nil
         else { return }
-        let prefs = initialPlaybackPreferences(for: score)
+        let prefs = PlaybackPreferences.initial(
+            for: score,
+            readerPreferences: preferences,
+            scoreItemID: scoreItem.id,
+            defaultVolume: Self.defaultStaffVolume,
+        )
         let task = Task<Void, Error> {
             try await controller.load(score: score, preferences: prefs)
         }
@@ -448,7 +387,12 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
                 soundfontAlertKind = .loading
             }
 
-            let prefs = initialPlaybackPreferences(for: score)
+            let prefs = PlaybackPreferences.initial(
+                for: score,
+                readerPreferences: preferences,
+                scoreItemID: scoreItem.id,
+                defaultVolume: Self.defaultStaffVolume,
+            )
             let task = preloadTask ?? Task<Void, Error> {
                 try await controller.load(score: score, preferences: prefs)
             }
@@ -495,7 +439,10 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
         // Re-translate against the new visibility so the cursor recovers
         // immediately when the staff comes back, and falls back to .beat
         // immediately when one is hidden mid-playback.
-        playbackCursor = translateCursorForHiddenStaves(rawPlaybackCursor)
+        playbackCursor = loadState.score?.translateCursorForHiddenStaves(
+            rawPlaybackCursor,
+            hiddenStaves: preferences.hiddenStaves,
+        ) ?? rawPlaybackCursor
     }
 
     func resetZoom() {
@@ -519,56 +466,14 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     }
 
     func setManualCursor(_ cursor: ScoreCursor) {
-        let engineCursor = engineCursorForFilteredTap(cursor)
+        let engineCursor = loadState.score?.engineCursorForFilteredTap(
+            cursor,
+            hiddenStaves: preferences.hiddenStaves,
+        ) ?? cursor
         rawPlaybackCursor = engineCursor
         playbackCursor = cursor
         guard let controller = playbackController else { return }
         Task { await controller.setCursor(to: engineCursor) }
-    }
-
-    /// `nearestCursor` runs against a `LayoutDocument` built from the
-    /// filtered score, so the `StaffAddress` it stamps onto `NoteID` /
-    /// `RestID` is positional within the filtered parts. The playback
-    /// engine's timeline is keyed by the full-score address, so the
-    /// cursor has to be re-addressed before being handed to the
-    /// controller — without it the engine fails to resolve the cursor
-    /// (most visibly when the visible staff holds a whole rest and the
-    /// hidden staff holds notes: the `.rest` key slot is occupied by
-    /// the hidden staff's `.note` entries, so the lookup misses and
-    /// `seek` silently no-ops). `.beat` cursors carry no staff address
-    /// and pass through unchanged.
-    private func engineCursorForFilteredTap(
-        _ cursor: ScoreCursor,
-    ) -> ScoreCursor {
-        let hidden = preferences.hiddenStaves
-        guard !hidden.isEmpty,
-              case let .item(id) = cursor,
-              case let .loaded(score) = loadState,
-              let full = score.unfilterStaffAddress(
-                  id.staff, hidingStaves: hidden,
-              )
-        else { return cursor }
-        switch id {
-        case let .note(noteID):
-            return .item(.note(NoteID(
-                staff: full,
-                measureIndex: noteID.measureIndex,
-                voiceIndex: noteID.voiceIndex,
-                elementIndex: noteID.elementIndex,
-                noteIndexInChord: noteID.noteIndexInChord,
-            )))
-        case let .rest(restID):
-            return .item(.rest(RestID(
-                staff: full,
-                measureIndex: restID.measureIndex,
-                voiceIndex: restID.voiceIndex,
-                elementIndex: restID.elementIndex,
-            )))
-        case .tuplet, .clef:
-            // Tap-to-seek never produces these item kinds; pass
-            // through to keep the function total over `ScoreItemID`.
-            return cursor
-        }
     }
 
     // MARK: - Tempo & metronome
@@ -665,36 +570,6 @@ final class ReaderViewModel { // swiftlint:disable:this type_body_length
     }
 
     // MARK: - Private
-
-    private func initialPlaybackPreferences(for score: Score) -> PlaybackPreferences {
-        let states = score.allStaves.enumerated().map { idx, entry in
-            let bank = score.parts.indices.contains(entry.address.partIndex)
-                ? score.parts[entry.address.partIndex].instrument.channel.bank
-                : 0
-            let program = preferences.staffProgramOverrides[entry.address]
-                ?? (
-                    score.parts.indices.contains(entry.address.partIndex)
-                        ? score.parts[entry.address.partIndex].instrument.channel.program
-                        : 0
-                )
-            return StaffMixerState(
-                staffIndex: idx,
-                volume: preferences.staffVolumeOverrides[entry.address]
-                    ?? scoreDefaultVolume(for: entry.address)
-                    ?? Self.defaultStaffVolume,
-                isMuted: false,
-                isSolo: false,
-                gmBank: bank,
-                gmProgram: program,
-            )
-        }
-        return PlaybackPreferences(
-            scoreItemID: scoreItem.id,
-            perStaff: states,
-            tempoMultiplier: preferences.tempoMultiplier ?? 1.0,
-            abRepeat: preferences.abRepeat,
-        )
-    }
 
     private func loadOrSeedPreferences() async {
         do {
@@ -895,10 +770,10 @@ extension ReaderViewModel {
             }
         }
         for address in addresses {
-            guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+            guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { continue }
             await playbackController?.setStaffInstrument(
                 staff: flatIndex,
-                bank: scoreDefaultBank(for: address) ?? 0,
+                bank: loadState.score?.gmBank(at: address) ?? 0,
                 program: program,
             )
         }
@@ -961,7 +836,7 @@ extension ReaderViewModel {
         do {
             try await task.value
             for address in addresses {
-                guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+                guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { continue }
                 await controller.setStaffInstrument(
                     staff: flatIndex, bank: bank, program: program,
                 )
@@ -1000,11 +875,11 @@ extension ReaderViewModel {
             }
         }
         for address in addresses {
-            guard let flatIndex = flattenedStaffIndex(for: address) else { continue }
+            guard let flatIndex = loadState.score?.flattenedStaffIndex(of: address) else { continue }
             await playbackController?.setStaffInstrument(
                 staff: flatIndex,
-                bank: scoreDefaultBank(for: address) ?? 0,
-                program: scoreDefaultProgram(for: address) ?? 0,
+                bank: loadState.score?.gmBank(at: address) ?? 0,
+                program: loadState.score?.gmProgram(at: address) ?? 0,
             )
         }
     }
