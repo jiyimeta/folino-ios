@@ -38,7 +38,11 @@ struct PlaybackInspectorScreen: View {
                             Text(part.instrument.longName ?? part.trackName ?? "-")
                                 .font(.headline)
 
-                            ProgramPicker(mixerModel: mixerModel, partIndex: partIndex)
+                            ProgramPicker(
+                                mixerModel: mixerModel,
+                                partIndex: partIndex,
+                                isDrums: part.instrument.useDrumset,
+                            )
                         }
 
                         VStack {
