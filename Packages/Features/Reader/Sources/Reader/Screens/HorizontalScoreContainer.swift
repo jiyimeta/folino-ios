@@ -99,7 +99,7 @@ struct HorizontalScoreContainer: View {
                 )
             },
         ) {
-            zoomedSurface()
+            zoomedSurface(viewport: viewport)
         }
         .onChange(of: playbackCursor) { _, newCursor in
             autoScroll(cursor: newCursor, viewport: viewport)
@@ -107,7 +107,7 @@ struct HorizontalScoreContainer: View {
     }
 
     @ViewBuilder
-    private func zoomedSurface() -> some View {
+    private func zoomedSurface(viewport: CGSize) -> some View {
         if let doc = document {
             let zoom = viewModel.viewportZoom
             let framedWidth = (doc.size.width + scorePadding * 2) * zoom
@@ -117,10 +117,17 @@ struct HorizontalScoreContainer: View {
                 .scaleEffect(liveMagnification, anchor: liveMagAnchor)
                 .scaleEffect(zoom, anchor: .topLeading)
                 .offset(x: 0, y: liveOffsetY)
+                // Inflate the outer frame to at least the viewport so a
+                // score shorter than the viewport gets centered vertically
+                // (`.leading` = leading-X + center-Y). Horizontal still
+                // pins to leading so the score opens at measure 1, not
+                // mid-page. When zoomed in past the viewport on either
+                // axis, the `max(...)` collapses to the framed size and
+                // normal scrolling resumes.
                 .frame(
-                    width: framedWidth,
-                    height: framedHeight,
-                    alignment: .topLeading,
+                    width: max(framedWidth, viewport.width),
+                    height: max(framedHeight, viewport.height),
+                    alignment: .leading,
                 )
                 .simultaneousGesture(doubleTapGesture)
         } else {
