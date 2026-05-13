@@ -271,18 +271,42 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
 
             switch gr.state {
             case .began:
-                pinchStartLocation = gr.location(in: hostView)
+                let rawLoc = gr.location(in: hostView)
                 pinchStartCentroid = scrollView.map { gr.location(in: $0) } ?? .zero
                 let bounds = hostView.bounds
-                let anchor = UnitPoint(
-                    x: bounds.width > 0 ? pinchStartLocation.x / bounds.width : 0.5,
-                    y: bounds.height > 0 ? pinchStartLocation.y / bounds.height : 0.5,
+                let rawX = bounds.width > 0 ? rawLoc.x / bounds.width : 0.5
+                let rawY = bounds.height > 0 ? rawLoc.y / bounds.height : 0.5
+                // When the finger lands outside the host's bounds
+                // (e.g. in horizontal mode's centering inset area —
+                // the host is the framed score, `contentInset` pads
+                // the empty space above/below), the raw unit point
+                // falls outside [0,1]. `scaleEffect`'s anchor would
+                // then pivot around a point in empty space and the
+                // visible content would shift away from the
+                // natural-rest position during the pinch — at
+                // release, snapping back to a topLeading-anchored
+                // composition reads as a sudden jump (the original
+                // "上にずれる" symptom).
+                //
+                // Fall back to `.center` on any out-of-range axis so
+                // the gesture pivots at the score center for both
+                // the live scaleEffect and the commit math
+                // (`pinchStartLocation` is moved to the clamped
+                // anchor too). Pre-release and post-release both
+                // sit centered, so no jump.
+                let clampedX = (0 ... 1).contains(rawX) ? rawX : 0.5
+                let clampedY = (0 ... 1).contains(rawY) ? rawY : 0.5
+                pinchStartLocation = CGPoint(
+                    x: clampedX * bounds.width,
+                    y: clampedY * bounds.height,
                 )
+                let anchor = UnitPoint(x: clampedX, y: clampedY)
                 print(
                     "[pinch] began host.bounds=\(bounds.size) intrinsic=\(hostView.intrinsicContentSize) " +
                         "scroll.bounds=\(scrollView?.bounds.size ?? .zero) " +
                         "scroll.contentInset=\(scrollView?.contentInset ?? .zero) " +
                         "scroll.contentOffset=\(scrollView?.contentOffset ?? .zero) " +
+                        "rawLoc=\(rawLoc) raw=(\(rawX),\(rawY)) " +
                         "startLoc=\(pinchStartLocation) anchor=\(anchor)",
                 )
                 parent.onPinchBegan(anchor, pinchStartLocation)
