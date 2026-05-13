@@ -143,16 +143,22 @@ struct HorizontalScoreContainer: View {
                 pinch.offsetY = 0
             }
         } else {
-            // See vertical container for the snap-to-unit animation
-            // rationale: when `targetZoom <= 1.0`, `withAnimation`
-            // interpolates `viewportZoom` (outer scaleEffect + frame
-            // size) and `pinch.magnification` (inner scaleEffect)
-            // together so the visual transition from `combined` < 1.0
-            // to 1.0 is smooth rather than instantaneous. The scroll
-            // offset still commits synchronously.
+            // Real zoom commit. Wrap in `withAnimation` unconditionally
+            // so `pinch.offsetY` rides home on a smooth spring instead
+            // of snapping: when post-commit `framedHeight < viewport`,
+            // the scroll view has no Y extent to absorb the
+            // `pinch.offsetY` compensation, so `scrollToTarget.y` gets
+            // clamped to 0 — without the animation, the pinch-pan
+            // offset disappears in a single frame and the content
+            // visibly jumps. The visible scale (combined =
+            // `viewportZoom × pinch.magnification`) is invariant across
+            // the interpolation because the inner and outer factors
+            // move toward `1.0 × targetZoom`; only position settles.
+            // The scroll offset still commits synchronously
+            // (`pendingScroll = .immediate(...)` resolves outside the
+            // animation transaction).
             pendingScroll = .immediate(scrollToTarget)
-            let snapToUnit = targetZoom <= 1.0
-            applyCommit(animated: snapToUnit) {
+            withAnimation(.smooth(duration: 0.18)) {
                 if targetZoom <= 1.0 {
                     viewModel.resetZoom()
                 } else {
@@ -163,14 +169,6 @@ struct HorizontalScoreContainer: View {
                 pinch.anchor = .center
                 pinch.offsetY = 0
             }
-        }
-    }
-
-    private func applyCommit(animated: Bool, _ body: () -> Void) {
-        if animated {
-            withAnimation(.smooth(duration: 0.18), body)
-        } else {
-            body()
         }
     }
 

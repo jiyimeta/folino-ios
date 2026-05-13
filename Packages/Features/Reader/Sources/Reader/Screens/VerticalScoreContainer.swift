@@ -244,27 +244,22 @@ struct VerticalScoreContainer: View {
             }
         } else {
             // Real zoom commit (in or out from a non-unit base).
-            // `viewportZoom`, `pendingScroll`, `pinch.magnification`,
-            // and `pinch.anchor` all commit in one SwiftUI transaction
-            // so outer-scale grows by `ratio`, inner-scale drops to
-            // identity, and `ScoreScrollHost.updateUIView` applies the
-            // offset synchronously (after `layoutIfNeeded()` propagates
-            // the new framed size to `UIScrollView.contentSize`) — all
-            // visible in the same render. No 1-frame anchor jump.
-            //
-            // Snap-to-unit (combined < 1.05 from a non-unit base): wrap
-            // the state mutation in `withAnimation` so SwiftUI
-            // interpolates `viewportZoom` (outer scaleEffect + frame
-            // size) and `pinch.magnification` (inner scaleEffect)
-            // together, giving a smooth visual transition from
-            // `combined` to 1.0 instead of an instantaneous snap. The
+            // Wrap in `withAnimation` unconditionally so
+            // `pinch.offsetX` rides home on a smooth spring instead of
+            // snapping: when post-commit `framedWidth < viewport`, the
+            // scroll view has no X extent to absorb the `pinch.offsetX`
+            // compensation, so `scrollToTarget.x` gets clamped to 0 —
+            // without the animation, the pinch-pan offset disappears
+            // in a single frame and the content visibly jumps. The
+            // visible scale (combined = `viewportZoom ×
+            // pinch.magnification`) is invariant across the
+            // interpolation because the inner and outer factors move
+            // toward `1.0 × targetZoom`; only position settles. The
             // scroll offset still commits synchronously
             // (`pendingScroll = .immediate(...)` resolves outside the
-            // animation transaction), so any contentOffset clamping
-            // happens up front rather than mid-animation.
+            // animation transaction).
             pendingScroll = .immediate(scrollToTarget)
-            let snapToUnit = targetZoom <= 1.0
-            applyCommit(animated: snapToUnit) {
+            withAnimation(.smooth(duration: 0.18)) {
                 if targetZoom <= 1.0 {
                     viewModel.resetZoom()
                 } else {
@@ -275,14 +270,6 @@ struct VerticalScoreContainer: View {
                 pinch.anchor = .center
                 pinch.offsetX = 0
             }
-        }
-    }
-
-    private func applyCommit(animated: Bool, _ body: () -> Void) {
-        if animated {
-            withAnimation(.smooth(duration: 0.18), body)
-        } else {
-            body()
         }
     }
 
