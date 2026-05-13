@@ -192,11 +192,6 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         let hGap = centerHorizontally ? max(0, (scrollBounds.width - contentSize.width) / 2) : 0
         let newInset = UIEdgeInsets(top: vGap, left: hGap, bottom: vGap, right: hGap)
         if uiView.contentInset != newInset {
-            print(
-                "[pinch] updateUIView contentInset \(uiView.contentInset) -> \(newInset) " +
-                    "scrollBounds=\(scrollBounds) expectedContent=\(contentSize) " +
-                    "hostIntrinsic=\(context.coordinator.host?.view.intrinsicContentSize ?? .zero)",
-            )
             uiView.contentInset = newInset
         }
         // Force UIScrollView to layout with the new inset so the
@@ -240,13 +235,6 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             let clampedPoint = CGPoint(
                 x: max(minX, min(maxX, command.point.x)),
                 y: max(minY, min(maxY, command.point.y)),
-            )
-            print(
-                "[pinch] setContentOffset target=\(command.point) " +
-                    "clampedTo=\(clampedPoint) " +
-                    "xRange=[\(minX),\(maxX)] yRange=[\(minY),\(maxY)] " +
-                    "expectedSize=\(size) actualSize=\(uiView.contentSize) " +
-                    "bounds=\(bounds.size) inset=\(inset)",
             )
             // Apply offset synchronously so the new offset paints in
             // the same frame as the new `viewportZoom`. The flag
@@ -360,14 +348,6 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                     y: clampedY * bounds.height,
                 )
                 let anchor = UnitPoint(x: clampedX, y: clampedY)
-                print(
-                    "[pinch] began host.bounds=\(bounds.size) intrinsic=\(hostView.intrinsicContentSize) " +
-                        "scroll.bounds=\(scrollView?.bounds.size ?? .zero) " +
-                        "scroll.contentInset=\(scrollView?.contentInset ?? .zero) " +
-                        "scroll.contentOffset=\(scrollView?.contentOffset ?? .zero) " +
-                        "rawLoc=\(rawLoc) raw=(\(rawX),\(rawY)) " +
-                        "startLoc=\(pinchStartLocation) anchor=\(anchor)",
-                )
                 parent.onPinchBegan(anchor, pinchStartLocation)
             case .changed:
                 let translation = scrollView.map { sv -> CGPoint in
@@ -380,13 +360,6 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 parent.onPinchChanged(gr.scale, translation)
             case .ended, .cancelled, .failed:
                 let currentOffset = scrollView?.contentOffset ?? .zero
-                print(
-                    "[pinch] ended scale=\(gr.scale) " +
-                        "host.bounds=\(hostView.bounds.size) intrinsic=\(hostView.intrinsicContentSize) " +
-                        "scroll.bounds=\(scrollView?.bounds.size ?? .zero) " +
-                        "scroll.contentInset=\(scrollView?.contentInset ?? .zero) " +
-                        "currentOffset=\(currentOffset) startLoc=\(pinchStartLocation)",
-                )
                 parent.onPinchEnded(gr.scale, pinchStartLocation, currentOffset)
                 gr.scale = 1.0
             case .possible:

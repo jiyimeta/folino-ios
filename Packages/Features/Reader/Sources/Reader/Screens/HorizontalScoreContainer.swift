@@ -1,5 +1,4 @@
 // swiftlint:disable file_length
-// (temporary; remove with the pinch instrumentation prints below)
 import Domain
 import SheetMusicCore
 import SheetMusicLayout
@@ -167,9 +166,8 @@ struct HorizontalScoreContainer: View {
         // era but bumps the target to 0 here, which UIScrollView then
         // re-clamps to -116 on the next layout pass — visible as a
         // one-frame upward jump to viewport top before settling).
-        let docH = document?.size.height ?? 0
-        let preFramedH = (docH + scorePadding * 2) * session.baseZoom
-        let postFramedH = (docH + scorePadding * 2) * targetZoom
+        let docHeight = document?.size.height ?? 0
+        let postFramedH = (docHeight + scorePadding * 2) * targetZoom
         let postInsetTop = max(0, (viewport.height - postFramedH) / 2)
 
         let scrollToTarget = CGPoint(
@@ -178,14 +176,6 @@ struct HorizontalScoreContainer: View {
         )
 
         let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
-        print(
-            "[pinch] commit base=\(session.baseZoom) mag=\(magnification) combined=\(combined) " +
-                "target=\(targetZoom) ratio=\(ratio) bounce=\(isBounceBack) " +
-                "viewport=\(viewport) preFramedH=\(preFramedH) postFramedH=\(postFramedH) " +
-                "pinch.anchor=\(pinch.anchor) pinch.magnification=\(pinch.magnification) " +
-                "pinch.offsetY=\(pinch.offsetY) currentOffset=\(currentOffset) " +
-                "startLocation=\(startLocation) scrollToTarget=\(scrollToTarget)",
-        )
         if isBounceBack {
             // Rubber-band release: animate `pinch.magnification` back
             // to identity. See `VerticalScoreContainer.commitPinch`
@@ -262,9 +252,7 @@ struct HorizontalScoreContainer: View {
                 pinch.magnification = 1.0
                 pinch.anchor = .center
 
-                let docHeight = document?.size.height ?? 0
-                let postFramedHeight = (docHeight + scorePadding * 2) * targetZoom
-                let scrollAbsorbsOffset = postFramedHeight > viewport.height
+                let scrollAbsorbsOffset = postFramedH > viewport.height
                 if pinch.offsetY != 0, !scrollAbsorbsOffset {
                     withAnimation(.smooth(duration: 0.18)) {
                         pinch.offsetY = 0
