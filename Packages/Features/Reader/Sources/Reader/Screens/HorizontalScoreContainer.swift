@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+// (temporary; remove with the pinch instrumentation prints below)
 import Domain
 import SheetMusicCore
 import SheetMusicLayout
@@ -137,6 +139,17 @@ struct HorizontalScoreContainer: View {
         )
 
         let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
+        let docH = document?.size.height ?? 0
+        let preFramedH = (docH + scorePadding * 2) * session.baseZoom
+        let postFramedH = (docH + scorePadding * 2) * targetZoom
+        print(
+            "[pinch] commit base=\(session.baseZoom) mag=\(magnification) combined=\(combined) " +
+                "target=\(targetZoom) ratio=\(ratio) bounce=\(isBounceBack) " +
+                "viewport=\(viewport) preFramedH=\(preFramedH) postFramedH=\(postFramedH) " +
+                "pinch.anchor=\(pinch.anchor) pinch.magnification=\(pinch.magnification) " +
+                "pinch.offsetY=\(pinch.offsetY) currentOffset=\(currentOffset) " +
+                "startLocation=\(startLocation) scrollToTarget=\(scrollToTarget)",
+        )
         if isBounceBack {
             // Rubber-band release: animate `pinch.magnification` back
             // to identity. See `VerticalScoreContainer.commitPinch`

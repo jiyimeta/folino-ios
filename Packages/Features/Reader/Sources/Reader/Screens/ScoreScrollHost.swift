@@ -173,6 +173,10 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         let hGap = centerHorizontally ? max(0, (scrollBounds.width - contentSize.width) / 2) : 0
         let newInset = UIEdgeInsets(top: vGap, left: hGap, bottom: vGap, right: hGap)
         if uiView.contentInset != newInset {
+            print(
+                "[pinch] updateUIView contentInset \(uiView.contentInset) -> \(newInset) " +
+                    "scrollBounds=\(scrollBounds) hostIntrinsic=\(contentSize)",
+            )
             uiView.contentInset = newInset
         }
 
@@ -274,6 +278,13 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                     x: bounds.width > 0 ? pinchStartLocation.x / bounds.width : 0.5,
                     y: bounds.height > 0 ? pinchStartLocation.y / bounds.height : 0.5,
                 )
+                print(
+                    "[pinch] began host.bounds=\(bounds.size) intrinsic=\(hostView.intrinsicContentSize) " +
+                        "scroll.bounds=\(scrollView?.bounds.size ?? .zero) " +
+                        "scroll.contentInset=\(scrollView?.contentInset ?? .zero) " +
+                        "scroll.contentOffset=\(scrollView?.contentOffset ?? .zero) " +
+                        "startLoc=\(pinchStartLocation) anchor=\(anchor)",
+                )
                 parent.onPinchBegan(anchor, pinchStartLocation)
             case .changed:
                 let translation = scrollView.map { sv -> CGPoint in
@@ -286,6 +297,13 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 parent.onPinchChanged(gr.scale, translation)
             case .ended, .cancelled, .failed:
                 let currentOffset = scrollView?.contentOffset ?? .zero
+                print(
+                    "[pinch] ended scale=\(gr.scale) " +
+                        "host.bounds=\(hostView.bounds.size) intrinsic=\(hostView.intrinsicContentSize) " +
+                        "scroll.bounds=\(scrollView?.bounds.size ?? .zero) " +
+                        "scroll.contentInset=\(scrollView?.contentInset ?? .zero) " +
+                        "currentOffset=\(currentOffset) startLoc=\(pinchStartLocation)",
+                )
                 parent.onPinchEnded(gr.scale, pinchStartLocation, currentOffset)
                 gr.scale = 1.0
             case .possible:
