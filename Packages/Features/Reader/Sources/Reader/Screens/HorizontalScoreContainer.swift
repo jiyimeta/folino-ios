@@ -131,6 +131,13 @@ struct HorizontalScoreContainer: View {
                 onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
             )
         }
+        // Mirror `VerticalScoreContainer`: let the score reach the
+        // screen edges and slide under the translucent overlays.
+        // Without this, the `UIViewRepresentable`'s UIView frame is
+        // shrunk by the system safe area (status bar + home indicator)
+        // and the parent's `.safeAreaPadding(.top, ReaderTopOverlay.height)`,
+        // leaving visible margins above / below / beside the scroll view.
+        .ignoresSafeArea()
         .onChange(of: playbackCursor) { _, newCursor in
             autoScroll(cursor: newCursor, viewport: viewport)
         }
