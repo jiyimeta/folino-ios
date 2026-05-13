@@ -133,15 +133,27 @@ struct HorizontalScoreContainer: View {
         let targetZoom: CGFloat = combined < 1.05 ? 1.0 : combined
         let ratio = targetZoom / session.baseZoom
 
-        let scrollToTarget = CGPoint(
-            x: max(0, currentOffset.x + startLocation.x * (ratio - 1)),
-            y: max(0, currentOffset.y + startLocation.y * (ratio - 1) - pinch.offsetY),
-        )
-
-        let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
+        // Pre-compute the post-commit contentInset.top so we can clamp
+        // `scrollToTarget.y` against the actual valid contentOffset
+        // range. `ScoreScrollHost` will set the same value in
+        // `updateUIView` once the new framed size flows through Auto
+        // Layout. Without this, the formula's natural Y target (e.g.
+        // -117 when valid range is [-116, -116]) gets clamped against
+        // the wrong floor (`max(0, …)` was correct for the no-inset
+        // era but bumps the target to 0 here, which UIScrollView then
+        // re-clamps to -116 on the next layout pass — visible as a
+        // one-frame upward jump to viewport top before settling).
         let docH = document?.size.height ?? 0
         let preFramedH = (docH + scorePadding * 2) * session.baseZoom
         let postFramedH = (docH + scorePadding * 2) * targetZoom
+        let postInsetTop = max(0, (viewport.height - postFramedH) / 2)
+
+        let scrollToTarget = CGPoint(
+            x: max(0, currentOffset.x + startLocation.x * (ratio - 1)),
+            y: max(-postInsetTop, currentOffset.y + startLocation.y * (ratio - 1) - pinch.offsetY),
+        )
+
+        let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
         print(
             "[pinch] commit base=\(session.baseZoom) mag=\(magnification) combined=\(combined) " +
                 "target=\(targetZoom) ratio=\(ratio) bounce=\(isBounceBack) " +
