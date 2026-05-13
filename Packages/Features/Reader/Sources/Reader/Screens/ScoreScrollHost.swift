@@ -57,6 +57,23 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
     /// around the wrong content point.
     let centerVertically: Bool
     let centerHorizontally: Bool
+    /// Container-provided closure that returns the *expected*
+    /// content size for the current state. We can't reliably read
+    /// `UIHostingController.view.intrinsicContentSize` inside
+    /// `updateUIView`: SwiftUI's re-render of a freshly-assigned
+    /// `rootView` is deferred to the next runloop tick, so
+    /// `intrinsicContentSize` (and therefore `UIScrollView`
+    /// `contentSize`) is still the old value here, and a centering
+    /// `contentInset` derived from it would be stale until a later
+    /// pass — `setContentOffset` then clamps against the wrong range.
+    /// The container already knows the post-zoom framed size from
+    /// `viewportZoom` and the document, so it passes a closure that
+    /// reads those values on demand. The closure is created in the
+    /// container body but its property reads happen at call time
+    /// (inside `updateUIView`), so it doesn't register observation
+    /// and doesn't force a container re-render on
+    /// `viewportZoom` changes.
+    let expectedContentSize: () -> CGSize
     /// Called once when a pinch begins. `anchor` is the gesture centroid
     /// expressed as a `UnitPoint` in the hosted content's coordinate space
     /// (suitable for passing to `scaleEffect(_:anchor:)`). `location` is
@@ -166,8 +183,10 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // content for us — without inflating `hostView.bounds`, which
         // would break the pinch anchor unit-point calculation.
         uiView.layoutIfNeeded()
-        let host = context.coordinator.host?.view
-        let contentSize = host?.intrinsicContentSize ?? .zero
+        // Use the container's expected content size, not the host's
+        // `intrinsicContentSize` (which can be stale until the next
+        // SwiftUI render cycle).
+        let contentSize = expectedContentSize()
         let scrollBounds = uiView.bounds.size
         let vGap = centerVertically ? max(0, (scrollBounds.height - contentSize.height) / 2) : 0
         let hGap = centerHorizontally ? max(0, (scrollBounds.width - contentSize.width) / 2) : 0
@@ -175,10 +194,14 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         if uiView.contentInset != newInset {
             print(
                 "[pinch] updateUIView contentInset \(uiView.contentInset) -> \(newInset) " +
-                    "scrollBounds=\(scrollBounds) hostIntrinsic=\(contentSize)",
+                    "scrollBounds=\(scrollBounds) expectedContent=\(contentSize) " +
+                    "hostIntrinsic=\(context.coordinator.host?.view.intrinsicContentSize ?? .zero)",
             )
             uiView.contentInset = newInset
         }
+        // Force UIScrollView to layout with the new inset so the
+        // valid contentOffset range below reflects it.
+        uiView.layoutIfNeeded()
 
         if let command = pendingScroll {
             // Force the just-assigned `rootView`'s intrinsic content
@@ -202,7 +225,13 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             // (visible as a brief "上にずれる" before the clamp lands).
             // Clamping here keeps the offset in range from the start.
             let inset = uiView.contentInset
-            let size = uiView.contentSize
+            // Use the container's expected content size for clamping
+            // — `uiView.contentSize` lags one render cycle behind
+            // SwiftUI for the same reason `intrinsicContentSize`
+            // does (the new rootView's layout hasn't propagated yet),
+            // and clamping against the stale size would still land
+            // outside UIScrollView's eventually-valid range.
+            let size = expectedContentSize()
             let bounds = uiView.bounds
             let minX = -inset.left
             let maxX = max(minX, size.width + inset.right - bounds.width)
@@ -216,7 +245,8 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 "[pinch] setContentOffset target=\(command.point) " +
                     "clampedTo=\(clampedPoint) " +
                     "xRange=[\(minX),\(maxX)] yRange=[\(minY),\(maxY)] " +
-                    "contentSize=\(size) bounds=\(bounds.size) inset=\(inset)",
+                    "expectedSize=\(size) actualSize=\(uiView.contentSize) " +
+                    "bounds=\(bounds.size) inset=\(inset)",
             )
             // Apply offset synchronously so the new offset paints in
             // the same frame as the new `viewportZoom`. The flag

@@ -136,6 +136,22 @@ struct VerticalScoreContainer: View {
             alwaysBounceHorizontal: false,
             centerVertically: false,
             centerHorizontally: false,
+            expectedContentSize: {
+                // Vertical mode doesn't center via contentInset, but
+                // pass the framed size anyway so any future clamp
+                // math has access to it. Reads viewportZoom / safeArea
+                // / document lazily to avoid container observation.
+                guard let doc = document else { return .zero }
+                let fit = doc.size.width > 0
+                    ? min(1.0, viewport.width / doc.size.width)
+                    : 1.0
+                let zoom = viewModel.viewportZoom * fit
+                let topPad = scoreTopPadding + safeAreaTop
+                return CGSize(
+                    width: doc.size.width * zoom,
+                    height: (doc.size.height + topPad + scoreBottomPadding) * zoom,
+                )
+            },
             onPinchBegan: { anchor, _ in
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor

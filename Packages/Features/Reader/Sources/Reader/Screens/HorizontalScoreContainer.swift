@@ -73,6 +73,18 @@ struct HorizontalScoreContainer: View {
             alwaysBounceHorizontal: true,
             centerVertically: true,
             centerHorizontally: false,
+            expectedContentSize: {
+                // Computed on demand inside updateUIView. Reads
+                // `viewModel.viewportZoom` and `document` lazily so
+                // it always reflects the current state without
+                // registering observation in the container body.
+                let doc = document?.size ?? .zero
+                let zoom = viewModel.viewportZoom
+                return CGSize(
+                    width: (doc.width + scorePadding * 2) * zoom,
+                    height: (doc.height + scorePadding * 2) * zoom,
+                )
+            },
             onPinchBegan: { anchor, _ in
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor
