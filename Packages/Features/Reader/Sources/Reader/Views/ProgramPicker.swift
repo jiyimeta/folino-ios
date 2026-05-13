@@ -31,7 +31,7 @@ struct ProgramPicker: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: isDrums ? "drum.fill" : "pianokeys")
+                pickerIcon
                     .foregroundStyle(.secondary)
                 menuLabel(program: program)
             }
@@ -40,6 +40,18 @@ struct ProgramPicker: View {
         .font(.caption)
         .padding(.top, 2)
         .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private var pickerIcon: some View {
+        if isDrums {
+            Image("snare", bundle: .module)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 14, height: 14)
+        } else {
+            Image(systemName: "pianokeys")
+        }
     }
 
     private var instrumentSections: some View {
