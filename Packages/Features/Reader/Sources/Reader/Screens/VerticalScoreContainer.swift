@@ -78,6 +78,10 @@ struct VerticalScoreContainer: View {
     @State private var liveMagnification: CGFloat = 1.0
     @State private var liveMagAnchor: UnitPoint = .center
 
+    /// Pinch-driven horizontal offset so pan-during-pinch tracks 1:1
+    /// even when `UIScrollView` has no horizontal extent (user-zoom 1.0).
+    @State private var liveOffsetX: CGFloat = 0
+
     /// Vertical padding that lives inside the scaled content so the
     /// first / last system don't butt up against the viewport edges.
     /// Scales with the score because it's applied inside the
@@ -137,9 +141,11 @@ struct VerticalScoreContainer: View {
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 liveMagAnchor = anchor
                 liveMagnification = 1.0
+                liveOffsetX = 0
             },
-            onPinchChanged: { magnification in
+            onPinchChanged: { magnification, translationX in
                 liveMagnification = magnification
+                liveOffsetX = translationX
             },
             onPinchEnded: { magnification, startLocation, currentOffset in
                 commitPinch(
@@ -174,6 +180,7 @@ struct VerticalScoreContainer: View {
                 .padding(.bottom, scoreBottomPadding)
                 .scaleEffect(liveMagnification, anchor: liveMagAnchor)
                 .scaleEffect(zoom, anchor: .topLeading)
+                .offset(x: liveOffsetX, y: 0)
                 .frame(
                     width: framedWidth,
                     height: framedHeight,
@@ -232,22 +239,12 @@ struct VerticalScoreContainer: View {
     }
 
     /// Folds a finished pinch into `viewportZoom` and queues a scroll
-    /// command so the content point under the user's fingers at
-    /// release lands on the same screen position post-commit.
+    /// so the content under the user's fingers at release lands on the
+    /// same screen position post-commit. Vertical pan-during-pinch rides
+    /// on `currentOffset` (UIScrollView native); horizontal rides on
+    /// `liveOffsetX`.
     ///
-    /// `currentOffset` is the scroll view's `contentOffset` at the
-    /// moment the gesture ended — using the *current* offset (instead
-    /// of the offset captured at pinch-start, as the SwiftUI version
-    /// did) preserves any pan that happened during the pinch:
-    ///
-    /// ```
-    /// pre-commit screen pos  = startLocation - currentOffset
-    /// post-commit screen pos = startLocation * ratio - newOffset
-    /// ⇒ newOffset = startLocation * (ratio - 1) + currentOffset
-    /// ```
-    ///
-    /// When pan-during-pinch is zero this collapses to the original
-    /// SwiftUI formula.
+    /// `newOffset = startLocation * (ratio - 1) + currentOffset − (liveOffsetX, 0)`
     private func commitPinch(
         magnification: CGFloat,
         startLocation: CGPoint,
@@ -261,7 +258,7 @@ struct VerticalScoreContainer: View {
         let ratio = targetZoom / session.baseZoom
 
         let scrollToTarget = CGPoint(
-            x: max(0, currentOffset.x + startLocation.x * (ratio - 1)),
+            x: max(0, currentOffset.x + startLocation.x * (ratio - 1) - liveOffsetX),
             y: max(0, currentOffset.y + startLocation.y * (ratio - 1)),
         )
 
@@ -284,6 +281,7 @@ struct VerticalScoreContainer: View {
             // behind; the next pinch's `onPinchBegan` overwrites it.
             withAnimation(.smooth(duration: 0.15)) {
                 liveMagnification = 1.0
+                liveOffsetX = 0
             }
         } else {
             // Real zoom commit (in or out from a non-unit base).
@@ -303,6 +301,7 @@ struct VerticalScoreContainer: View {
             }
             liveMagnification = 1.0
             liveMagAnchor = .center
+            liveOffsetX = 0
         }
     }
 
