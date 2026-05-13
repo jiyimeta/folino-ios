@@ -50,6 +50,10 @@ final class ReaderViewModel {
         didSet {
             guard oldValue != isPlaying else { return }
             applyPiPAutoStart()
+            // Playback start flips the auto-start permission on, so a
+            // backgrounded PiP could fire at any moment — flush any
+            // VisualInspector edits we deferred while paused.
+            if isPlaying { flushPendingPiPArmIfDirty() }
         }
     }
 
@@ -103,6 +107,17 @@ final class ReaderViewModel {
     /// queuing N detached `LayoutEngine.layout` runs.
     @ObservationIgnored
     private var pendingArmTask: Task<Void, Never>?
+    /// True once `performPiPArm` has successfully attached a renderer in
+    /// the current `isPiPEnabled` session. Cleared on disable so the
+    /// next enable arms eagerly even without an active PiP or playback.
+    @ObservationIgnored
+    private var hasArmedPiP = false
+    /// Set when `armPiPIfReady` postpones a rearm because no observer
+    /// (active PiP or playing → imminent auto-start) would have seen
+    /// the result. `flushPendingPiPArmIfDirty` consumes the flag when
+    /// an observer appears (`isPlaying` flips true).
+    @ObservationIgnored
+    private var pipArmIsDirty = false
 
     /// Applies the user's Settings preference. Driven by the
     /// `readerPictureInPictureEnabled` `@AppStorage` value in
@@ -116,6 +131,8 @@ final class ReaderViewModel {
         } else {
             pendingArmTask?.cancel()
             pendingArmTask = nil
+            pipArmIsDirty = false
+            hasArmedPiP = false
             pipCoordinator.dismissIfActive()
             pipCoordinator.disarm()
         }
@@ -148,17 +165,37 @@ final class ReaderViewModel {
         pipCoordinator.dismissIfActive()
     }
 
-    /// Spawns (or replaces) the coalesced rearm task. The heavy layout
-    /// step inside `pipCoordinator.arm` runs off the main actor; this
-    /// method itself only mutates the bookkeeping state, so all callers
-    /// stay synchronous.
+    /// Coalesced rearm trigger. The heavy layout step inside
+    /// `pipCoordinator.arm` runs off the main actor, but it's still
+    /// wasted CPU when no observer would see the result — the user is
+    /// paused in the foreground and PiP isn't visible. In that case the
+    /// arm is postponed; `flushPendingPiPArmIfDirty` consumes the
+    /// postponement when an observer appears.
+    ///
+    /// The first arm of each `isPiPEnabled` session always proceeds so
+    /// a manual PiP start (via the system control) still finds a
+    /// renderer attached.
     private func armPiPIfReady() {
         guard isPiPEnabled, case .loaded = loadState else { return }
+        if !hasArmedPiP || isPiPActive || isPlaying {
+            scheduleArm()
+        } else {
+            pipArmIsDirty = true
+        }
+    }
+
+    private func scheduleArm() {
+        pipArmIsDirty = false
         pendingArmTask?.cancel()
         pendingArmTask = Task { [weak self] in
             guard let self else { return }
             await performPiPArm()
         }
+    }
+
+    private func flushPendingPiPArmIfDirty() {
+        guard pipArmIsDirty else { return }
+        scheduleArm()
     }
 
     private func performPiPArm() async {
@@ -178,6 +215,7 @@ final class ReaderViewModel {
                 playbackCursor: playbackCursor,
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
             )
+            hasArmedPiP = true
         } catch is CancellationError {
             // Superseded by a newer rearm; nothing to do.
         } catch {
