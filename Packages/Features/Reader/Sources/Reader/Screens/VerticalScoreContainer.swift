@@ -134,6 +134,8 @@ struct VerticalScoreContainer: View {
             pendingScroll: $pendingScroll,
             alwaysBounceVertical: true,
             alwaysBounceHorizontal: false,
+            centerVertically: false,
+            centerHorizontally: false,
             onPinchBegan: { anchor, _ in
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor

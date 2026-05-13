@@ -69,6 +69,8 @@ struct HorizontalScoreContainer: View {
             pendingScroll: $pendingScroll,
             alwaysBounceVertical: false,
             alwaysBounceHorizontal: true,
+            centerVertically: true,
+            centerHorizontally: false,
             onPinchBegan: { anchor, _ in
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor
@@ -337,21 +339,20 @@ private struct HorizontalZoomedSurface: View {
                 .scaleEffect(pinch.magnification, anchor: pinch.anchor)
                 .scaleEffect(zoom, anchor: .topLeading)
                 .offset(x: 0, y: pinch.offsetY)
-                // Inner frame at exactly the framed (zoomed) size so
-                // the topLeading-anchored outer scaleEffect fills it.
+                // Single frame at exactly the framed (zoomed) size.
+                // Vertical centering when the score is shorter than
+                // the viewport is handled by
+                // `UIScrollView.contentInset` in `ScoreScrollHost`
+                // (see `centerVertically`) — using a second outer
+                // `.frame(max(...), alignment: .leading)` here would
+                // inflate `hostView.bounds` and desynchronize the
+                // pinch anchor from the inner scaleEffect's view
+                // bounds, pivoting the scaling around the wrong
+                // content point.
                 .frame(
                     width: framedWidth,
                     height: framedHeight,
                     alignment: .topLeading,
-                )
-                // Outer frame inflates to at least the viewport so a
-                // short score is vertically centered (`.leading` =
-                // leading-X + center-Y). See HorizontalScoreContainer's
-                // top comment for the math.
-                .frame(
-                    width: max(framedWidth, viewport.width),
-                    height: max(framedHeight, viewport.height),
-                    alignment: .leading,
                 )
                 .simultaneousGesture(
                     SpatialTapGesture(count: 2).onEnded { _ in

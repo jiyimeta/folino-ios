@@ -42,6 +42,21 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
     /// — bouncing is purely a rubber-band-at-edge cue.
     let alwaysBounceVertical: Bool
     let alwaysBounceHorizontal: Bool
+    /// Center the hosted content on each axis via `UIScrollView`
+    /// `contentInset` when the intrinsic content size is smaller than
+    /// the scroll view's bounds on that axis. Horizontal mode opts in
+    /// for vertical centering (a single-row score is shorter than the
+    /// viewport); vertical mode leaves both false. We can't do this
+    /// via SwiftUI `.frame(max(content, viewport), alignment: .center)`
+    /// because that inflates `hostView.bounds` past the content's
+    /// real bounds, which then desynchronizes the pinch anchor — the
+    /// recognizer reports finger locations in `hostView` (= inflated)
+    /// space, but the inner `scaleEffect`'s anchor is interpreted
+    /// against the underlying view's bounds (= un-inflated). Empty
+    /// centering padding makes the two diverge and the pinch pivots
+    /// around the wrong content point.
+    let centerVertically: Bool
+    let centerHorizontally: Bool
     /// Called once when a pinch begins. `anchor` is the gesture centroid
     /// expressed as a `UnitPoint` in the hosted content's coordinate space
     /// (suitable for passing to `scaleEffect(_:anchor:)`). `location` is
@@ -140,6 +155,25 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // animation with an un-animated rootView replacement.
         withTransaction(context.transaction) {
             context.coordinator.host?.rootView = content()
+        }
+
+        // Drive UIScrollView's contentInset off the actual host
+        // bounds. layoutIfNeeded() flushes pending Auto Layout passes
+        // so the intrinsicContentSize from the just-assigned rootView
+        // is in place. When the content is smaller than the scroll
+        // bounds on a centering axis, split the gap evenly into top/
+        // bottom (or left/right) insets so UIScrollView centers the
+        // content for us — without inflating `hostView.bounds`, which
+        // would break the pinch anchor unit-point calculation.
+        uiView.layoutIfNeeded()
+        let host = context.coordinator.host?.view
+        let contentSize = host?.intrinsicContentSize ?? .zero
+        let scrollBounds = uiView.bounds.size
+        let vGap = centerVertically ? max(0, (scrollBounds.height - contentSize.height) / 2) : 0
+        let hGap = centerHorizontally ? max(0, (scrollBounds.width - contentSize.width) / 2) : 0
+        let newInset = UIEdgeInsets(top: vGap, left: hGap, bottom: vGap, right: hGap)
+        if uiView.contentInset != newInset {
+            uiView.contentInset = newInset
         }
 
         if let command = pendingScroll {
