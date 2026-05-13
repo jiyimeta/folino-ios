@@ -138,15 +138,20 @@ struct VerticalScoreContainer: View {
             contentOffset: $liveScrollOffset,
             contentInsetTop: $contentInsetTop,
             pendingScroll: $pendingScroll,
+            alwaysBounceVertical: true,
+            alwaysBounceHorizontal: false,
             onPinchBegan: { anchor, _ in
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 liveMagAnchor = anchor
                 liveMagnification = 1.0
                 liveOffsetX = 0
             },
-            onPinchChanged: { magnification, translationX in
+            onPinchChanged: { magnification, translation in
+                // Y is fed back through `UIScrollView.contentOffset`
+                // natively; only X needs a live offset (no horizontal
+                // scrollable extent at user-zoom 1.0).
                 liveMagnification = magnification
-                liveOffsetX = translationX
+                liveOffsetX = translation.x
             },
             onPinchEnded: { magnification, startLocation, currentOffset in
                 commitPinch(

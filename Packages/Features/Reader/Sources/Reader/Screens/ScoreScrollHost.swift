@@ -35,20 +35,28 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
     @Binding var contentOffset: CGPoint
     @Binding var contentInsetTop: CGFloat
     @Binding var pendingScroll: ScoreScrollCommand?
+    /// Which axis bounces back when scrolled past the content edge.
+    /// `VerticalScoreContainer` sets `alwaysBounceVertical`;
+    /// `HorizontalScoreContainer` sets `alwaysBounceHorizontal`. The
+    /// non-bouncing axis still scrolls when content exceeds the viewport
+    /// — bouncing is purely a rubber-band-at-edge cue.
+    let alwaysBounceVertical: Bool
+    let alwaysBounceHorizontal: Bool
     /// Called once when a pinch begins. `anchor` is the gesture centroid
     /// expressed as a `UnitPoint` in the hosted content's coordinate space
     /// (suitable for passing to `scaleEffect(_:anchor:)`). `location` is
     /// the same point in pixels (used later for the commit math).
     let onPinchBegan: (UnitPoint, CGPoint) -> Void
     /// Called every time the pinch's scale factor changes. `scale` goes
-    /// to `liveMagnification`; `translationX` is the 2-finger centroid's
-    /// horizontal displacement since `.began`, used to drive a live
-    /// horizontal offset so pan-during-pinch follows the centroid 1:1
-    /// even at user-zoom 1.0 (where `contentSize.width == bounds.width`
-    /// gives `UIScrollView` no horizontal scrollable extent). Vertical
-    /// pan-during-pinch is handled natively by `UIScrollView`, so we
-    /// don't pass a y component (would double-count).
-    let onPinchChanged: (_ scale: CGFloat, _ translationX: CGFloat) -> Void
+    /// to `liveMagnification`; `translation` is the 2-finger centroid's
+    /// displacement (in scroll-view coords) since `.began`. Consumers feed
+    /// it into a live offset on whichever axis has no scrollable extent
+    /// at the current zoom (vertical mode → x at user-zoom 1.0; horizontal
+    /// mode → y at user-zoom 1.0). The axis that `UIScrollView` can scroll
+    /// natively is fed back through `contentOffset`; consumers should
+    /// discard the matching component of `translation` to avoid
+    /// double-counting pan-during-pinch.
+    let onPinchChanged: (_ scale: CGFloat, _ translation: CGPoint) -> Void
     /// Called when the pinch ends or is cancelled. Receives the final
     /// magnification, the location captured at `.began` (in host coords),
     /// and the scroll view's contentOffset at the moment of release —
@@ -63,7 +71,8 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         scroll.minimumZoomScale = 1
         scroll.maximumZoomScale = 1
         scroll.bouncesZoom = false
-        scroll.alwaysBounceVertical = true
+        scroll.alwaysBounceVertical = alwaysBounceVertical
+        scroll.alwaysBounceHorizontal = alwaysBounceHorizontal
         // Forward touches to the SwiftUI gesture stack without the default
         // ~150ms delay. Tap-to-seek + double-tap-to-zoom feel sluggish if
         // we leave delaysContentTouches at its default (true).
@@ -164,11 +173,11 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         /// write-back doesn't fire during a SwiftUI view update.
         var isApplyingProgrammaticScroll = false
         private var pinchStartLocation: CGPoint = .zero
-        /// Pinch centroid x captured at `.began` in scroll-view coords.
+        /// Pinch centroid captured at `.began` in scroll-view coords.
         /// Subtracted from the current centroid each `.changed` tick to
         /// yield pure finger-translation (scrollView coords don't shift
         /// with `contentOffset`, unlike `hostView` coords).
-        private var pinchStartCentroidX: CGFloat = 0
+        private var pinchStartCentroid: CGPoint = .zero
 
         init(parent: ScoreScrollHost) {
             self.parent = parent
@@ -211,7 +220,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             switch gr.state {
             case .began:
                 pinchStartLocation = gr.location(in: hostView)
-                pinchStartCentroidX = scrollView.map { gr.location(in: $0).x } ?? 0
+                pinchStartCentroid = scrollView.map { gr.location(in: $0) } ?? .zero
                 let bounds = hostView.bounds
                 let anchor = UnitPoint(
                     x: bounds.width > 0 ? pinchStartLocation.x / bounds.width : 0.5,
@@ -219,9 +228,14 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 )
                 parent.onPinchBegan(anchor, pinchStartLocation)
             case .changed:
-                let translationX = scrollView
-                    .map { gr.location(in: $0).x - pinchStartCentroidX } ?? 0
-                parent.onPinchChanged(gr.scale, translationX)
+                let translation = scrollView.map { sv -> CGPoint in
+                    let loc = gr.location(in: sv)
+                    return CGPoint(
+                        x: loc.x - pinchStartCentroid.x,
+                        y: loc.y - pinchStartCentroid.y,
+                    )
+                } ?? .zero
+                parent.onPinchChanged(gr.scale, translation)
             case .ended, .cancelled, .failed:
                 let currentOffset = scrollView?.contentOffset ?? .zero
                 parent.onPinchEnded(gr.scale, pinchStartLocation, currentOffset)
