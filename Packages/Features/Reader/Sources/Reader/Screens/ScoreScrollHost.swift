@@ -75,6 +75,15 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // Drive contentSize from SwiftUI's intrinsic size — i.e. the
         // `.frame(framedWidth, framedHeight)` inside zoomedSurface.
         host.sizingOptions = .intrinsicContentSize
+        // Stop UIHostingController from inflating intrinsicContentSize
+        // by the parent UIScrollView's safe-area insets. Without this,
+        // `hostView.bounds` ends up `framedHeight + topInset +
+        // bottomInset` tall, and the pinch commit math (which uses
+        // `gr.location(in: hostView)` as the anchor) drifts by
+        // `topInset * (ratio - 1)` on every zoom commit. `.ignoresSafeArea()`
+        // on the SwiftUI side only applies to the representable's own
+        // boundary — the embedded host needs its own opt-out.
+        host.safeAreaRegions = []
         scroll.addSubview(host.view)
 
         NSLayoutConstraint.activate([
