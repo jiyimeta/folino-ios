@@ -44,6 +44,16 @@ struct HorizontalScoreContainer: View {
     /// `rootView` reassignment that would drop the animation
     /// transaction).
     @State private var pinch = PinchState()
+    /// Mirror of `viewModel.viewportZoom` set OUTSIDE any
+    /// `withAnimation` block so it reflects the final committed
+    /// value immediately. Reads of `viewModel.viewportZoom` inside a
+    /// closure called during an in-flight animation appear to return
+    /// the interpolated (not final) value — so the `expectedContent
+    /// Size` closure passed to `ScoreScrollHost` reads this instead,
+    /// keeping the centering `contentInset` and `setContentOffset`
+    /// clamp ranges anchored to the post-commit framed size from the
+    /// first render pass.
+    @State private var committedZoom: CGFloat = 1.0
 
     private let scorePadding: CGFloat = 16
 
@@ -74,12 +84,14 @@ struct HorizontalScoreContainer: View {
             centerVertically: true,
             centerHorizontally: false,
             expectedContentSize: {
-                // Computed on demand inside updateUIView. Reads
-                // `viewModel.viewportZoom` and `document` lazily so
-                // it always reflects the current state without
-                // registering observation in the container body.
+                // Read `committedZoom` (the final target) rather than
+                // `viewModel.viewportZoom` — the latter returns
+                // interpolated values while a SwiftUI animation is
+                // in flight, which makes the centering inset and
+                // scroll clamp jump in two passes (first with the
+                // pre-commit value, then with the post-commit value).
                 let doc = document?.size ?? .zero
-                let zoom = viewModel.viewportZoom
+                let zoom = committedZoom
                 return CGSize(
                     width: (doc.width + scorePadding * 2) * zoom,
                     height: (doc.height + scorePadding * 2) * zoom,
@@ -179,11 +191,20 @@ struct HorizontalScoreContainer: View {
             // to identity. See `VerticalScoreContainer.commitPinch`
             // for the rationale on holding `pinch.anchor` steady
             // through the bounce animation.
+            // (No `committedZoom` change needed — viewportZoom stays
+            // at 1.0 throughout.)
             withAnimation(.smooth(duration: 0.18)) {
                 pinch.magnification = 1.0
                 pinch.offsetY = 0
             }
         } else {
+            // Set `committedZoom` (the closure-readable mirror)
+            // outside `withAnimation` so the `expectedContentSize`
+            // closure consulted in `ScoreScrollHost.updateUIView`
+            // reads the final post-commit value immediately (rather
+            // than the interpolated `viewModel.viewportZoom` during
+            // the animation).
+            committedZoom = targetZoom
             pendingScroll = .immediate(scrollToTarget)
             let snapToUnit = targetZoom <= 1.0
             if snapToUnit {

@@ -76,6 +76,13 @@ struct VerticalScoreContainer: View {
     /// The container's body does not read `pinch.*` directly; only
     /// `VerticalZoomedSurface` does.
     @State private var pinch = PinchState()
+    /// Mirror of `viewModel.viewportZoom` set OUTSIDE any
+    /// `withAnimation` block so it reflects the final committed
+    /// value immediately. See `HorizontalScoreContainer` for the
+    /// reasoning — `expectedContentSize`'s closure reads this rather
+    /// than `viewModel.viewportZoom` to dodge SwiftUI's animated
+    /// interpolation while the commit transition is in flight.
+    @State private var committedZoom: CGFloat = 1.0
 
     /// Vertical padding that lives inside the scaled content so the
     /// first / last system don't butt up against the viewport edges.
@@ -137,15 +144,15 @@ struct VerticalScoreContainer: View {
             centerVertically: false,
             centerHorizontally: false,
             expectedContentSize: {
-                // Vertical mode doesn't center via contentInset, but
-                // pass the framed size anyway so any future clamp
-                // math has access to it. Reads viewportZoom / safeArea
-                // / document lazily to avoid container observation.
+                // Read `committedZoom` (the closure-safe mirror) so
+                // we don't pick up SwiftUI's animated interpolation
+                // of `viewModel.viewportZoom` during a commit
+                // transition.
                 guard let doc = document else { return .zero }
                 let fit = doc.size.width > 0
                     ? min(1.0, viewport.width / doc.size.width)
                     : 1.0
-                let zoom = viewModel.viewportZoom * fit
+                let zoom = committedZoom * fit
                 let topPad = scoreTopPadding + safeAreaTop
                 return CGSize(
                     width: doc.size.width * zoom,
@@ -263,6 +270,10 @@ struct VerticalScoreContainer: View {
                 pinch.offsetX = 0
             }
         } else {
+            // See `HorizontalScoreContainer` — set the closure mirror
+            // outside `withAnimation` so the post-commit inset and
+            // clamp ranges resolve correctly on the first render pass.
+            committedZoom = targetZoom
             pendingScroll = .immediate(scrollToTarget)
             let snapToUnit = targetZoom <= 1.0
             if snapToUnit {
