@@ -117,13 +117,25 @@ struct HorizontalScoreContainer: View {
                 .scaleEffect(liveMagnification, anchor: liveMagAnchor)
                 .scaleEffect(zoom, anchor: .topLeading)
                 .offset(x: 0, y: liveOffsetY)
-                // Inflate the outer frame to at least the viewport so a
-                // score shorter than the viewport gets centered vertically
-                // (`.leading` = leading-X + center-Y). Horizontal still
-                // pins to leading so the score opens at measure 1, not
-                // mid-page. When zoomed in past the viewport on either
-                // axis, the `max(...)` collapses to the framed size and
-                // normal scrolling resumes.
+                // Inner frame at exactly the framed (zoomed) size with
+                // `.topLeading` alignment so the unscaled inner content
+                // sits at (0, 0) and `scaleEffect(anchor: .topLeading)`
+                // scales into the frame cleanly — the visible scaled
+                // content covers (0, 0)–(framedWidth, framedHeight).
+                .frame(
+                    width: framedWidth,
+                    height: framedHeight,
+                    alignment: .topLeading,
+                )
+                // Outer frame inflates to at least the viewport so a
+                // score smaller than the viewport gets centered
+                // vertically (`.leading` = leading-X + center-Y).
+                // Horizontal still pins to leading so the score opens
+                // at measure 1, not mid-page. When the inner framed
+                // size exceeds the viewport on either axis, `max(...)`
+                // collapses to the framed size and normal scrolling
+                // resumes — no extra centering offset to interfere
+                // with the auto-scroll math.
                 .frame(
                     width: max(framedWidth, viewport.width),
                     height: max(framedHeight, viewport.height),
