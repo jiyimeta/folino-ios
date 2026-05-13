@@ -189,13 +189,42 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             // anchor visibly drifted by ~`(framedSize_post -
             // framedSize_pre)/2` for one frame.
             uiView.layoutIfNeeded()
+            // Pre-clamp the requested offset into UIScrollView's
+            // actual valid range. With `contentInset` providing the
+            // vertical centering, the valid `contentOffset.y` range
+            // is `[-inset.top, contentSize.height + inset.bottom -
+            // bounds.height]` — narrow (often a single point) when
+            // the content fits the viewport. Passing an out-of-range
+            // value to `setContentOffset(_:animated:false)` makes
+            // `bounds.origin` accept it instantaneously and UIScroll
+            // View re-clamps on the next layout pass; the transient
+            // frame paints the content at the wrong scroll position
+            // (visible as a brief "上にずれる" before the clamp lands).
+            // Clamping here keeps the offset in range from the start.
+            let inset = uiView.contentInset
+            let size = uiView.contentSize
+            let bounds = uiView.bounds
+            let minX = -inset.left
+            let maxX = max(minX, size.width + inset.right - bounds.width)
+            let minY = -inset.top
+            let maxY = max(minY, size.height + inset.bottom - bounds.height)
+            let clampedPoint = CGPoint(
+                x: max(minX, min(maxX, command.point.x)),
+                y: max(minY, min(maxY, command.point.y)),
+            )
+            print(
+                "[pinch] setContentOffset target=\(command.point) " +
+                    "clampedTo=\(clampedPoint) " +
+                    "xRange=[\(minX),\(maxX)] yRange=[\(minY),\(maxY)] " +
+                    "contentSize=\(size) bounds=\(bounds.size) inset=\(inset)",
+            )
             // Apply offset synchronously so the new offset paints in
             // the same frame as the new `viewportZoom`. The flag
             // suppresses the resulting `scrollViewDidScroll` from
             // mutating `parent.contentOffset` mid-update (which would
             // trigger the "Modifying state during view update" warning).
             context.coordinator.isApplyingProgrammaticScroll = true
-            uiView.setContentOffset(command.point, animated: command.isAnimated)
+            uiView.setContentOffset(clampedPoint, animated: command.isAnimated)
             context.coordinator.isApplyingProgrammaticScroll = false
             // Clear the binding on the next runloop tick — mutating it
             // here would still warn.
