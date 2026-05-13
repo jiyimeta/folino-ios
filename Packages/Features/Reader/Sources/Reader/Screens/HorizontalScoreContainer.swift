@@ -10,18 +10,16 @@ import SwiftUI
 /// follow the same scaleEffect composition as `VerticalScoreContainer`.
 ///
 /// Pinch composition (identical to vertical, axes swapped):
-///   * inner `liveMagnification` with `anchor: liveMagAnchor` (gesture
-///     start anchor reported by the host's `UIPinchGestureRecognizer`) —
-///     pivots the visual around the user's fingers without changing
-///     layout;
+///   * inner `pinch.magnification` with `anchor: pinch.anchor` — pivots
+///     the visual around the user's fingers without changing layout;
 ///   * outer committed `viewportZoom` with `anchor: .topLeading` — the
 ///     persistent scale that drives the `.frame` size and the scroll
 ///     view's scrollable extent.
 ///
 /// During a live pinch, X pan-during-pinch rides on `currentOffset`
 /// (UIScrollView native, since horizontal mode always has horizontal
-/// extent); Y pan-during-pinch rides on `liveOffsetY` (mirror of
-/// vertical mode's `liveOffsetX`).
+/// extent); Y pan-during-pinch rides on `pinch.offsetY` (mirror of
+/// vertical mode's `pinch.offsetX`).
 struct HorizontalScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
@@ -31,27 +29,20 @@ struct HorizontalScoreContainer: View {
     @Bindable var viewModel: ReaderViewModel
 
     @State private var document: LayoutDocument?
-    @State private var lastManualCursor: ScoreCursor?
     @State private var liveScrollOffset: CGPoint = .zero
     @State private var pinchSession: PinchSession?
     @State private var pendingScroll: ScoreScrollCommand?
     @State private var contentInsetTop: CGFloat = 0
+    @State private var lastManualCursor: ScoreCursor?
+    /// Held in `@State` so the same `@Observable` instance lives for
+    /// the view's lifetime. The container's body never reads
+    /// `pinch.*` directly — only the hosted `HorizontalZoomedSurface`
+    /// does — so mutations propagate via observation into the host
+    /// without retriggering the parent's body (and thus avoid a
+    /// `rootView` reassignment that would drop the animation
+    /// transaction).
+    @State private var pinch = PinchState()
 
-    // Tracked as `@State` (not `@GestureState`) for the same reason
-    // vertical does: auto-reset before `onEnded` runs would snap the
-    // inner `scaleEffect` back to identity and pull content away from
-    // the anchor by `1 - mag`.
-    @State private var liveMagnification: CGFloat = 1.0
-    @State private var liveMagAnchor: UnitPoint = .center
-
-    /// Pinch-driven vertical offset so pan-during-pinch tracks 1:1
-    /// even when `UIScrollView` has no vertical extent (single row of
-    /// systems at user-zoom 1.0). Mirror of vertical's `liveOffsetX`.
-    @State private var liveOffsetY: CGFloat = 0
-
-    /// Padding inside the scaled content so the first / last measure
-    /// don't butt up against the viewport edges. Scales with zoom
-    /// because it sits inside the `scaleEffect`.
     private let scorePadding: CGFloat = 16
 
     private struct PinchSession {
@@ -80,16 +71,16 @@ struct HorizontalScoreContainer: View {
             alwaysBounceHorizontal: true,
             onPinchBegan: { anchor, _ in
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
-                liveMagAnchor = anchor
-                liveMagnification = 1.0
-                liveOffsetY = 0
+                pinch.anchor = anchor
+                pinch.magnification = 1.0
+                pinch.offsetY = 0
             },
             onPinchChanged: { magnification, translation in
                 // X is fed back through `UIScrollView.contentOffset`
                 // natively (horizontal extent always exists in this
                 // mode); only Y needs a live offset.
-                liveMagnification = magnification
-                liveOffsetY = translation.y
+                pinch.magnification = magnification
+                pinch.offsetY = translation.y
             },
             onPinchEnded: { magnification, startLocation, currentOffset in
                 commitPinch(
@@ -99,98 +90,31 @@ struct HorizontalScoreContainer: View {
                 )
             },
         ) {
-            zoomedSurface(viewport: viewport)
+            HorizontalZoomedSurface(
+                viewModel: viewModel,
+                pinch: pinch,
+                document: document,
+                score: score,
+                viewport: viewport,
+                scorePadding: scorePadding,
+                scoreOptions: scoreOptions,
+                playbackCursor: playbackCursor,
+                lastManualCursor: $lastManualCursor,
+                onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
+            )
         }
         .onChange(of: playbackCursor) { _, newCursor in
             autoScroll(cursor: newCursor, viewport: viewport)
         }
     }
 
-    @ViewBuilder
-    private func zoomedSurface(viewport: CGSize) -> some View {
-        if let doc = document {
-            let zoom = viewModel.viewportZoom
-            let framedWidth = (doc.size.width + scorePadding * 2) * zoom
-            let framedHeight = (doc.size.height + scorePadding * 2) * zoom
-            scoreSurface(document: doc)
-                .padding(scorePadding)
-                .scaleEffect(liveMagnification, anchor: liveMagAnchor)
-                .scaleEffect(zoom, anchor: .topLeading)
-                .offset(x: 0, y: liveOffsetY)
-                // Inner frame at exactly the framed (zoomed) size with
-                // `.topLeading` alignment so the unscaled inner content
-                // sits at (0, 0) and `scaleEffect(anchor: .topLeading)`
-                // scales into the frame cleanly — the visible scaled
-                // content covers (0, 0)–(framedWidth, framedHeight).
-                .frame(
-                    width: framedWidth,
-                    height: framedHeight,
-                    alignment: .topLeading,
-                )
-                // Outer frame inflates to at least the viewport so a
-                // score smaller than the viewport gets centered
-                // vertically (`.leading` = leading-X + center-Y).
-                // Horizontal still pins to leading so the score opens
-                // at measure 1, not mid-page. When the inner framed
-                // size exceeds the viewport on either axis, `max(...)`
-                // collapses to the framed size and normal scrolling
-                // resumes — no extra centering offset to interfere
-                // with the auto-scroll math.
-                .frame(
-                    width: max(framedWidth, viewport.width),
-                    height: max(framedHeight, viewport.height),
-                    alignment: .leading,
-                )
-                .simultaneousGesture(doubleTapGesture)
-        } else {
-            Color.clear
-        }
-    }
-
-    private func scoreSurface(document doc: LayoutDocument) -> some View {
-        ZStack(alignment: .topLeading) {
-            ScoreView(
-                document: doc, score: score, options: scoreOptions,
-                playbackCursor: playbackCursor, playbackCursorColor: .accentColor,
-            )
-            .coordinateSpace(name: "scoreSurface")
-            .gesture(tapSeekGesture(document: doc))
-            .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
-
-            if viewModel.repeatModel.mode == .abLoop {
-                LoopRegionOverlay(document: doc, range: viewModel.repeatModel.abRange)
-                LoopBoundaryMarkers(
-                    document: doc,
-                    start: viewModel.repeatModel.pendingRepeatA,
-                    end: viewModel.repeatModel.pendingRepeatB,
-                )
-            }
-        }
-    }
-
-    private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
-        SpatialTapGesture(coordinateSpace: .named("scoreSurface"))
-            .onEnded { value in
-                guard let cursor = nearestCursor(at: value.location, in: document) else { return }
-                viewModel.setManualCursor(cursor)
-                lastManualCursor = cursor
-            }
-    }
-
-    private var doubleTapGesture: some Gesture {
-        SpatialTapGesture(count: 2)
-            .onEnded { _ in
-                viewModel.toggleZoom(targetIfZoomedOut: 2.0)
-            }
-    }
-
     /// Folds a finished pinch into `viewportZoom` and queues a scroll
-    /// so the content under the user's fingers at release lands on the
-    /// same screen position post-commit. Horizontal pan-during-pinch
-    /// rides on `currentOffset` (UIScrollView native); vertical rides
-    /// on `liveOffsetY`.
+    /// so the content under the user's fingers at release lands on
+    /// the same screen position post-commit. Horizontal
+    /// pan-during-pinch rides on `currentOffset` (UIScrollView
+    /// native); vertical rides on `pinch.offsetY`.
     ///
-    /// `newOffset = startLocation * (ratio - 1) + currentOffset − (0, liveOffsetY)`
+    /// `newOffset = startLocation * (ratio - 1) + currentOffset − (0, pinch.offsetY)`
     private func commitPinch(
         magnification: CGFloat,
         startLocation: CGPoint,
@@ -205,26 +129,27 @@ struct HorizontalScoreContainer: View {
 
         let scrollToTarget = CGPoint(
             x: max(0, currentOffset.x + startLocation.x * (ratio - 1)),
-            y: max(0, currentOffset.y + startLocation.y * (ratio - 1) - liveOffsetY),
+            y: max(0, currentOffset.y + startLocation.y * (ratio - 1) - pinch.offsetY),
         )
 
         let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
         if isBounceBack {
-            // Rubber-band release: see VerticalScoreContainer.commitPinch
-            // for the rationale on holding `liveMagAnchor` steady through
-            // the bounce animation.
-            withAnimation(.smooth(duration: 0.15)) {
-                liveMagnification = 1.0
-                liveOffsetY = 0
+            // Rubber-band release: animate `pinch.magnification` back
+            // to identity. See `VerticalScoreContainer.commitPinch`
+            // for the rationale on holding `pinch.anchor` steady
+            // through the bounce animation.
+            withAnimation(.smooth(duration: 0.18)) {
+                pinch.magnification = 1.0
+                pinch.offsetY = 0
             }
         } else {
-            // See `VerticalScoreContainer.commitPinch` for the snap-to-
-            // unit animation rationale: `withAnimation` interpolates
-            // `viewportZoom` (outer scaleEffect + frame size) and
-            // `liveMagnification` (inner scaleEffect) together so the
-            // visual transition from `combined` < 1.0 to 1.0 is smooth
-            // rather than instantaneous. The scroll offset still commits
-            // synchronously.
+            // See vertical container for the snap-to-unit animation
+            // rationale: when `targetZoom <= 1.0`, `withAnimation`
+            // interpolates `viewportZoom` (outer scaleEffect + frame
+            // size) and `pinch.magnification` (inner scaleEffect)
+            // together so the visual transition from `combined` < 1.0
+            // to 1.0 is smooth rather than instantaneous. The scroll
+            // offset still commits synchronously.
             pendingScroll = .immediate(scrollToTarget)
             let snapToUnit = targetZoom <= 1.0
             applyCommit(animated: snapToUnit) {
@@ -234,9 +159,9 @@ struct HorizontalScoreContainer: View {
                     viewModel.viewportZoom = targetZoom
                     viewModel.captureCurrentZoomAsLast()
                 }
-                liveMagnification = 1.0
-                liveMagAnchor = .center
-                liveOffsetY = 0
+                pinch.magnification = 1.0
+                pinch.anchor = .center
+                pinch.offsetY = 0
             }
         }
     }
@@ -291,7 +216,8 @@ struct HorizontalScoreContainer: View {
         let pad = 8 * doc.metrics.sp * zoom
 
         // Cursor frame in scroll-content coords: padded then scaled
-        // from top-leading. Mirrors `zoomedSurface`'s composition.
+        // from top-leading. Mirrors `HorizontalZoomedSurface`'s
+        // composition.
         let minX = (rect.minX + scorePadding) * zoom
         let maxX = (rect.maxX + scorePadding) * zoom
         let minY = (rect.minY + scorePadding) * zoom
@@ -364,5 +290,91 @@ struct HorizontalScoreContainer: View {
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
         }
+    }
+}
+
+/// The hosted score subtree. Lives inside `ScoreScrollHost`'s
+/// `UIHostingController`. Reads `pinch.*` and `viewModel.viewportZoom`
+/// directly so the SwiftUI observation system can deliver animated
+/// updates inside the host (the parent `HorizontalScoreContainer` body
+/// never touches these properties, so it doesn't re-render and the
+/// hostingController doesn't reassign its `rootView` on every gesture
+/// frame).
+private struct HorizontalZoomedSurface: View {
+    @Bindable var viewModel: ReaderViewModel
+    @Bindable var pinch: PinchState
+    let document: LayoutDocument?
+    let score: Score
+    let viewport: CGSize
+    let scorePadding: CGFloat
+    let scoreOptions: ScoreViewOptions
+    let playbackCursor: ScoreCursor?
+    @Binding var lastManualCursor: ScoreCursor?
+    let onDoubleTap: () -> Void
+
+    var body: some View {
+        if let doc = document {
+            let zoom = viewModel.viewportZoom
+            let framedWidth = (doc.size.width + scorePadding * 2) * zoom
+            let framedHeight = (doc.size.height + scorePadding * 2) * zoom
+            scoreSurface(document: doc)
+                .padding(scorePadding)
+                .scaleEffect(pinch.magnification, anchor: pinch.anchor)
+                .scaleEffect(zoom, anchor: .topLeading)
+                .offset(x: 0, y: pinch.offsetY)
+                // Inner frame at exactly the framed (zoomed) size so
+                // the topLeading-anchored outer scaleEffect fills it.
+                .frame(
+                    width: framedWidth,
+                    height: framedHeight,
+                    alignment: .topLeading,
+                )
+                // Outer frame inflates to at least the viewport so a
+                // short score is vertically centered (`.leading` =
+                // leading-X + center-Y). See HorizontalScoreContainer's
+                // top comment for the math.
+                .frame(
+                    width: max(framedWidth, viewport.width),
+                    height: max(framedHeight, viewport.height),
+                    alignment: .leading,
+                )
+                .simultaneousGesture(
+                    SpatialTapGesture(count: 2).onEnded { _ in
+                        onDoubleTap()
+                    },
+                )
+        } else {
+            Color.clear
+        }
+    }
+
+    private func scoreSurface(document doc: LayoutDocument) -> some View {
+        ZStack(alignment: .topLeading) {
+            ScoreView(
+                document: doc, score: score, options: scoreOptions,
+                playbackCursor: playbackCursor, playbackCursorColor: .accentColor,
+            )
+            .coordinateSpace(name: "scoreSurface")
+            .gesture(tapSeekGesture(document: doc))
+            .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
+
+            if viewModel.repeatModel.mode == .abLoop {
+                LoopRegionOverlay(document: doc, range: viewModel.repeatModel.abRange)
+                LoopBoundaryMarkers(
+                    document: doc,
+                    start: viewModel.repeatModel.pendingRepeatA,
+                    end: viewModel.repeatModel.pendingRepeatB,
+                )
+            }
+        }
+    }
+
+    private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
+        SpatialTapGesture(coordinateSpace: .named("scoreSurface"))
+            .onEnded { value in
+                guard let cursor = nearestCursor(at: value.location, in: document) else { return }
+                viewModel.setManualCursor(cursor)
+                lastManualCursor = cursor
+            }
     }
 }

@@ -48,7 +48,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
     /// the same point in pixels (used later for the commit math).
     let onPinchBegan: (UnitPoint, CGPoint) -> Void
     /// Called every time the pinch's scale factor changes. `scale` goes
-    /// to `liveMagnification`; `translation` is the 2-finger centroid's
+    /// to `pinch.magnification`; `translation` is the 2-finger centroid's
     /// displacement (in scroll-view coords) since `.began`. Consumers feed
     /// it into a live offset on whichever axis has no scrollable extent
     /// at the current zoom (vertical mode → x at user-zoom 1.0; horizontal
@@ -126,14 +126,18 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // bindings. SwiftUI re-creates the struct each pass; the
         // Coordinator keeps a copy and uses it from delegate methods.
         context.coordinator.parent = self
-        // Assign the new rootView *inside* the parent's transaction so
-        // any active animation (e.g. `withAnimation { liveMagnification
-        // = 1.0 }` at pinch-commit time) propagates into the hosted
-        // SwiftUI subtree. UIHostingController's `rootView` is a normal
-        // stored property; assigning it outside a transaction makes the
-        // internal SwiftUI render treat the new view as a fresh tree
-        // with no animation context — visible as instant snaps where
-        // the call site expected interpolation.
+        // Animation transactions from outer `withAnimation { … }`
+        // calls do not reliably reach the hosted SwiftUI subtree via
+        // this `rootView` reassignment — UIHostingController treats
+        // each assignment as a fresh tree with no transaction. The
+        // primary fix lives in the containers: they drive pinch
+        // state through an `@Observable` (`PinchState`) so SwiftUI's
+        // observation system delivers animated updates straight to
+        // the hosted view. The `withTransaction(context.transaction)`
+        // wrapper here is belt-and-suspenders for cases where the
+        // parent's body *does* re-render (e.g. `pendingScroll`
+        // changes) and would otherwise interrupt an in-flight
+        // animation with an un-animated rootView replacement.
         withTransaction(context.transaction) {
             context.coordinator.host?.rootView = content()
         }
