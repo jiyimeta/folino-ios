@@ -49,7 +49,7 @@ struct HorizontalScoreContainer: View {
                 honorLayoutBreaks: honorLayoutBreaks,
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
             )) {
-                rebuildLayout()
+                await rebuildLayout()
             }
         }
     }
@@ -118,10 +118,19 @@ struct HorizontalScoreContainer: View {
         )
     }
 
-    private func rebuildLayout() {
+    /// Runs `LayoutEngine.layout` off the main actor so a heavy re-layout
+    /// (staff hide/show, clef override, staff-size change) doesn't stall
+    /// the UI. The `.task(id:)` wrapper cancels the outer task on the next
+    /// input change; we honor that here before publishing a stale document.
+    private func rebuildLayout() async {
+        let score = score
         let opts = scoreOptions
-        let natural = LayoutEngine.naturalContentWidth(score: score, options: opts)
-        document = LayoutEngine.layout(score: score, options: opts, availableWidth: natural)
+        let newDoc = await Task.detached(priority: .userInitiated) {
+            let natural = LayoutEngine.naturalContentWidth(score: score, options: opts)
+            return LayoutEngine.layout(score: score, options: opts, availableWidth: natural)
+        }.value
+        guard !Task.isCancelled else { return }
+        document = newDoc
     }
 
     private func autoScroll(

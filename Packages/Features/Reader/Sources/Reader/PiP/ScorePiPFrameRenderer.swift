@@ -123,9 +123,25 @@ final class ScorePiPFrameRenderer {
         abs(targetScrollOffsetDocX - scrollOffsetDocX) > Self.scrollSnapThresholdPt
     }
 
-    init(score: Score, staffSize: CGFloat, collapseMultiMeasureRests: Bool) throws {
-        self.score = score
+    /// Off-main-actor portion of construction. `LayoutEngine.layout` is
+    /// the heaviest step on the PiP rearm path; isolating it here lets
+    /// `ScorePiPCoordinator.arm` compute the document on a detached task
+    /// and only hop back to the main actor to assemble the
+    /// MainActor-only state (`CALayer`, `CVPixelBufferPool`, `UIColor`).
+    /// Without this split, every Visual Inspector staff toggle (and any
+    /// path that flows through `armPiPIfReady`) blocks main for ~100ms
+    /// of layout work even though that work has no UI dependencies.
+    struct Prepared {
+        let options: ScoreViewOptions
+        let document: LayoutDocument
+        let firstSystem: LayoutSystem
+    }
 
+    nonisolated static func prepare(
+        score: Score,
+        staffSize: CGFloat,
+        collapseMultiMeasureRests: Bool,
+    ) throws -> Prepared {
         let opts = ScoreViewOptions(
             staffSize: staffSize, systemGap: staffSize * 1.25,
             wrapToViewWidth: false, includeTitleFrame: false,
@@ -136,7 +152,7 @@ final class ScorePiPFrameRenderer {
                 : .disabled,
         )
         let naturalWidth = LayoutEngine.naturalContentWidth(score: score, options: opts)
-        document = LayoutEngine.layout(
+        let document = LayoutEngine.layout(
             score: score, options: opts, availableWidth: naturalWidth,
         )
         guard let firstSystem = document.systems.first else {
@@ -145,6 +161,25 @@ final class ScorePiPFrameRenderer {
                 userInfo: [NSLocalizedDescriptionKey: "Layout produced no systems"],
             )
         }
+        return Prepared(options: opts, document: document, firstSystem: firstSystem)
+    }
+
+    /// Convenience that runs `prepare` synchronously and chains into the
+    /// `Prepared`-taking init. Used by tests where the off-main split
+    /// would just add noise; production code goes through
+    /// `ScorePiPCoordinator.arm` which calls `prepare` on a detached task.
+    convenience init(score: Score, staffSize: CGFloat, collapseMultiMeasureRests: Bool) throws {
+        let prepared = try Self.prepare(
+            score: score, staffSize: staffSize,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
+        )
+        try self.init(score: score, prepared: prepared)
+    }
+
+    init(score: Score, prepared: Prepared) throws {
+        self.score = score
+        document = prepared.document
+        let firstSystem = prepared.firstSystem
         system = firstSystem
 
         // Adaptive PiP buffer size driven by staff count, with both an

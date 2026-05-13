@@ -96,6 +96,13 @@ final class ReaderViewModel {
     private var isPiPEnabled = false
     @ObservationIgnored
     private var collapseMultiMeasureRests = false
+    /// In-flight PiP rearm task. `armPiPIfReady` cancels this before
+    /// spawning a new one so back-to-back triggers (e.g. the
+    /// `onHiddenStavesChanged` → `onChange` pair fired by `toggleStaff`)
+    /// collapse to a single arm against the latest state instead of
+    /// queuing N detached `LayoutEngine.layout` runs.
+    @ObservationIgnored
+    private var pendingArmTask: Task<Void, Never>?
 
     /// Applies the user's Settings preference. Driven by the
     /// `readerPictureInPictureEnabled` `@AppStorage` value in
@@ -107,6 +114,8 @@ final class ReaderViewModel {
         if enabled {
             armPiPIfReady()
         } else {
+            pendingArmTask?.cancel()
+            pendingArmTask = nil
             pipCoordinator.dismissIfActive()
             pipCoordinator.disarm()
         }
@@ -139,20 +148,38 @@ final class ReaderViewModel {
         pipCoordinator.dismissIfActive()
     }
 
+    /// Spawns (or replaces) the coalesced rearm task. The heavy layout
+    /// step inside `pipCoordinator.arm` runs off the main actor; this
+    /// method itself only mutates the bookkeeping state, so all callers
+    /// stay synchronous.
     private func armPiPIfReady() {
-        guard isPiPEnabled, case let .loaded(score) = loadState else { return }
+        guard isPiPEnabled, case .loaded = loadState else { return }
+        pendingArmTask?.cancel()
+        pendingArmTask = Task { [weak self] in
+            guard let self else { return }
+            await performPiPArm()
+        }
+    }
+
+    private func performPiPArm() async {
+        guard !Task.isCancelled,
+              isPiPEnabled,
+              case let .loaded(score) = loadState
+        else { return }
         // Mirror the on-screen transformation so the PiP view sees the
         // same staves and clefs as the main Reader pane.
         let visible = score
             .applying(clefOverrides: layoutModel.staffClefOverrides)
             .filtered(hidingStaves: layoutModel.hiddenStaves)
         do {
-            try pipCoordinator.arm(
+            try await pipCoordinator.arm(
                 score: visible,
                 staffSize: layoutModel.staffSize,
                 playbackCursor: playbackCursor,
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
             )
+        } catch is CancellationError {
+            // Superseded by a newer rearm; nothing to do.
         } catch {
             // Coordinator throws only when no display layer is attached
             // (the host view hasn't mounted yet). Arming will retry once
@@ -263,12 +290,15 @@ final class ReaderViewModel {
             // AVKit fixes the PiP window's aspect ratio at session start
             // and won't renegotiate when we feed buffers with new
             // dimensions. Dismiss any active session so the next
-            // background auto-start opens at the right shape; the arm
-            // below leaves the coordinator ready to do so.
+            // background auto-start opens at the right shape. The
+            // subsequent `await onChange?()` in `LayoutSettingsModel`
+            // calls `armPiPIfReady` once the disk write yields, so we
+            // intentionally skip arming here to avoid the duplicate
+            // detached `LayoutEngine.layout` pass that this hot path
+            // would otherwise queue per toggle.
             if isPiPActive {
                 pipCoordinator.dismissIfActive()
             }
-            armPiPIfReady()
         }
         layoutModel.scoreProvider = { [weak self] in self?.loadState.score }
     }

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Domain
 import SheetMusicCore
 import SheetMusicLayout
@@ -324,10 +325,20 @@ struct VerticalScoreContainer: View {
         )
     }
 
-    private func rebuildLayout(width: CGFloat) {
-        document = LayoutEngine.layout(
-            score: score, options: scoreOptions, availableWidth: width,
-        )
+    /// Runs `LayoutEngine.layout` off the main actor so a heavy re-layout
+    /// (staff hide/show, clef override, staff-size change) doesn't stall
+    /// the UI. The `.task(id:)` wrapper cancels the outer task on the next
+    /// input change; we honor that here before publishing a stale document.
+    private func rebuildLayout(width: CGFloat) async {
+        let score = score
+        let options = scoreOptions
+        let newDoc = await Task.detached(priority: .userInitiated) {
+            LayoutEngine.layout(
+                score: score, options: options, availableWidth: width,
+            )
+        }.value
+        guard !Task.isCancelled else { return }
+        document = newDoc
         lastWidth = width
     }
 

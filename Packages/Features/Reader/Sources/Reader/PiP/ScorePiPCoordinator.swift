@@ -118,24 +118,32 @@ final class ScorePiPCoordinator: NSObject {
     /// changes a clef override, resizes via Visual Inspector, or
     /// toggles multi-measure rest collapse); the existing pump and
     /// queued samples are torn down first.
+    /// Async so the `LayoutEngine.layout` step runs on a detached task
+    /// — every rearm (staff hide/show, clef change, resize) would
+    /// otherwise burn ~100ms of main-actor time before the next Reader
+    /// frame can paint.
     func arm(
         score: Score,
         staffSize: CGFloat,
         playbackCursor: ScoreCursor?,
         collapseMultiMeasureRests: Bool,
-    ) throws {
+    ) async throws {
         guard let displayLayer else {
             throw NSError(
                 domain: "ScorePiPCoordinator", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "No display layer attached"],
             )
         }
+        let prepared = try await Task.detached(priority: .userInitiated) {
+            try ScorePiPFrameRenderer.prepare(
+                score: score,
+                staffSize: staffSize,
+                collapseMultiMeasureRests: collapseMultiMeasureRests,
+            )
+        }.value
+        try Task.checkCancellation()
         stopPump()
-        renderer = try ScorePiPFrameRenderer(
-            score: score,
-            staffSize: staffSize,
-            collapseMultiMeasureRests: collapseMultiMeasureRests,
-        )
+        renderer = try ScorePiPFrameRenderer(score: score, prepared: prepared)
         currentCursor = playbackCursor
         lastEnqueuedCursorHash = nil
         ticksSinceLastForceEnqueue = 0
