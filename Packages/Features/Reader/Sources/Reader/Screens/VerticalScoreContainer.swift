@@ -245,48 +245,49 @@ struct VerticalScoreContainer: View {
                 pinch.offsetX = 0
             }
         } else {
-            // Animate the commit *only* when the scroll view can't
-            // absorb the `pinch.offsetX` compensation on this axis —
-            // i.e. when post-commit `framedWidth <= viewport.width`,
-            // `scrollToTarget.x` would clamp to 0 via the `max(0, …)`
-            // guard and the offset compensation would fail, leaving a
-            // visible one-frame jump opposite the pan direction.
-            // Animating in that case lets `pinch.offsetX` spring back
-            // to 0 over `.smooth(duration: 0.18)`.
-            //
-            // When the scroll can absorb (post-commit content wider
-            // than viewport), snap everything synchronously so the
-            // offset → 0 snap and the corresponding scroll snap
-            // cancel out in the same frame — animating here would
-            // desynchronize them and cause a wobble.
-            //
-            // `postFramedWidth = min(doc.width, viewport.width) *
-            // targetZoom` mirrors `effectiveZoom`'s fit-to-width
-            // shrink: at `viewportZoom == 1.0` the score wraps to
-            // viewport width, and zooming in scales that fit width.
-            let docWidth = document?.size.width ?? 0
-            let postFramedWidth = min(docWidth, viewport.width) * targetZoom
-            let needsAnimation = postFramedWidth <= viewport.width
             pendingScroll = .immediate(scrollToTarget)
-            applyCommit(animated: needsAnimation) {
-                if targetZoom <= 1.0 {
+            let snapToUnit = targetZoom <= 1.0
+            if snapToUnit {
+                // Snap-to-unit from a non-unit base: visible scale
+                // genuinely changes (`combined < 1.0 → 1.0`), so
+                // animate every state mutation together so the user
+                // sees a smooth settle to identity.
+                withAnimation(.smooth(duration: 0.18)) {
                     viewModel.resetZoom()
-                } else {
-                    viewModel.viewportZoom = targetZoom
-                    viewModel.captureCurrentZoomAsLast()
+                    pinch.magnification = 1.0
+                    pinch.anchor = .center
+                    pinch.offsetX = 0
                 }
+            } else {
+                // Real zoom-in / zoom-out. See HorizontalScoreContainer
+                // for the rationale: combined visible scale is
+                // invariant across the commit (`baseZoom × gr.scale
+                // = targetZoom × 1.0`); interpolating each factor
+                // separately would make their product bulge along the
+                // easing curve and read as an unwanted scale animation.
+                // Snap the scale state, animate only the live offset
+                // reset, and only when the scroll view can't absorb it.
+                //
+                // `postFramedWidth = min(doc.width, viewport.width) *
+                // targetZoom` mirrors `effectiveZoom`'s fit-to-width
+                // shrink: at `viewportZoom == 1.0` the score wraps to
+                // viewport width, and zooming in scales that fit width.
+                viewModel.viewportZoom = targetZoom
+                viewModel.captureCurrentZoomAsLast()
                 pinch.magnification = 1.0
                 pinch.anchor = .center
-                pinch.offsetX = 0
-            }
-        }
-    }
 
-    private func applyCommit(animated: Bool, _ body: () -> Void) {
-        if animated {
-            withAnimation(.smooth(duration: 0.18), body)
-        } else {
-            body()
+                let docWidth = document?.size.width ?? 0
+                let postFramedWidth = min(docWidth, viewport.width) * targetZoom
+                let scrollAbsorbsOffset = postFramedWidth > viewport.width
+                if pinch.offsetX != 0, !scrollAbsorbsOffset {
+                    withAnimation(.smooth(duration: 0.18)) {
+                        pinch.offsetX = 0
+                    }
+                } else {
+                    pinch.offsetX = 0
+                }
+            }
         }
     }
 

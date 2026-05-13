@@ -145,44 +145,47 @@ struct HorizontalScoreContainer: View {
                 pinch.offsetY = 0
             }
         } else {
-            // Animate the commit *only* when the scroll view can't
-            // absorb the `pinch.offsetY` compensation on this axis —
-            // i.e. when post-commit `framedHeight <= viewport.height`,
-            // `scrollToTarget.y` would clamp to 0 via the `max(0, …)`
-            // guard and the offset compensation would fail, leaving a
-            // visible one-frame jump opposite the pan direction.
-            // Animating in that case lets `pinch.offsetY` spring back
-            // to 0 over `.smooth(duration: 0.18)` so the content
-            // settles to its centered rest position smoothly.
-            //
-            // When the scroll can absorb (post-commit content taller
-            // than viewport), snap everything synchronously so the
-            // offset → 0 snap and the corresponding scroll snap
-            // cancel out in the same frame — animating here would
-            // desynchronize them and cause a wobble.
-            let docHeight = document?.size.height ?? 0
-            let postFramedHeight = (docHeight + scorePadding * 2) * targetZoom
-            let needsAnimation = postFramedHeight <= viewport.height
             pendingScroll = .immediate(scrollToTarget)
-            applyCommit(animated: needsAnimation) {
-                if targetZoom <= 1.0 {
+            let snapToUnit = targetZoom <= 1.0
+            if snapToUnit {
+                // Snap-to-unit from a non-unit base: visible scale
+                // genuinely changes (`combined < 1.0 → 1.0`), so
+                // animate every state mutation together so the user
+                // sees a smooth settle to identity.
+                withAnimation(.smooth(duration: 0.18)) {
                     viewModel.resetZoom()
-                } else {
-                    viewModel.viewportZoom = targetZoom
-                    viewModel.captureCurrentZoomAsLast()
+                    pinch.magnification = 1.0
+                    pinch.anchor = .center
+                    pinch.offsetY = 0
                 }
+            } else {
+                // Real zoom-in / zoom-out. The combined visible scale
+                // (`viewportZoom × pinch.magnification`) is invariant
+                // across the commit: it goes from `baseZoom × gr.scale
+                // = combined` to `targetZoom × 1.0 = combined`. But
+                // interpolating each factor separately makes their
+                // product bulge along the easing curve, which reads as
+                // an unwanted scale animation at release. Snap the
+                // scale state instead and only animate the live offset
+                // reset — and only when the scroll view can't absorb
+                // it (`postFramedHeight ≤ viewport.height`, scroll
+                // extent zero, `scrollToTarget.y` clamps to 0).
+                viewModel.viewportZoom = targetZoom
+                viewModel.captureCurrentZoomAsLast()
                 pinch.magnification = 1.0
                 pinch.anchor = .center
-                pinch.offsetY = 0
-            }
-        }
-    }
 
-    private func applyCommit(animated: Bool, _ body: () -> Void) {
-        if animated {
-            withAnimation(.smooth(duration: 0.18), body)
-        } else {
-            body()
+                let docHeight = document?.size.height ?? 0
+                let postFramedHeight = (docHeight + scorePadding * 2) * targetZoom
+                let scrollAbsorbsOffset = postFramedHeight > viewport.height
+                if pinch.offsetY != 0, !scrollAbsorbsOffset {
+                    withAnimation(.smooth(duration: 0.18)) {
+                        pinch.offsetY = 0
+                    }
+                } else {
+                    pinch.offsetY = 0
+                }
+            }
         }
     }
 
