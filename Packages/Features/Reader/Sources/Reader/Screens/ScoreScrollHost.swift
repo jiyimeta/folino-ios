@@ -126,7 +126,17 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // bindings. SwiftUI re-creates the struct each pass; the
         // Coordinator keeps a copy and uses it from delegate methods.
         context.coordinator.parent = self
-        context.coordinator.host?.rootView = content()
+        // Assign the new rootView *inside* the parent's transaction so
+        // any active animation (e.g. `withAnimation { liveMagnification
+        // = 1.0 }` at pinch-commit time) propagates into the hosted
+        // SwiftUI subtree. UIHostingController's `rootView` is a normal
+        // stored property; assigning it outside a transaction makes the
+        // internal SwiftUI render treat the new view as a fresh tree
+        // with no animation context — visible as instant snaps where
+        // the call site expected interpolation.
+        withTransaction(context.transaction) {
+            context.coordinator.host?.rootView = content()
+        }
 
         if let command = pendingScroll {
             // Force the just-assigned `rootView`'s intrinsic content
