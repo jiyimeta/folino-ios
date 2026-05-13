@@ -277,15 +277,22 @@ struct VerticalScoreContainer: View {
             pendingScroll = .immediate(scrollToTarget)
             let snapToUnit = targetZoom <= 1.0
             if snapToUnit {
-                // Snap-to-unit from a non-unit base: visible scale
-                // genuinely changes (`combined < 1.0 → 1.0`), so
-                // animate every state mutation together so the user
-                // sees a smooth settle to identity.
-                withAnimation(.smooth(duration: 0.18)) {
-                    viewModel.resetZoom()
-                    pinch.magnification = 1.0
-                    pinch.anchor = .center
-                    pinch.offsetX = 0
+                // See `HorizontalScoreContainer` for the rationale.
+                // Synchronously snap `viewportZoom` to target and
+                // compensate magnification (= `combined / target`)
+                // so visible scale is invariant across the commit;
+                // then in the next runloop tick animate magnification
+                // → 1.0 so visible scale (`viewportZoom × mag`)
+                // transitions monotonically from `combined` to 1.0
+                // without the product-of-linear-curves bulge.
+                let compensatedMag = combined / targetZoom
+                viewModel.resetZoom()
+                pinch.magnification = compensatedMag
+                DispatchQueue.main.async {
+                    withAnimation(.smooth(duration: 0.18)) {
+                        pinch.magnification = 1.0
+                        pinch.offsetX = 0
+                    }
                 }
             } else {
                 // Real zoom-in / zoom-out. See HorizontalScoreContainer

@@ -208,15 +208,42 @@ struct HorizontalScoreContainer: View {
             pendingScroll = .immediate(scrollToTarget)
             let snapToUnit = targetZoom <= 1.0
             if snapToUnit {
-                // Snap-to-unit from a non-unit base: visible scale
-                // genuinely changes (`combined < 1.0 → 1.0`), so
-                // animate every state mutation together so the user
-                // sees a smooth settle to identity.
-                withAnimation(.smooth(duration: 0.18)) {
-                    viewModel.resetZoom()
-                    pinch.magnification = 1.0
-                    pinch.anchor = .center
-                    pinch.offsetY = 0
+                // Snap-to-unit from a non-unit base. Naïvely
+                // animating both `viewModel.viewportZoom`
+                // (`base → target`) and `pinch.magnification`
+                // (`gr.scale → 1`) together makes their product bulge
+                // mid-animation — for a 3× → 1× zoom-out the combined
+                // visible scale overshoots 1.0 by ~30% at the midpoint,
+                // which the user sees as a big lateral expansion-then-
+                // contraction.
+                //
+                // Decompose into two phases:
+                //
+                //   1. *Synchronous snap.* Set the post-commit
+                //      `viewportZoom` and compensate magnification
+                //      to `combined / targetZoom`. The visible scale
+                //      (`viewportZoom × magnification`) is invariant
+                //      across this snap.
+                //   2. *Animated decay.* In the next runloop tick,
+                //      animate magnification → 1.0 (and offset → 0).
+                //      Visible scale moves monotonically from
+                //      `combined` to 1.0 via a single factor — no
+                //      bulge.
+                //
+                // The async hop is what makes SwiftUI treat the
+                // compensated value as the animation's starting
+                // point. Inlining both mutations into one `with
+                // Animation` call would have SwiftUI animate from
+                // `pre-release magnification` to 1.0 directly,
+                // re-introducing the bulge.
+                let compensatedMag = combined / targetZoom
+                viewModel.resetZoom()
+                pinch.magnification = compensatedMag
+                DispatchQueue.main.async {
+                    withAnimation(.smooth(duration: 0.18)) {
+                        pinch.magnification = 1.0
+                        pinch.offsetY = 0
+                    }
                 }
             } else {
                 // Real zoom-in / zoom-out. The combined visible scale
