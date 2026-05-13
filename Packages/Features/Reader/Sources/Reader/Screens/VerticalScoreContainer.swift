@@ -152,6 +152,7 @@ struct VerticalScoreContainer: View {
                     magnification: magnification,
                     startLocation: startLocation,
                     currentOffset: currentOffset,
+                    viewport: viewport,
                 )
             },
         ) {
@@ -208,6 +209,7 @@ struct VerticalScoreContainer: View {
         magnification: CGFloat,
         startLocation: CGPoint,
         currentOffset: CGPoint,
+        viewport: CGSize,
     ) {
         let session = pinchSession ?? PinchSession(baseZoom: viewModel.viewportZoom)
         pinchSession = nil
@@ -243,23 +245,30 @@ struct VerticalScoreContainer: View {
                 pinch.offsetX = 0
             }
         } else {
-            // Real zoom commit (in or out from a non-unit base).
-            // Wrap in `withAnimation` unconditionally so
-            // `pinch.offsetX` rides home on a smooth spring instead of
-            // snapping: when post-commit `framedWidth < viewport`, the
-            // scroll view has no X extent to absorb the `pinch.offsetX`
-            // compensation, so `scrollToTarget.x` gets clamped to 0 —
-            // without the animation, the pinch-pan offset disappears
-            // in a single frame and the content visibly jumps. The
-            // visible scale (combined = `viewportZoom ×
-            // pinch.magnification`) is invariant across the
-            // interpolation because the inner and outer factors move
-            // toward `1.0 × targetZoom`; only position settles. The
-            // scroll offset still commits synchronously
-            // (`pendingScroll = .immediate(...)` resolves outside the
-            // animation transaction).
+            // Animate the commit *only* when the scroll view can't
+            // absorb the `pinch.offsetX` compensation on this axis —
+            // i.e. when post-commit `framedWidth <= viewport.width`,
+            // `scrollToTarget.x` would clamp to 0 via the `max(0, …)`
+            // guard and the offset compensation would fail, leaving a
+            // visible one-frame jump opposite the pan direction.
+            // Animating in that case lets `pinch.offsetX` spring back
+            // to 0 over `.smooth(duration: 0.18)`.
+            //
+            // When the scroll can absorb (post-commit content wider
+            // than viewport), snap everything synchronously so the
+            // offset → 0 snap and the corresponding scroll snap
+            // cancel out in the same frame — animating here would
+            // desynchronize them and cause a wobble.
+            //
+            // `postFramedWidth = min(doc.width, viewport.width) *
+            // targetZoom` mirrors `effectiveZoom`'s fit-to-width
+            // shrink: at `viewportZoom == 1.0` the score wraps to
+            // viewport width, and zooming in scales that fit width.
+            let docWidth = document?.size.width ?? 0
+            let postFramedWidth = min(docWidth, viewport.width) * targetZoom
+            let needsAnimation = postFramedWidth <= viewport.width
             pendingScroll = .immediate(scrollToTarget)
-            withAnimation(.smooth(duration: 0.18)) {
+            applyCommit(animated: needsAnimation) {
                 if targetZoom <= 1.0 {
                     viewModel.resetZoom()
                 } else {
@@ -270,6 +279,14 @@ struct VerticalScoreContainer: View {
                 pinch.anchor = .center
                 pinch.offsetX = 0
             }
+        }
+    }
+
+    private func applyCommit(animated: Bool, _ body: () -> Void) {
+        if animated {
+            withAnimation(.smooth(duration: 0.18), body)
+        } else {
+            body()
         }
     }
 
