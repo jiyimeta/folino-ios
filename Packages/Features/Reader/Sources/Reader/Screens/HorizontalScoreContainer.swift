@@ -218,16 +218,34 @@ struct HorizontalScoreContainer: View {
                 liveOffsetY = 0
             }
         } else {
+            // See `VerticalScoreContainer.commitPinch` for the snap-to-
+            // unit animation rationale: `withAnimation` interpolates
+            // `viewportZoom` (outer scaleEffect + frame size) and
+            // `liveMagnification` (inner scaleEffect) together so the
+            // visual transition from `combined` < 1.0 to 1.0 is smooth
+            // rather than instantaneous. The scroll offset still commits
+            // synchronously.
             pendingScroll = .immediate(scrollToTarget)
-            if targetZoom <= 1.0 {
-                viewModel.resetZoom()
-            } else {
-                viewModel.viewportZoom = targetZoom
-                viewModel.captureCurrentZoomAsLast()
+            let snapToUnit = targetZoom <= 1.0
+            applyCommit(animated: snapToUnit) {
+                if targetZoom <= 1.0 {
+                    viewModel.resetZoom()
+                } else {
+                    viewModel.viewportZoom = targetZoom
+                    viewModel.captureCurrentZoomAsLast()
+                }
+                liveMagnification = 1.0
+                liveMagAnchor = .center
+                liveOffsetY = 0
             }
-            liveMagnification = 1.0
-            liveMagAnchor = .center
-            liveOffsetY = 0
+        }
+    }
+
+    private func applyCommit(animated: Bool, _ body: () -> Void) {
+        if animated {
+            withAnimation(.smooth(duration: 0.18), body)
+        } else {
+            body()
         }
     }
 

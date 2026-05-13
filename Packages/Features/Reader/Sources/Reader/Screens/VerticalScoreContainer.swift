@@ -298,16 +298,38 @@ struct VerticalScoreContainer: View {
             // offset synchronously (after `layoutIfNeeded()` propagates
             // the new framed size to `UIScrollView.contentSize`) — all
             // visible in the same render. No 1-frame anchor jump.
+            //
+            // Snap-to-unit (combined < 1.05 from a non-unit base): wrap
+            // the state mutation in `withAnimation` so SwiftUI
+            // interpolates `viewportZoom` (outer scaleEffect + frame
+            // size) and `liveMagnification` (inner scaleEffect) together,
+            // giving a smooth visual transition from `combined` to 1.0
+            // instead of an instantaneous snap. The scroll offset still
+            // commits synchronously (`pendingScroll = .immediate(...)`
+            // resolves outside the animation transaction), so any
+            // contentOffset clamping happens up front rather than mid-
+            // animation.
             pendingScroll = .immediate(scrollToTarget)
-            if targetZoom <= 1.0 {
-                viewModel.resetZoom()
-            } else {
-                viewModel.viewportZoom = targetZoom
-                viewModel.captureCurrentZoomAsLast()
+            let snapToUnit = targetZoom <= 1.0
+            applyCommit(animated: snapToUnit) {
+                if targetZoom <= 1.0 {
+                    viewModel.resetZoom()
+                } else {
+                    viewModel.viewportZoom = targetZoom
+                    viewModel.captureCurrentZoomAsLast()
+                }
+                liveMagnification = 1.0
+                liveMagAnchor = .center
+                liveOffsetX = 0
             }
-            liveMagnification = 1.0
-            liveMagAnchor = .center
-            liveOffsetX = 0
+        }
+    }
+
+    private func applyCommit(animated: Bool, _ body: () -> Void) {
+        if animated {
+            withAnimation(.smooth(duration: 0.18), body)
+        } else {
+            body()
         }
     }
 
