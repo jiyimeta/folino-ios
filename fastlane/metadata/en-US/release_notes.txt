@@ -1,3 +1,1 @@
-- Added support for Picture in Picture
-- Added the ability to collapse multi-measure rests
 - Minor bug fixes
