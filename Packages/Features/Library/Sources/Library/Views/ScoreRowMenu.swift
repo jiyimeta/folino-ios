@@ -69,7 +69,7 @@ func scoreRowMenu(
     }
 }
 
-/// Lazy-loading share submenu. Shows the four placeholder formats
+/// Lazy-loading share submenu. Shows the placeholder formats
 /// (no `isOriginal` flag) until the menu first opens, then fetches
 /// the per-item options once via `loadFormats` and updates the rows
 /// in place. Loading on first open avoids parsing every score in a

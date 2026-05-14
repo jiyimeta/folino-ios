@@ -58,10 +58,13 @@ public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
                 )),
                 range: .full,
             )
-        } catch let error as AudioExportError {
-            throw DomainError.scoreWriteFailed(reason: "\(error)")
-        } catch is CancellationError {
+        } catch AudioExportError.cancelled {
+            // The engine maps Task cancellation to AudioExportError.cancelled
+            // and deletes the partial file before throwing. Re-raise as
+            // CancellationError so callers see the canonical Swift signal.
             throw CancellationError()
+        } catch let error as AudioExportError {
+            throw DomainError.scoreWriteFailed(reason: describe(error))
         } catch {
             throw DomainError.scoreWriteFailed(
                 reason: (error as NSError).localizedDescription,
@@ -78,12 +81,29 @@ public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
                     program: key.program,
                     isDrums: key.isDrums,
                 )
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 let detail = (error as NSError).localizedDescription
                 throw DomainError.scoreWriteFailed(
                     reason: "soundfont unavailable (bank \(key.bank), program \(key.program)): \(detail)",
                 )
             }
+        }
+    }
+
+    /// Render an `AudioExportError` as a user-facing string. The raw
+    /// enum description leaks Swift case syntax (e.g.
+    /// `engineSetupFailed(underlying: "...")`) into the alert; this
+    /// pulls the `underlying` payload out so the message is readable.
+    private func describe(_ error: AudioExportError) -> String {
+        switch error {
+        case .noScorePrepared: "no score prepared"
+        case .rangeNotInTimeline: "export range not in timeline"
+        case let .formatUnsupportedOnThisOS(format): "format unsupported on this OS: \(format)"
+        case let .engineSetupFailed(underlying): underlying
+        case let .fileWriteFailed(underlying): underlying
+        case .cancelled: "cancelled"
         }
     }
 }

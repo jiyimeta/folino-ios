@@ -37,7 +37,7 @@ public struct ScoreShareFormatOption: Hashable, Sendable {
 /// happens on demand when the menu opens, not eagerly per row.
 public protocol ScoreShareService: Sendable {
     /// Selectable formats for this item, in display order. Every item
-    /// reports the same four formats; the option flagged `isOriginal`
+    /// reports the same set of formats; the option flagged `isOriginal`
     /// is the one that re-emits the file as-is for that source. The
     /// implementation derives the flag from the parsed `Score.source`,
     /// so MIDI / MuseScore (v3 or v4) sources all light up the
