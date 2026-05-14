@@ -153,7 +153,7 @@ private func shareMenuFormatText(for format: ScoreShareFormat) -> Text {
     case .midi:
         Text("library.format.midi", bundle: .module)
     case .audioM4A:
-        Text("library.format.audioM4A", bundle: .module)
+        Text("library.format.m4a", bundle: .module)
     }
 }
 
