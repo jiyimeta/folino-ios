@@ -11,6 +11,7 @@ public enum ScoreShareFormat: Hashable, Sendable {
     case museScoreV3
     case pdf
     case midi
+    case audioM4A
 }
 
 /// One row in the share menu — a `format` plus whether it matches the
