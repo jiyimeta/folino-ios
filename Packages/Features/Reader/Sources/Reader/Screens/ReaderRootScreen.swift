@@ -162,6 +162,15 @@ public struct ReaderRootScreen: View {
                     playbackCursor: viewModel.playbackCursor,
                     viewModel: viewModel,
                 )
+            case .page:
+                PagedScoreContainer(
+                    score: visible,
+                    staffSize: viewModel.layoutModel.staffSize,
+                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                    collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    playbackCursor: viewModel.playbackCursor,
+                    viewModel: viewModel,
+                )
             }
         case let .failed(message):
             ContentUnavailableView {
