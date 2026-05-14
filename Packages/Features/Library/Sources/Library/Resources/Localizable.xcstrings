@@ -189,31 +189,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M4A"
+            "value" : "Audio (.m4a)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M4A"
+            "value" : "オーディオ (.m4a)"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M4A"
+            "value" : "오디오 (.m4a)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M4A"
+            "value" : "音频 (.m4a)"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M4A"
+            "value" : "音訊 (.m4a)"
           }
         }
       }
