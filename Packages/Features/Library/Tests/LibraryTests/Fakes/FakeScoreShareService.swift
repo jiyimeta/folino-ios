@@ -7,6 +7,7 @@ final class FakeScoreShareService: ScoreShareService, @unchecked Sendable {
         ScoreShareFormatOption(format: .museScoreV3),
         ScoreShareFormatOption(format: .pdf),
         ScoreShareFormatOption(format: .midi),
+        ScoreShareFormatOption(format: .audioM4A),
     ]
 
     var prepareShareError: DomainError?
