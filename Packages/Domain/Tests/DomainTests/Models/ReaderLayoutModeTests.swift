@@ -3,12 +3,21 @@ import Testing
 
 struct ReaderLayoutModeTests {
     @Test func `raw values are stable`() {
+        // @AppStorage("readerLayoutMode") persists the rawValue; a
+        // rename would silently drop user state on the next launch.
         #expect(ReaderLayoutMode.vertical.rawValue == "vertical")
         #expect(ReaderLayoutMode.horizontal.rawValue == "horizontal")
+        #expect(ReaderLayoutMode.page.rawValue == "page")
     }
 
-    @Test func `all cases contains both`() {
-        #expect(ReaderLayoutMode.allCases == [.vertical, .horizontal])
+    @Test func `all cases survive rawValue round trip`() {
+        for mode in ReaderLayoutMode.allCases {
+            #expect(ReaderLayoutMode(rawValue: mode.rawValue) == mode)
+        }
+    }
+
+    @Test func `all cases contains vertical horizontal page`() {
+        #expect(ReaderLayoutMode.allCases == [.vertical, .horizontal, .page])
     }
 
     @Test func `metronome key matches legacy app storage`() {

@@ -4,10 +4,12 @@ import Foundation
 ///
 /// `.vertical` wraps systems to fit the view width and scrolls vertically;
 /// `.horizontal` lays the score out at its natural width as one long row
-/// that scrolls horizontally.
+/// that scrolls horizontally; `.page` paginates wrapped systems by
+/// viewport height and shows one page at a time.
 public enum ReaderLayoutMode: String, CaseIterable, Sendable, Hashable {
     case vertical
     case horizontal
+    case page
 }
 
 /// `@AppStorage` keys for Reader settings that persist across sessions
