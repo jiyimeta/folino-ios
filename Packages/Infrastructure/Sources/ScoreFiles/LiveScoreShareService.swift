@@ -10,15 +10,18 @@ public struct LiveScoreShareService: ScoreShareService {
     private let scoresDirectory: URL
     private let shareTempDirectory: URL
     private let gateway: any ScoreFileGateway
+    private let audioExporter: any ScoreAudioExporter
 
     public init(
         scoresDirectory: URL,
         shareTempDirectory: URL,
         gateway: any ScoreFileGateway,
+        audioExporter: any ScoreAudioExporter,
     ) {
         self.scoresDirectory = scoresDirectory
         self.shareTempDirectory = shareTempDirectory
         self.gateway = gateway
+        self.audioExporter = audioExporter
     }
 
     /// Internal for tests. Replaces filesystem-hostile characters,
@@ -32,7 +35,7 @@ public struct LiveScoreShareService: ScoreShareService {
     }
 
     public func availableFormats(for item: ScoreItem) async -> [ScoreShareFormatOption] {
-        let formats: [ScoreShareFormat] = [.museScoreV4, .museScoreV3, .pdf, .midi]
+        let formats: [ScoreShareFormat] = [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A]
         let original = await detectOriginalFormat(for: item)
         return formats.map { ScoreShareFormatOption(format: $0, isOriginal: $0 == original) }
     }
@@ -59,7 +62,7 @@ public struct LiveScoreShareService: ScoreShareService {
         case .midi:
             return try writeMIDI(score: score, sanitizedTitle: title)
         case .audioM4A:
-            throw DomainError.unsupportedFormat("audioM4A")
+            return try await writeM4A(score: score, sanitizedTitle: title)
         }
     }
 
@@ -163,6 +166,16 @@ public struct LiveScoreShareService: ScoreShareService {
         } catch {
             throw DomainError.scoreWriteFailed(reason: "\(error)")
         }
+        return destination
+    }
+
+    private func writeM4A(
+        score: Score,
+        sanitizedTitle: String,
+    ) async throws -> URL {
+        let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).m4a")
+        try? FileManager.default.removeItem(at: destination)
+        try await audioExporter.exportM4A(score: score, to: destination)
         return destination
     }
 }
