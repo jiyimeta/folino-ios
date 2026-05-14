@@ -58,6 +58,8 @@ public struct LiveScoreShareService: ScoreShareService {
             return try await writePDF(score: score, item: item, sanitizedTitle: title)
         case .midi:
             return try writeMIDI(score: score, sanitizedTitle: title)
+        case .audioM4A:
+            throw DomainError.unsupportedFormat("audioM4A")
         }
     }
 
