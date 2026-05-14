@@ -189,7 +189,10 @@ public final class LivePlaybackController: Domain.PlaybackController {
         )
     }
 
-    private static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
+    /// Distinct `(bank, program, isDrums)` triples used by `score`.
+    /// Internal so `LiveScoreAudioExporter` can prefetch the same
+    /// patch set before its offline render.
+    static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
         var keys: Set<SoundfontPatchKey> = []
         for entry in score.allStaves {
             guard let part = score.part(at: entry.address) else { continue }
