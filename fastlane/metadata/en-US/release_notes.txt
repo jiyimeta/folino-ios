@@ -1,1 +1,2 @@
-- Minor bug fixes
+- Fixed an issue where score files could not be imported on some devices
+- Added audio (.m4a) export
