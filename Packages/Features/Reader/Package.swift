@@ -29,6 +29,7 @@ let package = Package(
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
                 .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
+                .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
                 .product(name: "SheetMusicUI", package: "swift-sheet-music"),
             ],
             resources: [.process("Resources")],

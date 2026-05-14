@@ -3,6 +3,7 @@ import Domain
 import Foundation
 import Observation
 import SheetMusicCore
+import SheetMusicMSCX
 
 // Preview-only fakes for Reader. Production code never instantiates these;
 // they exist solely so `#Preview` blocks in this target can build a
@@ -165,6 +166,25 @@ extension Instrument {
     /// Convenience for previews — a minimal instrument with an empty id.
     static var previewEmpty: Instrument {
         Instrument(id: "")
+    }
+}
+
+/// Loads a real `.mscz` from `Resources/PreviewAssets/` if present.
+/// The file is intentionally not tracked in git — developers drop a
+/// local score into that directory to iterate the page-mode layout
+/// against realistic content via `mcp__xcode__RenderPreview`. Returns
+/// `nil` when the asset is missing or fails to parse, letting callers
+/// fall back to a synthetic score.
+enum PreviewBundledScore {
+    static func nowIsTheTime() -> Score? {
+        // SwiftPM's `.process(...)` flattens the resource directory
+        // structure, so the file sits at the bundle root regardless
+        // of the on-disk `PreviewAssets/` subdirectory.
+        guard let url = Bundle.module.url(
+            forResource: "Now_is_the_time",
+            withExtension: "mscz",
+        ) else { return nil }
+        return try? MSCZReader.parse(contentsOf: url)
     }
 }
 

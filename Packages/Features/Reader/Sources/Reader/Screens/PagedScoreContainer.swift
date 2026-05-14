@@ -35,24 +35,57 @@ struct PagedScoreContainer: View {
     @State private var pinch = PinchState()
     @State private var committedZoom: CGFloat = 1.0
 
+    /// Insets that position the page band inside the full-screen
+    /// scroll host: top includes the parent's
+    /// `safeAreaPadding(.top, ReaderTopOverlay.height)` so the band
+    /// clears the navigation chrome; the other edges are the raw
+    /// system insets. Sampled from a sibling reader that ignores the
+    /// safe area so the values stay correct even when the scroll host
+    /// itself is full-bleed.
+    @State private var pageInsets: EdgeInsets = .init()
+
     private struct PinchSession {
         var baseZoom: CGFloat
     }
 
     var body: some View {
+        // The outer `GeometryReader` honours both the parent's
+        // `safeAreaPadding(.top, ReaderTopOverlay.height)` and the
+        // system insets, so `proxy.size` is the visible page band at
+        // zoom 1. The scroll host itself is full-bleed (see
+        // `scrollContent`), and the hosted surface pads its content
+        // by `pageInsets` so it lands inside this same rect — pinch
+        // zoom can then expand the page band beyond the safe area
+        // toward the screen edges.
         GeometryReader { proxy in
-            let layoutWidth = max(proxy.size.width, staffSize * 4)
-            scrollContent(viewport: proxy.size)
+            let viewportWidth = max(proxy.size.width, staffSize * 4)
+            let viewportHeight = proxy.size.height
+            let viewport = CGSize(width: viewportWidth, height: viewportHeight)
+            scrollContent(viewport: viewport)
                 .task(id: TaskKey(
-                    score: score, size: staffSize, width: layoutWidth,
+                    score: score, size: staffSize, width: viewportWidth,
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    pageHeight: proxy.size.height,
+                    pageHeight: viewportHeight,
                 )) {
                     await rebuildLayout(
-                        width: layoutWidth,
-                        pageHeight: proxy.size.height,
+                        width: viewportWidth,
+                        pageHeight: viewportHeight,
                     )
+                }
+        }
+        .background {
+            // Sibling reader extending past the safe area so its
+            // `proxy.safeAreaInsets` still reflects the chrome the
+            // main GR was inset by. Top includes `ReaderTopOverlay`'s
+            // reserve from `ReaderRootScreen.safeAreaPadding(.top, …)`;
+            // the other edges are raw system insets.
+            Color.clear
+                .ignoresSafeArea()
+                .onGeometryChange(for: EdgeInsets.self) { proxy in
+                    proxy.safeAreaInsets
+                } action: { newValue in
+                    pageInsets = newValue
                 }
         }
     }
@@ -64,12 +97,18 @@ struct PagedScoreContainer: View {
             pendingScroll: $pendingScroll,
             alwaysBounceVertical: false,
             alwaysBounceHorizontal: false,
-            centerVertically: true,
-            centerHorizontally: true,
+            centerVertically: false,
+            centerHorizontally: false,
             expectedContentSize: {
+                // Full-screen content area (= page band + insets) so
+                // pinch zoom can stretch the band into the chrome
+                // regions. Padding lives inside the hosted surface
+                // and scales with zoom (mirrors `VerticalZoomedSurface`).
                 CGSize(
-                    width: viewport.width * committedZoom,
-                    height: viewport.height * committedZoom,
+                    width: (viewport.width + pageInsets.leading + pageInsets.trailing)
+                        * committedZoom,
+                    height: (viewport.height + pageInsets.top + pageInsets.bottom)
+                        * committedZoom,
                 )
             },
             onPinchBegan: { anchor, _ in
@@ -99,6 +138,7 @@ struct PagedScoreContainer: View {
                 document: document,
                 score: score,
                 viewport: viewport,
+                pageInsets: pageInsets,
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
@@ -109,6 +149,10 @@ struct PagedScoreContainer: View {
                 onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
             )
         }
+        // Full-bleed so pinch zoom can stretch the page band beyond
+        // the safe area into the chrome regions. The hosted surface
+        // re-applies `pageInsets` as padding so the band sits inside
+        // the safe area at zoom 1.
         .ignoresSafeArea()
         .onChange(of: playbackCursor) { _, newCursor in
             followCursor(newCursor)
@@ -235,17 +279,19 @@ struct PagedScoreContainer: View {
         }
     }
 
-    /// Greedy paginator: walks systems in order, packs them onto the
-    /// current page until the next one would overflow `pageHeight`,
-    /// then starts a new page. Authored `<LayoutBreak>page` markup on
-    /// the last measure of a system closes the page immediately under
-    /// `.honor` / `.ignoreSystemBreaks`. Under `.ignoreAll` page breaks
-    /// are ignored and pages only close on vertical overflow.
+    /// Greedy paginator working in document-Y coordinates. Walks
+    /// `systems` in order and closes the current page just before a
+    /// system whose bottom edge would extend past
+    /// `pageTopDoc + pageHeight`. `pageTopDoc` is `0` for the first
+    /// page (so the title frame and any pre-system decorations are
+    /// visible) and the previous page's last-system bottom for every
+    /// subsequent page (so the gap region above the new page's first
+    /// system — which is where rehearsal marks live — renders on the
+    /// new page, not the previous one).
     ///
-    /// Mirrors `SheetMusicUI.PagedScoreView.paginate` — that helper is
-    /// `internal` to `SheetMusicUI` and not reachable from a consumer,
-    /// so we re-implement the ~30 lines here instead of widening the
-    /// sheet-music API surface.
+    /// Authored `<LayoutBreak>page` on a system's last measure closes
+    /// the page immediately under `.honor` / `.ignoreSystemBreaks`;
+    /// `.ignoreAll` lets pages keep packing until vertical overflow.
     static func paginate(
         systems: [LayoutSystem],
         pageHeight: CGFloat,
@@ -254,23 +300,22 @@ struct PagedScoreContainer: View {
         guard !systems.isEmpty, pageHeight > 0 else { return [] }
         var pages: [Range<Int>] = []
         var pageStart = 0
-        var usedHeight: CGFloat = 0
+        var pageTopDoc: CGFloat = 0
 
         for (index, system) in systems.enumerated() {
-            let h = system.size.height
-            if index > pageStart, usedHeight + h > pageHeight {
+            let systemBottom = system.origin.y + system.size.height
+            if index > pageStart, systemBottom - pageTopDoc > pageHeight {
                 pages.append(pageStart ..< index)
                 pageStart = index
-                usedHeight = 0
+                pageTopDoc = systems[index - 1].origin.y
+                    + systems[index - 1].size.height
             }
-            usedHeight += h
-
             if policy != .ignoreAll,
                system.measures.last?.pageBreak == true
             {
                 pages.append(pageStart ..< (index + 1))
                 pageStart = index + 1
-                usedHeight = 0
+                pageTopDoc = systemBottom
             }
         }
         if pageStart < systems.count {
@@ -314,6 +359,7 @@ private struct PagedZoomedSurface: View {
     let document: LayoutDocument?
     let score: Score
     let viewport: CGSize
+    let pageInsets: EdgeInsets
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
@@ -326,18 +372,47 @@ private struct PagedZoomedSurface: View {
     var body: some View {
         if let doc = document, !pages.isEmpty {
             let zoom = viewModel.viewportZoom
-            let framedWidth = viewport.width * zoom
-            let framedHeight = viewport.height * zoom
+            let paddedWidth = viewport.width + pageInsets.leading + pageInsets.trailing
+            let paddedHeight = viewport.height + pageInsets.top + pageInsets.bottom
+            let framedWidth = paddedWidth * zoom
+            let framedHeight = paddedHeight * zoom
             let safePageIndex = min(max(pageIndex, 0), pages.count - 1)
             let pageRange = pages[safePageIndex]
-            let pageStartY: CGFloat = pageRange.lowerBound < doc.systems.count
-                ? doc.systems[pageRange.lowerBound].origin.y
-                : 0
+            let lastSystemIndex = pageRange.upperBound - 1
+            // Start the clip from the previous page's last-system
+            // bottom (or `0` for the first page) so the gap above the
+            // current page's first system — where rehearsal marks
+            // sit, plus the title frame on page 0 — renders here
+            // rather than on the previous page.
+            let pageStartY = Self.pageStartY(
+                forPage: safePageIndex, pages: pages, doc: doc,
+            )
+            let pageEndY: CGFloat = (0 ..< doc.systems.count).contains(lastSystemIndex)
+                ? doc.systems[lastSystemIndex].origin.y
+                + doc.systems[lastSystemIndex].size.height
+                : pageStartY
+            let pageHeight = max(0, pageEndY - pageStartY)
 
-            ZStack {
-                scoreSurface(document: doc, pageStartY: pageStartY)
+            ZStack(alignment: .topLeading) {
+                scoreSurface(
+                    document: doc,
+                    pageStartY: pageStartY,
+                    pageHeight: pageHeight,
+                )
+                // White fills the full viewport so any unused space
+                // beneath the last system on this page reads as part
+                // of the page (just like `SheetMusicUI.PagedScoreView`'s
+                // canvas) rather than the host scroll background.
+                .frame(width: viewport.width, height: viewport.height, alignment: .top)
+                    .background(Color.white)
                 tapOverlay()
             }
+            // Inset the band by `pageInsets` so at zoom 1 it lands
+            // inside the safe area + overlay reserve. Padding lives
+            // *inside* the scale chain (matches `VerticalZoomedSurface`)
+            // so pinch zoom expands the band into the chrome regions
+            // proportionally.
+            .padding(pageInsets)
             .scaleEffect(pinch.magnification, anchor: pinch.anchor)
             .scaleEffect(zoom, anchor: .topLeading)
             .offset(x: pinch.offsetX, y: pinch.offsetY)
@@ -354,7 +429,11 @@ private struct PagedZoomedSurface: View {
         }
     }
 
-    private func scoreSurface(document doc: LayoutDocument, pageStartY: CGFloat) -> some View {
+    private func scoreSurface(
+        document doc: LayoutDocument,
+        pageStartY: CGFloat,
+        pageHeight: CGFloat,
+    ) -> some View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
@@ -373,9 +452,13 @@ private struct PagedZoomedSurface: View {
                 )
             }
         }
-        .frame(height: doc.size.height, alignment: .top)
+        .frame(height: doc.size.height, alignment: .topLeading)
         .offset(y: -pageStartY)
-        .frame(width: viewport.width, height: viewport.height, alignment: .top)
+        // `.topLeading` (not `.top`) prevents the default `.center`
+        // horizontal alignment from drifting the doc when
+        // `doc.size.width` ≠ `viewport.width` — which would clip
+        // part-labels on the leading edge (e.g. "Lead" → "ead").
+        .frame(width: viewport.width, height: pageHeight, alignment: .topLeading)
         .clipped()
     }
 
@@ -395,9 +478,6 @@ private struct PagedZoomedSurface: View {
         return Color.clear
             .frame(width: width, height: viewport.height)
             .contentShape(Rectangle())
-        #if DEBUG
-            .overlay(Color.red.opacity(0.2))
-        #endif
     }
 
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
@@ -407,5 +487,22 @@ private struct PagedZoomedSurface: View {
                 viewModel.setManualCursor(cursor)
                 lastManualCursor = cursor
             }
+    }
+
+    /// First page renders from doc-Y `0` (so the title frame and any
+    /// pre-system decoration are visible); every subsequent page
+    /// starts at the previous page's last-system bottom (so the gap
+    /// above its own first system — rehearsal marks, etc. — lands on
+    /// the right page).
+    fileprivate static func pageStartY(
+        forPage index: Int,
+        pages: [Range<Int>],
+        doc: LayoutDocument,
+    ) -> CGFloat {
+        guard index > 0 else { return 0 }
+        let prevLastIndex = pages[index - 1].upperBound - 1
+        guard (0 ..< doc.systems.count).contains(prevLastIndex) else { return 0 }
+        return doc.systems[prevLastIndex].origin.y
+            + doc.systems[prevLastIndex].size.height
     }
 }
