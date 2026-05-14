@@ -63,6 +63,9 @@ final class AppBootstrap {
             let audioExporter = LiveScoreAudioExporter(
                 soundfontResolver: soundfontResolver,
                 domainResolver: soundfontResolver,
+                metronomeEnabled: {
+                    UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
+                },
             )
             shareService = LiveScoreShareService(
                 scoresDirectory: AppPaths.scoresDirectory,

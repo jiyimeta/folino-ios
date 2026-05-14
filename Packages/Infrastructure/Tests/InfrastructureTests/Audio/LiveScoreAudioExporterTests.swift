@@ -46,6 +46,7 @@ struct LiveScoreAudioExporterTests {
         let exporter = LiveScoreAudioExporter(
             soundfontResolver: StubAudioResolver(),
             domainResolver: ThrowingDomainResolver(),
+            metronomeEnabled: { false },
         )
         let tmp = try TempDirectory()
         let dest = tmp.url.appending(path: "out.m4a")

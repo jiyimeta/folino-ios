@@ -22,17 +22,27 @@ import SheetMusicCore
 /// falls back to bundled patches: an audio export that secretly
 /// substitutes piano for, say, drums would be confusing once shared
 /// out of the app.
+///
+/// Metronome policy: `MetronomeController.isEnabled` defaults to `true`
+/// inside swift-sheet-music, so a fresh `PlaybackEngine` would always
+/// embed the click track. The `metronomeEnabled` closure is evaluated
+/// per export so the rendered file matches whatever the user has set
+/// in the Reader's global toggle (`@AppStorage`-backed under
+/// `ReaderGlobalSettingsKey.metronomeEnabled`).
 @MainActor
 public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
     private let soundfontResolver: any SheetMusicAudio.SoundfontResolver
     private let domainResolver: any Domain.SoundfontResolver
+    private let metronomeEnabled: @Sendable () -> Bool
 
     public init(
         soundfontResolver: any SheetMusicAudio.SoundfontResolver,
         domainResolver: any Domain.SoundfontResolver,
+        metronomeEnabled: @escaping @Sendable () -> Bool,
     ) {
         self.soundfontResolver = soundfontResolver
         self.domainResolver = domainResolver
+        self.metronomeEnabled = metronomeEnabled
     }
 
     public func exportM4A(score: Score, to url: URL) async throws {
@@ -46,6 +56,7 @@ public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
                 reason: "engine prepare failed: \((error as NSError).localizedDescription)",
             )
         }
+        engine.setMuted(forChannel: .metronome, to: !metronomeEnabled())
 
         do {
             try await engine.exportAudioFile(
