@@ -372,15 +372,15 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 }
 
 enum ScoreFileTypes {
-    /// Content types accepted by the import picker. Custom UTTypes are
-    /// declared in `App/Info.plist`; resolving them here lets Files /
-    /// Document Picker enable `.mscz` / `.mxl` / `.mscx` directly
-    /// instead of dimming them as opaque `.zip` / `.xml`.
-    static var allowed: [UTType] {
-        let custom = [
-            "org.musescore.mscx", "org.musescore.mscz",
-            "com.recordare.musicxml", "com.recordare.musicxml.zipped",
-        ].compactMap(UTType.init)
-        return [.xml, .midi] + custom
-    }
+    /// Each specific UTI comes from whichever app on the device owns
+    /// the extension's registration; parent fallbacks (`.xml`, `.zip`,
+    /// `.midi`) cover cloud providers that hand us generic UTIs and
+    /// devices where a sibling app's UTI doesn't conform to ours.
+    /// `LiveScoreFileImporter.prepareImport` rejects unsupported files
+    /// by filename extension.
+    static let allowed: [UTType] = {
+        let specific = ["mscx", "mscz", "musicxml", "mxl"]
+            .compactMap { UTType(filenameExtension: $0) }
+        return specific + [.xml, .zip, .midi]
+    }()
 }
