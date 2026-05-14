@@ -56,14 +56,12 @@ struct VisualInspectorScreen: View {
                     .tag(ReaderLayoutMode.vertical.rawValue)
                 Image(systemName: "arrow.left.and.right")
                     .tag(ReaderLayoutMode.horizontal.rawValue)
-                Image(systemName: "book.pages")
-                    .tag(ReaderLayoutMode.page.rawValue)
             } label: {
                 Text("reader.preferences.layoutDirection", bundle: .module)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 132)
+            .frame(width: 92)
             .fixedSize()
         }
     }
