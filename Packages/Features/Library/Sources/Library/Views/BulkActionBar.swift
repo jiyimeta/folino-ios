@@ -78,6 +78,8 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
         Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "doc.richtext") }
     case .midi:
         Label { Text("library.format.midi", bundle: .module) } icon: { Image(systemName: "pianokeys") }
+    case .audioM4A:
+        Label { Text("library.format.m4a", bundle: .module) } icon: { Image(systemName: "waveform") }
     }
 }
 

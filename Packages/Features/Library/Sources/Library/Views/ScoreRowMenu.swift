@@ -69,7 +69,7 @@ func scoreRowMenu(
     }
 }
 
-/// Lazy-loading share submenu. Shows the four placeholder formats
+/// Lazy-loading share submenu. Shows the placeholder formats
 /// (no `isOriginal` flag) until the menu first opens, then fetches
 /// the per-item options once via `loadFormats` and updates the rows
 /// in place. Loading on first open avoids parsing every score in a
@@ -114,6 +114,7 @@ struct ShareSubmenu: View {
         ScoreShareFormatOption(format: .museScoreV3),
         ScoreShareFormatOption(format: .pdf),
         ScoreShareFormatOption(format: .midi),
+        ScoreShareFormatOption(format: .audioM4A),
     ]
 }
 
@@ -151,6 +152,8 @@ private func shareMenuFormatText(for format: ScoreShareFormat) -> Text {
         Text("library.format.pdf", bundle: .module)
     case .midi:
         Text("library.format.midi", bundle: .module)
+    case .audioM4A:
+        Text("library.format.m4a", bundle: .module)
     }
 }
 
@@ -162,5 +165,7 @@ private func shareMenuIconName(for format: ScoreShareFormat) -> String {
         "doc.richtext"
     case .midi:
         "pianokeys"
+    case .audioM4A:
+        "waveform"
     }
 }

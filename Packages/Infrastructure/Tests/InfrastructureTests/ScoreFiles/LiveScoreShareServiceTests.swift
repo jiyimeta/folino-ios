@@ -15,6 +15,20 @@ struct LiveScoreShareServiceTests {
         )
     }
 
+    /// Fake `ScoreAudioExporter` that captures its call args and
+    /// writes a sentinel byte to the destination URL so the
+    /// returned share URL can be inspected.
+    private final class FakeAudioExporter: Domain.ScoreAudioExporter, @unchecked Sendable {
+        var error: Error?
+        private(set) var calls: [(score: Score, url: URL)] = []
+
+        func exportM4A(score: Score, to url: URL) throws {
+            calls.append((score, url))
+            if let error { throw error }
+            try Data([0]).write(to: url)
+        }
+    }
+
     /// Lays out `Scores/` and `Share/` and writes a single fixture
     /// score so the gateway can resolve `Score.source` on load. Used
     /// by every `availableFormats` and `prepareShare` test below.
@@ -24,6 +38,7 @@ struct LiveScoreShareServiceTests {
         let scores: URL
         let shareTmp: URL
         let item: ScoreItem
+        let audio: FakeAudioExporter
 
         init(scoreData: Data, localFileName: String) throws {
             tmp = try TempDirectory()
@@ -32,10 +47,12 @@ struct LiveScoreShareServiceTests {
             try FileManager.default.createDirectory(at: scores, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: shareTmp, withIntermediateDirectories: true)
             try scoreData.write(to: scores.appending(path: localFileName))
+            audio = FakeAudioExporter()
             svc = LiveScoreShareService(
                 scoresDirectory: scores,
                 shareTempDirectory: shareTmp,
                 gateway: LiveScoreFileGateway(),
+                audioExporter: audio,
             )
             item = LiveScoreShareServiceTests.makeItem(localFileName: localFileName)
         }
@@ -48,12 +65,12 @@ struct LiveScoreShareServiceTests {
         try Rig(scoreData: scoreData, localFileName: localFileName)
     }
 
-    @Test func `available formats reports the same four formats for every loadable item`() async throws {
+    @Test func `available formats reports the same five formats for every loadable item`() async throws {
         let rig = try Self.makeRig(
             scoreData: Fixtures.minimalMSCZData(), localFileName: "abc.mscz",
         )
         let formats = await rig.svc.availableFormats(for: rig.item).map(\.format)
-        #expect(formats == [.museScoreV4, .museScoreV3, .pdf, .midi])
+        #expect(formats == [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A])
     }
 
     @Test func `available formats flags the matching muse score version for MSCZ sources`() async throws {
@@ -67,6 +84,7 @@ struct LiveScoreShareServiceTests {
         #expect(options.first { $0.format == .museScoreV3 }?.isOriginal == false)
         #expect(options.first { $0.format == .pdf }?.isOriginal == false)
         #expect(options.first { $0.format == .midi }?.isOriginal == false)
+        #expect(options.first { $0.format == .audioM4A }?.isOriginal == false)
     }
 
     @Test func `available formats flags the matching muse score version for MSCX sources`() async throws {
@@ -76,6 +94,7 @@ struct LiveScoreShareServiceTests {
         let options = await rig.svc.availableFormats(for: rig.item)
         #expect(options.first { $0.format == .museScoreV4 }?.isOriginal == true)
         #expect(options.first { $0.format == .museScoreV3 }?.isOriginal == false)
+        #expect(options.first { $0.format == .audioM4A }?.isOriginal == false)
     }
 
     @Test func `available formats leaves everything unflagged when source cannot load`() async throws {
@@ -85,6 +104,7 @@ struct LiveScoreShareServiceTests {
             scoresDirectory: tmp.url.appending(path: "Scores"),
             shareTempDirectory: tmp.url.appending(path: "Share"),
             gateway: LiveScoreFileGateway(),
+            audioExporter: FakeAudioExporter(),
         )
         let options = await svc.availableFormats(for: Self.makeItem(localFileName: "missing.mscz"))
         #expect(options.allSatisfy { !$0.isOriginal })
@@ -185,5 +205,30 @@ struct LiveScoreShareServiceTests {
         let first = try await rig.svc.prepareShare(item: rig.item, format: .midi)
         let second = try await rig.svc.prepareShare(item: rig.item, format: .midi)
         #expect(first == second)
+    }
+
+    @Test func `prepare share audio m4a writes a file via the audio exporter`() async throws {
+        let rig = try Self.makeRig(
+            scoreData: Fixtures.minimalMSCZData(), localFileName: "abc.mscz",
+        )
+
+        let url = try await rig.svc.prepareShare(item: rig.item, format: .audioM4A)
+
+        #expect(url.pathExtension == "m4a")
+        #expect(url.deletingLastPathComponent().path == rig.shareTmp.path)
+        #expect(rig.audio.calls.count == 1)
+        #expect(rig.audio.calls.first?.url == url)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test func `prepare share audio m4a propagates exporter errors`() async throws {
+        let rig = try Self.makeRig(
+            scoreData: Fixtures.minimalMSCZData(), localFileName: "abc.mscz",
+        )
+        rig.audio.error = DomainError.scoreWriteFailed(reason: "no soundfont")
+
+        await #expect(throws: DomainError.self) {
+            try await rig.svc.prepareShare(item: rig.item, format: .audioM4A)
+        }
     }
 }
