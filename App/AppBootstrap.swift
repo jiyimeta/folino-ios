@@ -31,16 +31,7 @@ final class AppBootstrap {
     func start() {
         do {
             configureAudioSession()
-            try FileManager.default.createDirectory(
-                at: AppPaths.scoresDirectory, withIntermediateDirectories: true,
-            )
-            try FileManager.default.createDirectory(
-                at: AppPaths.soundfontCacheDirectory, withIntermediateDirectories: true,
-            )
-            try? FileManager.default.removeItem(at: AppPaths.shareTempDirectory)
-            try FileManager.default.createDirectory(
-                at: AppPaths.shareTempDirectory, withIntermediateDirectories: true,
-            )
+            try prepareDirectories()
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
             let repository = LiveScoreLibraryRepository(
                 database: database,
@@ -57,11 +48,6 @@ final class AppBootstrap {
             self.repository = repository
             self.gateway = gateway
             self.importer = importer
-            shareService = LiveScoreShareService(
-                scoresDirectory: AppPaths.scoresDirectory,
-                shareTempDirectory: AppPaths.shareTempDirectory,
-                gateway: gateway,
-            )
             // `MuseScoreSF2Resolver` conforms to all three protocols
             // (`SheetMusicAudio.SoundfontResolver`, `Domain.SoundfontResolver`,
             // `Domain.PrecisePatchProbe`); one instance satisfies every slot.
@@ -74,6 +60,16 @@ final class AppBootstrap {
             ) {
                 presetCatalog = try? BundledSF2PresetCatalog(sf2URL: bundleSF2URL)
             }
+            let audioExporter = LiveScoreAudioExporter(
+                soundfontResolver: soundfontResolver,
+                domainResolver: soundfontResolver,
+            )
+            shareService = LiveScoreShareService(
+                scoresDirectory: AppPaths.scoresDirectory,
+                shareTempDirectory: AppPaths.shareTempDirectory,
+                gateway: gateway,
+                audioExporter: audioExporter,
+            )
             playbackController = LivePlaybackController(
                 soundfontResolver: soundfontResolver,
                 domainResolver: soundfontResolver,
@@ -92,6 +88,19 @@ final class AppBootstrap {
         } catch {
             failure = error
         }
+    }
+
+    private func prepareDirectories() throws {
+        try FileManager.default.createDirectory(
+            at: AppPaths.scoresDirectory, withIntermediateDirectories: true,
+        )
+        try FileManager.default.createDirectory(
+            at: AppPaths.soundfontCacheDirectory, withIntermediateDirectories: true,
+        )
+        try? FileManager.default.removeItem(at: AppPaths.shareTempDirectory)
+        try FileManager.default.createDirectory(
+            at: AppPaths.shareTempDirectory, withIntermediateDirectories: true,
+        )
     }
 
     private func configureAudioSession() {
