@@ -1,7 +1,97 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-
+    "share_extension.action.save" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } }
+      }
+    },
+    "share_extension.action.save_and_open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save & Open" } }
+      }
+    },
+    "share_extension.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } }
+      }
+    },
+    "share_extension.loading" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preparing…" } }
+      }
+    },
+    "share_extension.no_supported_files" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No supported scores were shared." } }
+      }
+    },
+    "share_extension.picker.library_only" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Library only" } }
+      }
+    },
+    "share_extension.picker.new_playlist" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New playlist…" } }
+      }
+    },
+    "share_extension.picker.new_playlist_placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Playlist name" } }
+      }
+    },
+    "share_extension.picker.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add to playlist" } }
+      }
+    },
+    "share_extension.summary.hide_files" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide files" } }
+      }
+    },
+    "share_extension.summary.n_scores_%lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld score" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld scores" } }
+            }
+          }
+        }
+      }
+    },
+    "share_extension.summary.one_score" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "1 score" } }
+      }
+    },
+    "share_extension.summary.show_files" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show files" } }
+      }
+    },
+    "share_extension.summary.unsupported_warning_%lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld unsupported file will be skipped" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld unsupported files will be skipped" } }
+            }
+          }
+        }
+      }
+    },
+    "share_extension.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Folino" } }
+      }
+    }
   },
   "version" : "1.0"
 }
