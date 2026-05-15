@@ -346,6 +346,38 @@ struct IncomingShareCoordinatorTests {
         #expect(FileManager.default.fileExists(atPath: tokenPath))
     }
 
+    @Test func `drain on launch aggregates results across tokens`() async throws {
+        let container = try makeContainer()
+        defer { try? FileManager.default.removeItem(at: container) }
+        let importer = FakeImporter()
+        let repo = FakeRepository()
+        let coordinator = IncomingShareCoordinator(
+            importer: importer,
+            repository: repo,
+            appGroupContainer: container,
+            clock: FixedClock(date: .now),
+        )
+        let firstToken = UUID()
+        let secondToken = UUID()
+        try stageToken(
+            container,
+            token: firstToken,
+            filenames: ["first.mscz"],
+            createdAt: Date(timeIntervalSince1970: 1000),
+        )
+        try stageToken(
+            container,
+            token: secondToken,
+            filenames: ["second.mscz"],
+            createdAt: Date(timeIntervalSince1970: 2000),
+        )
+
+        let result = await coordinator.drain(token: nil)
+
+        #expect(result.imported.count == 2)
+        #expect(result.skipped.isEmpty)
+    }
+
     @Test func `drain on launch processes all tokens in order`() async throws {
         let container = try makeContainer()
         defer { try? FileManager.default.removeItem(at: container) }

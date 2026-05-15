@@ -81,11 +81,42 @@ public final class IncomingShareCoordinator {
             }
         }
         pairs.sort { $0.1 < $1.1 }
-        var last: DrainResult = .empty
+        var aggregatedImported: [ScoreItemID] = []
+        var aggregatedSkipped: [Skip] = []
+        var aggregatedOpenAfter: ScoreItemID?
+        var aggregatedCreatedPlaylistID: PlaylistID?
+        var aggregatedTargetPlaylistID: PlaylistID?
+        var aggregatedTargetPlaylistName: String?
+        var aggregatedPlaylistCreateFailure: String?
         for (token, _) in pairs {
-            last = await drainOne(token: token)
+            let result = await drainOne(token: token)
+            aggregatedImported.append(contentsOf: result.imported)
+            aggregatedSkipped.append(contentsOf: result.skipped)
+            if let openAfter = result.openAfter {
+                aggregatedOpenAfter = openAfter
+            }
+            if let createdID = result.createdPlaylistID {
+                aggregatedCreatedPlaylistID = createdID
+            }
+            if let targetID = result.targetPlaylistID {
+                aggregatedTargetPlaylistID = targetID
+            }
+            if let targetName = result.targetPlaylistName {
+                aggregatedTargetPlaylistName = targetName
+            }
+            if let failure = result.playlistCreateFailure {
+                aggregatedPlaylistCreateFailure = failure
+            }
         }
-        return last
+        return DrainResult(
+            imported: aggregatedImported,
+            skipped: aggregatedSkipped,
+            openAfter: aggregatedOpenAfter,
+            createdPlaylistID: aggregatedCreatedPlaylistID,
+            targetPlaylistID: aggregatedTargetPlaylistID,
+            targetPlaylistName: aggregatedTargetPlaylistName,
+            playlistCreateFailure: aggregatedPlaylistCreateFailure,
+        )
     }
 
     private func drainOne(token: UUID) async -> DrainResult {
