@@ -39,8 +39,6 @@
               ).@count > 0
             ).@count > 0</string>
         </dict>
-        <key>NSExtensionMainStoryboard</key>
-        <string></string>
         <key>NSExtensionPrincipalClass</key>
         <string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
         <key>NSExtensionPointIdentifier</key>
