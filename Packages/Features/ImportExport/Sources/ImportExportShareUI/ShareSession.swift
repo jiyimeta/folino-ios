@@ -29,6 +29,13 @@ public final class ShareSession {
     }
 
     /// Copies `NSItemProvider` items into the App Group container under `token/files/`.
+    ///
+    /// Two-stage filter: try the specific score UTIs first (works when Files /
+    /// the host app recognises Folino's imported types), and fall back to
+    /// `public.data` / `public.file-url` followed by a filename-extension
+    /// check. The fallback is necessary because Files frequently propagates
+    /// `.mscz` as `public.zip-archive` and `.midi` as a generic data item
+    /// rather than the app-declared UTI.
     public func ingest(items: [NSItemProvider], token: UUID) async -> IngestSummary {
         let filesURL = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
         try? FileManager.default.createDirectory(at: filesURL, withIntermediateDirectories: true)
@@ -37,20 +44,28 @@ public final class ShareSession {
         var unsupported = 0
 
         for provider in items {
-            let supportedTypes = [
+            let specificTypes = [
                 "org.musescore.mscz",
                 "org.musescore.mscx",
                 "com.recordare.musicxml",
                 "com.recordare.musicxml.zipped",
                 "public.midi-audio",
             ]
-            let matched = supportedTypes.first { provider.hasItemConformingToTypeIdentifier($0) }
+            let fallbackTypes = ["public.file-url", "public.data"]
+            let matched = specificTypes.first { provider.hasItemConformingToTypeIdentifier($0) }
+                ?? fallbackTypes.first { provider.hasItemConformingToTypeIdentifier($0) }
             guard let matched else {
+                logger.info("provider registered no usable UTI: \(provider.registeredTypeIdentifiers)")
                 unsupported += 1
                 continue
             }
             do {
                 let url = try await loadFileRepresentation(provider: provider, typeIdentifier: matched)
+                guard Self.acceptedExtensions.contains(url.pathExtension.lowercased()) else {
+                    logger.info("rejecting unsupported extension: \(url.lastPathComponent)")
+                    unsupported += 1
+                    continue
+                }
                 let name = url.lastPathComponent
                 let dest = filesURL.appending(path: name, directoryHint: .notDirectory)
                 if FileManager.default.fileExists(atPath: dest.path) {
@@ -66,6 +81,10 @@ public final class ShareSession {
 
         return IngestSummary(token: token, acceptedFiles: accepted, unsupportedCount: unsupported)
     }
+
+    private static let acceptedExtensions: Set = [
+        "mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid",
+    ]
 
     public func finalize(
         token: UUID,
