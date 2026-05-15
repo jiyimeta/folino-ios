@@ -30,11 +30,13 @@ public final class ShareSession {
 
     /// Copies `NSItemProvider` items into the App Group container under `token/files/`.
     ///
-    /// UTI strategy mirrors the main app's `ScoreFileTypes.allowed`:
-    /// match specific score UTIs first, then fall back to parent UTIs
-    /// (`public.xml`, `public.zip-archive`, `public.midi-audio`) so cloud
-    /// providers that don't propagate the score-specific identifier still
-    /// reach us. A filename-extension allow-list is the final guard.
+    /// `NSItemProvider` from `Files` etc. doesn't reliably advertise the
+    /// specific score UTIs even when the main app declares them — many
+    /// share-sheet sources only set `public.data`. We try the specific
+    /// UTIs and parent UTIs first (so the load uses the most precise
+    /// type identifier available), then fall back to `public.data` /
+    /// `public.file-url` so we still receive the bytes. The filename
+    /// extension allow-list is the real gate.
     public func ingest(items: [NSItemProvider], token: UUID) async -> IngestSummary {
         let filesURL = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
         try? FileManager.default.createDirectory(at: filesURL, withIntermediateDirectories: true)
@@ -43,17 +45,19 @@ public final class ShareSession {
         var unsupported = 0
 
         for provider in items {
+            logger.info("ingest provider type IDs: \(provider.registeredTypeIdentifiers)")
             let matched = Self.candidateTypeIdentifiers
                 .first { provider.hasItemConformingToTypeIdentifier($0) }
             guard let matched else {
-                logger.info("provider registered no usable UTI: \(provider.registeredTypeIdentifiers)")
+                logger.info("provider has no usable UTI; skipping")
                 unsupported += 1
                 continue
             }
             do {
                 let url = try await loadFileRepresentation(provider: provider, typeIdentifier: matched)
-                guard Self.acceptedExtensions.contains(url.pathExtension.lowercased()) else {
-                    logger.info("rejecting unsupported extension: \(url.lastPathComponent)")
+                let ext = url.pathExtension.lowercased()
+                guard Self.acceptedExtensions.contains(ext) else {
+                    logger.info("rejecting extension '\(ext)' for file: \(url.lastPathComponent)")
                     unsupported += 1
                     continue
                 }
@@ -65,7 +69,7 @@ public final class ShareSession {
                 try FileManager.default.copyItem(at: url, to: dest)
                 accepted.append(.init(relativePath: "files/\(name)", originalName: name))
             } catch {
-                logger.error("ingest failure: \(String(describing: error))")
+                logger.error("ingest load failure (uti=\(matched)): \(String(describing: error))")
                 unsupported += 1
             }
         }
@@ -79,11 +83,14 @@ public final class ShareSession {
         "org.musescore.mscx",
         "com.recordare.musicxml",
         "com.recordare.musicxml.zipped",
-        // Parent fallbacks for cloud providers handing us generic UTIs and
-        // devices where a sibling app's UTI doesn't conform to ours.
+        // Parent UTIs for cloud providers handing us generic identifiers.
         "public.zip-archive",
         "public.xml",
         "public.midi-audio",
+        // Last-resort fallbacks: many share-sheet sources only set these.
+        // The filename-extension check below is what actually filters.
+        "public.file-url",
+        "public.data",
     ]
 
     private static let acceptedExtensions: Set = [
