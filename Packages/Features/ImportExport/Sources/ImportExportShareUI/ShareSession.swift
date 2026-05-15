@@ -30,12 +30,11 @@ public final class ShareSession {
 
     /// Copies `NSItemProvider` items into the App Group container under `token/files/`.
     ///
-    /// Two-stage filter: try the specific score UTIs first (works when Files /
-    /// the host app recognises Folino's imported types), and fall back to
-    /// `public.data` / `public.file-url` followed by a filename-extension
-    /// check. The fallback is necessary because Files frequently propagates
-    /// `.mscz` as `public.zip-archive` and `.midi` as a generic data item
-    /// rather than the app-declared UTI.
+    /// UTI strategy mirrors the main app's `ScoreFileTypes.allowed`:
+    /// match specific score UTIs first, then fall back to parent UTIs
+    /// (`public.xml`, `public.zip-archive`, `public.midi-audio`) so cloud
+    /// providers that don't propagate the score-specific identifier still
+    /// reach us. A filename-extension allow-list is the final guard.
     public func ingest(items: [NSItemProvider], token: UUID) async -> IngestSummary {
         let filesURL = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
         try? FileManager.default.createDirectory(at: filesURL, withIntermediateDirectories: true)
@@ -44,16 +43,8 @@ public final class ShareSession {
         var unsupported = 0
 
         for provider in items {
-            let specificTypes = [
-                "org.musescore.mscz",
-                "org.musescore.mscx",
-                "com.recordare.musicxml",
-                "com.recordare.musicxml.zipped",
-                "public.midi-audio",
-            ]
-            let fallbackTypes = ["public.file-url", "public.data"]
-            let matched = specificTypes.first { provider.hasItemConformingToTypeIdentifier($0) }
-                ?? fallbackTypes.first { provider.hasItemConformingToTypeIdentifier($0) }
+            let matched = Self.candidateTypeIdentifiers
+                .first { provider.hasItemConformingToTypeIdentifier($0) }
             guard let matched else {
                 logger.info("provider registered no usable UTI: \(provider.registeredTypeIdentifiers)")
                 unsupported += 1
@@ -81,6 +72,19 @@ public final class ShareSession {
 
         return IngestSummary(token: token, acceptedFiles: accepted, unsupportedCount: unsupported)
     }
+
+    private static let candidateTypeIdentifiers: [String] = [
+        // Specific UTIs whichever app on the device owns the registration.
+        "org.musescore.mscz",
+        "org.musescore.mscx",
+        "com.recordare.musicxml",
+        "com.recordare.musicxml.zipped",
+        // Parent fallbacks for cloud providers handing us generic UTIs and
+        // devices where a sibling app's UTI doesn't conform to ours.
+        "public.zip-archive",
+        "public.xml",
+        "public.midi-audio",
+    ]
 
     private static let acceptedExtensions: Set = [
         "mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid",
