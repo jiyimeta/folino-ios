@@ -78,6 +78,8 @@ struct IncomingShareCoordinatorTests {
         var savedPlaylists: [Playlist] = []
         var savedScoreItems: [ScoreItem] = []
         var prefs: [ScoreItemID: ReaderPreferences] = [:]
+        var savePlaylistError: (any Error)?
+        var savePlaylistErrorMatchingName: String?
 
         func refresh() throws {}
         func saveScoreItem(_ item: ScoreItem) throws {
@@ -92,6 +94,11 @@ struct IncomingShareCoordinatorTests {
         func saveTag(_ tag: Domain.Tag) throws {}
         func deleteTag(id: TagID) throws {}
         func savePlaylist(_ playlist: Playlist) throws {
+            if let savePlaylistError,
+               savePlaylistErrorMatchingName == nil || savePlaylistErrorMatchingName == playlist.name
+            {
+                throw savePlaylistError
+            }
             savedPlaylists.append(playlist)
             if let idx = playlists.firstIndex(where: { $0.id == playlist.id }) {
                 playlists[idx] = playlist
@@ -312,6 +319,31 @@ struct IncomingShareCoordinatorTests {
         if case .parseFailed = result.skipped[0].reason {} else {
             Issue.record("expected parseFailed")
         }
+    }
+
+    @Test func `playlist create failure preserves token for retry`() async throws {
+        let container = try makeContainer()
+        defer { try? FileManager.default.removeItem(at: container) }
+        let importer = FakeImporter()
+        let repo = FakeRepository()
+        repo.savePlaylistError = NSError(domain: "Test", code: 42)
+        repo.savePlaylistErrorMatchingName = "fails"
+        let coordinator = IncomingShareCoordinator(
+            importer: importer,
+            repository: repo,
+            appGroupContainer: container,
+            clock: FixedClock(date: .now),
+        )
+        let token = UUID()
+        try stageToken(container, token: token, newPlaylistName: "fails", filenames: ["a.mscz"])
+
+        let result = await coordinator.drain(token: token)
+
+        #expect(result.imported.isEmpty)
+        #expect(result.skipped.isEmpty)
+        #expect(result.playlistCreateFailure == "fails")
+        let tokenPath = AppGroupPaths.tokenURL(token: token, in: container).path
+        #expect(FileManager.default.fileExists(atPath: tokenPath))
     }
 
     @Test func `drain on launch processes all tokens in order`() async throws {

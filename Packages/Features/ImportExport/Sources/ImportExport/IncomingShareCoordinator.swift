@@ -96,17 +96,18 @@ public final class IncomingShareCoordinator {
             return .empty
         }
         let resolution = await resolvePlaylist(intent: intent)
-        if case let .failed(name, error) = resolution {
-            try? FileManager.default.removeItem(at: tokenURL)
+        if case let .failed(name, _) = resolution {
+            // Preserve the staged token on disk so the user can retry on the
+            // next drain (cold launch). The spec mandates: nothing is imported,
+            // and the banner reports `Couldn't create playlist "<name>"`.
             return DrainResult(
                 imported: [],
-                skipped: intent.files.map {
-                    Skip(originalName: $0.originalName, reason: .persistenceFailed(error))
-                },
+                skipped: [],
                 openAfter: nil,
                 createdPlaylistID: nil,
                 targetPlaylistID: nil,
                 targetPlaylistName: name,
+                playlistCreateFailure: name,
             )
         }
         let importOutcome = await importFiles(intent: intent, token: token)

@@ -8,6 +8,11 @@ public struct DrainResult: Sendable {
     public let createdPlaylistID: PlaylistID?
     public let targetPlaylistID: PlaylistID?
     public let targetPlaylistName: String?
+    /// When non-nil, the coordinator attempted to create a new playlist with
+    /// this name but the persistence call threw. The staged token is preserved
+    /// on disk so the user can retry on the next drain. The banner reads
+    /// `Couldn't create playlist "<name>"`.
+    public let playlistCreateFailure: String?
 
     public init(
         imported: [ScoreItemID],
@@ -16,6 +21,7 @@ public struct DrainResult: Sendable {
         createdPlaylistID: PlaylistID?,
         targetPlaylistID: PlaylistID?,
         targetPlaylistName: String?,
+        playlistCreateFailure: String? = nil,
     ) {
         self.imported = imported
         self.skipped = skipped
@@ -23,6 +29,7 @@ public struct DrainResult: Sendable {
         self.createdPlaylistID = createdPlaylistID
         self.targetPlaylistID = targetPlaylistID
         self.targetPlaylistName = targetPlaylistName
+        self.playlistCreateFailure = playlistCreateFailure
     }
 
     public static let empty = DrainResult(
@@ -32,6 +39,7 @@ public struct DrainResult: Sendable {
         createdPlaylistID: nil,
         targetPlaylistID: nil,
         targetPlaylistName: nil,
+        playlistCreateFailure: nil,
     )
 }
 
