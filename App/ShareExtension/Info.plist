@@ -25,10 +25,19 @@
         <key>NSExtensionAttributes</key>
         <dict>
             <key>NSExtensionActivationRule</key>
-            <dict>
-                <key>NSExtensionActivationSupportsFileWithMaxCount</key>
-                <integer>10</integer>
-            </dict>
+            <string>SUBQUERY (
+              extensionItems,
+              $extensionItem,
+              SUBQUERY (
+                $extensionItem.attachments,
+                $attachment,
+                ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "org.musescore.mscz"
+                  || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "org.musescore.mscx"
+                  || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.recordare.musicxml"
+                  || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.recordare.musicxml.zipped"
+                  || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.midi-audio"
+              ).@count > 0
+            ).@count > 0</string>
         </dict>
         <key>NSExtensionMainStoryboard</key>
         <string></string>
