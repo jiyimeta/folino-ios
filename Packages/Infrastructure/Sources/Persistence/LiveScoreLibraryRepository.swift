@@ -18,11 +18,18 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     @ObservationIgnored
     private let scoresDirectory: URL
     @ObservationIgnored
+    private let playlistsIndexPublisher: (any PlaylistsIndexPublisher)?
+    @ObservationIgnored
     private var observationTask: Task<Void, Never>?
 
-    public init(database: AppDatabase, scoresDirectory: URL) {
+    public init(
+        database: AppDatabase,
+        scoresDirectory: URL,
+        playlistsIndexPublisher: (any PlaylistsIndexPublisher)? = nil,
+    ) {
         self.database = database
         self.scoresDirectory = scoresDirectory
+        self.playlistsIndexPublisher = playlistsIndexPublisher
     }
 
     deinit {
@@ -204,6 +211,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                     ).insert(db)
                 }
             }
+            await publishPlaylistsIndexIfNeeded()
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }
@@ -214,9 +222,15 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
             try await database.pool.write { db in
                 _ = try PlaylistRecord.deleteOne(db, key: id.rawValue.uuidString)
             }
+            await publishPlaylistsIndexIfNeeded()
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }
+    }
+
+    private func publishPlaylistsIndexIfNeeded() async {
+        guard let publisher = playlistsIndexPublisher else { return }
+        await publisher.publish(playlists: playlists)
     }
 
     // MARK: - Reader preferences
