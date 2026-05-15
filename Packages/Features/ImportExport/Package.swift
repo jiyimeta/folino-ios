@@ -45,7 +45,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ImportExportAppGroupTests",
-            dependencies: ["ImportExportAppGroup"],
+            dependencies: ["ImportExportAppGroup", "Domain"],
         ),
         .testTarget(
             name: "ImportExportTests",
