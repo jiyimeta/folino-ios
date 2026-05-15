@@ -2,10 +2,13 @@ import Audio
 import AVFoundation
 import Domain
 import Foundation
+import ImportExport
+import ImportExportAppGroup
 import Observation
 import Persistence
 import ScoreFiles
 import Soundfonts
+import UtilityCore
 
 @MainActor
 @Observable
@@ -22,20 +25,30 @@ final class AppBootstrap {
     private(set) var soundfontResolver: MuseScoreSF2Resolver?
     private(set) var presetCatalog: BundledSF2PresetCatalog?
     private(set) var shareService: LiveScoreShareService?
+    private(set) var incomingShareCoordinator: IncomingShareCoordinator?
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`.
     /// Last-wins: a second URL arriving before the first is consumed
     /// overwrites it. v1 only opens one file at a time.
     private(set) var pendingIncomingURL: URL?
 
+    /// Single-slot for an incoming share token. Last-wins.
+    private(set) var pendingShareToken: UUID?
+    private(set) var pendingShareOpenAfter = false
+
     func start() {
         do {
             configureAudioSession()
             try prepareDirectories()
+            let appGroupContainer = AppGroupPaths.container()
+            let writer: PlaylistsIndexWriter? = appGroupContainer.map {
+                PlaylistsIndexWriter(appGroupContainer: $0)
+            }
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
             let repository = LiveScoreLibraryRepository(
                 database: database,
                 scoresDirectory: AppPaths.scoresDirectory,
+                playlistsIndexPublisher: writer,
             )
             let gateway = LiveScoreFileGateway()
             let importer = LiveScoreFileImporter(
@@ -43,46 +56,31 @@ final class AppBootstrap {
                 repository: repository,
                 scoresDirectory: AppPaths.scoresDirectory,
             )
+            let shareCoordinator: IncomingShareCoordinator? = appGroupContainer.map { container in
+                IncomingShareCoordinator(
+                    importer: importer,
+                    repository: repository,
+                    appGroupContainer: container,
+                    clock: SystemClock(),
+                )
+            }
 
             self.database = database
             self.repository = repository
             self.gateway = gateway
             self.importer = importer
-            // `MuseScoreSF2Resolver` conforms to all three protocols
-            // (`SheetMusicAudio.SoundfontResolver`, `Domain.SoundfontResolver`,
-            // `Domain.PrecisePatchProbe`); one instance satisfies every slot.
-            let soundfontResolver = MuseScoreSF2Resolver(
-                cacheDirectory: AppPaths.soundfontCacheDirectory,
-            )
-            self.soundfontResolver = soundfontResolver
-            if let bundleSF2URL = Bundle.main.url(
-                forResource: "MuseScore_General", withExtension: "sf2", subdirectory: "Sounds",
-            ) {
-                presetCatalog = try? BundledSF2PresetCatalog(sf2URL: bundleSF2URL)
-            }
-            let audioExporter = LiveScoreAudioExporter(
-                soundfontResolver: soundfontResolver,
-                domainResolver: soundfontResolver,
-                metronomeEnabled: {
-                    UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
-                },
-            )
-            shareService = LiveScoreShareService(
-                scoresDirectory: AppPaths.scoresDirectory,
-                shareTempDirectory: AppPaths.shareTempDirectory,
-                gateway: gateway,
-                audioExporter: audioExporter,
-            )
-            playbackController = LivePlaybackController(
-                soundfontResolver: soundfontResolver,
-                domainResolver: soundfontResolver,
-                precisionProbe: soundfontResolver,
-            )
+            incomingShareCoordinator = shareCoordinator
+            installAudioStack(gateway: gateway)
             reachability = LiveNetworkReachability()
 
             Task { [weak self] in
                 do {
                     try await repository.refresh()
+                    // Publish current playlists so the Share Extension's picker
+                    // is populated on first use.
+                    if let writer { writer.publish(playlists: repository.playlists) }
+                    // Drain any tokens queued by the Share Extension before this launch.
+                    await self?.incomingShareCoordinator?.drain(token: nil)
                     self?.isReady = true
                 } catch {
                     self?.failure = error
@@ -91,6 +89,39 @@ final class AppBootstrap {
         } catch {
             failure = error
         }
+    }
+
+    private func installAudioStack(gateway: LiveScoreFileGateway) {
+        // `MuseScoreSF2Resolver` conforms to all three protocols
+        // (`SheetMusicAudio.SoundfontResolver`, `Domain.SoundfontResolver`,
+        // `Domain.PrecisePatchProbe`); one instance satisfies every slot.
+        let soundfontResolver = MuseScoreSF2Resolver(
+            cacheDirectory: AppPaths.soundfontCacheDirectory,
+        )
+        self.soundfontResolver = soundfontResolver
+        if let bundleSF2URL = Bundle.main.url(
+            forResource: "MuseScore_General", withExtension: "sf2", subdirectory: "Sounds",
+        ) {
+            presetCatalog = try? BundledSF2PresetCatalog(sf2URL: bundleSF2URL)
+        }
+        let audioExporter = LiveScoreAudioExporter(
+            soundfontResolver: soundfontResolver,
+            domainResolver: soundfontResolver,
+            metronomeEnabled: {
+                UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
+            },
+        )
+        shareService = LiveScoreShareService(
+            scoresDirectory: AppPaths.scoresDirectory,
+            shareTempDirectory: AppPaths.shareTempDirectory,
+            gateway: gateway,
+            audioExporter: audioExporter,
+        )
+        playbackController = LivePlaybackController(
+            soundfontResolver: soundfontResolver,
+            domainResolver: soundfontResolver,
+            precisionProbe: soundfontResolver,
+        )
     }
 
     private func prepareDirectories() throws {
@@ -114,6 +145,11 @@ final class AppBootstrap {
     }
 
     func acceptIncomingURL(_ url: URL) {
+        if let parsed = ShareTokenURL.parse(url) {
+            pendingShareToken = parsed.token
+            pendingShareOpenAfter = parsed.openAfter
+            return
+        }
         pendingIncomingURL = url
     }
 
@@ -121,5 +157,13 @@ final class AppBootstrap {
         let url = pendingIncomingURL
         pendingIncomingURL = nil
         return url
+    }
+
+    func consumePendingShareToken() -> (UUID, Bool)? {
+        guard let token = pendingShareToken else { return nil }
+        let pair = (token, pendingShareOpenAfter)
+        pendingShareToken = nil
+        pendingShareOpenAfter = false
+        return pair
     }
 }
