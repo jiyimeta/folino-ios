@@ -270,15 +270,7 @@ private struct ReadyShell: View {
     @MainActor
     private func runDrain(coordinator: IncomingShareCoordinator, openAfter: Bool) async {
         let result = await coordinator.drain(token: nil)
-        // Banner copy (v1 English, localized later).
-        if !result.imported.isEmpty {
-            let target = result.targetPlaylistName ?? "Library"
-            drainBannerMessage = "\(result.imported.count) added to \(target)"
-        } else if let dup = result.skipped.first, case let .duplicate(_, title) = dup.reason {
-            drainBannerMessage = "Already in Library: \(title)"
-        } else if let first = result.skipped.first {
-            drainBannerMessage = "Couldn't import: \(first.originalName)"
-        }
+        drainBannerMessage = DrainBannerComposer.message(for: result)
         // Reader push when openAfter is honored.
         if openAfter, let openID = result.openAfter,
            let item = repository.scoreItems.first(where: { $0.id == openID })
