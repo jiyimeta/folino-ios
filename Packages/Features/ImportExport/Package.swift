@@ -53,7 +53,12 @@ let package = Package(
         ),
         .testTarget(
             name: "ImportExportShareUITests",
-            dependencies: ["ImportExportShareUI"],
+            dependencies: [
+                "ImportExportShareUI",
+                "ImportExportAppGroup",
+                "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
+            ],
         ),
     ],
 )
