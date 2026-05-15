@@ -49,7 +49,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ImportExportTests",
-            dependencies: ["ImportExport"],
+            dependencies: ["ImportExport", "ImportExportAppGroup", "Domain"],
         ),
         .testTarget(
             name: "ImportExportShareUITests",
