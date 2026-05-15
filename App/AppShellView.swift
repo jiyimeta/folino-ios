@@ -1,4 +1,5 @@
 import Domain
+import ImportExport
 import Library
 import LicenseList
 import Reader
@@ -91,6 +92,7 @@ private struct ReadyShell: View {
     @State private var isSettingsPresented = false
     @State private var columnVisibility: NavigationSplitViewVisibility
     @State private var navStateStore = NavigationStateStore()
+    @State private var drainBannerMessage: String?
 
     init(
         bootstrap: AppBootstrap,
@@ -228,6 +230,22 @@ private struct ReadyShell: View {
             resetNavigationForIncomingURL()
             Task { await libraryVM.startImport(from: url) }
         }
+        .task {
+            // Cold-launch: drain a token queued before the view appeared.
+            if let (_, openAfter) = bootstrap.consumePendingShareToken(),
+               let coordinator = bootstrap.incomingShareCoordinator
+            {
+                resetNavigationForIncomingURL()
+                await runDrain(coordinator: coordinator, openAfter: openAfter)
+            }
+        }
+        .onChange(of: bootstrap.pendingShareToken) { _, newValue in
+            guard newValue != nil,
+                  let (_, openAfter) = bootstrap.consumePendingShareToken(),
+                  let coordinator = bootstrap.incomingShareCoordinator else { return }
+            resetNavigationForIncomingURL()
+            Task { await runDrain(coordinator: coordinator, openAfter: openAfter) }
+        }
         .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
         .onChange(of: sidebarPath) { _, _ in saveNavSnapshot() }
         .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
@@ -236,7 +254,44 @@ private struct ReadyShell: View {
                 ImportLoadingHUD()
             }
         }
+        .overlay(alignment: .top) {
+            if let message = drainBannerMessage {
+                DrainBannerView(message: message)
+                    .task {
+                        try? await Task.sleep(for: .seconds(2.5))
+                        drainBannerMessage = nil
+                    }
+            }
+        }
         .animation(.easeInOut(duration: 0.15), value: libraryVM.isImporting)
+        .animation(.easeInOut(duration: 0.2), value: drainBannerMessage)
+    }
+
+    @MainActor
+    private func runDrain(coordinator: IncomingShareCoordinator, openAfter: Bool) async {
+        let result = await coordinator.drain(token: nil)
+        // Banner copy (v1 English, localized later).
+        if !result.imported.isEmpty {
+            let target = result.targetPlaylistName ?? "Library"
+            drainBannerMessage = "\(result.imported.count) added to \(target)"
+        } else if let dup = result.skipped.first, case let .duplicate(_, title) = dup.reason {
+            drainBannerMessage = "Already in Library: \(title)"
+        } else if let first = result.skipped.first {
+            drainBannerMessage = "Couldn't import: \(first.originalName)"
+        }
+        // Reader push when openAfter is honored.
+        if openAfter, let openID = result.openAfter,
+           let item = repository.scoreItems.first(where: { $0.id == openID })
+        {
+            if horizontalSizeClass == .regular {
+                sidebarPath = NavigationPath()
+                detailScoreItem = item
+                columnVisibility = .detailOnly
+            } else {
+                compactPath = NavigationPath()
+                compactPath.append(item)
+            }
+        }
     }
 
     @ViewBuilder
@@ -318,5 +373,18 @@ private struct ImportLoadingHUD: View {
             .accessibilityElement(children: .combine)
         }
         .transition(.opacity)
+    }
+}
+
+private struct DrainBannerView: View {
+    let message: String
+    var body: some View {
+        Text(message)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .padding(.top, 12)
+            .shadow(radius: 4)
+            .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
