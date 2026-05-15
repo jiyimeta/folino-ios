@@ -45,11 +45,11 @@ public final class ShareSession {
         var unsupported = 0
 
         for provider in items {
-            logger.info("ingest provider type IDs: \(provider.registeredTypeIdentifiers)")
+            logger.notice("ingest provider type IDs: \(provider.registeredTypeIdentifiers)")
             let matched = Self.candidateTypeIdentifiers
                 .first { provider.hasItemConformingToTypeIdentifier($0) }
             guard let matched else {
-                logger.info("provider has no usable UTI; skipping")
+                logger.notice("provider has no usable UTI; skipping")
                 unsupported += 1
                 continue
             }
@@ -57,7 +57,7 @@ public final class ShareSession {
                 let url = try await loadFileRepresentation(provider: provider, typeIdentifier: matched)
                 let ext = url.pathExtension.lowercased()
                 guard Self.acceptedExtensions.contains(ext) else {
-                    logger.info("rejecting extension '\(ext)' for file: \(url.lastPathComponent)")
+                    logger.notice("rejecting extension '\(ext)' for file: \(url.lastPathComponent)")
                     unsupported += 1
                     continue
                 }
