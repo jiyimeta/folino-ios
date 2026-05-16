@@ -44,24 +44,29 @@ public final class ShareSession {
         var accepted: [IncomingShareIntent.File] = []
         var unsupported = 0
 
-        for provider in items {
-            logger.notice("ingest provider type IDs: \(provider.registeredTypeIdentifiers)")
+        logger.notice("ingest start; item count=\(items.count, privacy: .public)")
+        for (index, provider) in items.enumerated() {
+            let ids = provider.registeredTypeIdentifiers.joined(separator: ",")
+            logger.notice("provider[\(index, privacy: .public)] type IDs: \(ids, privacy: .public)")
             let matched = Self.candidateTypeIdentifiers
                 .first { provider.hasItemConformingToTypeIdentifier($0) }
             guard let matched else {
-                logger.notice("provider has no usable UTI; skipping")
+                logger.notice("provider[\(index, privacy: .public)] has no usable UTI; skipping")
                 unsupported += 1
                 continue
             }
+            logger.notice("provider[\(index, privacy: .public)] matched UTI: \(matched, privacy: .public)")
             do {
                 let url = try await loadFileRepresentation(provider: provider, typeIdentifier: matched)
                 let ext = url.pathExtension.lowercased()
+                let name = url.lastPathComponent
+                logger.notice("provider[\(index, privacy: .public)] loaded name=\(name, privacy: .public)")
+                logger.notice("provider[\(index, privacy: .public)] ext=\(ext, privacy: .public)")
                 guard Self.acceptedExtensions.contains(ext) else {
-                    logger.notice("rejecting extension '\(ext)' for file: \(url.lastPathComponent)")
+                    logger.notice("provider[\(index, privacy: .public)] rejected by extension allow-list")
                     unsupported += 1
                     continue
                 }
-                let name = url.lastPathComponent
                 let dest = filesURL.appending(path: name, directoryHint: .notDirectory)
                 if FileManager.default.fileExists(atPath: dest.path) {
                     try? FileManager.default.removeItem(at: dest)
@@ -69,10 +74,16 @@ public final class ShareSession {
                 try FileManager.default.copyItem(at: url, to: dest)
                 accepted.append(.init(relativePath: "files/\(name)", originalName: name))
             } catch {
-                logger.error("ingest load failure (uti=\(matched)): \(String(describing: error))")
+                let errDesc = String(describing: error)
+                logger.error(
+                    "provider[\(index, privacy: .public)] load failure: \(errDesc, privacy: .public)",
+                )
                 unsupported += 1
             }
         }
+        logger.notice(
+            "ingest done; accepted=\(accepted.count, privacy: .public) unsupported=\(unsupported, privacy: .public)",
+        )
 
         return IngestSummary(token: token, acceptedFiles: accepted, unsupportedCount: unsupported)
     }
