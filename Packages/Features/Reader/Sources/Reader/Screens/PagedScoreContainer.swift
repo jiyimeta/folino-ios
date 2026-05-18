@@ -14,8 +14,10 @@ import SwiftUI
 /// Pinch composition matches `VerticalScoreContainer` (see that file
 /// for the rationale on `committedZoom`, the two `scaleEffect`s, and
 /// the snap-to-unit two-phase commit). Pages turn from left / right
-/// 12 % tap zones overlaid on the scroll content; a page turn resets
-/// `viewportZoom` to 1 and `pendingScroll` to the origin.
+/// 12 % tap zones overlaid on the scroll content; a turn resets
+/// `viewportZoom` to 1 and `pendingScroll` to the origin, then plays
+/// the stack-style slide animation rendered by `PagedZoomedSurface`
+/// (only the moving page animates; the static side renders at identity).
 struct PagedScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
@@ -26,7 +28,12 @@ struct PagedScoreContainer: View {
 
     @State private var document: LayoutDocument?
     @State private var pages: [Range<Int>] = []
-    @State private var pageIndex = 0
+    /// Page-turn state lives on an `@Observable` so the `slideProgress`
+    /// animation reaches the `ScoreScrollHost`-hosted subtree via the
+    /// observation system. `UIHostingController` does not forward
+    /// animation transactions through `rootView` reassignment — same
+    /// hazard documented on `PinchState`.
+    @State private var pageState = PageState()
     @State private var liveScrollOffset: CGPoint = .zero
     @State private var pinchSession: PinchSession?
     @State private var pendingScroll: ScoreScrollCommand?
@@ -47,6 +54,19 @@ struct PagedScoreContainer: View {
     private struct PinchSession {
         var baseZoom: CGFloat
     }
+
+    /// Direction of the page turn currently animating. On `.forward`
+    /// the outgoing page slides off to the leading edge while the
+    /// incoming page sits statically beneath it; on `.backward` the
+    /// incoming page slides in from the leading edge on top of the
+    /// outgoing one.
+    enum PageDirection {
+        case forward
+        case backward
+    }
+
+    /// Curve used to animate `slideProgress` from 0 → 1 on every turn.
+    static let pageTransitionAnimation: Animation = .easeInOut(duration: 0.22)
 
     var body: some View {
         // The outer `GeometryReader` honours both the parent's
@@ -135,6 +155,7 @@ struct PagedScoreContainer: View {
             PagedZoomedSurface(
                 viewModel: viewModel,
                 pinch: pinch,
+                pageState: pageState,
                 document: document,
                 score: score,
                 viewport: viewport,
@@ -143,7 +164,6 @@ struct PagedScoreContainer: View {
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
                 pages: pages,
-                pageIndex: pageIndex,
                 onPrevPage: { goToPage(delta: -1) },
                 onNextPage: { goToPage(delta: +1) },
                 onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
@@ -215,9 +235,9 @@ struct PagedScoreContainer: View {
         let mi = measureIndex(of: cursor)
         guard let sys = systemIndex(forMeasureIndex: mi, in: doc) else { return }
         guard let target = pages.firstIndex(where: { $0.contains(sys) }) else { return }
-        guard target != pageIndex else { return }
-        pageIndex = target
-        pendingScroll = .immediate(.zero)
+        guard target != pageState.pageIndex else { return }
+        let direction: PageDirection = target > pageState.pageIndex ? .forward : .backward
+        commitPageTurn(to: target, direction: direction)
     }
 
     private func systemIndex(
@@ -233,7 +253,7 @@ struct PagedScoreContainer: View {
     }
 
     private func goToPage(delta: Int) {
-        let target = pageIndex + delta
+        let target = pageState.pageIndex + delta
         guard target >= 0, target < pages.count else { return }
         viewModel.resetZoom()
         committedZoom = 1.0
@@ -241,8 +261,43 @@ struct PagedScoreContainer: View {
         pinch.anchor = .center
         pinch.offsetX = 0
         pinch.offsetY = 0
-        pageIndex = target
+        commitPageTurn(to: target, direction: delta > 0 ? .forward : .backward)
+    }
+
+    /// Drive the page turn via an explicit `slideProgress` instead of
+    /// SwiftUI's view-removal transitions. `pageIndex` updates
+    /// synchronously so cursor follow / layout rebuilds see the new
+    /// page immediately; the visual transition is rendered by
+    /// `pageStackLayers` — only the moving page animates, the static
+    /// side stays put. A `transitionToken` guards the `completion:`
+    /// callback so a rapid second turn doesn't have its outgoing
+    /// wiped by the previous turn's late completion.
+    ///
+    /// The `slideProgress = 0` reset and the animated `1` assignment
+    /// are split across a run-loop hop on purpose: setting both in
+    /// the same synchronous block lets SwiftUI coalesce them, so the
+    /// renderer sees only the final value (`1`) and — if the previous
+    /// turn also ended at `1` — concludes "no change, no animation".
+    /// The matching pinch reset elsewhere in this file uses the same
+    /// pattern.
+    private func commitPageTurn(to target: Int, direction: PageDirection) {
+        let token = UUID()
+        pageState.transitionToken = token
+        pageState.pageDirection = direction
+        pageState.outgoingIndex = pageState.pageIndex
+        pageState.pageIndex = target
+        pageState.slideProgress = 0
         pendingScroll = .immediate(.zero)
+        DispatchQueue.main.async {
+            withAnimation(Self.pageTransitionAnimation) {
+                pageState.slideProgress = 1
+            } completion: {
+                if pageState.transitionToken == token {
+                    pageState.outgoingIndex = nil
+                    pageState.transitionToken = nil
+                }
+            }
+        }
     }
 
     private var scoreOptions: ScoreViewOptions {
@@ -274,8 +329,8 @@ struct PagedScoreContainer: View {
         )
         document = newDoc
         pages = newPages
-        if pageIndex >= newPages.count {
-            pageIndex = max(0, newPages.count - 1)
+        if pageState.pageIndex >= newPages.count {
+            pageState.pageIndex = max(0, newPages.count - 1)
         }
     }
 
@@ -356,6 +411,12 @@ struct PagedScoreContainer: View {
 private struct PagedZoomedSurface: View {
     @Bindable var viewModel: ReaderViewModel
     @Bindable var pinch: PinchState
+    /// Observed directly so the parent's `withAnimation` on
+    /// `slideProgress` reaches this subtree via observation — the
+    /// `UIHostingController` boundary swallows animation transactions
+    /// delivered through `rootView` reassignment, which would make the
+    /// turn snap if we passed `slideProgress` by parameter.
+    @Bindable var pageState: PageState
     let document: LayoutDocument?
     let score: Score
     let viewport: CGSize
@@ -364,7 +425,6 @@ private struct PagedZoomedSurface: View {
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
     let pages: [Range<Int>]
-    let pageIndex: Int
     let onPrevPage: () -> Void
     let onNextPage: () -> Void
     let onDoubleTap: () -> Void
@@ -376,35 +436,29 @@ private struct PagedZoomedSurface: View {
             let paddedHeight = viewport.height + pageInsets.top + pageInsets.bottom
             let framedWidth = paddedWidth * zoom
             let framedHeight = paddedHeight * zoom
-            let safePageIndex = min(max(pageIndex, 0), pages.count - 1)
-            let pageRange = pages[safePageIndex]
-            let lastSystemIndex = pageRange.upperBound - 1
-            // Start the clip from the previous page's last-system
-            // bottom (or `0` for the first page) so the gap above the
-            // current page's first system — where rehearsal marks
-            // sit, plus the title frame on page 0 — renders here
-            // rather than on the previous page.
-            let pageStartY = Self.pageStartY(
-                forPage: safePageIndex, pages: pages, doc: doc,
-            )
-            let pageEndY: CGFloat = (0 ..< doc.systems.count).contains(lastSystemIndex)
-                ? doc.systems[lastSystemIndex].origin.y
-                + doc.systems[lastSystemIndex].size.height
-                : pageStartY
-            let pageHeight = max(0, pageEndY - pageStartY)
+            let currentIdx = min(max(pageState.pageIndex, 0), pages.count - 1)
+            // While a turn is in flight, render BOTH pages and offset
+            // only the moving side. Drives the visual directly — we
+            // do not use SwiftUI's `.transition`, whose removal
+            // modifier is captured from the previous render and so
+            // can't depend on the new direction.
+            let outgoingIdx: Int? = pageState.outgoingIndex.flatMap { idx in
+                (0 ..< pages.count).contains(idx) && idx != currentIdx ? idx : nil
+            }
 
             ZStack(alignment: .topLeading) {
-                scoreSurface(
-                    document: doc,
-                    pageStartY: pageStartY,
-                    pageHeight: pageHeight,
-                )
-                // White fills the full viewport so any unused space
-                // beneath the last system on this page reads as part
-                // of the page (just like `SheetMusicUI.PagedScoreView`'s
-                // canvas) rather than the host scroll background.
-                .frame(width: viewport.width, height: viewport.height, alignment: .top)
-                    .background(Color.white)
+                if let outgoingIdx {
+                    pageStackLayers(
+                        currentIdx: currentIdx,
+                        outgoingIdx: outgoingIdx,
+                        doc: doc,
+                    )
+                } else {
+                    pageContent(forPage: currentIdx, doc: doc)
+                }
+                // Tap zones stay above the pages and do not animate
+                // — they are fixed UI affordances, not part of the
+                // page band.
                 tapOverlay()
             }
             // Inset the band by `pageInsets` so at zoom 1 it lands
@@ -426,6 +480,65 @@ private struct PagedZoomedSurface: View {
             )
         } else {
             Color.clear
+        }
+    }
+
+    private func pageContent(
+        forPage idx: Int,
+        doc: LayoutDocument,
+    ) -> some View {
+        let pageRange = pages[idx]
+        let lastSystemIndex = pageRange.upperBound - 1
+        // Start the clip from the previous page's last-system bottom
+        // (or `0` for the first page) so the gap above the current
+        // page's first system — where rehearsal marks sit, plus the
+        // title frame on page 0 — renders here rather than on the
+        // previous page.
+        let pageStartY = PagedZoomedSurface.pageStartY(
+            forPage: idx, pages: pages, doc: doc,
+        )
+        let pageEndY: CGFloat = (0 ..< doc.systems.count).contains(lastSystemIndex)
+            ? doc.systems[lastSystemIndex].origin.y
+            + doc.systems[lastSystemIndex].size.height
+            : pageStartY
+        let pageHeight = max(0, pageEndY - pageStartY)
+        return scoreSurface(
+            document: doc,
+            pageStartY: pageStartY,
+            pageHeight: pageHeight,
+        )
+        // White fills the full viewport so any unused space beneath
+        // the last system on this page reads as part of the page
+        // (just like `SheetMusicUI.PagedScoreView`'s canvas) rather
+        // than the host scroll background.
+        .frame(width: viewport.width, height: viewport.height, alignment: .top)
+            .background(Color.white)
+    }
+
+    /// Renders the two-layer stack during a page turn. The bottom
+    /// layer is the page that should appear static after the turn
+    /// settles; the top layer is the moving page, offset by a
+    /// fraction of `viewport.width` driven by `pageState.slideProgress`
+    /// (animated 0→1 inside `withAnimation`).
+    @ViewBuilder
+    private func pageStackLayers(
+        currentIdx: Int,
+        outgoingIdx: Int,
+        doc: LayoutDocument,
+    ) -> some View {
+        switch pageState.pageDirection {
+        case .forward:
+            // Incoming page sits beneath, static. Outgoing page rides
+            // on top and slides off toward the leading edge.
+            pageContent(forPage: currentIdx, doc: doc)
+            pageContent(forPage: outgoingIdx, doc: doc)
+                .offset(x: -pageState.slideProgress * viewport.width)
+        case .backward:
+            // Outgoing page stays put beneath. Incoming page rides on
+            // top and slides in from the leading edge.
+            pageContent(forPage: outgoingIdx, doc: doc)
+            pageContent(forPage: currentIdx, doc: doc)
+                .offset(x: -(1 - pageState.slideProgress) * viewport.width)
         }
     }
 
