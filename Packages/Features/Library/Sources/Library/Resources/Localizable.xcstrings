@@ -1357,13 +1357,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Items you delete appear here for 30 days."
+            "value" : "Scores you delete appear here for 30 days."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "削除したスコアは30日間ここに保管されます。"
+            "value" : "削除した楽譜は30日間ここに保管されます。"
           }
         }
       }
@@ -1373,13 +1373,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No Recently Deleted Files"
+            "value" : "No Recently Deleted Scores"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最近削除したファイルはありません"
+            "value" : "最近削除した楽譜はありません"
           }
         }
       }
@@ -1411,7 +1411,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最近削除したファイル"
+            "value" : "最近削除した楽譜"
           }
         }
       }
