@@ -23,4 +23,12 @@ final class PageState {
     /// pre-rendered neighbor's `.offset` references this index, so the
     /// moving side interpolates while the static side stays put.
     var pageIndex = 0
+
+    /// When `true`, idx 0 holds at `offset 0` regardless of the slide
+    /// rule. Used during jumps that involve the first page so idx 0
+    /// fades in (jump-to-first) or out (jump-from-first) at the page
+    /// center instead of sliding leftward — matching how the last
+    /// page's transition naturally reads as a fade because idx-last's
+    /// offset is `0` in every state.
+    var freezeFirstPageOffset = false
 }

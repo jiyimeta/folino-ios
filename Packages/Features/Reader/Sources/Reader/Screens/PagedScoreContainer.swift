@@ -13,11 +13,16 @@ import SwiftUI
 ///
 /// Pinch composition matches `VerticalScoreContainer` (see that file
 /// for the rationale on `committedZoom`, the two `scaleEffect`s, and
-/// the snap-to-unit two-phase commit). Pages turn from left / right
-/// 12 % tap zones overlaid on the scroll content; a turn resets
-/// `viewportZoom` to 1 and `pendingScroll` to the origin, then changes
-/// `pageState.pageIndex` inside `withAnimation` to drive the stack-
-/// style slide animation rendered by `PagedZoomedSurface`.
+/// the snap-to-unit two-phase commit).
+///
+/// Navigation lives in `TapOverlay`: a leading / trailing column each
+/// `12 %` of the viewport, split `3 : 7` vertically — the top slice
+/// jumps to the first / last page, the bottom slice turns one page in
+/// the same direction. A capsule page-position badge fades in along
+/// with the zones. A page turn resets `viewportZoom` to `1` and
+/// `pendingScroll` to the origin, then mutates `pageState.pageIndex`
+/// inside `withAnimation` so `PagedZoomedSurface` interpolates the
+/// neighbor / edge `.offset`s into the slide / fade transition.
 struct PagedScoreContainer: View {
     let score: Score
     let staffSize: CGFloat
@@ -64,7 +69,7 @@ struct PagedScoreContainer: View {
     /// band. The layout uses the gutter-deducted width so the score
     /// wraps to its visible width; the page background and tap zones
     /// still span the full band.
-    static let horizontalContentPadding: CGFloat = 8
+    static let horizontalContentPadding: CGFloat = 12
 
     var body: some View {
         // The outer `GeometryReader` honours both the parent's
@@ -168,6 +173,8 @@ struct PagedScoreContainer: View {
                 pages: pages,
                 onPrevPage: { goToPage(delta: -1) },
                 onNextPage: { goToPage(delta: +1) },
+                onFirstPage: { goToFirstPage() },
+                onLastPage: { goToLastPage() },
                 onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
             )
         }
@@ -254,8 +261,23 @@ struct PagedScoreContainer: View {
     }
 
     private func goToPage(delta: Int) {
-        let target = pageState.pageIndex + delta
+        jumpToPage(at: pageState.pageIndex + delta)
+    }
+
+    private func goToFirstPage() {
+        jumpToPage(at: 0)
+    }
+
+    private func goToLastPage() {
+        jumpToPage(at: pages.count - 1)
+    }
+
+    /// Resets the pinch / zoom state and animates to `target` if it is
+    /// in range and not already the current page. Shared by the
+    /// delta-based prev / next zones and the jump-to-edge zones.
+    private func jumpToPage(at target: Int) {
         guard target >= 0, target < pages.count else { return }
+        guard target != pageState.pageIndex else { return }
         viewModel.resetZoom()
         committedZoom = 1.0
         pinch.magnification = 1.0
@@ -271,9 +293,32 @@ struct PagedScoreContainer: View {
     /// current one — so a single `pageIndex` change makes the moving
     /// side interpolate while the static side stays put. No
     /// `slideProgress`, no outgoing tracking, no run-loop hop.
+    ///
+    /// Jumps that involve idx 0 (jump-to-first or jump-from-first) flip
+    /// `pageState.freezeFirstPageOffset` so idx 0 stays pinned at
+    /// `offset 0` for the duration of the animation. Otherwise idx 0
+    /// would slide between `-viewport.width` (its always-rule non-slide
+    /// resting position) and `0` (its current-page slide position),
+    /// which reads as a sideways slide rather than the symmetric fade
+    /// idx-last gets for free (idx-last's offset is `0` in every
+    /// state). The flag is released in `completion:` so the static
+    /// state can settle back to the always-rule while idx 0 is
+    /// invisible (`opacity 0`).
     private func commitPageTurn(to target: Int) {
+        let previous = pageState.pageIndex
+        let isJump = abs(target - previous) > 1
+        let involvesFirstPage = target == 0 || previous == 0
+        let shouldFreeze = isJump && involvesFirstPage
+
+        if shouldFreeze {
+            pageState.freezeFirstPageOffset = true
+        }
         withAnimation(Self.pageTransitionAnimation) {
             pageState.pageIndex = target
+        } completion: {
+            if shouldFreeze {
+                pageState.freezeFirstPageOffset = false
+            }
         }
         pendingScroll = .immediate(.zero)
     }
@@ -405,6 +450,8 @@ private struct PagedZoomedSurface: View {
     let pages: [Range<Int>]
     let onPrevPage: () -> Void
     let onNextPage: () -> Void
+    let onFirstPage: () -> Void
+    let onLastPage: () -> Void
     let onDoubleTap: () -> Void
 
     var body: some View {
@@ -424,38 +471,104 @@ private struct PagedZoomedSurface: View {
             // on top, so the previous page covers the current while
             // sliding in (backward) and the current page covers the
             // next while sliding off (forward).
-            let windowIndices: [Int] = [-1, 0, 1].compactMap { delta in
+            let slideSet = Set([-1, 0, 1].compactMap { delta -> Int? in
                 let idx = currentIdx + delta
                 return (0 ..< pages.count).contains(idx) ? idx : nil
-            }
+            })
+            // First / last are kept resident outside the slide window
+            // at `opacity 0` so jump-to-edge taps don't pay the
+            // `ScoreView` build cost. They animate via opacity (under
+            // the same `withAnimation` transaction that drives the
+            // slide), which reads as a fade — the only sensible
+            // animation when the source and target are non-adjacent.
+            let edgeSet: Set<Int> = pages.isEmpty
+                ? []
+                : [0, pages.count - 1]
+            let windowIndices = slideSet.union(edgeSet).sorted()
 
             ZStack(alignment: .topLeading) {
-                ForEach(windowIndices, id: \.self) { idx in
-                    pageContent(forPage: idx, doc: doc)
-                        .offset(x: idx >= currentIdx ? 0 : -viewport.width)
-                        .zIndex(-Double(idx))
+                // Page band — clipped to viewport and inset by
+                // `pageInsets` so the music sits inside the safe
+                // area + overlay reserve. Tap zones live outside
+                // this wrapper so they can still reach the host's
+                // edges (see below).
+                ZStack(alignment: .topLeading) {
+                    ForEach(windowIndices, id: \.self) { idx in
+                        let inSlideWindow = slideSet.contains(idx)
+                        let baseOffset: CGFloat = idx >= currentIdx
+                            ? 0 : -viewport.width
+                        let frozenFirstPage = idx == 0
+                            && pageState.freezeFirstPageOffset
+                        pageContent(forPage: idx, doc: doc)
+                            // Offset follows the same rule regardless
+                            // of slide-window membership: pages with
+                            // `idx < currentIdx` sit off-screen leading
+                            // at `-viewport.width`; others sit at `0`.
+                            // Edge pages stay at their slide-position
+                            // so entering / leaving the window doesn't
+                            // animate their offset — only opacity
+                            // crossfades. Otherwise idx 0's offset
+                            // would slide right when leaving the
+                            // window (1 → 2) and slide left when
+                            // re-entering (2 → 1), both visible on
+                            // top of the real prev / next slide.
+                            //
+                            // For jumps that involve idx 0 the
+                            // container raises `freezeFirstPageOffset`
+                            // so idx 0 holds at `0` for the duration —
+                            // jump-to-first then fades in at center
+                            // (like jump-to-last) instead of sliding
+                            // rightward from `-viewport.width`.
+                                .offset(x: frozenFirstPage ? 0 : baseOffset)
+                                .opacity(inSlideWindow ? 1 : 0)
+                                .allowsHitTesting(inSlideWindow)
+                                // Subtracting `pages.count` for non-slide
+                                // entries pushes every resident edge page
+                                // below every slide page, so the opacity
+                                // crossfade is hidden beneath whichever
+                                // slide page covers the same band region.
+                                .zIndex(
+                                    inSlideWindow
+                                        ? -Double(idx)
+                                        : -Double(idx) - Double(pages.count),
+                                )
+                                // Removed pages disappear instantly (no
+                                // default `.opacity` fade-out at their old
+                                // zIndex). Inserted pages fade in via
+                                // opacity so a fresh slide-next page (e.g.
+                                // idx 1 entering at cur = 0 during
+                                // jump-to-first) doesn't pop in at full
+                                // opacity on top of the still-fading
+                                // target.
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .opacity,
+                                        removal: .identity,
+                                    ),
+                                )
+                    }
                 }
-                // Tap zones stay above the pages and do not animate —
-                // they are fixed UI affordances, not part of the page
-                // band.
+                // Clip neighbors to the page band. Without this, the
+                // pre-rendered previous page (offset `-viewport.width`)
+                // leaks out the leading side whenever the band does
+                // not fully cover the host (pinch zoom-out below 100 %
+                // and landscape orientations where `pageInsets.leading`
+                // adds a safe-area gap to the left of the band).
+                .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
+                .clipped()
+                .padding(pageInsets)
+
+                // Tap zones extend `pageInsets.leading` /
+                // `pageInsets.trailing` outward so the tap-active
+                // (and visually highlighted) area reaches the host's
+                // edges in landscape, where there is otherwise a
+                // safe-area gutter that would swallow edge taps. The
+                // vertical padding matches the page band's so the
+                // overlay stays aligned with the music vertically.
                 tapOverlay()
+                    .padding(.top, pageInsets.top)
+                    .padding(.bottom, pageInsets.bottom)
             }
-            // Clip neighbors to the page band. Without this, the
-            // pre-rendered previous page (offset `-viewport.width`)
-            // leaks out the leading side whenever the band does not
-            // fully cover the host: pinch zoom-out below 100 %, and
-            // landscape orientations where `pageInsets.leading` adds
-            // a safe-area gap to the left of the band. Clipping the
-            // ZStack to its own viewport-sized footprint masks the
-            // off-screen page without affecting the slide animation.
-            .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
-            .clipped()
-            // Inset the band by `pageInsets` so at zoom 1 it lands
-            // inside the safe area + overlay reserve. Padding lives
-            // *inside* the scale chain (matches `VerticalZoomedSurface`)
-            // so pinch zoom expands the band into the chrome regions
-            // proportionally.
-            .padding(pageInsets)
             .scaleEffect(pinch.magnification, anchor: pinch.anchor)
             .scaleEffect(zoom, anchor: .topLeading)
             .offset(x: pinch.offsetX, y: pinch.offsetY)
@@ -547,22 +660,17 @@ private struct PagedZoomedSurface: View {
     }
 
     private func tapOverlay() -> some View {
-        HStack(spacing: 0) {
-            PageTapZone(
-                width: viewport.width * 0.12,
-                height: viewport.height,
-                action: onPrevPage,
-            )
-            Color.clear
-                .frame(width: viewport.width * 0.76)
-                .allowsHitTesting(false)
-            PageTapZone(
-                width: viewport.width * 0.12,
-                height: viewport.height,
-                action: onNextPage,
-            )
-        }
-        .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
+        TapOverlay(
+            viewport: viewport,
+            leadingExtra: pageInsets.leading,
+            trailingExtra: pageInsets.trailing,
+            onFirstPage: onFirstPage,
+            onPrevPage: onPrevPage,
+            onLastPage: onLastPage,
+            onNextPage: onNextPage,
+            currentPageNumber: pageState.pageIndex + 1,
+            totalPages: pages.count,
+        )
     }
 
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
@@ -592,31 +700,361 @@ private struct PagedZoomedSurface: View {
     }
 }
 
-/// Page-turn tap zone that tints itself with a translucent accent
-/// color while the finger is on it, then fires `action` on release
-/// inside the zone.
+/// Identifies the four page-navigation slices in `tapOverlay()` so each
+/// one can render the right icon / label combo when pressed without
+/// duplicating that map at every caller.
+private enum PageTapZoneKind {
+    case first
+    case last
+    case previous
+    case next
+
+    /// `first` ships a custom symbol bundled with the Reader module
+    /// (no system SF Symbol matches the `arrow.uturn.backward.to.line`
+    /// glyph). Everything else maps to a system symbol.
+    var image: Image {
+        switch self {
+        case .first: Image("arrow.uturn.backward.to.line", bundle: .module)
+        case .last: Image(systemName: "arrow.forward.to.line")
+        case .previous: Image(systemName: "arrow.uturn.backward")
+        case .next: Image(systemName: "arrow.forward")
+        }
+    }
+
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .first: "reader.pageMode.tapZone.first"
+        case .last: "reader.pageMode.tapZone.last"
+        case .previous: "reader.pageMode.tapZone.previous"
+        case .next: "reader.pageMode.tapZone.next"
+        }
+    }
+
+    /// Per-corner radii for the highlight pill. The side that runs
+    /// along the screen edge (leading for `first` / `previous`,
+    /// trailing for `last` / `next`) stays square; the inner side
+    /// rounds off so the highlight reads as a tab tucked against the
+    /// edge rather than a free-floating chip.
+    func cornerRadii(radius: CGFloat) -> RectangleCornerRadii {
+        switch self {
+        case .first, .previous:
+            RectangleCornerRadii(
+                topLeading: 0,
+                bottomLeading: 0,
+                bottomTrailing: radius,
+                topTrailing: radius,
+            )
+        case .last, .next:
+            RectangleCornerRadii(
+                topLeading: radius,
+                bottomLeading: radius,
+                bottomTrailing: 0,
+                topTrailing: 0,
+            )
+        }
+    }
+}
+
+/// Page-turn tap zone that fires `action` on release inside the zone.
 /// `DragGesture(minimumDistance: 0)` drives press tracking via
 /// `@GestureState` (auto-resets on lift/cancel) and decides whether
 /// the release counts as a tap by checking the final location.
+///
+/// The highlight (translucent accent fill + icon + label) is driven
+/// by the externally-supplied `highlighted` flag, not the zone's
+/// own gesture state. The parent collects press state from all
+/// zones and feeds the same flag back to each one so a tap on any
+/// zone lights up the whole set in unison.
 private struct PageTapZone: View {
+    let kind: PageTapZoneKind
     let width: CGFloat
     let height: CGFloat
     let action: () -> Void
+    let highlighted: Bool
+    let onPressChange: (Bool) -> Void
 
     @GestureState private var isPressed = false
 
     var body: some View {
-        Color.accentColor
-            .opacity(isPressed ? 0.15 : 0)
-            .frame(width: width, height: height)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($isPressed) { _, state, _ in state = true }
-                    .onEnded { value in
-                        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
-                        if bounds.contains(value.location) { action() }
-                    },
+        // The highlight (fill + icon + label) is rendered at full
+        // strength all the time; visibility is controlled by a single
+        // `.opacity` gate. With both layers always resident there's no
+        // view re-creation per press, so rapid re-taps can't stack a
+        // fading-out copy under a fading-in copy and darken the fill.
+        ZStack {
+            UnevenRoundedRectangle(cornerRadii: kind.cornerRadii(radius: 12))
+                .fill(Color.secondary.opacity(0.5))
+            VStack(spacing: 6) {
+                kind.image
+                    .font(.title2)
+                    .bold()
+                Text(kind.labelKey, bundle: .module)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 4)
+        }
+        .opacity(highlighted ? 1 : 0)
+        .frame(width: width, height: height)
+        // Hit area stays a full rectangle so the square (screen-edge)
+        // corners remain tappable even though the highlight pill
+        // crops them visually.
+        .contentShape(Rectangle())
+        // Fade the highlight out on release; show it immediately on
+        // touch. Picking the animation off the *new* value of
+        // `highlighted` keeps appearance instant (nil animation) and
+        // disappearance smooth. The `delay(0.5)` keeps the highlight
+        // visible after the page has already turned, so the user can
+        // see *which* tap zone fired before it disappears.
+        .animation(
+            highlighted ? nil : .easeOut(duration: 0.3).delay(0.35),
+            value: highlighted,
+        )
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .updating($isPressed) { _, state, _ in state = true }
+                .onEnded { value in
+                    let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+                    if bounds.contains(value.location) { action() }
+                },
+        )
+        .onChange(of: isPressed) { _, new in onPressChange(new) }
+    }
+}
+
+/// Four-zone page-navigation overlay used by `PagedZoomedSurface`.
+/// Owns the shared press state so any active touch lights up every
+/// zone in unison — that uniform highlight is the real surface the
+/// preview at the bottom of this file exercises.
+///
+/// `leadingExtra` / `trailingExtra` widen the leading / trailing
+/// columns outward so the tap-active (and visually highlighted)
+/// area can reach beyond `viewport` to the host's edges. The
+/// page-band internals still anchor to `viewport`; only the edge
+/// columns absorb the safe-area gutters.
+private struct TapOverlay: View {
+    let viewport: CGSize
+    let leadingExtra: CGFloat
+    let trailingExtra: CGFloat
+    let onFirstPage: () -> Void
+    let onPrevPage: () -> Void
+    let onLastPage: () -> Void
+    let onNextPage: () -> Void
+    /// 1-indexed page number shown in the indicator badge.
+    let currentPageNumber: Int
+    /// Total page count shown in the indicator badge.
+    let totalPages: Int
+
+    /// Per-zone press state. Set element identifies which zone is
+    /// touched; emptiness drives the global highlight off. Seeded
+    /// from `initialPressedKinds` so previews can render the
+    /// highlighted layout without firing a real gesture.
+    @State private var pressedKinds: Set<PageTapZoneKind>
+
+    init(
+        viewport: CGSize,
+        leadingExtra: CGFloat = 0,
+        trailingExtra: CGFloat = 0,
+        onFirstPage: @escaping () -> Void,
+        onPrevPage: @escaping () -> Void,
+        onLastPage: @escaping () -> Void,
+        onNextPage: @escaping () -> Void,
+        currentPageNumber: Int = 1,
+        totalPages: Int = 1,
+        initialPressedKinds: Set<PageTapZoneKind> = [],
+    ) {
+        self.viewport = viewport
+        self.leadingExtra = leadingExtra
+        self.trailingExtra = trailingExtra
+        self.onFirstPage = onFirstPage
+        self.onPrevPage = onPrevPage
+        self.onLastPage = onLastPage
+        self.onNextPage = onNextPage
+        self.currentPageNumber = currentPageNumber
+        self.totalPages = totalPages
+        _pressedKinds = State(initialValue: initialPressedKinds)
+    }
+
+    var body: some View {
+        let baseColumnWidth = viewport.width * 0.12
+        let leadingColumnWidth = baseColumnWidth + leadingExtra
+        let trailingColumnWidth = baseColumnWidth + trailingExtra
+        let middleWidth = viewport.width * 0.76
+        let totalWidth = viewport.width + leadingExtra + trailingExtra
+        let topHeight = viewport.height * 0.3
+        let bottomHeight = viewport.height - topHeight
+        let highlighted = !pressedKinds.isEmpty
+        ZStack(alignment: .bottom) {
+            HStack(spacing: 0) {
+                edgeColumn(
+                    width: leadingColumnWidth,
+                    topHeight: topHeight,
+                    bottomHeight: bottomHeight,
+                    topKind: .first,
+                    bottomKind: .previous,
+                    topAction: onFirstPage,
+                    bottomAction: onPrevPage,
+                    highlighted: highlighted,
+                )
+                Color.clear
+                    .frame(width: middleWidth)
+                    .allowsHitTesting(false)
+                edgeColumn(
+                    width: trailingColumnWidth,
+                    topHeight: topHeight,
+                    bottomHeight: bottomHeight,
+                    topKind: .last,
+                    bottomKind: .next,
+                    topAction: onLastPage,
+                    bottomAction: onNextPage,
+                    highlighted: highlighted,
+                )
+            }
+
+            // Capsule badge that mirrors the tap-zone highlight: same
+            // accent fill / opacity, same instant-on / fade-off
+            // animation, displaying the 1-indexed page position.
+            //
+            // Kept resident (opacity-gated rather than `if`-gated) so
+            // its `current` updates while it's still visible — the
+            // page index changes the moment the finger lifts, but the
+            // badge stays on screen through the delay window, and we
+            // want the number it shows to be the *new* page from t=0
+            // instead of the previous value frozen with the removed
+            // view.
+            PageIndicatorBadge(
+                current: currentPageNumber,
+                total: totalPages,
             )
+            .padding(.bottom, 24)
+            .opacity(highlighted ? 1 : 0)
+            .allowsHitTesting(false)
+        }
+        .frame(width: totalWidth, height: viewport.height, alignment: .topLeading)
+        // Local `.animation` only covers what doesn't already carry
+        // its own — i.e. the badge's insert / remove transition. Each
+        // `PageTapZone` has its own `.animation(_:value:)` so its
+        // highlight is still governed by the closer modifier. The
+        // delay matches the tap-zone fade-out so the indicator
+        // disappears in sync.
+        .animation(
+            highlighted ? nil : .easeOut(duration: 0.3).delay(0.35),
+            value: highlighted,
+        )
+    }
+
+    /// One leading / trailing tap column split 3 : 7 vertically. The
+    /// top slice jumps to the first / last page; the bottom slice
+    /// turns one page in the same direction.
+    private func edgeColumn(
+        width: CGFloat,
+        topHeight: CGFloat,
+        bottomHeight: CGFloat,
+        topKind: PageTapZoneKind,
+        bottomKind: PageTapZoneKind,
+        topAction: @escaping () -> Void,
+        bottomAction: @escaping () -> Void,
+        highlighted: Bool,
+    ) -> some View {
+        VStack(spacing: 8) {
+            PageTapZone(
+                kind: topKind,
+                width: width,
+                height: topHeight,
+                action: topAction,
+                highlighted: highlighted,
+                onPressChange: { updatePressed(topKind, pressed: $0) },
+            )
+            PageTapZone(
+                kind: bottomKind,
+                width: width,
+                height: bottomHeight,
+                action: bottomAction,
+                highlighted: highlighted,
+                onPressChange: { updatePressed(bottomKind, pressed: $0) },
+            )
+        }
+    }
+
+    private func updatePressed(_ kind: PageTapZoneKind, pressed: Bool) {
+        if pressed {
+            pressedKinds.insert(kind)
+        } else {
+            pressedKinds.remove(kind)
+        }
+    }
+}
+
+/// `n / d` page-position pill shown at the bottom of the page band
+/// while a tap zone is held. Matches the tap-zone highlight fill so
+/// the navigation feedback reads as one piece.
+private struct PageIndicatorBadge: View {
+    let current: Int
+    let total: Int
+
+    var body: some View {
+        Text(verbatim: "\(current) / \(total)")
+            .font(.subheadline.monospacedDigit())
+            .fontWeight(.medium)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.secondary.opacity(0.46)))
+    }
+}
+
+// Renders the production `TapOverlay` with its highlight state
+// pre-seeded so every zone shows its icon + label. Iterate on the
+// real view here — anything tweaked in `PageTapZone` /
+// `PageTapZoneKind` shows up directly. The page band is sampled
+// from the actual device canvas via `GeometryReader` so the tap
+// zones really do start at the device's leading / trailing edge.
+// Set `leadingGutter` / `trailingGutter` to mock the safe-area
+// gutters that `pageInsets` contributes in landscape.
+#Preview("Tap zones · no gutters") {
+    TapZonePreviewHost(leadingGutter: 0, trailingGutter: 0)
+        .ignoresSafeArea()
+}
+
+#Preview("Tap zones · landscape gutters") {
+    TapZonePreviewHost(leadingGutter: 59, trailingGutter: 59)
+        .ignoresSafeArea()
+}
+
+private struct TapZonePreviewHost: View {
+    let leadingGutter: CGFloat
+    let trailingGutter: CGFloat
+
+    var body: some View {
+        GeometryReader { proxy in
+            let totalWidth = proxy.size.width
+            let viewportWidth = max(totalWidth - leadingGutter - trailingGutter, 0)
+            let viewport = CGSize(width: viewportWidth, height: proxy.size.height)
+            ZStack(alignment: .topLeading) {
+                // Stripes mark where the safe-area gutters fall so
+                // it's visible that the tap zones overlap them.
+                HStack(spacing: 0) {
+                    Color.gray.opacity(0.25)
+                        .frame(width: leadingGutter)
+                    Color.white
+                        .frame(width: viewportWidth)
+                    Color.gray.opacity(0.25)
+                        .frame(width: trailingGutter)
+                }
+                TapOverlay(
+                    viewport: viewport,
+                    leadingExtra: leadingGutter,
+                    trailingExtra: trailingGutter,
+                    onFirstPage: {},
+                    onPrevPage: {},
+                    onLastPage: {},
+                    onNextPage: {},
+                    initialPressedKinds: [.first],
+                )
+            }
+        }
     }
 }
