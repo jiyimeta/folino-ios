@@ -122,11 +122,11 @@ public final class ShareSession {
                     return
                 }
                 do {
-                    let dst = FileManager.default.temporaryDirectory
-                        .appending(path: "share-\(UUID().uuidString)-\(url.lastPathComponent)")
-                    if FileManager.default.fileExists(atPath: dst.path) {
-                        try FileManager.default.removeItem(at: dst)
-                    }
+                    let dirName = "share-\(UUID().uuidString)"
+                    let dirURL = FileManager.default.temporaryDirectory
+                        .appending(path: dirName, directoryHint: .isDirectory)
+                    try FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
+                    let dst = dirURL.appending(path: url.lastPathComponent, directoryHint: .notDirectory)
                     let accessing = url.startAccessingSecurityScopedResource()
                     defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                     try FileManager.default.copyItem(at: url, to: dst)
@@ -148,7 +148,7 @@ public final class ShareSession {
 
     /// Bump this string per device-deploy iteration so logs unambiguously
     /// reveal whether the latest binary is running. Format is free-form.
-    private static let buildMarker = "r3-2026-05-18"
+    private static let buildMarker = "r4-2026-05-18"
 
     public func finalize(
         token: UUID,
@@ -197,11 +197,11 @@ public final class ShareSession {
                     cont.resume(throwing: error)
                 } else if let url {
                     do {
-                        let dst = FileManager.default.temporaryDirectory
-                            .appending(path: "share-\(UUID().uuidString)-\(url.lastPathComponent)")
-                        if FileManager.default.fileExists(atPath: dst.path) {
-                            try FileManager.default.removeItem(at: dst)
-                        }
+                        let dirName = "share-\(UUID().uuidString)"
+                        let dirURL = FileManager.default.temporaryDirectory
+                            .appending(path: dirName, directoryHint: .isDirectory)
+                        try FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
+                        let dst = dirURL.appending(path: url.lastPathComponent, directoryHint: .notDirectory)
                         try FileManager.default.copyItem(at: url, to: dst)
                         cont.resume(returning: dst)
                     } catch {
