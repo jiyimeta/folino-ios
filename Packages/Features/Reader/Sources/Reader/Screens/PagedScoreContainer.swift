@@ -440,6 +440,16 @@ private struct PagedZoomedSurface: View {
                 // band.
                 tapOverlay()
             }
+            // Clip neighbors to the page band. Without this, the
+            // pre-rendered previous page (offset `-viewport.width`)
+            // leaks out the leading side whenever the band does not
+            // fully cover the host: pinch zoom-out below 100 %, and
+            // landscape orientations where `pageInsets.leading` adds
+            // a safe-area gap to the left of the band. Clipping the
+            // ZStack to its own viewport-sized footprint masks the
+            // off-screen page without affecting the slide animation.
+            .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
+            .clipped()
             // Inset the band by `pageInsets` so at zoom 1 it lands
             // inside the safe area + overlay reserve. Padding lives
             // *inside* the scale chain (matches `VerticalZoomedSurface`)
