@@ -150,7 +150,7 @@ public final class ShareSession {
 
     /// Bump this string per device-deploy iteration so logs unambiguously
     /// reveal whether the latest binary is running. Format is free-form.
-    private static let buildMarker = "r5-2026-05-18"
+    private static let buildMarker = "r6-2026-05-18"
 
     public func finalize(
         token: UUID,

@@ -211,7 +211,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                     ).insert(db)
                 }
             }
-            await publishPlaylistsIndexIfNeeded()
+            await publishPlaylistsIndexIfNeeded(mergingSaved: playlist)
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }
@@ -222,15 +222,37 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
             try await database.pool.write { db in
                 _ = try PlaylistRecord.deleteOne(db, key: id.rawValue.uuidString)
             }
-            await publishPlaylistsIndexIfNeeded()
+            await publishPlaylistsIndexIfNeeded(mergingDeleted: id)
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }
     }
 
-    private func publishPlaylistsIndexIfNeeded() async {
+    /// Publishes the playlists index to the App Group container.
+    ///
+    /// `self.playlists` is updated by GRDB's `ValueObservation` on its own
+    /// schedule, so reading it immediately after a write returns the
+    /// pre-mutation snapshot — newly-saved playlists are missing and
+    /// just-deleted ones still present. Merge the actual mutation into a
+    /// local snapshot before publishing so the share-extension index
+    /// always reflects what just happened.
+    private func publishPlaylistsIndexIfNeeded(
+        mergingSaved saved: Playlist? = nil,
+        mergingDeleted deletedID: PlaylistID? = nil,
+    ) async {
         guard let publisher = playlistsIndexPublisher else { return }
-        await publisher.publish(playlists: playlists)
+        var snapshot = playlists
+        if let saved {
+            if let idx = snapshot.firstIndex(where: { $0.id == saved.id }) {
+                snapshot[idx] = saved
+            } else {
+                snapshot.append(saved)
+            }
+        }
+        if let deletedID {
+            snapshot.removeAll { $0.id == deletedID }
+        }
+        await publisher.publish(playlists: snapshot)
     }
 
     // MARK: - Reader preferences
