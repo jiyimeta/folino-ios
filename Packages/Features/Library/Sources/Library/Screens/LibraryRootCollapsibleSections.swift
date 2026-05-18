@@ -13,7 +13,7 @@ struct LibraryRootPlaylistsSection: View {
         if !allPlaylists.isEmpty {
             let total = allPlaylists.count
             let topN = playlistsByRecentlyUsed(allPlaylists, scoreItems: scoreItems, limit: 5)
-            Section {
+            CollapsibleSection(isExpanded: $expanded, count: total) {
                 if expanded {
                     ForEach(topN) { playlist in
                         NavigationLink(value: LibraryRoute.playlistDetail(playlist.id)) {
@@ -52,11 +52,7 @@ struct LibraryRootPlaylistsSection: View {
                     }
                 }
             } header: {
-                CollapsibleSectionHeader(
-                    title: Text("library.playlists", bundle: .module),
-                    count: total,
-                    expanded: $expanded,
-                )
+                Text("library.playlists", bundle: .module)
             }
         }
     }
@@ -73,7 +69,7 @@ struct LibraryRootTagsSection: View {
         if !allTags.isEmpty {
             let total = allTags.count
             let topN = tagsByRecentlyUsed(allTags, scoreItems: scoreItems, limit: 5)
-            Section {
+            CollapsibleSection(isExpanded: $expanded, count: total) {
                 if expanded {
                     ForEach(topN) { tag in
                         NavigationLink(value: LibraryRoute.tagDetail(tag.id)) {
@@ -112,11 +108,7 @@ struct LibraryRootTagsSection: View {
                     }
                 }
             } header: {
-                CollapsibleSectionHeader(
-                    title: Text("library.tags", bundle: .module),
-                    count: total,
-                    expanded: $expanded,
-                )
+                Text("library.tags", bundle: .module)
             }
             .animation(.default, value: expanded)
         }
@@ -124,30 +116,6 @@ struct LibraryRootTagsSection: View {
 
     private func memberCount(of tag: Tag) -> Int {
         scoreItems.reduce(0) { acc, item in acc + (item.tagIDs.contains(tag.id) ? 1 : 0) }
-    }
-}
-
-private struct CollapsibleSectionHeader: View {
-    let title: Text
-    let count: Int
-    @Binding var expanded: Bool
-
-    var body: some View {
-        Button {
-            withAnimation(.snappy) { expanded.toggle() }
-        } label: {
-            HStack {
-                title
-                Spacer()
-                Text(count, format: .number).foregroundStyle(.secondary)
-                Image(systemName: "chevron.down")
-                    .font(.footnote.weight(.semibold))
-                    .rotationEffect(.degrees(expanded ? 0 : -90))
-                    .foregroundStyle(Color.accentColor)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 
