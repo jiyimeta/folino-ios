@@ -72,7 +72,7 @@ final class ShareViewController: UIViewController {
     }
 
     private func presentFatalError(_ message: String) {
-        let alert = UIAlertController(title: "Folino", message: message, preferredStyle: .alert)
+        let alert = UIAlertController(title: "folino", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
             self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         })

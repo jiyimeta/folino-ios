@@ -115,8 +115,8 @@
     },
     "share_extension.title" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Folino" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Folino" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "folino" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "folino" } }
       }
     }
   },
