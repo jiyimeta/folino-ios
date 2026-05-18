@@ -23,8 +23,10 @@ public final class ShareSession {
         guard let data = try? Data(contentsOf: url),
               let index = try? JSONDecoder().decode(PlaylistsIndex.self, from: data)
         else {
+            logger.notice("loadPlaylists found no index file or decode failed")
             return []
         }
+        logger.notice("loadPlaylists read count=\(index.playlists.count, privacy: .public)")
         return index.playlists
     }
 
@@ -148,7 +150,7 @@ public final class ShareSession {
 
     /// Bump this string per device-deploy iteration so logs unambiguously
     /// reveal whether the latest binary is running. Format is free-form.
-    private static let buildMarker = "r4-2026-05-18"
+    private static let buildMarker = "r5-2026-05-18"
 
     public func finalize(
         token: UUID,

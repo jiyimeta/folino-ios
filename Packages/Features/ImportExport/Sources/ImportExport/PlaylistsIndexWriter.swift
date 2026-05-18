@@ -16,6 +16,8 @@ public final class PlaylistsIndexWriter: PlaylistsIndexPublisher {
     }
 
     public func publish(playlists: [Playlist]) {
+        let names = playlists.map(\.name).joined(separator: ",")
+        logger.notice("publish playlists count=\(playlists.count, privacy: .public) names=\(names, privacy: .public)")
         let entries = playlists.map { PlaylistsIndex.Entry(id: $0.id, name: $0.name) }
         let index = PlaylistsIndex(schemaVersion: 1, playlists: entries)
         do {
