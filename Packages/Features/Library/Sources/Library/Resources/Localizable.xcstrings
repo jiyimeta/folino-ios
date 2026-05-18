@@ -1451,6 +1451,7 @@
       }
     },
     "library.score.delete.message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1519,6 +1520,7 @@
       }
     },
     "library.score.deleteBulk.message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

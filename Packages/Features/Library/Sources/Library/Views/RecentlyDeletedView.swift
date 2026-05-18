@@ -41,24 +41,44 @@ struct RecentlyDeletedView: View {
     }
 
     private func row(for item: ScoreItem) -> some View {
-        ScoreRow(scoreItem: item)
-            .contentShape(Rectangle())
-            .onTapGesture { handleRowTap(item) }
-            .swipeActions(edge: .leading, allowsFullSwipe: true) { restoreSwipeButton(for: item) }
-            // Full swipe disabled — accidental hard-deletes here are
-            // unrecoverable, so require a deliberate tap that triggers the
-            // popover confirm.
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                permanentDeleteSwipeButton(for: item)
+        HStack(spacing: 0) {
+            ScoreRow(scoreItem: item)
+                .contentShape(Rectangle())
+                .onTapGesture { handleRowTap(item) }
+            if !editMode.isEditing {
+                Menu {
+                    rowContextMenu(for: item)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 34)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Common.more)
             }
-            .contextMenu { rowContextMenu(for: item) }
-            .popover(
-                isPresented: rowPopoverBinding(for: item),
-                attachmentAnchor: .rect(.bounds),
-                arrowEdge: .trailing,
-            ) {
-                rowPopoverContent(for: item)
-            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) { restoreSwipeButton(for: item) }
+        // Full swipe disabled — accidental hard-deletes here are
+        // unrecoverable, so require a deliberate tap that triggers the
+        // popover confirm.
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            permanentDeleteSwipeButton(for: item)
+        }
+        .contextMenu { rowContextMenu(for: item) }
+        // Anchor the popover so its arrow points UP at the row — on iPhone
+        // the row spans the full width, so a leading/trailing anchor would
+        // push the popover off-screen. `.top` floats it below the row,
+        // centered horizontally, which fits in compact widths.
+        .popover(
+            isPresented: rowPopoverBinding(for: item),
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: .top,
+        ) {
+            rowPopoverContent(for: item)
+        }
     }
 
     private func restoreSwipeButton(for item: ScoreItem) -> some View {
@@ -165,8 +185,13 @@ struct PermanentDeletePopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            title.font(.headline)
-            message.font(.subheadline).foregroundStyle(.secondary)
+            title
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+            message
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
                 Button(role: .cancel) {
                     onCancel()
@@ -184,7 +209,9 @@ struct PermanentDeletePopover: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 280, idealWidth: 320)
+        // 260 fits inside a compact-width iPhone (≈ 390pt – screen margins),
+        // while idealWidth gives Mac / iPad popovers a comfortable layout.
+        .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
     }
 }
 
@@ -259,3 +286,25 @@ private struct RecentlyDeletedBulkActionBar: View {
         .presentationCompactAdaptation(.popover)
     }
 }
+
+#if DEBUG
+#Preview("Popover (long ja title)") {
+    PermanentDeletePopover(
+        title: Text("「Now_is_the_time」を完全に削除しますか？"),
+        message: Text("このスコアとファイルがこの端末から削除されます。"),
+        confirmLabel: Text("完全に削除"),
+        onConfirm: {},
+        onCancel: {},
+    )
+}
+
+#Preview("Popover (en)") {
+    PermanentDeletePopover(
+        title: Text("Permanently delete \"Now is the time\"?"),
+        message: Text("This score and its file will be removed from this device."),
+        confirmLabel: Text("Permanently Delete"),
+        onConfirm: {},
+        onCancel: {},
+    )
+}
+#endif
