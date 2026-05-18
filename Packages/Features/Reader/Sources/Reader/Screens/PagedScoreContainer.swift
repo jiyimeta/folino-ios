@@ -60,6 +60,12 @@ struct PagedScoreContainer: View {
     /// so this curve governs every page's slide.
     static let pageTransitionAnimation: Animation = .easeInOut(duration: 0.22)
 
+    /// Horizontal gutter applied to the score content inside the page
+    /// band. The layout uses the gutter-deducted width so the score
+    /// wraps to its visible width; the page background and tap zones
+    /// still span the full band.
+    static let horizontalContentPadding: CGFloat = 8
+
     var body: some View {
         // The outer `GeometryReader` honours both the parent's
         // `safeAreaPadding(.top, ReaderTopOverlay.height)` and the
@@ -73,15 +79,19 @@ struct PagedScoreContainer: View {
             let viewportWidth = max(proxy.size.width, staffSize * 4)
             let viewportHeight = proxy.size.height
             let viewport = CGSize(width: viewportWidth, height: viewportHeight)
+            let contentWidth = max(
+                viewportWidth - Self.horizontalContentPadding * 2,
+                staffSize * 4,
+            )
             scrollContent(viewport: viewport)
                 .task(id: TaskKey(
-                    score: score, size: staffSize, width: viewportWidth,
+                    score: score, size: staffSize, width: contentWidth,
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     pageHeight: viewportHeight,
                 )) {
                     await rebuildLayout(
-                        width: viewportWidth,
+                        width: contentWidth,
                         pageHeight: viewportHeight,
                     )
                 }
@@ -476,11 +486,16 @@ private struct PagedZoomedSurface: View {
             pageStartY: pageStartY,
             pageHeight: pageHeight,
         )
-        // White fills the full viewport so any unused space beneath
-        // the last system on this page reads as part of the page
-        // (just like `SheetMusicUI.PagedScoreView`'s canvas) rather
-        // than the host scroll background.
-        .frame(width: viewport.width, height: viewport.height, alignment: .top)
+        // Inset the score by the shared horizontal gutter so the page
+        // background still spans the full band but the music itself
+        // sits inboard. The layout uses the same gutter-deducted width,
+        // so the score wraps to fit inside.
+        .padding(.horizontal, PagedScoreContainer.horizontalContentPadding)
+            // White fills the full viewport so any unused space beneath
+            // the last system on this page reads as part of the page
+            // (just like `SheetMusicUI.PagedScoreView`'s canvas) rather
+            // than the host scroll background.
+            .frame(width: viewport.width, height: viewport.height, alignment: .top)
             .background(Color.white)
     }
 
@@ -511,28 +526,33 @@ private struct PagedZoomedSurface: View {
         .offset(y: -pageStartY)
         // `.topLeading` (not `.top`) prevents the default `.center`
         // horizontal alignment from drifting the doc when
-        // `doc.size.width` ≠ `viewport.width` — which would clip
-        // part-labels on the leading edge (e.g. "Lead" → "ead").
-        .frame(width: viewport.width, height: pageHeight, alignment: .topLeading)
+        // `doc.size.width` ≠ inner width — which would clip part-
+        // labels on the leading edge (e.g. "Lead" → "ead").
+        .frame(
+            width: viewport.width - PagedScoreContainer.horizontalContentPadding * 2,
+            height: pageHeight,
+            alignment: .topLeading,
+        )
         .clipped()
     }
 
     private func tapOverlay() -> some View {
         HStack(spacing: 0) {
-            tapZone(.leading).onTapGesture { onPrevPage() }
+            PageTapZone(
+                width: viewport.width * 0.12,
+                height: viewport.height,
+                action: onPrevPage,
+            )
             Color.clear
                 .frame(width: viewport.width * 0.76)
                 .allowsHitTesting(false)
-            tapZone(.trailing).onTapGesture { onNextPage() }
+            PageTapZone(
+                width: viewport.width * 0.12,
+                height: viewport.height,
+                action: onNextPage,
+            )
         }
         .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
-    }
-
-    private func tapZone(_ edge: HorizontalEdge) -> some View {
-        let width = viewport.width * 0.12
-        return Color.clear
-            .frame(width: width, height: viewport.height)
-            .contentShape(Rectangle())
     }
 
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
@@ -559,5 +579,34 @@ private struct PagedZoomedSurface: View {
         guard (0 ..< doc.systems.count).contains(prevLastIndex) else { return 0 }
         return doc.systems[prevLastIndex].origin.y
             + doc.systems[prevLastIndex].size.height
+    }
+}
+
+/// Page-turn tap zone that tints itself with a translucent accent
+/// color while the finger is on it, then fires `action` on release
+/// inside the zone.
+/// `DragGesture(minimumDistance: 0)` drives press tracking via
+/// `@GestureState` (auto-resets on lift/cancel) and decides whether
+/// the release counts as a tap by checking the final location.
+private struct PageTapZone: View {
+    let width: CGFloat
+    let height: CGFloat
+    let action: () -> Void
+
+    @GestureState private var isPressed = false
+
+    var body: some View {
+        Color.accentColor
+            .opacity(isPressed ? 0.15 : 0)
+            .frame(width: width, height: height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($isPressed) { _, state, _ in state = true }
+                    .onEnded { value in
+                        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+                        if bounds.contains(value.location) { action() }
+                    },
+            )
     }
 }
