@@ -129,12 +129,14 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     .tag(ReaderLayoutMode.vertical.rawValue)
                 Image(systemName: "arrow.left.and.right")
                     .tag(ReaderLayoutMode.horizontal.rawValue)
+                Image(systemName: "book.pages")
+                    .tag(ReaderLayoutMode.page.rawValue)
             } label: {
                 Text("settings.reader.layout.title", bundle: .module)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 92)
+            .frame(width: 132)
             .fixedSize()
         }
     }
