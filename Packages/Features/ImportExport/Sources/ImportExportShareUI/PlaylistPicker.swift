@@ -58,6 +58,7 @@ struct PlaylistPicker: View {
             TextField(
                 "share_extension.picker.new_playlist_placeholder",
                 text: $newName,
+                prompt: Text("share_extension.picker.new_playlist_placeholder", bundle: .module),
             )
             .textInputAutocapitalization(.words)
             .submitLabel(.done)
