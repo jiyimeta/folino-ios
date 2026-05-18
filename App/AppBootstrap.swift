@@ -26,6 +26,7 @@ final class AppBootstrap {
     private(set) var presetCatalog: BundledSF2PresetCatalog?
     private(set) var shareService: LiveScoreShareService?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
+    let shareDuplicateResolver = ShareDuplicateResolver()
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`.
     /// Last-wins: a second URL arriving before the first is consumed
@@ -62,6 +63,7 @@ final class AppBootstrap {
                     repository: repository,
                     appGroupContainer: container,
                     clock: SystemClock(),
+                    duplicateResolver: shareDuplicateResolver,
                 )
             }
 

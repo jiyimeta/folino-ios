@@ -37,6 +37,16 @@ public final class LibraryViewModel {
     /// Drives the `.fileImporter` sheet.
     var isFileImporterPresented = false
 
+    /// Dismiss any in-flight import-flow UI (file picker sheet, duplicate
+    /// prompt, error alert). Called from the App layer when an external
+    /// incoming action (file URL or share token) supersedes whatever the
+    /// user was doing.
+    public func dismissImportUI() {
+        isFileImporterPresented = false
+        duplicatePrompt = nil
+        errorAlertMessage = nil
+    }
+
     /// Set when `prepareImport` returns at least one duplicate. The view
     /// presents a 3-button alert; choosing one of the buttons drives
     /// `commitImport`.

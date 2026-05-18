@@ -18,6 +18,7 @@ public final class IncomingShareCoordinator {
     private let repository: any ScoreLibraryRepository
     private let appGroupContainer: URL
     private let clock: any Clock
+    private let duplicateResolver: (any ImportDuplicateResolver)?
     private let logger = Logger(
         subsystem: "com.KeyNumber.Folino",
         category: "IncomingShareCoordinator",
@@ -29,11 +30,13 @@ public final class IncomingShareCoordinator {
         repository: any ScoreLibraryRepository,
         appGroupContainer: URL,
         clock: any Clock,
+        duplicateResolver: (any ImportDuplicateResolver)? = nil,
     ) {
         self.importer = importer
         self.repository = repository
         self.appGroupContainer = appGroupContainer
         self.clock = clock
+        self.duplicateResolver = duplicateResolver
     }
 
     /// Drains a single token (when `token != nil`) or every staged token in
@@ -220,6 +223,7 @@ public final class IncomingShareCoordinator {
     private func importFiles(intent: IncomingShareIntent, token: UUID) async -> ImportOutcome {
         var outcome = ImportOutcome()
         let filesURL = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
+        let isMultiFile = intent.files.count > 1
         for file in intent.files {
             let sourceURL = filesURL.appending(path: file.originalName, directoryHint: .notDirectory)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
@@ -233,7 +237,12 @@ public final class IncomingShareCoordinator {
                 ))
                 continue
             }
-            await importSingleFile(sourceURL: sourceURL, file: file, outcome: &outcome)
+            await importSingleFile(
+                sourceURL: sourceURL,
+                file: file,
+                isMultiFile: isMultiFile,
+                outcome: &outcome,
+            )
         }
         return outcome
     }
@@ -241,17 +250,19 @@ public final class IncomingShareCoordinator {
     private func importSingleFile(
         sourceURL: URL,
         file: IncomingShareIntent.File,
+        isMultiFile: Bool,
         outcome: inout ImportOutcome,
     ) async {
         do {
             let plan = try await importer.prepareImport(sourceURL: sourceURL)
             if let dup = plan.duplicates.first {
-                outcome.skipped.append(.init(
-                    originalName: file.originalName,
-                    reason: .duplicate(existingID: dup.id, existingTitle: dup.title),
-                ))
-                outcome.lastOpenedID = dup.id
-                _ = try? await importer.commitImport(plan, decision: .openExisting(dup.id))
+                await handleDuplicate(
+                    plan: plan,
+                    dup: dup,
+                    file: file,
+                    isMultiFile: isMultiFile,
+                    outcome: &outcome,
+                )
             } else {
                 let item = try await importer.commitImport(plan, decision: .importAsNew)
                 outcome.imported.append(item.id)
@@ -261,6 +272,50 @@ public final class IncomingShareCoordinator {
             outcome.skipped.append(.init(
                 originalName: file.originalName,
                 reason: .parseFailed(error),
+            ))
+        }
+    }
+
+    /// Routes a detected duplicate through the resolver (if provided) so the
+    /// App layer can surface a per-file alert. Falls back to silent
+    /// `openExisting` when no resolver is wired (e.g., tests).
+    private func handleDuplicate(
+        plan: ImportPlan,
+        dup: ScoreItem,
+        file: IncomingShareIntent.File,
+        isMultiFile: Bool,
+        outcome: inout ImportOutcome,
+    ) async {
+        let decision: ImportDecision? = if let duplicateResolver {
+            await duplicateResolver.resolveDuplicate(plan: plan, existing: dup, isMultiFile: isMultiFile)
+        } else {
+            .openExisting(dup.id)
+        }
+        guard let decision else {
+            // User cancelled — skip without committing.
+            outcome.skipped.append(.init(
+                originalName: file.originalName,
+                reason: .duplicate(existingID: dup.id, existingTitle: dup.title),
+            ))
+            return
+        }
+        do {
+            let item = try await importer.commitImport(plan, decision: decision)
+            switch decision {
+            case .importAsNew:
+                outcome.imported.append(item.id)
+                outcome.lastOpenedID = item.id
+            case .openExisting:
+                outcome.skipped.append(.init(
+                    originalName: file.originalName,
+                    reason: .duplicate(existingID: dup.id, existingTitle: dup.title),
+                ))
+                outcome.lastOpenedID = item.id
+            }
+        } catch {
+            outcome.skipped.append(.init(
+                originalName: file.originalName,
+                reason: .persistenceFailed(error),
             ))
         }
     }

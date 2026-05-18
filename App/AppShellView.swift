@@ -51,6 +51,7 @@ struct AppShellView: View {
         } message: {
             Text("app.review.preprompt.message")
         }
+        .shareDuplicateAlert(resolver: bootstrap.shareDuplicateResolver)
         .sheet(isPresented: $versionHistoryPresenter.isSheetPresented) {
             if let viewModel = versionHistoryPresenter.sheetViewModel {
                 NavigationStack {
@@ -145,6 +146,9 @@ private struct ReadyShell: View {
     /// task so the UI matches the "import in flight" state immediately,
     /// rather than waiting for the import to finish.
     private func resetNavigationForIncomingURL() {
+        libraryVM.dismissImportUI()
+        isSettingsPresented = false
+        versionHistoryPresenter.isSheetPresented = false
         if horizontalSizeClass == .regular {
             sidebarPath = NavigationPath()
             detailScoreItem = nil

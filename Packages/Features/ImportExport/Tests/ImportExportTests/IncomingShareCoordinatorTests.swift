@@ -131,6 +131,23 @@ struct IncomingShareCoordinatorTests {
         }
     }
 
+    /// Returns pre-scripted decisions in the order `resolveDuplicate` is called.
+    /// `nil` entries simulate a user-cancelled prompt.
+    final class ScriptedDuplicateResolver: ImportDuplicateResolver, @unchecked Sendable {
+        private var decisions: [ImportDecision?]
+        private(set) var callCount = 0
+
+        init(decisions: [ImportDecision?]) {
+            self.decisions = decisions
+        }
+
+        func resolveDuplicate(plan _: ImportPlan, existing _: ScoreItem, isMultiFile _: Bool) -> ImportDecision? {
+            defer { callCount += 1 }
+            guard !decisions.isEmpty else { return nil }
+            return decisions.removeFirst()
+        }
+    }
+
     // MARK: - Helpers
 
     func makeContainer() throws -> URL {
@@ -295,6 +312,64 @@ struct IncomingShareCoordinatorTests {
             Issue.record("expected duplicate reason")
         }
         #expect(result.openAfter == existing.id)
+    }
+
+    @Test func `duplicate resolver routes decisions per file`() async throws {
+        let container = try makeContainer()
+        defer { try? FileManager.default.removeItem(at: container) }
+        let importer = FakeImporter()
+        let repo = FakeRepository()
+        let existingA = makeFakeScoreItem(title: "ExistingA", contentHash: "a.mscz")
+        let existingB = makeFakeScoreItem(title: "ExistingB", contentHash: "b.mscz")
+        let existingC = makeFakeScoreItem(title: "ExistingC", contentHash: "c.mscz")
+        repo.scoreItems = [existingA, existingB, existingC]
+        importer.duplicateMap = [
+            "a.mscz": existingA,
+            "b.mscz": existingB,
+            "c.mscz": existingC,
+        ]
+        let resolver = ScriptedDuplicateResolver(decisions: [
+            .openExisting(existingA.id),
+            .importAsNew,
+            nil, // user cancelled
+        ])
+        let coordinator = IncomingShareCoordinator(
+            importer: importer,
+            repository: repo,
+            appGroupContainer: container,
+            clock: FixedClock(date: .now),
+            duplicateResolver: resolver,
+        )
+        let token = UUID()
+        try stageToken(container, token: token, filenames: ["a.mscz", "b.mscz", "c.mscz"])
+
+        let result = await coordinator.drain(token: token)
+
+        #expect(resolver.callCount == 3)
+        // openExisting → skipped as duplicate; importAsNew → imported;
+        // nil → skipped, no commit.
+        #expect(result.imported.count == 1)
+        #expect(result.skipped.count == 2)
+        #expect(importer.committed.count == 2)
+    }
+
+    private func makeFakeScoreItem(title: String, contentHash: String) -> ScoreItem {
+        ScoreItem(
+            id: ScoreItemID(),
+            title: title,
+            composer: nil,
+            instrumentationSummary: nil,
+            localFileName: "\(title).mscz",
+            contentHash: contentHash,
+            sizeBytes: 1,
+            lengthBeats: 1,
+            defaultTempoBpm: 120,
+            primaryKey: nil,
+            addedAt: .now,
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+        )
     }
 
     @Test func `parse failure surfaces as skip`() async throws {
