@@ -42,7 +42,6 @@ public struct ShareRootView: View {
     public var body: some View {
         NavigationStack {
             content
-                .padding(20)
                 .navigationTitle(Text("share_extension.title", bundle: .module))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -81,23 +80,36 @@ public struct ShareRootView: View {
                 .foregroundStyle(.orange)
             Text(message).multilineTextAlignment(.center)
         }
+        .padding(20)
     }
 
     private func loadedView(summary: IngestSummary) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            FileSummary(files: summary.acceptedFiles, unsupportedCount: summary.unsupportedCount)
-            if summary.acceptedFiles.isEmpty {
-                Text("share_extension.no_supported_files", bundle: .module)
-                    .foregroundStyle(.secondary)
-            } else {
-                PlaylistPicker(entries: playlists, selection: $selection)
+        Form {
+            Section {
+                FileSummary(files: summary.acceptedFiles, unsupportedCount: summary.unsupportedCount)
             }
-            Spacer(minLength: 0)
+            if summary.acceptedFiles.isEmpty {
+                Section {
+                    Text("share_extension.no_supported_files", bundle: .module)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section {
+                    PlaylistPicker(entries: playlists, selection: $selection)
+                } header: {
+                    Text("share_extension.picker.title", bundle: .module)
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
             ActionButtons(
                 disabled: summary.acceptedFiles.isEmpty || isFinalizing,
                 onSave: { finalize(decision: .save(selection)) },
                 onSaveAndOpen: { finalize(decision: .saveAndOpen(selection)) },
             )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.bar)
         }
     }
 

@@ -10,36 +10,29 @@ struct PlaylistPicker: View {
     @State private var creatingNew = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("share_extension.picker.title", bundle: .module)
-                .font(.headline)
-            VStack(spacing: 0) {
-                libraryOnlyRow
-                entryRows
-                Divider().padding(.leading, 32)
-                newPlaylistSection
+        Group {
+            noPlaylistRow
+            ForEach(entries) { entry in
+                entryRow(entry)
             }
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+            newPlaylistSection
         }
     }
 
-    private var libraryOnlyRow: some View {
-        row(
+    private var noPlaylistRow: some View {
+        selectionRow(
             label: Text("share_extension.picker.library_only", bundle: .module),
             isSelected: selection == .libraryOnly,
             action: { selection = .libraryOnly },
         )
     }
 
-    private var entryRows: some View {
-        ForEach(entries) { entry in
-            Divider().padding(.leading, 32)
-            row(
-                label: Text(entry.name),
-                isSelected: selection == .existing(entry.id),
-                action: { selection = .existing(entry.id) },
-            )
-        }
+    private func entryRow(_ entry: PlaylistsIndex.Entry) -> some View {
+        selectionRow(
+            label: Text(entry.name),
+            isSelected: selection == .existing(entry.id),
+            action: { selection = .existing(entry.id) },
+        )
     }
 
     @ViewBuilder
@@ -70,8 +63,6 @@ struct PlaylistPicker: View {
                 }
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
     }
 
     private var newPlaylistButton: some View {
@@ -82,23 +73,23 @@ struct PlaylistPicker: View {
                 Image(systemName: "plus.circle")
                 Text("share_extension.picker.new_playlist", bundle: .module)
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    private func row(label: Text, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func selectionRow(label: Text, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 label
+                    .foregroundStyle(.primary)
                 Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
