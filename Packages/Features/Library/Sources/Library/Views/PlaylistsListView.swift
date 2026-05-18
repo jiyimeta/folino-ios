@@ -4,6 +4,9 @@ import UtilityUI
 
 struct PlaylistsListView: View {
     let playlists: [Playlist]
+    /// Number of *live* items in the playlist — soft-deleted items are
+    /// excluded so the count matches what's actually playable / visible.
+    let memberCount: (Playlist) -> Int
     let onCreate: (String) -> Void
     let onDelete: (Playlist) -> Void
 
@@ -31,7 +34,7 @@ struct PlaylistsListView: View {
                                 Text(playlist.name)
                                     .foregroundStyle(.primary)
                                 Spacer()
-                                Text(playlist.orderedScoreItemIDs.count, format: .number)
+                                Text(memberCount(playlist), format: .number)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -91,6 +94,7 @@ private struct PlaylistsListViewPreviewHost: View {
         NavigationStack {
             PlaylistsListView(
                 playlists: playlists,
+                memberCount: { $0.orderedScoreItemIDs.count },
                 onCreate: { _ in },
                 onDelete: { _ in },
             )

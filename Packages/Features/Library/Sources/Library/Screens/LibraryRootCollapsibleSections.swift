@@ -13,6 +13,9 @@ struct LibraryRootPlaylistsSection: View {
         if !allPlaylists.isEmpty {
             let total = allPlaylists.count
             let topN = playlistsByRecentlyUsed(allPlaylists, scoreItems: scoreItems, limit: 5)
+            // `scoreItems` is the repository's live snapshot; build the set
+            // once so each row's member count excludes soft-deleted items.
+            let liveIDs = Set(scoreItems.map(\.id))
             Section {
                 if expanded {
                     ForEach(topN) { playlist in
@@ -24,7 +27,7 @@ struct LibraryRootPlaylistsSection: View {
                                     Image(systemName: "music.note.list").foregroundStyle(.tint)
                                 }
                                 Spacer()
-                                Text(playlist.orderedScoreItemIDs.count, format: .number)
+                                Text(liveMemberCount(of: playlist, liveIDs: liveIDs), format: .number)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -59,6 +62,12 @@ struct LibraryRootPlaylistsSection: View {
                 )
             }
         }
+    }
+}
+
+private func liveMemberCount(of playlist: Playlist, liveIDs: Set<ScoreItemID>) -> Int {
+    playlist.orderedScoreItemIDs.reduce(0) { acc, id in
+        acc + (liveIDs.contains(id) ? 1 : 0)
     }
 }
 
