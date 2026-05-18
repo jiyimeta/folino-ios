@@ -271,16 +271,41 @@ private struct ReadyShell: View {
     private func runDrain(coordinator: IncomingShareCoordinator, openAfter: Bool) async {
         let result = await coordinator.drain(token: nil)
         drainBannerMessage = DrainBannerComposer.message(for: result)
-        // Reader push when openAfter is honored.
-        if openAfter, let openID = result.openAfter,
-           let item = repository.scoreItems.first(where: { $0.id == openID })
-        {
+        guard openAfter else { return }
+
+        if result.imported.count >= 2 {
+            // Multi-file import: jump to the destination list, not Reader.
+            let route: LibraryRoute = result.targetPlaylistID
+                .map(LibraryRoute.playlistDetail)
+                ?? .allScores
             if horizontalSizeClass == .regular {
                 sidebarPath = NavigationPath()
+                sidebarPath.append(route)
+                detailScoreItem = nil
+                columnVisibility = .doubleColumn
+            } else {
+                compactPath = NavigationPath()
+                compactPath.append(route)
+            }
+        } else if let openID = result.openAfter,
+                  let item = repository.scoreItems.first(where: { $0.id == openID })
+        {
+            // Single import or dedupe-to-existing: push Reader, with the
+            // target playlist underneath so the Back affordance lands there.
+            let playlistRoute: LibraryRoute? = result.targetPlaylistID
+                .map(LibraryRoute.playlistDetail)
+            if horizontalSizeClass == .regular {
+                sidebarPath = NavigationPath()
+                if let playlistRoute {
+                    sidebarPath.append(playlistRoute)
+                }
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             } else {
                 compactPath = NavigationPath()
+                if let playlistRoute {
+                    compactPath.append(playlistRoute)
+                }
                 compactPath.append(item)
             }
         }
@@ -365,18 +390,5 @@ private struct ImportLoadingHUD: View {
             .accessibilityElement(children: .combine)
         }
         .transition(.opacity)
-    }
-}
-
-private struct DrainBannerView: View {
-    let message: String
-    var body: some View {
-        Text(message)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
-            .padding(.top, 12)
-            .shadow(radius: 4)
-            .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
