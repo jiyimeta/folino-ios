@@ -83,6 +83,11 @@ final class AppBootstrap {
             Task { [weak self] in
                 do {
                     try await repository.refresh()
+                    // Best-effort purge of trash items past the 30-day retention
+                    // window. Failures don't block readiness.
+                    try? await repository.pruneScoreItemsDeleted(
+                        before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
+                    )
                     self?.isReady = true
                 } catch {
                     self?.failure = error
@@ -122,4 +127,19 @@ final class AppBootstrap {
         pendingIncomingURL = nil
         return url
     }
+
+    /// Best-effort prune of trashed items that exceeded the 30-day retention.
+    /// Called from `AppShellView` when the scene becomes active so a long-
+    /// running session also enforces the retention window without a relaunch.
+    func pruneRecentlyDeletedIfNeeded() {
+        guard let repository else { return }
+        Task {
+            try? await repository.pruneScoreItemsDeleted(
+                before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
+            )
+        }
+    }
+
+    /// Trash retention window: 30 days expressed as seconds.
+    private static let recentlyDeletedRetention: TimeInterval = 30 * 24 * 60 * 60
 }

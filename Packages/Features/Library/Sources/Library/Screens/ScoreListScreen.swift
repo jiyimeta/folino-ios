@@ -9,13 +9,11 @@ struct ScoreListScreen: View {
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
 
-    @State private var pendingDelete: ScoreItem?
     @State private var pendingRename: ScoreItem?
     @State private var renameText = ""
     @State private var editMode: EditMode = .inactive
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var bulkSheet: BulkSheet?
-    @State private var bulkDeletePrompt: BulkDeletePrompt?
 
     private enum BulkSheet: Identifiable {
         case addToPlaylist
@@ -26,11 +24,6 @@ struct ScoreListScreen: View {
             case .editTags: 1
             }
         }
-    }
-
-    private struct BulkDeletePrompt: Identifiable {
-        let id = UUID()
-        let count: Int
     }
 
     var body: some View {
@@ -66,28 +59,6 @@ struct ScoreListScreen: View {
                     )
                 }
             }
-            .alert(
-                Text(String(
-                    localized: "library.score.deleteBulk.title",
-                    defaultValue: "Delete \(bulkDeletePrompt?.count ?? 0) scores?",
-                    bundle: .module,
-                )),
-                isPresented: bulkDeleteAlertBinding,
-                presenting: bulkDeletePrompt,
-            ) { _ in
-                Button(role: .destructive) {
-                    let ids = selectedIDs
-                    Task {
-                        await library.bulkDelete(ids)
-                        exitSelectionMode()
-                    }
-                } label: {
-                    L10n.Common.delete
-                }
-                Button(role: .cancel) {} label: { L10n.Common.cancel }
-            } message: { _ in
-                Text("library.score.deleteBulk.message", bundle: .module)
-            }
     }
 
     private var listContent: some View {
@@ -97,7 +68,6 @@ struct ScoreListScreen: View {
             sort: viewModel.sort,
             isManualOrderActive: viewModel.isManualOrderActive,
             showsManualOrderOption: isPlaylistSource,
-            pendingDelete: $pendingDelete,
             onTap: onOpen,
             onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
             onConfirmDelete: { item in Task { await library.delete(item) } },
@@ -110,7 +80,13 @@ struct ScoreListScreen: View {
             onBulkShare: { format in performBulkShare(format) },
             onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
             onBulkEditTags: { bulkSheet = .editTags },
-            onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) },
+            onBulkDelete: {
+                let ids = selectedIDs
+                Task {
+                    await library.bulkDelete(ids)
+                    exitSelectionMode()
+                }
+            },
         ) { item in
             scoreRowMenu(
                 item: item,
@@ -122,7 +98,7 @@ struct ScoreListScreen: View {
                 },
                 onEditTags: onEditTags,
                 onAddToPlaylist: onAddToPlaylist,
-                onRequestDelete: { pendingDelete = $0 },
+                onRequestDelete: { item in Task { await library.delete(item) } },
             )
         }
     }
@@ -164,13 +140,6 @@ struct ScoreListScreen: View {
     private func performBulkShare(_ format: ScoreShareFormat) {
         let items = selectedItems
         Task { await library.requestBulkShare(items, format: format) }
-    }
-
-    private var bulkDeleteAlertBinding: Binding<Bool> {
-        Binding(
-            get: { bulkDeletePrompt != nil },
-            set: { isPresented in if !isPresented { bulkDeletePrompt = nil } },
-        )
     }
 
     private func exitSelectionMode() {

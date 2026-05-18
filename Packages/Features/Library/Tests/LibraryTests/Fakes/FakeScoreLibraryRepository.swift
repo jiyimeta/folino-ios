@@ -6,11 +6,16 @@ import Observation
 @Observable
 final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     var scoreItems: [ScoreItem] = []
+    var deletedScoreItems: [ScoreItem] = []
     var tags: [Tag] = []
     var playlists: [Playlist] = []
 
     var savedScoreItems: [ScoreItem] = []
     var deletedScoreItemIDs: [ScoreItemID] = []
+    var softDeletedScoreItemIDs: [ScoreItemID] = []
+    var restoredScoreItemIDs: [ScoreItemID] = []
+    var permanentlyDeletedScoreItemIDs: [ScoreItemID] = []
+    var prunedCutoffs: [Date] = []
     var savedTags: [Tag] = []
     var deletedTagIDs: [TagID] = []
     var savedPlaylists: [Playlist] = []
@@ -43,7 +48,40 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     func deleteScoreItem(id: ScoreItemID) throws {
         if let error = deleteScoreItemError { throw error }
         deletedScoreItemIDs.append(id)
+        try softDeleteScoreItem(id: id)
+    }
+
+    func softDeleteScoreItem(id: ScoreItemID) throws {
+        if let error = deleteScoreItemError { throw error }
+        softDeletedScoreItemIDs.append(id)
+        if let idx = scoreItems.firstIndex(where: { $0.id == id }) {
+            var item = scoreItems.remove(at: idx)
+            item.deletedAt = Date()
+            deletedScoreItems.append(item)
+        }
+    }
+
+    func restoreScoreItem(id: ScoreItemID) throws {
+        restoredScoreItemIDs.append(id)
+        if let idx = deletedScoreItems.firstIndex(where: { $0.id == id }) {
+            var item = deletedScoreItems.remove(at: idx)
+            item.deletedAt = nil
+            scoreItems.append(item)
+        }
+    }
+
+    func permanentlyDeleteScoreItem(id: ScoreItemID) throws {
+        permanentlyDeletedScoreItemIDs.append(id)
         scoreItems.removeAll { $0.id == id }
+        deletedScoreItems.removeAll { $0.id == id }
+    }
+
+    func pruneScoreItemsDeleted(before cutoff: Date) throws {
+        prunedCutoffs.append(cutoff)
+        deletedScoreItems.removeAll { item in
+            guard let deletedAt = item.deletedAt else { return false }
+            return deletedAt < cutoff
+        }
     }
 
     func saveTag(_ tag: Tag) throws {

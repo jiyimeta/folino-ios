@@ -44,12 +44,39 @@ struct LibraryViewModelTests {
         #expect(f.repo.scoreItems.first?.isFavorite == true)
     }
 
-    @Test func `delete calls repository`() async {
+    @Test func `delete soft deletes via repository`() async {
         let item = Self.makeItem()
         let f = Self.makeVM(scoreItems: [item])
         await f.vm.delete(item)
+        // The default `deleteScoreItem` path now soft-deletes; both buckets
+        // are populated by the fake.
         #expect(f.repo.deletedScoreItemIDs == [item.id])
+        #expect(f.repo.softDeletedScoreItemIDs == [item.id])
+        #expect(f.repo.permanentlyDeletedScoreItemIDs.isEmpty)
         #expect(f.repo.scoreItems.isEmpty)
+        #expect(f.repo.deletedScoreItems.count == 1)
+    }
+
+    @Test func `restore calls repository restore`() async throws {
+        let item = Self.makeItem()
+        let f = Self.makeVM(scoreItems: [item])
+        await f.vm.delete(item)
+        let trashed = try #require(f.repo.deletedScoreItems.first)
+        await f.vm.restore(trashed)
+        #expect(f.repo.restoredScoreItemIDs == [item.id])
+        #expect(f.repo.scoreItems.count == 1)
+        #expect(f.repo.deletedScoreItems.isEmpty)
+    }
+
+    @Test func `permanently delete calls repository permanently delete`() async throws {
+        let item = Self.makeItem()
+        let f = Self.makeVM(scoreItems: [item])
+        await f.vm.delete(item)
+        let trashed = try #require(f.repo.deletedScoreItems.first)
+        await f.vm.permanentlyDelete(trashed)
+        #expect(f.repo.permanentlyDeletedScoreItemIDs == [item.id])
+        #expect(f.repo.scoreItems.isEmpty)
+        #expect(f.repo.deletedScoreItems.isEmpty)
     }
 
     @Test func `set tag I ds resyncs and saves`() async {

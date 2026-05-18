@@ -67,6 +67,38 @@ struct LibraryViewModelBulkTests {
         #expect(f.vm.errorAlertMessage != nil)
     }
 
+    // MARK: - bulkRestore
+
+    @Test func `bulk restore returns all to live`() async {
+        let a = Self.makeItem(title: "A")
+        let b = Self.makeItem(title: "B")
+        let f = Self.makeVM(scoreItems: [a, b])
+        await f.vm.bulkDelete([a.id, b.id])
+        #expect(f.repo.deletedScoreItems.count == 2)
+
+        await f.vm.bulkRestore([a.id, b.id])
+
+        #expect(Set(f.repo.restoredScoreItemIDs) == [a.id, b.id])
+        #expect(f.repo.deletedScoreItems.isEmpty)
+        #expect(f.repo.scoreItems.count == 2)
+    }
+
+    // MARK: - bulkPermanentlyDelete
+
+    @Test func `bulk permanently delete removes from both buckets`() async {
+        let a = Self.makeItem(title: "A")
+        let b = Self.makeItem(title: "B")
+        let f = Self.makeVM(scoreItems: [a, b])
+        await f.vm.bulkDelete([a.id, b.id])
+        #expect(f.repo.deletedScoreItems.count == 2)
+
+        await f.vm.bulkPermanentlyDelete([a.id, b.id])
+
+        #expect(Set(f.repo.permanentlyDeletedScoreItemIDs) == [a.id, b.id])
+        #expect(f.repo.scoreItems.isEmpty)
+        #expect(f.repo.deletedScoreItems.isEmpty)
+    }
+
     // MARK: - bulkRemoveFromPlaylist
 
     @Test func `bulk remove from playlist filters and preserves order`() async {

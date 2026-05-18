@@ -12,6 +12,7 @@ struct AppShellView: View {
     @Bindable var reviewPrompt: ReviewPromptCoordinator
     @Bindable var versionHistoryPresenter: VersionHistoryPresenter
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -49,6 +50,11 @@ struct AppShellView: View {
             Button(role: .cancel) {} label: { Text("app.review.preprompt.notNow") }
         } message: {
             Text("app.review.preprompt.message")
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                bootstrap.pruneRecentlyDeletedIfNeeded()
+            }
         }
         .sheet(isPresented: $versionHistoryPresenter.isSheetPresented) {
             if let viewModel = versionHistoryPresenter.sheetViewModel {

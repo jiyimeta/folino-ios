@@ -109,6 +109,44 @@ public final class LibraryViewModel {
         }
     }
 
+    func restore(_ scoreItem: ScoreItem) async {
+        do {
+            try await repository.restoreScoreItem(id: scoreItem.id)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
+    func bulkRestore(_ ids: Set<ScoreItemID>) async {
+        for id in ids {
+            do {
+                try await repository.restoreScoreItem(id: id)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+    }
+
+    func permanentlyDelete(_ scoreItem: ScoreItem) async {
+        do {
+            try await repository.permanentlyDeleteScoreItem(id: scoreItem.id)
+        } catch {
+            errorAlertMessage = describe(error)
+        }
+    }
+
+    func bulkPermanentlyDelete(_ ids: Set<ScoreItemID>) async {
+        for id in ids {
+            do {
+                try await repository.permanentlyDeleteScoreItem(id: id)
+            } catch {
+                errorAlertMessage = describe(error)
+                return
+            }
+        }
+    }
+
     func bulkRemoveFromPlaylist(
         _ ids: Set<ScoreItemID>,
         from playlist: Playlist,

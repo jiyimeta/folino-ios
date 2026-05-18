@@ -31,9 +31,10 @@ struct ScoreListView<RowMenu: View>: View {
     let sort: ScoreItemSort
     let isManualOrderActive: Bool
     let showsManualOrderOption: Bool
-    @Binding var pendingDelete: ScoreItem?
     let onTap: (ScoreItem) -> Void
     let onToggleFavorite: (ScoreItem) -> Void
+    /// Invoked when the user picks Delete in the row context menu or the trailing
+    /// swipe. Soft-delete, so no confirmation alert.
     let onConfirmDelete: (ScoreItem) -> Void
     let onSelectSort: (ScoreItemSort) -> Void
     let onSelectManualOrder: () -> Void
@@ -71,26 +72,6 @@ struct ScoreListView<RowMenu: View>: View {
                         onDelete: onBulkDelete,
                     )
                 }
-            }
-            .alert(
-                Text(String(
-                    localized: "library.score.delete.title",
-                    defaultValue: "Delete \"\(pendingDelete?.title ?? "")\"?",
-                    bundle: .module,
-                )),
-                isPresented: deleteAlertBinding,
-                presenting: pendingDelete,
-            ) { item in
-                Button(role: .destructive) {
-                    onConfirmDelete(item)
-                } label: {
-                    L10n.Common.delete
-                }
-                Button(role: .cancel) {} label: {
-                    L10n.Common.cancel
-                }
-            } message: { _ in
-                Text("library.score.delete.message", bundle: .module)
             }
     }
 
@@ -174,9 +155,11 @@ struct ScoreListView<RowMenu: View>: View {
             .tint(.yellow)
         }
         // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
+        // Soft-delete: no confirmation, just stamp `deletedAt`. The item moves
+        // into Recently Deleted where the user can restore within 30 days.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
-                pendingDelete = item
+                onConfirmDelete(item)
             } label: {
                 Label {
                     L10n.Common.delete
@@ -197,13 +180,6 @@ struct ScoreListView<RowMenu: View>: View {
         } else {
             selectedIDs.insert(id)
         }
-    }
-
-    private var deleteAlertBinding: Binding<Bool> {
-        Binding(
-            get: { pendingDelete != nil },
-            set: { isPresented in if !isPresented { pendingDelete = nil } },
-        )
     }
 
     private var sortMenu: some View {
@@ -274,7 +250,6 @@ private enum ScoreListViewPreview {
 
 private struct ScoreListViewPreviewHost: View {
     @State private var searchText = ""
-    @State private var pendingDelete: ScoreItem?
     @State private var sort: ScoreItemSort = .dateAddedDesc
     @State private var isManualOrderActive = false
     @State private var editMode: EditMode = .inactive
@@ -291,7 +266,6 @@ private struct ScoreListViewPreviewHost: View {
                 sort: sort,
                 isManualOrderActive: isManualOrderActive,
                 showsManualOrderOption: showsManualOrderOption,
-                pendingDelete: $pendingDelete,
                 onTap: { _ in },
                 onToggleFavorite: { _ in },
                 onConfirmDelete: { _ in },

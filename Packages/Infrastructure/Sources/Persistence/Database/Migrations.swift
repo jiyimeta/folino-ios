@@ -14,6 +14,7 @@ enum AppMigrations {
         m.registerMigration("v5", migrate: migrateV5)
         m.registerMigration("v6", migrate: migrateV6)
         m.registerMigration("v7", migrate: migrateV7)
+        m.registerMigration("v8", migrate: migrateV8)
         return m
     }()
 
@@ -81,6 +82,21 @@ enum AppMigrations {
         m.registerMigration("v4", migrate: migrateV4)
         m.registerMigration("v5", migrate: migrateV5)
         m.registerMigration("v6", migrate: migrateV6)
+        return m
+    }()
+
+    /// Migrator that registers v1 … v7 only — useful for tests that want
+    /// to exercise the v8 upgrade against rows already inserted at the
+    /// previous schema.
+    static let upToV7: DatabaseMigrator = {
+        var m = DatabaseMigrator()
+        m.registerMigration("v1", migrate: migrateV1)
+        m.registerMigration("v2", migrate: migrateV2)
+        m.registerMigration("v3", migrate: migrateV3)
+        m.registerMigration("v4", migrate: migrateV4)
+        m.registerMigration("v5", migrate: migrateV5)
+        m.registerMigration("v6", migrate: migrateV6)
+        m.registerMigration("v7", migrate: migrateV7)
         return m
     }()
 
@@ -232,5 +248,19 @@ enum AppMigrations {
         ALTER TABLE reader_preferences
         ADD COLUMN ab_repeat TEXT
         """)
+    }
+
+    // MARK: - v8
+
+    /// Adds the soft-delete column for the "Recently Deleted" feature.
+    /// `deleted_at` is NULL for live rows; non-NULL means the row is in the
+    /// trash and will be auto-purged 30 days after the stamp. Existing rows
+    /// migrate as live (NULL) because that's the column default.
+    private static func migrateV8(_ db: Database) throws {
+        try db.execute(sql: """
+        ALTER TABLE score_items
+        ADD COLUMN deleted_at REAL
+        """)
+        try db.execute(sql: "CREATE INDEX idx_score_items_deleted_at ON score_items(deleted_at)")
     }
 }

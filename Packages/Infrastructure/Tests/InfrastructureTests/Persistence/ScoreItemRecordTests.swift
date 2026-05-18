@@ -7,7 +7,9 @@ import Testing
 struct ScoreItemRecordTests {
     private func makeQueue() throws -> DatabaseQueue {
         let q = try DatabaseQueue()
-        try AppMigrations.v1.migrate(q)
+        // Record mirrors the latest schema (incl. `deleted_at` from v8) so we
+        // need the full migrator here.
+        try AppMigrations.all.migrate(q)
         return q
     }
 

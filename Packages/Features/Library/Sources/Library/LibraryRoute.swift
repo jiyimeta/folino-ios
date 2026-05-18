@@ -14,4 +14,5 @@ enum LibraryRoute: Hashable, Codable {
     case tagDetail(TagID)
     case playlists
     case playlistDetail(PlaylistID)
+    case recentlyDeleted
 }
