@@ -48,7 +48,7 @@ struct LiveScoreLibraryRepositoryTests {
         #expect(stored.title == "Prelude")
     }
 
-    @Test func `delete score item removes from array`() async throws {
+    @Test func `delete score item soft deletes and moves to trash`() async throws {
         let (db, lifetime) = try makeDatabase()
         let scoresDir = try TempDirectory()
         defer { withExtendedLifetime((lifetime, scoresDir)) {} }
@@ -66,6 +66,146 @@ struct LiveScoreLibraryRepositoryTests {
 
         try await repo.deleteScoreItem(id: item.id)
         try await waitFor { !repo.scoreItems.contains { $0.id == item.id } }
+        try await waitFor { repo.deletedScoreItems.contains { $0.id == item.id } }
+        let trashed = try #require(repo.deletedScoreItems.first { $0.id == item.id })
+        #expect(trashed.deletedAt != nil)
+    }
+
+    @Test func `soft delete keeps file on disk`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        let scoresDir = try TempDirectory()
+        defer { withExtendedLifetime((lifetime, scoresDir)) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: scoresDir.url)
+        try await repo.refresh()
+
+        let item = ScoreItem(
+            title: "x", composer: nil, instrumentationSummary: nil,
+            localFileName: "x.mid", contentHash: "h", sizeBytes: 0,
+            lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
+        )
+        try await repo.saveScoreItem(item)
+        let fileURL = scoresDir.url.appending(path: item.localFileName)
+        try Data("dummy".utf8).write(to: fileURL)
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+
+        try await repo.softDeleteScoreItem(id: item.id)
+        try await waitFor { repo.deletedScoreItems.contains { $0.id == item.id } }
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test func `restore returns item to live snapshot`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        let scoresDir = try TempDirectory()
+        defer { withExtendedLifetime((lifetime, scoresDir)) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: scoresDir.url)
+        try await repo.refresh()
+
+        let item = ScoreItem(
+            title: "x", composer: nil, instrumentationSummary: nil,
+            localFileName: "x.mid", contentHash: "h", sizeBytes: 0,
+            lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
+        )
+        try await repo.saveScoreItem(item)
+        try await repo.softDeleteScoreItem(id: item.id)
+        try await waitFor { repo.deletedScoreItems.contains { $0.id == item.id } }
+
+        try await repo.restoreScoreItem(id: item.id)
+        try await waitFor { repo.scoreItems.contains { $0.id == item.id } }
+        #expect(!repo.deletedScoreItems.contains { $0.id == item.id })
+        let restored = try #require(repo.scoreItems.first { $0.id == item.id })
+        #expect(restored.deletedAt == nil)
+    }
+
+    @Test func `permanently delete removes row and file`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        let scoresDir = try TempDirectory()
+        defer { withExtendedLifetime((lifetime, scoresDir)) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: scoresDir.url)
+        try await repo.refresh()
+
+        let item = ScoreItem(
+            title: "x", composer: nil, instrumentationSummary: nil,
+            localFileName: "x.mid", contentHash: "h", sizeBytes: 0,
+            lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
+        )
+        try await repo.saveScoreItem(item)
+        let fileURL = scoresDir.url.appending(path: item.localFileName)
+        try Data("dummy".utf8).write(to: fileURL)
+        try await repo.softDeleteScoreItem(id: item.id)
+        try await waitFor { repo.deletedScoreItems.contains { $0.id == item.id } }
+
+        try await repo.permanentlyDeleteScoreItem(id: item.id)
+        try await waitFor { !repo.deletedScoreItems.contains { $0.id == item.id } }
+        #expect(!repo.scoreItems.contains { $0.id == item.id })
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test func `prune removes only items past cutoff`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        let scoresDir = try TempDirectory()
+        defer { withExtendedLifetime((lifetime, scoresDir)) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: scoresDir.url)
+        try await repo.refresh()
+
+        let now = Date()
+        let stale = makeBareItem(localFileName: "stale.mid", contentHash: "s")
+        let fresh = makeBareItem(localFileName: "fresh.mid", contentHash: "f")
+        try await repo.saveScoreItem(stale)
+        try await repo.saveScoreItem(fresh)
+        // Stamp deleted_at directly so we can choose absolute times.
+        try await db.pool.write { db in
+            try db.execute(
+                sql: "UPDATE score_items SET deleted_at = ? WHERE id = ?",
+                arguments: [
+                    now.addingTimeInterval(-60 * 86400).timeIntervalSince1970,
+                    stale.id.rawValue.uuidString,
+                ],
+            )
+            try db.execute(
+                sql: "UPDATE score_items SET deleted_at = ? WHERE id = ?",
+                arguments: [
+                    now.addingTimeInterval(-1 * 86400).timeIntervalSince1970,
+                    fresh.id.rawValue.uuidString,
+                ],
+            )
+        }
+        try await waitFor { repo.deletedScoreItems.count == 2 }
+
+        try await repo.pruneScoreItemsDeleted(before: now.addingTimeInterval(-30 * 86400))
+
+        try await waitFor { repo.deletedScoreItems.count == 1 }
+        #expect(repo.deletedScoreItems.first?.id == fresh.id)
+    }
+
+    @Test func `soft deleted items excluded from content hash lookup`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        let hash = "dup-hash"
+        let live = makeBareItem(localFileName: "live.mid", contentHash: hash)
+        let trashed = makeBareItem(localFileName: "trashed.mid", contentHash: hash)
+        try await repo.saveScoreItem(live)
+        try await repo.saveScoreItem(trashed)
+        try await repo.softDeleteScoreItem(id: trashed.id)
+        try await waitFor { repo.deletedScoreItems.contains { $0.id == trashed.id } }
+
+        let matches = try await repo.scoreItems(matchingContentHash: hash)
+        #expect(matches.count == 1)
+        #expect(matches.first?.id == live.id)
+    }
+
+    private func makeBareItem(localFileName: String, contentHash: String) -> ScoreItem {
+        ScoreItem(
+            title: "x", composer: nil, instrumentationSummary: nil,
+            localFileName: localFileName, contentHash: contentHash, sizeBytes: 0,
+            lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
+            addedAt: Date(), lastOpenedAt: nil, tagIDs: [], isFavorite: false,
+        )
     }
 
     @Test func `save tag appears in observed array`() async throws {

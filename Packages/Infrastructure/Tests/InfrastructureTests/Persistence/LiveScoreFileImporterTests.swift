@@ -8,6 +8,7 @@ import Testing
 @Observable
 private final class FailingRepository: ScoreLibraryRepository {
     var scoreItems: [ScoreItem] = []
+    var deletedScoreItems: [ScoreItem] = []
     var tags: [Domain.Tag] = []
     var playlists: [Playlist] = []
 
@@ -17,6 +18,10 @@ private final class FailingRepository: ScoreLibraryRepository {
     }
 
     func deleteScoreItem(id: ScoreItemID) throws {}
+    func softDeleteScoreItem(id: ScoreItemID) throws {}
+    func restoreScoreItem(id: ScoreItemID) throws {}
+    func permanentlyDeleteScoreItem(id: ScoreItemID) throws {}
+    func pruneScoreItemsDeleted(before cutoff: Date) throws {}
     func saveTag(_ tag: Domain.Tag) throws {}
     func deleteTag(id: TagID) throws {}
     func savePlaylist(_ playlist: Playlist) throws {}

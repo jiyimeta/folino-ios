@@ -6,6 +6,7 @@ import Observation
 @Observable
 final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     var scoreItems: [ScoreItem] = []
+    var deletedScoreItems: [ScoreItem] = []
     var tags: [Tag] = []
     var playlists: [Playlist] = []
 
@@ -23,6 +24,10 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     func deleteScoreItem(id: ScoreItemID) throws {}
+    func softDeleteScoreItem(id: ScoreItemID) throws {}
+    func restoreScoreItem(id: ScoreItemID) throws {}
+    func permanentlyDeleteScoreItem(id: ScoreItemID) throws {}
+    func pruneScoreItemsDeleted(before cutoff: Date) throws {}
     func saveTag(_ tag: Tag) throws {}
     func deleteTag(id: TagID) throws {}
     func savePlaylist(_ playlist: Playlist) throws {}

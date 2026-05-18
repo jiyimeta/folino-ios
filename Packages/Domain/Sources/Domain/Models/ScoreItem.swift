@@ -26,6 +26,11 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public var lastOpenedAt: Date?
     public var tagIDs: Set<TagID>
     public var isFavorite: Bool
+    /// When non-nil, the item has been soft-deleted at this timestamp and lives only in
+    /// the "Recently Deleted" view until it is restored or auto-purged after 30 days.
+    /// The repository surfaces these rows via `deletedScoreItems` and excludes them
+    /// from `scoreItems`, so non-trash callers never see them.
+    public var deletedAt: Date?
 
     public init(
         id: ScoreItemID = ScoreItemID(),
@@ -43,6 +48,7 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         lastOpenedAt: Date?,
         tagIDs: Set<TagID>,
         isFavorite: Bool,
+        deletedAt: Date? = nil,
     ) {
         self.id = id
         self.title = title
@@ -59,5 +65,6 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         self.lastOpenedAt = lastOpenedAt
         self.tagIDs = tagIDs
         self.isFavorite = isFavorite
+        self.deletedAt = deletedAt
     }
 }

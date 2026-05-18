@@ -18,12 +18,17 @@ import SheetMusicMSCX
 @Observable
 final class PreviewFakeRepository: ScoreLibraryRepository {
     var scoreItems: [ScoreItem] = []
+    var deletedScoreItems: [ScoreItem] = []
     var tags: [Tag] = []
     var playlists: [Playlist] = []
 
     func refresh() throws {}
     func saveScoreItem(_: ScoreItem) throws {}
     func deleteScoreItem(id _: Domain.ScoreItemID) throws {}
+    func softDeleteScoreItem(id _: Domain.ScoreItemID) throws {}
+    func restoreScoreItem(id _: Domain.ScoreItemID) throws {}
+    func permanentlyDeleteScoreItem(id _: Domain.ScoreItemID) throws {}
+    func pruneScoreItemsDeleted(before _: Date) throws {}
     func saveTag(_: Tag) throws {}
     func deleteTag(id _: TagID) throws {}
     func savePlaylist(_: Playlist) throws {}
@@ -82,6 +87,10 @@ final class PreviewSeededPreferencesRepository: ScoreLibraryRepository {
         base.scoreItems
     }
 
+    var deletedScoreItems: [ScoreItem] {
+        base.deletedScoreItems
+    }
+
     var tags: [Tag] {
         base.tags
     }
@@ -100,6 +109,22 @@ final class PreviewSeededPreferencesRepository: ScoreLibraryRepository {
 
     func deleteScoreItem(id: Domain.ScoreItemID) throws {
         try base.deleteScoreItem(id: id)
+    }
+
+    func softDeleteScoreItem(id: Domain.ScoreItemID) throws {
+        try base.softDeleteScoreItem(id: id)
+    }
+
+    func restoreScoreItem(id: Domain.ScoreItemID) throws {
+        try base.restoreScoreItem(id: id)
+    }
+
+    func permanentlyDeleteScoreItem(id: Domain.ScoreItemID) throws {
+        try base.permanentlyDeleteScoreItem(id: id)
+    }
+
+    func pruneScoreItemsDeleted(before cutoff: Date) throws {
+        try base.pruneScoreItemsDeleted(before: cutoff)
     }
 
     func saveTag(_ tag: Tag) throws {

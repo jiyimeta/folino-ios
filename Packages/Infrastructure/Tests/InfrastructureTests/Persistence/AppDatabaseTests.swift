@@ -151,6 +151,46 @@ struct AppDatabaseTests {
         }
     }
 
+    @Test func `v 8 adds deleted at column with null default`() throws {
+        // Insert a row at the v7 schema (no deleted_at), then run v8. The new
+        // nullable column should be NULL for the pre-existing row.
+        let queue = try DatabaseQueue()
+        try AppMigrations.upToV7.migrate(queue)
+        let scoreID = "88888888-8888-8888-8888-888888888888"
+        try queue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO score_items (id, title, local_file_name, content_hash,
+                    size_bytes, length_beats, default_tempo_bpm, added_at)
+                VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+                """,
+                arguments: [scoreID],
+            )
+        }
+
+        try AppMigrations.all.migrate(queue)
+
+        try queue.read { db in
+            let cols = try db.columns(in: "score_items").map(\.name)
+            #expect(cols.contains("deleted_at"))
+            let value = try Row.fetchOne(
+                db,
+                sql: "SELECT deleted_at FROM score_items WHERE id = ?",
+                arguments: [scoreID],
+            )
+            #expect(value?["deleted_at"] == nil as Double?)
+        }
+    }
+
+    @Test func `v 8 creates deleted at index`() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+        try queue.read { db in
+            let indexNames = try Set(db.indexes(on: "score_items").map(\.name))
+            #expect(indexNames.contains("idx_score_items_deleted_at"))
+        }
+    }
+
     @Test func `v 5 defaults existing rows to empty volume overrides JSON`() throws {
         // Insert a row at the v4 schema, then run v5. The new column's
         // DEFAULT '[]' should backfill the pre-existing row.

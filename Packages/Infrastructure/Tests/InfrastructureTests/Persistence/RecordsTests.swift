@@ -7,7 +7,10 @@ import Testing
 struct RecordsTests {
     private func makeQueue() throws -> DatabaseQueue {
         let q = try DatabaseQueue()
-        try AppMigrations.v1.migrate(q)
+        // Records mirror the latest schema, so use the full migrator —
+        // GRDB's auto-generated INSERT covers every column on the record,
+        // including columns added by later migrations like `deleted_at`.
+        try AppMigrations.all.migrate(q)
         return q
     }
 

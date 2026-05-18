@@ -10,6 +10,7 @@ import Observation
 @Observable
 public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     public private(set) var scoreItems: [ScoreItem] = []
+    public private(set) var deletedScoreItems: [ScoreItem] = []
     public private(set) var tags: [Domain.Tag] = []
     public private(set) var playlists: [Playlist] = []
 
@@ -68,6 +69,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                     await MainActor.run {
                         guard let self else { return }
                         self.scoreItems = mapped.items
+                        self.deletedScoreItems = mapped.deletedItems
                         self.tags = mapped.tags
                         self.playlists = mapped.playlists
                     }
@@ -98,6 +100,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
 
     private struct Materialized {
         var items: [ScoreItem]
+        var deletedItems: [ScoreItem]
         var tags: [Domain.Tag]
         var playlists: [Playlist]
     }
@@ -108,8 +111,15 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
             guard let uuid = UUID(uuidString: row.tagID) else { continue }
             tagIDsByItem[row.scoreItemID, default: []].insert(TagID(rawValue: uuid))
         }
-        let items: [ScoreItem] = snap.items.compactMap { rec in
-            try? rec.toDomain(tagIDs: tagIDsByItem[rec.id] ?? [])
+        var live: [ScoreItem] = []
+        var trashed: [ScoreItem] = []
+        for rec in snap.items {
+            guard let item = try? rec.toDomain(tagIDs: tagIDsByItem[rec.id] ?? []) else { continue }
+            if item.deletedAt == nil {
+                live.append(item)
+            } else {
+                trashed.append(item)
+            }
         }
         let tags: [Domain.Tag] = snap.tags.compactMap { try? $0.toDomain() }
 
@@ -121,7 +131,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         let playlists: [Playlist] = snap.playlists.compactMap { rec in
             try? rec.toDomain(orderedScoreItemIDs: orderedByPlaylist[rec.id] ?? [])
         }
-        return Materialized(items: items, tags: tags, playlists: playlists)
+        return Materialized(items: live, deletedItems: trashed, tags: tags, playlists: playlists)
     }
 
     // MARK: - Stubs (filled in by Tasks 11–13)
@@ -148,6 +158,37 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     public func deleteScoreItem(id: ScoreItemID) async throws {
+        try await softDeleteScoreItem(id: id)
+    }
+
+    public func softDeleteScoreItem(id: ScoreItemID) async throws {
+        do {
+            let stamp = Date().timeIntervalSince1970
+            try await database.pool.write { db in
+                try db.execute(
+                    sql: "UPDATE score_items SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+                    arguments: [stamp, id.rawValue.uuidString],
+                )
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
+    }
+
+    public func restoreScoreItem(id: ScoreItemID) async throws {
+        do {
+            try await database.pool.write { db in
+                try db.execute(
+                    sql: "UPDATE score_items SET deleted_at = NULL WHERE id = ?",
+                    arguments: [id.rawValue.uuidString],
+                )
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
+    }
+
+    public func permanentlyDeleteScoreItem(id: ScoreItemID) async throws {
         let pool = database.pool
         do {
             // Capture filename for disk cleanup BEFORE the row goes away.
@@ -161,6 +202,30 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 let url = scoresDirectory.appending(path: filename)
                 // Best-effort: file may already be missing. TODO: log orphaned-file events
                 // to telemetry once logging infrastructure exists.
+                try? FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
+    }
+
+    public func pruneScoreItemsDeleted(before cutoff: Date) async throws {
+        let pool = database.pool
+        do {
+            // Drop rows in one write, capture filenames first so we can sweep disk.
+            let stamp = cutoff.timeIntervalSince1970
+            let filenames: [String] = try await pool.write { db in
+                let rows = try ScoreItemRecord
+                    .filter(Column("deleted_at") != nil && Column("deleted_at") < stamp)
+                    .fetchAll(db)
+                let names = rows.map(\.localFileName)
+                for row in rows {
+                    _ = try ScoreItemRecord.deleteOne(db, key: row.id)
+                }
+                return names
+            }
+            for filename in filenames {
+                let url = scoresDirectory.appending(path: filename)
                 try? FileManager.default.removeItem(at: url)
             }
         } catch {
@@ -248,8 +313,9 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {
         do {
             return try await database.pool.read { db in
+                // Trashed rows are excluded so duplicate detection treats them as gone.
                 let records = try ScoreItemRecord
-                    .filter(Column("content_hash") == contentHash)
+                    .filter(Column("content_hash") == contentHash && Column("deleted_at") == nil)
                     .fetchAll(db)
                 return try records.map { rec -> ScoreItem in
                     let tagRows = try ScoreItemTagRecord

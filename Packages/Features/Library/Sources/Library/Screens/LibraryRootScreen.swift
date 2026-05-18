@@ -22,7 +22,6 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 
     @State private var pendingDeletePlaylist: Playlist?
     @State private var pendingDeleteTag: Tag?
-    @State private var pendingDeleteScore: ScoreItem?
     @State private var pendingRenameScore: ScoreItem?
     @State private var renameScoreText = ""
 
@@ -122,7 +121,6 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             viewModel: viewModel,
             pendingDeletePlaylist: $pendingDeletePlaylist,
             pendingDeleteTag: $pendingDeleteTag,
-            pendingDeleteScore: $pendingDeleteScore,
         )
         .alert(
             Text("library.import.duplicate.title", bundle: .module),
@@ -216,7 +214,11 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         let items = viewModel.repository.scoreItems
         let recents = items.mostRecentlyOpened(limit: 5)
 
-        if items.isEmpty && viewModel.repository.tags.isEmpty && viewModel.repository.playlists.isEmpty {
+        if items.isEmpty
+            && viewModel.repository.tags.isEmpty
+            && viewModel.repository.playlists.isEmpty
+            && viewModel.repository.deletedScoreItems.isEmpty
+        {
             ContentUnavailableView {
                 Label {
                     Text("library.allScores.empty.title", bundle: .module)
@@ -248,6 +250,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @ViewBuilder
     private func browseSection(items: [ScoreItem]) -> some View {
         let favoriteCount = items.filter(\.isFavorite).count
+        let trashCount = viewModel.repository.deletedScoreItems.count
         Section {
             NavigationLink(value: LibraryRoute.allScores) {
                 browseRow(title: "library.allScores", systemImage: "list.bullet", count: items.count)
@@ -255,6 +258,15 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             if favoriteCount > 0 {
                 NavigationLink(value: LibraryRoute.favorites) {
                     browseRow(title: "library.favorites", systemImage: "star.fill", count: favoriteCount)
+                }
+            }
+            if trashCount > 0 {
+                NavigationLink(value: LibraryRoute.recentlyDeleted) {
+                    browseRow(
+                        title: "library.recentlyDeleted.title",
+                        systemImage: "trash",
+                        count: trashCount,
+                    )
                 }
             }
         }
@@ -284,7 +296,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             },
             onEditTags: { editTagsTarget = $0 },
             onAddToPlaylist: { addToPlaylistTarget = $0 },
-            onRequestDelete: { pendingDeleteScore = $0 },
+            onRequestDelete: { item in Task { await viewModel.delete(item) } },
         )
     }
 
@@ -321,13 +333,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             .tint(.yellow)
         }
         // No `role: .destructive`: it would make SwiftUI hide the row
-        // immediately on tap (same contract as `.onDelete`), which fights
-        // our confirm-then-delete flow and crashes multi-section Lists
-        // ("Invalid update: invalid number of items in section N").
-        // `.tint(.red)` keeps the red colour.
+        // immediately on tap (same contract as `.onDelete`), which can crash
+        // multi-section Lists. Soft-delete is silent (no confirm); the item
+        // moves into Recently Deleted.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
-                pendingDeleteScore = item
+                Task { await viewModel.delete(item) }
             } label: {
                 Label {
                     L10n.Common.delete

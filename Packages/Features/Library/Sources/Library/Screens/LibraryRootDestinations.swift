@@ -51,6 +51,8 @@ func libraryRootDestination(
         }
     case .playlists:
         PlaylistsListScreen(library: viewModel)
+    case .recentlyDeleted:
+        RecentlyDeletedScreen(library: viewModel, onOpen: onOpenScore)
     case let .playlistDetail(playlistID):
         if let playlist = viewModel.repository.playlists.first(where: { $0.id == playlistID }) {
             PlaylistDetailScreen(
