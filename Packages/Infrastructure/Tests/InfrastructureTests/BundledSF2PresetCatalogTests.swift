@@ -19,8 +19,8 @@ struct BundledSF2PresetCatalogTests {
     }
 
     @Test func `skips over info and sdta lists before PDTA`() throws {
-        // Realistic SF2 layout: INFO and sdta come before pdta — the parser
-        // needs to step past them to find the preset table.
+        // Realistic SF2 layout: INFO and sdta come before pdta — the parser needs to step past them to find the preset
+        // table.
         let url = try writeSyntheticSF2(
             presets: [(bank: 8, program: 0, name: "Bright Piano")],
             includeLeadingInfoAndSdta: true,

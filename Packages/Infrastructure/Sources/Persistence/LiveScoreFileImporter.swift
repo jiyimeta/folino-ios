@@ -4,9 +4,8 @@ import Foundation
 
 public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
     private let gateway: any ScoreFileGateway
-    // `ScoreLibraryRepository` is `@MainActor`-isolated, which guarantees
-    // single-actor access. Swift 6's type system doesn't (yet) infer Sendable
-    // from the actor annotation alone, so we assert it here.
+    // `ScoreLibraryRepository` is `@MainActor`-isolated, which guarantees single-actor access. Swift 6's type system
+    // doesn't (yet) infer Sendable from the actor annotation alone, so we assert it here.
     private nonisolated(unsafe) let repository: any ScoreLibraryRepository
     private let scoresDirectory: URL
 
@@ -33,17 +32,13 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
         let summary = try await gateway.loadFileMetadata(fileURL: sourceURL)
         let duplicates = try await repository.scoreItems(matchingContentHash: hash)
 
-        // Copy the bytes into our own sandbox while the source's security
-        // scope is still open. URLs delivered via `.onOpenURL` are one-shot:
-        // releasing scope here and re-acquiring it later in `commitImport`
-        // does not grant access on a real device. Staging decouples the
-        // commit step from scope entirely.
+        // Copy the bytes into our own sandbox while the source's security scope is still open. URLs delivered via
+        // `.onOpenURL` are one-shot: releasing scope here and re-acquiring it later in `commitImport` does not grant
+        // access on a real device. Staging decouples the commit step from scope entirely.
         //
-        // We stage inside a `.staging` subdirectory of the managed scores
-        // directory (rather than `URL.temporaryDirectory`). That keeps
-        // staging files co-located with the destination — `moveItem` is
-        // a fast intra-directory rename — and ensures abandoned staged
-        // files are cleaned up when the user uninstalls the app.
+        // We stage inside a `.staging` subdirectory of the managed scores directory (rather than
+        // `URL.temporaryDirectory`). That keeps staging files co-located with the destination — `moveItem` is a fast
+        // intra-directory rename — and ensures abandoned staged files are cleaned up when the user uninstalls the app.
         let stagingDir = scoresDirectory.appending(path: ".staging", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
         let stagedURL = stagingDir.appending(
@@ -88,8 +83,8 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
             let localFileName = "\(id.rawValue.uuidString).\(plan.format.canonicalExtension)"
             let destinationURL = scoresDirectory.appending(path: localFileName)
 
-            // Move the staged copy into the managed location. No security
-            // scope needed — staging lives in our own tmp directory.
+            // Move the staged copy into the managed location. No security scope needed — staging lives in our own tmp
+            // directory.
             do {
                 try FileManager.default.moveItem(at: plan.stagedURL, to: destinationURL)
             } catch {
@@ -128,8 +123,8 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
         }
     }
 
-    /// SHA-256 the file in a single pass. Off-main via `Task.detached` so
-    /// large MSCZ archives don't stall the main actor.
+    /// SHA-256 the file in a single pass. Off-main via `Task.detached` so large MSCZ archives don't stall the main
+    /// actor.
     private static func hashAndSize(_ url: URL) async throws -> (String, Int64) {
         try await Task.detached(priority: .utility) {
             do {

@@ -19,9 +19,8 @@ struct ReaderPreferencesRepeatTests {
     }
 
     @Test func `legacy JSON without repeat fields decodes with defaults`() throws {
-        // Encode a current struct then strip the new keys to simulate a
-        // record persisted before repeatMode / abRepeat landed — same
-        // technique used for tempoMultiplier's back-compat test.
+        // Encode a current struct then strip the new keys to simulate a record persisted before repeatMode / abRepeat
+        // landed — same technique used for tempoMultiplier's back-compat test.
         let prefs = ReaderPreferences(
             scoreItemID: Self.sampleScoreItemID(),
             staffSize: 14,

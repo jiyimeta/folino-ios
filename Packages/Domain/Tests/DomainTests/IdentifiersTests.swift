@@ -18,9 +18,9 @@ struct IdentifiersTests {
     }
 
     @Test func `each identifier kind is distinct type`() {
-        // Compile-time guarantee: passing a ScoreItemID where a TagID is required must not compile.
-        // Runtime guarantee: their UUIDs can collide (extremely unlikely) but the values are still
-        // not equatable because they are different types.
+        // Compile-time guarantee: passing a ScoreItemID where a TagID is required must not compile. Runtime guarantee:
+        // their UUIDs can collide (extremely unlikely) but the values are still not equatable because they are
+        // different types.
         let scoreID = ScoreItemID()
         let tagID = TagID()
         let _: ScoreItemID = scoreID

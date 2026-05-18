@@ -236,11 +236,9 @@ struct ReaderPreferencesTests {
     }
 
     @Test func `legacy JSON without tempo multiplier key decodes as nil`() throws {
-        // Ensures additive-only schema change: rows persisted before
-        // tempoMultiplier landed must still load. We synthesize the
-        // "legacy" shape by encoding the current struct and stripping
-        // the new key, so we don't have to hand-write IDs whose
-        // encoded form is implementation-defined.
+        // Ensures additive-only schema change: rows persisted before tempoMultiplier landed must still load. We
+        // synthesize the "legacy" shape by encoding the current struct and stripping the new key, so we don't have to
+        // hand-write IDs whose encoded form is implementation-defined.
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,

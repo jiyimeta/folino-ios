@@ -319,8 +319,7 @@ struct ReaderPreferencesRecordTests {
         }
         try AppMigrations.all.migrate(queue)
 
-        // After the v7 upgrade the row is still loadable and the new
-        // columns surface as the documented defaults.
+        // After the v7 upgrade the row is still loadable and the new columns surface as the documented defaults.
         let restored = try queue.read { db in
             try ReaderPreferencesRecord
                 .filter(Column("score_item_id") == scoreID.rawValue.uuidString)

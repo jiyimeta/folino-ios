@@ -2,8 +2,8 @@ import Domain
 import Foundation
 import SheetMusicCore
 
-/// A 6-measure score fixture used by RepeatTests.
-/// Each measure has one voice with two quarter-note chords (index 0 and 1).
+/// A 6-measure score fixture used by RepeatTests. Each measure has one voice with two quarter-note chords (index 0 and
+/// 1).
 private func makeFixtureScore() -> Score {
     func measure() -> Measure {
         Measure(voices: [

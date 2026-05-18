@@ -3,8 +3,8 @@ import SwiftUI
 struct ImportLoadingHUD: View {
     var body: some View {
         ZStack {
-            // Near-invisible tap-capture layer so the user can't reach the
-            // library underneath while the import is running.
+            // Near-invisible tap-capture layer so the user can't reach the library underneath while the import is
+            // running.
             Color.black.opacity(0.001)
                 .ignoresSafeArea()
                 .accessibilityHidden(true)

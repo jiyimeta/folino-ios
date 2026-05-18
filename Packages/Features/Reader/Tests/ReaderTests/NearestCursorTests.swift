@@ -33,8 +33,8 @@ struct NearestCursorTests {
         )
     }
 
-    /// System 0: two staves at y-origins 0 and 40. Each staff carries
-    /// one chord (x=20) and one rest (x=60) at its centerline.
+    /// System 0: two staves at y-origins 0 and 40. Each staff carries one chord (x=20) and one rest (x=60) at its
+    /// centerline.
     private static func makeSystem0(sp: CGFloat) -> LayoutSystem {
         let sTop = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let sBot = StaffAddress(partIndex: 1, staffIndexInPart: 0)
@@ -113,9 +113,8 @@ struct NearestCursorTests {
 
     @Test func `press in gap between staves picks nearer staff`() {
         let doc = Self.makeDocument()
-        // Top staff mid is at 2 sp; bottom mid is at 40 + 2 sp = ~47.
-        // Gap mid Y = (2*sp + 40 + 2*sp) / 2 ≈ 23.5; press a hair below
-        // that → should snap to bottom staff.
+        // Top staff mid is at 2 sp; bottom mid is at 40 + 2 sp = ~47. Gap mid Y = (2*sp + 40 + 2*sp) / 2 ≈ 23.5; press
+        // a hair below that → should snap to bottom staff.
         let probeY = 2 * Self.sp + 40 / 2 + 1
         let result = nearestCursor(at: CGPoint(x: 20, y: probeY), in: doc)
         #expect(result?.staffOfNote == StaffAddress(partIndex: 1, staffIndexInPart: 0))
@@ -156,8 +155,7 @@ struct NearestCursorTests {
 }
 
 extension ScoreCursor {
-    /// Helper for asserting on `.item(.note(_))` results — only valid
-    /// for the test cases that produce a note cursor.
+    /// Helper for asserting on `.item(.note(_))` results — only valid for the test cases that produce a note cursor.
     fileprivate var staffOfNote: StaffAddress? {
         if case let .item(.note(id)) = self { return id.staff }
         return nil

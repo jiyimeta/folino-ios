@@ -48,8 +48,7 @@ struct LibraryViewModelTests {
         let item = Self.makeItem()
         let f = Self.makeVM(scoreItems: [item])
         await f.vm.delete(item)
-        // The default `deleteScoreItem` path now soft-deletes; both buckets
-        // are populated by the fake.
+        // The default `deleteScoreItem` path now soft-deletes; both buckets are populated by the fake.
         #expect(f.repo.deletedScoreItemIDs == [item.id])
         #expect(f.repo.softDeletedScoreItemIDs == [item.id])
         #expect(f.repo.permanentlyDeletedScoreItemIDs.isEmpty)

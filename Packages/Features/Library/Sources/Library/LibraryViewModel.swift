@@ -13,10 +13,9 @@ public final class LibraryViewModel {
     var shareTarget: ShareTarget?
     var isPreparingShare = false
 
-    /// True while a file import is in flight (prepare or commit). Driven by
-    /// `defer` blocks in `startImport` and `commit` so it clears on success,
-    /// duplicate detection, and any thrown error. The App composition root
-    /// uses this to show a loading HUD over the whole shell.
+    /// True while a file import is in flight (prepare or commit). Driven by `defer` blocks in `startImport` and
+    /// `commit` so it clears on success, duplicate detection, and any thrown error. The App composition root uses this
+    /// to show a loading HUD over the whole shell.
     public var isImporting = false
 
     struct ShareTarget: Identifiable, Equatable {
@@ -30,26 +29,23 @@ public final class LibraryViewModel {
 
     var errorAlertMessage: String?
 
-    /// Set when an import succeeds; the App composition root watches this and
-    /// pushes the Reader. Cleared by the watcher after handling.
+    /// Set when an import succeeds; the App composition root watches this and pushes the Reader. Cleared by the watcher
+    /// after handling.
     public var pendingScoreToOpen: ScoreItem?
 
     /// Drives the `.fileImporter` sheet.
     var isFileImporterPresented = false
 
-    /// Dismiss any in-flight import-flow UI (file picker sheet, duplicate
-    /// prompt, error alert). Called from the App layer when an external
-    /// incoming action (file URL or share token) supersedes whatever the
-    /// user was doing.
+    /// Dismiss any in-flight import-flow UI (file picker sheet, duplicate prompt, error alert). Called from the App
+    /// layer when an external incoming action (file URL or share token) supersedes whatever the user was doing.
     public func dismissImportUI() {
         isFileImporterPresented = false
         duplicatePrompt = nil
         errorAlertMessage = nil
     }
 
-    /// Set when `prepareImport` returns at least one duplicate. The view
-    /// presents a 3-button alert; choosing one of the buttons drives
-    /// `commitImport`.
+    /// Set when `prepareImport` returns at least one duplicate. The view presents a 3-button alert; choosing one of the
+    /// buttons drives `commitImport`.
     var duplicatePrompt: DuplicatePrompt?
 
     struct DuplicatePrompt: Identifiable, Equatable {
@@ -274,9 +270,8 @@ public final class LibraryViewModel {
         }
     }
 
-    /// Called by the `.fileImporter` `onCompletion`. Handles security-scoped
-    /// access, prepareImport, and either commits immediately or stages a
-    /// duplicate prompt.
+    /// Called by the `.fileImporter` `onCompletion`. Handles security-scoped access, prepareImport, and either commits
+    /// immediately or stages a duplicate prompt.
     public func startImport(from sourceURL: URL) async {
         isImporting = true
         defer { isImporting = false }

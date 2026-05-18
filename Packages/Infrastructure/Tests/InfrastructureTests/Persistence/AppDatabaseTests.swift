@@ -75,9 +75,8 @@ struct AppDatabaseTests {
     }
 
     @Test func `v 3 defaults existing rows to empty overrides JSON`() throws {
-        // Insert a row before v3 has been registered, then run the full
-        // migrator. The `DEFAULT` on the new column should backfill the
-        // pre-existing row.
+        // Insert a row before v3 has been registered, then run the full migrator. The `DEFAULT` on the new column
+        // should backfill the pre-existing row.
         let queue = try DatabaseQueue()
         try AppMigrations.upToV2.migrate(queue)
         try queue.write { db in
@@ -105,8 +104,7 @@ struct AppDatabaseTests {
         let queue = try DatabaseQueue()
         try AppMigrations.upToV3.migrate(queue)
 
-        // Insert a parent score row, then a v3-shape reader_preferences row
-        // (no honor_layout_breaks column yet).
+        // Insert a parent score row, then a v3-shape reader_preferences row (no honor_layout_breaks column yet).
         let scoreID = "00000000-0000-0000-0000-000000000001"
         let prefsID = "11111111-1111-1111-1111-111111111111"
         try queue.write { db in
@@ -152,8 +150,8 @@ struct AppDatabaseTests {
     }
 
     @Test func `v 8 adds deleted at column with null default`() throws {
-        // Insert a row at the v7 schema (no deleted_at), then run v8. The new
-        // nullable column should be NULL for the pre-existing row.
+        // Insert a row at the v7 schema (no deleted_at), then run v8. The new nullable column should be NULL for the
+        // pre-existing row.
         let queue = try DatabaseQueue()
         try AppMigrations.upToV7.migrate(queue)
         let scoreID = "88888888-8888-8888-8888-888888888888"
@@ -192,8 +190,8 @@ struct AppDatabaseTests {
     }
 
     @Test func `v 5 defaults existing rows to empty volume overrides JSON`() throws {
-        // Insert a row at the v4 schema, then run v5. The new column's
-        // DEFAULT '[]' should backfill the pre-existing row.
+        // Insert a row at the v4 schema, then run v5. The new column's DEFAULT '[]' should backfill the pre-existing
+        // row.
         let queue = try DatabaseQueue()
         try AppMigrations.upToV4.migrate(queue)
         let scoreID = "00000000-0000-0000-0000-000000000002"

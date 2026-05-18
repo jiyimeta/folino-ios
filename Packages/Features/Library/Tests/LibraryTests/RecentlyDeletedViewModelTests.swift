@@ -22,8 +22,7 @@ struct RecentlyDeletedViewModelTests {
         let middle = Self.makeItem(title: "Middle", deletedAt: Self.base.addingTimeInterval(-2000))
         let newest = Self.makeItem(title: "Newest", deletedAt: Self.base.addingTimeInterval(-1000))
         let repo = FakeScoreLibraryRepository()
-        // Seed in shuffled order to make sure sort isn't accidentally an
-        // identity reordering.
+        // Seed in shuffled order to make sure sort isn't accidentally an identity reordering.
         repo.deletedScoreItems = [middle, oldest, newest]
         let vm = RecentlyDeletedViewModel(repository: repo)
 

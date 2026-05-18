@@ -147,10 +147,9 @@ private struct ReadyShell: View {
         )
     }
 
-    /// Snap the user back to library root before an incoming-URL import
-    /// starts. Called from both the warm-reentry handler and the cold-launch
-    /// task so the UI matches the "import in flight" state immediately,
-    /// rather than waiting for the import to finish.
+    /// Snap the user back to library root before an incoming-URL import starts. Called from both the warm-reentry
+    /// handler and the cold-launch task so the UI matches the "import in flight" state immediately, rather than waiting
+    /// for the import to finish.
     private func resetNavigationForIncomingURL() {
         libraryVM.dismissImportUI()
         isSettingsPresented = false
@@ -231,10 +230,9 @@ private struct ReadyShell: View {
             }
         }
         .onChange(of: bootstrap.pendingIncomingURL) { _, newValue in
-            // Warm re-entry: a URL arrived while the app was already running.
-            // Fire-and-forget so the import isn't tied to the view's task
-            // lifecycle — `.task(id:)` would cancel its current body when the
-            // slot is cleared, surfacing as a persistenceFailed alert.
+            // Warm re-entry: a URL arrived while the app was already running. Fire-and-forget so the import isn't tied
+            // to the view's task lifecycle — `.task(id:)` would cancel its current body when the slot is cleared,
+            // surfacing as a persistenceFailed alert.
             guard newValue != nil,
                   let url = bootstrap.consumePendingIncomingURL() else { return }
             resetNavigationForIncomingURL()
@@ -300,8 +298,8 @@ private struct ReadyShell: View {
         } else if let openID = result.openAfter,
                   let item = repository.scoreItems.first(where: { $0.id == openID })
         {
-            // Single import or dedupe-to-existing: push Reader, with the
-            // target playlist underneath so the Back affordance lands there.
+            // Single import or dedupe-to-existing: push Reader, with the target playlist underneath so the Back
+            // affordance lands there.
             let playlistRoute: LibraryRoute? = result.targetPlaylistID
                 .map(LibraryRoute.playlistDetail)
             if horizontalSizeClass == .regular {
@@ -334,9 +332,8 @@ private struct ReadyShell: View {
                 onBack: { columnVisibility = .doubleColumn },
                 hidesBackButton: columnVisibility == .doubleColumn,
             )
-            // Force a fresh view identity per score so ReaderRootScreen's
-            // @State (viewModel seeded from scoreItem in init) is rebuilt
-            // when the user opens a different score from the iPad sidebar.
+            // Force a fresh view identity per score so ReaderRootScreen's @State (viewModel seeded from scoreItem in
+            // init) is rebuilt when the user opens a different score from the iPad sidebar.
             .id(item.id)
         } else {
             emptyDetail

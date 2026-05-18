@@ -107,8 +107,7 @@ struct PlaylistDetailScreen: View {
     }
 
     private var bulkAvailableShareFormats: [ScoreShareFormat] {
-        // See `ScoreListScreen.bulkAvailableShareFormats` for the
-        // per-item-vs-bulk reasoning.
+        // See `ScoreListScreen.bulkAvailableShareFormats` for the per-item-vs-bulk reasoning.
         selectedItems.isEmpty ? [] : [.museScoreV4, .museScoreV3, .pdf, .midi]
     }
 

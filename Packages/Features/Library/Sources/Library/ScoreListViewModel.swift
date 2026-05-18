@@ -18,8 +18,8 @@ final class ScoreListViewModel {
     var sort: ScoreItemSort
     var searchQuery = ""
 
-    /// `true` when `source == .playlist(...)` and the current sort is the
-    /// playlist's manual order (i.e. no explicit sort was picked).
+    /// `true` when `source == .playlist(...)` and the current sort is the playlist's manual order (i.e. no explicit
+    /// sort was picked).
     var isManualOrderActive: Bool {
         if case .playlist = source { return manualOrder }
         return false

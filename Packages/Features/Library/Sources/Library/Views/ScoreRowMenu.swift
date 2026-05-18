@@ -2,9 +2,8 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// Pure menu builder used by the trailing ellipsis menus and context-menus
-/// across the Library feature. Takes plain Domain values and closures so it
-/// can be reused from any Screen and rendered in `#Preview`.
+/// Pure menu builder used by the trailing ellipsis menus and context-menus across the Library feature. Takes plain
+/// Domain values and closures so it can be reused from any Screen and rendered in `#Preview`.
 @MainActor
 @ViewBuilder
 func scoreRowMenu(
@@ -69,11 +68,9 @@ func scoreRowMenu(
     }
 }
 
-/// Lazy-loading share submenu. Shows the placeholder formats
-/// (no `isOriginal` flag) until the menu first opens, then fetches
-/// the per-item options once via `loadFormats` and updates the rows
-/// in place. Loading on first open avoids parsing every score in a
-/// large list at row-appear time.
+/// Lazy-loading share submenu. Shows the placeholder formats (no `isOriginal` flag) until the menu first opens, then
+/// fetches the per-item options once via `loadFormats` and updates the rows in place. Loading on first open avoids
+/// parsing every score in a large list at row-appear time.
 @MainActor
 struct ShareSubmenu: View {
     let loadFormats: @Sendable () async -> [ScoreShareFormatOption]
@@ -91,9 +88,8 @@ struct ShareSubmenu: View {
                     shareMenuLabel(option: option)
                 }
             }
-            // Triggers exactly when the menu opens. The empty view
-            // disappears when the menu closes, cancelling the task —
-            // the `hasLoaded` flag stops the next open from refetching.
+            // Triggers exactly when the menu opens. The empty view disappears when the menu closes, cancelling the task
+            // — the `hasLoaded` flag stops the next open from refetching.
             Color.clear.frame(width: 0, height: 0)
                 .task {
                     guard !hasLoaded else { return }
@@ -132,8 +128,7 @@ private func shareMenuLabel(option: ScoreShareFormatOption) -> some View {
 private func shareMenuTitle(for option: ScoreShareFormatOption) -> some View {
     let formatText = shareMenuFormatText(for: option.format)
     if option.isOriginal {
-        // Mark the option that matches the source's format so the user
-        // can tell it from re-encoded peers.
+        // Mark the option that matches the source's format so the user can tell it from re-encoded peers.
         formatText
             + Text(verbatim: " ")
             + Text("library.format.original.suffix", bundle: .module)

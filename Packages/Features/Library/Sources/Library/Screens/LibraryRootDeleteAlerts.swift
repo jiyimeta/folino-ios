@@ -2,9 +2,8 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// Two confirmation alerts (playlist / tag) used by the Library root's
-/// swipe-to-delete actions. Score deletion is soft (no confirmation) — the
-/// Recently Deleted screen handles permanent-delete confirmation via popover.
+/// Two confirmation alerts (playlist / tag) used by the Library root's swipe-to-delete actions. Score deletion is soft
+/// (no confirmation) — the Recently Deleted screen handles permanent-delete confirmation via popover.
 @MainActor
 struct LibraryRootDeleteAlerts: ViewModifier {
     let viewModel: LibraryViewModel

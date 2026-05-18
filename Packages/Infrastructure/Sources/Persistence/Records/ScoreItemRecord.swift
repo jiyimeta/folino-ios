@@ -2,9 +2,8 @@ import Domain
 import Foundation
 import GRDB
 
-/// Row mirror for the `score_items` table. Tag IDs are NOT stored on this
-/// record — they live in `score_item_tags` and are joined in by the
-/// repository before building a `ScoreItem`.
+/// Row mirror for the `score_items` table. Tag IDs are NOT stored on this record — they live in `score_item_tags` and
+/// are joined in by the repository before building a `ScoreItem`.
 struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
     static let databaseTableName = "score_items"
 

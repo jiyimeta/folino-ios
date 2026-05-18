@@ -3,14 +3,11 @@ import Domain
 import SheetMusicCore
 import SwiftUI
 
-// Verifies the initial scroll position lands at the *top* of the score —
-// used to confirm the `.defaultScrollAnchor(.topLeading)` fix in
-// `VerticalScoreContainer`. Without the modifier this preview opens
-// around the middle of the score because the container's content grows
-// from `Color.clear` (size 0×0 while `document == nil`) to the
-// laid-out page once `rebuildLayout` finishes, and SwiftUI's default
-// 2-axis scroll anchor preserves the *centre* across content-size
-// changes.
+// Verifies the initial scroll position lands at the *top* of the score — used to confirm the
+// `.defaultScrollAnchor(.topLeading)` fix in `VerticalScoreContainer`. Without the modifier this preview opens around
+// the middle of the score because the container's content grows from `Color.clear` (size 0×0 while `document == nil`)
+// to the laid-out page once `rebuildLayout` finishes, and SwiftUI's default 2-axis scroll anchor preserves the *centre*
+// across content-size changes.
 #Preview("Initial scroll · top of score") {
     let score = PreviewSampleScore.tall
     let repo = PreviewFakeRepository()
@@ -33,9 +30,8 @@ import SwiftUI
 
 // MARK: - A–B loop boundary marker previews
 
-/// Builds the shared boilerplate for A–B marker preview blocks: score,
-/// repo, view model, and container — differing only in the seeded
-/// `ReaderPreferences`.
+/// Builds the shared boilerplate for A–B marker preview blocks: score, repo, view model, and container — differing only
+/// in the seeded `ReaderPreferences`.
 @MainActor
 private func abLoopPreview(prefs: ReaderPreferences) -> some View {
     let score = PreviewSampleScore.tall
@@ -60,9 +56,8 @@ private func abLoopPreview(prefs: ReaderPreferences) -> some View {
 }
 
 #Preview("A–B markers · multi-bar") {
-    // Pre-seed an A–B loop spanning a few bars. ChordPath only needs
-    // the indices the overlay reads — markers gate on measureIndex,
-    // so chordIndex/voiceIndex/systemIndex can stay at 0.
+    // Pre-seed an A–B loop spanning a few bars. ChordPath only needs the indices the overlay reads — markers gate on
+    // measureIndex, so chordIndex/voiceIndex/systemIndex can stay at 0.
     let item = PreviewFakeRepository.sampleItem
     let prefs = ReaderPreferences(
         scoreItemID: item.id,

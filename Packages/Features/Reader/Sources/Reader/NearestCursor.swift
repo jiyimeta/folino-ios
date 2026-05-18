@@ -2,12 +2,11 @@ import CoreGraphics
 import SheetMusicCore
 import SheetMusicLayout
 
-/// Maps a point in `LayoutDocument` coordinates to the nearest
-/// playable cursor (a chord onset or a rest) on the staff closest to
-/// the touch.
+/// Maps a point in `LayoutDocument` coordinates to the nearest playable cursor (a chord onset or a rest) on the staff
+/// closest to the touch.
 ///
-/// Returns `nil` when the chosen system / staff / measure has no
-/// playable elements (e.g. an empty staff under the touched X).
+/// Returns `nil` when the chosen system / staff / measure has no playable elements (e.g. an empty staff under the
+/// touched X).
 @available(macOS 15.0, iOS 16.0, *)
 func nearestCursor(at point: CGPoint, in document: LayoutDocument) -> ScoreCursor? {
     guard let system = chooseSystem(forY: point.y, in: document.systems) else {
@@ -51,9 +50,8 @@ private func verticalDistance(y: CGFloat, system: LayoutSystem) -> CGFloat {
     return 0
 }
 
-/// Returns the chosen staff's mid-Y in document coordinates.
-/// A 5-line staff is 4 sp tall, so the centerline sits 2 sp below
-/// `staffOrigins[i].y`.
+/// Returns the chosen staff's mid-Y in document coordinates. A 5-line staff is 4 sp tall, so the centerline sits 2 sp
+/// below `staffOrigins[i].y`.
 @available(macOS 15.0, iOS 16.0, *)
 private func chooseStaffMidY(
     forY y: CGFloat, system: LayoutSystem, sp: CGFloat,

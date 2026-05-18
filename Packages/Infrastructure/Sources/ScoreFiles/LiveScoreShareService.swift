@@ -4,8 +4,7 @@ import SheetMusic
 import SheetMusicMSCX
 import SheetMusicPDF
 
-/// Live `ScoreShareService` backed by `swift-sheet-music`. Companion to
-/// `LiveScoreFileGateway` in the same module.
+/// Live `ScoreShareService` backed by `swift-sheet-music`. Companion to `LiveScoreFileGateway` in the same module.
 public struct LiveScoreShareService: ScoreShareService {
     private let scoresDirectory: URL
     private let shareTempDirectory: URL
@@ -24,8 +23,8 @@ public struct LiveScoreShareService: ScoreShareService {
         self.audioExporter = audioExporter
     }
 
-    /// Internal for tests. Replaces filesystem-hostile characters,
-    /// trims to ≤100 chars, falls back to `"score"` if empty.
+    /// Internal for tests. Replaces filesystem-hostile characters, trims to ≤100 chars, falls back to `"score"` if
+    /// empty.
     static func sanitize(title: String) -> String {
         let bad: Set<Character> = ["/", ":", "\\", "\u{0000}"]
         let cleaned = String(title.map { bad.contains($0) ? "_" : $0 })
@@ -68,9 +67,8 @@ public struct LiveScoreShareService: ScoreShareService {
 
     // MARK: - Source-based mapping
 
-    /// `ScoreSource` → matching `ScoreShareFormat`. Returns `nil` for
-    /// sources we don't expose as shareable formats today (MusicXML,
-    /// PDF, MuseScore 2, unknown).
+    /// `ScoreSource` → matching `ScoreShareFormat`. Returns `nil` for sources we don't expose as shareable formats
+    /// today (MusicXML, PDF, MuseScore 2, unknown).
     static func matchingFormat(for source: ScoreSource) -> ScoreShareFormat? {
         switch source {
         case .midi: .midi
@@ -80,10 +78,8 @@ public struct LiveScoreShareService: ScoreShareService {
         }
     }
 
-    /// Loads the item via the gateway just to read `Score.source` and
-    /// map it to the matching share format. Errors map to `nil` so a
-    /// transient parse failure simply leaves the menu unflagged
-    /// instead of breaking it.
+    /// Loads the item via the gateway just to read `Score.source` and map it to the matching share format. Errors map
+    /// to `nil` so a transient parse failure simply leaves the menu unflagged instead of breaking it.
     private func detectOriginalFormat(for item: ScoreItem) async -> ScoreShareFormat? {
         let url = scoresDirectory.appending(path: item.localFileName)
         guard let result = try? await gateway.loadScore(fileURL: url) else { return nil }
@@ -92,9 +88,8 @@ public struct LiveScoreShareService: ScoreShareService {
 
     // MARK: - Original-bytes copy
 
-    /// Copy the source file as-is into the share temp directory,
-    /// preserving its extension. Used when the picked format matches
-    /// the item's source byte-for-byte.
+    /// Copy the source file as-is into the share temp directory, preserving its extension. Used when the picked format
+    /// matches the item's source byte-for-byte.
     private func copyOriginalBytes(
         sourceURL: URL,
         sanitizedTitle: String,

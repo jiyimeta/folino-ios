@@ -20,24 +20,20 @@ final class ReaderViewModel {
         }
     }
 
-    /// Which copy the playback-prep alert should show. The view binds
-    /// presentation to whether this is non-nil and renders the title
-    /// from the case.
+    /// Which copy the playback-prep alert should show. The view binds presentation to whether this is non-nil and
+    /// renders the title from the case.
     enum SoundfontAlertKind {
-        /// Soundfonts are still being prepared and the user pressed
-        /// play before the work finished.
+        /// Soundfonts are still being prepared and the user pressed play before the work finished.
         case loading
-        /// The device is offline AND the cache doesn't already cover
-        /// every voice this score needs — the wait won't make progress
-        /// until connectivity is back.
+        /// The device is offline AND the cache doesn't already cover every voice this score needs — the wait won't make
+        /// progress until connectivity is back.
         case offline
     }
 
     static let defaultStaffVolume = 1.0
 
-    /// Always the same instance (set once at init); declared `var` only so
-    /// `@Bindable` projections like `$viewModel.repeatModel.mode` type-check —
-    /// the chain needs the intermediate path to be writable.
+    /// Always the same instance (set once at init); declared `var` only so `@Bindable` projections like
+    /// `$viewModel.repeatModel.mode` type-check — the chain needs the intermediate path to be writable.
     var repeatModel = RepeatModel()
     var tempoModel = TempoModel()
     var layoutModel = LayoutSettingsModel()
@@ -50,9 +46,8 @@ final class ReaderViewModel {
         didSet {
             guard oldValue != isPlaying else { return }
             applyPiPAutoStart()
-            // Playback start flips the auto-start permission on, so a
-            // backgrounded PiP could fire at any moment — flush any
-            // VisualInspector edits we deferred while paused.
+            // Playback start flips the auto-start permission on, so a backgrounded PiP could fire at any moment — flush
+            // any VisualInspector edits we deferred while paused.
             if isPlaying { flushPendingPiPArmIfDirty() }
         }
     }
@@ -100,27 +95,22 @@ final class ReaderViewModel {
     private var isPiPEnabled = false
     @ObservationIgnored
     private var collapseMultiMeasureRests = false
-    /// In-flight PiP rearm task. `armPiPIfReady` cancels this before
-    /// spawning a new one so back-to-back triggers (e.g. the
-    /// `onHiddenStavesChanged` → `onChange` pair fired by `toggleStaff`)
-    /// collapse to a single arm against the latest state instead of
-    /// queuing N detached `LayoutEngine.layout` runs.
+    /// In-flight PiP rearm task. `armPiPIfReady` cancels this before spawning a new one so back-to-back triggers (e.g.
+    /// the `onHiddenStavesChanged` → `onChange` pair fired by `toggleStaff`) collapse to a single arm against the
+    /// latest state instead of queuing N detached `LayoutEngine.layout` runs.
     @ObservationIgnored
     private var pendingArmTask: Task<Void, Never>?
-    /// True once `performPiPArm` has successfully attached a renderer in
-    /// the current `isPiPEnabled` session. Cleared on disable so the
-    /// next enable arms eagerly even without an active PiP or playback.
+    /// True once `performPiPArm` has successfully attached a renderer in the current `isPiPEnabled` session. Cleared on
+    /// disable so the next enable arms eagerly even without an active PiP or playback.
     @ObservationIgnored
     private var hasArmedPiP = false
-    /// Set when `armPiPIfReady` postpones a rearm because no observer
-    /// (active PiP or playing → imminent auto-start) would have seen
-    /// the result. `flushPendingPiPArmIfDirty` consumes the flag when
-    /// an observer appears (`isPlaying` flips true).
+    /// Set when `armPiPIfReady` postpones a rearm because no observer (active PiP or playing → imminent auto-start)
+    /// would have seen the result. `flushPendingPiPArmIfDirty` consumes the flag when an observer appears (`isPlaying`
+    /// flips true).
     @ObservationIgnored
     private var pipArmIsDirty = false
 
-    /// Applies the user's Settings preference. Driven by the
-    /// `readerPictureInPictureEnabled` `@AppStorage` value in
+    /// Applies the user's Settings preference. Driven by the `readerPictureInPictureEnabled` `@AppStorage` value in
     /// `ReaderRootScreen`.
     func setPiPEnabled(_ enabled: Bool) {
         guard isPiPSupported else { return }
@@ -138,11 +128,9 @@ final class ReaderViewModel {
         }
     }
 
-    /// Hands AVKit the current "may auto-present PiP on background"
-    /// permission. We gate on `isPlaying` so PiP only appears when the
-    /// user backgrounds *during playback* — matching YouTube's behavior.
-    /// An already-presenting PiP session is left intact when playback
-    /// pauses; only the auto-start permission is withdrawn.
+    /// Hands AVKit the current "may auto-present PiP on background" permission. We gate on `isPlaying` so PiP only
+    /// appears when the user backgrounds *during playback* — matching YouTube's behavior. An already-presenting PiP
+    /// session is left intact when playback pauses; only the auto-start permission is withdrawn.
     private func applyPiPAutoStart() {
         guard isPiPSupported else { return }
         pipCoordinator.setAutoStartFromBackground(isPiPEnabled && isPlaying)
@@ -151,30 +139,25 @@ final class ReaderViewModel {
     func setCollapseMultiMeasureRests(_ enabled: Bool) {
         guard collapseMultiMeasureRests != enabled else { return }
         collapseMultiMeasureRests = enabled
-        // Re-arm PiP immediately so a currently-armed session re-lays
-        // out with the new policy. No-op when PiP is disabled or the
-        // score hasn't finished loading — `armPiPIfReady` guards both.
+        // Re-arm PiP immediately so a currently-armed session re-lays out with the new policy. No-op when PiP is
+        // disabled or the score hasn't finished loading — `armPiPIfReady` guards both.
         armPiPIfReady()
     }
 
-    /// Called from `ReaderRootScreen`'s `scenePhase` observer when the
-    /// app returns to the foreground — the Settings spec dismisses PiP
-    /// on return regardless of why it started.
+    /// Called from `ReaderRootScreen`'s `scenePhase` observer when the app returns to the foreground — the Settings
+    /// spec dismisses PiP on return regardless of why it started.
     func dismissPiPOnForeground() {
         guard isPiPActive else { return }
         pipCoordinator.dismissIfActive()
     }
 
-    /// Coalesced rearm trigger. The heavy layout step inside
-    /// `pipCoordinator.arm` runs off the main actor, but it's still
-    /// wasted CPU when no observer would see the result — the user is
-    /// paused in the foreground and PiP isn't visible. In that case the
-    /// arm is postponed; `flushPendingPiPArmIfDirty` consumes the
-    /// postponement when an observer appears.
+    /// Coalesced rearm trigger. The heavy layout step inside `pipCoordinator.arm` runs off the main actor, but it's
+    /// still wasted CPU when no observer would see the result — the user is paused in the foreground and PiP isn't
+    /// visible. In that case the arm is postponed; `flushPendingPiPArmIfDirty` consumes the postponement when an
+    /// observer appears.
     ///
-    /// The first arm of each `isPiPEnabled` session always proceeds so
-    /// a manual PiP start (via the system control) still finds a
-    /// renderer attached.
+    /// The first arm of each `isPiPEnabled` session always proceeds so a manual PiP start (via the system control)
+    /// still finds a renderer attached.
     private func armPiPIfReady() {
         guard isPiPEnabled, case .loaded = loadState else { return }
         if !hasArmedPiP || isPiPActive || isPlaying {
@@ -203,8 +186,7 @@ final class ReaderViewModel {
               isPiPEnabled,
               case let .loaded(score) = loadState
         else { return }
-        // Mirror the on-screen transformation so the PiP view sees the
-        // same staves and clefs as the main Reader pane.
+        // Mirror the on-screen transformation so the PiP view sees the same staves and clefs as the main Reader pane.
         let visible = score
             .applying(clefOverrides: layoutModel.staffClefOverrides)
             .filtered(hidingStaves: layoutModel.hiddenStaves)
@@ -219,21 +201,17 @@ final class ReaderViewModel {
         } catch is CancellationError {
             // Superseded by a newer rearm; nothing to do.
         } catch {
-            // Coordinator throws only when no display layer is attached
-            // (the host view hasn't mounted yet). Arming will retry once
-            // the view installs the layer and load() finishes — neither
-            // ordering is fatal.
+            // Coordinator throws only when no display layer is attached (the host view hasn't mounted yet). Arming will
+            // retry once the view installs the layer and load() finishes — neither ordering is fatal.
         }
     }
 
-    /// Convenience for tests and previews — true while the "loading
-    /// playback sounds…" copy is showing.
+    /// Convenience for tests and previews — true while the "loading playback sounds…" copy is showing.
     var isLoadingSoundfonts: Bool {
         soundfontAlertKind == .loading
     }
 
-    /// Convenience for tests and previews — true while the offline
-    /// copy is showing.
+    /// Convenience for tests and previews — true while the offline copy is showing.
     var isOfflineAlertPresented: Bool {
         soundfontAlertKind == .offline
     }
@@ -256,10 +234,9 @@ final class ReaderViewModel {
     private var hasLoadedIntoPlayback = false
     @ObservationIgnored
     private var preloadTask: Task<Void, Error>?
-    /// Untranslated cursor as the engine published it. Kept so we can
-    /// re-derive `playbackCursor` whenever `hiddenStaves` changes — the
-    /// engine doesn't know about visibility, so the same raw value can
-    /// map to a different visible representation across toggles.
+    /// Untranslated cursor as the engine published it. Kept so we can re-derive `playbackCursor` whenever
+    /// `hiddenStaves` changes — the engine doesn't know about visibility, so the same raw value can map to a different
+    /// visible representation across toggles.
     @ObservationIgnored
     private var rawPlaybackCursor: ScoreCursor?
 
@@ -310,30 +287,24 @@ final class ReaderViewModel {
                 prefs.hiddenStaves = self.layoutModel.hiddenStaves
                 prefs.staffClefOverrides = self.layoutModel.staffClefOverrides
             }
-            // Clef override edits land only through this path
-            // (hidden-staves changes also fire `onHiddenStavesChanged`),
-            // so rebuild the PiP renderer here to pick them up.
+            // Clef override edits land only through this path (hidden-staves changes also fire
+            // `onHiddenStavesChanged`), so rebuild the PiP renderer here to pick them up.
             armPiPIfReady()
         }
         layoutModel.onHiddenStavesChanged = { [weak self] in
             guard let self else { return }
-            // Re-translate against the new visibility so the cursor recovers
-            // immediately when the staff comes back, and falls back to .beat
-            // immediately when one is hidden mid-playback.
+            // Re-translate against the new visibility so the cursor recovers immediately when the staff comes back, and
+            // falls back to .beat immediately when one is hidden mid-playback.
             playbackCursor = loadState.score?.translateCursorForHiddenStaves(
                 rawPlaybackCursor,
                 hiddenStaves: layoutModel.hiddenStaves,
             ) ?? rawPlaybackCursor
             notifyPiPCursor()
-            // AVKit fixes the PiP window's aspect ratio at session start
-            // and won't renegotiate when we feed buffers with new
-            // dimensions. Dismiss any active session so the next
-            // background auto-start opens at the right shape. The
-            // subsequent `await onChange?()` in `LayoutSettingsModel`
-            // calls `armPiPIfReady` once the disk write yields, so we
-            // intentionally skip arming here to avoid the duplicate
-            // detached `LayoutEngine.layout` pass that this hot path
-            // would otherwise queue per toggle.
+            // AVKit fixes the PiP window's aspect ratio at session start and won't renegotiate when we feed buffers
+            // with new dimensions. Dismiss any active session so the next background auto-start opens at the right
+            // shape. The subsequent `await onChange?()` in `LayoutSettingsModel` calls `armPiPIfReady` once the disk
+            // write yields, so we intentionally skip arming here to avoid the duplicate detached `LayoutEngine.layout`
+            // pass that this hot path would otherwise queue per toggle.
             if isPiPActive {
                 pipCoordinator.dismissIfActive()
             }
@@ -364,16 +335,12 @@ final class ReaderViewModel {
         repeatModel.controllerProvider = { [weak self] in self?.playbackController }
     }
 
-    /// Subscribe to the controller's cursor stream. Must be called from a
-    /// view-lifecycle hook (`.task` / `.onAppear`) — NOT from `init` —
-    /// so only the VM that SwiftUI actually retains via `@State` registers
-    /// its handler. Calling from `init` regressed the playback cursor:
-    /// SwiftUI re-evaluates the `@State(wrappedValue:)` expression on
-    /// every parent body pass, constructing a fresh VM each time, but
-    /// keeps only the first as the persisted state. The subsequent
-    /// throwaway VMs all register handlers that capture themselves
-    /// weakly, the last one wins, and once it's deallocated the engine's
-    /// cursor changes land on a `[weak self]` that's already nil.
+    /// Subscribe to the controller's cursor stream. Must be called from a view-lifecycle hook (`.task` / `.onAppear`) —
+    /// NOT from `init` — so only the VM that SwiftUI actually retains via `@State` registers its handler. Calling from
+    /// `init` regressed the playback cursor: SwiftUI re-evaluates the `@State(wrappedValue:)` expression on every
+    /// parent body pass, constructing a fresh VM each time, but keeps only the first as the persisted state. The
+    /// subsequent throwaway VMs all register handlers that capture themselves weakly, the last one wins, and once it's
+    /// deallocated the engine's cursor changes land on a `[weak self]` that's already nil.
     func startObservingCursor() {
         guard let controller = playbackController else { return }
         controller.observeCursor { [weak self] value in
@@ -384,19 +351,15 @@ final class ReaderViewModel {
                 hiddenStaves: layoutModel.hiddenStaves,
             ) ?? value
             notifyPiPCursor()
-            // The engine emits a nil cursor only when playback hits the
-            // end of the score (`PlaybackEngine.stop()` clears it; explicit
-            // `pause()` does not). Use that signal to flip the toolbar's
-            // play/pause glyph back to "play" — without this, isPlaying
-            // stays true forever after the score finishes naturally.
+            // The engine emits a nil cursor only when playback hits the end of the score (`PlaybackEngine.stop()`
+            // clears it; explicit `pause()` does not). Use that signal to flip the toolbar's play/pause glyph back to
+            // "play" — without this, isPlaying stays true forever after the score finishes naturally.
             if value == nil, isPlaying {
                 isPlaying = false
             }
         }
-        // Mirror the engine's play/pause state into the VM regardless of
-        // who flipped it (in-app toolbar, lock-screen Now Playing, audio
-        // session interruption, etc.) so PiP chrome and toolbar glyph
-        // stay accurate.
+        // Mirror the engine's play/pause state into the VM regardless of who flipped it (in-app toolbar, lock-screen
+        // Now Playing, audio session interruption, etc.) so PiP chrome and toolbar glyph stay accurate.
         controller.observeIsPlaying { [weak self] playing in
             self?.isPlaying = playing
         }
@@ -421,10 +384,9 @@ final class ReaderViewModel {
         }
     }
 
-    /// Kick off the playback engine's `load` in the background as soon as
-    /// the score is open, so the user usually finds soundfonts ready by
-    /// the time they tap play. Idempotent — re-entry while a preload is
-    /// in flight or already finished is a no-op.
+    /// Kick off the playback engine's `load` in the background as soon as the score is open, so the user usually finds
+    /// soundfonts ready by the time they tap play. Idempotent — re-entry while a preload is in flight or already
+    /// finished is a no-op.
     func prepareForPlayback() async {
         guard let controller = playbackController,
               case let .loaded(score) = loadState,
@@ -444,26 +406,21 @@ final class ReaderViewModel {
         }
         preloadTask = task
         do {
-            // Forward `.task` cancellation (user navigated away mid-prep)
-            // into the unstructured load — without this hop the engine
-            // load would keep running after the Reader disappears.
+            // Forward `.task` cancellation (user navigated away mid-prep) into the unstructured load — without this hop
+            // the engine load would keep running after the Reader disappears.
             try await withTaskCancellationHandler {
                 try await task.value
             } onCancel: {
                 task.cancel()
             }
             hasLoadedIntoPlayback = true
-            // `PlaybackPreferences` carries `abRepeat` but the engine's
-            // load path doesn't consume it (and prefs has no field for
-            // `repeatMode`'s .off / .loopAll / .abLoop distinction).
-            // Push the active range now that the score is loaded —
-            // without this, a persisted repeat mode appears in the
-            // inspector but playback runs without looping until the
-            // user touches the picker.
+            // `PlaybackPreferences` carries `abRepeat` but the engine's load path doesn't consume it (and prefs has no
+            // field for `repeatMode`'s .off / .loopAll / .abLoop distinction). Push the active range now that the score
+            // is loaded — without this, a persisted repeat mode appears in the inspector but playback runs without
+            // looping until the user touches the picker.
             await repeatModel.forwardLoopRangeToController()
         } catch {
-            // Cancellation or controller error — leave the slot clear so
-            // a subsequent toggle starts a fresh attempt.
+            // Cancellation or controller error — leave the slot clear so a subsequent toggle starts a fresh attempt.
         }
         preloadTask = nil
     }
@@ -473,15 +430,13 @@ final class ReaderViewModel {
               case let .loaded(score) = loadState,
               soundfontAlertKind == nil
         else { return }
-        // If a silent prefetch is in flight (the user picked an instrument
-        // while paused), wait for it before starting play. The mixer surfaces
-        // its own alert copy during the wait.
+        // If a silent prefetch is in flight (the user picked an instrument while paused), wait for it before starting
+        // play. The mixer surfaces its own alert copy during the wait.
         guard await mixerModel.awaitSilentPrefetch() else { return }
         if !hasLoadedIntoPlayback {
             let cached = await controller.areSoundfontsAvailableLocally(for: score)
             let online = await reachability?.isOnline() ?? true
-            // Pick the alert copy based on what the wait will actually look
-            // like to the user:
+            // Pick the alert copy based on what the wait will actually look like to the user:
             //  - cache covers the score → no alert (load is just engine prep)
             //  - offline + cache miss   → "you're offline" (download won't progress)
             //  - online  + cache miss   → "loading playback sounds…"
@@ -511,10 +466,9 @@ final class ReaderViewModel {
                 preloadTask = nil
                 return
             }
-            // Same reason as in `prepareForPlayback`: push the persisted
-            // repeat state now that the engine has the score. Covers
-            // the case where the user taps play before
-            // `prepareForPlayback` ran (or while it's still in flight).
+            // Same reason as in `prepareForPlayback`: push the persisted repeat state now that the engine has the
+            // score. Covers the case where the user taps play before `prepareForPlayback` ran (or while it's still in
+            // flight).
             await repeatModel.forwardLoopRangeToController()
             soundfontAlertKind = nil
             preloadTask = nil
@@ -532,8 +486,8 @@ final class ReaderViewModel {
         }
     }
 
-    /// Cancels an in-flight `load` on the playback controller. Safe to call
-    /// when no load is in flight — the cancel is a no-op.
+    /// Cancels an in-flight `load` on the playback controller. Safe to call when no load is in flight — the cancel is a
+    /// no-op.
     func cancelLoadingSoundfonts() {
         preloadTask?.cancel()
         mixerModel.cancelLoadingSoundfonts()
@@ -543,8 +497,8 @@ final class ReaderViewModel {
         viewportZoom = 1.0
     }
 
-    /// Records the current zoom as the value to restore on the next
-    /// `toggleZoom`. Called from the gesture layer at the end of a pinch.
+    /// Records the current zoom as the value to restore on the next `toggleZoom`. Called from the gesture layer at the
+    /// end of a pinch.
     func captureCurrentZoomAsLast() {
         if viewportZoom > 1.0 {
             lastNonUnitZoom = viewportZoom
@@ -601,8 +555,7 @@ final class ReaderViewModel {
     private func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
         var copy = preferences
         apply(&copy)
-        // Re-seat through the initializer so clamping rules in
-        // `ReaderPreferences.init` always run.
+        // Re-seat through the initializer so clamping rules in `ReaderPreferences.init` always run.
         let normalized = ReaderPreferences(
             id: copy.id,
             scoreItemID: copy.scoreItemID,

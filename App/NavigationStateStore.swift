@@ -2,11 +2,9 @@ import Domain
 import Foundation
 import SwiftUI
 
-/// Persists and restores `AppShellView`'s navigation state across launches:
-/// the compact (iPhone) and sidebar (iPad) `NavigationPath` instances and the
-/// iPad detail score's identifier. Storage is plain `UserDefaults`; corrupt
-/// or forward-incompatible payloads are silently dropped so a fresh launch
-/// just starts at the Library root.
+/// Persists and restores `AppShellView`'s navigation state across launches: the compact (iPhone) and sidebar (iPad)
+/// `NavigationPath` instances and the iPad detail score's identifier. Storage is plain `UserDefaults`; corrupt or
+/// forward-incompatible payloads are silently dropped so a fresh launch just starts at the Library root.
 @MainActor
 final class NavigationStateStore {
     private static let compactPathKey = "NavigationState.compactPath"

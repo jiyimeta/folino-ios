@@ -2,10 +2,9 @@ import Domain
 import Observation
 import SheetMusicCore
 
-/// Surface the mixer needs from its parent (transport state + the
-/// few playback-control hooks the uncached-soundfont saga drives).
-/// Keeping it a protocol lets the mixer be tested with a hand-written
-/// fake host instead of a full `ReaderViewModel`.
+/// Surface the mixer needs from its parent (transport state + the few playback-control hooks the uncached-soundfont
+/// saga drives). Keeping it a protocol lets the mixer be tested with a hand-written fake host instead of a full
+/// `ReaderViewModel`.
 @MainActor
 protocol PlaybackMixerHost: AnyObject {
     var isPlaying: Bool { get }
@@ -17,16 +16,13 @@ protocol PlaybackMixerHost: AnyObject {
     func setSoundfontAlertKind(_ kind: ReaderViewModel.SoundfontAlertKind?)
 }
 
-/// Owns the Reader's playback-mixer surface: per-staff mute / solo /
-/// volume, plus per-staff and per-part GM program overrides. Carved out
-/// of `ReaderViewModel` so `PlaybackInspectorScreen` and `ProgramPicker`
-/// can receive this model directly without seeing the full view model.
+/// Owns the Reader's playback-mixer surface: per-staff mute / solo / volume, plus per-staff and per-part GM program
+/// overrides. Carved out of `ReaderViewModel` so `PlaybackInspectorScreen` and `ProgramPicker` can receive this model
+/// directly without seeing the full view model.
 ///
-/// The per-part program path includes a state machine for the case where
-/// the chosen instrument isn't cached locally yet (`PendingInstrumentLoad`
-/// + `runUncachedPartProgramSwap`) — it pauses playback, surfaces the
-/// loading/offline alert via the host, prefetches the soundfont, and
-/// resumes on success or reverts on cancel.
+/// The per-part program path includes a state machine for the case where the chosen instrument isn't cached locally yet
+/// (`PendingInstrumentLoad` + `runUncachedPartProgramSwap`) — it pauses playback, surfaces the loading/offline alert
+/// via the host, prefetches the soundfont, and resumes on success or reverts on cancel.
 @MainActor
 @Observable
 final class PlaybackMixerModel {
@@ -34,9 +30,8 @@ final class PlaybackMixerModel {
     private(set) var staffVolumeOverrides: [StaffAddress: Double] = [:]
     private(set) var mutedStaves: Set<StaffAddress> = []
     private(set) var soloStaves: Set<StaffAddress> = []
-    /// Transient per-staff volume during a slider drag. Populated by
-    /// `setVolume`, cleared by `commitVolume`. Lives here so SwiftUI
-    /// re-renders the slider as the value moves.
+    /// Transient per-staff volume during a slider drag. Populated by `setVolume`, cleared by `commitVolume`. Lives here
+    /// so SwiftUI re-renders the slider as the value moves.
     private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
 
     @ObservationIgnored private var pendingInstrumentLoad: PendingInstrumentLoad?
@@ -51,13 +46,11 @@ final class PlaybackMixerModel {
         let bank: Int
         let program: Int
         let isDrums: Bool
-        /// Per-staff snapshot of the override map restricted to this part
-        /// at the moment the pick was registered. `nil` value means "no
-        /// override existed for that address; remove on revert".
+        /// Per-staff snapshot of the override map restricted to this part at the moment the pick was registered. `nil`
+        /// value means "no override existed for that address; remove on revert".
         let previousOverrides: [(address: StaffAddress, previous: Int?)]
-        /// True iff playback was running at the moment we registered the
-        /// pick (or was inherited from an earlier in-flight pick that we
-        /// just cancelled). Drives auto-resume on success.
+        /// True iff playback was running at the moment we registered the pick (or was inherited from an earlier
+        /// in-flight pick that we just cancelled). Drives auto-resume on success.
         let wasPlaying: Bool
         let task: Task<Void, Error>
     }
@@ -67,18 +60,15 @@ final class PlaybackMixerModel {
         staffVolumeOverrides = prefs.staffVolumeOverrides
     }
 
-    /// Cancels any in-flight uncached prefetch. Safe to call when nothing
-    /// is in flight — the cancel becomes a no-op. Called when the user
-    /// dismisses the loading alert.
+    /// Cancels any in-flight uncached prefetch. Safe to call when nothing is in flight — the cancel becomes a no-op.
+    /// Called when the user dismisses the loading alert.
     func cancelLoadingSoundfonts() {
         pendingInstrumentLoad?.task.cancel()
     }
 
-    /// Awaits an in-flight silent prefetch (one kicked off while playback
-    /// was paused). Returns false when the wait was cancelled — callers
-    /// should bail out of any in-progress play attempt. No-op fast-path
-    /// when there's nothing in flight, or when the prefetch was started
-    /// while the user was already playing (in which case the saga itself
+    /// Awaits an in-flight silent prefetch (one kicked off while playback was paused). Returns false when the wait was
+    /// cancelled — callers should bail out of any in-progress play attempt. No-op fast-path when there's nothing in
+    /// flight, or when the prefetch was started while the user was already playing (in which case the saga itself
     /// handles its own pause/resume).
     func awaitSilentPrefetch() async -> Bool {
         guard let pending = pendingInstrumentLoad, !pending.wasPlaying else {
@@ -105,9 +95,8 @@ final class PlaybackMixerModel {
             ?? Self.defaultVolume
     }
 
-    /// Per-staff baseline used as the slider's reset target and tick
-    /// position — the score's authored initial volume when present,
-    /// otherwise the global default. Independent of any user override.
+    /// Per-staff baseline used as the slider's reset target and tick position — the score's authored initial volume
+    /// when present, otherwise the global default. Independent of any user override.
     func defaultVolume(for address: StaffAddress) -> Double {
         host?.loadState.score?.initialStaffVolume(at: address)
             ?? Self.defaultVolume
@@ -123,9 +112,8 @@ final class PlaybackMixerModel {
         }
     }
 
-    /// Slider release: persist the value as the per-score override and
-    /// clear the transient drag entry. Forwards to the engine so the
-    /// post-clamp value is what gets played.
+    /// Slider release: persist the value as the per-score override and clear the transient drag entry. Forwards to the
+    /// engine so the post-clamp value is what gets played.
     func commitVolume(_ value: Double, for address: StaffAddress) async {
         let clamped = min(max(value, 0), 1)
         staffVolumeOverrides[address] = clamped
@@ -166,8 +154,8 @@ final class PlaybackMixerModel {
 
     // MARK: - Per-staff program overrides
 
-    /// Returns the GM program (0…127) currently driving the staff: the user's
-    /// override if one is set, otherwise the score's declared instrument program.
+    /// Returns the GM program (0…127) currently driving the staff: the user's override if one is set, otherwise the
+    /// score's declared instrument program.
     func effectiveProgram(for address: StaffAddress) -> Int {
         if let override = staffProgramOverrides[address] {
             return override
@@ -205,9 +193,8 @@ final class PlaybackMixerModel {
 
     // MARK: - Per-part program overrides
 
-    /// Effective GM program for a part. All staves under a part share the
-    /// part's instrument, so we report the first staff's effective program
-    /// (or the score default when no override exists).
+    /// Effective GM program for a part. All staves under a part share the part's instrument, so we report the first
+    /// staff's effective program (or the score default when no override exists).
     func effectiveProgram(forPartIndex partIndex: Int) -> Int {
         let firstAddress = StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
         return effectiveProgram(for: firstAddress)
@@ -218,9 +205,8 @@ final class PlaybackMixerModel {
             .contains { staffProgramOverrides[$0] != nil }
     }
 
-    /// Set a program override for every staff under the part. Each staff has
-    /// its own engine voice, so we have to fan out — but to the user it
-    /// reads as one "this part's instrument" choice.
+    /// Set a program override for every staff under the part. Each staff has its own engine voice, so we have to fan
+    /// out — but to the user it reads as one "this part's instrument" choice.
     func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
         let addresses = partStaffAddresses(forPartIndex: partIndex)
         guard !addresses.isEmpty,
@@ -276,9 +262,8 @@ final class PlaybackMixerModel {
         if let existing = pendingInstrumentLoad, existing.partIndex == partIndex {
             inheritedWasPlaying = existing.wasPlaying
             existing.task.cancel()
-            // Block until the cancelled task's catch branch finishes its
-            // revert; otherwise our snapshot below captures the mid-flight
-            // state the previous pick mutated to.
+            // Block until the cancelled task's catch branch finishes its revert; otherwise our snapshot below captures
+            // the mid-flight state the previous pick mutated to.
             _ = try? await existing.task.value
         }
 

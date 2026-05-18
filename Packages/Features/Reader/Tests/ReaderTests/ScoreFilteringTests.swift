@@ -42,8 +42,8 @@ struct ScoreFilteringTests {
     @Test func `dropping one staff preserves its parent part`() {
         let score = makeScore()
         let result = score.filtered(hidingStaves: [address(1, 0)])
-        // Part 0 keeps its single staff; Part 1's first staff is dropped,
-        // its second staff survives — so Part 1 keeps one staff.
+        // Part 0 keeps its single staff; Part 1's first staff is dropped, its second staff survives — so Part 1 keeps
+        // one staff.
         #expect(result.parts.count == 2)
         #expect(result.parts[0].staves.count == 1)
         #expect(result.parts[1].staves.count == 1)
@@ -72,8 +72,8 @@ struct ScoreFilteringTests {
     }
 
     private func makePianoScore() -> Score {
-        // Single piano part with two staves; brace anchored on top staff
-        // spans both. Mirrors how MSCX decodes a grand staff.
+        // Single piano part with two staves; brace anchored on top staff spans both. Mirrors how MSCX decodes a grand
+        // staff.
         let piano = Part(
             id: "P0", trackName: "Piano", instrument: .empty,
             staves: [
@@ -91,9 +91,8 @@ struct ScoreFilteringTests {
     @Test func `hiding top staff reanchors brace on new top`() {
         let score = makePianoScore()
         let result = score.filtered(hidingStaves: [address(0, 0)])
-        // Part survives with one staff. The brace originally on the
-        // hidden top staff must now sit on the surviving staff with
-        // span = 1.
+        // Part survives with one staff. The brace originally on the hidden top staff must now sit on the surviving
+        // staff with span = 1.
         #expect(result.parts.count == 1)
         #expect(result.parts[0].staves.count == 1)
         #expect(result.parts[0].staves[0].brackets.map(\.type) == [.brace])
@@ -103,8 +102,8 @@ struct ScoreFilteringTests {
     @Test func `hiding bottom staff shrinks brace span`() {
         let score = makePianoScore()
         let result = score.filtered(hidingStaves: [address(0, 1)])
-        // Top staff still carries the brace, but its span has shrunk
-        // to 1 because the bottom staff of the original group is gone.
+        // Top staff still carries the brace, but its span has shrunk to 1 because the bottom staff of the original
+        // group is gone.
         #expect(result.parts[0].staves.count == 1)
         #expect(result.parts[0].staves[0].brackets.map(\.span) == [1])
     }
@@ -129,8 +128,7 @@ struct ScoreFilteringTests {
     @Test func `hiding middle staff shrinks bracket span by one`() {
         let score = makeThreeStaffBracketScore()
         let result = score.filtered(hidingStaves: [address(0, 1)])
-        // Bracket originally covered three staves; after hiding the
-        // middle one only two remain in its group.
+        // Bracket originally covered three staves; after hiding the middle one only two remain in its group.
         #expect(result.parts[0].staves.count == 2)
         #expect(result.parts[0].staves[0].brackets.map(\.span) == [2])
         #expect(result.parts[0].staves[1].brackets.isEmpty)
@@ -139,16 +137,15 @@ struct ScoreFilteringTests {
     @Test func `hiding top of three reanchors bracket with reduced span`() {
         let score = makeThreeStaffBracketScore()
         let result = score.filtered(hidingStaves: [address(0, 0)])
-        // After hiding the top, the bracket should re-anchor on the
-        // new top staff (was index 1) with span = 2.
+        // After hiding the top, the bracket should re-anchor on the new top staff (was index 1) with span = 2.
         #expect(result.parts[0].staves.count == 2)
         #expect(result.parts[0].staves[0].brackets.map(\.type) == [.normal])
         #expect(result.parts[0].staves[0].brackets.map(\.span) == [2])
     }
 
     @Test func `bracket does not leak onto staves outside original span`() {
-        // Two parts, each with its own brace. Hiding the bottom staff
-        // of part 0 must not extend part 0's brace into part 1.
+        // Two parts, each with its own brace. Hiding the bottom staff of part 0 must not extend part 0's brace into
+        // part 1.
         let part0 = Part(
             id: "P0", trackName: "Piano", instrument: .empty,
             staves: [

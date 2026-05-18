@@ -8,11 +8,9 @@ extension LivePlaybackController {
         let wasPlaying = engine.state == .playing
         var didMutate = false
         if let range {
-            // Only act when the persisted range resolves into engine cursor
-            // bounds. An unresolvable range (stale data after a score with
-            // fewer measures, or an end measure with no chord/rest to anchor
-            // `throughEndOf` on) leaves the engine's existing loop alone —
-            // silently clearing it would destroy the user's loop on a
+            // Only act when the persisted range resolves into engine cursor bounds. An unresolvable range (stale data
+            // after a score with fewer measures, or an end measure with no chord/rest to anchor `throughEndOf` on)
+            // leaves the engine's existing loop alone — silently clearing it would destroy the user's loop on a
             // corner-case bug.
             if let score = loadedScore,
                let bounds = Self.loopBounds(for: range, in: score)
@@ -21,10 +19,8 @@ extension LivePlaybackController {
                 didMutate = true
             }
         } else if engine.loopRange != nil {
-            // Skip the engine's `clearLoop` when there's nothing to clear —
-            // it pauses the sequencer unconditionally, so a no-op clear
-            // would still cause an audible pause / restart blip on the
-            // auto-resume path below.
+            // Skip the engine's `clearLoop` when there's nothing to clear — it pauses the sequencer unconditionally, so
+            // a no-op clear would still cause an audible pause / restart blip on the auto-resume path below.
             engine.clearLoop()
             didMutate = true
         }
@@ -33,22 +29,18 @@ extension LivePlaybackController {
         }
     }
 
-    /// Loop endpoints resolved against the loaded score. Both endpoints
-    /// are `ScoreItemID`s rather than `.beat(...)` cursors because
-    /// `PlaybackTimeline.frame(forCursor:)` requires an exact cursor
-    /// match for `.beat` lookups, and the timeline registers `.item(...)`
-    /// for any tick that already carries a chord onset (the typical
-    /// shape for measure downbeats). A `.beat(measureIndex: M,
-    /// tickInMeasure: 0)` lookup at such a tick would return nil and
-    /// the engine's `setLoop` would silently no-op.
+    /// Loop endpoints resolved against the loaded score. Both endpoints are `ScoreItemID`s rather than `.beat(...)`
+    /// cursors because `PlaybackTimeline.frame(forCursor:)` requires an exact cursor match for `.beat` lookups, and the
+    /// timeline registers `.item(...)` for any tick that already carries a chord onset (the typical shape for measure
+    /// downbeats). A `.beat(measureIndex: M, tickInMeasure: 0)` lookup at such a tick would return nil and the engine's
+    /// `setLoop` would silently no-op.
     struct LoopBounds: Equatable {
         let start: SheetMusicCore.ScoreItemID
         let last: SheetMusicCore.ScoreItemID
     }
 
-    /// Map a persistence-typed `ABRepeatRange` to engine item-IDs.
-    /// Returns `nil` when the start measure or end measure has no
-    /// chord/rest elements to anchor on, or when the range is inverted.
+    /// Map a persistence-typed `ABRepeatRange` to engine item-IDs. Returns `nil` when the start measure or end measure
+    /// has no chord/rest elements to anchor on, or when the range is inverted.
     static func loopBounds(
         for range: ABRepeatRange, in score: Score,
     ) -> LoopBounds? {
@@ -67,11 +59,9 @@ extension LivePlaybackController {
         return LoopBounds(start: start, last: last)
     }
 
-    /// First `.chord` element in the given measure (voice 0 of staff 0
-    /// — same spine the rest of the cursor mapping uses). Returns
-    /// `.note(NoteID)` for sounding chords, `.rest(RestID)` for rests
-    /// (empty chords). `nil` when the measure has no `.chord` elements
-    /// at all.
+    /// First `.chord` element in the given measure (voice 0 of staff 0 — same spine the rest of the cursor mapping
+    /// uses). Returns `.note(NoteID)` for sounding chords, `.rest(RestID)` for rests (empty chords). `nil` when the
+    /// measure has no `.chord` elements at all.
     static func firstScoreItemID(
         inMeasure measureIndex: Int, of score: Score,
     ) -> SheetMusicCore.ScoreItemID? {
@@ -93,8 +83,7 @@ extension LivePlaybackController {
         return nil
     }
 
-    /// Last `.chord` element in the given measure. Same shape as
-    /// `firstScoreItemID` but walks to the end.
+    /// Last `.chord` element in the given measure. Same shape as `firstScoreItemID` but walks to the end.
     static func lastScoreItemID(
         inMeasure measureIndex: Int, of score: Score,
     ) -> SheetMusicCore.ScoreItemID? {

@@ -10,8 +10,7 @@ struct ScoreApplyingClefOverridesTests {
     }
 
     @Test func `override rewrites explicit measure 0 clef`() {
-        // Staff with an explicit measure-0 clef change as the very first
-        // voice element on voice 0.
+        // Staff with an explicit measure-0 clef change as the very first voice element on voice 0.
         var score = makeScore(staffDefaultClefs: [nil])
         score.parts[0].staves[0].measures = [
             Measure(voices: [
@@ -112,9 +111,8 @@ struct ScoreApplyingClefOverridesTests {
         #expect(result == score)
     }
 
-    /// Builds a Score with N staves under one Part. Each entry in
-    /// `staffDefaultClefs` becomes one staff with that defaultClefType
-    /// and one empty measure (so layout has something to anchor to).
+    /// Builds a Score with N staves under one Part. Each entry in `staffDefaultClefs` becomes one staff with that
+    /// defaultClefType and one empty measure (so layout has something to anchor to).
     private func makeScore(staffDefaultClefs: [String?]) -> Score {
         let staves = staffDefaultClefs.map { rawType in
             Staff(

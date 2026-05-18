@@ -1,11 +1,9 @@
 import SheetMusicCore
 
-/// `StaffAddress` is `Hashable & Sendable & Comparable` upstream but not
-/// `Codable`. Domain needs Codable so `ReaderPreferences` (which holds a
-/// `Set<StaffAddress>`) can round-trip through JSON / GRDB blobs.
+/// `StaffAddress` is `Hashable & Sendable & Comparable` upstream but not `Codable`. Domain needs Codable so
+/// `ReaderPreferences` (which holds a `Set<StaffAddress>`) can round-trip through JSON / GRDB blobs.
 ///
-/// Encoded as a two-element unkeyed array `[partIndex, staffIndexInPart]`
-/// — compact and stable across versions.
+/// Encoded as a two-element unkeyed array `[partIndex, staffIndexInPart]` — compact and stable across versions.
 extension SheetMusicCore.StaffAddress: @retroactive Codable {
     public init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()

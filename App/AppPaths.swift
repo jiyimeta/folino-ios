@@ -1,7 +1,6 @@
 import Foundation
 
-/// Resolves on-disk locations the app uses. Centralized so AppBootstrap and
-/// any future migrations agree on layout.
+/// Resolves on-disk locations the app uses. Centralized so AppBootstrap and any future migrations agree on layout.
 enum AppPaths {
     static var documentsRoot: URL {
         guard let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {

@@ -25,9 +25,8 @@ public struct DefaultVersionHistoryLoader: VersionHistoryLoader {
             throw LoadError.resourceNotFound(name: resourceName)
         }
         let yaml = try String(contentsOf: url, encoding: .utf8)
-        // Parse to the YAML node tree first so we can iterate the top-level
-        // sequence and re-decode each child independently — a single malformed
-        // entry is then skipped instead of poisoning the whole load.
+        // Parse to the YAML node tree first so we can iterate the top-level sequence and re-decode each child
+        // independently — a single malformed entry is then skipped instead of poisoning the whole load.
         guard let root = try Yams.compose(yaml: yaml) else {
             throw LoadError.unparseableRoot
         }

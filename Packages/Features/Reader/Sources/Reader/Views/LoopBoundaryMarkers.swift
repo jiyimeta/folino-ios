@@ -3,16 +3,12 @@ import Domain
 import SheetMusicLayout
 import SwiftUI
 
-/// Crisp accent-color line + filled triangle drawn at each endpoint of
-/// an A–B loop. Each endpoint draws independently so a single marker
-/// shows as soon as A or B is set, before the other has been chosen.
-/// Shares the geometry plumbing of `LoopRegionOverlay` and is intended
-/// to draw on top of it inside the score-surface `ZStack`.
+/// Crisp accent-color line + filled triangle drawn at each endpoint of an A–B loop. Each endpoint draws independently
+/// so a single marker shows as soon as A or B is set, before the other has been chosen. Shares the geometry plumbing of
+/// `LoopRegionOverlay` and is intended to draw on top of it inside the score-surface `ZStack`.
 struct LoopBoundaryMarkers: View {
-    /// Multipliers applied to `document.metrics.sp` to derive marker
-    /// dimensions. Exposed so tests can reference the same source of
-    /// truth that the view draws with. Tune via the preview cases in
-    /// `VerticalScoreContainerPreviews`.
+    /// Multipliers applied to `document.metrics.sp` to derive marker dimensions. Exposed so tests can reference the
+    /// same source of truth that the view draws with. Tune via the preview cases in `VerticalScoreContainerPreviews`.
     nonisolated static let triangleHeightFactor: CGFloat = 1.0
     nonisolated static let triangleWidthFactor: CGFloat = 1.2
     nonisolated static let lineThicknessFactor: CGFloat = 0.5
@@ -59,9 +55,8 @@ struct LoopBoundaryMarkers: View {
     }
 }
 
-/// Returns the line rect and apex-right triangle path for the A endpoint
-/// of an A–B loop, drawn at the **left edge** of `measureIndex`. Returns
-/// nil if the measure is not present in any system of `document`.
+/// Returns the line rect and apex-right triangle path for the A endpoint of an A–B loop, drawn at the **left edge** of
+/// `measureIndex`. Returns nil if the measure is not present in any system of `document`.
 func aMarkerGeometry(
     document: LayoutDocument,
     measureIndex: Int,
@@ -95,9 +90,8 @@ func aMarkerGeometry(
     return (line, triangle)
 }
 
-/// Returns the line rect and apex-left triangle path for the B endpoint
-/// of an A–B loop, drawn at the **right edge** of `measureIndex`. Returns
-/// nil if the measure is not present in any system of `document`.
+/// Returns the line rect and apex-left triangle path for the B endpoint of an A–B loop, drawn at the **right edge** of
+/// `measureIndex`. Returns nil if the measure is not present in any system of `document`.
 func bMarkerGeometry(
     document: LayoutDocument,
     measureIndex: Int,

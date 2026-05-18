@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// A Slider that exposes a "reset to default" affordance: a small tick at
-/// the default position along the track, and a double-tap that snaps the
-/// value back to that default.
+/// A Slider that exposes a "reset to default" affordance: a small tick at the default position along the track, and a
+/// double-tap that snaps the value back to that default.
 ///
-/// Double-tap detection uses two independent paths so it works everywhere
-/// on the slider:
+/// Double-tap detection uses two independent paths so it works everywhere on the slider:
 ///
 /// - **Track / bar**: a SwiftUI `.simultaneousGesture(TapGesture(count: 2))`
 ///   on the slider catches it. The track has no internal gesture competing
@@ -16,13 +14,10 @@ import SwiftUI
 ///   consecutive editing-end events at the same value within a short window
 ///   are treated as a double-tap.
 ///
-/// **Binding contract**: the caller must route `value` through a stable
-/// reference type (e.g. an `@Observable` model with a transient drag-state
-/// property — see `PlaybackMixerModel.setVolume` / `TempoModel.setMultiplier`).
-/// SwiftUI Slider writes its internal thumb position back through the
-/// binding on release; a plain `@State` target gets clobbered, undoing
-/// the reset. Routing through a model lets `onReset` authoritatively
-/// clear the transient state.
+/// **Binding contract**: the caller must route `value` through a stable reference type (e.g. an `@Observable` model
+/// with a transient drag-state property — see `PlaybackMixerModel.setVolume` / `TempoModel.setMultiplier`). SwiftUI
+/// Slider writes its internal thumb position back through the binding on release; a plain `@State` target gets
+/// clobbered, undoing the reset. Routing through a model lets `onReset` authoritatively clear the transient state.
 struct ResettableSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -70,10 +65,9 @@ struct ResettableSlider: View {
     }
 }
 
-/// Detects a double-tap on the slider thumb by inspecting the cadence of
-/// `onEditingChanged(false)` events. Two end-of-editing events at the same
-/// value within `tapWindow` seconds qualify — drag releases fail the
-/// same-value check, lone taps fail the cadence check.
+/// Detects a double-tap on the slider thumb by inspecting the cadence of `onEditingChanged(false)` events. Two
+/// end-of-editing events at the same value within `tapWindow` seconds qualify — drag releases fail the same-value
+/// check, lone taps fail the cadence check.
 @MainActor
 private final class ThumbTapDetector {
     private var lastEndTime: Date?

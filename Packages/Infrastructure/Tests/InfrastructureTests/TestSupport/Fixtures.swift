@@ -9,15 +9,15 @@ enum Fixtures {
         return try Data(contentsOf: url)
     }
 
-    /// Synthesizes minimal `.mscz` bytes by packaging the bundled `.mscx`
-    /// through `swift-sheet-music`'s MSCZ writer. No GPL fixture data.
+    /// Synthesizes minimal `.mscz` bytes by packaging the bundled `.mscx` through `swift-sheet-music`'s MSCZ writer. No
+    /// GPL fixture data.
     static func minimalMSCZData() throws -> Data {
         let mscx = try minimalMSCXData()
         return try SheetMusic.saveMSCZ(mscxData: mscx)
     }
 
-    /// Synthesizes minimal `.mid` bytes by parsing the `.mscx` fixture and
-    /// rendering it through `SheetMusic.exportMIDI`.
+    /// Synthesizes minimal `.mid` bytes by parsing the `.mscx` fixture and rendering it through
+    /// `SheetMusic.exportMIDI`.
     static func minimalMIDIData() throws -> Data {
         let score = try SheetMusic.loadScore(mscxData: minimalMSCXData())
         return try SheetMusic.exportMIDI(score: score)

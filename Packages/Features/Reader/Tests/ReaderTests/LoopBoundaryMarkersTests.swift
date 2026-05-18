@@ -12,8 +12,8 @@ struct LoopBoundaryMarkersTests {
     private static let triangleWidth: CGFloat = sp * LoopBoundaryMarkers.triangleWidthFactor
     private static let lineThickness: CGFloat = sp * LoopBoundaryMarkers.lineThicknessFactor
 
-    /// One system at y=100, height=60, with two measures:
-    /// measure 0 origin.x = 0, width 80; measure 1 origin.x = 80, width 100.
+    /// One system at y=100, height=60, with two measures: measure 0 origin.x = 0, width 80; measure 1 origin.x = 80,
+    /// width 100.
     private static func makeDocument() -> LayoutDocument {
         let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let m0 = LayoutMeasure(measureIndex: 0, origin: .zero, width: 80, elements: [])
@@ -48,8 +48,8 @@ struct LoopBoundaryMarkersTests {
             triangleWidth: Self.triangleWidth,
         )
         let line = try #require(result?.line)
-        // Measure 0: system.origin.x (10) + measure.origin.x (0) = 10.
-        // Line is centered on that x, so origin.x = 10 - thickness/2.
+        // Measure 0: system.origin.x (10) + measure.origin.x (0) = 10. Line is centered on that x, so origin.x = 10 -
+        // thickness/2.
         #expect(line.origin.x == 10 - Self.lineThickness / 2)
         // Y span: systemTop − triangleHeight (100 − 1*sp) to systemBottom (160).
         #expect(line.origin.y == 100 - Self.triangleHeight)
@@ -82,8 +82,8 @@ struct LoopBoundaryMarkersTests {
             triangleWidth: Self.triangleWidth,
         )
         let bbox = try #require(result?.triangle.boundingRect)
-        // Apex (max X) is to the right of the line center (x = 10).
-        // Use a tolerance because CGFloat bbox arithmetic can drift by ~2e-7.
+        // Apex (max X) is to the right of the line center (x = 10). Use a tolerance because CGFloat bbox arithmetic can
+        // drift by ~2e-7.
         #expect(abs(bbox.maxX - (10 + Self.triangleWidth)) < 1e-4)
         #expect(bbox.minX == 10) // flat side aligned with line
         // Triangle sits above the system (top of system = 100).
@@ -100,8 +100,8 @@ struct LoopBoundaryMarkersTests {
             triangleWidth: Self.triangleWidth,
         )
         let bbox = try #require(result?.triangle.boundingRect)
-        // Line center for measure 1 right edge = 190; apex (min X) is to its left.
-        // Use a tolerance because CGFloat bbox arithmetic can drift by ~2e-7.
+        // Line center for measure 1 right edge = 190; apex (min X) is to its left. Use a tolerance because CGFloat bbox
+        // arithmetic can drift by ~2e-7.
         #expect(abs(bbox.minX - (190 - Self.triangleWidth)) < 1e-4)
         #expect(bbox.maxX == 190) // flat side aligned with line
         #expect(bbox.minY == 100 - Self.triangleHeight)
@@ -126,8 +126,7 @@ struct LoopBoundaryMarkersTests {
 
 @MainActor struct LoopBoundaryMarkersWiringTests {
     @Test func `view builds with range`() {
-        // Smoke test: the view initializer accepts the same shape that
-        // LoopRegionOverlay does, so the wiring blocks in
+        // Smoke test: the view initializer accepts the same shape that LoopRegionOverlay does, so the wiring blocks in
         // {Vertical,Horizontal}ScoreContainer compile.
         let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let m = LayoutMeasure(measureIndex: 0, origin: .zero, width: 80, elements: [])
@@ -142,8 +141,8 @@ struct LoopBoundaryMarkersTests {
             systems: [system], metrics: StaffMetrics(staffSize: 14),
         )
         let chord = ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0)
-        // Both endpoints, A-only, B-only, and neither — every shape the
-        // containers wire up via `pendingRepeatA` / `pendingRepeatB`.
+        // Both endpoints, A-only, B-only, and neither — every shape the containers wire up via `pendingRepeatA` /
+        // `pendingRepeatB`.
         _ = LoopBoundaryMarkers(document: doc, start: chord, end: chord)
         _ = LoopBoundaryMarkers(document: doc, start: chord, end: nil)
         _ = LoopBoundaryMarkers(document: doc, start: nil, end: chord)

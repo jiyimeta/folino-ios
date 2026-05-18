@@ -7,47 +7,38 @@ import SheetMusicAudio
 import SheetMusicCore
 import UIKit
 
-/// Bridges folino's `Domain.PlaybackController` onto
-/// `SheetMusicAudio.PlaybackEngine`. The engine is `@MainActor` so this
-/// adapter is too — the protocol's `async` methods become hops onto the
-/// main actor.
+/// Bridges folino's `Domain.PlaybackController` onto `SheetMusicAudio.PlaybackEngine`. The engine is `@MainActor` so
+/// this adapter is too — the protocol's `async` methods become hops onto the main actor.
 @MainActor
 public final class LivePlaybackController: Domain.PlaybackController {
     let engine: PlaybackEngine
     private let domainResolver: any Domain.SoundfontResolver
     private let precisionProbe: any Domain.PrecisePatchProbe
-    /// Internal (not private) so the +LoopBounds extension file can reach
-    /// it when forwarding to engine.play(in:) after a setLoop / clearLoop.
+    /// Internal (not private) so the +LoopBounds extension file can reach it when forwarding to engine.play(in:) after
+    /// a setLoop / clearLoop.
     var loadedScore: Score?
-    /// Cursor the user picked while the engine's sequencer wasn't yet
-    /// built (it's lazy — first `play(from:in:)` builds it). `seek` early-
-    /// outs in that state, so we stash the request here and apply it on
-    /// the next `play()` via `engine.play(from:in:)`. Without this, the
-    /// first play after a tap-to-seek would reset to position 0 because
+    /// Cursor the user picked while the engine's sequencer wasn't yet built (it's lazy — first `play(from:in:)` builds
+    /// it). `seek` early-outs in that state, so we stash the request here and apply it on the next `play()` via
+    /// `engine.play(from:in:)`. Without this, the first play after a tap-to-seek would reset to position 0 because
     /// `play(in:)` with `state == .stopped` rewinds the sequencer.
     private var pendingCursor: ScoreCursor?
 
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var isPlayingHandler: (@MainActor (Bool) -> Void)?
     private var cancellables: Set<AnyCancellable> = []
-    /// Last engine time we observed on the cursor stream. Used to detect
-    /// backward jumps (A-B loop wrap) and re-publish `nowPlayingInfo` so
-    /// the lock-screen scrubber follows the wrap. iOS interpolates the
-    /// scrubber from the last published elapsed snapshot + rate, so
-    /// without an extra publish on wrap the lock screen keeps advancing
-    /// past B even though audio and in-app cursor jumped back to A.
+    /// Last engine time we observed on the cursor stream. Used to detect backward jumps (A-B loop wrap) and re-publish
+    /// `nowPlayingInfo` so the lock-screen scrubber follows the wrap. iOS interpolates the scrubber from the last
+    /// published elapsed snapshot + rate, so without an extra publish on wrap the lock screen keeps advancing past B
+    /// even though audio and in-app cursor jumped back to A.
     private var lastObservedEngineTime: TimeInterval = 0
-    /// Cached title / artist / default-rate for the loaded score. We
-    /// rebuild the full `nowPlayingInfo` dictionary on every state
-    /// change rather than mutating the live one in place — reading
-    /// `MPNowPlayingInfoCenter.nowPlayingInfo` back can return a stale
-    /// or nil snapshot, which would silently drop the rate update.
+    /// Cached title / artist / default-rate for the loaded score. We rebuild the full `nowPlayingInfo` dictionary on
+    /// every state change rather than mutating the live one in place — reading `MPNowPlayingInfoCenter.nowPlayingInfo`
+    /// back can return a stale or nil snapshot, which would silently drop the rate update.
     private var nowPlayingMetadata: [String: Any] = [:]
 
-    /// Bank / program of the bundled fallback patches. When a staff's
-    /// precise SF2 is unavailable, the controller rewrites the staff's
-    /// channel to one of these so the resolver's sync path returns the
-    /// committed bundle file rather than an unrelated cached patch.
+    /// Bank / program of the bundled fallback patches. When a staff's precise SF2 is unavailable, the controller
+    /// rewrites the staff's channel to one of these so the resolver's sync path returns the committed bundle file
+    /// rather than an unrelated cached patch.
     static let pitchedFallbackChannel = (bank: 0, program: 73)
     static let drumFallbackChannel = (bank: 0, program: 0)
 
@@ -61,23 +52,17 @@ public final class LivePlaybackController: Domain.PlaybackController {
         self.precisionProbe = precisionProbe
         engine.$currentCursor
             .sink { [weak self] value in
-                // Combine emits the engine's `@Published currentCursor` on
-                // willSet, synchronously on the MainActor where the timer
-                // task ran. Forward to the registered handler in the same
-                // work item so each cursor change reaches SwiftUI without
-                // an intervening Task hop. Routing through `AsyncStream` +
-                // `for-await` instead let the consumer drain a buffered
-                // burst in one work item, collapsing the intermediate
-                // cursor positions before SwiftUI got a render slot
-                // between them — visible as the cursor "skipping" past
-                // chord onsets that the example app shows.
+                // Combine emits the engine's `@Published currentCursor` on willSet, synchronously on the MainActor
+                // where the timer task ran. Forward to the registered handler in the same work item so each cursor
+                // change reaches SwiftUI without an intervening Task hop. Routing through `AsyncStream` + `for-await`
+                // instead let the consumer drain a buffered burst in one work item, collapsing the intermediate cursor
+                // positions before SwiftUI got a render slot between them — visible as the cursor "skipping" past chord
+                // onsets that the example app shows.
                 guard let self else { return }
                 let now = engine.currentTimeSeconds
                 if now < lastObservedEngineTime {
-                    // A-B loop wrap (or any other engine-driven backward
-                    // jump) — re-publish so the lock-screen scrubber
-                    // resets to the new elapsed time instead of
-                    // continuing to interpolate past B.
+                    // A-B loop wrap (or any other engine-driven backward jump) — re-publish so the lock-screen scrubber
+                    // resets to the new elapsed time instead of continuing to interpolate past B.
                     publishNowPlayingInfo(seeking: true)
                 }
                 lastObservedEngineTime = now
@@ -97,21 +82,16 @@ public final class LivePlaybackController: Domain.PlaybackController {
         score: Score, displayTitle: String?, preferences: PlaybackPreferences,
     ) async throws {
         await Self.prefetchSoundfonts(score: score, resolver: domainResolver)
-        // Prefetch's URLSession calls honor cancellation but the TaskGroup
-        // returns regardless. Bail before the engine prepare so a cancel
-        // mid-load doesn't end up with a primed engine the user expects to
-        // be silent.
+        // Prefetch's URLSession calls honor cancellation but the TaskGroup returns regardless. Bail before the engine
+        // prepare so a cancel mid-load doesn't end up with a primed engine the user expects to be silent.
         try Task.checkCancellation()
         let prepared = Self.scoreWithFallbackRewrites(score, probe: precisionProbe)
         try engine.prepare(score: prepared)
-        // `prepare` ends with `AVAudioEngine.start()` so the engine is running
-        // even though `PlaybackState` is `.stopped`. iOS Control Center reads
-        // the running engine as "audio is active" and overrides our
-        // `MPNowPlayingInfoCenter.playbackState = .paused`, drawing the pause
-        // glyph before the user has pressed play. Pausing the engine here
-        // matches what `PlaybackEngine.pause()` does after a real pause —
-        // sequencer is still nil (lazy), so this just stops the audio graph
-        // and parks `state` at `.paused`.
+        // `prepare` ends with `AVAudioEngine.start()` so the engine is running even though `PlaybackState` is
+        // `.stopped`. iOS Control Center reads the running engine as "audio is active" and overrides our
+        // `MPNowPlayingInfoCenter.playbackState = .paused`, drawing the pause glyph before the user has pressed play.
+        // Pausing the engine here matches what `PlaybackEngine.pause()` does after a real pause — sequencer is still
+        // nil (lazy), so this just stops the audio graph and parks `state` at `.paused`.
         engine.pause()
         loadedScore = prepared
         pendingCursor = nil
@@ -130,11 +110,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine.setRate(Float(preferences.tempoMultiplier))
     }
 
-    /// Walks the score's distinct `(bank, program, isDrums)` triples and
-    /// asks the resolver to materialise each on disk, in parallel.
-    /// Soft-fails per patch — if one download 404s, the others still land.
-    /// Patches that fail outright are handled later by
-    /// `scoreWithFallbackRewrites` rewriting the staff channel.
+    /// Walks the score's distinct `(bank, program, isDrums)` triples and asks the resolver to materialise each on disk,
+    /// in parallel. Soft-fails per patch — if one download 404s, the others still land. Patches that fail outright are
+    /// handled later by `scoreWithFallbackRewrites` rewriting the staff channel.
     private static func prefetchSoundfonts(
         score: Score, resolver: any Domain.SoundfontResolver,
     ) async {
@@ -160,9 +138,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
                 SoundfontPatchKey(bank: $0.bank, program: $0.program, isDrums: $0.isDrums)
             })
         } catch {
-            // If we can't enumerate the cache, fall back to "may need to
-            // fetch" so the user gets the loading affordance instead of
-            // a silent stall.
+            // If we can't enumerate the cache, fall back to "may need to fetch" so the user gets the loading affordance
+            // instead of a silent stall.
             return false
         }
         return needed.isSubset(of: cachedKeys)
@@ -176,9 +153,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
                 SoundfontPatchKey(bank: patch.bank, program: patch.program, isDrums: patch.isDrums) == needle
             }
         } catch {
-            // Match `areSoundfontsAvailableLocally`'s policy: if the cache
-            // can't be enumerated, report "not cached" so callers surface
-            // the loading affordance instead of stalling silently.
+            // Match `areSoundfontsAvailableLocally`'s policy: if the cache can't be enumerated, report "not cached" so
+            // callers surface the loading affordance instead of stalling silently.
             return false
         }
     }
@@ -189,9 +165,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
         )
     }
 
-    /// Distinct `(bank, program, isDrums)` triples used by `score`.
-    /// Internal so `LiveScoreAudioExporter` can prefetch the same
-    /// patch set before its offline render.
+    /// Distinct `(bank, program, isDrums)` triples used by `score`. Internal so `LiveScoreAudioExporter` can prefetch
+    /// the same patch set before its offline render.
     static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
         var keys: Set<SoundfontPatchKey> = []
         for entry in score.allStaves {
@@ -205,24 +180,19 @@ public final class LivePlaybackController: Domain.PlaybackController {
         return keys
     }
 
-    /// Returns a `Score` where every staff whose `(bank, program, isDrums)`
-    /// has no precise SF2 file (cache or bundle) is rewritten to the
-    /// matching bundled fallback channel (`(0, 73)` for pitched,
-    /// `(0, 0)` for drums). Staves whose patch *is* available pass
-    /// through unmodified.
+    /// Returns a `Score` where every staff whose `(bank, program, isDrums)` has no precise SF2 file (cache or bundle)
+    /// is rewritten to the matching bundled fallback channel (`(0, 73)` for pitched, `(0, 0)` for drums). Staves whose
+    /// patch *is* available pass through unmodified.
     ///
-    /// `swift-sheet-music`'s `Score` doesn't expose a `setPart(_:at:)`
-    /// mutator — `parts` is a public mutable array — so this rewrites
-    /// the part by index lookup off `StaffAddress.partIndex`.
+    /// `swift-sheet-music`'s `Score` doesn't expose a `setPart(_:at:)` mutator — `parts` is a public mutable array — so
+    /// this rewrites the part by index lookup off `StaffAddress.partIndex`.
     static func scoreWithFallbackRewrites(
         _ score: Score, probe: any Domain.PrecisePatchProbe,
     ) -> Score {
         var rewritten = score
-        // Multi-staff parts (e.g. piano) yield multiple `allStaves` entries
-        // sharing one `partIndex`. The precise-path check on the (already
-        // rewritten) channel short-circuits subsequent visits — the rewrite
-        // is idempotent per part, so the redundant probe call is the only
-        // overhead.
+        // Multi-staff parts (e.g. piano) yield multiple `allStaves` entries sharing one `partIndex`. The precise-path
+        // check on the (already rewritten) channel short-circuits subsequent visits — the rewrite is idempotent per
+        // part, so the redundant probe call is the only overhead.
         for entry in rewritten.allStaves {
             let partIndex = entry.address.partIndex
             guard rewritten.parts.indices.contains(partIndex) else { continue }
@@ -238,9 +208,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
             var newChannel = channel
             newChannel.bank = target.bank
             newChannel.program = target.program
-            // `Instrument.init` substitutes a default `[InstrumentChannel()]` when
-            // given an empty channels array, so this branch is defensive — it only
-            // fires if a caller mutates `channels = []` post-construction.
+            // `Instrument.init` substitutes a default `[InstrumentChannel()]` when given an empty channels array, so
+            // this branch is defensive — it only fires if a caller mutates `channels = []` post-construction.
             if rewritten.parts[partIndex].instrument.channels.isEmpty {
                 rewritten.parts[partIndex].instrument.channels = [newChannel]
             } else {
@@ -298,19 +267,17 @@ public final class LivePlaybackController: Domain.PlaybackController {
     }
 
     public func setCursor(to cursor: ScoreCursor) {
-        // `AVAudioSequencer` halts when `currentPositionInBeats` is written
-        // during playback, which kills the engine's own cursor timer on its
-        // next tick (`tickCursor` early-outs on `!sequencer.isPlaying`). To
-        // preserve "playback continues from the seeked position", route
-        // through `play(from:in:)` while playing — that path writes the
-        // position AND calls `sequencer.start()` AND restarts the cursor
-        // timer in lockstep. Pure `seek` is fine while paused / stopped.
+        // `AVAudioSequencer` halts when `currentPositionInBeats` is written during playback, which kills the engine's
+        // own cursor timer on its next tick (`tickCursor` early-outs on `!sequencer.isPlaying`). To preserve "playback
+        // continues from the seeked position", route through `play(from:in:)` while playing — that path writes the
+        // position AND calls `sequencer.start()` AND restarts the cursor timer in lockstep. Pure `seek` is fine while
+        // paused / stopped.
         if engine.state == .playing, let score = loadedScore {
             engine.play(from: cursor, in: score)
             pendingCursor = nil
         } else {
-            // `seek` is a no-op until the sequencer is built (first `play`
-            // call), so always stash the request — `play()` consumes it.
+            // `seek` is a no-op until the sequencer is built (first `play` call), so always stash the request —
+            // `play()` consumes it.
             engine.seek(to: cursor)
             pendingCursor = cursor
         }
@@ -322,15 +289,13 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func observeIsPlaying(_ handler: @MainActor @escaping (Bool) -> Void) {
         isPlayingHandler = handler
-        // Seed with the current state so the consumer doesn't have to
-        // wait for the next engine transition to learn whether the
-        // engine is already playing.
+        // Seed with the current state so the consumer doesn't have to wait for the next engine transition to learn
+        // whether the engine is already playing.
         handler(engine.state == .playing)
     }
 
-    // setLoopRange lives in `LivePlaybackController+LoopBounds.swift`
-    // alongside the cursor-mapping helpers it depends on (file_length
-    // budget keeps `engine`-touching protocol methods split out).
+    // setLoopRange lives in `LivePlaybackController+LoopBounds.swift` alongside the cursor-mapping helpers it depends
+    // on (file_length budget keeps `engine`-touching protocol methods split out).
 
     public func setTempoMultiplier(_ value: Double) {
         engine.setRate(Float(value))
@@ -345,11 +310,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         center.skipForwardCommand.removeTarget(nil)
         center.skipBackwardCommand.removeTarget(nil)
         center.changePlaybackPositionCommand.removeTarget(nil)
-        // Disable togglePlayPause: with all three registered, iOS 17+
-        // sometimes follows a Control Center pause tap with a synthesised
-        // toggle event, which our handler would interpret as "state is
-        // paused → resume" and immediately flip back to playing. Letting
-        // play/pause be the only source of truth removes the race.
+        // Disable togglePlayPause: with all three registered, iOS 17+ sometimes follows a Control Center pause tap with
+        // a synthesised toggle event, which our handler would interpret as "state is paused → resume" and immediately
+        // flip back to playing. Letting play/pause be the only source of truth removes the race.
         center.togglePlayPauseCommand.removeTarget(nil)
         center.togglePlayPauseCommand.isEnabled = false
 
@@ -370,8 +333,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
             return .success
         }
 
-        // 10-second skip on lock screen / Control Center. The interval
-        // also drives the glyph iOS draws on the buttons (the "10" badge).
+        // 10-second skip on lock screen / Control Center. The interval also drives the glyph iOS draws on the buttons
+        // (the "10" badge).
         center.skipForwardCommand.preferredIntervals = [10]
         center.skipBackwardCommand.preferredIntervals = [10]
         center.skipForwardCommand.addTarget { [weak self] event in
@@ -395,14 +358,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
             return .success
         }
 
-        // Lock-screen / Control Center scrubber drag. iOS only fires this
-        // when `MPMediaItemPropertyPlaybackDuration` is published, which we
-        // already do in `publishNowPlayingInfo`. `engine.skip(by:)` clamps
-        // to `[0, totalTimeSeconds]` and preserves play / pause state, so
-        // forwarding the delta from the engine's current time is enough.
-        // No-op until the sequencer has been built (first `play` call) —
-        // before that, scrubbing is unreachable in practice because the
-        // user has to press play to engage the lock-screen player.
+        // Lock-screen / Control Center scrubber drag. iOS only fires this when `MPMediaItemPropertyPlaybackDuration` is
+        // published, which we already do in `publishNowPlayingInfo`. `engine.skip(by:)` clamps to `[0,
+        // totalTimeSeconds]` and preserves play / pause state, so forwarding the delta from the engine's current time
+        // is enough. No-op until the sequencer has been built (first `play` call) — before that, scrubbing is
+        // unreachable in practice because the user has to press play to engage the lock-screen player.
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let self,
                   let position = event as? MPChangePlaybackPositionCommandEvent
@@ -438,11 +398,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         publishNowPlayingInfo()
     }
 
-    /// App icon as `MPMediaItemArtwork`, used as the lock-screen /
-    /// Control Center artwork. Looked up once via the canonical
-    /// `CFBundleIcons` → `CFBundlePrimaryIcon` → `CFBundleIconFiles`
-    /// path; `UIImage(named: "AppIcon")` doesn't resolve the processed
-    /// icon at runtime. `nil` on platforms / hosts that don't ship one.
+    /// App icon as `MPMediaItemArtwork`, used as the lock-screen / Control Center artwork. Looked up once via the
+    /// canonical `CFBundleIcons` → `CFBundlePrimaryIcon` → `CFBundleIconFiles` path; `UIImage(named: "AppIcon")`
+    /// doesn't resolve the processed icon at runtime. `nil` on platforms / hosts that don't ship one.
     private static let appIconArtwork: MPMediaItemArtwork? = {
         guard
             let icons = Bundle.main.infoDictionary?["CFBundleIcons"]
@@ -455,21 +413,16 @@ public final class LivePlaybackController: Domain.PlaybackController {
         return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
     }()
 
-    /// Rebuild `nowPlayingInfo` from cached metadata + the engine's current
-    /// state, and set the canonical `playbackState`. Always publishes a
-    /// complete dictionary — partial updates that read `nowPlayingInfo` back
-    /// have been observed to silently drop the rate change when the system
-    /// returns nil mid-transition.
+    /// Rebuild `nowPlayingInfo` from cached metadata + the engine's current state, and set the canonical
+    /// `playbackState`. Always publishes a complete dictionary — partial updates that read `nowPlayingInfo` back have
+    /// been observed to silently drop the rate change when the system returns nil mid-transition.
     ///
-    /// `seeking` flag — for engine-driven backward jumps (A-B loop wrap)
-    /// and explicit seeks. iOS doesn't honour a decreasing
-    /// `elapsedPlaybackTime` with `playbackRate` held at 1.0 (the lock
-    /// screen scrubber keeps extrapolating forward from the previous
-    /// snapshot). The workaround is to publish with `rate = 0` first to
-    /// force iOS to commit the new elapsed value, then re-publish with
-    /// the real rate so playback continues. Apple's MusicKit /
-    /// AVPlayer-backed apps do this implicitly via `playbackState`
-    /// transitions, which third-party apps can't write directly.
+    /// `seeking` flag — for engine-driven backward jumps (A-B loop wrap) and explicit seeks. iOS doesn't honour a
+    /// decreasing `elapsedPlaybackTime` with `playbackRate` held at 1.0 (the lock screen scrubber keeps extrapolating
+    /// forward from the previous snapshot). The workaround is to publish with `rate = 0` first to force iOS to commit
+    /// the new elapsed value, then re-publish with the real rate so playback continues. Apple's MusicKit /
+    /// AVPlayer-backed apps do this implicitly via `playbackState` transitions, which third-party apps can't write
+    /// directly.
     private func publishNowPlayingInfo(seeking: Bool = false) {
         let isPlaying = engine.state == .playing
         let elapsed = engine.currentTimeSeconds
@@ -478,18 +431,16 @@ public final class LivePlaybackController: Domain.PlaybackController {
         info[MPMediaItemPropertyPlaybackDuration] = engine.totalTimeSeconds
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
         if seeking, isPlaying {
-            // Two-step publish: first park the rate at 0 with the new
-            // elapsed so iOS records the snapshot, then resume rate = 1
-            // so extrapolation continues from the snapped position.
+            // Two-step publish: first park the rate at 0 with the new elapsed so iOS records the snapshot, then resume
+            // rate = 1 so extrapolation continues from the snapped position.
             info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
             center.nowPlayingInfo = info
         }
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         center.nowPlayingInfo = info
         center.playbackState = isPlaying ? .playing : .paused
-        // Resync the cursor-sink's backward-jump detector so the next
-        // tick after an explicit publish (skip / seek / state change)
-        // doesn't re-trigger a redundant publish.
+        // Resync the cursor-sink's backward-jump detector so the next tick after an explicit publish (skip / seek /
+        // state change) doesn't re-trigger a redundant publish.
         lastObservedEngineTime = elapsed
     }
 }

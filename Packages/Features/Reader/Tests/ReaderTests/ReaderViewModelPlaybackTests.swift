@@ -47,11 +47,9 @@ struct ReaderViewModelPlaybackTests {
     }
 
     @Test func `cursor becoming nil after play resets is playing`() async {
-        // The engine emits a nil cursor when playback finishes naturally
-        // (`PlaybackEngine.stop()` clears `currentCursor` once
-        // `tickCursor` reaches `totalTicks`). The toolbar's play/pause
-        // glyph is bound to `isPlaying`, so it must flip back to "play"
-        // when that signal arrives.
+        // The engine emits a nil cursor when playback finishes naturally (`PlaybackEngine.stop()` clears
+        // `currentCursor` once `tickCursor` reaches `totalTicks`). The toolbar's play/pause glyph is bound to
+        // `isPlaying`, so it must flip back to "play" when that signal arrives.
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -157,8 +155,7 @@ struct ReaderViewModelPlaybackTests {
         #expect(controller.loadCount == 1)
         #expect(vm.soundfontAlertKind == nil)
 
-        // First user-driven toggle should reuse the primed engine — no
-        // additional load and no alert flash.
+        // First user-driven toggle should reuse the primed engine — no additional load and no alert flash.
         await vm.togglePlayback()
         #expect(controller.loadCount == 1)
         #expect(controller.playCount == 1)
@@ -254,8 +251,8 @@ struct ReaderViewModelPlaybackTests {
         for _ in 0 ..< 5 {
             await Task.yield()
         }
-        // Even though `load` is blocked, the alert never shows because the
-        // controller reports the cache covers the score.
+        // Even though `load` is blocked, the alert never shows because the controller reports the cache covers the
+        // score.
         #expect(!vm.isLoadingSoundfonts)
 
         vm.cancelLoadingSoundfonts()
@@ -330,8 +327,8 @@ struct ReaderViewModelPlaybackTests {
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
         )
-        // No load: flat index lookup fails, controller is never called,
-        // but the in-memory set still tracks the user's intent.
+        // No load: flat index lookup fails, controller is never called, but the in-memory set still tracks the user's
+        // intent.
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         vm.mixerModel.toggleStaffSolo(address)
         #expect(vm.mixerModel.soloStaves == [address])
@@ -507,8 +504,8 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        // Piano's lower staff is at (partIndex: 1, staffIndexInPart: 1)
-        // → flat staff index 2 (Vn=0, Pno-top=1, Pno-bottom=2).
+        // Piano's lower staff is at (partIndex: 1, staffIndexInPart: 1) → flat staff index 2 (Vn=0, Pno-top=1,
+        // Pno-bottom=2).
         let pianoBottom = StaffAddress(partIndex: 1, staffIndexInPart: 1)
         vm.mixerModel.setVolume(0.3, for: pianoBottom)
         await Task.yield()

@@ -1,10 +1,9 @@
 import GRDB
 
 enum AppMigrations {
-    /// Aggregate migrator that runs every registered version in order.
-    /// Use this from production code (`AppDatabase`) and from tests that
-    /// want a fully-migrated DB. The per-version migrators (`v1`, `v2`)
-    /// remain available for migration-step-specific tests.
+    /// Aggregate migrator that runs every registered version in order. Use this from production code (`AppDatabase`)
+    /// and from tests that want a fully-migrated DB. The per-version migrators (`v1`, `v2`) remain available for
+    /// migration-step-specific tests.
     static let all: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
@@ -25,9 +24,8 @@ enum AppMigrations {
         return m
     }()
 
-    /// Migrator that registers v1 + v2 only — useful for tests that want to
-    /// exercise a v3 upgrade against rows already inserted at the previous
-    /// schema.
+    /// Migrator that registers v1 + v2 only — useful for tests that want to exercise a v3 upgrade against rows already
+    /// inserted at the previous schema.
     static let upToV2: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
@@ -35,9 +33,8 @@ enum AppMigrations {
         return m
     }()
 
-    /// Migrator that registers v1 + v2 + v3 only — useful for tests that
-    /// want to exercise a v4 upgrade against rows already inserted at the
-    /// previous schema.
+    /// Migrator that registers v1 + v2 + v3 only — useful for tests that want to exercise a v4 upgrade against rows
+    /// already inserted at the previous schema.
     static let upToV3: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
@@ -46,9 +43,8 @@ enum AppMigrations {
         return m
     }()
 
-    /// Migrator that registers v1 + v2 + v3 + v4 only — useful for tests
-    /// that want to exercise a v5 upgrade against rows already inserted at
-    /// the previous schema.
+    /// Migrator that registers v1 + v2 + v3 + v4 only — useful for tests that want to exercise a v5 upgrade against
+    /// rows already inserted at the previous schema.
     static let upToV4: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
@@ -58,9 +54,8 @@ enum AppMigrations {
         return m
     }()
 
-    /// Migrator that registers v1 + v2 + v3 + v4 + v5 only — useful for
-    /// tests that want to exercise a v6 upgrade against rows already
-    /// inserted at the previous schema.
+    /// Migrator that registers v1 + v2 + v3 + v4 + v5 only — useful for tests that want to exercise a v6 upgrade
+    /// against rows already inserted at the previous schema.
     static let upToV5: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
@@ -71,9 +66,8 @@ enum AppMigrations {
         return m
     }()
 
-    /// Migrator that registers v1 … v6 only — useful for tests that want
-    /// to exercise the v7 upgrade against rows already inserted at the
-    /// previous schema.
+    /// Migrator that registers v1 … v6 only — useful for tests that want to exercise the v7 upgrade against rows
+    /// already inserted at the previous schema.
     static let upToV6: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
@@ -85,9 +79,8 @@ enum AppMigrations {
         return m
     }()
 
-    /// Migrator that registers v1 … v7 only — useful for tests that want
-    /// to exercise the v8 upgrade against rows already inserted at the
-    /// previous schema.
+    /// Migrator that registers v1 … v7 only — useful for tests that want to exercise the v8 upgrade against rows
+    /// already inserted at the previous schema.
     static let upToV7: DatabaseMigrator = {
         var m = DatabaseMigrator()
         m.registerMigration("v1", migrate: migrateV1)
@@ -229,12 +222,10 @@ enum AppMigrations {
 
     // MARK: - v7
 
-    /// Adds the three playback-shape columns that `ReaderPreferences`
-    /// has always carried in-memory but the record schema dropped:
-    /// `repeat_mode` (cycle state), `tempo_multiplier` (override, null
-    /// = native tempo), `ab_repeat` (JSON-encoded `ABRepeatRange?`,
-    /// null = no range). Existing rows fall back to "off / no override
-    /// / no range" via column defaults.
+    /// Adds the three playback-shape columns that `ReaderPreferences` has always carried in-memory but the record
+    /// schema dropped: `repeat_mode` (cycle state), `tempo_multiplier` (override, null = native tempo), `ab_repeat`
+    /// (JSON-encoded `ABRepeatRange?`, null = no range). Existing rows fall back to "off / no override / no range" via
+    /// column defaults.
     private static func migrateV7(_ db: Database) throws {
         try db.execute(sql: """
         ALTER TABLE reader_preferences
@@ -252,10 +243,9 @@ enum AppMigrations {
 
     // MARK: - v8
 
-    /// Adds the soft-delete column for the "Recently Deleted" feature.
-    /// `deleted_at` is NULL for live rows; non-NULL means the row is in the
-    /// trash and will be auto-purged 30 days after the stamp. Existing rows
-    /// migrate as live (NULL) because that's the column default.
+    /// Adds the soft-delete column for the "Recently Deleted" feature. `deleted_at` is NULL for live rows; non-NULL
+    /// means the row is in the trash and will be auto-purged 30 days after the stamp. Existing rows migrate as live
+    /// (NULL) because that's the column default.
     private static func migrateV8(_ db: Database) throws {
         try db.execute(sql: """
         ALTER TABLE score_items

@@ -7,9 +7,8 @@ import Testing
 
 @MainActor
 struct LiveScoreAudioExporterTests {
-    /// Domain.SoundfontResolver fake that always throws on resolve. Used
-    /// to verify the exporter's prefetch gate hard-fails before the
-    /// PlaybackEngine is touched.
+    /// Domain.SoundfontResolver fake that always throws on resolve. Used to verify the exporter's prefetch gate
+    /// hard-fails before the PlaybackEngine is touched.
     private final class ThrowingDomainResolver: Domain.SoundfontResolver, @unchecked Sendable {
         struct Boom: Error {}
         func resolveSoundfont(bank _: Int, program _: Int, isDrums _: Bool) throws -> URL {
@@ -28,9 +27,8 @@ struct LiveScoreAudioExporterTests {
         func clearCache() throws {}
     }
 
-    /// SheetMusicAudio.SoundfontResolver fake that the exporter passes
-    /// to `PlaybackEngine`. The throwing-prefetch test never reaches
-    /// the engine, so this just satisfies the constructor.
+    /// SheetMusicAudio.SoundfontResolver fake that the exporter passes to `PlaybackEngine`. The throwing-prefetch test
+    /// never reaches the engine, so this just satisfies the constructor.
     private final class StubAudioResolver: SheetMusicAudio.SoundfontResolver, @unchecked Sendable {
         func soundfontURL(forBank _: UInt8, program _: UInt8, isDrums _: Bool) -> URL? {
             nil

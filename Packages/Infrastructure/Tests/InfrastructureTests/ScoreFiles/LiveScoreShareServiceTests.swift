@@ -15,8 +15,7 @@ struct LiveScoreShareServiceTests {
         )
     }
 
-    /// Fake `ScoreAudioExporter` that captures its call args and
-    /// writes a sentinel byte to the destination URL so the
+    /// Fake `ScoreAudioExporter` that captures its call args and writes a sentinel byte to the destination URL so the
     /// returned share URL can be inspected.
     private final class FakeAudioExporter: Domain.ScoreAudioExporter, @unchecked Sendable {
         var error: Error?
@@ -29,9 +28,8 @@ struct LiveScoreShareServiceTests {
         }
     }
 
-    /// Lays out `Scores/` and `Share/` and writes a single fixture
-    /// score so the gateway can resolve `Score.source` on load. Used
-    /// by every `availableFormats` and `prepareShare` test below.
+    /// Lays out `Scores/` and `Share/` and writes a single fixture score so the gateway can resolve `Score.source` on
+    /// load. Used by every `availableFormats` and `prepareShare` test below.
     private final class Rig {
         let tmp: TempDirectory
         let svc: LiveScoreShareService
@@ -74,8 +72,7 @@ struct LiveScoreShareServiceTests {
     }
 
     @Test func `available formats flags the matching muse score version for MSCZ sources`() async throws {
-        // The minimal fixture parses as MuseScore v4 — the matching
-        // share row must light up `isOriginal`.
+        // The minimal fixture parses as MuseScore v4 — the matching share row must light up `isOriginal`.
         let rig = try Self.makeRig(
             scoreData: Fixtures.minimalMSCZData(), localFileName: "abc.mscz",
         )
@@ -143,8 +140,8 @@ struct LiveScoreShareServiceTests {
     // MARK: - prepareShare
 
     @Test func `prepare share returns original bytes when format matches source`() async throws {
-        // mscz fixture parses as v4 → picking museScoreV4 must return
-        // the source bytes verbatim with the source extension intact.
+        // mscz fixture parses as v4 → picking museScoreV4 must return the source bytes verbatim with the source
+        // extension intact.
         let mscz = try Fixtures.minimalMSCZData()
         let rig = try Self.makeRig(scoreData: mscz, localFileName: "abc.mscz")
 
@@ -166,8 +163,7 @@ struct LiveScoreShareServiceTests {
     }
 
     @Test func `prepare share reencodes when format does not match source`() async throws {
-        // v4 fixture re-encoded to v3 must produce loadable but
-        // distinct bytes.
+        // v4 fixture re-encoded to v3 must produce loadable but distinct bytes.
         let mscz = try Fixtures.minimalMSCZData()
         let rig = try Self.makeRig(scoreData: mscz, localFileName: "abc.mscz")
 

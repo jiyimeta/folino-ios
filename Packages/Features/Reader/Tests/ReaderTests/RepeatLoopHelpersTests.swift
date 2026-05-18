@@ -4,10 +4,9 @@ import SheetMusicCore
 import Testing
 
 struct RepeatLoopHelpersTests {
-    /// One quarter-note element used to populate measure fixtures.
-    /// `VoiceElement.rest(duration:)` is sugar for
-    /// `.chord(Chord(duration: ..., notes: []))`, so the fixture is
-    /// composed of `.chord(_)` elements — what `snapMeasureEnd` matches.
+    /// One quarter-note element used to populate measure fixtures. `VoiceElement.rest(duration:)` is sugar for
+    /// `.chord(Chord(duration: ..., notes: []))`, so the fixture is composed of `.chord(_)` elements — what
+    /// `snapMeasureEnd` matches.
     private static func element() -> VoiceElement {
         .rest(duration: .quarter)
     }

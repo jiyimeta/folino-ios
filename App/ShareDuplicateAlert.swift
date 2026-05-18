@@ -3,9 +3,8 @@ import SwiftUI
 import UtilityUI
 
 extension View {
-    /// Attaches the share-extension duplicate-resolution alert. Presented
-    /// once per duplicate file, sequentially, with the "Open" affordance
-    /// suppressed for multi-file batches.
+    /// Attaches the share-extension duplicate-resolution alert. Presented once per duplicate file, sequentially, with
+    /// the "Open" affordance suppressed for multi-file batches.
     func shareDuplicateAlert(resolver: ShareDuplicateResolver) -> some View {
         modifier(ShareDuplicateAlertModifier(resolver: resolver))
     }

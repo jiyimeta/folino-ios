@@ -1,8 +1,7 @@
 import Foundation
 
-/// Creates a unique temp directory under `NSTemporaryDirectory()` and removes
-/// it when destroyed. Use as `let tmp = try TempDirectory()` in a test —
-/// the directory's URL is `tmp.url`.
+/// Creates a unique temp directory under `NSTemporaryDirectory()` and removes it when destroyed. Use as `let tmp = try
+/// TempDirectory()` in a test — the directory's URL is `tmp.url`.
 final class TempDirectory {
     let url: URL
 

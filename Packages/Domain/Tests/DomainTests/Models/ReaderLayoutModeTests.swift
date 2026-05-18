@@ -3,8 +3,8 @@ import Testing
 
 struct ReaderLayoutModeTests {
     @Test func `raw values are stable`() {
-        // @AppStorage("readerLayoutMode") persists the rawValue; a
-        // rename would silently drop user state on the next launch.
+        // @AppStorage("readerLayoutMode") persists the rawValue; a rename would silently drop user state on the next
+        // launch.
         #expect(ReaderLayoutMode.vertical.rawValue == "vertical")
         #expect(ReaderLayoutMode.horizontal.rawValue == "horizontal")
         #expect(ReaderLayoutMode.page.rawValue == "page")
@@ -21,8 +21,8 @@ struct ReaderLayoutModeTests {
     }
 
     @Test func `metronome key matches legacy app storage`() {
-        // The string literal is load-bearing: existing user state lives under
-        // this key, so changing it would silently reset every install.
+        // The string literal is load-bearing: existing user state lives under this key, so changing it would silently
+        // reset every install.
         #expect(ReaderGlobalSettingsKey.metronomeEnabled == "readerMetronomeEnabled")
     }
 

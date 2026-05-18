@@ -1,13 +1,12 @@
 import SheetMusicCore
 
 extension Score {
-    /// In-measure tick offset of the voice element identified by `itemID`,
-    /// summing chord/rest durations in the voice up to (not including)
-    /// `itemID.elementIndex`. Returns `nil` when the path doesn't resolve.
+    /// In-measure tick offset of the voice element identified by `itemID`, summing chord/rest durations in the voice up
+    /// to (not including) `itemID.elementIndex`. Returns `nil` when the path doesn't resolve.
     ///
-    /// Used to translate a `.item(id)` cursor anchored on a hidden-staff
-    /// element into a `.beat(measureIndex:tickInMeasure:)` cursor that
-    /// `PlaybackCursorView` can interpolate against the visible staves.
+    /// Used to translate a `.item(id)` cursor anchored on a hidden-staff element into a
+    /// `.beat(measureIndex:tickInMeasure:)` cursor that `PlaybackCursorView` can interpolate against the visible
+    /// staves.
     func resolveTickInMeasure(for itemID: ScoreItemID) -> Int? {
         guard let staff = self[itemID.staff] else { return nil }
         guard staff.measures.indices.contains(itemID.measureIndex) else { return nil }

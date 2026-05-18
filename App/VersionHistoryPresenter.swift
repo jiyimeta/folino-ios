@@ -30,8 +30,8 @@ final class VersionHistoryPresenter {
         self.loader = loader
     }
 
-    /// Idempotent per-process. Safe to call from `.task` blocks that may run
-    /// multiple times across iPad multi-window scenes.
+    /// Idempotent per-process. Safe to call from `.task` blocks that may run multiple times across iPad multi-window
+    /// scenes.
     func registerColdLaunchIfNeeded() {
         guard !hasRegistered else { return }
         hasRegistered = true
@@ -48,8 +48,8 @@ final class VersionHistoryPresenter {
         let current = AppVersion.current
 
         if stored == .zero {
-            // First install (or stored value was unparseable): silent bump,
-            // no sheet — we have no history to show this user.
+            // First install (or stored value was unparseable): silent bump, no sheet — we have no history to show this
+            // user.
             markCurrentVersionAsSeen()
             return
         }

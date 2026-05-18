@@ -5,14 +5,12 @@ import Observation
 import SheetMusicCore
 import SheetMusicMSCX
 
-// Preview-only fakes for Reader. Production code never instantiates these;
-// they exist solely so `#Preview` blocks in this target can build a
-// `ReaderViewModel` without depending on Infrastructure adapters or the
-// test target's `@testable` fakes.
+// Preview-only fakes for Reader. Production code never instantiates these; they exist solely so `#Preview` blocks in
+// this target can build a `ReaderViewModel` without depending on Infrastructure adapters or the test target's
+// `@testable` fakes.
 //
-// Mirrors `Tests/ReaderTests/Fakes/` but is `internal` and #if DEBUG-guarded
-// so it ships in debug builds (where previews live) and is stripped from
-// release.
+// Mirrors `Tests/ReaderTests/Fakes/` but is `internal` and #if DEBUG-guarded so it ships in debug builds (where
+// previews live) and is stripped from release.
 
 @MainActor
 @Observable
@@ -62,11 +60,10 @@ final class PreviewFakeRepository: ScoreLibraryRepository {
     }
 }
 
-/// `ScoreLibraryRepository` fake that delegates every call to a held
-/// `PreviewFakeRepository` except `loadReaderPreferences`, which returns
-/// a caller-provided `ReaderPreferences`. Use this in `#Preview` blocks
-/// that need to exercise a non-default reader-preference state (e.g. a
-/// pre-seeded A–B loop) without touching the production view-model API.
+/// `ScoreLibraryRepository` fake that delegates every call to a held `PreviewFakeRepository` except
+/// `loadReaderPreferences`, which returns a caller-provided `ReaderPreferences`. Use this in `#Preview` blocks that
+/// need to exercise a non-default reader-preference state (e.g. a pre-seeded A–B loop) without touching the production
+/// view-model API.
 @MainActor
 @Observable
 final class PreviewSeededPreferencesRepository: ScoreLibraryRepository {
@@ -81,8 +78,8 @@ final class PreviewSeededPreferencesRepository: ScoreLibraryRepository {
         seededPreferences
     }
 
-    /// Delegate every other method to `base`. (List them all so a future
-    /// protocol addition fails to compile here, surfacing the gap.)
+    /// Delegate every other method to `base`. (List them all so a future protocol addition fails to compile here,
+    /// surfacing the gap.)
     var scoreItems: [ScoreItem] {
         base.scoreItems
     }
@@ -194,17 +191,14 @@ extension Instrument {
     }
 }
 
-/// Loads a real `.mscz` from `Resources/PreviewAssets/` if present.
-/// The file is intentionally not tracked in git — developers drop a
-/// local score into that directory to iterate the page-mode layout
-/// against realistic content via `mcp__xcode__RenderPreview`. Returns
-/// `nil` when the asset is missing or fails to parse, letting callers
-/// fall back to a synthetic score.
+/// Loads a real `.mscz` from `Resources/PreviewAssets/` if present. The file is intentionally not tracked in git —
+/// developers drop a local score into that directory to iterate the page-mode layout against realistic content via
+/// `mcp__xcode__RenderPreview`. Returns `nil` when the asset is missing or fails to parse, letting callers fall back to
+/// a synthetic score.
 enum PreviewBundledScore {
     static func nowIsTheTime() -> Score? {
-        // SwiftPM's `.process(...)` flattens the resource directory
-        // structure, so the file sits at the bundle root regardless
-        // of the on-disk `PreviewAssets/` subdirectory.
+        // SwiftPM's `.process(...)` flattens the resource directory structure, so the file sits at the bundle root
+        // regardless of the on-disk `PreviewAssets/` subdirectory.
         guard let url = Bundle.module.url(
             forResource: "Now_is_the_time",
             withExtension: "mscz",
@@ -213,10 +207,9 @@ enum PreviewBundledScore {
     }
 }
 
-/// Hand-built score tall enough to scroll inside a typical iPad viewport.
-/// 36 measures of quarter notes wrapped across many systems — the
-/// `VerticalScoreContainer` preview uses it to verify the initial scroll
-/// position lands at the top of page 1, not somewhere in the middle.
+/// Hand-built score tall enough to scroll inside a typical iPad viewport. 36 measures of quarter notes wrapped across
+/// many systems — the `VerticalScoreContainer` preview uses it to verify the initial scroll position lands at the top
+/// of page 1, not somewhere in the middle.
 enum PreviewSampleScore {
     static var tall: Score {
         let pitches: [(Int, Int)] = [

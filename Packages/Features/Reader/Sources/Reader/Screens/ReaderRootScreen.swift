@@ -38,8 +38,8 @@ public struct ReaderRootScreen: View {
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
     ) {
-        // Seed the device-class default at construction time. The view
-        // model only uses this if no persisted record exists.
+        // Seed the device-class default at construction time. The view model only uses this if no persisted record
+        // exists.
         let initialDefault: CGFloat = 14 // TBD: device-class override (follow-up)
         _viewModel = State(
             wrappedValue: ReaderViewModel(
@@ -98,15 +98,14 @@ public struct ReaderRootScreen: View {
             viewModel.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
             await viewModel.load()
             await viewModel.prepareForPlayback()
-            // Initial sync: the engine starts up unaware of persisted state,
-            // so seed it from the @AppStorage value at view start.
+            // Initial sync: the engine starts up unaware of persisted state, so seed it from the @AppStorage value at
+            // view start.
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
         }
         .onChange(of: isMetronomeEnabled) { _, newValue in
-            // The iPad fix: if the user toggles metronome from the Settings
-            // sheet while a Reader detail pane is alive in the same scene,
-            // the running engine has to be reconfigured here — the
-            // Inspector's button no longer drives that side effect.
+            // The iPad fix: if the user toggles metronome from the Settings sheet while a Reader detail pane is alive
+            // in the same scene, the running engine has to be reconfigured here — the Inspector's button no longer
+            // drives that side effect.
             Task { await viewModel.tempoModel.setMetronomeEnabled(newValue) }
         }
         .onChange(of: isPiPEnabled) { _, newValue in
@@ -116,8 +115,8 @@ public struct ReaderRootScreen: View {
             viewModel.setCollapseMultiMeasureRests(newValue)
         }
         .onChange(of: scenePhase) { _, newValue in
-            // The Settings spec dismisses PiP whenever the app returns
-            // to the foreground, regardless of how it was started.
+            // The Settings spec dismisses PiP whenever the app returns to the foreground, regardless of how it was
+            // started.
             if newValue == .active {
                 viewModel.dismissPiPOnForeground()
             }
@@ -192,9 +191,8 @@ public struct ReaderRootScreen: View {
 }
 
 #if DEBUG
-/// Documents the shape of a real Score fixture. Not used by the previews
-/// below — building a `ReaderRootScreen` preview requires wiring a fake gateway
-/// that returns a real `Score`, which is too brittle for a preview. See
+/// Documents the shape of a real Score fixture. Not used by the previews below — building a `ReaderRootScreen` preview
+/// requires wiring a fake gateway that returns a real `Score`, which is too brittle for a preview. See
 /// `PlaybackInspectorScreen` for a productive Score-shaped preview.
 @MainActor
 private func previewScore() -> Score {
@@ -210,10 +208,9 @@ private func previewScore() -> Score {
 }
 
 #Preview("Loaded · vertical · iPhone") {
-    // A real assembled-ReaderRootScreen preview would need a fake gateway
-    // returning a non-empty Score plus persistence wiring. Snapshot the
-    // chrome-only intent here; productive Score shape lives in
-    // `PlaybackInspectorScreen`'s preview.
+    // A real assembled-ReaderRootScreen preview would need a fake gateway returning a non-empty Score plus persistence
+    // wiring. Snapshot the chrome-only intent here; productive Score shape lives in `PlaybackInspectorScreen`'s
+    // preview.
     Text("Run via xcode preview to see the assembled view")
 }
 #endif

@@ -62,8 +62,8 @@ struct ReaderViewModelRepeatTests {
 
         await vm.repeatModel.setA()
 
-        // A is set; B is not — loop is incomplete so abRepeat stays nil.
-        // The pending marker is reflected in pendingRepeatA.
+        // A is set; B is not — loop is incomplete so abRepeat stays nil. The pending marker is reflected in
+        // pendingRepeatA.
         #expect(vm.repeatModel.pendingRepeatA?.measureIndex == 4)
         #expect(vm.repeatModel.pendingRepeatA?.chordIndex == 0)
         #expect(vm.repeatModel.abRange == nil)
@@ -77,10 +77,9 @@ struct ReaderViewModelRepeatTests {
 
         await vm.repeatModel.setB()
 
-        // FakeScoreFileGateway loads a 6-measure score; m1 has 2 chord
-        // positions (indices 0 and 1), so the snapped end ChordPath has
-        // measureIndex == 1 and chordIndex == 1.
-        // B-only → loop is incomplete; abRepeat is nil; pendingRepeatB reflects the snap.
+        // FakeScoreFileGateway loads a 6-measure score; m1 has 2 chord positions (indices 0 and 1), so the snapped end
+        // ChordPath has measureIndex == 1 and chordIndex == 1. B-only → loop is incomplete; abRepeat is nil;
+        // pendingRepeatB reflects the snap.
         #expect(vm.repeatModel.pendingRepeatB?.measureIndex == 1)
         #expect(vm.repeatModel.pendingRepeatB?.chordIndex == 1)
         #expect(vm.repeatModel.abRange == nil)
@@ -95,8 +94,7 @@ struct ReaderViewModelRepeatTests {
         vm.setManualCursor(.beat(measureIndex: 5, tickInMeasure: 0))
         await vm.repeatModel.setA()
 
-        // Still no B set — loop incomplete, abRepeat is nil.
-        // The pending A marker is updated to m5.
+        // Still no B set — loop incomplete, abRepeat is nil. The pending A marker is updated to m5.
         #expect(vm.repeatModel.pendingRepeatA?.measureIndex == 5)
         #expect(vm.repeatModel.abRange == nil)
     }
@@ -111,9 +109,8 @@ struct ReaderViewModelRepeatTests {
 
         await vm.repeatModel.clearA()
 
-        // Once start is cleared and end remains, the persisted record drops
-        // the range entirely (loop is incomplete) but keeps the B marker
-        // for re-display via a separate `pendingB` accessor.
+        // Once start is cleared and end remains, the persisted record drops the range entirely (loop is incomplete) but
+        // keeps the B marker for re-display via a separate `pendingB` accessor.
         #expect(vm.repeatModel.abRange == nil)
         #expect(vm.repeatModel.pendingRepeatB?.measureIndex == 1)
     }
@@ -169,9 +166,8 @@ struct ReaderViewModelRepeatTests {
 
         await vm.repeatModel.setB()
 
-        // Auto-swap: B at m0 + A at m2 -> normalized start=m0, end=m2.
-        // loopRangeCalls is [ABRepeatRange?]; .last is (ABRepeatRange?)?
-        // flatMap collapses to ABRepeatRange? (outer=no calls, inner=nil call).
+        // Auto-swap: B at m0 + A at m2 -> normalized start=m0, end=m2. loopRangeCalls is [ABRepeatRange?]; .last is
+        // (ABRepeatRange?)? flatMap collapses to ABRepeatRange? (outer=no calls, inner=nil call).
         let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
         #expect(last?.start.measureIndex == 0)
         #expect(last?.end.measureIndex == 2)
@@ -260,8 +256,7 @@ struct ReaderViewModelRepeatTests {
         await vm.load()
         await vm.prepareForPlayback()
 
-        // Fixture: 6 measures, two chord-positions per measure.
-        // Full range = m0.chord0 .. m5.chord1.
+        // Fixture: 6 measures, two chord-positions per measure. Full range = m0.chord0 .. m5.chord1.
         let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
         #expect(last?.start.measureIndex == 0)
         #expect(last?.start.chordIndex == 0)

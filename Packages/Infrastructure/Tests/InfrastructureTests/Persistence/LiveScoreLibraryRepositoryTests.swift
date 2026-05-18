@@ -6,8 +6,8 @@ import Testing
 
 @MainActor
 struct LiveScoreLibraryRepositoryTests {
-    /// Returns a database AND a lifetime anchor that keeps the temp directory
-    /// alive for the duration of the test. Both must be retained together.
+    /// Returns a database AND a lifetime anchor that keeps the temp directory alive for the duration of the test. Both
+    /// must be retained together.
     private func makeDatabase() throws -> (AppDatabase, TempDirectory) {
         let tmp = try TempDirectory()
         let db = try AppDatabase(databaseURL: tmp.url.appending(path: "f.sqlite"))

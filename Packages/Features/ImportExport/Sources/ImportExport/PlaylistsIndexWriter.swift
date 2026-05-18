@@ -3,10 +3,9 @@ import Foundation
 import ImportExportAppGroup
 import os
 
-/// Writes `PlaylistsIndex` atomically to the App Group container so the
-/// Share Extension can show the current Library playlists in its picker.
-/// Conforms to `PlaylistsIndexPublisher` so it can plug into
-/// `LiveScoreLibraryRepository` without that target importing ImportExport.
+/// Writes `PlaylistsIndex` atomically to the App Group container so the Share Extension can show the current Library
+/// playlists in its picker. Conforms to `PlaylistsIndexPublisher` so it can plug into `LiveScoreLibraryRepository`
+/// without that target importing ImportExport.
 public final class PlaylistsIndexWriter: PlaylistsIndexPublisher {
     private let appGroupContainer: URL
     private let logger = Logger(subsystem: "com.KeyNumber.Folino", category: "PlaylistsIndexWriter")

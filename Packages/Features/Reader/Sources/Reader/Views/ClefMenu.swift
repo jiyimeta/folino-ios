@@ -2,11 +2,9 @@ import Domain
 import SheetMusicUI
 import SwiftUI
 
-/// Per-staff clef override picker shown on the Reader Inspector's Visual
-/// tab. The trigger button shows the current clef glyph; tapping opens a
-/// popover with a grid of SMuFL clef tiles grouped by family
-/// (treble / bass / C). Modeled after the swift-sheet-music macOS
-/// example's `ClefPopover`.
+/// Per-staff clef override picker shown on the Reader Inspector's Visual tab. The trigger button shows the current clef
+/// glyph; tapping opens a popover with a grid of SMuFL clef tiles grouped by family (treble / bass / C). Modeled after
+/// the swift-sheet-music macOS example's `ClefPopover`.
 struct ClefMenu: View {
     let layoutModel: LayoutSettingsModel
     let address: StaffAddress
@@ -16,9 +14,8 @@ struct ClefMenu: View {
         let effective = layoutModel.effectiveClef(for: address)
         let hasOverride = layoutModel.hasClefOverride(for: address)
         let canReset = layoutModel.isClefOverrideEffective(for: address)
-        // Touch BravuraFont.register so previews and first-render paths
-        // get the SMuFL font even when the score view hasn't been
-        // resolved yet.
+        // Touch BravuraFont.register so previews and first-render paths get the SMuFL font even when the score view
+        // hasn't been resolved yet.
         _ = BravuraFont.register
         return Button {
             isPresented = true
@@ -59,11 +56,9 @@ struct ClefMenu: View {
 
     private func popoverContent(currentRawType: String, canReset: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Percussion staves stay on percussion clefs; pitched staves
-            // stay on pitched clefs. Mixing the two would produce
-            // nonsensical engraving (a kick drum line under a treble G,
-            // or a melody under `||`), so the picker hides the family
-            // the staff doesn't belong to.
+            // Percussion staves stay on percussion clefs; pitched staves stay on pitched clefs. Mixing the two would
+            // produce nonsensical engraving (a kick drum line under a treble G, or a melody under `||`), so the picker
+            // hides the family the staff doesn't belong to.
             if isPercussionStaff(rawType: currentRawType) {
                 tileRow(ClefMenuChoice.percussionFamily, current: currentRawType)
             } else {
@@ -80,9 +75,8 @@ struct ClefMenu: View {
             }
         }
         .padding(.vertical, 16)
-        // Cap the popover width so the 5-tile treble row scrolls
-        // horizontally, giving the surrounding padding room to breathe
-        // on small devices.
+        // Cap the popover width so the 5-tile treble row scrolls horizontally, giving the surrounding padding room to
+        // breathe on small devices.
         .frame(width: 260)
     }
 
@@ -129,9 +123,8 @@ struct ClefMenu: View {
                 )
                 .clipShape(.rect(cornerRadius: 6))
                 .overlay(
-                    // strokeBorder (vs stroke) keeps the line entirely inside
-                    // the tile so the 1pt edge stays pixel-aligned instead of
-                    // straddling the frame boundary at half-pixel offsets.
+                    // strokeBorder (vs stroke) keeps the line entirely inside the tile so the 1pt edge stays
+                    // pixel-aligned instead of straddling the frame boundary at half-pixel offsets.
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(
                             isCurrent ? Color.accentColor : Color.gray.opacity(0.3),
@@ -167,9 +160,8 @@ struct ClefMenu: View {
             path.addLine(to: CGPoint(x: size.width, y: y))
             ctx.stroke(path, with: .color(.primary.opacity(0.6)), lineWidth: 0.5)
         }
-        // Anchor convention: origin Y is the staff's middle line, with
-        // +Y meaning down (toward the bottom line). Mirrors upstream
-        // `ClefRenderer`'s yOffset table exactly:
+        // Anchor convention: origin Y is the staff's middle line, with +Y meaning down (toward the bottom line).
+        // Mirrors upstream `ClefRenderer`'s yOffset table exactly:
         //   * Treble family: +sp (G line, line 2 from bottom)
         //   * Bass   family: -sp (F line, line 4 from bottom)
         //   * Soprano C:    +2sp (line 1, bottom)

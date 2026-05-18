@@ -1,10 +1,8 @@
 import SwiftUI
 
-/// Picker vocabulary for the Reader's per-staff clef override popover.
-/// Each case carries its `NotatedClef.rawType`, its SMuFL codepoint
-/// (Bravura PUA), and the staff line (1 = bottom, 5 = top) the clef
-/// anchors to. The override map stores any rawType string, so future
-/// expansion is purely additive here.
+/// Picker vocabulary for the Reader's per-staff clef override popover. Each case carries its `NotatedClef.rawType`, its
+/// SMuFL codepoint (Bravura PUA), and the staff line (1 = bottom, 5 = top) the clef anchors to. The override map stores
+/// any rawType string, so future expansion is purely additive here.
 enum ClefMenuChoice: Hashable, CaseIterable {
     case trebleG, trebleG8va, trebleG8vb, trebleG15ma, trebleG15mb
     case bassF, bassF8va, bassF8vb
@@ -30,8 +28,7 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         }
     }
 
-    /// SMuFL Private Use Area codepoint (Bravura). Source:
-    /// https://www.smufl.org/version/latest/range/clefs/
+    /// SMuFL Private Use Area codepoint (Bravura). Source: https://www.smufl.org/version/latest/range/clefs/
     var smuflGlyph: Character {
         switch self {
         case .trebleG: "\u{E050}" // gClef
@@ -42,18 +39,16 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         case .bassF: "\u{E062}" // fClef
         case .bassF8va: "\u{E065}" // fClef8va
         case .bassF8vb: "\u{E064}" // fClef8vb
-        // All four C clef variants share the movable cClef glyph; the
-        // staff-line position the glyph attaches to is what
-        // distinguishes Soprano (line 1) / Alto (3) / Tenor (4) /
-        // Baritone (5). The picker tile applies that yOffset itself.
+        // All four C clef variants share the movable cClef glyph; the staff-line position the glyph attaches to is what
+        // distinguishes Soprano (line 1) / Alto (3) / Tenor (4) / Baritone (5). The picker tile applies that yOffset
+        // itself.
         case .sopranoC1, .altoC3, .tenorC4, .baritoneC5: "\u{E05C}" // cClef (movable)
         case .percussion: "\u{E069}" // unpitchedPercussionClef1
         case .percussion2: "\u{E06A}" // unpitchedPercussionClef2
         }
     }
 
-    /// Localized accessibility label. Picker tiles render glyphs only;
-    /// this label is what VoiceOver announces.
+    /// Localized accessibility label. Picker tiles render glyphs only; this label is what VoiceOver announces.
     var displayLabel: LocalizedStringKey {
         switch self {
         case .trebleG: "reader.preferences.clef.choice.treble"
@@ -86,10 +81,9 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         .percussion, .percussion2,
     ]
 
-    /// True if this choice belongs to the percussion family. The picker
-    /// uses this to keep percussion staves on percussion clefs and keep
-    /// pitched staves on pitched clefs — overriding across families
-    /// would produce nonsensical playback / engraving.
+    /// True if this choice belongs to the percussion family. The picker uses this to keep percussion staves on
+    /// percussion clefs and keep pitched staves on pitched clefs — overriding across families would produce nonsensical
+    /// playback / engraving.
     var isPercussion: Bool {
         switch self {
         case .percussion, .percussion2: true
@@ -97,8 +91,7 @@ enum ClefMenuChoice: Hashable, CaseIterable {
         }
     }
 
-    /// Looks up the menu choice for an arbitrary rawType. Returns
-    /// `nil` for rawTypes outside the v1 picker.
+    /// Looks up the menu choice for an arbitrary rawType. Returns `nil` for rawTypes outside the v1 picker.
     static func from(rawType: String) -> ClefMenuChoice? {
         allCases.first { $0.rawType == rawType }
     }

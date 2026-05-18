@@ -2,22 +2,18 @@ import Domain
 import Observation
 import SheetMusicCore
 
-/// Owns the Reader's repeat / A-B loop state. Carved out of
-/// `ReaderViewModel` so views that need only the loop surface
-/// (`PlaybackInspectorScreen`, the score-area markers, the toolbar's A/B
-/// buttons) can receive this model instead of the full view model.
+/// Owns the Reader's repeat / A-B loop state. Carved out of `ReaderViewModel` so views that need only the loop surface
+/// (`PlaybackInspectorScreen`, the score-area markers, the toolbar's A/B buttons) can receive this model instead of the
+/// full view model.
 ///
-/// Persistent fields (`mode`, `abRange`) are mirrored into
-/// `ReaderPreferences` via the parent VM's `onChange` callback; transient
-/// fields (`pendingA`, `pendingB`) live here only.
+/// Persistent fields (`mode`, `abRange`) are mirrored into `ReaderPreferences` via the parent VM's `onChange` callback;
+/// transient fields (`pendingA`, `pendingB`) live here only.
 @MainActor
 @Observable
 final class RepeatModel {
-    /// SwiftUI bindings write through `mode` directly. Reads are tracked
-    /// via the macro-generated observation registrar like any other
-    /// stored property. The `didSet` defers persistence + controller
-    /// push to a Task so that picker writes stay synchronous; tests use
-    /// `setMode(_:)` to await both side effects.
+    /// SwiftUI bindings write through `mode` directly. Reads are tracked via the macro-generated observation registrar
+    /// like any other stored property. The `didSet` defers persistence + controller push to a Task so that picker
+    /// writes stay synchronous; tests use `setMode(_:)` to await both side effects.
     var mode: RepeatMode = .off {
         didSet {
             guard mode != oldValue, !isSyncing else { return }
@@ -38,14 +34,12 @@ final class RepeatModel {
     @ObservationIgnored var cursorProvider: () -> ScoreCursor? = { nil }
     @ObservationIgnored var controllerProvider: () -> (any PlaybackController)? = { nil }
 
-    /// Suppresses `mode`'s didSet side effects while the parent reseeds
-    /// the model from a freshly loaded `ReaderPreferences`.
+    /// Suppresses `mode`'s didSet side effects while the parent reseeds the model from a freshly loaded
+    /// `ReaderPreferences`.
     @ObservationIgnored private var isSyncing = false
 
-    /// Either the user's staged A endpoint (a candidate that hasn't yet
-    /// formed a complete loop) or the persisted start of an existing
-    /// `abRange`. Callers don't care which — they just want "what point
-    /// represents A right now."
+    /// Either the user's staged A endpoint (a candidate that hasn't yet formed a complete loop) or the persisted start
+    /// of an existing `abRange`. Callers don't care which — they just want "what point represents A right now."
     var pendingRepeatA: ChordPath? {
         pendingA ?? abRange?.start
     }
@@ -54,8 +48,8 @@ final class RepeatModel {
         pendingB ?? abRange?.end
     }
 
-    /// Apply a persisted slice loaded from disk. Resets the in-flight
-    /// endpoints — they're UI-transient and don't survive a fresh load.
+    /// Apply a persisted slice loaded from disk. Resets the in-flight endpoints — they're UI-transient and don't
+    /// survive a fresh load.
     func sync(from prefs: ReaderPreferences) {
         isSyncing = true
         defer { isSyncing = false }
@@ -65,9 +59,8 @@ final class RepeatModel {
         pendingB = nil
     }
 
-    /// Awaitable counterpart to the `mode` binding setter. Tests and any
-    /// async context that needs to observe persistence + loop-range push
-    /// before continuing should use this.
+    /// Awaitable counterpart to the `mode` binding setter. Tests and any async context that needs to observe
+    /// persistence + loop-range push before continuing should use this.
     func setMode(_ value: RepeatMode) async {
         guard value != mode else { return }
         isSyncing = true
@@ -110,8 +103,8 @@ final class RepeatModel {
             abRange = nil
             await onChange?()
         }
-        // Forwards even when no save fired — keeps the controller's last-call
-        // cache aligned with intent (e.g. clearing during .loopAll).
+        // Forwards even when no save fired — keeps the controller's last-call cache aligned with intent (e.g. clearing
+        // during .loopAll).
         await forwardLoopRangeToController()
     }
 

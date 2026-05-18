@@ -8,83 +8,61 @@ import SheetMusicUI
 import SwiftUI
 import UIKit
 
-/// Renders a horizontal-mode frame of the score directly into a
-/// `CVPixelBuffer` via Core Graphics — no window or view-tree
-/// dependency. `ScoreLayerBuilder.buildSystem(...)` produces a
-/// `CALayer` we can `render(in:)` into any CGContext, including
-/// off-screen pixel-buffer-backed ones. SwiftUI / UIKit are only
-/// reached at init to resolve `Color.accentColor` for the cursor
-/// fill so it matches what the Reader paints on-screen.
+/// Renders a horizontal-mode frame of the score directly into a `CVPixelBuffer` via Core Graphics — no window or
+/// view-tree dependency. `ScoreLayerBuilder.buildSystem(...)` produces a `CALayer` we can `render(in:)` into any
+/// CGContext, including off-screen pixel-buffer-backed ones. SwiftUI / UIKit are only reached at init to resolve
+/// `Color.accentColor` for the cursor fill so it matches what the Reader paints on-screen.
 ///
-/// Horizontal layout is single-system, so we lay out once at init,
-/// build the system layer once, and per-frame just blit + draw the
-/// cursor rectangle on top.
+/// Horizontal layout is single-system, so we lay out once at init, build the system layer once, and per-frame just blit
+/// + draw the cursor rectangle on top.
 @MainActor
 final class ScorePiPFrameRenderer {
-    /// Distance in pt from the left edge of the PiP window at which the
-    /// cursor's measure is parked when playback is running.
+    /// Distance in pt from the left edge of the PiP window at which the cursor's measure is parked when playback is
+    /// running.
     private static let cursorLeadingInsetPt: CGFloat = 80
-    /// Vertical breathing room above & below the system inside the
-    /// PiP window.
+    /// Vertical breathing room above & below the system inside the PiP window.
     private static let verticalPaddingPt: CGFloat = 16
-    /// Upper bound on buffer height. Beyond this, the score is
-    /// uniformly scaled down so it fits — keeps the PiP window from
-    /// growing taller than wider screens want to support.
+    /// Upper bound on buffer height. Beyond this, the score is uniformly scaled down so it fits — keeps the PiP window
+    /// from growing taller than wider screens want to support.
     private static let maxPixelHeightPt: CGFloat = 800
-    /// AVKit needs non-trivial dimensions; floor each pixel-buffer
-    /// axis here so very small scores don't degenerate the pipeline.
+    /// AVKit needs non-trivial dimensions; floor each pixel-buffer axis here so very small scores don't degenerate the
+    /// pipeline.
     private static let minPixelDimensionPt: CGFloat = 80
-    /// Multiplier applied via `scoreScale` to shrink the drawn music
-    /// inside the PiP buffer. The PiP window's on-screen size is fixed
-    /// by the buffer's *aspect ratio* (not its pixel dimensions), so the
-    /// only way to land the staff at Reader-parity is to occupy a smaller
-    /// fraction of the buffer. The unavoidable consequence is more top/
-    /// bottom whitespace in the PiP window — that's a property of the
-    /// fixed-window-height invariant, not a bug.
-    /// Tune empirically. Paired with `aspectNumerator = 6` (flatter
-    /// PiP window) and `pointHeightMultiplier = 0.9` (tighter buffer):
-    /// 0.88 lands the staff a hair above Reader-parity while leaving
-    /// just enough room for the padding above & below. With the older
-    /// `aspectNumerator = 4`, 0.67 was the equivalent target.
+    /// Multiplier applied via `scoreScale` to shrink the drawn music inside the PiP buffer. The PiP window's on-screen
+    /// size is fixed by the buffer's *aspect ratio* (not its pixel dimensions), so the only way to land the staff at
+    /// Reader-parity is to occupy a smaller fraction of the buffer. The unavoidable consequence is more top/ bottom
+    /// whitespace in the PiP window — that's a property of the fixed-window-height invariant, not a bug. Tune
+    /// empirically. Paired with `aspectNumerator = 6` (flatter PiP window) and `pointHeightMultiplier = 0.9` (tighter
+    /// buffer): 0.88 lands the staff a hair above Reader-parity while leaving just enough room for the padding above &
+    /// below. With the older `aspectNumerator = 4`, 0.67 was the equivalent target.
     private static let pipStaffShrinkFactor: CGFloat = 0.88
-    /// Multiplier applied to the buffer's "natural" point height
-    /// (system + verticalPadding*2). 1.0 leaves a margin equal to
-    /// `verticalPaddingPt` on each side of the system; values < 1
-    /// shave that margin (and proportionally the buffer width via
-    /// `aspect`), so the PiP window's on-screen real estate is less
-    /// dominated by whitespace. At 0.9 the buffer's natural margin
-    /// is consumed almost exactly by the `pipStaffShrinkFactor = 0.88`
-    /// shrink — the drawn music ends up filling the usable area.
+    /// Multiplier applied to the buffer's "natural" point height (system + verticalPadding*2). 1.0 leaves a margin
+    /// equal to `verticalPaddingPt` on each side of the system; values < 1 shave that margin (and proportionally the
+    /// buffer width via `aspect`), so the PiP window's on-screen real estate is less dominated by whitespace. At 0.9
+    /// the buffer's natural margin is consumed almost exactly by the `pipStaffShrinkFactor = 0.88` shrink — the drawn
+    /// music ends up filling the usable area.
     private static let pointHeightMultiplier: CGFloat = 0.9
-    /// Lowest buffer aspect (most square / tall) we'll produce. Going
-    /// narrower than this makes the PiP window awkwardly tall; instead
-    /// we cap aspect here and let the renderer shrink the score
-    /// uniformly to fit the resulting buffer height.
+    /// Lowest buffer aspect (most square / tall) we'll produce. Going narrower than this makes the PiP window awkwardly
+    /// tall; instead we cap aspect here and let the renderer shrink the score uniformly to fit the resulting buffer
+    /// height.
     private static let minAspect: CGFloat = 1.0
-    /// Widest buffer aspect we'll produce. Pushed beyond Apple's
-    /// HIG 1.78:1 guideline because (a) AVKit happily renders the
-    /// wider window, and (b) wider buffer → flatter PiP window →
-    /// less vertical whitespace around the (deliberately shrunk)
-    /// staff. See `pipStaffShrinkFactor` for the other half of the
-    /// trade-off.
+    /// Widest buffer aspect we'll produce. Pushed beyond Apple's HIG 1.78:1 guideline because (a) AVKit happily renders
+    /// the wider window, and (b) wider buffer → flatter PiP window → less vertical whitespace around the (deliberately
+    /// shrunk) staff. See `pipStaffShrinkFactor` for the other half of the trade-off.
     private static let maxAspect: CGFloat = 6.0
-    /// Numerator for the staff-count → aspect heuristic. Picked so
-    /// 1-staff scores hit `maxAspect`, 2-staff scores land at 3:1
-    /// (flat enough to keep on-screen whitespace modest), and
-    /// orchestral scores still degrade smoothly toward square.
+    /// Numerator for the staff-count → aspect heuristic. Picked so 1-staff scores hit `maxAspect`, 2-staff scores land
+    /// at 3:1 (flat enough to keep on-screen whitespace modest), and orchestral scores still degrade smoothly toward
+    /// square.
     private static let aspectNumerator: CGFloat = 6.0
-    /// Pixels per content point. AVKit upscales the buffer to fit the
-    /// PiP window on screen; rendering at 2x means AVKit downscales
-    /// instead, which produces crisp edges on stems/staff lines
-    /// without changing the apparent size of the music.
+    /// Pixels per content point. AVKit upscales the buffer to fit the PiP window on screen; rendering at 2x means AVKit
+    /// downscales instead, which produces crisp edges on stems/staff lines without changing the apparent size of the
+    /// music.
     private static let pixelDensity: CGFloat = 2.0
-    /// Per-tick fraction of the remaining distance to consume during
-    /// auto-scroll animation. Tuned so ~0.25s of pump (15 ticks at
-    /// 60fps) closes ~90% of the gap, matching the on-screen
-    /// horizontal Reader's `easeInOut` feel.
+    /// Per-tick fraction of the remaining distance to consume during auto-scroll animation. Tuned so ~0.25s of pump (15
+    /// ticks at 60fps) closes ~90% of the gap, matching the on-screen horizontal Reader's `easeInOut` feel.
     private static let scrollSmoothingFactor: CGFloat = 0.14
-    /// Below this remaining-distance threshold (in document pt), the
-    /// scroll offset snaps to the target and the animation ends.
+    /// Below this remaining-distance threshold (in document pt), the scroll offset snaps to the target and the
+    /// animation ends.
     private static let scrollSnapThresholdPt: CGFloat = 0.5
 
     let pixelSize: CGSize
@@ -94,43 +72,34 @@ final class ScorePiPFrameRenderer {
     private let document: LayoutDocument
     private let system: LayoutSystem
     private let scoreLayer: CALayer
-    /// Resolved at init from `Color.accentColor` (the same color the
-    /// Reader passes to `ScoreView` as `playbackCursorColor`) so the
-    /// PiP cursor matches the on-screen one. Drawn fully opaque — the
-    /// PiP window is small enough that a translucent overlay reads as
-    /// a blurry smear instead of a distinct cursor. Kept as a `CGColor`
-    /// so the hot path in `renderFrame` doesn't reallocate per frame.
+    /// Resolved at init from `Color.accentColor` (the same color the Reader passes to `ScoreView` as
+    /// `playbackCursorColor`) so the PiP cursor matches the on-screen one. Drawn fully opaque — the PiP window is small
+    /// enough that a translucent overlay reads as a blurry smear instead of a distinct cursor. Kept as a `CGColor` so
+    /// the hot path in `renderFrame` doesn't reallocate per frame.
     private let cursorFillColor: CGColor
-    /// Logical size of the renderable area, in CG points. The actual
-    /// pixel buffer is `pointSize × pixelDensity` — see init.
+    /// Logical size of the renderable area, in CG points. The actual pixel buffer is `pointSize × pixelDensity` — see
+    /// init.
     private let pointSize: CGSize
-    /// Uniform scale applied to the system layer (and cursor rect) when
-    /// the score would otherwise overflow the buffer's usable height.
+    /// Uniform scale applied to the system layer (and cursor rect) when the score would otherwise overflow the buffer's
+    /// usable height.
     private let scoreScale: CGFloat
-    /// Leading edge of the viewport in document X coordinates. Animates
-    /// toward `targetScrollOffsetDocX` so the visible window slides
-    /// smoothly when the cursor walks off the end.
+    /// Leading edge of the viewport in document X coordinates. Animates toward `targetScrollOffsetDocX` so the visible
+    /// window slides smoothly when the cursor walks off the end.
     private var scrollOffsetDocX: CGFloat = 0
-    /// Destination for the auto-scroll animation. Updated whenever the
-    /// cursor's measure overflows the viewport.
+    /// Destination for the auto-scroll animation. Updated whenever the cursor's measure overflows the viewport.
     private var targetScrollOffsetDocX: CGFloat = 0
 
-    /// True while the viewport is still sliding toward its target.
-    /// The pump uses this to keep rendering frames between cursor
-    /// changes; otherwise the animation would freeze on the first
-    /// post-cursor tick.
+    /// True while the viewport is still sliding toward its target. The pump uses this to keep rendering frames between
+    /// cursor changes; otherwise the animation would freeze on the first post-cursor tick.
     var isAnimatingScroll: Bool {
         abs(targetScrollOffsetDocX - scrollOffsetDocX) > Self.scrollSnapThresholdPt
     }
 
-    /// Off-main-actor portion of construction. `LayoutEngine.layout` is
-    /// the heaviest step on the PiP rearm path; isolating it here lets
-    /// `ScorePiPCoordinator.arm` compute the document on a detached task
-    /// and only hop back to the main actor to assemble the
-    /// MainActor-only state (`CALayer`, `CVPixelBufferPool`, `UIColor`).
-    /// Without this split, every Visual Inspector staff toggle (and any
-    /// path that flows through `armPiPIfReady`) blocks main for ~100ms
-    /// of layout work even though that work has no UI dependencies.
+    /// Off-main-actor portion of construction. `LayoutEngine.layout` is the heaviest step on the PiP rearm path;
+    /// isolating it here lets `ScorePiPCoordinator.arm` compute the document on a detached task and only hop back to
+    /// the main actor to assemble the MainActor-only state (`CALayer`, `CVPixelBufferPool`, `UIColor`). Without this
+    /// split, every Visual Inspector staff toggle (and any path that flows through `armPiPIfReady`) blocks main for
+    /// ~100ms of layout work even though that work has no UI dependencies.
     struct Prepared {
         let options: ScoreViewOptions
         let document: LayoutDocument
@@ -164,10 +133,9 @@ final class ScorePiPFrameRenderer {
         return Prepared(options: opts, document: document, firstSystem: firstSystem)
     }
 
-    /// Convenience that runs `prepare` synchronously and chains into the
-    /// `Prepared`-taking init. Used by tests where the off-main split
-    /// would just add noise; production code goes through
-    /// `ScorePiPCoordinator.arm` which calls `prepare` on a detached task.
+    /// Convenience that runs `prepare` synchronously and chains into the `Prepared`-taking init. Used by tests where
+    /// the off-main split would just add noise; production code goes through `ScorePiPCoordinator.arm` which calls
+    /// `prepare` on a detached task.
     convenience init(score: Score, staffSize: CGFloat, collapseMultiMeasureRests: Bool) throws {
         let prepared = try Self.prepare(
             score: score, staffSize: staffSize,
@@ -182,13 +150,10 @@ final class ScorePiPFrameRenderer {
         let firstSystem = prepared.firstSystem
         system = firstSystem
 
-        // Adaptive PiP buffer size driven by staff count, with both an
-        // aspect floor (so the window never gets uncomfortably tall on
-        // orchestral scores) and an absolute height cap. When the
-        // natural system is too tall to fit, `scoreScale` shrinks the
-        // drawn music uniformly so it still fits inside the buffer.
-        // Lower-bound the dimensions just enough to keep AVKit happy
-        // — the rest is content-driven.
+        // Adaptive PiP buffer size driven by staff count, with both an aspect floor (so the window never gets
+        // uncomfortably tall on orchestral scores) and an absolute height cap. When the natural system is too tall to
+        // fit, `scoreScale` shrinks the drawn music uniformly so it still fits inside the buffer. Lower-bound the
+        // dimensions just enough to keep AVKit happy — the rest is content-driven.
         let staffCount = max(1, firstSystem.staffOrigins.count)
         let rawHeight = ceil(
             (firstSystem.size.height + Self.verticalPaddingPt * 2) * Self.pointHeightMultiplier,
@@ -200,16 +165,14 @@ final class ScorePiPFrameRenderer {
         )
         let pointWidth = max(Self.minPixelDimensionPt, ceil(pointHeight * aspect))
         pointSize = CGSize(width: pointWidth, height: pointHeight)
-        // Buffer pixels = points × density. AVKit downscales for the
-        // PiP window; the extra resolution prevents the stems and
-        // staff lines from blurring on the way through.
+        // Buffer pixels = points × density. AVKit downscales for the PiP window; the extra resolution prevents the
+        // stems and staff lines from blurring on the way through.
         pixelSize = CGSize(
             width: Self.roundUpToEven(pointWidth * Self.pixelDensity),
             height: Self.roundUpToEven(pointHeight * Self.pixelDensity),
         )
-        // Shrink to the configured fraction by default; only fall back
-        // to a tighter fit-scale when even the shrunk system would
-        // overflow the buffer's usable height (orchestral edge case).
+        // Shrink to the configured fraction by default; only fall back to a tighter fit-scale when even the shrunk
+        // system would overflow the buffer's usable height (orchestral edge case).
         let usableHeight = pointHeight - Self.verticalPaddingPt * 2
         scoreScale = min(Self.pipStaffShrinkFactor, usableHeight / firstSystem.size.height)
 
@@ -243,12 +206,10 @@ final class ScorePiPFrameRenderer {
         ctx.setFillColor(CGColor(gray: 1, alpha: 1))
         ctx.fill(CGRect(origin: .zero, size: pixelSize))
 
-        // Scale into the point coordinate system; everything that
-        // follows can reason in points, with `pixelDensity` translating
-        // to pixel positions automatically.
+        // Scale into the point coordinate system; everything that follows can reason in points, with `pixelDensity`
+        // translating to pixel positions automatically.
         ctx.scaleBy(x: Self.pixelDensity, y: Self.pixelDensity)
-        // CGContext default is bottom-left; CALayer & cursor frames are
-        // top-left. Flip so positive Y goes downward.
+        // CGContext default is bottom-left; CALayer & cursor frames are top-left. Flip so positive Y goes downward.
         ctx.translateBy(x: 0, y: pointSize.height)
         ctx.scaleBy(x: 1, y: -1)
 
@@ -256,8 +217,7 @@ final class ScorePiPFrameRenderer {
             document.cursorFrame(for: $0, in: score)
         }
         advanceScroll(cursor: playbackCursor)
-        // Center the (scaled) system vertically; viewport's left edge
-        // sits at `scrollOffsetDocX` in document coords.
+        // Center the (scaled) system vertically; viewport's left edge sits at `scrollOffsetDocX` in document coords.
         let scaledSystemHeight = system.size.height * scoreScale
         let shiftY = (pointSize.height - scaledSystemHeight) / 2
         let shiftX = -scrollOffsetDocX * scoreScale
@@ -281,9 +241,8 @@ final class ScorePiPFrameRenderer {
         return buffer
     }
 
-    /// Update `targetScrollOffsetDocX` if the cursor's measure has
-    /// fallen outside the viewport, and lerp `scrollOffsetDocX` toward
-    /// the target. Idiom matches `HorizontalScoreContainer.autoScroll`.
+    /// Update `targetScrollOffsetDocX` if the cursor's measure has fallen outside the viewport, and lerp
+    /// `scrollOffsetDocX` toward the target. Idiom matches `HorizontalScoreContainer.autoScroll`.
     private func advanceScroll(cursor: ScoreCursor?) {
         if let cursor, let measureRect = measureDocRect(for: cursor) {
             let viewportWidthDoc = pointSize.width / scoreScale
@@ -307,10 +266,9 @@ final class ScorePiPFrameRenderer {
         }
     }
 
-    /// Document-space rect of the measure the cursor is parked on,
-    /// regardless of `.item` vs `.beat`. Used to decide whether to
-    /// auto-scroll: the trigger is "the measure overflows the
-    /// viewport", not "the cursor itself crosses an edge".
+    /// Document-space rect of the measure the cursor is parked on, regardless of `.item` vs `.beat`. Used to decide
+    /// whether to auto-scroll: the trigger is "the measure overflows the viewport", not "the cursor itself crosses an
+    /// edge".
     private func measureDocRect(for cursor: ScoreCursor) -> CGRect? {
         guard let firstSystem = document.systems.first,
               let measure = firstSystem.measures.first(where: {

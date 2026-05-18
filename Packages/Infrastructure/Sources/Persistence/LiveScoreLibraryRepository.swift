@@ -3,9 +3,8 @@ import Foundation
 import GRDB
 import Observation
 
-/// Live, GRDB-backed implementation of `ScoreLibraryRepository`. Holds the
-/// library snapshot in `@Observable` properties refreshed by a single
-/// `ValueObservation` task started on the first `refresh()`.
+/// Live, GRDB-backed implementation of `ScoreLibraryRepository`. Holds the library snapshot in `@Observable` properties
+/// refreshed by a single `ValueObservation` task started on the first `refresh()`.
 @MainActor
 @Observable
 public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
@@ -46,8 +45,8 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
 
     // MARK: - Observation
 
-    /// Starts the observation task, capturing `firstSnapshotContinuation` so it
-    /// is available the moment the first snapshot arrives — no race window.
+    /// Starts the observation task, capturing `firstSnapshotContinuation` so it is available the moment the first
+    /// snapshot arrives — no race window.
     private func startObservation(firstSnapshotContinuation cont: CheckedContinuation<Void, Never>) {
         let observation = ValueObservation.tracking { db -> Snapshot in
             let items = try ScoreItemRecord.fetchAll(db)
@@ -64,10 +63,9 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         }
 
         let pool = database.pool
-        // Task.detached so this is NOT @MainActor-isolated — GRDB delivers
-        // values on the cooperative thread pool (.task scheduler), and a
-        // non-isolated task can freely hop on and off the main actor without
-        // being gated on the MainActor queue that refresh() is awaiting on.
+        // Task.detached so this is NOT @MainActor-isolated — GRDB delivers values on the cooperative thread pool (.task
+        // scheduler), and a non-isolated task can freely hop on and off the main actor without being gated on the
+        // MainActor queue that refresh() is awaiting on.
         observationTask = Task.detached { [weak self] in
             var resumedOnce = false
             do {
@@ -207,8 +205,8 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
             }
             if let filename {
                 let url = scoresDirectory.appending(path: filename)
-                // Best-effort: file may already be missing. TODO: log orphaned-file events
-                // to telemetry once logging infrastructure exists.
+                // Best-effort: file may already be missing. TODO: log orphaned-file events to telemetry once logging
+                // infrastructure exists.
                 try? FileManager.default.removeItem(at: url)
             }
         } catch {
@@ -295,12 +293,10 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
 
     /// Publishes the playlists index to the App Group container.
     ///
-    /// `self.playlists` is updated by GRDB's `ValueObservation` on its own
-    /// schedule, so reading it immediately after a write returns the
-    /// pre-mutation snapshot — newly-saved playlists are missing and
-    /// just-deleted ones still present. Merge the actual mutation into a
-    /// local snapshot before publishing so the share-extension index
-    /// always reflects what just happened.
+    /// `self.playlists` is updated by GRDB's `ValueObservation` on its own schedule, so reading it immediately after a
+    /// write returns the pre-mutation snapshot — newly-saved playlists are missing and just-deleted ones still present.
+    /// Merge the actual mutation into a local snapshot before publishing so the share-extension index always reflects
+    /// what just happened.
     private func publishPlaylistsIndexIfNeeded(
         mergingSaved saved: Playlist? = nil,
         mergingDeleted deletedID: PlaylistID? = nil,

@@ -13,8 +13,8 @@ struct LibraryRootPlaylistsSection: View {
         if !allPlaylists.isEmpty {
             let total = allPlaylists.count
             let topN = playlistsByRecentlyUsed(allPlaylists, scoreItems: scoreItems, limit: 5)
-            // `scoreItems` is the repository's live snapshot; build the set
-            // once so each row's member count excludes soft-deleted items.
+            // `scoreItems` is the repository's live snapshot; build the set once so each row's member count excludes
+            // soft-deleted items.
             let liveIDs = Set(scoreItems.map(\.id))
             CollapsibleSection(isExpanded: $expanded, count: total) {
                 if expanded {

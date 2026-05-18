@@ -61,17 +61,15 @@ struct RecentlyDeletedView: View {
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) { restoreSwipeButton(for: item) }
-        // Full swipe disabled — accidental hard-deletes here are
-        // unrecoverable, so require a deliberate tap that triggers the
-        // popover confirm.
+        // Full swipe disabled — accidental hard-deletes here are unrecoverable, so require a deliberate tap that
+        // triggers the popover confirm.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             permanentDeleteSwipeButton(for: item)
         }
         .contextMenu { rowContextMenu(for: item) }
-        // Anchor the popover so its arrow points UP at the row — on iPhone
-        // the row spans the full width, so a leading/trailing anchor would
-        // push the popover off-screen. `.top` floats it below the row,
-        // centered horizontally, which fits in compact widths.
+        // Anchor the popover so its arrow points UP at the row — on iPhone the row spans the full width, so a
+        // leading/trailing anchor would push the popover off-screen. `.top` floats it below the row, centered
+        // horizontally, which fits in compact widths.
         .popover(
             isPresented: rowPopoverBinding(for: item),
             attachmentAnchor: .rect(.bounds),
@@ -209,15 +207,14 @@ struct PermanentDeletePopover: View {
             }
         }
         .padding(20)
-        // 260 fits inside a compact-width iPhone (≈ 390pt – screen margins),
-        // while idealWidth gives Mac / iPad popovers a comfortable layout.
+        // 260 fits inside a compact-width iPhone (≈ 390pt – screen margins), while idealWidth gives Mac / iPad popovers
+        // a comfortable layout.
         .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
     }
 }
 
-/// Bottom bar shown in edit mode of the Recently Deleted screen. Only two
-/// actions: Restore and Permanently Delete; the latter anchors a popover
-/// confirmation to itself.
+/// Bottom bar shown in edit mode of the Recently Deleted screen. Only two actions: Restore and Permanently Delete; the
+/// latter anchors a popover confirmation to itself.
 private struct RecentlyDeletedBulkActionBar: View {
     let selectionCount: Int
     let onRestore: () -> Void

@@ -28,9 +28,8 @@ final class AppBootstrap {
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
     let shareDuplicateResolver = ShareDuplicateResolver()
 
-    /// Single-slot queue for an incoming URL received via `.onOpenURL`.
-    /// Last-wins: a second URL arriving before the first is consumed
-    /// overwrites it. v1 only opens one file at a time.
+    /// Single-slot queue for an incoming URL received via `.onOpenURL`. Last-wins: a second URL arriving before the
+    /// first is consumed overwrites it. v1 only opens one file at a time.
     private(set) var pendingIncomingURL: URL?
 
     /// Single-slot for an incoming share token. Last-wins.
@@ -78,13 +77,12 @@ final class AppBootstrap {
             Task { [weak self] in
                 do {
                     try await repository.refresh()
-                    // Best-effort purge of trash items past the 30-day retention
-                    // window. Failures don't block readiness.
+                    // Best-effort purge of trash items past the 30-day retention window. Failures don't block
+                    // readiness.
                     try? await repository.pruneScoreItemsDeleted(
                         before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
                     )
-                    // Publish current playlists so the Share Extension's picker
-                    // is populated on first use.
+                    // Publish current playlists so the Share Extension's picker is populated on first use.
                     if let writer { writer.publish(playlists: repository.playlists) }
                     // Drain any tokens queued by the Share Extension before this launch.
                     await self?.incomingShareCoordinator?.drain(token: nil)
@@ -99,9 +97,8 @@ final class AppBootstrap {
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {
-        // `MuseScoreSF2Resolver` conforms to all three protocols
-        // (`SheetMusicAudio.SoundfontResolver`, `Domain.SoundfontResolver`,
-        // `Domain.PrecisePatchProbe`); one instance satisfies every slot.
+        // `MuseScoreSF2Resolver` conforms to all three protocols (`SheetMusicAudio.SoundfontResolver`,
+        // `Domain.SoundfontResolver`, `Domain.PrecisePatchProbe`); one instance satisfies every slot.
         let soundfontResolver = MuseScoreSF2Resolver(
             cacheDirectory: AppPaths.soundfontCacheDirectory,
         )
@@ -166,9 +163,8 @@ final class AppBootstrap {
         return url
     }
 
-    /// Best-effort prune of trashed items that exceeded the 30-day retention.
-    /// Called from `AppShellView` when the scene becomes active so a long-
-    /// running session also enforces the retention window without a relaunch.
+    /// Best-effort prune of trashed items that exceeded the 30-day retention. Called from `AppShellView` when the scene
+    /// becomes active so a long-running session also enforces the retention window without a relaunch.
     func pruneRecentlyDeletedIfNeeded() {
         guard let repository else { return }
         Task {

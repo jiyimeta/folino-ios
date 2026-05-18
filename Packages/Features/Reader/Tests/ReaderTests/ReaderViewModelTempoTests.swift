@@ -44,9 +44,8 @@ struct ReaderViewModelTempoTests {
 
         vm.tempoModel.setMultiplier(0.75)
 
-        // setTempoMultiplier kicks off an unstructured Task that awaits
-        // the controller call. Yield once so the Task lands before
-        // assertions read the call array.
+        // setTempoMultiplier kicks off an unstructured Task that awaits the controller call. Yield once so the Task
+        // lands before assertions read the call array.
         await Task.yield()
 
         #expect(controller.tempoMultiplierCalls == [0.75])
@@ -130,8 +129,7 @@ struct ReaderViewModelTempoTests {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
 
-        // Slider value that visually maps to 100% display
-        // (Int((value * 100).rounded()) == 100) but is not exactly 1.0.
+        // Slider value that visually maps to 100% display (Int((value * 100).rounded()) == 100) but is not exactly 1.0.
         await vm.tempoModel.commitMultiplier(0.9999)
 
         #expect(repo.savedReaderPreferences.last?.tempoMultiplier == nil)

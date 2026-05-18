@@ -2,10 +2,9 @@ import Domain
 import Foundation
 import GRDB
 
-/// Row mirror for the `reader_preferences` table. `hidden_staff_ids` is
-/// stored as a JSON-encoded `[StaffAddress]` (each address serialized as
-/// the two-element array `[partIndex, staffIndexInPart]`) so GRDB doesn't
-/// need a custom column type for the set.
+/// Row mirror for the `reader_preferences` table. `hidden_staff_ids` is stored as a JSON-encoded `[StaffAddress]` (each
+/// address serialized as the two-element array `[partIndex, staffIndexInPart]`) so GRDB doesn't need a custom column
+/// type for the set.
 struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     static let databaseTableName = "reader_preferences"
 
@@ -86,10 +85,8 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
                 reason: "reader_preferences.score_item_id is not a valid UUID: \(scoreItemId)",
             )
         }
-        // Unknown repeat mode strings (e.g. SQL column hand-edited or a
-        // future value rolled back to an older binary) fall back to
-        // `.off` — preserves the row instead of failing the whole
-        // fetch.
+        // Unknown repeat mode strings (e.g. SQL column hand-edited or a future value rolled back to an older binary)
+        // fall back to `.off` — preserves the row instead of failing the whole fetch.
         let decodedRepeatMode = RepeatMode(rawValue: repeatMode) ?? .off
         let decodedAbRepeat: ABRepeatRange? = abRepeat.flatMap { json in
             try? JSONDecoder().decode(ABRepeatRange.self, from: Data(json.utf8))

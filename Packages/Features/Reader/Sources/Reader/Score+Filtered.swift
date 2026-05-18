@@ -1,21 +1,16 @@
 import SheetMusicCore
 
 extension Score {
-    /// Returns a copy of the score with the staves at the given addresses
-    /// removed from each `Part.staves`. Parts left without any visible
-    /// staff are dropped entirely so labels and brackets do not render
-    /// against an empty group.
+    /// Returns a copy of the score with the staves at the given addresses removed from each `Part.staves`. Parts left
+    /// without any visible staff are dropped entirely so labels and brackets do not render against an empty group.
     ///
-    /// Indexing is positional: a `StaffAddress(partIndex, staffIndexInPart)`
-    /// resolves to `parts[partIndex].staves[staffIndexInPart]` on the
-    /// pre-filter score.
+    /// Indexing is positional: a `StaffAddress(partIndex, staffIndexInPart)` resolves to
+    /// `parts[partIndex].staves[staffIndexInPart]` on the pre-filter score.
     ///
-    /// `BracketItem`s anchor on the topmost staff of their group with a
-    /// `span` count of staves below them (see `BracketItem` in
-    /// SheetMusicCore). Naively dropping staves loses the bracket when
-    /// the anchor is hidden and miscounts the span when an interior
-    /// staff is hidden, so brackets are re-anchored here against the
-    /// surviving staves before the layout engine sees them.
+    /// `BracketItem`s anchor on the topmost staff of their group with a `span` count of staves below them (see
+    /// `BracketItem` in SheetMusicCore). Naively dropping staves loses the bracket when the anchor is hidden and
+    /// miscounts the span when an interior staff is hidden, so brackets are re-anchored here against the surviving
+    /// staves before the layout engine sees them.
     func filtered(hidingStaves addresses: Set<StaffAddress>) -> Score {
         guard !addresses.isEmpty else { return self }
         var copy = self

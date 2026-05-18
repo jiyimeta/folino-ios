@@ -1,9 +1,8 @@
 import Domain
 import SwiftUI
 
-/// Routing for `LibraryRoute` from the root screen. Extracted from
-/// `LibraryRootScreen` to keep that file under SwiftLint's file-length
-/// budget.
+/// Routing for `LibraryRoute` from the root screen. Extracted from `LibraryRootScreen` to keep that file under
+/// SwiftLint's file-length budget.
 @MainActor
 @ViewBuilder
 func libraryRootDestination(

@@ -3,9 +3,8 @@ import Foundation
 @testable import Soundfonts
 import Testing
 
-/// `.serialized` because the async download tests share `StubURLProtocol.next`
-/// global state — running them in parallel would let one suite's stubbed
-/// response leak into another.
+/// `.serialized` because the async download tests share `StubURLProtocol.next` global state — running them in parallel
+/// would let one suite's stubbed response leak into another.
 @Suite(.serialized) struct MuseScoreSF2ResolverTests {
     // MARK: - File naming
 
@@ -91,11 +90,11 @@ import Testing
         )
         let resolver = MuseScoreSF2Resolver(cacheDirectory: tmp.url, bundle: bundle)
 
-        // Pitched lookup that has no precise file — even though the
-        // drum fallback bundle is present, precisePath must return nil.
+        // Pitched lookup that has no precise file — even though the drum fallback bundle is present, precisePath must
+        // return nil.
         #expect(resolver.precisePath(forBank: 5, program: 42, isDrums: false) == nil)
-        // Drum lookup whose precise file IS the same as the fallback name —
-        // must return the bundle URL (it's a precise hit, not a fallthrough).
+        // Drum lookup whose precise file IS the same as the fallback name — must return the bundle URL (it's a precise
+        // hit, not a fallthrough).
         #expect(resolver.precisePath(forBank: 0, program: 0, isDrums: true) != nil)
     }
 
@@ -156,8 +155,8 @@ import Testing
 
 // MARK: - Test helpers
 
-/// Builds a real on-disk `Bundle` so `Bundle.url(forResource:...)` works.
-/// Files are written under `tmp.url/FakeBundle.bundle/<relative path>`.
+/// Builds a real on-disk `Bundle` so `Bundle.url(forResource:...)` works. Files are written under
+/// `tmp.url/FakeBundle.bundle/<relative path>`.
 private func makeFakeBundle(tmp: TempDirectory, files: [String: Data]) throws -> Bundle {
     let bundleURL = tmp.url.appending(path: "FakeBundle.bundle", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
@@ -174,8 +173,8 @@ private func makeFakeBundle(tmp: TempDirectory, files: [String: Data]) throws ->
     return bundle
 }
 
-/// Returns a `URLSession` whose `URLProtocol` either serves a fixed payload
-/// or throws — chosen at construction so a single test stays declarative.
+/// Returns a `URLSession` whose `URLProtocol` either serves a fixed payload or throws — chosen at construction so a
+/// single test stays declarative.
 private func stubSession(
     payload: Data = Data(),
     status: Int = 200,

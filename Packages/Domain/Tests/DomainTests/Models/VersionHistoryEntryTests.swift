@@ -100,8 +100,8 @@ struct VersionHistoryEntryTests {
     }
 
     @Test func `falls back to english when new-locale translation is missing`() throws {
-        // Entries that predate the zh/ko fields should keep working — the loader
-        // should not silently drop them and a zh/ko reader should see English.
+        // Entries that predate the zh/ko fields should keep working — the loader should not silently drop them and a
+        // zh/ko reader should see English.
         let json = #"""
         {
           "version": "1.2.3",

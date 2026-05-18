@@ -1,9 +1,8 @@
 import Domain
 import Foundation
 
-/// Top-N playlists ordered by the most recent `lastOpenedAt` of any contained
-/// score item. Empty playlists, or playlists whose every contained ID has no
-/// `lastOpenedAt`, fall back to `createdAt`. Ties tiebreak by `name` ascending.
+/// Top-N playlists ordered by the most recent `lastOpenedAt` of any contained score item. Empty playlists, or playlists
+/// whose every contained ID has no `lastOpenedAt`, fall back to `createdAt`. Ties tiebreak by `name` ascending.
 func playlistsByRecentlyUsed(
     _ playlists: [Playlist],
     scoreItems: [ScoreItem],
@@ -26,9 +25,8 @@ func playlistsByRecentlyUsed(
     return Array(sorted.prefix(limit).map(\.0))
 }
 
-/// Top-N tags ordered by the most recent `lastOpenedAt` across score items
-/// carrying the tag. Tags with no items (or no opened items) sink to the
-/// bottom and tiebreak by `name` ascending.
+/// Top-N tags ordered by the most recent `lastOpenedAt` across score items carrying the tag. Tags with no items (or no
+/// opened items) sink to the bottom and tiebreak by `name` ascending.
 func tagsByRecentlyUsed(
     _ tags: [Tag],
     scoreItems: [ScoreItem],

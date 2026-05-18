@@ -29,8 +29,8 @@ struct ScorePiPFrameRendererTests {
         #expect(renderer.renderFrame(playbackCursor: cursor) != nil)
     }
 
-    /// Minimal Score with one part / one staff / one measure.
-    /// Modeled after the `makeScore()` helper in `ScoreFilteringTests.swift`.
+    /// Minimal Score with one part / one staff / one measure. Modeled after the `makeScore()` helper in
+    /// `ScoreFilteringTests.swift`.
     private func makeScore() -> Score {
         let part = Part(
             id: "P0", trackName: "Test", instrument: .empty,

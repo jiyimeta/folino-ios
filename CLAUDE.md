@@ -94,6 +94,19 @@ These plugins run automatically on every `xcodebuild` / Xcode build — no manua
 - **SwiftLintBuildToolPlugin** (`SimplyDanny/SwiftLintPlugins`) — applied to every Package source target and the App target. Config is the repo-root `.swiftlint.yml`.
 - **PrepareLicenseList** (`cybozu/LicenseList`) — extracts third-party license texts at App build time. Surface them via `LicenseListView()` from `import LicenseList`.
 
+## Comment style
+
+Reflow comment paragraphs (`//` and `///`) at the SwiftLint `line_length.warning: 120` budget, not 80. Older code may still be wrapped at ~80 — reflow as you touch it. Aim to keep prose paragraphs as a single line up to 120 characters wide; only break for the reasons below.
+
+Preserve as-is (do not reflow across these):
+- Directives: `// MARK:`, `// swiftlint:…`, `// swift-format…`, `// sourcery:`.
+- Blank comment lines (`//` or `///` with no body) — they mark a paragraph break.
+- Markdown structure inside a comment — `- ` / `* ` / numbered list, `# ` headings, `> ` blockquotes, `` ``` `` fences. Each starts a new paragraph.
+- Preformatted content — comment bodies that begin with 2+ leading spaces (indented code samples, ASCII tables).
+- Decorative dividers like `////…` or `// ====`.
+
+Hyphenated soft breaks (`long-\nrunning`) join back into one word when the next line begins with a letter — `long-running`, not `long- running`.
+
 ## Project Constraints
 
 - **App name is lowercase `folino` for users.** `Folino` is only for type names, the SwiftPM/Xcode scheme name, the project name, and the bundle ID prefix — strictly developer-facing. Anywhere a user can read the brand (Info.plist `CFBundleDisplayName`, navigation titles, alert titles, share-sheet display, marketing copy), it must be lowercase `folino`.

@@ -13,8 +13,8 @@ extension Score {
     ///   `PlaybackCursorView.itemFrame`'s `LayoutDocument` lookup —
     ///   keyed by filtered addresses — can find it.
     ///
-    /// `.beat` cursors and visible-staff `.item` values whose full and
-    /// filtered addresses already match pass through unchanged.
+    /// `.beat` cursors and visible-staff `.item` values whose full and filtered addresses already match pass through
+    /// unchanged.
     func translateCursorForHiddenStaves(
         _ cursor: ScoreCursor?,
         hiddenStaves hidden: Set<StaffAddress>,
@@ -51,17 +51,12 @@ extension Score {
         }
     }
 
-    /// `nearestCursor` runs against a `LayoutDocument` built from the
-    /// filtered score, so the `StaffAddress` it stamps onto `NoteID` /
-    /// `RestID` is positional within the filtered parts. The playback
-    /// engine's timeline is keyed by the full-score address, so the
-    /// cursor has to be re-addressed before being handed to the
-    /// controller — without it the engine fails to resolve the cursor
-    /// (most visibly when the visible staff holds a whole rest and the
-    /// hidden staff holds notes: the `.rest` key slot is occupied by
-    /// the hidden staff's `.note` entries, so the lookup misses and
-    /// `seek` silently no-ops). `.beat` cursors carry no staff address
-    /// and pass through unchanged.
+    /// `nearestCursor` runs against a `LayoutDocument` built from the filtered score, so the `StaffAddress` it stamps
+    /// onto `NoteID` / `RestID` is positional within the filtered parts. The playback engine's timeline is keyed by the
+    /// full-score address, so the cursor has to be re-addressed before being handed to the controller — without it the
+    /// engine fails to resolve the cursor (most visibly when the visible staff holds a whole rest and the hidden staff
+    /// holds notes: the `.rest` key slot is occupied by the hidden staff's `.note` entries, so the lookup misses and
+    /// `seek` silently no-ops). `.beat` cursors carry no staff address and pass through unchanged.
     func engineCursorForFilteredTap(
         _ cursor: ScoreCursor,
         hiddenStaves hidden: Set<StaffAddress>,
@@ -87,8 +82,7 @@ extension Score {
                 elementIndex: restID.elementIndex,
             )))
         case .tuplet, .clef:
-            // Tap-to-seek never produces these item kinds; pass
-            // through to keep the function total over `ScoreItemID`.
+            // Tap-to-seek never produces these item kinds; pass through to keep the function total over `ScoreItemID`.
             return cursor
         }
     }

@@ -23,10 +23,9 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
 
     func loadScore(fileURL: URL) throws -> (score: Score, summary: ScoreFileSummary) {
         if let error = loadScoreError { throw error }
-        // Library tests do not exercise loaded Scores; provide an empty stub.
-        // ScoreFileGateway is async but the fake satisfies both sync and async
-        // shapes. Real Score values are exercised by Reader tests via a
-        // separate fake (Task 20).
+        // Library tests do not exercise loaded Scores; provide an empty stub. ScoreFileGateway is async but the fake
+        // satisfies both sync and async shapes. Real Score values are exercised by Reader tests via a separate fake
+        // (Task 20).
         throw DomainError.scoreParseFailed(reason: "FakeScoreFileGateway.loadScore stubbed")
     }
 

@@ -1,8 +1,8 @@
 import Foundation
 
 extension [ScoreItem] {
-    /// Top items by `lastOpenedAt` desc. Items with `nil` lastOpenedAt are
-    /// excluded entirely (they have never been opened).
+    /// Top items by `lastOpenedAt` desc. Items with `nil` lastOpenedAt are excluded entirely (they have never been
+    /// opened).
     public func mostRecentlyOpened(limit: Int) -> [ScoreItem] {
         guard limit > 0 else { return [] }
         return Array(

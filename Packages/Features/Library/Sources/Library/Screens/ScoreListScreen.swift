@@ -130,10 +130,9 @@ struct ScoreListScreen: View {
     }
 
     private var bulkAvailableShareFormats: [ScoreShareFormat] {
-        // Every item now reports the same four formats; the per-item
-        // `isOriginal` flag is meaningful only for the row menu, not
-        // for the bulk one. `prepareShare` returns original bytes
-        // per-item where the source matches the picked format.
+        // Every item now reports the same four formats; the per-item `isOriginal` flag is meaningful only for the row
+        // menu, not for the bulk one. `prepareShare` returns original bytes per-item where the source matches the
+        // picked format.
         selectedItems.isEmpty ? [] : [.museScoreV4, .museScoreV3, .pdf, .midi]
     }
 

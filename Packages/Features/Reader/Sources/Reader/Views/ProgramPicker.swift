@@ -1,16 +1,14 @@
 import SheetMusicAudio
 import SwiftUI
 
-/// Per-Part program override Menu shown in the Reader Inspector's Playback
-/// tab header. Lives outside `PlaybackInspectorScreen` so the screen file stays under
-/// length limits — semantics match the prior inline `programPicker` exactly.
+/// Per-Part program override Menu shown in the Reader Inspector's Playback tab header. Lives outside
+/// `PlaybackInspectorScreen` so the screen file stays under length limits — semantics match the prior inline
+/// `programPicker` exactly.
 ///
-/// `isDrums` selects which catalog drives the menu: GM Level 1 melodic
-/// instruments for pitched parts, or `GMDrumKit` (the kits actually
-/// shipped by the SF2 split resolver) for percussion parts. The
-/// override-set / reset / cache-hit-miss machinery underneath is shared
-/// — `PlaybackMixerModel.setPartProgram` already pulls `isDrums` from
-/// the part's `useDrumset` flag.
+/// `isDrums` selects which catalog drives the menu: GM Level 1 melodic instruments for pitched parts, or `GMDrumKit`
+/// (the kits actually shipped by the SF2 split resolver) for percussion parts. The override-set / reset /
+/// cache-hit-miss machinery underneath is shared — `PlaybackMixerModel.setPartProgram` already pulls `isDrums` from the
+/// part's `useDrumset` flag.
 struct ProgramPicker: View {
     let mixerModel: PlaybackMixerModel
     let partIndex: Int

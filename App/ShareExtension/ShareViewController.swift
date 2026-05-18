@@ -56,10 +56,9 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    /// Walks the responder chain to find a `UIApplication` and invokes its
-    /// `open(_:options:completionHandler:)`. Best-effort: if the chain doesn't
-    /// reach a `UIApplication`, the drain-on-launch fallback in the main app
-    /// still picks up the token.
+    /// Walks the responder chain to find a `UIApplication` and invokes its `open(_:options:completionHandler:)`.
+    /// Best-effort: if the chain doesn't reach a `UIApplication`, the drain-on-launch fallback in the main app still
+    /// picks up the token.
     private func openMainApp(url: URL) {
         var responder: UIResponder? = self
         while let current = responder {

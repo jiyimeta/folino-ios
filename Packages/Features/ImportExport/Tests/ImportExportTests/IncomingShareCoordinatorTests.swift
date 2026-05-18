@@ -131,8 +131,8 @@ struct IncomingShareCoordinatorTests {
         }
     }
 
-    /// Returns pre-scripted decisions in the order `resolveDuplicate` is called.
-    /// `nil` entries simulate a user-cancelled prompt.
+    /// Returns pre-scripted decisions in the order `resolveDuplicate` is called. `nil` entries simulate a
+    /// user-cancelled prompt.
     final class ScriptedDuplicateResolver: ImportDuplicateResolver, @unchecked Sendable {
         private var decisions: [ImportDecision?]
         private(set) var callCount = 0
@@ -346,8 +346,7 @@ struct IncomingShareCoordinatorTests {
         let result = await coordinator.drain(token: token)
 
         #expect(resolver.callCount == 3)
-        // openExisting → skipped as duplicate; importAsNew → imported;
-        // nil → skipped, no commit.
+        // openExisting → skipped as duplicate; importAsNew → imported; nil → skipped, no commit.
         #expect(result.imported.count == 1)
         #expect(result.skipped.count == 2)
         #expect(importer.committed.count == 2)

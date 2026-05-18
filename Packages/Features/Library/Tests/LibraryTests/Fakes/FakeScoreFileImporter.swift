@@ -4,13 +4,12 @@ import Foundation
 final class FakeScoreFileImporter: ScoreFileImporter, @unchecked Sendable {
     /// Plans queued to be returned by `prepareImport`. Consumed FIFO.
     var preparedPlans: [ImportPlan] = []
-    /// Errors queued to be thrown by `prepareImport`. Consumed FIFO; if both
-    /// `preparedPlans` and `prepareImportErrors` are non-empty, errors take
-    /// precedence on the same call.
+    /// Errors queued to be thrown by `prepareImport`. Consumed FIFO; if both `preparedPlans` and `prepareImportErrors`
+    /// are non-empty, errors take precedence on the same call.
     var prepareImportErrors: [DomainError] = []
 
-    /// `commitImport` returns this `ScoreItem` factory invoked with the plan
-    /// and decision; tests can capture the call by reading `committed`.
+    /// `commitImport` returns this `ScoreItem` factory invoked with the plan and decision; tests can capture the call
+    /// by reading `committed`.
     var commitFactory: (@Sendable (ImportPlan, ImportDecision) -> ScoreItem)?
     var commitImportError: DomainError?
 

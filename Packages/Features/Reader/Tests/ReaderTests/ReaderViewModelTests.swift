@@ -537,8 +537,8 @@ struct ReaderViewModelTests {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         var score = makeTwoStaffScore()
-        // Authored opening clef on staff (0,0) is "G" via an explicit
-        // measure-0 clef element; on (0,1) is `nil` with defaultClefType "F".
+        // Authored opening clef on staff (0,0) is "G" via an explicit measure-0 clef element; on (0,1) is `nil` with
+        // defaultClefType "F".
         let openingClefVoice = Voice(elements: [.clef(Clef(concertClefType: "G"))])
         score.parts[0].staves[0].measures = [Measure(voices: [openingClefVoice])]
         score.parts[0].staves[1].defaultClefType = "F"

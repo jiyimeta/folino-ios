@@ -19,8 +19,8 @@ public enum ScoreFormat: String, Hashable, Sendable, Codable, CaseIterable {
         }
     }
 
-    /// Best-effort detection from a filename or path. Case-insensitive on the extension.
-    /// Returns `nil` for `.pdf` in v1 — PDF support is deferred to a later plan that introduces OCR.
+    /// Best-effort detection from a filename or path. Case-insensitive on the extension. Returns `nil` for `.pdf` in v1
+    /// — PDF support is deferred to a later plan that introduces OCR.
     public static func detect(filename: String) -> ScoreFormat? {
         guard let dotIndex = filename.lastIndex(of: ".") else { return nil }
         let ext = filename[filename.index(after: dotIndex)...].lowercased()

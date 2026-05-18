@@ -2,9 +2,8 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// Rename-score TextField alert for the Library root. Extracted from
-/// `LibraryRootScreen` to keep that file under SwiftLint's file-length
-/// budget.
+/// Rename-score TextField alert for the Library root. Extracted from `LibraryRootScreen` to keep that file under
+/// SwiftLint's file-length budget.
 @MainActor
 struct LibraryRootRenameScoreAlert: ViewModifier {
     let viewModel: LibraryViewModel

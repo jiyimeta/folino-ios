@@ -2,8 +2,8 @@ import Domain
 import Foundation
 import SheetMusic
 
-/// Live `ScoreFileGateway` backed by `swift-sheet-music`. Per-format dispatch
-/// happens in this single file so the surface stays small.
+/// Live `ScoreFileGateway` backed by `swift-sheet-music`. Per-format dispatch happens in this single file so the
+/// surface stays small.
 public struct LiveScoreFileGateway: ScoreFileGateway {
     public init() {}
 
@@ -13,9 +13,8 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
 
     public func loadFileMetadata(fileURL: URL) async throws -> ScoreFileSummary {
         let (_, summary) = try await loadScore(fileURL: fileURL)
-        // Right now the summary is built from the parsed Score regardless;
-        // when swift-sheet-music exposes a metadata-only fast path we'll
-        // bypass full parsing. Stays correct under that future change.
+        // Right now the summary is built from the parsed Score regardless; when swift-sheet-music exposes a
+        // metadata-only fast path we'll bypass full parsing. Stays correct under that future change.
         return summary
     }
 
@@ -57,8 +56,7 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
     }
 
     public func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
-        // v1: swift-sheet-music has no Score → MSCX/MSCZ/MusicXML serializer.
-        // The Editor plan will fill this in.
+        // v1: swift-sheet-music has no Score → MSCX/MSCZ/MusicXML serializer. The Editor plan will fill this in.
         throw DomainError.unsupportedFormat(format.canonicalExtension)
     }
 }

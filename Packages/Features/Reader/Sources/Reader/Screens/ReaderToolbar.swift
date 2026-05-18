@@ -1,26 +1,22 @@
 import SheetMusicCore
 import SwiftUI
 
-/// Top overlay hosting Back / Play / Inspector buttons. Rendered inside
-/// `ReaderRootScreen`'s `ZStack` so the score stays visible behind the
-/// buttons — maximising the rendered staff area, which is core to the
-/// app's value proposition.
+/// Top overlay hosting Back / Play / Inspector buttons. Rendered inside `ReaderRootScreen`'s `ZStack` so the score
+/// stays visible behind the buttons — maximising the rendered staff area, which is core to the app's value proposition.
 ///
-/// We sidestep the standard `.toolbar { … }` route because on iOS 26.3.x
-/// physical devices `.toolbarBackgroundVisibility(.hidden, for: .navigationBar)`
-/// fails to suppress the navigation bar's chrome (confirmed working only
-/// from iOS 26.4 simulator). Once 26.4+ adoption is broad, this overlay
-/// can likely be reverted to a plain `ToolbarContent`.
+/// We sidestep the standard `.toolbar { … }` route because on iOS 26.3.x physical devices
+/// `.toolbarBackgroundVisibility(.hidden, for: .navigationBar)` fails to suppress the navigation bar's chrome
+/// (confirmed working only from iOS 26.4 simulator). Once 26.4+ adoption is broad, this overlay can likely be reverted
+/// to a plain `ToolbarContent`.
 struct ReaderTopOverlay: View {
     @Bindable var viewModel: ReaderViewModel
-    /// `nil` hides the back button entirely — used by iPad split-view detail
-    /// where the sidebar already provides navigation back to the library.
+    /// `nil` hides the back button entirely — used by iPad split-view detail where the sidebar already provides
+    /// navigation back to the library.
     let onBack: (() -> Void)?
 
-    /// Vertical space the overlay occupies inside the safe area
-    /// (button 40 + top padding 4 + a little breathing room). Used by
-    /// `ReaderRootScreen` to extend the score's safe area so the first
-    /// staff is never hidden under the floating buttons.
+    /// Vertical space the overlay occupies inside the safe area (button 40 + top padding 4 + a little breathing room).
+    /// Used by `ReaderRootScreen` to extend the score's safe area so the first staff is never hidden under the floating
+    /// buttons.
     static let height: CGFloat = 52
 
     var body: some View {
@@ -44,9 +40,8 @@ struct ReaderTopOverlay: View {
         .padding(.top, 4)
     }
 
-    /// Right-side buttons that depend on a loaded score: play/pause plus
-    /// the paired inspector pill. Extracted from `body` to keep the outer
-    /// HStack closure under SwiftLint's body-length limit.
+    /// Right-side buttons that depend on a loaded score: play/pause plus the paired inspector pill. Extracted from
+    /// `body` to keep the outer HStack closure under SwiftLint's body-length limit.
     private func loadedActions(score: Score) -> some View {
         HStack(spacing: 12) {
             overlayButton(
@@ -65,9 +60,8 @@ struct ReaderTopOverlay: View {
         }
     }
 
-    /// Paired playback / visual inspector buttons sharing a single
-    /// glass-pill background. Each button owns its own popover anchored
-    /// to itself so the popover arrow points at the tapped icon.
+    /// Paired playback / visual inspector buttons sharing a single glass-pill background. Each button owns its own
+    /// popover anchored to itself so the popover arrow points at the tapped icon.
     private func inspectorButtons(score: Score) -> some View {
         HStack(spacing: 0) {
             overlayButton(
@@ -121,8 +115,8 @@ struct ReaderTopOverlay: View {
     }
 }
 
-/// Bottom reset-zoom pill. Lives outside the toolbar so it can sit on
-/// top of the score content rather than in the navigation bar.
+/// Bottom reset-zoom pill. Lives outside the toolbar so it can sit on top of the score content rather than in the
+/// navigation bar.
 struct ReaderBottomOverlay: View {
     @Bindable var viewModel: ReaderViewModel
 

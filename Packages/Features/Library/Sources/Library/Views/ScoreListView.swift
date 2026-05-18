@@ -33,8 +33,8 @@ struct ScoreListView<RowMenu: View>: View {
     let showsManualOrderOption: Bool
     let onTap: (ScoreItem) -> Void
     let onToggleFavorite: (ScoreItem) -> Void
-    /// Invoked when the user picks Delete in the row context menu or the trailing
-    /// swipe. Soft-delete, so no confirmation alert.
+    /// Invoked when the user picks Delete in the row context menu or the trailing swipe. Soft-delete, so no
+    /// confirmation alert.
     let onConfirmDelete: (ScoreItem) -> Void
     let onSelectSort: (ScoreItemSort) -> Void
     let onSelectManualOrder: () -> Void
@@ -154,9 +154,8 @@ struct ScoreListView<RowMenu: View>: View {
             }
             .tint(.yellow)
         }
-        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
-        // Soft-delete: no confirmation, just stamp `deletedAt`. The item moves
-        // into Recently Deleted where the user can restore within 30 days.
+        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`. Soft-delete: no confirmation, just stamp
+        // `deletedAt`. The item moves into Recently Deleted where the user can restore within 30 days.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 onConfirmDelete(item)

@@ -19,12 +19,11 @@ final class FakePlaybackController: PlaybackController {
 
     var loadError: Error?
     var playError: Error?
-    /// When true, `load` suspends until `Task.cancel()` fires, throwing
-    /// `CancellationError`. Lets tests exercise the "loading" alert flow.
+    /// When true, `load` suspends until `Task.cancel()` fires, throwing `CancellationError`. Lets tests exercise the
+    /// "loading" alert flow.
     var blocksLoadUntilCancelled = false
-    /// What `areSoundfontsAvailableLocally` reports back. Defaults to
-    /// `false` — the Reader treats that as "may need to fetch" and shows
-    /// the alert, matching the existing tests' expectations.
+    /// What `areSoundfontsAvailableLocally` reports back. Defaults to `false` — the Reader treats that as "may need to
+    /// fetch" and shows the alert, matching the existing tests' expectations.
     var soundfontsAvailableLocally = false
     var currentTimeSeconds: TimeInterval = 0
     var totalTimeSeconds: TimeInterval = 0
@@ -73,12 +72,11 @@ final class FakePlaybackController: PlaybackController {
         soundfontsAvailableLocally
     }
 
-    /// Patches the fake reports as already on disk. Default: empty —
-    /// every pick is a cache miss unless the test seeds this set.
+    /// Patches the fake reports as already on disk. Default: empty — every pick is a cache miss unless the test seeds
+    /// this set.
     var cachedPatches: Set<SoundfontPatchKey> = []
     private(set) var prefetchedPatches: [SoundfontPatchKey] = []
-    /// When true, `prefetchSoundfont` suspends until `Task.cancel()`
-    /// fires, throwing `CancellationError`. Mirrors
+    /// When true, `prefetchSoundfont` suspends until `Task.cancel()` fires, throwing `CancellationError`. Mirrors
     /// `blocksLoadUntilCancelled` for the per-patch path.
     var blocksPrefetchUntilCancelled = false
     var prefetchError: Error?

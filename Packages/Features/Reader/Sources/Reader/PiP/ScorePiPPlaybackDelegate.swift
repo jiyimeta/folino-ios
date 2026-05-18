@@ -5,22 +5,19 @@ import Foundation
 
 @MainActor
 final class ScorePiPPlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate {
-    /// Returns the app's current play state — the system pause/play
-    /// glyph mirrors this. Coordinator wires it to the ViewModel.
+    /// Returns the app's current play state — the system pause/play glyph mirrors this. Coordinator wires it to the
+    /// ViewModel.
     var isAppPlaying: () -> Bool = { false }
-    /// True only between `didStartPiP` and `didStopPiP`. Before PiP is
-    /// fully running we report "not paused" regardless of the app's
-    /// real state — AVKit refuses to start PiP on a live source that
-    /// reports paused at start time. Once PiP is up, mirror reality.
+    /// True only between `didStartPiP` and `didStopPiP`. Before PiP is fully running we report "not paused" regardless
+    /// of the app's real state — AVKit refuses to start PiP on a live source that reports paused at start time. Once
+    /// PiP is up, mirror reality.
     var isPiPActive = false
-    /// Fired when the user taps the PiP play/pause control. Passes the
-    /// new desired state (true = play, false = pause).
+    /// Fired when the user taps the PiP play/pause control. Passes the new desired state (true = play, false = pause).
     var onSetPlaying: (Bool) -> Void = { _ in }
-    /// Fired when the user taps the ±10s skip control in PiP. Forwarded
-    /// to the playback engine's skip API.
+    /// Fired when the user taps the ±10s skip control in PiP. Forwarded to the playback engine's skip API.
     var onSkip: (TimeInterval) -> Void = { _ in }
-    /// Total score duration in seconds. Used for the PiP scrubber's
-    /// time range — finite range hides AVKit's "LIVE" badge.
+    /// Total score duration in seconds. Used for the PiP scrubber's time range — finite range hides AVKit's "LIVE"
+    /// badge.
     var totalTimeSeconds: () -> TimeInterval = { 0 }
 
     nonisolated func pictureInPictureController(
@@ -33,8 +30,8 @@ final class ScorePiPPlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPl
         _: AVPictureInPictureController,
         didTransitionToRenderSize _: CMVideoDimensions,
     ) {
-        // PiP window resize. We render at a fixed aspect ratio per
-        // session, so AVKit's letterbox handles the on-screen scaling.
+        // PiP window resize. We render at a fixed aspect ratio per session, so AVKit's letterbox handles the on-screen
+        // scaling.
     }
 
     nonisolated func pictureInPictureController(
@@ -50,10 +47,8 @@ final class ScorePiPPlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPl
     nonisolated func pictureInPictureControllerTimeRangeForPlayback(
         _: AVPictureInPictureController,
     ) -> CMTimeRange {
-        // Finite range = AVKit drops the "LIVE" badge and shows a real
-        // scrubber. Duration comes from the loaded score; floor at 1s
-        // so the range is never degenerate before the score finishes
-        // loading.
+        // Finite range = AVKit drops the "LIVE" badge and shows a real scrubber. Duration comes from the loaded score;
+        // floor at 1s so the range is never degenerate before the score finishes loading.
         let total = MainActor.assumeIsolated { totalTimeSeconds() }
         return CMTimeRange(
             start: .zero,

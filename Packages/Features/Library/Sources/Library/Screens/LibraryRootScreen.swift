@@ -332,10 +332,9 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             }
             .tint(.yellow)
         }
-        // No `role: .destructive`: it would make SwiftUI hide the row
-        // immediately on tap (same contract as `.onDelete`), which can crash
-        // multi-section Lists. Soft-delete is silent (no confirm); the item
-        // moves into Recently Deleted.
+        // No `role: .destructive`: it would make SwiftUI hide the row immediately on tap (same contract as
+        // `.onDelete`), which can crash multi-section Lists. Soft-delete is silent (no confirm); the item moves into
+        // Recently Deleted.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 Task { await viewModel.delete(item) }
@@ -383,12 +382,9 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 }
 
 enum ScoreFileTypes {
-    /// Each specific UTI comes from whichever app on the device owns
-    /// the extension's registration; parent fallbacks (`.xml`, `.zip`,
-    /// `.midi`) cover cloud providers that hand us generic UTIs and
-    /// devices where a sibling app's UTI doesn't conform to ours.
-    /// `LiveScoreFileImporter.prepareImport` rejects unsupported files
-    /// by filename extension.
+    /// Each specific UTI comes from whichever app on the device owns the extension's registration; parent fallbacks
+    /// (`.xml`, `.zip`, `.midi`) cover cloud providers that hand us generic UTIs and devices where a sibling app's UTI
+    /// doesn't conform to ours. `LiveScoreFileImporter.prepareImport` rejects unsupported files by filename extension.
     static let allowed: [UTType] = {
         let specific = ["mscx", "mscz", "musicxml", "mxl"]
             .compactMap { UTType(filenameExtension: $0) }

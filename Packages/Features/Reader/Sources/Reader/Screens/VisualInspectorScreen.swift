@@ -15,9 +15,8 @@ struct VisualInspectorScreen: View {
 
     var body: some View {
         List {
-            // Top-of-list "general" controls intentionally render without
-            // a section header — they apply to the whole score and the
-            // header would only repeat that with no information value.
+            // Top-of-list "general" controls intentionally render without a section header — they apply to the whole
+            // score and the header would only repeat that with no information value.
             layoutRow
             staffSizeRow
             breakPolicyRow

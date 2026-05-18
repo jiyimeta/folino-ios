@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Bridges `UIActivityViewController` (the system share sheet) into
-/// SwiftUI. Use via `.sheet { ActivityViewControllerRepresentable(items: [...]) }`.
+/// Bridges `UIActivityViewController` (the system share sheet) into SwiftUI. Use via `.sheet {
+/// ActivityViewControllerRepresentable(items: [...]) }`.
 public struct ActivityViewControllerRepresentable: UIViewControllerRepresentable {
     private let items: [Any]
     private let activities: [UIActivity]?

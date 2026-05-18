@@ -2,9 +2,8 @@ import Domain
 import Foundation
 import SheetMusicAudio
 
-/// Single resolver that covers both folino's async download path
-/// (`Domain.SoundfontResolver`) and `swift-sheet-music`'s synchronous
-/// per-(bank, program, isDrums) lookup (`SheetMusicAudio.SoundfontResolver`).
+/// Single resolver that covers both folino's async download path (`Domain.SoundfontResolver`) and `swift-sheet-music`'s
+/// synchronous per-(bank, program, isDrums) lookup (`SheetMusicAudio.SoundfontResolver`).
 ///
 /// Lookup order, sync path:
 ///   1. Cache hit at `cacheDirectory/<name>` — return.
@@ -34,9 +33,8 @@ public struct MuseScoreSF2Resolver:
         string: "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/1.0.0",
     )! // swiftlint:disable:this force_unwrapping
 
-    /// Subdirectory inside `Bundle.main` that hosts committed
-    /// fallback SF2 files. Matches the folder reference set up in
-    /// `project.yml`.
+    /// Subdirectory inside `Bundle.main` that hosts committed fallback SF2 files. Matches the folder reference set up
+    /// in `project.yml`.
     static let bundleSubdirectory = "Soundfonts"
     /// Pitched fallback (GM Flute, ~624 KB).
     static let pitchedFallbackName = "000_073.sf2"
@@ -75,9 +73,8 @@ public struct MuseScoreSF2Resolver:
         nil
     }
 
-    /// Sync resolver path that returns `nil` if neither cache nor
-    /// bundle has a precise file — used by `LivePlaybackController`
-    /// to decide whether a staff needs a fallback channel rewrite.
+    /// Sync resolver path that returns `nil` if neither cache nor bundle has a precise file — used by
+    /// `LivePlaybackController` to decide whether a staff needs a fallback channel rewrite.
     public func precisePath(forBank bank: Int, program: Int, isDrums: Bool) -> URL? {
         precisePath(name: Self.fileName(bank: bank, program: program, isDrums: isDrums))
     }
@@ -91,8 +88,7 @@ public struct MuseScoreSF2Resolver:
     }
 
     private func bundleURL(name: String) -> URL? {
-        // `Bundle.url(forResource:withExtension:subdirectory:)`
-        // wants the components split. Strip the `.sf2` suffix.
+        // `Bundle.url(forResource:withExtension:subdirectory:)` wants the components split. Strip the `.sf2` suffix.
         guard name.hasSuffix(".sf2") else { return nil }
         let stem = String(name.dropLast(".sf2".count))
         return bundle.url(
@@ -177,16 +173,12 @@ public struct MuseScoreSF2Resolver:
         return String(format: "%03d_%03d.sf2", prefix, program)
     }
 
-    /// Parses a `BBB_PPP.sf2` cache filename into its canonical
-    /// `(bank, program, isDrums)` form.
+    /// Parses a `BBB_PPP.sf2` cache filename into its canonical `(bank, program, isDrums)` form.
     ///
-    /// SF2 / GS / GM convention: bank 128 is the percussion bank, so any
-    /// `128_PPP.sf2` filename describes a drum kit, not a melodic patch
-    /// in bank 128. The returned `bank` is the canonical zero-prefixed
-    /// form for drums, ensuring
-    /// `SoundfontPatch.id == SoundfontPatchKey(bank: 0, program: P, isDrums: true)`
-    /// and disambiguating `(0, 0)` Acoustic Grand Piano from
-    /// `(0, 0)` Standard Drum Kit in the cache index and Settings UI.
+    /// SF2 / GS / GM convention: bank 128 is the percussion bank, so any `128_PPP.sf2` filename describes a drum kit,
+    /// not a melodic patch in bank 128. The returned `bank` is the canonical zero-prefixed form for drums, ensuring
+    /// `SoundfontPatch.id == SoundfontPatchKey(bank: 0, program: P, isDrums: true)` and disambiguating `(0, 0)`
+    /// Acoustic Grand Piano from `(0, 0)` Standard Drum Kit in the cache index and Settings UI.
     static func parseFileName(_ name: String) -> (bank: Int, program: Int, isDrums: Bool)? {
         // Expected shape: "BBB_PPP.sf2" with three-digit decimals.
         let stem = name.split(separator: ".").first.map(String.init) ?? name

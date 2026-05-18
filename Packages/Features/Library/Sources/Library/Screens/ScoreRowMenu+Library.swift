@@ -1,8 +1,8 @@
 import Domain
 import SwiftUI
 
-/// Screen-tier convenience that wires `LibraryViewModel` into the pure
-/// `scoreRowMenu` builder. Used by every Screen that renders a score row.
+/// Screen-tier convenience that wires `LibraryViewModel` into the pure `scoreRowMenu` builder. Used by every Screen
+/// that renders a score row.
 @MainActor
 func scoreRowMenu(
     item: ScoreItem,

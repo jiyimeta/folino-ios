@@ -124,9 +124,8 @@ public struct ShareRootView: View {
     }
 }
 
-/// Internal content of the loaded share screen. Pulled out of
-/// `ShareRootView.loadedView` so SwiftUI previews can drive it without
-/// having to fake `NSItemProvider` ingestion.
+/// Internal content of the loaded share screen. Pulled out of `ShareRootView.loadedView` so SwiftUI previews can drive
+/// it without having to fake `NSItemProvider` ingestion.
 private struct ShareLoadedContent: View {
     let acceptedFiles: [IncomingShareIntent.File]
     let unsupportedCount: Int

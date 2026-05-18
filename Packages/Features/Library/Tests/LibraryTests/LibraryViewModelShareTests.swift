@@ -86,8 +86,8 @@ struct LibraryViewModelShareTests {
     }
 }
 
-/// Tiny lock helper so the test reads `vm.isPreparingShare` from the
-/// fake's hook without a Sendable warning. Local to this test file.
+/// Tiny lock helper so the test reads `vm.isPreparingShare` from the fake's hook without a Sendable warning. Local to
+/// this test file.
 private final class LockIsolated<Value>: @unchecked Sendable {
     private let lock = NSLock()
     private var _value: Value

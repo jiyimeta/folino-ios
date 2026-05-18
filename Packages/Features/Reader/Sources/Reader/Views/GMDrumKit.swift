@@ -1,15 +1,12 @@
 import Foundation
 
-/// One percussion-bank (bank 128) drum kit, with the canonical preset
-/// name and family grouping. Drives the drum-kit branch of the
-/// `ProgramPicker` for parts whose instrument reports `useDrumset == true`.
+/// One percussion-bank (bank 128) drum kit, with the canonical preset name and family grouping. Drives the drum-kit
+/// branch of the `ProgramPicker` for parts whose instrument reports `useDrumset == true`.
 ///
-/// Programs and names match the kits actually shipped in the
-/// `jiyimeta/musescore-general-sf2-split` 1.0.0 release — that resolver
-/// is the only source of percussion soundfonts, so kits outside this list
-/// would resolve to the Standard fallback and silently lie to the user.
-/// When the SF2 split publishes additional kits, mirror the new
-/// `128_PPP.sf2` filenames here.
+/// Programs and names match the kits actually shipped in the `jiyimeta/musescore-general-sf2-split` 1.0.0 release —
+/// that resolver is the only source of percussion soundfonts, so kits outside this list would resolve to the Standard
+/// fallback and silently lie to the user. When the SF2 split publishes additional kits, mirror the new `128_PPP.sf2`
+/// filenames here.
 struct GMDrumKit: Equatable, Identifiable {
     let program: UInt8
     let name: String
@@ -74,10 +71,9 @@ struct GMDrumKit: Equatable, Identifiable {
         GMDrumKit(program: 96, name: "Marching Tenor", family: .marching),
     ]
 
-    /// Returns the catalog entry for a stored program byte, or `nil` if
-    /// the program isn't a known drum kit. Callers fall back to a
-    /// synthesized `"Kit \(program)"` label so an unknown override
-    /// (e.g., from a future SF2 split release) still renders.
+    /// Returns the catalog entry for a stored program byte, or `nil` if the program isn't a known drum kit. Callers
+    /// fall back to a synthesized `"Kit \(program)"` label so an unknown override (e.g., from a future SF2 split
+    /// release) still renders.
     static func kit(for program: UInt8) -> GMDrumKit? {
         all.first { $0.program == program }
     }

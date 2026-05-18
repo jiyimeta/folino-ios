@@ -8,10 +8,9 @@ public struct DrainResult: Sendable {
     public let createdPlaylistID: PlaylistID?
     public let targetPlaylistID: PlaylistID?
     public let targetPlaylistName: String?
-    /// When non-nil, the coordinator attempted to create a new playlist with
-    /// this name but the persistence call threw. The staged token is preserved
-    /// on disk so the user can retry on the next drain. The banner reads
-    /// `Couldn't create playlist "<name>"`.
+    /// When non-nil, the coordinator attempted to create a new playlist with this name but the persistence call threw.
+    /// The staged token is preserved on disk so the user can retry on the next drain. The banner reads `Couldn't create
+    /// playlist "<name>"`.
     public let playlistCreateFailure: String?
 
     public init(

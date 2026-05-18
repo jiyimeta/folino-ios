@@ -1,12 +1,10 @@
 import Foundation
 
-/// A persisted entry in folino's library. The actual score bytes live on disk
-/// at `AppPaths.scoresDirectory/localFileName` (the resolution to absolute URL
-/// happens in Infrastructure, not Domain).
+/// A persisted entry in folino's library. The actual score bytes live on disk at
+/// `AppPaths.scoresDirectory/localFileName` (the resolution to absolute URL happens in Infrastructure, not Domain).
 ///
-/// `format` is intentionally NOT stored: callers derive it via
-/// `ScoreFormat.detect(filename: item.localFileName)`. The convention
-/// `localFileName == "<id>.<canonical-extension>"` is enforced at import time.
+/// `format` is intentionally NOT stored: callers derive it via `ScoreFormat.detect(filename: item.localFileName)`. The
+/// convention `localFileName == "<id>.<canonical-extension>"` is enforced at import time.
 public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public let id: ScoreItemID
     public var title: String
@@ -15,8 +13,8 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public var instrumentationSummary: String?
     /// Filename relative to the scores directory. Convention: `<id>.<canonical-extension>`.
     public var localFileName: String
-    /// SHA-256 hex digest of the on-disk file bytes, computed at import time. Used for
-    /// duplicate detection. Never edited after import.
+    /// SHA-256 hex digest of the on-disk file bytes, computed at import time. Used for duplicate detection. Never
+    /// edited after import.
     public let contentHash: String
     public var sizeBytes: Int64
     public var lengthBeats: Int
@@ -26,10 +24,9 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public var lastOpenedAt: Date?
     public var tagIDs: Set<TagID>
     public var isFavorite: Bool
-    /// When non-nil, the item has been soft-deleted at this timestamp and lives only in
-    /// the "Recently Deleted" view until it is restored or auto-purged after 30 days.
-    /// The repository surfaces these rows via `deletedScoreItems` and excludes them
-    /// from `scoreItems`, so non-trash callers never see them.
+    /// When non-nil, the item has been soft-deleted at this timestamp and lives only in the "Recently Deleted" view
+    /// until it is restored or auto-purged after 30 days. The repository surfaces these rows via `deletedScoreItems`
+    /// and excludes them from `scoreItems`, so non-trash callers never see them.
     public var deletedAt: Date?
 
     public init(

@@ -1,7 +1,7 @@
 import ImportExport
 
-/// Composes the user-facing banner string shown after a share-drain
-/// completes. Pure formatting only — v1 English, localized later.
+/// Composes the user-facing banner string shown after a share-drain completes. Pure formatting only — v1 English,
+/// localized later.
 enum DrainBannerComposer {
     static func message(for result: DrainResult) -> String? {
         let nonDuplicateSkipped = result.skipped.filter {

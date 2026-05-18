@@ -12,9 +12,8 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
         self.descriptions = descriptions
     }
 
-    /// Inject a `Locale` into `Decoder.userInfo` under this key to override
-    /// the default `Locale.current` lookup. Tests use this; production code
-    /// can leave `userInfo` empty.
+    /// Inject a `Locale` into `Decoder.userInfo` under this key to override the default `Locale.current` lookup. Tests
+    /// use this; production code can leave `userInfo` empty.
     static let localeUserInfoKey: CodingUserInfoKey = // swiftlint:disable:next force_unwrapping
         .init(rawValue: "VersionHistoryEntry.locale")!
 
@@ -26,9 +25,8 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
     private struct LocalizedDescription: Decodable {
         let en: String
         let ja: String
-        // Newer locales are optional so a future entry that forgets a translation
-        // falls back to en instead of being silently dropped by the loader's
-        // `try?` decode.
+        // Newer locales are optional so a future entry that forgets a translation falls back to en instead of being
+        // silently dropped by the loader's `try?` decode.
         let zhHans: String?
         let zhHant: String?
         let ko: String?

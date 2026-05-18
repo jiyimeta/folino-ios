@@ -3,31 +3,21 @@ import Foundation
 import SheetMusicAudio
 import SheetMusicCore
 
-/// `Domain.ScoreAudioExporter` backed by `swift-sheet-music`'s
-/// offline `PlaybackEngine.exportAudioFile`.
+/// `Domain.ScoreAudioExporter` backed by `swift-sheet-music`'s offline `PlaybackEngine.exportAudioFile`.
 ///
-/// Builds a one-shot `PlaybackEngine` per call (the engine is
-/// `@MainActor` and not designed to be reused for back-to-back
-/// renders), so live playback through `LivePlaybackController` is
-/// unaffected — `exportAudioFile` itself spins a dedicated
-/// `AVAudioEngine` internally for the offline render.
+/// Builds a one-shot `PlaybackEngine` per call (the engine is `@MainActor` and not designed to be reused for
+/// back-to-back renders), so live playback through `LivePlaybackController` is unaffected — `exportAudioFile` itself
+/// spins a dedicated `AVAudioEngine` internally for the offline render.
 ///
-/// Soundfont policy: every distinct `(bank, program, isDrums)` triple
-/// the score uses is prefetched through the `Domain.SoundfontResolver`
-/// before the engine is asked to prepare. A single resolve failure
-/// (e.g. offline + uncached) propagates as
-/// `DomainError.scoreWriteFailed` and the offline render is never
-/// attempted. This is a deliberate departure from
-/// `LivePlaybackController.scoreWithFallbackRewrites`, which silently
-/// falls back to bundled patches: an audio export that secretly
-/// substitutes piano for, say, drums would be confusing once shared
-/// out of the app.
+/// Soundfont policy: every distinct `(bank, program, isDrums)` triple the score uses is prefetched through the
+/// `Domain.SoundfontResolver` before the engine is asked to prepare. A single resolve failure (e.g. offline + uncached)
+/// propagates as `DomainError.scoreWriteFailed` and the offline render is never attempted. This is a deliberate
+/// departure from `LivePlaybackController.scoreWithFallbackRewrites`, which silently falls back to bundled patches: an
+/// audio export that secretly substitutes piano for, say, drums would be confusing once shared out of the app.
 ///
-/// Metronome policy: `MetronomeController.isEnabled` defaults to `true`
-/// inside swift-sheet-music, so a fresh `PlaybackEngine` would always
-/// embed the click track. The `metronomeEnabled` closure is evaluated
-/// per export so the rendered file matches whatever the user has set
-/// in the Reader's global toggle (`@AppStorage`-backed under
+/// Metronome policy: `MetronomeController.isEnabled` defaults to `true` inside swift-sheet-music, so a fresh
+/// `PlaybackEngine` would always embed the click track. The `metronomeEnabled` closure is evaluated per export so the
+/// rendered file matches whatever the user has set in the Reader's global toggle (`@AppStorage`-backed under
 /// `ReaderGlobalSettingsKey.metronomeEnabled`).
 @MainActor
 public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
@@ -70,9 +60,8 @@ public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
                 range: .full,
             )
         } catch AudioExportError.cancelled {
-            // The engine maps Task cancellation to AudioExportError.cancelled
-            // and deletes the partial file before throwing. Re-raise as
-            // CancellationError so callers see the canonical Swift signal.
+            // The engine maps Task cancellation to AudioExportError.cancelled and deletes the partial file before
+            // throwing. Re-raise as CancellationError so callers see the canonical Swift signal.
             throw CancellationError()
         } catch let error as AudioExportError {
             throw DomainError.scoreWriteFailed(reason: describe(error))
@@ -103,10 +92,9 @@ public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
         }
     }
 
-    /// Render an `AudioExportError` as a user-facing string. The raw
-    /// enum description leaks Swift case syntax (e.g.
-    /// `engineSetupFailed(underlying: "...")`) into the alert; this
-    /// pulls the `underlying` payload out so the message is readable.
+    /// Render an `AudioExportError` as a user-facing string. The raw enum description leaks Swift case syntax (e.g.
+    /// `engineSetupFailed(underlying: "...")`) into the alert; this pulls the `underlying` payload out so the message
+    /// is readable.
     private func describe(_ error: AudioExportError) -> String {
         switch error {
         case .noScorePrepared: "no score prepared"

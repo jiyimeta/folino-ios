@@ -4,14 +4,12 @@ import ImportExportAppGroup
 import os
 import UtilityCore
 
-/// Drains share-extension-staged import tokens from the App Group container,
-/// imports each staged file through `ScoreFileImporter`, and appends the
-/// resulting score items to a target playlist (existing or freshly created).
+/// Drains share-extension-staged import tokens from the App Group container, imports each staged file through
+/// `ScoreFileImporter`, and appends the resulting score items to a target playlist (existing or freshly created).
 ///
-/// `drain(token:)` accepts either a specific token (foreground handoff from
-/// a `folino://...` URL) or `nil` (app-launch sweep of every staged token
-/// in chronological order). The coordinator serializes concurrent calls so
-/// two near-simultaneous handoffs cannot race on the same staged directory.
+/// `drain(token:)` accepts either a specific token (foreground handoff from a `folino://...` URL) or `nil` (app-launch
+/// sweep of every staged token in chronological order). The coordinator serializes concurrent calls so two
+/// near-simultaneous handoffs cannot race on the same staged directory.
 @MainActor
 public final class IncomingShareCoordinator {
     private let importer: any ScoreFileImporter
@@ -39,9 +37,8 @@ public final class IncomingShareCoordinator {
         self.duplicateResolver = duplicateResolver
     }
 
-    /// Drains a single token (when `token != nil`) or every staged token in
-    /// chronological order (when `token == nil`). Always removes the
-    /// per-token directory before returning, even on failure paths.
+    /// Drains a single token (when `token != nil`) or every staged token in chronological order (when `token == nil`).
+    /// Always removes the per-token directory before returning, even on failure paths.
     public func drain(token: UUID?) async -> DrainResult {
         if let inFlight {
             _ = await inFlight.value
@@ -131,9 +128,8 @@ public final class IncomingShareCoordinator {
         }
         let resolution = await resolvePlaylist(intent: intent)
         if case let .failed(name, _) = resolution {
-            // Preserve the staged token on disk so the user can retry on the
-            // next drain (cold launch). The spec mandates: nothing is imported,
-            // and the banner reports `Couldn't create playlist "<name>"`.
+            // Preserve the staged token on disk so the user can retry on the next drain (cold launch). The spec
+            // mandates: nothing is imported, and the banner reports `Couldn't create playlist "<name>"`.
             return DrainResult(
                 imported: [],
                 skipped: [],
@@ -276,9 +272,8 @@ public final class IncomingShareCoordinator {
         }
     }
 
-    /// Routes a detected duplicate through the resolver (if provided) so the
-    /// App layer can surface a per-file alert. Falls back to silent
-    /// `openExisting` when no resolver is wired (e.g., tests).
+    /// Routes a detected duplicate through the resolver (if provided) so the App layer can surface a per-file alert.
+    /// Falls back to silent `openExisting` when no resolver is wired (e.g., tests).
     private func handleDuplicate(
         plan: ImportPlan,
         dup: ScoreItem,

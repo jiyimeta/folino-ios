@@ -1,11 +1,9 @@
 import SheetMusicCore
 
 extension Score {
-    /// Returns a copy of the score with each staff's opening clef
-    /// rewritten according to `clefOverrides`. The map is keyed by
-    /// the pre-`filtered(hidingStaves:)` staff address — apply this
-    /// transform *before* filtering, otherwise the filter's reindex
-    /// invalidates the keys.
+    /// Returns a copy of the score with each staff's opening clef rewritten according to `clefOverrides`. The map is
+    /// keyed by the pre-`filtered(hidingStaves:)` staff address — apply this transform *before* filtering, otherwise
+    /// the filter's reindex invalidates the keys.
     ///
     /// For each `(staff, rawType)`:
     /// - If the staff's measure 0, voice 0, element 0 is an explicit
@@ -16,12 +14,10 @@ extension Score {
     ///   engine synthesizes the opening clef from this when no
     ///   explicit measure-0 clef is present.
     ///
-    /// Mid-score clef changes (any explicit `<Clef>` element at
-    /// position other than measure 0 / voice 0 / element 0) are not
-    /// touched.
+    /// Mid-score clef changes (any explicit `<Clef>` element at position other than measure 0 / voice 0 / element 0)
+    /// are not touched.
     ///
-    /// Overrides targeting staves that don't exist in this score are
-    /// skipped silently — no error, no crash.
+    /// Overrides targeting staves that don't exist in this score are skipped silently — no error, no crash.
     func applying(clefOverrides: [StaffAddress: String]) -> Score {
         guard !clefOverrides.isEmpty else { return self }
         var copy = self

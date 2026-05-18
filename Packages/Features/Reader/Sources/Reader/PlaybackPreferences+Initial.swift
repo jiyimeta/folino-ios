@@ -2,11 +2,9 @@ import Domain
 import SheetMusicCore
 
 extension PlaybackPreferences {
-    /// Builds the initial `PlaybackPreferences` to hand the playback engine
-    /// when a score is first loaded into the controller: per-staff mixer
-    /// states keyed by flattened staff index, with volume and program drawn
-    /// from the user's `ReaderPreferences` overrides where set and from the
-    /// score's authored channel values otherwise.
+    /// Builds the initial `PlaybackPreferences` to hand the playback engine when a score is first loaded into the
+    /// controller: per-staff mixer states keyed by flattened staff index, with volume and program drawn from the user's
+    /// `ReaderPreferences` overrides where set and from the score's authored channel values otherwise.
     static func initial(
         for score: Score,
         readerPreferences: ReaderPreferences,

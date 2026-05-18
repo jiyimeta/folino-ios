@@ -3,9 +3,8 @@ import Foundation
 import Observation
 import Testing
 
-/// In-memory fake conforming to `ScoreLibraryRepository`. Living inside the
-/// test target ensures the protocol's shape compiles for at least one
-/// concrete implementor and exercises the observable surface.
+/// In-memory fake conforming to `ScoreLibraryRepository`. Living inside the test target ensures the protocol's shape
+/// compiles for at least one concrete implementor and exercises the observable surface.
 @MainActor
 @Observable
 private final class FakeScoreLibraryRepository: ScoreLibraryRepository {

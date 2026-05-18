@@ -1,8 +1,7 @@
 import Foundation
 
-/// A free-hand stroke (or stroke group) anchored to a position inside a system.
-/// `encodedDrawing` is opaque to Domain — the Reader feature decodes it as a
-/// `PKDrawing`. Domain does not depend on PencilKit.
+/// A free-hand stroke (or stroke group) anchored to a position inside a system. `encodedDrawing` is opaque to Domain —
+/// the Reader feature decodes it as a `PKDrawing`. Domain does not depend on PencilKit.
 struct DrawingAnchor: Hashable, Codable, Identifiable {
     let id: AnnotationID
     var anchor: MusicalAnchor
@@ -15,8 +14,7 @@ struct DrawingAnchor: Hashable, Codable, Identifiable {
     }
 }
 
-/// A user-typed text box anchored to a position inside a system. Plain text
-/// only — no rich formatting in v1.
+/// A user-typed text box anchored to a position inside a system. Plain text only — no rich formatting in v1.
 struct TextBoxAnchor: Hashable, Codable, Identifiable {
     let id: AnnotationID
     var anchor: MusicalAnchor
@@ -29,8 +27,7 @@ struct TextBoxAnchor: Hashable, Codable, Identifiable {
     }
 }
 
-/// All annotations for a single score. There is at most one `AnnotationLayer`
-/// per `ScoreItem`.
+/// All annotations for a single score. There is at most one `AnnotationLayer` per `ScoreItem`.
 struct AnnotationLayer: Hashable, Codable, Identifiable {
     let id: AnnotationLayerID
     let scoreItemID: ScoreItemID

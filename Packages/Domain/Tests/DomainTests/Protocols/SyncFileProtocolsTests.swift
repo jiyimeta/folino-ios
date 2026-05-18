@@ -38,8 +38,8 @@ private actor FakeScoreFileGateway: @preconcurrency ScoreFileGateway {
     }
 
     func loadScore(fileURL: URL) throws -> (score: Score, summary: ScoreFileSummary) {
-        // Cannot construct a real `Score` without SheetMusicCore knowledge; throw to prove
-        // the throwing signature compiles.
+        // Cannot construct a real `Score` without SheetMusicCore knowledge; throw to prove the throwing signature
+        // compiles.
         throw DomainError.scoreParseFailed(reason: "fake")
     }
 

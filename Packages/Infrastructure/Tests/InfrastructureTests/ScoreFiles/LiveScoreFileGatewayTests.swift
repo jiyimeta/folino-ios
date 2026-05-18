@@ -21,9 +21,8 @@ struct LiveScoreFileGatewayTests {
         )
         let gateway = LiveScoreFileGateway()
         let summary = try await gateway.loadFileMetadata(fileURL: mscxURL)
-        // Fixture is one quarter note + three rests = one measure of 4/4.
-        // The helper's per-measure fallback returns 4 beats. Either reading
-        // is acceptable for v1 — assert ">= 0".
+        // Fixture is one quarter note + three rests = one measure of 4/4. The helper's per-measure fallback returns 4
+        // beats. Either reading is acceptable for v1 — assert ">= 0".
         #expect(summary.lengthBeats >= 0)
     }
 

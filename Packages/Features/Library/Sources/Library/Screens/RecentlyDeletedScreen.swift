@@ -2,9 +2,8 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// Recently Deleted (trash) screen. Items are sorted most-recently-deleted
-/// first. Soft-delete is silent; this screen is where permanent removal and
-/// restoration happen, plus the 30-day retention window.
+/// Recently Deleted (trash) screen. Items are sorted most-recently-deleted first. Soft-delete is silent; this screen is
+/// where permanent removal and restoration happen, plus the 30-day retention window.
 struct RecentlyDeletedScreen: View {
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void

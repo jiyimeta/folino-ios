@@ -3,10 +3,9 @@ import Domain
 import SheetMusicCore
 import SwiftUI
 
-/// Verifies the page-mode inset wiring against a realistic score.
-/// Loads `Resources/PreviewAssets/Now_is_the_time.mscz` (untracked by
-/// design — drop your own copy there) and falls back to
-/// `PreviewSampleScore.tall` so the build keeps working without it.
+/// Verifies the page-mode inset wiring against a realistic score. Loads `Resources/PreviewAssets/Now_is_the_time.mscz`
+/// (untracked by design — drop your own copy there) and falls back to `PreviewSampleScore.tall` so the build keeps
+/// working without it.
 @MainActor
 private func paged(
     prefs: ReaderPreferences? = nil,
@@ -37,12 +36,9 @@ private func paged(
         .background(Color.gray.opacity(0.4))
 }
 
-/// Mimics what `ReaderRootScreen` does: applies
-/// `safeAreaPadding(.top, ReaderTopOverlay.height)` on top of the
-/// device's own status-bar / notch reserve. Without this the
-/// container's background reader sees only the simulated chrome and
-/// subtracts the overlay height to zero, leaving an artificially
-/// small top inset.
+/// Mimics what `ReaderRootScreen` does: applies `safeAreaPadding(.top, ReaderTopOverlay.height)` on top of the device's
+/// own status-bar / notch reserve. Without this the container's background reader sees only the simulated chrome and
+/// subtracts the overlay height to zero, leaving an artificially small top inset.
 private func underRootScreenChrome(_ statusBarTop: CGFloat) -> CGFloat {
     statusBarTop + ReaderTopOverlay.height
 }

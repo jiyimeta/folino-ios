@@ -30,8 +30,8 @@ private final class FailingRepository: ScoreLibraryRepository {
         []
     }
 
-    /// Reader preferences: no-op stubs — this fake exists to fail score-item
-    /// saves; reader-pref methods aren't exercised by these tests.
+    /// Reader preferences: no-op stubs — this fake exists to fail score-item saves; reader-pref methods aren't
+    /// exercised by these tests.
     func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
         nil
     }

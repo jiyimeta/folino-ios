@@ -1,10 +1,8 @@
 import Foundation
 
-/// A coordinate that uniquely identifies a chord inside an engraved score's
-/// layout. Used as the cursor position and as the endpoints of A–B repeat
-/// ranges. The exact mapping to `SheetMusicLayout` cursor types is the
-/// Infrastructure adapter's responsibility — Domain only stores integer
-/// indices.
+/// A coordinate that uniquely identifies a chord inside an engraved score's layout. Used as the cursor position and as
+/// the endpoints of A–B repeat ranges. The exact mapping to `SheetMusicLayout` cursor types is the Infrastructure
+/// adapter's responsibility — Domain only stores integer indices.
 public struct ChordPath: Hashable, Sendable, Codable {
     public let systemIndex: Int
     public let measureIndex: Int
@@ -19,9 +17,8 @@ public struct ChordPath: Hashable, Sendable, Codable {
     }
 }
 
-/// Mixer settings for one staff in the engraved score. `gmBank` follows the
-/// MIDI convention (0 = melodic, 128 = drum); `gmProgram` is the General MIDI
-/// program number (0…127).
+/// Mixer settings for one staff in the engraved score. `gmBank` follows the MIDI convention (0 = melodic, 128 = drum);
+/// `gmProgram` is the General MIDI program number (0…127).
 public struct StaffMixerState: Hashable, Sendable, Codable {
     public let staffIndex: Int
     public var volume: Double
@@ -51,8 +48,8 @@ public struct ABRepeatRange: Hashable, Sendable, Codable {
     }
 }
 
-/// Per-score playback preferences: mixer state, tempo multiplier, and any
-/// active A–B loop. Persisted alongside the score item.
+/// Per-score playback preferences: mixer state, tempo multiplier, and any active A–B loop. Persisted alongside the
+/// score item.
 public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
     public let id: PlaybackPreferencesID
     public let scoreItemID: ScoreItemID

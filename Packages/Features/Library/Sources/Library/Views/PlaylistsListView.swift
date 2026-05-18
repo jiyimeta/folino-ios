@@ -4,8 +4,8 @@ import UtilityUI
 
 struct PlaylistsListView: View {
     let playlists: [Playlist]
-    /// Number of *live* items in the playlist — soft-deleted items are
-    /// excluded so the count matches what's actually playable / visible.
+    /// Number of *live* items in the playlist — soft-deleted items are excluded so the count matches what's actually
+    /// playable / visible.
     let memberCount: (Playlist) -> Int
     let onCreate: (String) -> Void
     let onDelete: (Playlist) -> Void

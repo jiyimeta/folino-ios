@@ -1,9 +1,8 @@
 import Foundation
 
-/// A cache record describing one (bank, program) SoundFont 2 patch on disk.
-/// Bundled patches and downloaded patches both use this record; the
-/// `isBundled` flag distinguishes them so the cache management UI can prevent
-/// deletion of bundled patches.
+/// A cache record describing one (bank, program) SoundFont 2 patch on disk. Bundled patches and downloaded patches both
+/// use this record; the `isBundled` flag distinguishes them so the cache management UI can prevent deletion of bundled
+/// patches.
 public struct SoundfontPatch: Hashable, Sendable, Codable, Identifiable {
     public var id: SoundfontPatchKey {
         SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)

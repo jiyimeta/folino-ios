@@ -2,10 +2,9 @@ import Domain
 import SheetMusicLayout
 import SwiftUI
 
-/// Translucent accent-color band drawn over the measures inside the
-/// active A–B loop. Sized to the same `LayoutDocument` that
-/// `ScoreView(document:score:...)` consumes — drop into the same
-/// `ZStack` and the rectangles align with the rendered staves.
+/// Translucent accent-color band drawn over the measures inside the active A–B loop. Sized to the same `LayoutDocument`
+/// that `ScoreView(document:score:...)` consumes — drop into the same `ZStack` and the rectangles align with the
+/// rendered staves.
 struct LoopRegionOverlay: View {
     let document: LayoutDocument
     let range: ABRepeatRange?

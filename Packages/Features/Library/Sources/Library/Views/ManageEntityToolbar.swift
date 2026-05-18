@@ -1,9 +1,8 @@
 import SwiftUI
 import UtilityUI
 
-/// Localization keys for the leading "manage" ellipsis menu shown on
-/// `PlaylistDetailView` / `TagDetailView`. Literals stay at the struct-init
-/// sites so xcstringstool keeps extracting them.
+/// Localization keys for the leading "manage" ellipsis menu shown on `PlaylistDetailView` / `TagDetailView`. Literals
+/// stay at the struct-init sites so xcstringstool keeps extracting them.
 struct ManageEntityCopy {
     let editAccessibilityLabelKey: LocalizedStringKey
     let renameTitleKey: LocalizedStringKey

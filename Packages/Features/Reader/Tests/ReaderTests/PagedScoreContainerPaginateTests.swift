@@ -4,15 +4,12 @@ import SheetMusicLayout
 import Testing
 
 struct PagedScoreContainerPaginateTests {
-    /// Builds a `LayoutSystem` placed at `originY` in document
-    /// coordinates with the requested height. Other fields are
-    /// stubbed to the minimum init can swallow — pagination math
-    /// only inspects `origin.y`, `size.height`, and
+    /// Builds a `LayoutSystem` placed at `originY` in document coordinates with the requested height. Other fields are
+    /// stubbed to the minimum init can swallow — pagination math only inspects `origin.y`, `size.height`, and
     /// `measures.last?.pageBreak`.
     ///
-    /// The real `LayoutEngine` bakes `systemGap` into `origin.y`, so
-    /// callers expressing a gap should leave a numeric gap between
-    /// successive `originY` values rather than passing it separately.
+    /// The real `LayoutEngine` bakes `systemGap` into `origin.y`, so callers expressing a gap should leave a numeric
+    /// gap between successive `originY` values rather than passing it separately.
     private static func system(
         originY: CGFloat,
         height: CGFloat,
@@ -81,10 +78,9 @@ struct PagedScoreContainerPaginateTests {
         #expect(pages == [0 ..< 1, 1 ..< 2])
     }
 
-    /// Two systems whose `size.height` sum (= 800) fits the page,
-    /// but whose combined extent including `systemGap` exceeds it.
-    /// The old size-only paginator put both on one page; the new
-    /// origin-based paginator correctly splits them.
+    /// Two systems whose `size.height` sum (= 800) fits the page, but whose combined extent including `systemGap`
+    /// exceeds it. The old size-only paginator put both on one page; the new origin-based paginator correctly splits
+    /// them.
     @Test func `system gap counts toward page extent`() {
         let systems = [
             Self.system(originY: 0, height: 400),
@@ -117,8 +113,8 @@ struct PagedScoreContainerPaginateTests {
         let pages = PagedScoreContainer.paginate(
             systems: systems, pageHeight: 800, policy: .ignoreAll,
         )
-        // All three fit vertically (bottom of last = 640 < 800);
-        // without the page-break closing page 1 they share a single page.
+        // All three fit vertically (bottom of last = 640 < 800); without the page-break closing page 1 they share a
+        // single page.
         #expect(pages == [0 ..< 3])
     }
 

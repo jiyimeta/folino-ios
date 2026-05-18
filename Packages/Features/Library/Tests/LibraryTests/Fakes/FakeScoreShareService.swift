@@ -14,9 +14,8 @@ final class FakeScoreShareService: ScoreShareService, @unchecked Sendable {
     var prepareShareReturnURL: URL = .init(fileURLWithPath: "/tmp/share-fake")
     private(set) var prepareShareCalls: [(item: ScoreItem, format: ScoreShareFormat)] = []
 
-    /// Tests set this to make `prepareShare` await the closure mid-flight,
-    /// so they can observe `vm.isPreparingShare == true` while the call is
-    /// in flight.
+    /// Tests set this to make `prepareShare` await the closure mid-flight, so they can observe `vm.isPreparingShare ==
+    /// true` while the call is in flight.
     var inFlightHook: (@Sendable () async -> Void)?
 
     func availableFormats(for _: ScoreItem) -> [ScoreShareFormatOption] {

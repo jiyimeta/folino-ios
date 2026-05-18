@@ -13,10 +13,8 @@ struct PlaybackInspectorScreen: View {
 
     var body: some View {
         List {
-            // Two unheadered sections separate the tempo/metronome group
-            // (which the slider belongs to) from repeat mode — the gap
-            // makes it visually obvious the slider is not a metronome
-            // volume control.
+            // Two unheadered sections separate the tempo/metronome group (which the slider belongs to) from repeat mode
+            // — the gap makes it visually obvious the slider is not a metronome volume control.
             Section {
                 metronomeRow
                 tempoRow
@@ -62,12 +60,10 @@ struct PlaybackInspectorScreen: View {
 
     @ViewBuilder
     private var tempoRow: some View {
-        // Route the slider's binding through `tempoModel` (like the per-staff
-        // volume sliders go through `mixerModel`) so the slider's release-
-        // time writeback lands in the model's transient `liveMultiplier` and
-        // `commitMultiplier` / `resetMultiplier` can authoritatively clear
-        // it — a slider double-tap reset against a plain `@Binding` to local
-        // `@State` is overwritten by the writeback and silently reverts.
+        // Route the slider's binding through `tempoModel` (like the per-staff volume sliders go through `mixerModel`)
+        // so the slider's release-time writeback lands in the model's transient `liveMultiplier` and `commitMultiplier`
+        // / `resetMultiplier` can authoritatively clear it — a slider double-tap reset against a plain `@Binding` to
+        // local `@State` is overwritten by the writeback and silently reverts.
         let tempoBinding = Binding<Double>(
             get: { tempoModel.displayMultiplier },
             set: { tempoModel.setMultiplier($0) },

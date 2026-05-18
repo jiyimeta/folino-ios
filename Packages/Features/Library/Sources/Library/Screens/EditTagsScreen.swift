@@ -37,8 +37,8 @@ struct EditTagsScreen: View {
         await library.save(updated)
     }
 
-    /// Re-read from the repository on each operation in case other operations
-    /// have mutated the score's tagIDs while this sheet is open.
+    /// Re-read from the repository on each operation in case other operations have mutated the score's tagIDs while
+    /// this sheet is open.
     private func currentScoreItem() -> ScoreItem {
         library.repository.scoreItems.first(where: { $0.id == scoreItem.id }) ?? scoreItem
     }

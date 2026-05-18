@@ -1,10 +1,8 @@
 import Domain
 import SheetMusicCore
 
-/// Returns the measure index the cursor points at. Both
-/// `ScoreCursor.beat` and `ScoreCursor.item` carry it directly:
-/// `.beat` has it as a stored field, `.item(ScoreItemID)` exposes
-/// it via `ScoreItemID.measureIndex`.
+/// Returns the measure index the cursor points at. Both `ScoreCursor.beat` and `ScoreCursor.item` carry it directly:
+/// `.beat` has it as a stored field, `.item(ScoreItemID)` exposes it via `ScoreItemID.measureIndex`.
 func measureIndex(of cursor: ScoreCursor) -> Int {
     switch cursor {
     case let .beat(measureIndex, _): measureIndex
@@ -12,18 +10,15 @@ func measureIndex(of cursor: ScoreCursor) -> Int {
     }
 }
 
-/// First-chord ChordPath for the given measure (`voiceIndex = 0,
-/// chordIndex = 0`). The `systemIndex` is set to 0 — it's a layout-side
-/// concept the engine doesn't consume here.
+/// First-chord ChordPath for the given measure (`voiceIndex = 0, chordIndex = 0`). The `systemIndex` is set to 0 — it's
+/// a layout-side concept the engine doesn't consume here.
 func snapMeasureHead(measureIndex: Int, in _: Score) -> ChordPath {
     ChordPath(systemIndex: 0, measureIndex: measureIndex, voiceIndex: 0, chordIndex: 0)
 }
 
-/// Last-chord ChordPath for the given measure. Walks voice 0 of the
-/// first staff to find the maximum chord index. Rests are represented
-/// as `.chord(...)` with empty notes and count for this purpose;
-/// purely non-chord measures (only clef / time signature / etc.) and
-/// empty voices return `nil`.
+/// Last-chord ChordPath for the given measure. Walks voice 0 of the first staff to find the maximum chord index. Rests
+/// are represented as `.chord(...)` with empty notes and count for this purpose; purely non-chord measures (only clef /
+/// time signature / etc.) and empty voices return `nil`.
 func snapMeasureEnd(measureIndex: Int, in score: Score) -> ChordPath? {
     guard let part = score.parts.first,
           let staff = part.staves.first,
@@ -41,8 +36,7 @@ func snapMeasureEnd(measureIndex: Int, in score: Score) -> ChordPath? {
     )
 }
 
-/// Loop range covering the whole score, used for `.loopAll`. `nil` when
-/// the score has no measures.
+/// Loop range covering the whole score, used for `.loopAll`. `nil` when the score has no measures.
 func scoreFullRange(in score: Score) -> ABRepeatRange? {
     guard let part = score.parts.first,
           let staff = part.staves.first,

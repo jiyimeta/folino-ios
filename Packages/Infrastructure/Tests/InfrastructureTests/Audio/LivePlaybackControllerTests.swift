@@ -7,8 +7,8 @@ import Testing
 
 @MainActor
 struct LivePlaybackControllerTests {
-    /// Resolver probe that reports a fixed set of `(bank, program, isDrums)`
-    /// triples as "precisely available", everything else as missing.
+    /// Resolver probe that reports a fixed set of `(bank, program, isDrums)` triples as "precisely available",
+    /// everything else as missing.
     private struct StubProbe: PrecisePatchProbe {
         struct Triple: Hashable { let bank: Int; let program: Int; let isDrums: Bool }
         let available: Set<Triple>
@@ -63,8 +63,8 @@ struct LivePlaybackControllerTests {
 
         let bounds = LivePlaybackController.loopBounds(for: range, in: score)
 
-        // Each measure in `makeMeasureScore` carries a single quarter-note
-        // rest at element index 0. Both endpoints resolve to .rest IDs.
+        // Each measure in `makeMeasureScore` carries a single quarter-note rest at element index 0. Both endpoints
+        // resolve to .rest IDs.
         if case let .rest(startID) = bounds?.start {
             #expect(startID.measureIndex == 1)
             #expect(startID.elementIndex == 0)
@@ -111,10 +111,9 @@ struct LivePlaybackControllerTests {
     }
 
     @Test func `last score item ID returns note ID for chord with notes`() {
-        // MIDI 60 = middle C, TPC 14 = "C natural" in MuseScore's tonal pitch
-        // class numbering. Concrete values don't matter — we only need a
-        // `Chord` whose `notes` is non-empty so `lastScoreItemID` returns
-        // `.note(...)` rather than `.rest(...)`.
+        // MIDI 60 = middle C, TPC 14 = "C natural" in MuseScore's tonal pitch class numbering. Concrete values don't
+        // matter — we only need a `Chord` whose `notes` is non-empty so `lastScoreItemID` returns `.note(...)` rather
+        // than `.rest(...)`.
         let chord = Chord(
             duration: .quarter,
             notes: [Note(pitch: 60, tpc: 14)],
@@ -211,12 +210,10 @@ private enum PartSpec {
     case drums(bank: Int, program: Int)
 }
 
-/// Builds a minimal `Score` whose parts each carry a single pitched-or-drum
-/// staff with one `InstrumentChannel` set to the requested bank/program.
-/// Everything else is left at the default values supplied by
-/// `swift-sheet-music`'s public initializers — measures stay empty,
-/// which is fine for `scoreWithFallbackRewrites`: that helper only
-/// inspects `parts[i].instrument` and `score.allStaves`.
+/// Builds a minimal `Score` whose parts each carry a single pitched-or-drum staff with one `InstrumentChannel` set to
+/// the requested bank/program. Everything else is left at the default values supplied by `swift-sheet-music`'s public
+/// initializers — measures stay empty, which is fine for `scoreWithFallbackRewrites`: that helper only inspects
+/// `parts[i].instrument` and `score.allStaves`.
 private func makeScore(parts specs: [PartSpec]) -> Score {
     let parts: [Part] = specs.enumerated().map { index, spec in
         switch spec {
@@ -245,17 +242,15 @@ private func makeScore(parts specs: [PartSpec]) -> Score {
     return Score(division: 480, parts: parts)
 }
 
-/// First `InstrumentChannel` of the part at `partIndex`. Falls back to a
-/// default-constructed channel if the part has none, mirroring the
-/// helper's own defensive behaviour.
+/// First `InstrumentChannel` of the part at `partIndex`. Falls back to a default-constructed channel if the part has
+/// none, mirroring the helper's own defensive behaviour.
 private func firstChannel(of score: Score, partIndex: Int) -> InstrumentChannel {
     score.parts[partIndex].instrument.channels.first ?? InstrumentChannel()
 }
 
-/// Builds a single-part, single-staff score with `measureCount` measures,
-/// each containing a single quarter-note rest on voice 0 (rests are
-/// the unified empty-chord representation, which is what the cursor
-/// timeline keys via `.rest(RestID)`).
+/// Builds a single-part, single-staff score with `measureCount` measures, each containing a single quarter-note rest on
+/// voice 0 (rests are the unified empty-chord representation, which is what the cursor timeline keys via
+/// `.rest(RestID)`).
 private func makeMeasureScore(measureCount: Int) -> Score {
     let measures = (0 ..< measureCount).map { _ in
         Measure(voices: [Voice(elements: [.rest(duration: .quarter)])])
@@ -269,9 +264,8 @@ private func makeMeasureScore(measureCount: Int) -> Score {
     return Score(division: 480, parts: [part])
 }
 
-/// Builds a single-part, single-staff, single-measure score with the
-/// given `Measure`. Used by `firstScoreItemID` / `lastScoreItemID`
-/// tests that need to specify exact voice content.
+/// Builds a single-part, single-staff, single-measure score with the given `Measure`. Used by `firstScoreItemID` /
+/// `lastScoreItemID` tests that need to specify exact voice content.
 private func makeSingleMeasureScore(measure: Measure) -> Score {
     let staff = Staff(measures: [measure])
     let part = Part(
@@ -284,9 +278,8 @@ private func makeSingleMeasureScore(measure: Measure) -> Score {
 
 private enum TestError: Error, Equatable { case boom }
 
-/// Minimal AudioResolver — required by `LivePlaybackController.init` but
-/// never consulted by the cache / prefetch paths under test, which only
-/// touch the Domain resolver.
+/// Minimal AudioResolver — required by `LivePlaybackController.init` but never consulted by the cache / prefetch paths
+/// under test, which only touch the Domain resolver.
 private struct NoopAudioResolver: SheetMusicAudio.SoundfontResolver {
     func soundfontURL(forBank _: UInt8, program _: UInt8, isDrums _: Bool) -> URL? {
         nil
@@ -297,9 +290,8 @@ private struct NoopAudioResolver: SheetMusicAudio.SoundfontResolver {
     }
 }
 
-/// Records `resolveSoundfont` calls and returns either a fake URL or the
-/// configured error. `cachedPatches()` returns one `SoundfontPatch` per
-/// key in `cached`, or throws `cachedPatchesError` if set.
+/// Records `resolveSoundfont` calls and returns either a fake URL or the configured error. `cachedPatches()` returns
+/// one `SoundfontPatch` per key in `cached`, or throws `cachedPatchesError` if set.
 private actor FakeDomainSoundfontResolver: Domain.SoundfontResolver {
     var cached: Set<SoundfontPatchKey>
     var cachedPatchesError: Error?

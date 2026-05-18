@@ -1,9 +1,8 @@
 import SwiftUI
 import UtilityUI
 
-/// Localization keys for the trailing "+" create-entity toolbar shown on
-/// `PlaylistsListView` / `TagsListView`. Literals stay at the struct-init
-/// sites so xcstringstool keeps extracting them.
+/// Localization keys for the trailing "+" create-entity toolbar shown on `PlaylistsListView` / `TagsListView`. Literals
+/// stay at the struct-init sites so xcstringstool keeps extracting them.
 struct CreateEntityCopy {
     let createTitleKey: LocalizedStringKey
     let createMessageKey: LocalizedStringKey

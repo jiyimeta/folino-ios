@@ -31,11 +31,9 @@ public final class ShareSession {
 
     /// Copies `NSItemProvider` items into the App Group container under `token/files/`.
     ///
-    /// `NSItemProvider` doesn't reliably advertise a single, specific UTI — Files
-    /// often only sets `public.file-url`, and other hosts may use a sibling app's
-    /// reverse-DNS UTI we don't know. `loadProviderFile` picks whichever
-    /// identifier the provider exposes; the filename-extension allow-list below
-    /// is the real gate.
+    /// `NSItemProvider` doesn't reliably advertise a single, specific UTI — Files often only sets `public.file-url`,
+    /// and other hosts may use a sibling app's reverse-DNS UTI we don't know. `loadProviderFile` picks whichever
+    /// identifier the provider exposes; the filename-extension allow-list below is the real gate.
     public func ingest(items: [NSItemProvider], token: UUID) async -> IngestSummary {
         let filesURL = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
         try? FileManager.default.createDirectory(at: filesURL, withIntermediateDirectories: true)
@@ -82,9 +80,8 @@ public final class ShareSession {
         return IngestSummary(token: token, acceptedFiles: accepted, unsupportedCount: unsupported)
     }
 
-    /// Picks the most specific usable UTI from a provider's registered list
-    /// and loads the file representation. URL-only items (where the only
-    /// usable identifier is `public.url` / `public.file-url`) need the
+    /// Picks the most specific usable UTI from a provider's registered list and loads the file representation. URL-only
+    /// items (where the only usable identifier is `public.url` / `public.file-url`) need the
     /// `loadItem(forTypeIdentifier:)` path with security-scoped access.
     private func loadProviderFile(provider: NSItemProvider, index: Int) async throws -> URL? {
         let registered = provider.registeredTypeIdentifiers
@@ -208,8 +205,8 @@ public final class ShareSession {
     }
 }
 
-/// Mirror of ShareTokenURL.build from the ImportExport main-app library.
-/// Duplicated here so ImportExportShareUI does not need to depend on ImportExport.
+/// Mirror of ShareTokenURL.build from the ImportExport main-app library. Duplicated here so ImportExportShareUI does
+/// not need to depend on ImportExport.
 private enum ShareTokenURLBuilder {
     static func build(token: UUID, openAfter: Bool) -> URL {
         var c = URLComponents()

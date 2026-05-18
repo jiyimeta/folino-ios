@@ -1,11 +1,9 @@
 import Domain
 import Foundation
 
-/// In-memory `(bank, program) -> name` lookup built from the SoundFont 2
-/// preset-header (`phdr`) chunk of a bundled `.sf2` file. Loading is lazy
-/// and only reads the small `pdta` LIST chunk — sample data (the bulk of
-/// the file) is never touched, so init costs are dominated by I/O setup
-/// rather than 200 MB of throughput.
+/// In-memory `(bank, program) -> name` lookup built from the SoundFont 2 preset-header (`phdr`) chunk of a bundled
+/// `.sf2` file. Loading is lazy and only reads the small `pdta` LIST chunk — sample data (the bulk of the file) is
+/// never touched, so init costs are dominated by I/O setup rather than 200 MB of throughput.
 public struct BundledSF2PresetCatalog: SoundfontPresetCatalog {
     private let names: [BankProgram: String]
 
