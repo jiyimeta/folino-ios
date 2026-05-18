@@ -1,4 +1,3 @@
-// Sources/ImportExportShareUI/ShareDecision.swift
 import Domain
 import Foundation
 import ImportExportAppGroup

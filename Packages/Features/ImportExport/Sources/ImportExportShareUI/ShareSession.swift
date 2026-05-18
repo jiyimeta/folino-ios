@@ -1,4 +1,3 @@
-// Sources/ImportExportShareUI/ShareSession.swift
 import Domain
 import Foundation
 import ImportExportAppGroup
@@ -32,13 +31,11 @@ public final class ShareSession {
 
     /// Copies `NSItemProvider` items into the App Group container under `token/files/`.
     ///
-    /// `NSItemProvider` from `Files` etc. doesn't reliably advertise the
-    /// specific score UTIs even when the main app declares them — many
-    /// share-sheet sources only set `public.data`. We try the specific
-    /// UTIs and parent UTIs first (so the load uses the most precise
-    /// type identifier available), then fall back to `public.data` /
-    /// `public.file-url` so we still receive the bytes. The filename
-    /// extension allow-list is the real gate.
+    /// `NSItemProvider` doesn't reliably advertise a single, specific UTI — Files
+    /// often only sets `public.file-url`, and other hosts may use a sibling app's
+    /// reverse-DNS UTI we don't know. `loadProviderFile` picks whichever
+    /// identifier the provider exposes; the filename-extension allow-list below
+    /// is the real gate.
     public func ingest(items: [NSItemProvider], token: UUID) async -> IngestSummary {
         let filesURL = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
         try? FileManager.default.createDirectory(at: filesURL, withIntermediateDirectories: true)
@@ -46,9 +43,7 @@ public final class ShareSession {
         var accepted: [IncomingShareIntent.File] = []
         var unsupported = 0
 
-        logger.notice(
-            "ingest start build=\(Self.buildMarker, privacy: .public) count=\(items.count, privacy: .public)",
-        )
+        logger.notice("ingest start count=\(items.count, privacy: .public)")
         for (index, provider) in items.enumerated() {
             let ids = provider.registeredTypeIdentifiers.joined(separator: ",")
             logger.notice("provider[\(index, privacy: .public)] type IDs: \(ids, privacy: .public)")
@@ -147,10 +142,6 @@ public final class ShareSession {
     private static let acceptedExtensions: Set = [
         "mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid",
     ]
-
-    /// Bump this string per device-deploy iteration so logs unambiguously
-    /// reveal whether the latest binary is running. Format is free-form.
-    private static let buildMarker = "r6-2026-05-18"
 
     public func finalize(
         token: UUID,

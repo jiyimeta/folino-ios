@@ -1,4 +1,3 @@
-// Sources/ImportExportShareUI/ShareRootView.swift
 import Domain
 import ImportExportAppGroup
 import SwiftUI
@@ -21,7 +20,6 @@ public struct ShareRootView: View {
     @State private var summary: IngestSummary?
     @State private var playlists: [PlaylistsIndex.Entry] = []
     @State private var selection: PlaylistChoice = .libraryOnly
-    @State private var isFinalizing = false
     @State private var fatalMessage: String?
 
     private let session: ShareSession
@@ -52,6 +50,16 @@ public struct ShareRootView: View {
                         } label: {
                             Text("share_extension.cancel", bundle: .module)
                         }
+                    }
+
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            finalize(decision: .saveAndOpen(selection))
+                        } label: {
+                            Image(systemName: "checkmark")
+                        }
+                        .buttonStyle(.glassProminent)
+                        .disabled(summary?.acceptedFiles.isEmpty ?? true)
                     }
                 }
                 .task {
@@ -84,33 +92,12 @@ public struct ShareRootView: View {
     }
 
     private func loadedView(summary: IngestSummary) -> some View {
-        Form {
-            Section {
-                FileSummary(files: summary.acceptedFiles, unsupportedCount: summary.unsupportedCount)
-            }
-            if summary.acceptedFiles.isEmpty {
-                Section {
-                    Text("share_extension.no_supported_files", bundle: .module)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Section {
-                    PlaylistPicker(entries: playlists, selection: $selection)
-                } header: {
-                    Text("share_extension.picker.title", bundle: .module)
-                }
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            ActionButtons(
-                disabled: summary.acceptedFiles.isEmpty || isFinalizing,
-                onSave: { finalize(decision: .save(selection)) },
-                onSaveAndOpen: { finalize(decision: .saveAndOpen(selection)) },
-            )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.bar)
-        }
+        ShareLoadedContent(
+            acceptedFiles: summary.acceptedFiles,
+            unsupportedCount: summary.unsupportedCount,
+            playlists: playlists,
+            selection: $selection,
+        )
     }
 
     private var loadingView: some View {
@@ -124,7 +111,6 @@ public struct ShareRootView: View {
 
     private func finalize(decision: ShareDecision) {
         guard let summary else { return }
-        isFinalizing = true
         do {
             let url = try session.finalize(
                 token: token,
@@ -133,13 +119,33 @@ public struct ShareRootView: View {
             )
             onComplete(.init(outcome: .submitted(openURL: url)))
         } catch {
-            isFinalizing = false
             fatalMessage = String(describing: error)
         }
     }
 }
 
-#Preview("Empty playlists") {
+/// Internal content of the loaded share screen. Pulled out of
+/// `ShareRootView.loadedView` so SwiftUI previews can drive it without
+/// having to fake `NSItemProvider` ingestion.
+private struct ShareLoadedContent: View {
+    let acceptedFiles: [IncomingShareIntent.File]
+    let unsupportedCount: Int
+    let playlists: [PlaylistsIndex.Entry]
+    @Binding var selection: PlaylistChoice
+
+    var body: some View {
+        Form {
+            FileSummarySection(files: acceptedFiles, unsupportedCount: unsupportedCount)
+            if !acceptedFiles.isEmpty {
+                PlaylistPickerSection(entries: playlists, selection: $selection)
+            }
+        }
+    }
+}
+
+// MARK: - Previews
+
+#Preview("Empty (loading from empty App Group)") {
     let tmp = FileManager.default.temporaryDirectory
         .appending(path: "share-preview-\(UUID().uuidString)")
     try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
@@ -148,4 +154,91 @@ public struct ShareRootView: View {
         items: [],
         onComplete: { _ in },
     )
+}
+
+#Preview("Single file, no playlists") {
+    PreviewLoaded(
+        files: [
+            .init(
+                relativePath: "files/Beethoven Sonata No. 14.mscz",
+                originalName: "Beethoven Sonata No. 14.mscz",
+            ),
+        ],
+        playlists: [],
+    )
+}
+
+#Preview("Single file, several playlists") {
+    PreviewLoaded(
+        files: [
+            .init(
+                relativePath: "files/Goldberg Variations.mscz",
+                originalName: "Goldberg Variations.mscz",
+            ),
+        ],
+        playlists: [
+            .init(id: PlaylistID(), name: "Practice"),
+            .init(id: PlaylistID(), name: "Jazz studies"),
+            .init(id: PlaylistID(), name: "Sight reading"),
+        ],
+    )
+}
+
+#Preview("Multiple files, several playlists") {
+    PreviewLoaded(
+        files: [
+            .init(relativePath: "files/First.mscz", originalName: "First.mscz"),
+            .init(relativePath: "files/Second.musicxml", originalName: "Second.musicxml"),
+            .init(relativePath: "files/Third.midi", originalName: "Third.midi"),
+        ],
+        playlists: [
+            .init(id: PlaylistID(), name: "Practice"),
+            .init(id: PlaylistID(), name: "Concert prep"),
+        ],
+    )
+}
+
+#Preview("With unsupported files") {
+    PreviewLoaded(
+        files: [
+            .init(relativePath: "files/MyScore.mscz", originalName: "MyScore.mscz"),
+        ],
+        unsupportedCount: 2,
+        playlists: [
+            .init(id: PlaylistID(), name: "Practice"),
+        ],
+    )
+}
+
+private struct PreviewLoaded: View {
+    let files: [IncomingShareIntent.File]
+    var unsupportedCount = 0
+    let playlists: [PlaylistsIndex.Entry]
+    @State private var selection: PlaylistChoice = .libraryOnly
+
+    var body: some View {
+        NavigationStack {
+            ShareLoadedContent(
+                acceptedFiles: files,
+                unsupportedCount: unsupportedCount,
+                playlists: playlists,
+                selection: $selection,
+            )
+            .navigationTitle(Text("share_extension.title", bundle: .module))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {} label: {
+                        Text("share_extension.cancel", bundle: .module)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {} label: { Image(systemName: "checkmark") }
+                        .buttonStyle(.glassProminent)
+                        .disabled(files.isEmpty)
+                }
+            }
+        }
+        .environment(\.locale, Locale(identifier: "ja"))
+    }
 }

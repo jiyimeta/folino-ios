@@ -3,94 +3,194 @@
   "strings" : {
     "share_extension.action.save" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存" } }
-      }
-    },
-    "share_extension.action.save_and_open" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save & Open" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存して開く" } }
-      }
-    },
-    "share_extension.cancel" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キャンセル" } }
-      }
-    },
-    "share_extension.loading" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preparing…" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "読み込み中…" } }
-      }
-    },
-    "share_extension.no_supported_files" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No supported scores were shared." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "対応している楽譜が見つかりません。" } }
-      }
-    },
-    "share_extension.picker.no_playlist" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Don't add to a playlist" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "playlist に追加しない" } }
-      }
-    },
-    "share_extension.picker.new_playlist" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "New playlist…" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "新しい playlist…" } }
-      }
-    },
-    "share_extension.picker.new_playlist_placeholder" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Playlist name" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "playlist 名" } }
-      }
-    },
-    "share_extension.picker.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add to playlist" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "playlist に追加" } }
-      }
-    },
-    "share_extension.summary.hide_files" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide files" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ファイル一覧を閉じる" } }
-      }
-    },
-    "share_extension.summary.n_scores_%lld" : {
-      "extractionState" : "manual",
-      "localizations" : {
         "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld score" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld scores" } }
-            }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
           }
         },
         "ja" : {
-          "variations" : {
-            "plural" : {
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld 件" } }
-            }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存"
           }
         }
       }
     },
-    "share_extension.summary.one_score" : {
+    "share_extension.action.save_and_open" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "1 score" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "1 件" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save & Open"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存して開く"
+          }
+        }
+      }
+    },
+    "share_extension.cancel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャンセル"
+          }
+        }
+      }
+    },
+    "share_extension.loading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込み中…"
+          }
+        }
+      }
+    },
+    "share_extension.no_supported_files" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No supported scores were shared."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "対応している楽譜が見つかりません。"
+          }
+        }
+      }
+    },
+    "share_extension.picker.new_playlist_placeholder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlist name"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新規プレイリスト"
+          }
+        }
+      }
+    },
+    "share_extension.picker.no_playlist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Don't add to a playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストに追加しない"
+          }
+        }
+      }
+    },
+    "share_extension.picker.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリスト"
+          }
+        }
+      }
+    },
+    "share_extension.summary.hide_files" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide files"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイル一覧を閉じる"
+          }
+        }
+      }
+    },
+    "share_extension.summary.file_to_add" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File to add"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加するファイル"
+          }
+        }
+      }
+    },
+    "share_extension.summary.files_to_add" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Files to add"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加するファイル"
+          }
+        }
       }
     },
     "share_extension.summary.show_files" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show files" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ファイル一覧を見る" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show files"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイル一覧を見る"
+          }
+        }
       }
     },
     "share_extension.summary.unsupported_warning_%lld" : {
@@ -99,15 +199,30 @@
         "en" : {
           "variations" : {
             "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld unsupported file will be skipped" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld unsupported files will be skipped" } }
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld unsupported file will be skipped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld unsupported files will be skipped"
+                }
+              }
             }
           }
         },
         "ja" : {
           "variations" : {
             "plural" : {
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "対応していないファイル %lld 件はスキップされます" } }
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "対応していないファイル %lld 件はスキップされます"
+                }
+              }
             }
           }
         }
@@ -115,8 +230,18 @@
     },
     "share_extension.title" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "folino" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "folino" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino"
+          }
+        }
       }
     }
   },
