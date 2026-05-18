@@ -31,10 +31,10 @@
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "対応している楽譜が見つかりません。" } }
       }
     },
-    "share_extension.picker.library_only" : {
+    "share_extension.picker.no_playlist" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Library only" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Library のみ" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Don't add to a playlist" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "playlist に追加しない" } }
       }
     },
     "share_extension.picker.new_playlist" : {

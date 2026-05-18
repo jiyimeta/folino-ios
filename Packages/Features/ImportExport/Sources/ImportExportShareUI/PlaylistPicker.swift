@@ -21,7 +21,7 @@ struct PlaylistPicker: View {
 
     private var noPlaylistRow: some View {
         selectionRow(
-            label: Text("share_extension.picker.library_only", bundle: .module),
+            label: Text("share_extension.picker.no_playlist", bundle: .module),
             isSelected: selection == .libraryOnly,
             action: { selection = .libraryOnly },
         )
