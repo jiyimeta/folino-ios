@@ -55,7 +55,7 @@ public protocol PlaybackController: Sendable {
     /// Features can subscribe without depending on the audio package directly.
     ///
     /// Synchronous delivery (instead of `AsyncStream`) keeps each cursor change on its own MainActor work item —
-    /// mirroring the engine's `@Published currentCursor` semantics — so SwiftUI gets a render opportunity between every
+    /// mirroring the engine's observable `currentCursor` semantics — so SwiftUI gets a render opportunity between every
     /// change instead of seeing only the last value of a buffered burst.
     @MainActor func observeCursor(_ handler: @MainActor @escaping (ScoreCursor?) -> Void)
 

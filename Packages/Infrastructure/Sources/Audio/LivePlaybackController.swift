@@ -1,8 +1,8 @@
 // swiftlint:disable file_length
-import Combine
 import Domain
 import Foundation
 import MediaPlayer
+import Observation
 import SheetMusicAudio
 import SheetMusicCore
 import UIKit
@@ -25,7 +25,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var isPlayingHandler: (@MainActor (Bool) -> Void)?
-    private var cancellables: Set<AnyCancellable> = []
+    /// Tasks consuming `Observations` streams over the engine's observable `currentCursor` / `state`. Cancelled in
+    /// `deinit` so the loops drop their strong engine reference and exit. Stored separately (rather than as a set) so
+    /// each can be reasoned about and torn down explicitly.
+    private var cursorObservationTask: Task<Void, Never>?
+    private var stateObservationTask: Task<Void, Never>?
     /// Last engine time we observed on the cursor stream. Used to detect backward jumps (A-B loop wrap) and re-publish
     /// `nowPlayingInfo` so the lock-screen scrubber follows the wrap. iOS interpolates the scrubber from the last
     /// published elapsed snapshot + rate, so without an extra publish on wrap the lock screen keeps advancing past B
@@ -50,14 +54,30 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
         self.domainResolver = domainResolver
         self.precisionProbe = precisionProbe
-        engine.$currentCursor
-            .sink { [weak self] value in
-                // Combine emits the engine's `@Published currentCursor` on willSet, synchronously on the MainActor
-                // where the timer task ran. Forward to the registered handler in the same work item so each cursor
-                // change reaches SwiftUI without an intervening Task hop. Routing through `AsyncStream` + `for-await`
-                // instead let the consumer drain a buffered burst in one work item, collapsing the intermediate cursor
-                // positions before SwiftUI got a render slot between them — visible as the cursor "skipping" past chord
-                // onsets that the example app shows.
+        startObservingEngine()
+        configureRemoteCommands()
+    }
+
+    deinit {
+        cursorObservationTask?.cancel()
+        stateObservationTask?.cancel()
+    }
+
+    /// Subscribe to the engine's observable `currentCursor` / `state` via the `Observation` framework. `PlaybackEngine`
+    /// is `@Observable`, so we open an `Observations` stream per property and consume successive snapshots on the main
+    /// actor — replacing the Combine `$currentCursor` / `$state` publishers we used before the engine migrated.
+    ///
+    /// `Observations` yields the latest value when any observed dependency changes; between awaits it coalesces
+    /// intermediate writes. The engine ticks the cursor once per chord / rest step and SwiftUI gets a render slot
+    /// between iterations on the main actor, so in practice this preserves the per-step delivery the cursor highlight
+    /// depends on. If a future engine tick burst (e.g. fast-tempo wrap with multiple cursor moves inside one main-actor
+    /// work item) ever collapses visible chord onsets, the handler signature is small enough to swap to a synchronous
+    /// observation primitive without changing the `PlaybackController` protocol contract.
+    private func startObservingEngine() {
+        let engine = engine
+        cursorObservationTask = Task { @MainActor [weak self] in
+            let stream = Observations { engine.currentCursor }
+            for await cursor in stream {
                 guard let self else { return }
                 let now = engine.currentTimeSeconds
                 if now < lastObservedEngineTime {
@@ -66,16 +86,17 @@ public final class LivePlaybackController: Domain.PlaybackController {
                     publishNowPlayingInfo(seeking: true)
                 }
                 lastObservedEngineTime = now
-                cursorHandler?(value)
+                cursorHandler?(cursor)
             }
-            .store(in: &cancellables)
-        engine.$state
-            .sink { [weak self] newState in
-                self?.publishNowPlayingInfo()
-                self?.isPlayingHandler?(newState == .playing)
+        }
+        stateObservationTask = Task { @MainActor [weak self] in
+            let stream = Observations { engine.state }
+            for await state in stream {
+                guard let self else { return }
+                publishNowPlayingInfo()
+                isPlayingHandler?(state == .playing)
             }
-            .store(in: &cancellables)
-        configureRemoteCommands()
+        }
     }
 
     public func load(
