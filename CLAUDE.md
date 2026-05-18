@@ -96,6 +96,7 @@ These plugins run automatically on every `xcodebuild` / Xcode build — no manua
 
 ## Project Constraints
 
+- **App name is lowercase `folino` for users.** `Folino` is only for type names, the SwiftPM/Xcode scheme name, the project name, and the bundle ID prefix — strictly developer-facing. Anywhere a user can read the brand (Info.plist `CFBundleDisplayName`, navigation titles, alert titles, share-sheet display, marketing copy), it must be lowercase `folino`.
 - **Do not propose AudioKit (the third-party library)**. Folino uses AVFoundation directly via `swift-sheet-music`'s `SheetMusicAudio`.
 - **No GPL dependencies.** Hard constraint.
 - Bumping a SwiftPM dependency means updating both the relevant `Package.swift` AND the `from:` entry under `packages:` in `project.yml` to the same version.
