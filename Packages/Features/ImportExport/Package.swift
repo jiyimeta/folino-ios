@@ -10,6 +10,8 @@ let package = Package(
     platforms: [.iOS(.v26)],
     products: [
         .library(name: "ImportExport", targets: ["ImportExport"]),
+        .library(name: "ImportExportAppGroup", targets: ["ImportExportAppGroup"]),
+        .library(name: "ImportExportShareUI", targets: ["ImportExportShareUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
@@ -18,14 +20,46 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "ImportExportAppGroup",
+            dependencies: ["Domain"],
+            plugins: swiftLintPlugins,
+        ),
+        .target(
             name: "ImportExport",
             dependencies: [
+                "ImportExportAppGroup",
+                "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
+            ],
+            plugins: swiftLintPlugins,
+        ),
+        .target(
+            name: "ImportExportShareUI",
+            dependencies: [
+                "ImportExportAppGroup",
                 "Domain",
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
             ],
+            resources: [.process("Resources")],
             plugins: swiftLintPlugins,
         ),
-        .testTarget(name: "ImportExportTests", dependencies: ["ImportExport"]),
+        .testTarget(
+            name: "ImportExportAppGroupTests",
+            dependencies: ["ImportExportAppGroup", "Domain"],
+        ),
+        .testTarget(
+            name: "ImportExportTests",
+            dependencies: ["ImportExport", "ImportExportAppGroup", "Domain"],
+        ),
+        .testTarget(
+            name: "ImportExportShareUITests",
+            dependencies: [
+                "ImportExportShareUI",
+                "ImportExportAppGroup",
+                "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
+            ],
+        ),
     ],
 )

@@ -7,7 +7,7 @@ import Foundation
 /// importing the screen.
 /// Public + Codable so the App layer can persist `NavigationPath` instances
 /// containing these values.
-enum LibraryRoute: Hashable, Codable {
+public enum LibraryRoute: Hashable, Codable {
     case allScores
     case favorites
     case tags

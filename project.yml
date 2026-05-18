@@ -66,6 +66,7 @@ targets:
           - Folino.entitlements
           - Resources/Soundfonts
           - Resources/Fonts
+          - ShareExtension
       - path: App/Resources/Soundfonts
         type: folder
         buildPhase: resources
@@ -93,11 +94,37 @@ targets:
       - package: Reader
       - package: Editor
       - package: ImportExport
+        products: [ImportExport, ImportExportAppGroup]
       - package: Settings
       - package: swift-sheet-music
         product: SheetMusicLayout
       - package: LicenseList
         product: LicenseList
+      - target: FolinoShareExtension
+        embed: true
+  FolinoShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: App/ShareExtension
+        excludes:
+          - Info.plist
+          - FolinoShareExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.ShareExtension
+        PRODUCT_NAME: FolinoShareExtension
+        INFOPLIST_FILE: App/ShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/ShareExtension/FolinoShareExtension.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: 1,2
+    dependencies:
+      - package: ImportExport
+        products: [ImportExportAppGroup, ImportExportShareUI]
+      - package: Domain
+      - package: Utility
+        products: [UtilityCore]
   FolinoTests:
     type: bundle.unit-test
     platform: iOS

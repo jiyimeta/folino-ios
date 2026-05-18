@@ -1,4 +1,5 @@
 import Domain
+import ImportExport
 import Library
 import LicenseList
 import Reader
@@ -56,6 +57,7 @@ struct AppShellView: View {
                 bootstrap.pruneRecentlyDeletedIfNeeded()
             }
         }
+        .shareDuplicateAlert(resolver: bootstrap.shareDuplicateResolver)
         .sheet(isPresented: $versionHistoryPresenter.isSheetPresented) {
             if let viewModel = versionHistoryPresenter.sheetViewModel {
                 NavigationStack {
@@ -97,6 +99,7 @@ private struct ReadyShell: View {
     @State private var isSettingsPresented = false
     @State private var columnVisibility: NavigationSplitViewVisibility
     @State private var navStateStore = NavigationStateStore()
+    @State private var drainBannerMessage: String?
 
     init(
         bootstrap: AppBootstrap,
@@ -149,6 +152,9 @@ private struct ReadyShell: View {
     /// task so the UI matches the "import in flight" state immediately,
     /// rather than waiting for the import to finish.
     private func resetNavigationForIncomingURL() {
+        libraryVM.dismissImportUI()
+        isSettingsPresented = false
+        versionHistoryPresenter.isSheetPresented = false
         if horizontalSizeClass == .regular {
             sidebarPath = NavigationPath()
             detailScoreItem = nil
@@ -234,6 +240,22 @@ private struct ReadyShell: View {
             resetNavigationForIncomingURL()
             Task { await libraryVM.startImport(from: url) }
         }
+        .task {
+            // Cold-launch: drain a token queued before the view appeared.
+            if let (_, openAfter) = bootstrap.consumePendingShareToken(),
+               let coordinator = bootstrap.incomingShareCoordinator
+            {
+                resetNavigationForIncomingURL()
+                await runDrain(coordinator: coordinator, openAfter: openAfter)
+            }
+        }
+        .onChange(of: bootstrap.pendingShareToken) { _, newValue in
+            guard newValue != nil,
+                  let (_, openAfter) = bootstrap.consumePendingShareToken(),
+                  let coordinator = bootstrap.incomingShareCoordinator else { return }
+            resetNavigationForIncomingURL()
+            Task { await runDrain(coordinator: coordinator, openAfter: openAfter) }
+        }
         .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
         .onChange(of: sidebarPath) { _, _ in saveNavSnapshot() }
         .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
@@ -242,7 +264,61 @@ private struct ReadyShell: View {
                 ImportLoadingHUD()
             }
         }
+        .overlay(alignment: .top) {
+            if let message = drainBannerMessage {
+                DrainBannerView(message: message)
+                    .task {
+                        try? await Task.sleep(for: .seconds(2.5))
+                        drainBannerMessage = nil
+                    }
+            }
+        }
         .animation(.easeInOut(duration: 0.15), value: libraryVM.isImporting)
+        .animation(.easeInOut(duration: 0.2), value: drainBannerMessage)
+    }
+
+    @MainActor
+    private func runDrain(coordinator: IncomingShareCoordinator, openAfter: Bool) async {
+        let result = await coordinator.drain(token: nil)
+        drainBannerMessage = DrainBannerComposer.message(for: result)
+        guard openAfter else { return }
+
+        if result.imported.count >= 2 {
+            // Multi-file import: jump to the destination list, not Reader.
+            let route: LibraryRoute = result.targetPlaylistID
+                .map(LibraryRoute.playlistDetail)
+                ?? .allScores
+            if horizontalSizeClass == .regular {
+                sidebarPath = NavigationPath()
+                sidebarPath.append(route)
+                detailScoreItem = nil
+                columnVisibility = .doubleColumn
+            } else {
+                compactPath = NavigationPath()
+                compactPath.append(route)
+            }
+        } else if let openID = result.openAfter,
+                  let item = repository.scoreItems.first(where: { $0.id == openID })
+        {
+            // Single import or dedupe-to-existing: push Reader, with the
+            // target playlist underneath so the Back affordance lands there.
+            let playlistRoute: LibraryRoute? = result.targetPlaylistID
+                .map(LibraryRoute.playlistDetail)
+            if horizontalSizeClass == .regular {
+                sidebarPath = NavigationPath()
+                if let playlistRoute {
+                    sidebarPath.append(playlistRoute)
+                }
+                detailScoreItem = item
+                columnVisibility = .detailOnly
+            } else {
+                compactPath = NavigationPath()
+                if let playlistRoute {
+                    compactPath.append(playlistRoute)
+                }
+                compactPath.append(item)
+            }
+        }
     }
 
     @ViewBuilder
@@ -304,25 +380,5 @@ private struct ReadyShell: View {
                 Image(systemName: "music.note")
             }
         }
-    }
-}
-
-private struct ImportLoadingHUD: View {
-    var body: some View {
-        ZStack {
-            // Near-invisible tap-capture layer so the user can't reach the
-            // library underneath while the import is running.
-            Color.black.opacity(0.001)
-                .ignoresSafeArea()
-                .accessibilityHidden(true)
-            VStack(spacing: 16) {
-                ProgressView().controlSize(.large)
-                Text("app.import.loading.label")
-            }
-            .padding(24)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .accessibilityElement(children: .combine)
-        }
-        .transition(.opacity)
     }
 }
