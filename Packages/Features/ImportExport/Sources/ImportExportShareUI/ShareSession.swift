@@ -44,20 +44,17 @@ public final class ShareSession {
         var accepted: [IncomingShareIntent.File] = []
         var unsupported = 0
 
-        logger.notice("ingest start; item count=\(items.count, privacy: .public)")
+        logger.notice(
+            "ingest start build=\(Self.buildMarker, privacy: .public) count=\(items.count, privacy: .public)",
+        )
         for (index, provider) in items.enumerated() {
             let ids = provider.registeredTypeIdentifiers.joined(separator: ",")
             logger.notice("provider[\(index, privacy: .public)] type IDs: \(ids, privacy: .public)")
-            let matched = Self.candidateTypeIdentifiers
-                .first { provider.hasItemConformingToTypeIdentifier($0) }
-            guard let matched else {
-                logger.notice("provider[\(index, privacy: .public)] has no usable UTI; skipping")
-                unsupported += 1
-                continue
-            }
-            logger.notice("provider[\(index, privacy: .public)] matched UTI: \(matched, privacy: .public)")
             do {
-                let url = try await loadFileRepresentation(provider: provider, typeIdentifier: matched)
+                guard let url = try await loadProviderFile(provider: provider, index: index) else {
+                    unsupported += 1
+                    continue
+                }
                 let ext = url.pathExtension.lowercased()
                 let name = url.lastPathComponent
                 logger.notice("provider[\(index, privacy: .public)] loaded name=\(name, privacy: .public)")
@@ -76,7 +73,7 @@ public final class ShareSession {
             } catch {
                 let errDesc = String(describing: error)
                 logger.error(
-                    "provider[\(index, privacy: .public)] load failure: \(errDesc, privacy: .public)",
+                    "provider[\(index, privacy: .public)] failure: \(errDesc, privacy: .public)",
                 )
                 unsupported += 1
             }
@@ -88,25 +85,70 @@ public final class ShareSession {
         return IngestSummary(token: token, acceptedFiles: accepted, unsupportedCount: unsupported)
     }
 
-    private static let candidateTypeIdentifiers: [String] = [
-        // Specific UTIs whichever app on the device owns the registration.
-        "org.musescore.mscz",
-        "org.musescore.mscx",
-        "com.recordare.musicxml",
-        "com.recordare.musicxml.zipped",
-        // Parent UTIs for cloud providers handing us generic identifiers.
-        "public.zip-archive",
-        "public.xml",
-        "public.midi-audio",
-        // Last-resort fallbacks: many share-sheet sources only set these.
-        // The filename-extension check below is what actually filters.
-        "public.file-url",
-        "public.data",
+    /// Picks the most specific usable UTI from a provider's registered list
+    /// and loads the file representation. URL-only items (where the only
+    /// usable identifier is `public.url` / `public.file-url`) need the
+    /// `loadItem(forTypeIdentifier:)` path with security-scoped access.
+    private func loadProviderFile(provider: NSItemProvider, index: Int) async throws -> URL? {
+        let registered = provider.registeredTypeIdentifiers
+        let specific = registered.first { !Self.urlOnlyIdentifiers.contains($0) }
+        if let specific {
+            logger.notice("provider[\(index, privacy: .public)] using specific UTI \(specific, privacy: .public)")
+            return try await loadFileRepresentation(provider: provider, typeIdentifier: specific)
+        }
+        if registered.contains("public.file-url") {
+            logger.notice("provider[\(index, privacy: .public)] using public.file-url item path")
+            return try await loadFileURLItem(provider: provider)
+        }
+        logger.notice("provider[\(index, privacy: .public)] no usable UTI; skipping")
+        return nil
+    }
+
+    private func loadFileURLItem(provider: NSItemProvider) async throws -> URL {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
+            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                if let error {
+                    cont.resume(throwing: error)
+                    return
+                }
+                let url: URL? = (item as? URL)
+                    ?? (item as? NSURL).map { $0 as URL }
+                    ?? (item as? Data).flatMap { URL(dataRepresentation: $0, relativeTo: nil, isAbsolute: true) }
+                guard let url else {
+                    cont.resume(throwing: NSError(
+                        domain: "ShareSession", code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: "loadItem returned non-URL"],
+                    ))
+                    return
+                }
+                do {
+                    let dst = FileManager.default.temporaryDirectory
+                        .appending(path: "share-\(UUID().uuidString)-\(url.lastPathComponent)")
+                    if FileManager.default.fileExists(atPath: dst.path) {
+                        try FileManager.default.removeItem(at: dst)
+                    }
+                    let accessing = url.startAccessingSecurityScopedResource()
+                    defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                    try FileManager.default.copyItem(at: url, to: dst)
+                    cont.resume(returning: dst)
+                } catch {
+                    cont.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private static let urlOnlyIdentifiers: Set = [
+        "public.url", "public.file-url", "public.data", "public.item",
     ]
 
     private static let acceptedExtensions: Set = [
         "mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid",
     ]
+
+    /// Bump this string per device-deploy iteration so logs unambiguously
+    /// reveal whether the latest binary is running. Format is free-form.
+    private static let buildMarker = "r3-2026-05-18"
 
     public func finalize(
         token: UUID,
