@@ -208,6 +208,74 @@
         }
       }
     },
+    "settings.reader.keepScreenAwake" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prevent auto-lock"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動ロックを抑止"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "자동 잠금 방지"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阻止自动锁屏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "防止自動鎖定"
+          }
+        }
+      }
+    },
+    "settings.reader.keepScreenAwake.footer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauses the device's auto-lock while a score is open."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜を開いている間、デバイスの自動ロックを一時的に止めます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보를 열어 둔 동안 기기의 자동 잠금을 일시적으로 막습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在打开乐谱时，暂时阻止设备自动锁屏。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在開啟樂譜時，暫時防止裝置自動鎖定。"
+          }
+        }
+      }
+    },
     "settings.reader.layout.title" : {
       "localizations" : {
         "en" : {

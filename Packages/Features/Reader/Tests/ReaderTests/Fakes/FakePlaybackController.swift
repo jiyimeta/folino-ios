@@ -104,6 +104,12 @@ final class FakePlaybackController: PlaybackController {
         pauseCount += 1
     }
 
+    private(set) var releaseEngineCount = 0
+
+    func releaseEngine() {
+        releaseEngineCount += 1
+    }
+
     func setStaffVolume(staff: Int, volume: Double) {
         staffVolumes[staff] = volume
     }

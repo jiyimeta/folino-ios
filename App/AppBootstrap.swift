@@ -1,5 +1,4 @@
 import Audio
-import AVFoundation
 import Domain
 import Foundation
 import ImportExport
@@ -38,7 +37,6 @@ final class AppBootstrap {
 
     func start() {
         do {
-            configureAudioSession()
             try prepareDirectories()
             let appGroupContainer = AppGroupPaths.container()
             let writer: PlaylistsIndexWriter? = appGroupContainer.map {
@@ -139,13 +137,6 @@ final class AppBootstrap {
         try FileManager.default.createDirectory(
             at: AppPaths.shareTempDirectory, withIntermediateDirectories: true,
         )
-    }
-
-    private func configureAudioSession() {
-        try? AVAudioSession.sharedInstance().setCategory(
-            .playback, mode: .default, options: [],
-        )
-        try? AVAudioSession.sharedInstance().setActive(true)
     }
 
     func acceptIncomingURL(_ url: URL) {

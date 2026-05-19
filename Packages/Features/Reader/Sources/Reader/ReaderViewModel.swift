@@ -425,6 +425,15 @@ final class ReaderViewModel {
         preloadTask = nil
     }
 
+    /// Tear down the audio engine and reset prepare-state so the system's auto-lock can take effect once the Reader is
+    /// off-screen. A subsequent `prepareForPlayback()` re-primes the engine for the same score on return.
+    func releaseEngine() async {
+        preloadTask?.cancel()
+        preloadTask = nil
+        await playbackController?.releaseEngine()
+        hasLoadedIntoPlayback = false
+    }
+
     func togglePlayback() async {
         guard let controller = playbackController,
               case let .loaded(score) = loadState,

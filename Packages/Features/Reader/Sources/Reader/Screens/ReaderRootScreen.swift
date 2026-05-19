@@ -1,6 +1,7 @@
 import Domain
 import SheetMusicCore
 import SwiftUI
+import UIKit
 import UtilityUI
 
 @MainActor
@@ -21,6 +22,9 @@ public struct ReaderRootScreen: View {
 
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
+
+    @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
+    private var keepScreenAwake = true
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -101,6 +105,19 @@ public struct ReaderRootScreen: View {
             // Initial sync: the engine starts up unaware of persisted state, so seed it from the @AppStorage value at
             // view start.
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
+        }
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            // `engine.prepare(score:)` ends with `AVAudioEngine.start()` + `engine.pause()`. iOS treats a running
+            // engine on a `.playback` session as active audio output and would inhibit auto-lock for the rest of the
+            // app's lifetime if we never tore it down. Release here so screen lock can resume once the user leaves the
+            // Reader.
+            let viewModel = viewModel
+            Task { await viewModel.releaseEngine() }
+        }
+        .onChange(of: keepScreenAwake) { _, newValue in
+            UIApplication.shared.isIdleTimerDisabled = newValue
         }
         .onChange(of: isMetronomeEnabled) { _, newValue in
             // The iPad fix: if the user toggles metronome from the Settings sheet while a Reader detail pane is alive

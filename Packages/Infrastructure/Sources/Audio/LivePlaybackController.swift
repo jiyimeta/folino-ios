@@ -1,4 +1,5 @@
 // swiftlint:disable file_length
+import AVFoundation
 import Domain
 import Foundation
 import MediaPlayer
@@ -250,6 +251,21 @@ public final class LivePlaybackController: Domain.PlaybackController {
     public func pause() {
         engine.pause()
         publishNowPlayingInfo()
+    }
+
+    public func releaseEngine() {
+        // `engine.prepare(score:)` ends with `AVAudioEngine.start()` and only pauses it afterwards. iOS treats a
+        // `.playback` session — active or paused — as ongoing audio output and inhibits screen auto-lock for the rest
+        // of the app's lifetime. Teardown stops the underlying AVAudioEngine and releases samplers; the session is
+        // then explicitly demoted to `.ambient` and deactivated so the system resumes normal idle-timer behavior. The
+        // next `load(score:...)` re-primes everything (engine.prepare sets the category back to `.playback`).
+        engine.teardown()
+        loadedScore = nil
+        pendingCursor = nil
+        lastObservedEngineTime = 0
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        try? session.setCategory(.ambient, mode: .default, options: [])
     }
 
     public var currentTimeSeconds: TimeInterval {

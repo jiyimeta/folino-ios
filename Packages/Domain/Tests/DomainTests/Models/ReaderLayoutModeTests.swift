@@ -42,4 +42,10 @@ struct ReaderLayoutModeTests {
                 == "readerCollapseMultiMeasureRests",
         )
     }
+
+    @Test func `keep screen awake key is stable`() {
+        #expect(
+            ReaderGlobalSettingsKey.keepScreenAwakeEnabled == "readerKeepScreenAwakeEnabled",
+        )
+    }
 }

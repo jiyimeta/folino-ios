@@ -27,6 +27,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
 
+    @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
+    private var keepScreenAwake = true
+
     public init(
         soundfontResolver: (any SoundfontResolver)? = nil,
         presetCatalog: (any SoundfontPresetCatalog)? = nil,
@@ -108,6 +111,18 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 } icon: {
                     Image(systemName: "rectangle.compress.vertical")
                         .rotationEffect(.degrees(90))
+                }
+            }
+            Toggle(isOn: $keepScreenAwake) {
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("settings.reader.keepScreenAwake", bundle: .module)
+                        Text("settings.reader.keepScreenAwake.footer", bundle: .module)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "lock.slash")
                 }
             }
             readerLayoutRow

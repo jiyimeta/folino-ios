@@ -30,6 +30,13 @@ public protocol PlaybackController: Sendable {
     func play() async throws
     func pause() async
 
+    /// Tear down the audio engine and deactivate the audio session so the system can resume normal auto-lock behavior.
+    /// A subsequent `load(score:displayTitle:preferences:)` re-prepares the engine and re-activates the session. The
+    /// Reader calls this on `.onDisappear` because `engine.prepare(...)` ends with `AVAudioEngine.start()` (and only
+    /// pauses it), which iOS treats as active audio output and which would otherwise inhibit screen lock for the rest
+    /// of the app's lifetime.
+    func releaseEngine() async
+
     /// Current playback position in seconds. Zero before a score is loaded and prepared. Read main-actor synchronously
     /// — the engine computes this from its sequencer state on the main thread, so no actor hop is needed.
     @MainActor var currentTimeSeconds: TimeInterval { get }
