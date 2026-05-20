@@ -1,4 +1,3 @@
-// App/AppPaths.swift
 import Foundation
 
 /// Resolves on-disk locations the app uses. Centralized so AppBootstrap and any future migrations agree on layout.
