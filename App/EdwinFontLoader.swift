@@ -1,5 +1,5 @@
 import Foundation
-import SheetMusicLayout
+import SheetMusicLayoutApple
 
 /// Bundles + registers the Edwin OFL font family on app launch. MuseScore's `Sid::*FontFace` defaults all reference
 /// "Edwin", and `SheetMusicLayout` resolves text faces via SwiftUI's named-font path — so registering Edwin here lets
@@ -8,6 +8,11 @@ import SheetMusicLayout
 enum EdwinFontLoader {
     /// Idempotent — safe to call from multiple lifecycle hooks.
     static func registerOnce() {
+        // Install the Apple CoreText FontMetrics provider before any
+        // LayoutEngine call (pagination, PiP frame rendering) runs.
+        // SheetMusicUI views auto-install in their bodies, but a few
+        // Folino paths reach LayoutEngine first.
+        _ = SheetMusicLayoutApple.install
         let urls = [
             "Edwin-Roman", "Edwin-Bold",
             "Edwin-Italic", "Edwin-BdIta",

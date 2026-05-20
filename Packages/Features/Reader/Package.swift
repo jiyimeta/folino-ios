@@ -18,7 +18,7 @@ let package = Package(
         .package(path: "../../Utility"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            revision: "faa5e3ed86c50ae8bebe3ed5cb790b6cd4f18927",
+            revision: "c22c71607f6ce746390757fbf8b54b0e579640b1",
         ),
     ],
     targets: [
@@ -29,6 +29,7 @@ let package = Package(
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
                 .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
+                .product(name: "SheetMusicLayoutApple", package: "swift-sheet-music"),
                 .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
                 .product(name: "SheetMusicUI", package: "swift-sheet-music"),
             ],
