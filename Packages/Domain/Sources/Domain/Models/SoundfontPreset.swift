@@ -1,5 +1,3 @@
-import Foundation
-
 /// The GM SoundFont actively serving the playback engine. Folino ships GeneralUser GS bundled (always available); the
 /// MuseScore_General upgrade is opted into via Settings and downloaded over the network the first time the toggle is on
 /// and Wi-Fi is reachable.
@@ -25,6 +23,8 @@ public enum SoundfontPreset: String, Sendable, Hashable, CaseIterable {
         }
     }
 
+    /// `true` for `generalUserGS`, which ships inside the app bundle and is always available
+    /// without a network download.
     public var isBundled: Bool {
         self == .generalUserGS
     }

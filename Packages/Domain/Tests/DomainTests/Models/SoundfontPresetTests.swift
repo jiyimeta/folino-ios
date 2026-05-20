@@ -1,6 +1,4 @@
-// Packages/Domain/Tests/DomainTests/Models/SoundfontPresetTests.swift
-@testable import Domain
-import Foundation
+import Domain
 import Testing
 
 struct SoundfontPresetTests {
@@ -14,5 +12,10 @@ struct SoundfontPresetTests {
         #expect(SoundfontPreset.museScoreGeneral.fileName == "MuseScore_General.sf2")
         #expect(SoundfontPreset.museScoreGeneral.sizeBytes == 206 * 1024 * 1024)
         #expect(SoundfontPreset.museScoreGeneral.isBundled == false)
+    }
+
+    @Test func `rawValues are stable`() {
+        #expect(SoundfontPreset.generalUserGS.rawValue == "generalUserGS")
+        #expect(SoundfontPreset.museScoreGeneral.rawValue == "museScoreGeneral")
     }
 }
