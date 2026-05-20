@@ -446,344 +446,308 @@
         }
       }
     },
-    "settings.soundfont.cached.title" : {
+    "settings.soundfont.cellularWarning" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cached Soundfonts"
+            "value" : "Downloads 206 MB over cellular."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "キャッシュ済み音源"
+            "value" : "モバイル通信で 206 MB をダウンロードします。"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "캐시된 음원"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "已缓存音源"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "已快取音源"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.deleteAll.action" : {
+    "settings.soundfont.downloadOverCellular" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete All Cached Soundfonts"
+            "value" : "Download over cellular"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "キャッシュをすべて削除"
+            "value" : "モバイル通信でダウンロード"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "모든 캐시 삭제"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除所有缓存"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除所有快取"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.deleteAll.button" : {
+    "settings.soundfont.musescore.subtitle" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete All"
+            "value" : "206 MB optional download. Off uses bundled GeneralUser GS."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべて削除"
+            "value" : "追加で 206 MB をダウンロード。オフにすると bundled GeneralUser GS で再生します。"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "모두 삭제"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部删除"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部刪除"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.deleteAll.message" : {
+    "settings.soundfont.musescore.title" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cached files will be re-downloaded the next time they're needed."
+            "value" : "MuseScore_General (high quality)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "削除した音源は次に必要になったときに再ダウンロードされます。"
+            "value" : "MuseScore_General (高品質)"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "삭제한 음원은 다음에 필요할 때 다시 다운로드됩니다."
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除的音源会在下次需要时重新下载。"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除的音源會在下次需要時重新下載。"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.deleteAll.title" : {
+    "settings.soundfont.retry" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete all cached soundfonts?"
+            "value" : "Retry"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "キャッシュをすべて削除しますか？"
+            "value" : "再試行"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "모든 캐시를 삭제하시겠습니까?"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "要删除所有缓存吗？"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "要刪除所有快取嗎？"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.drumKit.label" : {
-      "comment" : "Soundfont cache row label for a percussion patch",
+    "settings.soundfont.state.downloaded" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Drum Kit (Program %lld)"
+            "value" : "Downloaded — playing with MuseScore_General."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ドラムキット（プログラム %lld）"
+            "value" : "ダウンロード済み — MuseScore_General で再生中。"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "드럼 키트 (프로그램 %lld)"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "鼓组（程序 %lld）"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "鼓組（程式 %lld）"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.empty.hint" : {
+    "settings.soundfont.state.downloading" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downloaded soundfonts for playback will appear here."
+            "value" : "Downloading"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "再生のためにダウンロードした音源がここに表示されます。"
+            "value" : "ダウンロード中"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "재생을 위해 다운로드한 음원이 여기에 표시됩니다."
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "为播放下载的音源会显示在这里。"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "為播放下載的音源會顯示在這裡。"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.empty.title" : {
+    "settings.soundfont.state.failed" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No cached soundfonts"
+            "value" : "Download failed"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "キャッシュはありません"
+            "value" : "ダウンロード失敗"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "캐시 없음"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂无缓存"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "尚無快取"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
     },
-    "settings.soundfont.error.title" : {
+    "settings.soundfont.state.idle" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't read cache"
+            "value" : "Not downloaded — will fetch automatically on Wi-Fi."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "キャッシュを読み込めませんでした"
+            "value" : "未ダウンロード — Wi-Fi 接続時に自動取得します。"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "캐시를 불러올 수 없습니다"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法加载缓存"
+            "state" : "needs_review",
+            "value" : ""
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法載入快取"
-          }
-        }
-      }
-    },
-    "settings.soundfont.patch.label" : {
-      "comment" : "Soundfont cache row label for a non-GM patch",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bank %1$lld · Program %2$lld"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "バンク %1$lld・プログラム %2$lld"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "뱅크 %1$lld · 프로그램 %2$lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "音色组 %1$lld · 程序 %2$lld"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "音色組 %1$lld · 程式 %2$lld"
+            "state" : "needs_review",
+            "value" : ""
           }
         }
       }
@@ -818,40 +782,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "音源快取"
-          }
-        }
-      }
-    },
-    "settings.soundfont.total" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Total"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合計"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "합계"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "总计"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "總計"
           }
         }
       }
