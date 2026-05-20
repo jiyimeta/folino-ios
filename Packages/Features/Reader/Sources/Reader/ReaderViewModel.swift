@@ -20,16 +20,6 @@ final class ReaderViewModel {
         }
     }
 
-    /// Which copy the playback-prep alert should show. The view binds presentation to whether this is non-nil and
-    /// renders the title from the case.
-    enum SoundfontAlertKind {
-        /// Soundfonts are still being prepared and the user pressed play before the work finished.
-        case loading
-        /// The device is offline AND the cache doesn't already cover every voice this score needs — the wait won't make
-        /// progress until connectivity is back.
-        case offline
-    }
-
     static let defaultStaffVolume = 1.0
 
     /// Always the same instance (set once at init); declared `var` only so `@Bindable` projections like
@@ -52,7 +42,6 @@ final class ReaderViewModel {
         }
     }
 
-    private(set) var soundfontAlertKind: SoundfontAlertKind?
     private(set) var playbackCursor: ScoreCursor?
     var viewportZoom: CGFloat = 1.0
     var lastNonUnitZoom: CGFloat = 1.0
@@ -206,16 +195,6 @@ final class ReaderViewModel {
         }
     }
 
-    /// Convenience for tests and previews — true while the "loading playback sounds…" copy is showing.
-    var isLoadingSoundfonts: Bool {
-        soundfontAlertKind == .loading
-    }
-
-    /// Convenience for tests and previews — true while the offline copy is showing.
-    var isOfflineAlertPresented: Bool {
-        soundfontAlertKind == .offline
-    }
-
     @ObservationIgnored
     private let repository: any ScoreLibraryRepository
     @ObservationIgnored
@@ -226,8 +205,6 @@ final class ReaderViewModel {
     private let defaultStaffSize: CGFloat
     @ObservationIgnored
     let playbackController: (any PlaybackController)?
-    @ObservationIgnored
-    let reachability: (any NetworkReachability)?
     @ObservationIgnored
     private var hasUpdatedLastOpened = false
     @ObservationIgnored
@@ -247,7 +224,6 @@ final class ReaderViewModel {
         scoresDirectory: URL,
         defaultStaffSize: CGFloat = 14,
         playbackController: (any PlaybackController)? = nil,
-        reachability: (any NetworkReachability)? = nil,
     ) {
         self.scoreItem = scoreItem
         self.repository = repository
@@ -255,7 +231,6 @@ final class ReaderViewModel {
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
         self.playbackController = playbackController
-        self.reachability = reachability
         preferences = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
@@ -436,8 +411,7 @@ final class ReaderViewModel {
 
     func togglePlayback() async {
         guard let controller = playbackController,
-              case let .loaded(score) = loadState,
-              soundfontAlertKind == nil
+              case let .loaded(score) = loadState
         else { return }
         if !hasLoadedIntoPlayback {
             let prefs = PlaybackPreferences.initial(
@@ -456,7 +430,6 @@ final class ReaderViewModel {
                 try await task.value
                 hasLoadedIntoPlayback = true
             } catch {
-                soundfontAlertKind = nil
                 preloadTask = nil
                 return
             }
@@ -464,7 +437,6 @@ final class ReaderViewModel {
             // score. Covers the case where the user taps play before `prepareForPlayback` ran (or while it's still in
             // flight).
             await repeatModel.forwardLoopRangeToController()
-            soundfontAlertKind = nil
             preloadTask = nil
         }
         if isPlaying {
@@ -478,12 +450,6 @@ final class ReaderViewModel {
                 isPlaying = false
             }
         }
-    }
-
-    /// Cancels an in-flight `load` on the playback controller. Safe to call when no load is in flight — the cancel is a
-    /// no-op.
-    func cancelLoadingSoundfonts() {
-        preloadTask?.cancel()
     }
 
     func resetZoom() {

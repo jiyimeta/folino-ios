@@ -195,7 +195,6 @@ private struct ReadyShell: View {
                             gateway: gateway,
                             scoresDirectory: scoresDirectory,
                             playbackController: bootstrap.playbackController,
-                            reachability: bootstrap.reachability,
                         )
                     },
                     licenseContent: { LicenseListView() },
@@ -334,7 +333,6 @@ private struct ReadyShell: View {
                 gateway: gateway,
                 scoresDirectory: scoresDirectory,
                 playbackController: bootstrap.playbackController,
-                reachability: bootstrap.reachability,
                 onBack: { columnVisibility = .doubleColumn },
                 hidesBackButton: columnVisibility == .doubleColumn,
             )

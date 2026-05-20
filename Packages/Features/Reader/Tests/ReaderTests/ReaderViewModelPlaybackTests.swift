@@ -101,39 +101,6 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.isPlaying)
     }
 
-    @Test func `cancel loading soundfonts aborts toggle playback`() async {
-        let item = Self.makeItem()
-        let repo = FakeScoreLibraryRepository()
-        repo.scoreItems = [item]
-        let score = Score(
-            division: 480,
-            parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
-            metaTags: [:],
-        )
-        let controller = FakePlaybackController()
-        controller.blocksLoadUntilCancelled = true
-        let vm = ReaderViewModel(
-            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
-            scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller,
-        )
-        await vm.load()
-
-        let toggle = Task { await vm.togglePlayback() }
-        for _ in 0 ..< 5 {
-            await Task.yield()
-        }
-        #expect(vm.isLoadingSoundfonts)
-        #expect(!vm.isPlaying)
-        #expect(controller.loadCount == 0)
-
-        vm.cancelLoadingSoundfonts()
-        _ = await toggle.value
-        #expect(!vm.isLoadingSoundfonts)
-        #expect(!vm.isPlaying)
-        #expect(controller.playCount == 0)
-    }
-
     @Test func `prepare for playback primes engine without showing alert`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
@@ -153,13 +120,11 @@ struct ReaderViewModelPlaybackTests {
         await vm.prepareForPlayback()
 
         #expect(controller.loadCount == 1)
-        #expect(vm.soundfontAlertKind == nil)
 
-        // First user-driven toggle should reuse the primed engine — no additional load and no alert flash.
+        // First user-driven toggle should reuse the primed engine — no additional load.
         await vm.togglePlayback()
         #expect(controller.loadCount == 1)
         #expect(controller.playCount == 1)
-        #expect(vm.soundfontAlertKind == nil)
         #expect(vm.isPlaying)
     }
 
@@ -440,7 +405,6 @@ struct ReaderViewModelPlaybackTests {
 
         await vm.mixerModel.setPartProgram(6, forPartIndex: 0)
 
-        #expect(vm.soundfontAlertKind == nil)
         let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
         #expect(calls.count == 1)
         #expect(vm.mixerModel.staffProgramOverrides[

@@ -38,7 +38,6 @@ public struct ReaderRootScreen: View {
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
-        reachability: (any NetworkReachability)? = nil,
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
     ) {
@@ -53,7 +52,6 @@ public struct ReaderRootScreen: View {
                 scoresDirectory: scoresDirectory,
                 defaultStaffSize: initialDefault,
                 playbackController: playbackController,
-                reachability: reachability,
             ),
         )
         self.onBack = onBack
@@ -81,21 +79,6 @@ public struct ReaderRootScreen: View {
         }
         .navigationTitle("")
         .toolbar(.hidden, for: .navigationBar)
-        .alert(
-            soundfontAlertTitle(for: viewModel.soundfontAlertKind),
-            isPresented: Binding(
-                get: { viewModel.soundfontAlertKind != nil },
-                set: { newValue in
-                    if !newValue { viewModel.cancelLoadingSoundfonts() }
-                },
-            ),
-        ) {
-            Button(role: .cancel) {
-                viewModel.cancelLoadingSoundfonts()
-            } label: {
-                L10n.Common.cancel
-            }
-        }
         .task {
             viewModel.startObservingCursor()
             viewModel.setPiPEnabled(isPiPEnabled)
@@ -137,17 +120,6 @@ public struct ReaderRootScreen: View {
             if newValue == .active {
                 viewModel.dismissPiPOnForeground()
             }
-        }
-    }
-
-    private func soundfontAlertTitle(
-        for kind: ReaderViewModel.SoundfontAlertKind?,
-    ) -> String {
-        switch kind {
-        case .offline:
-            String(localized: "reader.error.offline", bundle: .module)
-        case .loading, nil:
-            String(localized: "reader.playback.loadingSounds", bundle: .module)
         }
     }
 

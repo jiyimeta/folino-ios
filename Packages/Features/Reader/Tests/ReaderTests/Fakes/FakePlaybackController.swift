@@ -19,9 +19,6 @@ final class FakePlaybackController: PlaybackController {
 
     var loadError: Error?
     var playError: Error?
-    /// When true, `load` suspends until `Task.cancel()` fires, throwing `CancellationError`. Lets tests exercise the
-    /// "loading" alert flow.
-    var blocksLoadUntilCancelled = false
     var currentTimeSeconds: TimeInterval = 0
     var totalTimeSeconds: TimeInterval = 0
     private(set) var skipBySecondsCalls: [TimeInterval] = []
@@ -55,10 +52,7 @@ final class FakePlaybackController: PlaybackController {
 
     func load(
         score _: Score, displayTitle: String?, preferences: PlaybackPreferences,
-    ) async throws {
-        if blocksLoadUntilCancelled {
-            try await Task.sleep(for: .seconds(60))
-        }
+    ) throws {
         if let error = loadError { throw error }
         loadCount += 1
         lastLoadedPreferences = preferences
