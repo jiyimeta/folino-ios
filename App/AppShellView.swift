@@ -57,6 +57,13 @@ struct AppShellView: View {
                 bootstrap.pruneRecentlyDeletedIfNeeded()
             }
         }
+        .task(id: bootstrap.isReady) {
+            // Kick off MuseScore_General download once bootstrap finishes — Wi-Fi only by default, no-op when opt-out
+            // toggle is off or file already present. Safe to call on every isReady transition; the provider gates
+            // re-entry internally.
+            guard bootstrap.isReady else { return }
+            await bootstrap.museScoreGeneralProvider?.startDownloadIfNeeded()
+        }
         .shareDuplicateAlert(resolver: bootstrap.shareDuplicateResolver)
         .sheet(isPresented: $versionHistoryPresenter.isSheetPresented) {
             if let viewModel = versionHistoryPresenter.sheetViewModel {
