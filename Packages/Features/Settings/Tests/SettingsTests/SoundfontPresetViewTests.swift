@@ -1,22 +1,12 @@
 import Domain
 import Foundation
 @testable import Settings
-import SwiftUI
 import Testing
 
-@MainActor
-struct SettingsSheetTests {
-    @Test func `sheet constructs with stub license content`() {
-        let sheet = SettingsSheet { Text("License placeholder") }
-        // The view is a value; if it constructs, this test passes.
-        _ = sheet.body
-    }
-
-    @Test func `sheet constructs with stub provider`() {
-        let sheet = SettingsSheet(provider: StubProvider()) {
-            Text("License placeholder")
-        }
-        _ = sheet.body
+struct SoundfontPresetViewTests {
+    @Test func `view instantiates with a stub provider`() {
+        let view = SoundfontPresetView(provider: StubProvider())
+        _ = view.body
     }
 }
 

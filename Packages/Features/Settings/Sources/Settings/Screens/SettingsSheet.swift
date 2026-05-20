@@ -5,8 +5,7 @@ import UtilityUI
 @MainActor
 public struct SettingsSheet<LicenseContent: View>: View {
     private let licenseContent: () -> LicenseContent
-    private let soundfontResolver: (any SoundfontResolver)?
-    private let presetCatalog: (any SoundfontPresetCatalog)?
+    private let provider: (any MuseScoreGeneralProvider)?
     private let versionHistoryLoader: any VersionHistoryLoader
     private let onVersionHistoryViewed: @MainActor () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -31,14 +30,12 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private var keepScreenAwake = true
 
     public init(
-        soundfontResolver: (any SoundfontResolver)? = nil,
-        presetCatalog: (any SoundfontPresetCatalog)? = nil,
+        provider: (any MuseScoreGeneralProvider)? = nil,
         versionHistoryLoader: any VersionHistoryLoader = DefaultVersionHistoryLoader(),
         onVersionHistoryViewed: @escaping @MainActor () -> Void = {},
         @ViewBuilder licenseContent: @escaping () -> LicenseContent,
     ) {
-        self.soundfontResolver = soundfontResolver
-        self.presetCatalog = presetCatalog
+        self.provider = provider
         self.versionHistoryLoader = versionHistoryLoader
         self.onVersionHistoryViewed = onVersionHistoryViewed
         self.licenseContent = licenseContent
@@ -48,8 +45,8 @@ public struct SettingsSheet<LicenseContent: View>: View {
         NavigationStack {
             Form {
                 readerSection
-                if let soundfontResolver {
-                    storageSection(resolver: soundfontResolver)
+                if let provider {
+                    storageSection(provider: provider)
                 }
                 aboutSection
             }
@@ -156,10 +153,10 @@ public struct SettingsSheet<LicenseContent: View>: View {
         }
     }
 
-    private func storageSection(resolver: any SoundfontResolver) -> some View {
+    private func storageSection(provider: any MuseScoreGeneralProvider) -> some View {
         Section {
             NavigationLink {
-                SoundfontCacheView(resolver: resolver, presetCatalog: presetCatalog)
+                SoundfontPresetView(provider: provider)
             } label: {
                 Label {
                     Text("settings.soundfont.title", bundle: .module)
@@ -243,29 +240,44 @@ public struct SettingsSheet<LicenseContent: View>: View {
     }
 }
 
-#Preview("Without resolver") {
+#Preview("Without provider") {
     SettingsSheet { Text("License placeholder") }
 }
 
-#Preview("With resolver") {
-    SettingsSheet(soundfontResolver: PreviewResolver()) {
+#Preview("With provider") {
+    SettingsSheet(provider: _StubProvider()) {
         Text("License placeholder")
     }
 }
 
-private struct PreviewResolver: SoundfontResolver {
-    func resolveSoundfont(bank _: Int, program _: Int, isDrums _: Bool) throws -> URL {
-        URL(fileURLWithPath: "/dev/null")
+private struct _StubProvider: MuseScoreGeneralProvider {
+    var isOptedIn: Bool {
+        true
     }
 
-    func cachedPatches() throws -> [SoundfontPatch] {
-        []
+    var isDownloaded: Bool {
+        false
     }
 
-    func totalCacheSizeBytes() throws -> Int64 {
-        0
+    var museScoreGeneralFileURL: URL? {
+        nil
     }
 
-    func deletePatch(bank _: Int, program _: Int, isDrums _: Bool) throws {}
-    func clearCache() throws {}
+    var museScoreGeneralFileURLSync: URL? {
+        nil
+    }
+
+    var currentPreset: SoundfontPreset {
+        .generalUserGS
+    }
+
+    func setOptedIn(_: Bool) {}
+    func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
+        AsyncStream { _ in }
+    }
+
+    func startDownloadIfNeeded() {}
+    func startDownloadAllowingCellular() {}
+    func cancelDownload() {}
+    func deleteDownloaded() {}
 }

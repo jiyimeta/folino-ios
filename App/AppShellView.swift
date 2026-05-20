@@ -208,8 +208,7 @@ private struct ReadyShell: View {
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(
-                soundfontResolver: nil,
-                presetCatalog: bootstrap.presetCatalog,
+                provider: bootstrap.museScoreGeneralProvider,
                 onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
             ) {
                 LicenseListView()
