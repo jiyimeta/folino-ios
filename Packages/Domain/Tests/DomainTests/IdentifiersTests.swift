@@ -27,23 +27,6 @@ struct IdentifiersTests {
         let _: TagID = tagID
         // Cannot write `#expect(scoreID == tagID)` — that would not compile, which is the point.
     }
-
-    @Test func `soundfont patch key equals by bank and program`() {
-        let a = SoundfontPatchKey(bank: 0, program: 4)
-        let b = SoundfontPatchKey(bank: 0, program: 4)
-        let c = SoundfontPatchKey(bank: 128, program: 0)
-        #expect(a == b)
-        #expect(a != c)
-    }
-
-    @Test func `soundfont patch key hashes by bank and program`() {
-        let set: Set<SoundfontPatchKey> = [
-            SoundfontPatchKey(bank: 0, program: 4),
-            SoundfontPatchKey(bank: 0, program: 4),
-            SoundfontPatchKey(bank: 128, program: 0),
-        ]
-        #expect(set.count == 2)
-    }
 }
 
 struct ReaderPreferencesIDTests {

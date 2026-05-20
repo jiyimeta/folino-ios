@@ -7,7 +7,6 @@ public enum DomainError: Error, Sendable, Equatable {
     case unsupportedFormat(String)
     case scoreParseFailed(reason: String)
     case scoreWriteFailed(reason: String)
-    case soundfontDownloadFailed(SoundfontPatchKey)
     case persistenceFailed(reason: String)
     case syncFailed(reason: String)
     case audioEngineFailed(reason: String)
@@ -38,12 +37,6 @@ extension DomainError: LocalizedError {
             String(
                 localized: "domain.error.scoreWriteFailed",
                 defaultValue: "Could not write score file: \(reason)",
-                bundle: .module,
-            )
-        case let .soundfontDownloadFailed(key):
-            String(
-                localized: "domain.error.soundfontDownloadFailed",
-                defaultValue: "Failed to download SoundFont (bank \(key.bank), program \(key.program))",
                 bundle: .module,
             )
         case let .persistenceFailed(reason):

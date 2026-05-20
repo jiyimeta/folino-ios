@@ -44,32 +44,6 @@ private final class FakePlaybackController: PlaybackController {
     func setStaffInstrument(staff: Int, bank: Int, program: Int) {}
 }
 
-private actor FakeSoundfontResolver: SoundfontResolver {
-    var calls: [SoundfontPatchKey] = []
-    var cache: [SoundfontPatch] = []
-
-    func resolveSoundfont(bank: Int, program: Int, isDrums: Bool) throws -> URL {
-        calls.append(SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums))
-        return URL(fileURLWithPath: "/tmp/fake.sf2")
-    }
-
-    func cachedPatches() throws -> [SoundfontPatch] {
-        cache
-    }
-
-    func totalCacheSizeBytes() throws -> Int64 {
-        cache.reduce(0) { $0 + $1.sizeBytes }
-    }
-
-    func deletePatch(bank: Int, program: Int, isDrums: Bool) throws {
-        cache.removeAll { $0.bank == bank && $0.program == program }
-    }
-
-    func clearCache() throws {
-        cache.removeAll()
-    }
-}
-
 struct AudioProtocolsTests {
     @MainActor @Test func `playback controller sets cursor and tempo`() async {
         let controller = FakePlaybackController()
@@ -78,16 +52,5 @@ struct AudioProtocolsTests {
         await controller.setTempoMultiplier(0.75)
         #expect(controller.lastCursor == target)
         #expect(controller.lastTempo == 0.75)
-    }
-
-    @Test func `soundfont resolver records calls`() async throws {
-        let resolver = FakeSoundfontResolver()
-        _ = try await resolver.resolveSoundfont(bank: 0, program: 4, isDrums: false)
-        _ = try await resolver.resolveSoundfont(bank: 128, program: 0, isDrums: true)
-        let calls = await resolver.calls
-        #expect(calls == [
-            SoundfontPatchKey(bank: 0, program: 4, isDrums: false),
-            SoundfontPatchKey(bank: 128, program: 0, isDrums: true),
-        ])
     }
 }

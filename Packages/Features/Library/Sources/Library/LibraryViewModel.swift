@@ -313,8 +313,7 @@ public final class LibraryViewModel {
                 return String(localized: "library.import.error.invalidFile", bundle: .module)
             case .persistenceFailed:
                 return String(localized: "library.import.error.saveFailed", bundle: .module)
-            case .scoreFileNotFound, .scoreWriteFailed,
-                 .soundfontDownloadFailed, .syncFailed, .audioEngineFailed:
+            case .scoreFileNotFound, .scoreWriteFailed, .syncFailed, .audioEngineFailed:
                 return domain.errorDescription ?? "\(domain)"
             }
         }
