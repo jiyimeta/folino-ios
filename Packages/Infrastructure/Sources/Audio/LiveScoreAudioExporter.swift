@@ -9,11 +9,9 @@ import SheetMusicCore
 /// back-to-back renders), so live playback through `LivePlaybackController` is unaffected — `exportAudioFile` itself
 /// spins a dedicated `AVAudioEngine` internally for the offline render.
 ///
-/// Soundfont policy: every distinct `(bank, program, isDrums)` triple the score uses is prefetched through the
-/// `Domain.SoundfontResolver` before the engine is asked to prepare. A single resolve failure (e.g. offline + uncached)
-/// propagates as `DomainError.scoreWriteFailed` and the offline render is never attempted. This is a deliberate
-/// departure from `LivePlaybackController.scoreWithFallbackRewrites`, which silently falls back to bundled patches: an
-/// audio export that secretly substitutes piano for, say, drums would be confusing once shared out of the app.
+/// Soundfont policy: the GM soundfont is provided by the `SheetMusicAudio.SoundfontResolver` passed at init time (a
+/// `GMSoundfontResolver` in production). No per-patch prefetch is needed — the bundled GeneralUser GS covers every GM
+/// program, and the optional MuseScore_General download is handled separately by `LiveMuseScoreGeneralProvider`.
 ///
 /// Metronome policy: `MetronomeController.isEnabled` defaults to `true` inside swift-sheet-music, so a fresh
 /// `PlaybackEngine` would always embed the click track. The `metronomeEnabled` closure is evaluated per export so the
@@ -22,22 +20,17 @@ import SheetMusicCore
 @MainActor
 public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
     private let soundfontResolver: any SheetMusicAudio.SoundfontResolver
-    private let domainResolver: any Domain.SoundfontResolver
     private let metronomeEnabled: @Sendable () -> Bool
 
     public init(
         soundfontResolver: any SheetMusicAudio.SoundfontResolver,
-        domainResolver: any Domain.SoundfontResolver,
         metronomeEnabled: @escaping @Sendable () -> Bool,
     ) {
         self.soundfontResolver = soundfontResolver
-        self.domainResolver = domainResolver
         self.metronomeEnabled = metronomeEnabled
     }
 
     public func exportM4A(score: Score, to url: URL) async throws {
-        try await prefetchAllPatches(in: score)
-
         let engine = PlaybackEngine(soundfontResolver: soundfontResolver)
         do {
             try engine.prepare(score: score)
@@ -69,26 +62,6 @@ public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
             throw DomainError.scoreWriteFailed(
                 reason: (error as NSError).localizedDescription,
             )
-        }
-    }
-
-    private func prefetchAllPatches(in score: Score) async throws {
-        let keys = LivePlaybackController.distinctPatchKeys(in: score)
-        for key in keys {
-            do {
-                _ = try await domainResolver.resolveSoundfont(
-                    bank: key.bank,
-                    program: key.program,
-                    isDrums: key.isDrums,
-                )
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                let detail = (error as NSError).localizedDescription
-                throw DomainError.scoreWriteFailed(
-                    reason: "soundfont unavailable (bank \(key.bank), program \(key.program)): \(detail)",
-                )
-            }
         }
     }
 

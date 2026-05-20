@@ -201,7 +201,7 @@ private struct ReadyShell: View {
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(
-                soundfontResolver: bootstrap.soundfontResolver,
+                soundfontResolver: nil,
                 presetCatalog: bootstrap.presetCatalog,
                 onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
             ) {

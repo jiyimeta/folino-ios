@@ -439,22 +439,7 @@ final class ReaderViewModel {
               case let .loaded(score) = loadState,
               soundfontAlertKind == nil
         else { return }
-        // If a silent prefetch is in flight (the user picked an instrument while paused), wait for it before starting
-        // play. The mixer surfaces its own alert copy during the wait.
-        guard await mixerModel.awaitSilentPrefetch() else { return }
         if !hasLoadedIntoPlayback {
-            let cached = await controller.areSoundfontsAvailableLocally(for: score)
-            let online = await reachability?.isOnline() ?? true
-            // Pick the alert copy based on what the wait will actually look like to the user:
-            //  - cache covers the score → no alert (load is just engine prep)
-            //  - offline + cache miss   → "you're offline" (download won't progress)
-            //  - online  + cache miss   → "loading playback sounds…"
-            if !cached, !online {
-                soundfontAlertKind = .offline
-            } else if !cached {
-                soundfontAlertKind = .loading
-            }
-
             let prefs = PlaybackPreferences.initial(
                 for: score,
                 readerPreferences: preferences,
@@ -499,7 +484,6 @@ final class ReaderViewModel {
     /// no-op.
     func cancelLoadingSoundfonts() {
         preloadTask?.cancel()
-        mixerModel.cancelLoadingSoundfonts()
     }
 
     func resetZoom() {
@@ -610,24 +594,4 @@ final class ReaderViewModel {
 
 // MARK: - PlaybackMixerHost conformance
 
-extension ReaderViewModel: PlaybackMixerHost {
-    func pausePlayback() async {
-        guard let controller = playbackController, isPlaying else { return }
-        await controller.pause()
-        isPlaying = false
-    }
-
-    func tryResumePlayback() async {
-        guard let controller = playbackController else { return }
-        do {
-            try await controller.play()
-            isPlaying = true
-        } catch {
-            isPlaying = false
-        }
-    }
-
-    func setSoundfontAlertKind(_ kind: SoundfontAlertKind?) {
-        soundfontAlertKind = kind
-    }
-}
+extension ReaderViewModel: PlaybackMixerHost {}

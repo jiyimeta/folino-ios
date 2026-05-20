@@ -21,16 +21,6 @@ private final class FakePlaybackController: PlaybackController {
         loadedScores += 1
     }
 
-    func areSoundfontsAvailableLocally(for _: Score) -> Bool {
-        true
-    }
-
-    func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) -> Bool {
-        true
-    }
-
-    func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) throws {}
-
     func play() throws {}
     func pause() {}
 

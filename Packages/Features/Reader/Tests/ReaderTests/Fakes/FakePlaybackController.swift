@@ -22,9 +22,6 @@ final class FakePlaybackController: PlaybackController {
     /// When true, `load` suspends until `Task.cancel()` fires, throwing `CancellationError`. Lets tests exercise the
     /// "loading" alert flow.
     var blocksLoadUntilCancelled = false
-    /// What `areSoundfontsAvailableLocally` reports back. Defaults to `false` — the Reader treats that as "may need to
-    /// fetch" and shows the alert, matching the existing tests' expectations.
-    var soundfontsAvailableLocally = false
     var currentTimeSeconds: TimeInterval = 0
     var totalTimeSeconds: TimeInterval = 0
     private(set) var skipBySecondsCalls: [TimeInterval] = []
@@ -66,33 +63,6 @@ final class FakePlaybackController: PlaybackController {
         loadCount += 1
         lastLoadedPreferences = preferences
         lastLoadedDisplayTitle = displayTitle
-    }
-
-    func areSoundfontsAvailableLocally(for _: Score) -> Bool {
-        soundfontsAvailableLocally
-    }
-
-    /// Patches the fake reports as already on disk. Default: empty — every pick is a cache miss unless the test seeds
-    /// this set.
-    var cachedPatches: Set<SoundfontPatchKey> = []
-    private(set) var prefetchedPatches: [SoundfontPatchKey] = []
-    /// When true, `prefetchSoundfont` suspends until `Task.cancel()` fires, throwing `CancellationError`. Mirrors
-    /// `blocksLoadUntilCancelled` for the per-patch path.
-    var blocksPrefetchUntilCancelled = false
-    var prefetchError: Error?
-
-    func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) -> Bool {
-        cachedPatches.contains(SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums))
-    }
-
-    func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) async throws {
-        if blocksPrefetchUntilCancelled {
-            try await Task.sleep(for: .seconds(60))
-        }
-        if let error = prefetchError { throw error }
-        let key = SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
-        prefetchedPatches.append(key)
-        cachedPatches.insert(key)
     }
 
     func play() throws {

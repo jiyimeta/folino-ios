@@ -1,4 +1,3 @@
-// swiftlint:disable file_length
 import AVFoundation
 import Domain
 import Foundation
@@ -13,8 +12,6 @@ import UIKit
 @MainActor
 public final class LivePlaybackController: Domain.PlaybackController {
     let engine: PlaybackEngine
-    private let domainResolver: any Domain.SoundfontResolver
-    private let precisionProbe: any Domain.PrecisePatchProbe
     /// Internal (not private) so the +LoopBounds extension file can reach it when forwarding to engine.play(in:) after
     /// a setLoop / clearLoop.
     var loadedScore: Score?
@@ -41,20 +38,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// back can return a stale or nil snapshot, which would silently drop the rate update.
     private var nowPlayingMetadata: [String: Any] = [:]
 
-    /// Bank / program of the bundled fallback patches. When a staff's precise SF2 is unavailable, the controller
-    /// rewrites the staff's channel to one of these so the resolver's sync path returns the committed bundle file
-    /// rather than an unrelated cached patch.
-    static let pitchedFallbackChannel = (bank: 0, program: 73)
-    static let drumFallbackChannel = (bank: 0, program: 0)
-
-    public init(
-        soundfontResolver: any SheetMusicAudio.SoundfontResolver,
-        domainResolver: any Domain.SoundfontResolver,
-        precisionProbe: any Domain.PrecisePatchProbe,
-    ) {
+    public init(soundfontResolver: any SheetMusicAudio.SoundfontResolver) {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
-        self.domainResolver = domainResolver
-        self.precisionProbe = precisionProbe
         startObservingEngine()
         configureRemoteCommands()
     }
@@ -102,22 +87,17 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func load(
         score: Score, displayTitle: String?, preferences: PlaybackPreferences,
-    ) async throws {
-        await Self.prefetchSoundfonts(score: score, resolver: domainResolver)
-        // Prefetch's URLSession calls honor cancellation but the TaskGroup returns regardless. Bail before the engine
-        // prepare so a cancel mid-load doesn't end up with a primed engine the user expects to be silent.
-        try Task.checkCancellation()
-        let prepared = Self.scoreWithFallbackRewrites(score, probe: precisionProbe)
-        try engine.prepare(score: prepared)
+    ) throws {
+        try engine.prepare(score: score)
         // `prepare` ends with `AVAudioEngine.start()` so the engine is running even though `PlaybackState` is
         // `.stopped`. iOS Control Center reads the running engine as "audio is active" and overrides our
         // `MPNowPlayingInfoCenter.playbackState = .paused`, drawing the pause glyph before the user has pressed play.
         // Pausing the engine here matches what `PlaybackEngine.pause()` does after a real pause — sequencer is still
         // nil (lazy), so this just stops the audio graph and parks `state` at `.paused`.
         engine.pause()
-        loadedScore = prepared
+        loadedScore = score
         pendingCursor = nil
-        updateNowPlayingMetadata(for: prepared, displayTitle: displayTitle)
+        updateNowPlayingMetadata(for: score, displayTitle: displayTitle)
         for state in preferences.perStaff {
             engine.setVolume(
                 forChannel: .staff(state.staffIndex), to: Float(state.volume),
@@ -130,115 +110,6 @@ public final class LivePlaybackController: Domain.PlaybackController {
             )
         }
         engine.setRate(Float(preferences.tempoMultiplier))
-    }
-
-    /// Walks the score's distinct `(bank, program, isDrums)` triples and asks the resolver to materialise each on disk,
-    /// in parallel. Soft-fails per patch — if one download 404s, the others still land. Patches that fail outright are
-    /// handled later by `scoreWithFallbackRewrites` rewriting the staff channel.
-    private static func prefetchSoundfonts(
-        score: Score, resolver: any Domain.SoundfontResolver,
-    ) async {
-        let keys = distinctPatchKeys(in: score)
-        await withTaskGroup(of: Void.self) { group in
-            for key in keys {
-                group.addTask {
-                    _ = try? await resolver.resolveSoundfont(
-                        bank: key.bank, program: key.program, isDrums: key.isDrums,
-                    )
-                }
-            }
-        }
-    }
-
-    public func areSoundfontsAvailableLocally(for score: Score) async -> Bool {
-        let needed = Self.distinctPatchKeys(in: score)
-        if needed.isEmpty { return true }
-        let cachedKeys: Set<SoundfontPatchKey>
-        do {
-            let patches = try await domainResolver.cachedPatches()
-            cachedKeys = Set(patches.map {
-                SoundfontPatchKey(bank: $0.bank, program: $0.program, isDrums: $0.isDrums)
-            })
-        } catch {
-            // If we can't enumerate the cache, fall back to "may need to fetch" so the user gets the loading affordance
-            // instead of a silent stall.
-            return false
-        }
-        return needed.isSubset(of: cachedKeys)
-    }
-
-    public func isSoundfontCached(bank: Int, program: Int, isDrums: Bool) async -> Bool {
-        do {
-            let patches = try await domainResolver.cachedPatches()
-            let needle = SoundfontPatchKey(bank: bank, program: program, isDrums: isDrums)
-            return patches.contains { patch in
-                SoundfontPatchKey(bank: patch.bank, program: patch.program, isDrums: patch.isDrums) == needle
-            }
-        } catch {
-            // Match `areSoundfontsAvailableLocally`'s policy: if the cache can't be enumerated, report "not cached" so
-            // callers surface the loading affordance instead of stalling silently.
-            return false
-        }
-    }
-
-    public func prefetchSoundfont(bank: Int, program: Int, isDrums: Bool) async throws {
-        _ = try await domainResolver.resolveSoundfont(
-            bank: bank, program: program, isDrums: isDrums,
-        )
-    }
-
-    /// Distinct `(bank, program, isDrums)` triples used by `score`. Internal so `LiveScoreAudioExporter` can prefetch
-    /// the same patch set before its offline render.
-    static func distinctPatchKeys(in score: Score) -> Set<SoundfontPatchKey> {
-        var keys: Set<SoundfontPatchKey> = []
-        for entry in score.allStaves {
-            guard let part = score.part(at: entry.address) else { continue }
-            let channel = part.instrument.channels.first ?? InstrumentChannel()
-            let isDrums = part.instrument.useDrumset
-            keys.insert(SoundfontPatchKey(
-                bank: channel.bank, program: channel.program, isDrums: isDrums,
-            ))
-        }
-        return keys
-    }
-
-    /// Returns a `Score` where every staff whose `(bank, program, isDrums)` has no precise SF2 file (cache or bundle)
-    /// is rewritten to the matching bundled fallback channel (`(0, 73)` for pitched, `(0, 0)` for drums). Staves whose
-    /// patch *is* available pass through unmodified.
-    ///
-    /// `swift-sheet-music`'s `Score` doesn't expose a `setPart(_:at:)` mutator — `parts` is a public mutable array — so
-    /// this rewrites the part by index lookup off `StaffAddress.partIndex`.
-    static func scoreWithFallbackRewrites(
-        _ score: Score, probe: any Domain.PrecisePatchProbe,
-    ) -> Score {
-        var rewritten = score
-        // Multi-staff parts (e.g. piano) yield multiple `allStaves` entries sharing one `partIndex`. The precise-path
-        // check on the (already rewritten) channel short-circuits subsequent visits — the rewrite is idempotent per
-        // part, so the redundant probe call is the only overhead.
-        for entry in rewritten.allStaves {
-            let partIndex = entry.address.partIndex
-            guard rewritten.parts.indices.contains(partIndex) else { continue }
-            let part = rewritten.parts[partIndex]
-            let channel = part.instrument.channels.first ?? InstrumentChannel()
-            let isDrums = part.instrument.useDrumset
-            if probe.precisePath(
-                forBank: channel.bank, program: channel.program, isDrums: isDrums,
-            ) != nil {
-                continue
-            }
-            let target = isDrums ? drumFallbackChannel : pitchedFallbackChannel
-            var newChannel = channel
-            newChannel.bank = target.bank
-            newChannel.program = target.program
-            // `Instrument.init` substitutes a default `[InstrumentChannel()]` when given an empty channels array, so
-            // this branch is defensive — it only fires if a caller mutates `channels = []` post-construction.
-            if rewritten.parts[partIndex].instrument.channels.isEmpty {
-                rewritten.parts[partIndex].instrument.channels = [newChannel]
-            } else {
-                rewritten.parts[partIndex].instrument.channels[0] = newChannel
-            }
-        }
-        return rewritten
     }
 
     public func play() throws {

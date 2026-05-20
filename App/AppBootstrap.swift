@@ -21,7 +21,8 @@ final class AppBootstrap {
     private(set) var importer: LiveScoreFileImporter?
     private(set) var playbackController: LivePlaybackController?
     private(set) var reachability: LiveNetworkReachability?
-    private(set) var soundfontResolver: MuseScoreSF2Resolver?
+    private(set) var museScoreGeneralProvider: LiveMuseScoreGeneralProvider?
+    private(set) var soundfontResolver: GMSoundfontResolver?
     private(set) var presetCatalog: BundledSF2PresetCatalog?
     private(set) var shareService: LiveScoreShareService?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
@@ -95,20 +96,17 @@ final class AppBootstrap {
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {
-        // `MuseScoreSF2Resolver` conforms to all three protocols (`SheetMusicAudio.SoundfontResolver`,
-        // `Domain.SoundfontResolver`, `Domain.PrecisePatchProbe`); one instance satisfies every slot.
-        let soundfontResolver = MuseScoreSF2Resolver(
-            cacheDirectory: AppPaths.soundfontCacheDirectory,
-        )
-        self.soundfontResolver = soundfontResolver
+        let provider = LiveMuseScoreGeneralProvider(targetDirectory: AppPaths.soundfontsDirectory)
+        museScoreGeneralProvider = provider
+        let resolver = GMSoundfontResolver(provider: provider)
+        soundfontResolver = resolver
         if let bundleSF2URL = Bundle.main.url(
-            forResource: "MuseScore_General", withExtension: "sf2", subdirectory: "Sounds",
+            forResource: "GeneralUser-GS", withExtension: "sf2", subdirectory: "Soundfonts",
         ) {
             presetCatalog = try? BundledSF2PresetCatalog(sf2URL: bundleSF2URL)
         }
         let audioExporter = LiveScoreAudioExporter(
-            soundfontResolver: soundfontResolver,
-            domainResolver: soundfontResolver,
+            soundfontResolver: resolver,
             metronomeEnabled: {
                 UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
             },
@@ -119,20 +117,18 @@ final class AppBootstrap {
             gateway: gateway,
             audioExporter: audioExporter,
         )
-        playbackController = LivePlaybackController(
-            soundfontResolver: soundfontResolver,
-            domainResolver: soundfontResolver,
-            precisionProbe: soundfontResolver,
-        )
+        playbackController = LivePlaybackController(soundfontResolver: resolver)
     }
 
     private func prepareDirectories() throws {
         try FileManager.default.createDirectory(
             at: AppPaths.scoresDirectory, withIntermediateDirectories: true,
         )
-        try FileManager.default.createDirectory(
-            at: AppPaths.soundfontCacheDirectory, withIntermediateDirectories: true,
-        )
+        var soundfontsDir = AppPaths.soundfontsDirectory
+        try FileManager.default.createDirectory(at: soundfontsDir, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? soundfontsDir.setResourceValues(values)
         try? FileManager.default.removeItem(at: AppPaths.shareTempDirectory)
         try FileManager.default.createDirectory(
             at: AppPaths.shareTempDirectory, withIntermediateDirectories: true,

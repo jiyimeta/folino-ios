@@ -2,27 +2,18 @@ import Domain
 import Observation
 import SheetMusicCore
 
-/// Surface the mixer needs from its parent (transport state + the few playback-control hooks the uncached-soundfont
-/// saga drives). Keeping it a protocol lets the mixer be tested with a hand-written fake host instead of a full
-/// `ReaderViewModel`.
+/// Surface the mixer needs from its parent. Keeping it a protocol lets the mixer be tested with a hand-written fake
+/// host instead of a full `ReaderViewModel`.
 @MainActor
 protocol PlaybackMixerHost: AnyObject {
     var isPlaying: Bool { get }
     var playbackController: (any PlaybackController)? { get }
-    var reachability: (any NetworkReachability)? { get }
     var loadState: ReaderViewModel.LoadState { get }
-    func pausePlayback() async
-    func tryResumePlayback() async
-    func setSoundfontAlertKind(_ kind: ReaderViewModel.SoundfontAlertKind?)
 }
 
 /// Owns the Reader's playback-mixer surface: per-staff mute / solo / volume, plus per-staff and per-part GM program
 /// overrides. Carved out of `ReaderViewModel` so `PlaybackInspectorScreen` and `ProgramPicker` can receive this model
 /// directly without seeing the full view model.
-///
-/// The per-part program path includes a state machine for the case where the chosen instrument isn't cached locally yet
-/// (`PendingInstrumentLoad` + `runUncachedPartProgramSwap`) — it pauses playback, surfaces the loading/offline alert
-/// via the host, prefetches the soundfont, and resumes on success or reverts on cancel.
 @MainActor
 @Observable
 final class PlaybackMixerModel {
@@ -34,56 +25,14 @@ final class PlaybackMixerModel {
     /// so SwiftUI re-renders the slider as the value moves.
     private(set) var liveStaffVolumes: [StaffAddress: Double] = [:]
 
-    @ObservationIgnored private var pendingInstrumentLoad: PendingInstrumentLoad?
-
     @ObservationIgnored var onChange: (() async -> Void)?
     @ObservationIgnored weak var host: (any PlaybackMixerHost)?
 
     static let defaultVolume = 1.0
 
-    private struct PendingInstrumentLoad {
-        let partIndex: Int
-        let bank: Int
-        let program: Int
-        let isDrums: Bool
-        /// Per-staff snapshot of the override map restricted to this part at the moment the pick was registered. `nil`
-        /// value means "no override existed for that address; remove on revert".
-        let previousOverrides: [(address: StaffAddress, previous: Int?)]
-        /// True iff playback was running at the moment we registered the pick (or was inherited from an earlier
-        /// in-flight pick that we just cancelled). Drives auto-resume on success.
-        let wasPlaying: Bool
-        let task: Task<Void, Error>
-    }
-
     func sync(from prefs: ReaderPreferences) {
         staffProgramOverrides = prefs.staffProgramOverrides
         staffVolumeOverrides = prefs.staffVolumeOverrides
-    }
-
-    /// Cancels any in-flight uncached prefetch. Safe to call when nothing is in flight — the cancel becomes a no-op.
-    /// Called when the user dismisses the loading alert.
-    func cancelLoadingSoundfonts() {
-        pendingInstrumentLoad?.task.cancel()
-    }
-
-    /// Awaits an in-flight silent prefetch (one kicked off while playback was paused). Returns false when the wait was
-    /// cancelled — callers should bail out of any in-progress play attempt. No-op fast-path when there's nothing in
-    /// flight, or when the prefetch was started while the user was already playing (in which case the saga itself
-    /// handles its own pause/resume).
-    func awaitSilentPrefetch() async -> Bool {
-        guard let pending = pendingInstrumentLoad, !pending.wasPlaying else {
-            return true
-        }
-        let online = await host?.reachability?.isOnline() ?? true
-        host?.setSoundfontAlertKind(online ? .loading : .offline)
-        do {
-            try await pending.task.value
-            host?.setSoundfontAlertKind(nil)
-            return true
-        } catch {
-            host?.setSoundfontAlertKind(nil)
-            return false
-        }
     }
 
     // MARK: - Volume / mute / solo
@@ -206,31 +155,16 @@ final class PlaybackMixerModel {
     }
 
     /// Set a program override for every staff under the part. Each staff has its own engine voice, so we have to fan
-    /// out — but to the user it reads as one "this part's instrument" choice.
+    /// out — but to the user it reads as one "this part's instrument" choice. With the GM soundfont always available
+    /// (bundled GeneralUser GS or downloaded MuseScore General), no prefetch is needed: every GM program is
+    /// immediately playable, so the engine switch is synchronous.
     func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
         let addresses = partStaffAddresses(forPartIndex: partIndex)
         guard !addresses.isEmpty,
               let score = host?.loadState.score,
               score.parts.indices.contains(partIndex)
         else { return }
-        let part = score.parts[partIndex]
-        let bank = part.instrument.channel.bank
-        let isDrums = part.instrument.useDrumset
 
-        if let controller = host?.playbackController,
-           await controller.isSoundfontCached(
-               bank: bank, program: program, isDrums: isDrums,
-           ) == false
-        {
-            await runUncachedPartProgramSwap(
-                program: program, partIndex: partIndex,
-                addresses: addresses, bank: bank, isDrums: isDrums,
-                controller: controller,
-            )
-            return
-        }
-
-        // Cache-hit (or no controller): persist the override and fan out.
         for address in addresses {
             staffProgramOverrides[address] = program
         }
@@ -244,85 +178,6 @@ final class PlaybackMixerModel {
                 program: program,
             )
         }
-    }
-
-    private func runUncachedPartProgramSwap(
-        program: Int,
-        partIndex: Int,
-        addresses: [StaffAddress],
-        bank: Int,
-        isDrums: Bool,
-        controller: any PlaybackController,
-    ) async {
-        // 1. Latest pick wins on the same part: cancel any in-flight pick
-        //    and inherit its wasPlaying — without inheritance the new pick
-        //    would never auto-resume because the previous one already
-        //    paused us.
-        var inheritedWasPlaying = false
-        if let existing = pendingInstrumentLoad, existing.partIndex == partIndex {
-            inheritedWasPlaying = existing.wasPlaying
-            existing.task.cancel()
-            // Block until the cancelled task's catch branch finishes its revert; otherwise our snapshot below captures
-            // the mid-flight state the previous pick mutated to.
-            _ = try? await existing.task.value
-        }
-
-        let hostWasPlaying = host?.isPlaying ?? false
-        let wasPlaying = hostWasPlaying || inheritedWasPlaying
-        if hostWasPlaying {
-            await host?.pausePlayback()
-        }
-
-        let snapshot = addresses.map { address in
-            (address: address, previous: staffProgramOverrides[address])
-        }
-        for address in addresses {
-            staffProgramOverrides[address] = program
-        }
-        await onChange?()
-
-        if wasPlaying {
-            let online = await host?.reachability?.isOnline() ?? true
-            host?.setSoundfontAlertKind(online ? .loading : .offline)
-        }
-
-        let task = Task<Void, Error> {
-            try await controller.prefetchSoundfont(
-                bank: bank, program: program, isDrums: isDrums,
-            )
-        }
-        let pending = PendingInstrumentLoad(
-            partIndex: partIndex, bank: bank, program: program, isDrums: isDrums,
-            previousOverrides: snapshot, wasPlaying: wasPlaying, task: task,
-        )
-        pendingInstrumentLoad = pending
-
-        do {
-            try await task.value
-            for address in addresses {
-                guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
-                else { continue }
-                await controller.setStaffInstrument(
-                    staff: flatIndex, bank: bank, program: program,
-                )
-            }
-            host?.setSoundfontAlertKind(nil)
-            if wasPlaying {
-                await host?.tryResumePlayback()
-            }
-        } catch {
-            for entry in snapshot {
-                if let previous = entry.previous {
-                    staffProgramOverrides[entry.address] = previous
-                } else {
-                    staffProgramOverrides.removeValue(forKey: entry.address)
-                }
-            }
-            await onChange?()
-            host?.setSoundfontAlertKind(nil)
-            // Only auto-resume on success. Cancel leaves us paused.
-        }
-        pendingInstrumentLoad = nil
     }
 
     func clearPartProgramOverride(forPartIndex partIndex: Int) async {

@@ -278,7 +278,6 @@ struct ReaderViewModelRepeatTests {
             abRepeat: ABRepeatRange(start: chord, end: endChord),
         )
         let controller = FakePlaybackController()
-        controller.soundfontsAvailableLocally = true
         let vm = ReaderViewModel(
             scoreItem: item,
             repository: repo,
