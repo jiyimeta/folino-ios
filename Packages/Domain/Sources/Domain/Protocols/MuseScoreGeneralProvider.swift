@@ -16,6 +16,12 @@ public protocol MuseScoreGeneralProvider: Sendable {
     /// engine asks for `defaultGMSoundfontURL`.
     var museScoreGeneralFileURL: URL? { get async }
 
+    /// Synchronous file-URL accessor used by the audio thread. Defaults to `nil`; concrete providers override for real
+    /// file-presence checks. Keeping this in the protocol makes it reachable via `any MuseScoreGeneralProvider`
+    /// existentials (protocol extension non-requirements are statically dispatched and cannot be overridden through
+    /// existentials).
+    var museScoreGeneralFileURLSync: URL? { get }
+
     /// Currently-effective preset, derived from `(isOptedIn, isDownloaded)`: `museScoreGeneral` when both true,
     /// otherwise `generalUserGS`.
     var currentPreset: SoundfontPreset { get async }
@@ -35,4 +41,12 @@ public protocol MuseScoreGeneralProvider: Sendable {
 
     /// Delete `MuseScore_General.sf2` from disk if present. No-op if absent.
     func deleteDownloaded() async
+}
+
+extension MuseScoreGeneralProvider {
+    /// Default synchronous file-URL accessor. Returns `nil`. Override in concrete providers that can answer without an
+    /// actor hop (e.g. `LiveMuseScoreGeneralProvider.museScoreGeneralFileURLSync`).
+    public var museScoreGeneralFileURLSync: URL? {
+        nil
+    }
 }

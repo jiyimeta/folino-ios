@@ -47,6 +47,10 @@ private struct StubProvider: MuseScoreGeneralProvider {
         isDownloaded ? .museScoreGeneral : .generalUserGS
     }
 
+    var museScoreGeneralFileURLSync: URL? {
+        museScoreGeneralFileURL
+    }
+
     func setOptedIn(_: Bool) {}
     func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
         AsyncStream { _ in }

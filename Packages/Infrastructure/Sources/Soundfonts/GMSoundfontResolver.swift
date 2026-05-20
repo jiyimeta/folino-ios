@@ -34,11 +34,3 @@ public struct GMSoundfontResolver: SheetMusicAudio.SoundfontResolver {
         )
     }
 }
-
-extension MuseScoreGeneralProvider {
-    /// Synchronous accessor used by the audio thread. Concrete providers override; default is `nil` to keep stub
-    /// providers in tests trivially compliant.
-    public var museScoreGeneralFileURLSync: URL? {
-        nil
-    }
-}
