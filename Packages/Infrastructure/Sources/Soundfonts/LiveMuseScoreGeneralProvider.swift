@@ -262,17 +262,18 @@ public protocol NetworkPathObserving: Sendable {
 public final class NWPathMonitorAdapter: NetworkPathObserving, @unchecked Sendable {
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "soundfont.network-path", qos: .utility)
-    private var cachedIsWiFi = false
+    private let cachedIsWiFiLock = OSAllocatedUnfairLock<Bool>(initialState: false)
 
     public init() {}
+
     public var isCurrentlyWiFi: Bool {
-        cachedIsWiFi
+        cachedIsWiFiLock.withLock { $0 }
     }
 
     public func start(handler: @escaping @Sendable (Bool) -> Void) {
-        monitor.pathUpdateHandler = { [weak self] path in
+        monitor.pathUpdateHandler = { [cachedIsWiFiLock] path in
             let isWiFi = path.status == .satisfied && path.usesInterfaceType(.wifi)
-            self?.cachedIsWiFi = isWiFi
+            cachedIsWiFiLock.withLock { $0 = isWiFi }
             handler(isWiFi)
         }
         monitor.start(queue: queue)
