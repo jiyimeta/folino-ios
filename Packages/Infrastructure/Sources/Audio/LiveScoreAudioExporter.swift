@@ -10,8 +10,8 @@ import SheetMusicCore
 /// spins a dedicated `AVAudioEngine` internally for the offline render.
 ///
 /// Soundfont policy: the GM soundfont is provided by the `SheetMusicAudio.SoundfontResolver` passed at init time (a
-/// `GMSoundfontResolver` in production). No per-patch prefetch is needed — the bundled GeneralUser GS covers every GM
-/// program, and the optional MuseScore_General download is handled separately by `LiveMuseScoreGeneralProvider`.
+/// `GMSoundfontResolver` in production). No per-patch prefetch is needed — the bundled lightweight preset covers every
+/// GM program, and the optional high-quality download is handled separately by `LiveMuseScoreGeneralProvider`.
 ///
 /// Metronome policy: `MetronomeController.isEnabled` defaults to `true` inside swift-sheet-music, so a fresh
 /// `PlaybackEngine` would always embed the click track. The `metronomeEnabled` closure is evaluated per export so the

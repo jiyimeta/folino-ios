@@ -3,7 +3,7 @@ import Foundation
 import Network
 import os
 
-/// UserDefaults-backed opt-out toggle + foreground `URLSessionDownloadTask` lifecycle for `MuseScore_General.sf2`.
+/// UserDefaults-backed opt-out toggle + foreground `URLSessionDownloadTask` lifecycle for the high-quality preset.
 ///
 /// Network policy: `URLSessionConfiguration.allowsCellularAccess = false` for the auto-download session — that means
 /// `startDownloadIfNeeded` is a no-op when Wi-Fi is unreachable, but a `URLSessionDownloadTask` already in flight on
@@ -41,13 +41,13 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     ) {
         self.targetDirectory = targetDirectory
         // swiftlint:disable:next force_unwrapping line_length
-        self.downloadURL = downloadURL ?? URL(string: "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/v2.0.0/MuseScore_General.sf2")!
+        self.downloadURL = downloadURL ?? URL(string: "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/unsplit/MuseScore_General.sf2")!
         self.defaults = defaults
         self.pathMonitor = pathMonitor
         self.wifiSession = wifiSession ?? Self.makeSession(allowsCellular: false)
         self.cellularSession = cellularSession ?? Self.makeSession(allowsCellular: true)
         // Compute the file URL directly here; `targetFileURL` is actor-isolated so cannot be accessed before init ends.
-        let fileURL = targetDirectory.appending(path: SoundfontPreset.museScoreGeneral.fileName)
+        let fileURL = targetDirectory.appending(path: SoundfontPreset.highQuality.fileName)
         currentState = FileManager.default.fileExists(atPath: fileURL.path) ? .downloaded : .idle
         pathMonitor.start { [weak self] isWiFi in
             Task { await self?.handlePathChange(isWiFi: isWiFi) }
@@ -65,7 +65,7 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     private static let optInKey = "soundfont.museScoreGeneral.optedIn"
 
     private var targetFileURL: URL {
-        targetDirectory.appending(path: SoundfontPreset.museScoreGeneral.fileName)
+        targetDirectory.appending(path: SoundfontPreset.highQuality.fileName)
     }
 
     // MARK: - MuseScoreGeneralProvider
@@ -93,12 +93,12 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     }
 
     public nonisolated var museScoreGeneralFileURLSync: URL? {
-        let url = targetDirectory.appending(path: SoundfontPreset.museScoreGeneral.fileName)
+        let url = targetDirectory.appending(path: SoundfontPreset.highQuality.fileName)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     public var currentPreset: SoundfontPreset {
-        (isOptedIn && isDownloaded) ? .museScoreGeneral : .generalUserGS
+        (isOptedIn && isDownloaded) ? .highQuality : .lightweight
     }
 
     public nonisolated func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
@@ -192,7 +192,7 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
             activeDelegate = nil
             publish(.downloaded)
         } catch {
-            logger.error("Failed to install MuseScore_General.sf2: \(String(describing: error), privacy: .public)")
+            logger.error("Failed to install high-quality preset: \(String(describing: error), privacy: .public)")
             activeTask = nil
             activeDelegate = nil
             publish(.failed(reason: error.localizedDescription))
@@ -234,7 +234,20 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unc
         Task { await owner.updateProgress(bytesWritten: written, expected: expected) }
     }
 
-    func urlSession(_: URLSession, downloadTask _: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+    func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        // `didFinishDownloadingTo` fires for *any* completed HTTP transaction including 4xx/5xx responses — the
+        // server's error body would otherwise be saved as if it were a SoundFont. Check the status code before
+        // accepting the file. Reject anything outside the 2xx range as a failed download.
+        if let http = downloadTask.response as? HTTPURLResponse,
+           !(200 ..< 300).contains(http.statusCode)
+        {
+            let urlString = downloadTask.originalRequest?.url?.absoluteString ?? "<unknown URL>"
+            let error = URLError(.badServerResponse, userInfo: [
+                NSLocalizedDescriptionKey: "HTTP \(http.statusCode) for \(urlString)",
+            ])
+            Task { await owner.handleDownloadFailed(error: error) }
+            return
+        }
         // Move synchronously off the delegate's tmp directory before returning; the file is deleted as soon as this
         // callback returns. Copy into our own scratch URL, then let the actor move it into place.
         let scratch = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

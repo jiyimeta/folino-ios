@@ -156,7 +156,7 @@ final class PlaybackMixerModel {
 
     /// Set a program override for every staff under the part. Each staff has its own engine voice, so we have to fan
     /// out — but to the user it reads as one "this part's instrument" choice. With the GM soundfont always available
-    /// (bundled GeneralUser GS or downloaded MuseScore General), no prefetch is needed: every GM program is
+    /// (lightweight bundled or downloaded high-quality preset), no prefetch is needed: every GM program is
     /// immediately playable, so the engine switch is synchronous.
     func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
         let addresses = partStaffAddresses(forPartIndex: partIndex)

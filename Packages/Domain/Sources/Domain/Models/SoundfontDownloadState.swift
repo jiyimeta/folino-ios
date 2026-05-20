@@ -1,4 +1,4 @@
-/// Lifecycle of the MuseScore_General download. The Settings row reads this for its subtitle;
+/// Lifecycle of the high-quality preset download. The Settings row reads this for its subtitle;
 /// the provider is the sole writer.
 public enum SoundfontDownloadState: Sendable, Equatable {
     /// File is not on disk and no download is in flight. The provider may transition to `downloading` automatically

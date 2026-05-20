@@ -1,16 +1,20 @@
-/// The GM SoundFont actively serving the playback engine. Folino ships GeneralUser GS bundled (always available); the
-/// MuseScore_General upgrade is opted into via Settings and downloaded over the network the first time the toggle is on
-/// and Wi-Fi is reachable.
+/// Identifies which GM SoundFont tier is currently serving the playback engine. The mapping from these abstract tiers
+/// to concrete `.sf2` files is the resolver's responsibility — callers should not assume a particular SF2 vendor or
+/// format. Two tiers: a small bundled default that is always available, and an optional higher-quality download.
 public enum SoundfontPreset: String, Sendable, Hashable, CaseIterable {
-    case generalUserGS
-    case museScoreGeneral
+    /// Small SF2 shipped inside the app bundle. Always available — the audio engine falls back here when no upgrade is
+    /// downloaded.
+    case lightweight
+    /// Larger SF2 fetched on demand (Wi-Fi by default) when the user opts in. Higher fidelity than `.lightweight`.
+    case highQuality
 
-    /// SF2 file name expected under `Bundle.main/Soundfonts/` (bundled) or `Application Support/Soundfonts/`
-    /// (downloaded).
+    /// On-disk file name the resolver looks up under `Bundle.main/Soundfonts/` (for `.lightweight`) or
+    /// `Application Support/Soundfonts/` (for `.highQuality`). Layers other than the resolver should not introspect
+    /// this — the case itself is the contract.
     public var fileName: String {
         switch self {
-        case .generalUserGS: "GeneralUser-GS.sf2"
-        case .museScoreGeneral: "MuseScore_General.sf2"
+        case .lightweight: "TimGM6mb.sf2"
+        case .highQuality: "MuseScore_General.sf2"
         }
     }
 
@@ -18,14 +22,14 @@ public enum SoundfontPreset: String, Sendable, Hashable, CaseIterable {
     /// provider when available.
     public var sizeBytes: Int64 {
         switch self {
-        case .generalUserGS: 31 * 1024 * 1024
-        case .museScoreGeneral: 206 * 1024 * 1024
+        case .lightweight: 6 * 1024 * 1024
+        case .highQuality: 206 * 1024 * 1024
         }
     }
 
-    /// `true` for `generalUserGS`, which ships inside the app bundle and is always available
-    /// without a network download.
+    /// `true` for the bundled lightweight preset, which ships inside the app bundle and is available without a
+    /// network download.
     public var isBundled: Bool {
-        self == .generalUserGS
+        self == .lightweight
     }
 }

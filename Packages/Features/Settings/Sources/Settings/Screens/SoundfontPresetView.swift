@@ -15,8 +15,8 @@ struct SoundfontPresetView: View {
             Section {
                 Toggle(isOn: $isOptedIn) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("settings.soundfont.musescore.title", bundle: .module)
-                        Text("settings.soundfont.musescore.subtitle", bundle: .module)
+                        Text("settings.soundfont.highQuality.title", bundle: .module)
+                        Text("settings.soundfont.highQuality.subtitle", bundle: .module)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

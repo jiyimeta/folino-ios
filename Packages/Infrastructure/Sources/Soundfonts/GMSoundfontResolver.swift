@@ -3,8 +3,8 @@ import Foundation
 import SheetMusicAudio
 
 /// Adapter from `SheetMusicAudio.SoundfontResolver` to Folino's GM-only sound model. The audio engine asks this
-/// resolver for `defaultGMSoundfontURL` every time it loads a score; we hand back either the downloaded
-/// MuseScore_General URL (preferred when present + opted in) or the bundled GeneralUser GS URL.
+/// resolver for `defaultGMSoundfontURL` every time it loads a score; we hand back either the downloaded high-quality
+/// URL (preferred when present + opted in) or the bundled lightweight URL.
 public struct GMSoundfontResolver: SheetMusicAudio.SoundfontResolver {
     private let provider: any MuseScoreGeneralProvider
     private let bundle: Bundle
@@ -14,8 +14,9 @@ public struct GMSoundfontResolver: SheetMusicAudio.SoundfontResolver {
         self.bundle = bundle
     }
 
-    /// Always `nil` — the engine falls through to `defaultGMSoundfontURL`, which carries the full GM bank. Returning
-    /// nil here keeps the engine code path identical for every voice in every score.
+    /// Always `nil` — the engine falls through to `defaultGMSoundfontURL`, which carries the full GM bank (including
+    /// drum bank 128 used by the metronome on MIDI channel 9). Returning nil here keeps the engine code path identical
+    /// for every voice in every score.
     public func soundfontURL(forBank _: UInt8, program _: UInt8, isDrums _: Bool) -> URL? {
         nil
     }
@@ -28,7 +29,7 @@ public struct GMSoundfontResolver: SheetMusicAudio.SoundfontResolver {
             return downloaded
         }
         return bundle.url(
-            forResource: "GeneralUser-GS",
+            forResource: "TimGM6mb",
             withExtension: "sf2",
             subdirectory: "Soundfonts",
         )

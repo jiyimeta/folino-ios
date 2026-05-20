@@ -514,18 +514,30 @@
         }
       }
     },
-    "settings.soundfont.musescore.subtitle" : {
+    "settings.soundfont.drumKit.label" : {
+      "comment" : "Soundfont cache row label for a percussion patch",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Drum Kit (Program %lld)"
+          }
+        }
+      }
+    },
+    "settings.soundfont.highQuality.subtitle" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "206 MB optional download. Off uses bundled GeneralUser GS."
+            "value" : "206 MB optional download. Uses the lightweight default when off or not yet downloaded."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "追加で 206 MB をダウンロード。オフにすると bundled GeneralUser GS で再生します。"
+            "value" : "追加で 206 MB をダウンロード。オフ時または未ダウンロード時はデフォルトの軽量音源で再生します。"
           }
         },
         "ko" : {
@@ -548,18 +560,18 @@
         }
       }
     },
-    "settings.soundfont.musescore.title" : {
+    "settings.soundfont.highQuality.title" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MuseScore_General (high quality)"
+            "value" : "High quality audio"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MuseScore_General (高品質)"
+            "value" : "高品質音源"
           }
         },
         "ko" : {
@@ -578,6 +590,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : ""
+          }
+        }
+      }
+    },
+    "settings.soundfont.patch.label" : {
+      "comment" : "Soundfont cache row label for a non-GM patch",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bank %1$lld · Program %2$lld"
           }
         }
       }
@@ -621,13 +645,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downloaded — playing with MuseScore_General."
+            "value" : "Downloaded — playing in high quality."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ダウンロード済み — MuseScore_General で再生中。"
+            "value" : "ダウンロード済み — 高品質音源で再生中。"
           }
         },
         "ko" : {

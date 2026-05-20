@@ -18,7 +18,7 @@ import Testing
         let provider = env.makeProvider()
         await provider.setOptedIn(false)
         #expect(await provider.isDownloaded == false)
-        #expect(await provider.currentPreset == .generalUserGS)
+        #expect(await provider.currentPreset == .lightweight)
     }
 
     @Test func `startDownloadIfNeeded skips when network is cellular and policy is wifi-only`() async throws {
@@ -46,7 +46,7 @@ import Testing
             if case .downloaded = state { break }
         }
         #expect(await provider.isDownloaded == true)
-        #expect(await provider.currentPreset == .museScoreGeneral)
+        #expect(await provider.currentPreset == .highQuality)
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -140,7 +140,7 @@ final class TestEnvironment: @unchecked Sendable {
 
     /// Drops a fake `MuseScore_General.sf2` into the target directory so the provider sees it as already downloaded.
     func placeDownloadedFile(bytes: Int) throws {
-        let url = targetDirectory.appending(path: SoundfontPreset.museScoreGeneral.fileName)
+        let url = targetDirectory.appending(path: SoundfontPreset.highQuality.fileName)
         try Data(repeating: 0xAA, count: bytes).write(to: url)
     }
 

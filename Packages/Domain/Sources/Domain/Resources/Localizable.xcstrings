@@ -172,6 +172,7 @@
       }
     },
     "domain.error.soundfontDownloadFailed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

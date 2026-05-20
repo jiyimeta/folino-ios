@@ -28,7 +28,7 @@ private struct StubProvider: MuseScoreGeneralProvider {
     }
 
     var currentPreset: SoundfontPreset {
-        .generalUserGS
+        .lightweight
     }
 
     func setOptedIn(_: Bool) {}

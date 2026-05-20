@@ -13,7 +13,7 @@ struct GMSoundfontResolverTests {
         #expect(resolver.soundfontURL(forBank: 0, program: 0, isDrums: true) == nil)
     }
 
-    @Test func `defaultGMSoundfontURL prefers downloaded MuseScore_General when present`() throws {
+    @Test func `defaultGMSoundfontURL prefers downloaded high-quality preset when present`() throws {
         let downloaded = URL(filePath: "/tmp/MuseScore_General.sf2")
         let resolver = try GMSoundfontResolver(
             provider: StubProvider(museScoreGeneralFileURL: downloaded),
@@ -22,14 +22,14 @@ struct GMSoundfontResolverTests {
         #expect(resolver.defaultGMSoundfontURL == downloaded)
     }
 
-    @Test func `defaultGMSoundfontURL falls back to bundled GeneralUser GS when nothing downloaded`() throws {
+    @Test func `defaultGMSoundfontURL falls back to bundled lightweight preset when nothing downloaded`() throws {
         let bundle = try makeBundleStub()
         let resolver = GMSoundfontResolver(
             provider: StubProvider(museScoreGeneralFileURL: nil),
             bundle: bundle,
         )
         let url = resolver.defaultGMSoundfontURL
-        #expect(url?.lastPathComponent == "GeneralUser-GS.sf2")
+        #expect(url?.lastPathComponent == "TimGM6mb.sf2")
     }
 }
 
@@ -44,7 +44,7 @@ private struct StubProvider: MuseScoreGeneralProvider {
     }
 
     var currentPreset: SoundfontPreset {
-        isDownloaded ? .museScoreGeneral : .generalUserGS
+        isDownloaded ? .highQuality : .lightweight
     }
 
     var museScoreGeneralFileURLSync: URL? {
@@ -62,14 +62,14 @@ private struct StubProvider: MuseScoreGeneralProvider {
     func deleteDownloaded() {}
 }
 
-/// Builds a fake `Bundle` containing only `Soundfonts/GeneralUser-GS.sf2` so the resolver's bundle lookup has a target.
+/// Builds a fake `Bundle` containing only `Soundfonts/TimGM6mb.sf2` so the resolver's bundle lookup has a target.
 private func makeBundleStub() throws -> Bundle {
     let tmp = FileManager.default.temporaryDirectory.appending(
         path: "GMSoundfontResolverTests-\(UUID().uuidString).bundle",
     )
     let soundfontsDir = tmp.appending(path: "Soundfonts")
     try FileManager.default.createDirectory(at: soundfontsDir, withIntermediateDirectories: true)
-    try Data([0xFF]).write(to: soundfontsDir.appending(path: "GeneralUser-GS.sf2"))
+    try Data([0xFF]).write(to: soundfontsDir.appending(path: "TimGM6mb.sf2"))
     guard let bundle = Bundle(url: tmp) else { throw NSError(domain: "bundle", code: 1) }
     return bundle
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Owns the MuseScore_General opt-out toggle, file presence, and download lifecycle. The audio resolver and the
+/// Owns the high-quality preset opt-out toggle, file presence, and download lifecycle. The audio resolver and the
 /// Settings row both consume this protocol; only the live infrastructure implementation mutates state.
 public protocol MuseScoreGeneralProvider: Sendable {
     /// User toggle. Defaults to `true` on first launch (auto-download by default; opt-out via Settings). When the user
@@ -8,8 +8,8 @@ public protocol MuseScoreGeneralProvider: Sendable {
     var isOptedIn: Bool { get async }
     func setOptedIn(_ value: Bool) async
 
-    /// `true` iff `MuseScore_General.sf2` is currently on disk and readable. Cached file system observation; safe to
-    /// poll from the audio thread.
+    /// `true` iff the high-quality preset file is currently on disk and readable. Cached file system observation; safe
+    /// to poll from the audio thread.
     var isDownloaded: Bool { get async }
 
     /// File system URL of the downloaded preset, or `nil` if absent. `GMSoundfontResolver` consults this every time the
@@ -22,8 +22,8 @@ public protocol MuseScoreGeneralProvider: Sendable {
     /// existentials).
     var museScoreGeneralFileURLSync: URL? { get }
 
-    /// Currently-effective preset, derived from `(isOptedIn, isDownloaded)`: `museScoreGeneral` when both true,
-    /// otherwise `generalUserGS`.
+    /// Currently-effective preset, derived from `(isOptedIn, isDownloaded)`: `highQuality` when both true,
+    /// otherwise `lightweight`.
     var currentPreset: SoundfontPreset { get async }
 
     /// Async stream of state changes for the Settings UI. New subscribers receive the current state immediately.
@@ -39,7 +39,7 @@ public protocol MuseScoreGeneralProvider: Sendable {
     /// Cancel an in-flight download. No-op if idle.
     func cancelDownload() async
 
-    /// Delete `MuseScore_General.sf2` from disk if present. No-op if absent.
+    /// Delete the downloaded preset file from disk if present. No-op if absent.
     func deleteDownloaded() async
 }
 
