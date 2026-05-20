@@ -22,6 +22,7 @@ struct NearestCursorTests {
             stemOrigin: CGPoint(x: 20, y: originY),
             hasArpeggio: false, arpeggioRawType: nil,
             isBeamed: false, voiceIndex: 0,
+            stemExtension: 0,
         )
     }
 
