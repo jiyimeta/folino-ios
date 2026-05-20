@@ -21,9 +21,9 @@ public struct GMSoundfontResolver: SheetMusicAudio.SoundfontResolver {
     }
 
     public var defaultGMSoundfontURL: URL? {
-        // Synchronous read of the provider's snapshot is fine because the file URL only changes on download completion
-        // / deletion, both of which are user-initiated rare events. Audio thread tolerates an occasional cross-actor
-        // hop via `unsafeWait` (see provider implementation).
+        // `museScoreGeneralFileURLSync` is `nonisolated` on the provider and reads only the immutable
+        // `targetDirectory` constant plus `FileManager.fileExists`, so this is safe to call from the
+        // audio thread without an actor hop.
         if let downloaded = provider.museScoreGeneralFileURLSync {
             return downloaded
         }

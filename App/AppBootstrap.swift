@@ -23,7 +23,6 @@ final class AppBootstrap {
     private(set) var reachability: LiveNetworkReachability?
     private(set) var museScoreGeneralProvider: LiveMuseScoreGeneralProvider?
     private(set) var soundfontResolver: GMSoundfontResolver?
-    private(set) var presetCatalog: BundledSF2PresetCatalog?
     private(set) var shareService: LiveScoreShareService?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
     let shareDuplicateResolver = ShareDuplicateResolver()
@@ -100,11 +99,6 @@ final class AppBootstrap {
         museScoreGeneralProvider = provider
         let resolver = GMSoundfontResolver(provider: provider)
         soundfontResolver = resolver
-        if let bundleSF2URL = Bundle.main.url(
-            forResource: "GeneralUser-GS", withExtension: "sf2", subdirectory: "Soundfonts",
-        ) {
-            presetCatalog = try? BundledSF2PresetCatalog(sf2URL: bundleSF2URL)
-        }
         let audioExporter = LiveScoreAudioExporter(
             soundfontResolver: resolver,
             metronomeEnabled: {
