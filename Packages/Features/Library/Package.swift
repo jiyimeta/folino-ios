@@ -37,7 +37,7 @@ let package = Package(
         ),
         .testTarget(
             name: "LibraryLogicTests",
-            dependencies: ["LibraryLogic"],
+            dependencies: ["LibraryLogic", "Domain"],
         ),
         .testTarget(name: "LibraryTests", dependencies: ["Library"]),
     ],
