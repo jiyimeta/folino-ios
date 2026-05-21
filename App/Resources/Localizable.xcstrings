@@ -274,6 +274,7 @@
       }
     },
     "app.share.duplicate.message" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
