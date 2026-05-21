@@ -38,6 +38,7 @@ public struct ReaderRootScreen: View {
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
+        museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
     ) {
@@ -52,6 +53,7 @@ public struct ReaderRootScreen: View {
                 scoresDirectory: scoresDirectory,
                 defaultStaffSize: initialDefault,
                 playbackController: playbackController,
+                museScoreGeneralProvider: museScoreGeneralProvider,
             ),
         )
         self.onBack = onBack
@@ -81,6 +83,7 @@ public struct ReaderRootScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .task {
             viewModel.startObservingCursor()
+            viewModel.startObservingSoundfontDownload()
             viewModel.setPiPEnabled(isPiPEnabled)
             viewModel.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
             await viewModel.load()

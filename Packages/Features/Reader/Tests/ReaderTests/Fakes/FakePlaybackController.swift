@@ -74,6 +74,12 @@ final class FakePlaybackController: PlaybackController {
         releaseEngineCount += 1
     }
 
+    private(set) var reloadSoundfontCount = 0
+
+    func reloadSoundfont() {
+        reloadSoundfontCount += 1
+    }
+
     func setStaffVolume(staff: Int, volume: Double) {
         staffVolumes[staff] = volume
     }

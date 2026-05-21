@@ -15,6 +15,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// Internal (not private) so the +LoopBounds extension file can reach it when forwarding to engine.play(in:) after
     /// a setLoop / clearLoop.
     var loadedScore: Score?
+    /// Cached preferences from the most recent `load(...)` — replayed against the engine during `reloadSoundfont()` so
+    /// per-staff volumes / mutes / solos / tempo survive the soundfont swap.
+    private var loadedPreferences: PlaybackPreferences?
     /// Cursor the user picked while the engine's sequencer wasn't yet built (it's lazy — first `play(from:in:)` builds
     /// it). `seek` early-outs in that state, so we stash the request here and apply it on the next `play()` via
     /// `engine.play(from:in:)`. Without this, the first play after a tap-to-seek would reset to position 0 because
@@ -96,8 +99,37 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // nil (lazy), so this just stops the audio graph and parks `state` at `.paused`.
         engine.pause()
         loadedScore = score
+        loadedPreferences = preferences
         pendingCursor = nil
         updateNowPlayingMetadata(for: score, displayTitle: displayTitle)
+        applyPreferences(preferences)
+    }
+
+    public func reloadSoundfont() {
+        // No-op when nothing is loaded — caller (Reader) only invokes this after a download finishes, which can race
+        // against Reader teardown if the user backs out while the swap is queued.
+        guard let score = loadedScore, let preferences = loadedPreferences else { return }
+        let savedCursor = engine.currentCursor
+        do {
+            // Re-running `prepare` re-asks the `SoundfontResolver` for `defaultGMSoundfontURL`, which is how the
+            // newly-downloaded MuseScore_General.sf2 reaches the AUMIDISynth without reopening the score.
+            try engine.prepare(score: score)
+        } catch {
+            // Swap failed — keep running on whatever was prepared before. The next score-open will retry naturally.
+            return
+        }
+        engine.pause()
+        applyPreferences(preferences)
+        if let savedCursor {
+            // Match the paused-branch behavior in `setCursor(to:)`: `seek` is a no-op until the sequencer is rebuilt by
+            // the next `play()`, so stash the request so `play()` consumes it.
+            engine.seek(to: savedCursor)
+            pendingCursor = savedCursor
+        }
+        publishNowPlayingInfo()
+    }
+
+    private func applyPreferences(_ preferences: PlaybackPreferences) {
         for state in preferences.perStaff {
             engine.setVolume(
                 forChannel: .staff(state.staffIndex), to: Float(state.volume),
@@ -132,6 +164,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // next `load(score:...)` re-primes everything (engine.prepare sets the category back to `.playback`).
         engine.teardown()
         loadedScore = nil
+        loadedPreferences = nil
         pendingCursor = nil
         lastObservedEngineTime = 0
         let session = AVAudioSession.sharedInstance()

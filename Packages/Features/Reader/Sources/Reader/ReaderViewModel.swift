@@ -206,11 +206,22 @@ final class ReaderViewModel {
     @ObservationIgnored
     let playbackController: (any PlaybackController)?
     @ObservationIgnored
+    private let museScoreGeneralProvider: (any MuseScoreGeneralProvider)?
+    @ObservationIgnored
     private var hasUpdatedLastOpened = false
     @ObservationIgnored
     private var hasLoadedIntoPlayback = false
     @ObservationIgnored
     private var preloadTask: Task<Void, Error>?
+    /// `true` after the high-quality SF2 finishes downloading mid-session while the user is playing. Drained by the
+    /// `observeIsPlaying` handler on the next pause, which calls `playbackController.reloadSoundfont()` so the engine
+    /// re-consults its `SoundfontResolver` and the new file lands without interrupting active audio.
+    @ObservationIgnored
+    private var pendingSoundfontSwap = false
+    /// In-flight observation of the soundfont provider's `downloadState`. Cancelled on deinit so the loop drops its
+    /// provider reference and exits.
+    @ObservationIgnored
+    private var soundfontDownloadObservationTask: Task<Void, Never>?
     /// Untranslated cursor as the engine published it. Kept so we can re-derive `playbackCursor` whenever
     /// `hiddenStaves` changes — the engine doesn't know about visibility, so the same raw value can map to a different
     /// visible representation across toggles.
@@ -224,6 +235,7 @@ final class ReaderViewModel {
         scoresDirectory: URL,
         defaultStaffSize: CGFloat = 14,
         playbackController: (any PlaybackController)? = nil,
+        museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
     ) {
         self.scoreItem = scoreItem
         self.repository = repository
@@ -231,6 +243,7 @@ final class ReaderViewModel {
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
         self.playbackController = playbackController
+        self.museScoreGeneralProvider = museScoreGeneralProvider
         preferences = ReaderPreferences(
             scoreItemID: scoreItem.id,
             staffSize: defaultStaffSize,
@@ -240,6 +253,10 @@ final class ReaderViewModel {
         wireTempoModel()
         wireLayoutModel()
         wireMixerModel()
+    }
+
+    deinit {
+        soundfontDownloadObservationTask?.cancel()
     }
 
     private func wireMixerModel() {
@@ -336,7 +353,48 @@ final class ReaderViewModel {
         // Mirror the engine's play/pause state into the VM regardless of who flipped it (in-app toolbar, lock-screen
         // Now Playing, audio session interruption, etc.) so PiP chrome and toolbar glyph stay accurate.
         controller.observeIsPlaying { [weak self] playing in
-            self?.isPlaying = playing
+            guard let self else { return }
+            isPlaying = playing
+            if !playing, pendingSoundfontSwap {
+                pendingSoundfontSwap = false
+                Task { await self.playbackController?.reloadSoundfont() }
+            }
+        }
+    }
+
+    /// Watch the high-quality soundfont download. If it finishes while the Reader is open, hot-swap the engine's SF2
+    /// without forcing the user to reopen the score — swap immediately when paused, or queue until the next pause when
+    /// actively playing so an audio cut is never introduced. One-shot per Reader session: once `.downloaded` arrives
+    /// the observer exits, because no further swap is needed (the file is now on disk for every subsequent score load).
+    /// Should be called from the same view-lifecycle hook as `startObservingCursor` for the same reason — only the
+    /// SwiftUI-retained VM should register.
+    func startObservingSoundfontDownload() {
+        guard let provider = museScoreGeneralProvider,
+              soundfontDownloadObservationTask == nil
+        else { return }
+        // Already downloaded at Reader open → the natural `controller.load(...)` will pick up the high-quality SF2 on
+        // its own, no swap needed.
+        if case .downloaded = provider.downloadState { return }
+        soundfontDownloadObservationTask = Task { @MainActor [weak self] in
+            let stream = Observations { provider.downloadState }
+            for await state in stream {
+                guard let self else { return }
+                if case .downloaded = state {
+                    handleSoundfontReady()
+                    return
+                }
+            }
+        }
+    }
+
+    private func handleSoundfontReady() {
+        // Engine hasn't been primed yet → `prepareForPlayback` / `togglePlayback` will consume the new resolver URL on
+        // its initial `load`, so nothing to do here.
+        guard hasLoadedIntoPlayback else { return }
+        if isPlaying {
+            pendingSoundfontSwap = true
+        } else {
+            Task { await playbackController?.reloadSoundfont() }
         }
     }
 
