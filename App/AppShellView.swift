@@ -195,6 +195,7 @@ private struct ReadyShell: View {
                             gateway: gateway,
                             scoresDirectory: scoresDirectory,
                             playbackController: bootstrap.playbackController,
+                            museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
                         )
                     },
                     licenseContent: { LicenseListView() },
@@ -333,6 +334,7 @@ private struct ReadyShell: View {
                 gateway: gateway,
                 scoresDirectory: scoresDirectory,
                 playbackController: bootstrap.playbackController,
+                museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
                 onBack: { columnVisibility = .doubleColumn },
                 hidesBackButton: columnVisibility == .doubleColumn,
             )

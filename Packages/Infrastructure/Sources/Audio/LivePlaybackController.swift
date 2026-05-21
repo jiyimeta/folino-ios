@@ -3,6 +3,7 @@ import Domain
 import Foundation
 import MediaPlayer
 import Observation
+import os
 import SheetMusicAudio
 import SheetMusicCore
 import UIKit
@@ -15,11 +16,16 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// Internal (not private) so the +LoopBounds extension file can reach it when forwarding to engine.play(in:) after
     /// a setLoop / clearLoop.
     var loadedScore: Score?
+    /// Cached preferences from the most recent `load(...)` — replayed against the engine during `reloadSoundfont()` so
+    /// per-staff volumes / mutes / solos / tempo survive the soundfont swap. Internal so the +Reload extension can
+    /// reach it.
+    var loadedPreferences: PlaybackPreferences?
     /// Cursor the user picked while the engine's sequencer wasn't yet built (it's lazy — first `play(from:in:)` builds
     /// it). `seek` early-outs in that state, so we stash the request here and apply it on the next `play()` via
     /// `engine.play(from:in:)`. Without this, the first play after a tap-to-seek would reset to position 0 because
-    /// `play(in:)` with `state == .stopped` rewinds the sequencer.
-    private var pendingCursor: ScoreCursor?
+    /// `play(in:)` with `state == .stopped` rewinds the sequencer. Internal so the +Reload extension can stash a
+    /// pending cursor after re-prepare.
+    var pendingCursor: ScoreCursor?
 
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var isPlayingHandler: (@MainActor (Bool) -> Void)?
@@ -37,6 +43,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// every state change rather than mutating the live one in place — reading `MPNowPlayingInfoCenter.nowPlayingInfo`
     /// back can return a stale or nil snapshot, which would silently drop the rate update.
     private var nowPlayingMetadata: [String: Any] = [:]
+    /// Cached metronome-enabled flag. Mirrors what was last passed to `setMetronomeEnabled(_:)`. `prepare(score:)`
+    /// resets the engine's metronome to its default of enabled, so `reloadSoundfont()` re-applies this. Internal so
+    /// the +Reload extension can read it.
+    var metronomeEnabled = true
+    let logger = Logger(subsystem: "com.KeyNumber.Folino", category: "PlaybackController")
 
     public init(soundfontResolver: any SheetMusicAudio.SoundfontResolver) {
         engine = PlaybackEngine(soundfontResolver: soundfontResolver)
@@ -96,8 +107,17 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // nil (lazy), so this just stops the audio graph and parks `state` at `.paused`.
         engine.pause()
         loadedScore = score
+        loadedPreferences = preferences
         pendingCursor = nil
         updateNowPlayingMetadata(for: score, displayTitle: displayTitle)
+        applyPreferences(preferences)
+    }
+
+    // `reloadSoundfont` lives in `LivePlaybackController+Reload.swift` — it needs the cached `loadedPreferences` and
+    // `metronomeEnabled` declared above plus `applyPreferences` / `publishNowPlayingInfo` below, but is otherwise
+    // self-contained.
+
+    func applyPreferences(_ preferences: PlaybackPreferences) {
         for state in preferences.perStaff {
             engine.setVolume(
                 forChannel: .staff(state.staffIndex), to: Float(state.volume),
@@ -132,6 +152,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // next `load(score:...)` re-primes everything (engine.prepare sets the category back to `.playback`).
         engine.teardown()
         loadedScore = nil
+        loadedPreferences = nil
         pendingCursor = nil
         lastObservedEngineTime = 0
         let session = AVAudioSession.sharedInstance()
@@ -171,6 +192,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     }
 
     public func setMetronomeEnabled(_ enabled: Bool) {
+        metronomeEnabled = enabled
         engine.setMuted(forChannel: .metronome, to: !enabled)
     }
 
@@ -331,7 +353,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// the new elapsed value, then re-publish with the real rate so playback continues. Apple's MusicKit /
     /// AVPlayer-backed apps do this implicitly via `playbackState` transitions, which third-party apps can't write
     /// directly.
-    private func publishNowPlayingInfo(seeking: Bool = false) {
+    func publishNowPlayingInfo(seeking: Bool = false) {
         let isPlaying = engine.state == .playing
         let elapsed = engine.currentTimeSeconds
         let center = MPNowPlayingInfoCenter.default()

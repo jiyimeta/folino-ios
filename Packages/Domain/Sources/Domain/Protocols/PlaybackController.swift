@@ -23,6 +23,12 @@ public protocol PlaybackController: Sendable {
     /// of the app's lifetime.
     func releaseEngine() async
 
+    /// Re-prepare the currently loaded score so the engine re-consults its `SoundfontResolver`. Preserves the cursor
+    /// position and re-applies per-staff volume / mute / solo / tempo from the original `load` preferences. Stays
+    /// paused after the swap regardless of prior playing state — the Reader is responsible for calling this only when
+    /// `isPlaying == false`, so a soundfont swap never cuts active audio. No-op when no score is currently loaded.
+    func reloadSoundfont() async
+
     /// Current playback position in seconds. Zero before a score is loaded and prepared. Read main-actor synchronously
     /// — the engine computes this from its sequencer state on the main thread, so no actor hop is needed.
     @MainActor var currentTimeSeconds: TimeInterval { get }

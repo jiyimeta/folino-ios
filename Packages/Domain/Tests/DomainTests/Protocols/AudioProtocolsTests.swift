@@ -24,6 +24,7 @@ private final class FakePlaybackController: PlaybackController {
     func play() throws {}
     func pause() {}
     func releaseEngine() {}
+    func reloadSoundfont() {}
 
     var currentTimeSeconds: TimeInterval = 0
     var totalTimeSeconds: TimeInterval = 0

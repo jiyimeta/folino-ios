@@ -140,6 +140,8 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         activeDelegate = delegate // keep strong ref alive for the lifetime of the task
         activeTask = task
         downloadState = .downloading(progress: 0)
+        let url = downloadURL.absoluteString
+        logger.notice("MuseScore_General download starting from \(url, privacy: .public)")
         task.resume()
     }
 
@@ -177,6 +179,8 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
             activeTask = nil
             activeDelegate = nil
             downloadState = .downloaded
+            let path = targetFileURL.path
+            logger.notice("MuseScore_General download finished, installed at \(path, privacy: .public)")
         } catch {
             logger.error("Failed to install high-quality preset: \(String(describing: error), privacy: .public)")
             activeTask = nil
@@ -191,6 +195,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         // `URLError.cancelled` arrives when the user toggles off mid-download or app foregrounds with a stale handle —
         // do not surface a "failed" state in that case; cancellation already drove the state machine.
         if (error as? URLError)?.code == .cancelled { return }
+        logger.notice("MuseScore_General download failed: \(error.localizedDescription, privacy: .public)")
         downloadState = .failed(reason: error.localizedDescription)
     }
 
