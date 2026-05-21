@@ -359,11 +359,12 @@ public final class LibraryStore {
             currentError = LibraryError.from(error)
             return
         }
-        if let existing = plan.duplicates.first {
+        switch ImportPlanValidator.decision(for: plan) {
+        case .commitAsNew:
+            await commit(plan: plan, decision: .importAsNew)
+        case let .promptForDuplicate(existing):
             duplicatePrompt = DuplicatePrompt(plan: plan, existing: existing)
-            return
         }
-        await commit(plan: plan, decision: .importAsNew)
     }
 
     public func commit(plan: ImportPlan, decision: ImportDecision) async {
