@@ -39,6 +39,11 @@ struct PagedScoreContainer: View {
     @State private var pinch = PinchState()
     @State private var committedZoom: CGFloat = 1.0
 
+    /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
+    /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
+    @AppStorage(ReaderGlobalSettingsKey.pageTapHintDismissed)
+    private var pageTapHintDismissed = false
+
     /// Insets that position the page band inside the full-screen scroll host: top includes the parent's
     /// `safeAreaPadding(.top, ReaderTopOverlay.height)` so the band clears the navigation chrome; the other edges are
     /// the raw system insets. Sampled from a sibling reader that ignores the safe area so the values stay correct even
@@ -97,6 +102,7 @@ struct PagedScoreContainer: View {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     private func scrollContent(viewport: CGSize) -> some View {
         ScoreScrollHost(
             contentOffset: $liveScrollOffset,
@@ -155,6 +161,8 @@ struct PagedScoreContainer: View {
                 onFirstPage: { goToFirstPage() },
                 onLastPage: { goToLastPage() },
                 onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
+                showsHint: !pageTapHintDismissed,
+                onAnyZoneTouchDown: { pageTapHintDismissed = true },
             )
         }
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area into the chrome regions. The hosted
@@ -416,6 +424,8 @@ private struct PagedZoomedSurface: View {
     let onFirstPage: () -> Void
     let onLastPage: () -> Void
     let onDoubleTap: () -> Void
+    let showsHint: Bool
+    let onAnyZoneTouchDown: () -> Void
 
     var body: some View {
         if let doc = document, !pages.isEmpty {
@@ -597,6 +607,8 @@ private struct PagedZoomedSurface: View {
             onNextPage: onNextPage,
             currentPageNumber: pageState.pageIndex + 1,
             totalPages: pages.count,
+            showsHint: showsHint,
+            onAnyZoneTouchDown: onAnyZoneTouchDown,
         )
     }
 
@@ -689,43 +701,51 @@ private struct PageTapZone: View {
     let height: CGFloat
     let action: () -> Void
     let highlighted: Bool
+    /// When true, render the onboarding hint (dashed border + light accent fill + tinted icon/label). Mutually
+    /// exclusive with `highlighted` — the moment a finger lands the parent flips `hintVisible` false and `highlighted`
+    /// true.
+    let hintVisible: Bool
     let onPressChange: (Bool) -> Void
 
     @GestureState private var isPressed = false
 
     var body: some View {
-        // The highlight (fill + icon + label) is rendered at full strength all the time; visibility is controlled by a
-        // single `.opacity` gate. With both layers always resident there's no view re-creation per press, so rapid
-        // re-taps can't stack a fading-out copy under a fading-in copy and darken the fill.
+        let shape = UnevenRoundedRectangle(cornerRadii: kind.cornerRadii(radius: 12))
         ZStack {
-            UnevenRoundedRectangle(cornerRadii: kind.cornerRadii(radius: 12))
-                .fill(Color.secondary.opacity(0.5))
-            VStack(spacing: 6) {
-                kind.image
-                    .font(.title2)
-                    .bold()
-                Text(kind.labelKey, bundle: .module)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            // Onboarding hint layer: dashed border + light tint fill + tinted icon/label at full opacity.
+            ZStack {
+                shape.fill(Color.accentColor.opacity(0.12))
+                shape.strokeBorder(
+                    Color.accentColor,
+                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]),
+                )
+                zoneLabel
+                    .foregroundStyle(Color.accentColor)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 4)
+            .opacity(hintVisible ? 1 : 0)
+            .animation(.easeOut(duration: 0.2), value: hintVisible)
+
+            // Press-feedback layer: existing solid grey fill + white icon/label. Resident at full strength so rapid
+            // re-taps can't stack a fading-out copy under a fading-in copy and darken the fill.
+            ZStack {
+                shape.fill(Color.secondary.opacity(0.5))
+                zoneLabel
+                    .foregroundStyle(.white)
+            }
+            .opacity(highlighted ? 1 : 0)
+            // Fade the highlight out on release; show it immediately on touch. Picking the animation off the *new*
+            // value of `highlighted` keeps appearance instant (nil animation) and disappearance smooth. The
+            // `delay(0.35)` keeps the highlight visible after the page has already turned, so the user can see *which*
+            // tap zone fired before it disappears.
+            .animation(
+                highlighted ? nil : .easeOut(duration: 0.3).delay(0.35),
+                value: highlighted,
+            )
         }
-        .opacity(highlighted ? 1 : 0)
         .frame(width: width, height: height)
-        // Hit area stays a full rectangle so the square (screen-edge) corners remain tappable even though the highlight
-        // pill crops them visually.
+        // Hit area stays a full rectangle so the square (screen-edge) corners remain tappable even though the pill
+        // crops them visually.
         .contentShape(Rectangle())
-        // Fade the highlight out on release; show it immediately on touch. Picking the animation off the *new* value of
-        // `highlighted` keeps appearance instant (nil animation) and disappearance smooth. The `delay(0.5)` keeps the
-        // highlight visible after the page has already turned, so the user can see *which* tap zone fired before it
-        // disappears.
-        .animation(
-            highlighted ? nil : .easeOut(duration: 0.3).delay(0.35),
-            value: highlighted,
-        )
         .gesture(
             DragGesture(minimumDistance: 0)
                 .updating($isPressed) { _, state, _ in state = true }
@@ -735,6 +755,20 @@ private struct PageTapZone: View {
                 },
         )
         .onChange(of: isPressed) { _, new in onPressChange(new) }
+    }
+
+    private var zoneLabel: some View {
+        VStack(spacing: 6) {
+            kind.image
+                .font(.title2)
+                .bold()
+            Text(kind.labelKey, bundle: .module)
+                .font(.caption)
+                .fontWeight(.medium)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 4)
     }
 }
 
@@ -757,6 +791,11 @@ private struct TapOverlay: View {
     let currentPageNumber: Int
     /// Total page count shown in the indicator badge.
     let totalPages: Int
+    /// When true, the four zones render a dashed-border onboarding hint at rest. Flips false the moment the user
+    /// touches any zone.
+    let showsHint: Bool
+    /// Fires once per touch-down sequence — the parent uses this to flip the persisted dismiss flag.
+    let onAnyZoneTouchDown: () -> Void
 
     /// Per-zone press state. Set element identifies which zone is touched; emptiness drives the global highlight off.
     /// Seeded from `initialPressedKinds` so previews can render the highlighted layout without firing a real gesture.
@@ -772,6 +811,8 @@ private struct TapOverlay: View {
         onNextPage: @escaping () -> Void,
         currentPageNumber: Int = 1,
         totalPages: Int = 1,
+        showsHint: Bool = false,
+        onAnyZoneTouchDown: @escaping () -> Void = {},
         initialPressedKinds: Set<PageTapZoneKind> = [],
     ) {
         self.viewport = viewport
@@ -783,6 +824,8 @@ private struct TapOverlay: View {
         self.onNextPage = onNextPage
         self.currentPageNumber = currentPageNumber
         self.totalPages = totalPages
+        self.showsHint = showsHint
+        self.onAnyZoneTouchDown = onAnyZoneTouchDown
         _pressedKinds = State(initialValue: initialPressedKinds)
     }
 
@@ -795,6 +838,9 @@ private struct TapOverlay: View {
         let topHeight = viewport.height * 0.3
         let bottomHeight = viewport.height - topHeight
         let highlighted = !pressedKinds.isEmpty
+        // Hint is mutually exclusive with the press visual: the moment a finger lands, `pressedKinds` is non-empty and
+        // `hintVisible` flips false so the hint fades out while the press fill takes over.
+        let hintVisible = showsHint && pressedKinds.isEmpty
         ZStack(alignment: .bottom) {
             HStack(spacing: 0) {
                 edgeColumn(
@@ -806,6 +852,7 @@ private struct TapOverlay: View {
                     topAction: onFirstPage,
                     bottomAction: onPrevPage,
                     highlighted: highlighted,
+                    hintVisible: hintVisible,
                 )
                 Color.clear
                     .frame(width: middleWidth)
@@ -819,6 +866,7 @@ private struct TapOverlay: View {
                     topAction: onLastPage,
                     bottomAction: onNextPage,
                     highlighted: highlighted,
+                    hintVisible: hintVisible,
                 )
             }
 
@@ -858,6 +906,7 @@ private struct TapOverlay: View {
         topAction: @escaping () -> Void,
         bottomAction: @escaping () -> Void,
         highlighted: Bool,
+        hintVisible: Bool,
     ) -> some View {
         VStack(spacing: 8) {
             PageTapZone(
@@ -866,6 +915,7 @@ private struct TapOverlay: View {
                 height: topHeight,
                 action: topAction,
                 highlighted: highlighted,
+                hintVisible: hintVisible,
                 onPressChange: { updatePressed(topKind, pressed: $0) },
             )
             PageTapZone(
@@ -874,13 +924,17 @@ private struct TapOverlay: View {
                 height: bottomHeight,
                 action: bottomAction,
                 highlighted: highlighted,
+                hintVisible: hintVisible,
                 onPressChange: { updatePressed(bottomKind, pressed: $0) },
             )
         }
     }
 
+    /// Fires `onAnyZoneTouchDown` exactly once per touch-down sequence — the first transition from "no zones pressed"
+    /// to "any zone pressed". A long press or a finger-roll between zones does not refire.
     private func updatePressed(_ kind: PageTapZoneKind, pressed: Bool) {
         if pressed {
+            if pressedKinds.isEmpty { onAnyZoneTouchDown() }
             pressedKinds.insert(kind)
         } else {
             pressedKinds.remove(kind)
@@ -920,9 +974,17 @@ private struct PageIndicatorBadge: View {
         .ignoresSafeArea()
 }
 
+#Preview("Tap zones · onboarding hint") {
+    TapZonePreviewHost(leadingGutter: 0, trailingGutter: 0, showsHint: true)
+        .ignoresSafeArea()
+}
+
 private struct TapZonePreviewHost: View {
     let leadingGutter: CGFloat
     let trailingGutter: CGFloat
+    /// When true, render the onboarding hint at rest (no pressed zones). Mutually exclusive with the highlighted
+    /// press state — pressing a zone would dismiss the hint in production.
+    var showsHint = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -947,7 +1009,8 @@ private struct TapZonePreviewHost: View {
                     onPrevPage: {},
                     onLastPage: {},
                     onNextPage: {},
-                    initialPressedKinds: [.first],
+                    showsHint: showsHint,
+                    initialPressedKinds: showsHint ? [] : [.first],
                 )
             }
         }

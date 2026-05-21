@@ -32,4 +32,9 @@ public enum ReaderGlobalSettingsKey {
     /// or lock during practice. The Reader restores the idle timer when it disappears. Defaults to true at the
     /// `@AppStorage` site for first-launch users.
     public static let keepScreenAwakeEnabled = "readerKeepScreenAwakeEnabled"
+
+    /// Bool. `true` once the user has touched any page-mode tap-navigation zone for the first time. Drives the
+    /// onboarding hint in `PagedScoreContainer.TapOverlay`. Defaults to `false`; once flipped, stays true for the
+    /// install lifetime.
+    public static let pageTapHintDismissed = "readerPageTapHintDismissed"
 }
