@@ -82,6 +82,10 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         // double-tap-to-zoom feel sluggish if we leave delaysContentTouches at its default (true).
         scroll.delaysContentTouches = false
         scroll.canCancelContentTouches = true
+        // Also unset the touch-end delay on the pan recognizer itself: while the pan is in `.possible`, its default
+        // `delaysTouchesEnded = true` postpones touch-up delivery to other recognizers until the pan transitions to
+        // `.failed`, which surfaces as a sub-second lag between finger lift and `PageTapZone.onEnded` firing.
+        scroll.panGestureRecognizer.delaysTouchesEnded = false
         // SwiftUI side owns the top inset via `.safeAreaPadding` on the host view. `.always` would double-apply and
         // leave margins above / below the score.
         scroll.contentInsetAdjustmentBehavior = .never

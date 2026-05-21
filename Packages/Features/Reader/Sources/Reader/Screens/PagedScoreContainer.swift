@@ -65,7 +65,7 @@ struct PagedScoreContainer: View {
 
     /// Curve applied when mutating `pageState.pageIndex`. Every page in the rendered window has an `.offset` that
     /// depends on `pageIndex`, so this curve governs every page's slide.
-    static let pageTransitionAnimation: Animation = .easeInOut(duration: 0.22)
+    static let pageTransitionAnimation: Animation = .easeOut(duration: 0.18)
 
     /// Horizontal gutter applied to the score content inside the page band. The layout uses the gutter-deducted width
     /// so the score wraps to its visible width; the page background and tap zones still span the full band.
@@ -319,7 +319,13 @@ struct PagedScoreContainer: View {
                 pageState.freezeFirstPageOffset = false
             }
         }
-        pendingScroll = .immediate(.zero)
+        // Reset scroll position to origin when the previous page was scrolled — typically the user was zoomed in
+        // and scrolled around before tapping a navigation zone. Skipping this when `liveScrollOffset == .zero`
+        // avoids triggering `ScoreScrollHost.updateUIView` (whose `layoutIfNeeded()` passes can cost tens of ms)
+        // for the common zoom-1 case where the scroll position is already at origin.
+        if liveScrollOffset != .zero {
+            pendingScroll = .immediate(.zero)
+        }
     }
 
     /// Page-swipe activation gate. Returns `true` only when the existing page-band state allows a finger-following
@@ -822,8 +828,19 @@ private struct PagedZoomedSurface: View {
             + doc.systems[lastSystemIndex].size.height
             : pageStartY
         let pageHeight = max(0, pageEndY - pageStartY)
+        // Sub-document containing only this page's systems — each ScoreView in the slide window otherwise constructs
+        // a `SystemLayerView` for every system in the full doc, multiplying the layout cost by `windowIndices.count`
+        // (up to 5). System `origin.y` is preserved so the existing `.offset(y: -pageStartY)` + outer `.clipped()`
+        // machinery still positions the page correctly inside the band. `titleFrame` is preserved only on idx 0.
+        let pageSystems = Array(doc.systems[pageRange])
+        let pageDoc = LayoutDocument(
+            size: doc.size,
+            systems: pageSystems,
+            metrics: doc.metrics,
+            titleFrame: idx == 0 ? doc.titleFrame : nil,
+        )
         return scoreSurface(
-            document: doc,
+            document: pageDoc,
             pageStartY: pageStartY,
             pageHeight: pageHeight,
         )
