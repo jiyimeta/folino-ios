@@ -29,7 +29,7 @@ struct GMSoundfontResolverTests {
             bundle: bundle,
         )
         let url = resolver.defaultGMSoundfontURL
-        #expect(url?.lastPathComponent == "TimGM6mb.sf2")
+        #expect(url?.lastPathComponent == "GeneralUser-GS.sf2")
     }
 }
 
@@ -62,14 +62,14 @@ private struct StubProvider: MuseScoreGeneralProvider {
     func deleteDownloaded() {}
 }
 
-/// Builds a fake `Bundle` containing only `Soundfonts/TimGM6mb.sf2` so the resolver's bundle lookup has a target.
+/// Builds a fake `Bundle` containing only `Soundfonts/GeneralUser-GS.sf2` so the resolver's bundle lookup has a target.
 private func makeBundleStub() throws -> Bundle {
     let tmp = FileManager.default.temporaryDirectory.appending(
         path: "GMSoundfontResolverTests-\(UUID().uuidString).bundle",
     )
     let soundfontsDir = tmp.appending(path: "Soundfonts")
     try FileManager.default.createDirectory(at: soundfontsDir, withIntermediateDirectories: true)
-    try Data([0xFF]).write(to: soundfontsDir.appending(path: "TimGM6mb.sf2"))
+    try Data([0xFF]).write(to: soundfontsDir.appending(path: "GeneralUser-GS.sf2"))
     guard let bundle = Bundle(url: tmp) else { throw NSError(domain: "bundle", code: 1) }
     return bundle
 }

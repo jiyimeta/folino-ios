@@ -29,7 +29,7 @@ public struct GMSoundfontResolver: SheetMusicAudio.SoundfontResolver {
             return downloaded
         }
         return bundle.url(
-            forResource: "TimGM6mb",
+            forResource: "GeneralUser-GS",
             withExtension: "sf2",
             subdirectory: "Soundfonts",
         )

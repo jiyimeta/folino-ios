@@ -3,8 +3,8 @@ import Testing
 
 struct SoundfontPresetTests {
     @Test func `lightweight preset describes the bundled asset`() {
-        #expect(SoundfontPreset.lightweight.fileName == "TimGM6mb.sf2")
-        #expect(SoundfontPreset.lightweight.sizeBytes == 6 * 1024 * 1024)
+        #expect(SoundfontPreset.lightweight.fileName == "GeneralUser-GS.sf2")
+        #expect(SoundfontPreset.lightweight.sizeBytes == 31 * 1024 * 1024)
         #expect(SoundfontPreset.lightweight.isBundled == true)
     }
 

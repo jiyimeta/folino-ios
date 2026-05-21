@@ -13,7 +13,7 @@ public enum SoundfontPreset: String, Sendable, Hashable, CaseIterable {
     /// this — the case itself is the contract.
     public var fileName: String {
         switch self {
-        case .lightweight: "TimGM6mb.sf2"
+        case .lightweight: "GeneralUser-GS.sf2"
         case .highQuality: "MuseScore_General.sf2"
         }
     }
@@ -22,7 +22,7 @@ public enum SoundfontPreset: String, Sendable, Hashable, CaseIterable {
     /// provider when available.
     public var sizeBytes: Int64 {
         switch self {
-        case .lightweight: 6 * 1024 * 1024
+        case .lightweight: 31 * 1024 * 1024
         case .highQuality: 206 * 1024 * 1024
         }
     }
