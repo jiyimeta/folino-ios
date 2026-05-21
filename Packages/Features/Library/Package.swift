@@ -10,6 +10,7 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.iOS(.v26)],
     products: [
+        .library(name: "LibraryLogic", targets: ["LibraryLogic"]),
         .library(name: "Library", targets: ["Library"]),
     ],
     dependencies: [
@@ -19,14 +20,24 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "LibraryLogic",
+            dependencies: ["Domain"],
+            plugins: swiftLintPlugins,
+        ),
+        .target(
             name: "Library",
             dependencies: [
+                "LibraryLogic",
                 "Domain",
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
             ],
             resources: [.process("Resources")],
             plugins: swiftLintPlugins,
+        ),
+        .testTarget(
+            name: "LibraryLogicTests",
+            dependencies: ["LibraryLogic"],
         ),
         .testTarget(name: "LibraryTests", dependencies: ["Library"]),
     ],
