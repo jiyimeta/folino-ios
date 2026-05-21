@@ -795,7 +795,14 @@ private struct PagedZoomedSurface: View {
                 // values and visible jitter). `minimumDistance: 8` lets a tap below the threshold still reach the
                 // per-page `tapSeekGesture` inside the ScoreView; crossing 8 pt activates the swipe and the
                 // tap-seek's `SpatialTapGesture` is rejected on release (high travel).
-                .simultaneousGesture(pageSwipeGesture())
+                //
+                // Above unit zoom the swipe is masked off (`.subviews`) so the hosting `UIScrollView`'s pan
+                // recogniser can claim the touch and handle one-finger panning of the zoomed score. Tap-seek
+                // (on the score subview) is unaffected by the mask.
+                .simultaneousGesture(
+                    pageSwipeGesture(),
+                    including: abs(zoom - 1.0) < 0.001 ? .all : .subviews,
+                )
 
                 // Tap zones extend `pageInsets.leading` / `pageInsets.trailing` outward so the tap-active (and visually
                 // highlighted) area reaches the host's edges in landscape, where there is otherwise a safe-area gutter
