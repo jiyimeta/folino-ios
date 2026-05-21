@@ -1,3 +1,30 @@
+- version: 1.5.0
+  descriptions:
+    - en: Added a page view mode
+      ja: ページめくり表示モードを追加
+      ko: 페이지 보기 모드 추가
+      zh-Hans: 新增分页查看模式
+      zh-Hant: 新增頁面檢視模式
+    - en: Added a setting to prevent auto-lock
+      ja: 自動ロックを抑止する設定を追加
+      ko: 자동 잠금 방지 설정 추가
+      zh-Hans: 新增防止自动锁屏的设置
+      zh-Hant: 新增防止自動鎖定的設定
+    - en: Improved score deletion
+      ja: 楽譜の削除機能を改善
+      ko: 악보 삭제 개선
+      zh-Hans: 改进乐谱删除
+      zh-Hant: 改善樂譜刪除
+    - en: Improved file sharing from other apps
+      ja: 他のアプリからのファイル共有機能を改善
+      ko: 다른 앱에서의 파일 공유 개선
+      zh-Hans: 改进从其他应用共享文件的体验
+      zh-Hant: 改善從其他應用程式分享檔案的功能
+    - en: Added support for tremolo and portamento
+      ja: トレモロとポルタメントに対応
+      ko: 트레몰로와 포르타멘토 지원 추가
+      zh-Hans: 新增颤音与滑音支持
+      zh-Hant: 新增顫音與滑音支援
 - version: 1.4.0
   descriptions:
     - en: Fixed an issue where score files could not be imported on some devices

@@ -1,2 +1,5 @@
-- Fixed an issue where score files could not be imported on some devices
-- Added audio (.m4a) export
+- Added a page view mode
+- Added a setting to prevent auto-lock
+- Improved score deletion
+- Improved file sharing from other apps
+- Added support for tremolo and portamento
