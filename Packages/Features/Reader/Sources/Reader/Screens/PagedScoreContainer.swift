@@ -26,6 +26,7 @@ enum PageSwipeOutcome: Equatable {
 /// the origin, then mutates `pageState.pageIndex` inside `withAnimation` so `PagedZoomedSurface` interpolates the
 /// neighbor / edge `.offset`s into the slide / fade transition.
 struct PagedScoreContainer: View {
+    // swiftlint:disable:previous type_body_length
     let score: Score
     let staffSize: CGFloat
     let honorLayoutBreaks: Bool
@@ -169,6 +170,16 @@ struct PagedScoreContainer: View {
                 onFirstPage: { goToFirstPage() },
                 onLastPage: { goToLastPage() },
                 onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
+                onSwipeChanged: { translationX in
+                    onSwipeChanged(translationX: translationX, viewportWidth: viewport.width)
+                },
+                onSwipeEnded: { translationX, predictedEndX in
+                    onSwipeEnded(
+                        translationX: translationX,
+                        predictedEndX: predictedEndX,
+                        viewportWidth: viewport.width,
+                    )
+                },
                 showsHint: !pageTapHintDismissed,
                 onAnyZoneTouchDown: { pageTapHintDismissed = true },
             )
@@ -233,6 +244,7 @@ struct PagedScoreContainer: View {
     }
 
     private func followCursor(_ cursor: ScoreCursor?) {
+        guard !pageState.isDragging else { return }
         guard let cursor, let doc = document else { return }
         let mi = measureIndex(of: cursor)
         guard let sys = systemIndex(forMeasureIndex: mi, in: doc) else { return }
@@ -305,6 +317,97 @@ struct PagedScoreContainer: View {
             if shouldFreeze {
                 pageState.freezeFirstPageOffset = false
             }
+        }
+        pendingScroll = .immediate(.zero)
+    }
+
+    /// Page-swipe activation gate. Returns `true` only when the existing page-band state allows a finger-following
+    /// drag: at unit zoom, with no pinch in flight, and on a multi-page document. The 0.001 epsilon guards against
+    /// floating-point drift; pinch-snap already lands exactly on `1.0` for the in-tree zoom-out path.
+    private var pageSwipeEnabled: Bool {
+        abs(viewModel.viewportZoom - 1.0) < 0.001
+            && pinchSession == nil
+            && pages.count > 1
+    }
+
+    /// Rubber-band damping for the edge-overshoot case. Asymptotes at half the viewport width so the drag still
+    /// reads as "tracking the finger" without ever crossing the commit threshold.
+    private static func dampedTranslation(
+        raw: CGFloat,
+        viewportWidth: CGFloat,
+    ) -> CGFloat {
+        guard viewportWidth > 0 else { return 0 }
+        let magnitude = abs(raw)
+        let damped = viewportWidth * (1 - 1 / (1 + magnitude / viewportWidth))
+        return raw < 0 ? -damped : damped
+    }
+
+    /// Live drag → `dragTranslationX`. Applies rubber-band damping on the impossible-commit side. Idempotent for
+    /// gated-off drags (drops the update without touching state).
+    private func onSwipeChanged(
+        translationX: CGFloat,
+        viewportWidth: CGFloat,
+    ) {
+        guard pageSwipeEnabled else { return }
+        pageState.isDragging = true
+        let atFirst = pageState.pageIndex == 0
+        let atLast = pageState.pageIndex == pages.count - 1
+        let needsDamping = (translationX > 0 && atFirst)
+            || (translationX < 0 && atLast)
+        pageState.dragTranslationX = needsDamping
+            ? Self.dampedTranslation(raw: translationX, viewportWidth: viewportWidth)
+            : translationX
+    }
+
+    /// Drag release → run through `outcome` and dispatch. Commit folds `dragTranslationX` back into the
+    /// `commitPageTurn` animation; cancel snaps back with a shorter curve. Either way, `isDragging` clears and
+    /// `followCursor` re-runs against the current `playbackCursor` so playback-driven advancement that fired
+    /// during the drag is honoured exactly once at the end.
+    private func onSwipeEnded(
+        translationX: CGFloat,
+        predictedEndX: CGFloat,
+        viewportWidth: CGFloat,
+    ) {
+        guard pageState.isDragging else { return }
+        let atFirst = pageState.pageIndex == 0
+        let atLast = pageState.pageIndex == pages.count - 1
+        let outcome = Self.outcome(
+            translationX: translationX,
+            predictedEndX: predictedEndX,
+            viewportWidth: viewportWidth,
+            isAtFirstPage: atFirst,
+            isAtLastPage: atLast,
+        )
+
+        pageState.isDragging = false
+
+        switch outcome {
+        case .commitNext:
+            commitDragTurn(to: pageState.pageIndex + 1)
+        case .commitPrevious:
+            commitDragTurn(to: pageState.pageIndex - 1)
+        case .cancel:
+            withAnimation(.smooth(duration: 0.18)) {
+                pageState.dragTranslationX = 0
+            }
+        }
+
+        followCursor(playbackCursor)
+    }
+
+    /// Drag-commit variant of `commitPageTurn`. Difference: mutates `pageIndex` and `dragTranslationX` inside the
+    /// same `withAnimation` block so every page interpolates from "old baseline + drag" to "new baseline + 0" as
+    /// one motion. No freeze-first-page handling — drag commits are always ±1, never jump-to-edge.
+    private func commitDragTurn(to target: Int) {
+        guard target >= 0, target < pages.count else {
+            withAnimation(.smooth(duration: 0.18)) {
+                pageState.dragTranslationX = 0
+            }
+            return
+        }
+        withAnimation(Self.pageTransitionAnimation) {
+            pageState.pageIndex = target
+            pageState.dragTranslationX = 0
         }
         pendingScroll = .immediate(.zero)
     }
@@ -466,6 +569,8 @@ private struct PagedZoomedSurface: View {
     let onFirstPage: () -> Void
     let onLastPage: () -> Void
     let onDoubleTap: () -> Void
+    let onSwipeChanged: (CGFloat) -> Void
+    let onSwipeEnded: (CGFloat, CGFloat) -> Void
     let showsHint: Bool
     let onAnyZoneTouchDown: () -> Void
 
@@ -632,6 +737,9 @@ private struct PagedZoomedSurface: View {
             .gesture(tapSeekGesture(
                 document: doc, pageStartY: pageStartY, pageHeight: pageHeight,
             ))
+            // `minimumDistance: 8` lets a tap (under 8 pt) still reach `tapSeekGesture` via SwiftUI's distance-based
+            // disambiguation; crossing 8 pt activates the swipe and cancels tap-seek.
+            .simultaneousGesture(pageSwipeGesture())
             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
             if viewModel.repeatModel.mode == .abLoop {
@@ -690,6 +798,22 @@ private struct PagedZoomedSurface: View {
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.setManualCursor(cursor)
                 lastManualCursor = cursor
+            }
+    }
+
+    private func pageSwipeGesture() -> some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .local)
+            .onChanged { value in
+                // First-sample horizontal-dominance gate: reject vertical-leaning drags so a future vertical-scroll
+                // surface (not present today) wouldn't compete with the page swipe. Pure-horizontal drags satisfy
+                // `abs(dy) == 0`, well below `abs(dx) / 1.5`.
+                guard abs(value.translation.width)
+                    > abs(value.translation.height) * 1.5
+                else { return }
+                onSwipeChanged(value.translation.width)
+            }
+            .onEnded { value in
+                onSwipeEnded(value.translation.width, value.predictedEndTranslation.width)
             }
     }
 
