@@ -1,7 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "" : {},
+    "" : {
+      "shouldTranslate" : false
+    },
+    "•" : {
+      "shouldTranslate" : false
+    },
     "settings.about.licenses" : {
       "localizations" : {
         "en" : {
@@ -279,31 +284,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Layout direction"
+            "value" : "Display mode"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "レイアウト方向"
+            "value" : "表示モード"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "레이아웃 방향"
+            "value" : "표시 모드"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "布局方向"
+            "value" : "显示模式"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "排版方向"
+            "value" : "顯示模式"
           }
         }
       }
@@ -987,8 +992,7 @@
           }
         }
       }
-    },
-    "•" : {}
+    }
   },
   "version" : "1.0"
 }
