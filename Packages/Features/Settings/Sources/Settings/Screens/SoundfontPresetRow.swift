@@ -26,7 +26,7 @@ struct SoundfontPresetRow: View {
     @State private var deleteCacheAlertPresented = false
 
     var body: some View {
-        row
+        content
             .alert(
                 Text("settings.soundfont.wifi.alert.title", bundle: .module),
                 isPresented: $noWiFiAlertPresented,
@@ -55,16 +55,20 @@ struct SoundfontPresetRow: View {
             }
     }
 
-    private var row: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("settings.soundfont.highQuality.title", bundle: .module)
-                stateSubtitle
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+    private var content: some View {
+        Label {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("settings.soundfont.highQuality.title", bundle: .module)
+                    stateSubtitle
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                accessory
             }
-            Spacer()
-            accessory
+        } icon: {
+            Image(systemName: "pianokeys")
         }
     }
 
