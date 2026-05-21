@@ -101,7 +101,7 @@ struct VisualInspectorScreen: View {
         )
         Stepper(
             value: staffSize,
-            in: ReaderPreferences.minStaffSize ... ReaderPreferences.maxStaffSize,
+            in: CGFloat(ReaderPreferences.minStaffSize) ... CGFloat(ReaderPreferences.maxStaffSize),
             step: 1,
         ) {
             Text(String(

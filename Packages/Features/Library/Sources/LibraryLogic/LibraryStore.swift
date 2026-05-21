@@ -348,7 +348,7 @@ public final class LibraryStore {
     public func startImport(from sourceURL: URL) async {
         isImporting = true
         defer { isImporting = false }
-        #if canImport(CoreGraphics)
+        #if !os(Android)
         // Security-scoped resource access is required on Apple platforms to read
         // URLs delivered via UIDocumentPickerViewController / .fileImporter.
         let scoped = sourceURL.startAccessingSecurityScopedResource()

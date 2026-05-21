@@ -15,8 +15,8 @@ struct DomainErrorTests {
         #expect(DomainError.scoreFileNotFound(name: "a") != DomainError.scoreFileNotFound(name: "b"))
     }
 
-    @Test func `provides localized description`() {
-        let error = DomainError.unsupportedFormat("rtf")
-        #expect(!error.localizedDescription.isEmpty)
+    @Test func `conforms to sendable`() {
+        let error: any Sendable = DomainError.unsupportedFormat("rtf")
+        _ = error
     }
 }

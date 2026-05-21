@@ -1,10 +1,3 @@
-#if canImport(CoreGraphics)
-import CoreGraphics
-#else
-// Android: CGFloat is not available; map it to Double so the module compiles.
-// All storage is still Double-precision; the public API is unchanged.
-public typealias CGFloat = Double
-#endif
 import Foundation
 import SheetMusicCore
 
@@ -12,8 +5,8 @@ import SheetMusicCore
 /// staffIndexInPart)`). Layout mode (vertical vs. page) is global and is NOT stored here — the Reader feature reads it
 /// from `@AppStorage`.
 public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
-    public static let minStaffSize: CGFloat = 8
-    public static let maxStaffSize: CGFloat = 28
+    public static let minStaffSize: Double = 8
+    public static let maxStaffSize: Double = 28
     public static let minTempoMultiplier = 0.5
     public static let maxTempoMultiplier = 2.0
     /// Minimum run length (in measures) at which the Reader collapses consecutive empty-rest measures into a single
@@ -35,7 +28,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
 
     public let id: ReaderPreferencesID
     public let scoreItemID: ScoreItemID
-    public var staffSize: CGFloat
+    public var staffSize: Double
     public var hiddenStaves: Set<StaffAddress>
     /// User-chosen GM program (0…127) per staff that overrides whatever the score declares. Absent entries fall back to
     /// the score's instrument channel program. Bank stays at 0 — the picker only swaps melodic programs (matches
@@ -67,7 +60,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
         scoreItemID: ScoreItemID,
-        staffSize: CGFloat,
+        staffSize: Double,
         hiddenStaves: Set<StaffAddress>,
         staffProgramOverrides: [StaffAddress: Int] = [:],
         staffVolumeOverrides: [StaffAddress: Double] = [:],
@@ -105,7 +98,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let id = try c.decode(ReaderPreferencesID.self, forKey: .id)
         let scoreItemID = try c.decode(ScoreItemID.self, forKey: .scoreItemID)
-        let staffSize = try c.decode(CGFloat.self, forKey: .staffSize)
+        let staffSize = try c.decode(Double.self, forKey: .staffSize)
         let hiddenStaves = try c.decode(Set<StaffAddress>.self, forKey: .hiddenStaves)
         let programOverrides = try c.decodeIfPresent(
             [StaffAddress: Int].self, forKey: .staffProgramOverrides,

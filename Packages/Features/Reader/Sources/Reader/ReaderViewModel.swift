@@ -550,8 +550,14 @@ final class ReaderViewModel {
                 return String(localized: "reader.error.corrupted", bundle: .module)
             case .unsupportedFormat:
                 return String(localized: "reader.error.cannotOpen.unsupportedType", bundle: .module)
-            default:
-                return domain.errorDescription ?? "\(domain)"
+            case let .scoreWriteFailed(reason):
+                return "Could not write score file: \(reason)"
+            case let .persistenceFailed(reason):
+                return "Library save failed: \(reason)"
+            case let .syncFailed(reason):
+                return "Sync failed: \(reason)"
+            case let .audioEngineFailed(reason):
+                return "Audio engine error: \(reason)"
             }
         }
         return (error as NSError).localizedDescription

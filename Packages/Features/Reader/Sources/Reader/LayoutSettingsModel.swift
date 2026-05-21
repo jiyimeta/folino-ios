@@ -32,14 +32,14 @@ final class LayoutSettingsModel {
     }
 
     func incrementStaffSize() async {
-        let next = min(staffSize + 1, ReaderPreferences.maxStaffSize)
+        let next = min(staffSize + 1, CGFloat(ReaderPreferences.maxStaffSize))
         guard next != staffSize else { return }
         staffSize = next
         await onChange?()
     }
 
     func decrementStaffSize() async {
-        let next = max(staffSize - 1, ReaderPreferences.minStaffSize)
+        let next = max(staffSize - 1, CGFloat(ReaderPreferences.minStaffSize))
         guard next != staffSize else { return }
         staffSize = next
         await onChange?()
