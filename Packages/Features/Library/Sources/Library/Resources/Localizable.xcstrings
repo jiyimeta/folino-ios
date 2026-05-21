@@ -1285,6 +1285,24 @@
             "state" : "translated",
             "value" : "完全に削除"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "영구 삭제"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久删除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久刪除"
+          }
         }
       }
     },
@@ -1300,6 +1318,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "この楽譜とファイルがこの端末から削除されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 악보와 파일이 이 기기에서 제거됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此乐谱及其文件将从此设备中移除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此樂譜及其檔案將從此裝置中移除。"
           }
         }
       }
@@ -1317,6 +1353,24 @@
             "state" : "translated",
             "value" : "「%@」を完全に削除しますか？"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\"%@\"을(를) 영구 삭제할까요?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久删除“%@”？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久刪除「%@」？"
+          }
         }
       }
     },
@@ -1332,6 +1386,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "これらの楽譜とファイルがこの端末から削除されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 악보들과 파일이 이 기기에서 제거됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些乐谱及其文件将从此设备中移除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這些樂譜及其檔案將從此裝置中移除。"
           }
         }
       }
@@ -1349,6 +1421,24 @@
             "state" : "translated",
             "value" : "%lld 件の楽譜を完全に削除しますか？"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보 %lld개를 영구 삭제할까요?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久删除 %lld 个乐谱？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久刪除 %lld 個樂譜？"
+          }
         }
       }
     },
@@ -1364,6 +1454,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "削除した楽譜は30日間ここに保管されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "삭제한 악보는 30일간 여기에 보관됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除的乐谱会在此保留 30 天。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除的樂譜會在此保留 30 天。"
           }
         }
       }
@@ -1381,6 +1489,24 @@
             "state" : "translated",
             "value" : "最近削除した楽譜はありません"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최근 삭제한 악보가 없습니다"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有最近删除的乐谱"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有最近刪除的樂譜"
+          }
         }
       }
     },
@@ -1397,6 +1523,24 @@
             "state" : "translated",
             "value" : "復元"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "복원"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還原"
+          }
         }
       }
     },
@@ -1412,6 +1556,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最近削除した楽譜"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최근 삭제"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近删除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近刪除"
           }
         }
       }
@@ -1450,41 +1612,6 @@
         }
       }
     },
-    "library.score.delete.message" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This will remove the score and its file from this device."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この楽譜とそのファイルがこの端末から削除されます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 악보와 해당 파일이 이 기기에서 삭제됩니다."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此乐谱及其文件将从本设备删除。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此樂譜及其檔案將從本裝置刪除。"
-          }
-        }
-      }
-    },
     "library.score.delete.title" : {
       "localizations" : {
         "en" : {
@@ -1515,41 +1642,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "要刪除「%@」嗎？"
-          }
-        }
-      }
-    },
-    "library.score.deleteBulk.message" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This will remove the scores and their files from this device."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "スコアとファイルがこの端末から削除されます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "악보와 파일이 이 기기에서 삭제됩니다."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "乐谱及其文件将从本设备删除。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "樂譜及其檔案將從本裝置刪除。"
           }
         }
       }
