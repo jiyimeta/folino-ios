@@ -1,10 +1,11 @@
 import Domain
+import Observation
 import SwiftUI
 import UtilityUI
 
 /// Embeddable Settings row for the high-quality soundfont download. Designed to drop into an existing `Section` (the
 /// Reader section in SettingsSheet) — no `Section`/`NavigationStack` of its own. The accessory morphs based on
-/// `downloadState`:
+/// `provider.downloadState`:
 ///
 /// - downloading → determinate circular progress + stop button (cancels the in-flight download)
 /// - opted-in + idle → indeterminate spinner + stop button (opts out)
@@ -15,34 +16,27 @@ import UtilityUI
 /// - turning **on** when Wi-Fi is unavailable → "no Wi-Fi" alert offers "download now over cellular" vs "wait for
 ///   Wi-Fi" (or cancel, which reverts the toggle).
 /// - turning **off** when the file is already downloaded → "delete cache" confirmation. Cancelling reverts.
+///
+/// State comes directly off the `@Observable` provider — no `@State` mirror layer.
 @MainActor
 struct SoundfontPresetRow: View {
     let provider: any MuseScoreGeneralProvider
 
-    @State private var isOptedIn = true
-    @State private var downloadState: SoundfontDownloadState = .idle
     @State private var noWiFiAlertPresented = false
     @State private var deleteCacheAlertPresented = false
 
     var body: some View {
         row
-            .task {
-                isOptedIn = await provider.isOptedIn
-                for await state in provider.downloadStateStream() {
-                    downloadState = state
-                }
-            }
             .alert(
                 Text("settings.soundfont.wifi.alert.title", bundle: .module),
                 isPresented: $noWiFiAlertPresented,
             ) {
                 Button {
-                    isOptedIn = true
-                    Task { await applyOptedIn(true, cellular: true) }
+                    provider.setOptedIn(true)
+                    provider.startDownloadAllowingCellular()
                 } label: { Text("settings.soundfont.wifi.alert.now", bundle: .module) }
                 Button {
-                    isOptedIn = true
-                    Task { await applyOptedIn(true, cellular: false) }
+                    provider.setOptedIn(true)
                 } label: { Text("settings.soundfont.wifi.alert.wait", bundle: .module) }
                 Button(role: .cancel) {} label: { L10n.Common.cancel }
             } message: {
@@ -53,8 +47,7 @@ struct SoundfontPresetRow: View {
                 isPresented: $deleteCacheAlertPresented,
             ) {
                 Button(role: .destructive) {
-                    isOptedIn = false
-                    Task { await applyOptedIn(false, cellular: false) }
+                    provider.setOptedIn(false)
                 } label: { Text("settings.soundfont.delete.alert.confirm", bundle: .module) }
                 Button(role: .cancel) {} label: { L10n.Common.cancel }
             } message: {
@@ -77,17 +70,16 @@ struct SoundfontPresetRow: View {
 
     @ViewBuilder
     private var accessory: some View {
-        if case let .downloading(progress) = downloadState {
+        if case let .downloading(progress) = provider.downloadState {
             stopSpinner(determinate: progress) {
-                Task { await provider.cancelDownload() }
+                provider.cancelDownload()
             }
-        } else if isOptedIn, case .idle = downloadState {
+        } else if provider.isOptedIn, case .idle = provider.downloadState {
             // Opted in but waiting for the network policy / next Wi-Fi window. Show an indeterminate spinner with the
             // same visual weight as the downloading state; tapping the stop button opts out (matches the user's
             // expectation that the spinner means "in progress" and the stop button means "stop trying").
             stopSpinner(determinate: nil) {
-                isOptedIn = false
-                Task { await applyOptedIn(false, cellular: false) }
+                provider.setOptedIn(false)
             }
         } else {
             Toggle("", isOn: toggleBinding)
@@ -95,14 +87,14 @@ struct SoundfontPresetRow: View {
         }
     }
 
-    /// Displayed toggle state. Defers to `isOptedIn` except in `.failed`, where the toggle reads as off so the user can
-    /// re-flip it on to retry — `setOptedIn(true)` re-runs `startDownloadIfNeeded` whether the underlying flag was
-    /// already true or not, making the on-tap a natural retry gesture.
+    /// Displayed toggle state. Defers to `provider.isOptedIn` except in `.failed`, where the toggle reads as off so the
+    /// user can re-flip it on to retry — `setOptedIn(true)` re-runs `startDownloadIfNeeded` whether the underlying flag
+    /// was already true or not, making the on-tap a natural retry gesture.
     private var toggleBinding: Binding<Bool> {
         Binding(
             get: {
-                if case .failed = downloadState { return false }
-                return isOptedIn
+                if case .failed = provider.downloadState { return false }
+                return provider.isOptedIn
             },
             set: { newValue in handleToggleChange(newValue) },
         )
@@ -140,16 +132,16 @@ struct SoundfontPresetRow: View {
 
     @ViewBuilder
     private var stateSubtitle: some View {
-        switch downloadState {
+        switch provider.downloadState {
         case .idle:
-            if isOptedIn {
+            if provider.isOptedIn {
                 // The localized value embeds a markdown link (folino-action://download-now) styled as a tinted inline
                 // link. The `openURL` handler below intercepts that custom URL and routes it to the same code path the
                 // "Download Now" alert button uses — bypassing the Wi-Fi gate.
                 Text("settings.soundfont.state.waitingForWiFi", bundle: .module)
                     .environment(\.openURL, OpenURLAction { url in
                         if url.scheme == "folino-action", url.host == "download-now" {
-                            Task { await provider.startDownloadAllowingCellular() }
+                            provider.startDownloadAllowingCellular()
                             return .handled
                         }
                         return .systemAction
@@ -166,25 +158,16 @@ struct SoundfontPresetRow: View {
     private func handleToggleChange(_ newValue: Bool) {
         if newValue {
             if provider.isCurrentlyWiFi {
-                isOptedIn = true
-                Task { await applyOptedIn(true, cellular: false) }
+                provider.setOptedIn(true)
             } else {
                 noWiFiAlertPresented = true
             }
         } else {
-            if case .downloaded = downloadState {
+            if case .downloaded = provider.downloadState {
                 deleteCacheAlertPresented = true
             } else {
-                isOptedIn = false
-                Task { await applyOptedIn(false, cellular: false) }
+                provider.setOptedIn(false)
             }
-        }
-    }
-
-    private func applyOptedIn(_ value: Bool, cellular: Bool) async {
-        await provider.setOptedIn(value)
-        if value, cellular {
-            await provider.startDownloadAllowingCellular()
         }
     }
 }
@@ -211,14 +194,19 @@ private struct IndeterminateArc: View {
 }
 
 #if DEBUG
-private struct PreviewStubProvider: MuseScoreGeneralProvider {
-    let optedIn: Bool
-    let state: SoundfontDownloadState
-    let downloaded: Bool
-    let wifi: Bool
+@MainActor
+@Observable
+private final class PreviewStubProvider: MuseScoreGeneralProvider {
+    var isOptedIn: Bool
+    var downloadState: SoundfontDownloadState
+    @ObservationIgnored let downloaded: Bool
+    @ObservationIgnored nonisolated let wifi: Bool
 
-    var isOptedIn: Bool {
-        optedIn
+    init(optedIn: Bool, state: SoundfontDownloadState, downloaded: Bool, wifi: Bool) {
+        isOptedIn = optedIn
+        downloadState = state
+        self.downloaded = downloaded
+        self.wifi = wifi
     }
 
     var isDownloaded: Bool {
@@ -229,11 +217,11 @@ private struct PreviewStubProvider: MuseScoreGeneralProvider {
         downloaded ? URL(filePath: "/tmp/MuseScore_General.sf2") : nil
     }
 
-    var museScoreGeneralFileURLSync: URL? {
-        museScoreGeneralFileURL
+    nonisolated var museScoreGeneralFileURLSync: URL? {
+        nil
     }
 
-    var isCurrentlyWiFi: Bool {
+    nonisolated var isCurrentlyWiFi: Bool {
         wifi
     }
 
@@ -242,18 +230,13 @@ private struct PreviewStubProvider: MuseScoreGeneralProvider {
     }
 
     func setOptedIn(_: Bool) {}
-    func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
-        AsyncStream { continuation in
-            continuation.yield(state)
-        }
-    }
-
     func startDownloadIfNeeded() {}
     func startDownloadAllowingCellular() {}
     func cancelDownload() {}
     func deleteDownloaded() {}
 }
 
+@MainActor
 private func previewRow(
     optedIn: Bool,
     state: SoundfontDownloadState,

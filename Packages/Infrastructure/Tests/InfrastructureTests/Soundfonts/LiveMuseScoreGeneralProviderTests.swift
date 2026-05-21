@@ -3,35 +3,33 @@ import Foundation
 @testable import Soundfonts
 import Testing
 
-@Suite(.serialized) struct LiveMuseScoreGeneralProviderTests {
-    @Test func `default opt-in is true on first launch`() async throws {
+@MainActor
+@Suite(.serialized)
+struct LiveMuseScoreGeneralProviderTests {
+    @Test func `default opt-in is true on first launch`() throws {
         let env = try TestEnvironment()
         defer { env.cleanup() }
         let provider = env.makeProvider()
-        #expect(await provider.isOptedIn == true)
+        #expect(provider.isOptedIn == true)
     }
 
-    @Test func `toggling off cancels in-flight download and deletes file`() async throws {
+    @Test func `toggling off cancels in-flight download and deletes file`() throws {
         let env = try TestEnvironment()
         defer { env.cleanup() }
         try env.placeDownloadedFile(bytes: 100)
         let provider = env.makeProvider()
-        await provider.setOptedIn(false)
-        #expect(await provider.isDownloaded == false)
-        #expect(await provider.currentPreset == .lightweight)
+        provider.setOptedIn(false)
+        #expect(provider.isDownloaded == false)
+        #expect(provider.currentPreset == .lightweight)
     }
 
-    @Test func `startDownloadIfNeeded skips when network is cellular and policy is wifi-only`() async throws {
+    @Test func `startDownloadIfNeeded skips when network is cellular and policy is wifi-only`() throws {
         let env = try TestEnvironment(networkIsWiFi: false)
         defer { env.cleanup() }
         let provider = env.makeProvider()
-        await provider.startDownloadIfNeeded()
-        #expect(await provider.isDownloaded == false)
-        var observed: [SoundfontDownloadState] = []
-        for await state in provider.downloadStateStream().prefix(1) {
-            observed.append(state)
-        }
-        #expect(observed == [.idle])
+        provider.startDownloadIfNeeded()
+        #expect(provider.isDownloaded == false)
+        #expect(provider.downloadState == .idle)
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -40,13 +38,10 @@ import Testing
         defer { env.cleanup() }
         env.stubResponseBody = Data(repeating: 0xAB, count: 1024)
         let provider = env.makeProvider()
-        await provider.startDownloadIfNeeded()
-        // Wait for completion via the stream.
-        for await state in provider.downloadStateStream() {
-            if case .downloaded = state { break }
-        }
-        #expect(await provider.isDownloaded == true)
-        #expect(await provider.currentPreset == .highQuality)
+        provider.startDownloadIfNeeded()
+        try await awaitState(provider, until: { $0.isDownloaded })
+        #expect(provider.isDownloaded == true)
+        #expect(provider.currentPreset == .highQuality)
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -55,11 +50,9 @@ import Testing
         defer { env.cleanup() }
         env.stubResponseBody = Data(repeating: 0xCC, count: 1024)
         let provider = env.makeProvider()
-        await provider.startDownloadAllowingCellular()
-        for await state in provider.downloadStateStream() {
-            if case .downloaded = state { break }
-        }
-        #expect(await provider.isDownloaded == true)
+        provider.startDownloadAllowingCellular()
+        try await awaitState(provider, until: { $0.isDownloaded })
+        #expect(provider.isDownloaded == true)
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -68,26 +61,34 @@ import Testing
         defer { env.cleanup() }
         env.stubResponseError = URLError(.notConnectedToInternet)
         let provider = env.makeProvider()
-        await provider.startDownloadIfNeeded()
-        var sawFailed = false
-        for await state in provider.downloadStateStream() {
-            if case .failed = state { sawFailed = true; break }
-        }
-        #expect(sawFailed)
+        provider.startDownloadIfNeeded()
+        try await awaitState(provider, until: { if case .failed = $0.downloadState { true } else { false } })
         // Drop the error; signal reachability change; expect the provider to retry.
         env.stubResponseError = nil
         env.stubResponseBody = Data(repeating: 0xDD, count: 1024)
         env.simulateReachabilityChange(toWiFi: true)
-        for await state in provider.downloadStateStream() {
-            if case .downloaded = state { break }
-        }
-        #expect(await provider.isDownloaded == true)
+        try await awaitState(provider, until: { $0.isDownloaded })
+        #expect(provider.isDownloaded == true)
+    }
+}
+
+/// Spin until the provider satisfies `predicate`, yielding back to the main actor between polls so dispatched download
+/// callbacks can run. Hard-caps at ~10 s; the `@Test(.timeLimit)` annotation is the real backstop.
+@MainActor
+private func awaitState(
+    _ provider: LiveMuseScoreGeneralProvider,
+    until predicate: @MainActor (LiveMuseScoreGeneralProvider) -> Bool,
+) async throws {
+    for _ in 0 ..< 1000 {
+        if predicate(provider) { return }
+        try await Task.sleep(for: .milliseconds(10))
     }
 }
 
 // MARK: - TestEnvironment
 
-final class TestEnvironment: @unchecked Sendable {
+@MainActor
+final class TestEnvironment {
     let targetDirectory: URL
     let pathMonitor: FakePathMonitor
     private let defaultsSuiteName: String

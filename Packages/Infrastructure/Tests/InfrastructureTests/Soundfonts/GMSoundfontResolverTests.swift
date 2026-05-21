@@ -1,12 +1,14 @@
 import Domain
 import Foundation
+import Observation
 @testable import Soundfonts
 import Testing
 
+@MainActor
 struct GMSoundfontResolverTests {
     @Test func `soundfontURL is always nil — engine consults defaultGMSoundfontURL`() throws {
         let resolver = try GMSoundfontResolver(
-            provider: StubProvider(museScoreGeneralFileURL: nil),
+            provider: StubProvider(downloadedURL: nil),
             bundle: makeBundleStub(),
         )
         #expect(resolver.soundfontURL(forBank: 0, program: 0, isDrums: false) == nil)
@@ -16,7 +18,7 @@ struct GMSoundfontResolverTests {
     @Test func `defaultGMSoundfontURL prefers downloaded high-quality preset when present`() throws {
         let downloaded = URL(filePath: "/tmp/MuseScore_General.sf2")
         let resolver = try GMSoundfontResolver(
-            provider: StubProvider(museScoreGeneralFileURL: downloaded),
+            provider: StubProvider(downloadedURL: downloaded),
             bundle: makeBundleStub(),
         )
         #expect(resolver.defaultGMSoundfontURL == downloaded)
@@ -25,7 +27,7 @@ struct GMSoundfontResolverTests {
     @Test func `defaultGMSoundfontURL falls back to bundled lightweight preset when nothing downloaded`() throws {
         let bundle = try makeBundleStub()
         let resolver = GMSoundfontResolver(
-            provider: StubProvider(museScoreGeneralFileURL: nil),
+            provider: StubProvider(downloadedURL: nil),
             bundle: bundle,
         )
         let url = resolver.defaultGMSoundfontURL
@@ -33,33 +35,40 @@ struct GMSoundfontResolverTests {
     }
 }
 
-private struct StubProvider: MuseScoreGeneralProvider {
-    let museScoreGeneralFileURL: URL?
-    var isOptedIn: Bool {
-        true
+@MainActor
+@Observable
+private final class StubProvider: MuseScoreGeneralProvider {
+    @ObservationIgnored nonisolated let downloadedURL: URL?
+    var isOptedIn = true
+    var downloadState: SoundfontDownloadState
+
+    init(downloadedURL: URL?) {
+        self.downloadedURL = downloadedURL
+        downloadState = downloadedURL == nil ? .idle : .downloaded
     }
 
     var isDownloaded: Bool {
-        museScoreGeneralFileURL != nil
+        downloadedURL != nil
+    }
+
+    var museScoreGeneralFileURL: URL? {
+        downloadedURL
+    }
+
+    nonisolated var museScoreGeneralFileURLSync: URL? {
+        // `downloadedURL` is set once during init and never mutated; safe to read without an actor hop.
+        downloadedURL
+    }
+
+    nonisolated var isCurrentlyWiFi: Bool {
+        true
     }
 
     var currentPreset: SoundfontPreset {
         isDownloaded ? .highQuality : .lightweight
     }
 
-    var museScoreGeneralFileURLSync: URL? {
-        museScoreGeneralFileURL
-    }
-
-    var isCurrentlyWiFi: Bool {
-        true
-    }
-
     func setOptedIn(_: Bool) {}
-    func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
-        AsyncStream { _ in }
-    }
-
     func startDownloadIfNeeded() {}
     func startDownloadAllowingCellular() {}
     func cancelDownload() {}

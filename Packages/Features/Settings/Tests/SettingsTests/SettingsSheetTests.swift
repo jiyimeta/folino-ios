@@ -1,5 +1,6 @@
 import Domain
 import Foundation
+import Observation
 @testable import Settings
 import SwiftUI
 import Testing
@@ -20,10 +21,11 @@ struct SettingsSheetTests {
     }
 }
 
-private struct StubProvider: MuseScoreGeneralProvider {
-    var isOptedIn: Bool {
-        true
-    }
+@MainActor
+@Observable
+private final class StubProvider: MuseScoreGeneralProvider {
+    var isOptedIn = true
+    var downloadState: SoundfontDownloadState = .idle
 
     var isDownloaded: Bool {
         false
@@ -33,11 +35,11 @@ private struct StubProvider: MuseScoreGeneralProvider {
         nil
     }
 
-    var museScoreGeneralFileURLSync: URL? {
+    nonisolated var museScoreGeneralFileURLSync: URL? {
         nil
     }
 
-    var isCurrentlyWiFi: Bool {
+    nonisolated var isCurrentlyWiFi: Bool {
         true
     }
 
@@ -46,10 +48,6 @@ private struct StubProvider: MuseScoreGeneralProvider {
     }
 
     func setOptedIn(_: Bool) {}
-    func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
-        AsyncStream { _ in }
-    }
-
     func startDownloadIfNeeded() {}
     func startDownloadAllowingCellular() {}
     func cancelDownload() {}

@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import Network
+import Observation
 import os
 
 /// UserDefaults-backed opt-out toggle + foreground `URLSessionDownloadTask` lifecycle for the high-quality preset.
@@ -10,26 +11,31 @@ import os
 /// Wi-Fi will not be killed if the user later steps onto cellular. `startDownloadAllowingCellular` uses a separate
 /// session with `allowsCellularAccess = true` for the explicit "Download over cellular" button.
 ///
-/// State stream: `downloadStateStream()` returns a multicast `AsyncStream` so Settings + the resolver can both watch.
-/// New subscribers receive the current state immediately.
+/// Observable: Settings reads `isOptedIn` and `downloadState` directly via `@Bindable`. Both are stored properties of
+/// this `@Observable` class so the SwiftUI tracker picks up every transition.
 ///
 /// Auto-retry: an `NWPathMonitor` watches for a Wi-Fi transition. When the last download failed and Wi-Fi becomes
 /// reachable, the provider re-issues `startDownloadIfNeeded`.
-public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
-    private let targetDirectory: URL
-    private let downloadURL: URL
-    private let defaults: UserDefaults
-    private let pathMonitor: any NetworkPathObserving
-    private let wifiSession: URLSession
-    private let cellularSession: URLSession
-    private let logger = Logger(subsystem: "com.KeyNumber.Folino", category: "MuseScoreGeneralProvider")
+@MainActor
+@Observable
+public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
+    public private(set) var isOptedIn: Bool
+    public private(set) var downloadState: SoundfontDownloadState
 
-    private var activeTask: URLSessionDownloadTask?
+    @ObservationIgnored private let targetDirectory: URL
+    @ObservationIgnored private let downloadURL: URL
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let pathMonitor: any NetworkPathObserving
+    @ObservationIgnored private let wifiSession: URLSession
+    @ObservationIgnored private let cellularSession: URLSession
+    @ObservationIgnored private let logger = Logger(
+        subsystem: "com.KeyNumber.Folino", category: "MuseScoreGeneralProvider",
+    )
+
+    @ObservationIgnored private var activeTask: URLSessionDownloadTask?
     /// Strongly held reference to the download delegate. `URLSessionTask.delegate` is `weak`, so without this the
     /// delegate would be deallocated before any callbacks fire.
-    private var activeDelegate: DownloadDelegate?
-    private var currentState: SoundfontDownloadState = .idle
-    private var continuations: [UUID: AsyncStream<SoundfontDownloadState>.Continuation] = [:]
+    @ObservationIgnored private var activeDelegate: DownloadDelegate?
 
     public init(
         targetDirectory: URL,
@@ -46,11 +52,11 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         self.pathMonitor = pathMonitor
         self.wifiSession = wifiSession ?? Self.makeSession(allowsCellular: false)
         self.cellularSession = cellularSession ?? Self.makeSession(allowsCellular: true)
-        // Compute the file URL directly here; `targetFileURL` is actor-isolated so cannot be accessed before init ends.
+        isOptedIn = defaults.object(forKey: Self.optInKey) as? Bool ?? true
         let fileURL = targetDirectory.appending(path: SoundfontPreset.highQuality.fileName)
-        currentState = FileManager.default.fileExists(atPath: fileURL.path) ? .downloaded : .idle
+        downloadState = FileManager.default.fileExists(atPath: fileURL.path) ? .downloaded : .idle
         pathMonitor.start { [weak self] isWiFi in
-            Task { await self?.handlePathChange(isWiFi: isWiFi) }
+            Task { @MainActor in self?.handlePathChange(isWiFi: isWiFi) }
         }
     }
 
@@ -70,26 +76,14 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
 
     // MARK: - MuseScoreGeneralProvider
 
-    public var isOptedIn: Bool {
-        defaults.object(forKey: Self.optInKey) as? Bool ?? true
-    }
-
-    public func setOptedIn(_ value: Bool) async {
-        defaults.set(value, forKey: Self.optInKey)
-        if value {
-            await startDownloadIfNeeded()
-        } else {
-            await cancelDownload()
-            await deleteDownloaded()
-        }
-    }
-
     public nonisolated var isCurrentlyWiFi: Bool {
         pathMonitor.isCurrentlyWiFi
     }
 
+    /// Derived from `downloadState` so observers re-evaluate when the state machine transitions.
     public var isDownloaded: Bool {
-        FileManager.default.fileExists(atPath: targetFileURL.path)
+        if case .downloaded = downloadState { return true }
+        return false
     }
 
     public var museScoreGeneralFileURL: URL? {
@@ -105,44 +99,33 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         (isOptedIn && isDownloaded) ? .highQuality : .lightweight
     }
 
-    public nonisolated func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
-        AsyncStream { continuation in
-            let id = UUID()
-            Task { await self.register(id: id, continuation: continuation) }
-            continuation.onTermination = { _ in
-                Task { await self.unregister(id: id) }
-            }
+    public func setOptedIn(_ value: Bool) {
+        defaults.set(value, forKey: Self.optInKey)
+        isOptedIn = value
+        if value {
+            startDownloadIfNeeded()
+        } else {
+            cancelDownload()
+            deleteDownloaded()
         }
     }
 
-    private func register(id: UUID, continuation: AsyncStream<SoundfontDownloadState>.Continuation) {
-        continuations[id] = continuation
-        continuation.yield(currentState)
-    }
-
-    private func unregister(id: UUID) {
-        continuations.removeValue(forKey: id)
-    }
-
-    private func publish(_ state: SoundfontDownloadState) {
-        currentState = state
-        for continuation in continuations.values {
-            continuation.yield(state)
-        }
-    }
-
-    // swiftlint:disable:next async_without_await
-    public func startDownloadIfNeeded() async {
+    public func startDownloadIfNeeded() {
         guard isOptedIn else { return }
-        guard !isDownloaded else { publish(.downloaded); return }
+        if FileManager.default.fileExists(atPath: targetFileURL.path) {
+            downloadState = .downloaded
+            return
+        }
         guard activeTask == nil else { return }
         guard pathMonitor.isCurrentlyWiFi else { return }
         startDownload(session: wifiSession)
     }
 
-    // swiftlint:disable:next async_without_await
-    public func startDownloadAllowingCellular() async {
-        guard !isDownloaded else { publish(.downloaded); return }
+    public func startDownloadAllowingCellular() {
+        if FileManager.default.fileExists(atPath: targetFileURL.path) {
+            downloadState = .downloaded
+            return
+        }
         guard activeTask == nil else { return }
         startDownload(session: cellularSession)
     }
@@ -156,30 +139,29 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         task.delegate = delegate
         activeDelegate = delegate // keep strong ref alive for the lifetime of the task
         activeTask = task
-        publish(.downloading(progress: 0))
+        downloadState = .downloading(progress: 0)
         task.resume()
     }
 
-    // swiftlint:disable:next async_without_await
-    public func cancelDownload() async {
+    public func cancelDownload() {
         activeTask?.cancel()
         activeTask = nil
         activeDelegate = nil
-        // Keep state machine honest: if a file landed before cancel propagated, surface that.
-        publish(isDownloaded ? .downloaded : .idle)
+        // Keep the state machine honest: if a file landed before cancel propagated, surface that.
+        let exists = FileManager.default.fileExists(atPath: targetFileURL.path)
+        downloadState = exists ? .downloaded : .idle
     }
 
-    // swiftlint:disable:next async_without_await
-    public func deleteDownloaded() async {
+    public func deleteDownloaded() {
         try? FileManager.default.removeItem(at: targetFileURL)
-        publish(.idle)
+        downloadState = .idle
     }
 
     // MARK: - Internal — called by URLSessionDownloadDelegate
 
     fileprivate func updateProgress(bytesWritten: Int64, expected: Int64) {
         guard expected > 0 else { return }
-        publish(.downloading(progress: Double(bytesWritten) / Double(expected)))
+        downloadState = .downloading(progress: Double(bytesWritten) / Double(expected))
     }
 
     fileprivate func handleDownloadFinished(temporaryURL: URL) {
@@ -194,12 +176,12 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
             try moved.setResourceValues(values)
             activeTask = nil
             activeDelegate = nil
-            publish(.downloaded)
+            downloadState = .downloaded
         } catch {
             logger.error("Failed to install high-quality preset: \(String(describing: error), privacy: .public)")
             activeTask = nil
             activeDelegate = nil
-            publish(.failed(reason: error.localizedDescription))
+            downloadState = .failed(reason: error.localizedDescription)
         }
     }
 
@@ -209,21 +191,21 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         // `URLError.cancelled` arrives when the user toggles off mid-download or app foregrounds with a stale handle —
         // do not surface a "failed" state in that case; cancellation already drove the state machine.
         if (error as? URLError)?.code == .cancelled { return }
-        publish(.failed(reason: error.localizedDescription))
+        downloadState = .failed(reason: error.localizedDescription)
     }
 
     // MARK: - Reachability
 
-    private func handlePathChange(isWiFi: Bool) async {
+    private func handlePathChange(isWiFi: Bool) {
         guard isWiFi else { return }
-        if case .failed = currentState {
-            await startDownloadIfNeeded()
+        if case .failed = downloadState {
+            startDownloadIfNeeded()
         }
     }
 }
 
-/// `URLSessionDownloadDelegate` lives outside the actor (URLSession's delegate callbacks are not isolated). It hops
-/// back into the actor for every state mutation.
+/// `URLSessionDownloadDelegate` lives outside the class (URLSession's delegate callbacks are not isolated). It hops
+/// back onto the main actor for every state mutation.
 private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let owner: LiveMuseScoreGeneralProvider
     init(owner: LiveMuseScoreGeneralProvider) {
@@ -235,7 +217,7 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unc
         didWriteData _: Int64, totalBytesWritten written: Int64,
         totalBytesExpectedToWrite expected: Int64,
     ) {
-        Task { await owner.updateProgress(bytesWritten: written, expected: expected) }
+        Task { @MainActor in owner.updateProgress(bytesWritten: written, expected: expected) }
     }
 
     func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -249,24 +231,24 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unc
             let error = URLError(.badServerResponse, userInfo: [
                 NSLocalizedDescriptionKey: "HTTP \(http.statusCode) for \(urlString)",
             ])
-            Task { await owner.handleDownloadFailed(error: error) }
+            Task { @MainActor in owner.handleDownloadFailed(error: error) }
             return
         }
         // Move synchronously off the delegate's tmp directory before returning; the file is deleted as soon as this
-        // callback returns. Copy into our own scratch URL, then let the actor move it into place.
+        // callback returns. Copy into our own scratch URL, then let the main actor move it into place.
         let scratch = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         do {
             try FileManager.default.moveItem(at: location, to: scratch)
         } catch {
-            Task { await owner.handleDownloadFailed(error: error) }
+            Task { @MainActor in owner.handleDownloadFailed(error: error) }
             return
         }
-        Task { await owner.handleDownloadFinished(temporaryURL: scratch) }
+        Task { @MainActor in owner.handleDownloadFinished(temporaryURL: scratch) }
     }
 
     func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: Error?) {
         guard let error else { return } // Success path is handled by `didFinishDownloadingTo`.
-        Task { await owner.handleDownloadFailed(error: error) }
+        Task { @MainActor in owner.handleDownloadFailed(error: error) }
     }
 }
 
