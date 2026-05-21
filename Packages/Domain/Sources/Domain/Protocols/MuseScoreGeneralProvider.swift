@@ -33,8 +33,13 @@ public protocol MuseScoreGeneralProvider: Sendable {
     /// safe to call on every app launch and every network-availability change.
     func startDownloadIfNeeded() async
 
-    /// Force a download attempt regardless of the network policy. Used by the "Download over cellular" button.
+    /// Force a download attempt regardless of the network policy. Used when the user explicitly accepts cellular usage
+    /// from the "no Wi-Fi" confirmation alert.
     func startDownloadAllowingCellular() async
+
+    /// Current network reachability snapshot used by the Settings UI to decide whether to prompt the user before
+    /// kicking off a cellular download. Cheap synchronous read backed by the provider's internal `NWPathMonitor`.
+    var isCurrentlyWiFi: Bool { get }
 
     /// Cancel an in-flight download. No-op if idle.
     func cancelDownload() async

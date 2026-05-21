@@ -84,6 +84,10 @@ public actor LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         }
     }
 
+    public nonisolated var isCurrentlyWiFi: Bool {
+        pathMonitor.isCurrentlyWiFi
+    }
+
     public var isDownloaded: Bool {
         FileManager.default.fileExists(atPath: targetFileURL.path)
     }

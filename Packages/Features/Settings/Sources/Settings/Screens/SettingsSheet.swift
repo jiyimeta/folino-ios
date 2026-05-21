@@ -154,19 +154,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     }
 
     private func storageSection(provider: any MuseScoreGeneralProvider) -> some View {
-        Section {
-            NavigationLink {
-                SoundfontPresetView(provider: provider)
-            } label: {
-                Label {
-                    Text("settings.soundfont.title", bundle: .module)
-                } icon: {
-                    Image(systemName: "tray.full")
-                }
-            }
-        } header: {
-            Text("settings.storage.title", bundle: .module)
-        }
+        SoundfontPresetSection(provider: provider)
     }
 
     private var aboutSection: some View {
@@ -265,6 +253,10 @@ private struct _StubProvider: MuseScoreGeneralProvider {
 
     var museScoreGeneralFileURLSync: URL? {
         nil
+    }
+
+    var isCurrentlyWiFi: Bool {
+        true
     }
 
     var currentPreset: SoundfontPreset {

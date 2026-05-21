@@ -51,6 +51,10 @@ private struct StubProvider: MuseScoreGeneralProvider {
         museScoreGeneralFileURL
     }
 
+    var isCurrentlyWiFi: Bool {
+        true
+    }
+
     func setOptedIn(_: Bool) {}
     func downloadStateStream() -> AsyncStream<SoundfontDownloadState> {
         AsyncStream { _ in }

@@ -3,10 +3,10 @@ import Foundation
 @testable import Settings
 import Testing
 
-struct SoundfontPresetViewTests {
-    @Test func `view instantiates with a stub provider`() {
-        let view = SoundfontPresetView(provider: StubProvider())
-        _ = view.body
+struct SoundfontPresetSectionTests {
+    @Test func `section instantiates with a stub provider`() {
+        let section = SoundfontPresetSection(provider: StubProvider())
+        _ = section.body
     }
 }
 
@@ -25,6 +25,10 @@ private struct StubProvider: MuseScoreGeneralProvider {
 
     var museScoreGeneralFileURLSync: URL? {
         nil
+    }
+
+    var isCurrentlyWiFi: Bool {
+        true
     }
 
     var currentPreset: SoundfontPreset {

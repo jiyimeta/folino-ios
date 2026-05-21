@@ -37,6 +37,10 @@ private struct StubProvider: MuseScoreGeneralProvider {
         nil
     }
 
+    var isCurrentlyWiFi: Bool {
+        true
+    }
+
     var currentPreset: SoundfontPreset {
         .lightweight
     }
