@@ -38,6 +38,7 @@ final class AppBootstrap {
     func start() {
         do {
             try prepareDirectories()
+            cleanupLegacySoundfontCacheIfNeeded()
             let appGroupContainer = AppGroupPaths.container()
             let writer: PlaylistsIndexWriter? = appGroupContainer.map {
                 PlaylistsIndexWriter(appGroupContainer: $0)
@@ -113,6 +114,25 @@ final class AppBootstrap {
         )
         playbackController = LivePlaybackController(soundfontResolver: resolver)
     }
+
+    /// One-shot cleanup of the pre-GM per-patch SF2 cache. Old versions stored split-bank soundfonts at
+    /// `Library/Caches/Soundfonts/` (filenames like `000_073.sf2`, `128_000.sf2`). The current GM stack reads only
+    /// `Library/Application Support/Soundfonts/MuseScore_General.sf2`, so the legacy directory is dead weight after an
+    /// in-place update — potentially hundreds of megabytes depending on how many patches the user played.
+    ///
+    /// Gated behind a UserDefaults flag rather than running unconditionally on every launch: if a future version
+    /// reintroduces `Library/Caches/Soundfonts/` for any reason, this cleanup won't keep clobbering it. A new key
+    /// (e.g. `legacySoundfontCacheCleanupV2DidRun`) can opt that future scenario back into a one-shot wipe.
+    private func cleanupLegacySoundfontCacheIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.legacySoundfontCacheCleanupDidRunKey) else { return }
+        if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? FileManager.default.removeItem(at: cachesURL.appending(path: "Soundfonts"))
+        }
+        defaults.set(true, forKey: Self.legacySoundfontCacheCleanupDidRunKey)
+    }
+
+    private static let legacySoundfontCacheCleanupDidRunKey = "soundfont.legacyCacheCleanupDidRun"
 
     private func prepareDirectories() throws {
         try FileManager.default.createDirectory(
