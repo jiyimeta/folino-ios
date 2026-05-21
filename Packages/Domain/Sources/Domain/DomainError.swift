@@ -12,6 +12,10 @@ public enum DomainError: Error, Sendable, Equatable {
     case audioEngineFailed(reason: String)
 }
 
+#if canImport(CoreGraphics)
+/// LocalizedError with bundle-based string lookup is Apple-platform-only.
+/// On Android, errorDescription falls back to nil (the error's rawValue is sufficient
+/// for JNI bridge code in Task 11 to produce a meaningful message for callers).
 extension DomainError: LocalizedError {
     public var errorDescription: String? {
         switch self {
@@ -60,3 +64,4 @@ extension DomainError: LocalizedError {
         }
     }
 }
+#endif

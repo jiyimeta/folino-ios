@@ -10,7 +10,9 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.iOS(.v26)],
     products: [
-        .library(name: "LibraryLogic", targets: ["LibraryLogic"]),
+        // .dynamic causes SwiftPM to produce libLibraryLogic.so for Android and
+        // a loadable .dylib on Apple platforms. The app target embeds it normally.
+        .library(name: "LibraryLogic", type: .dynamic, targets: ["LibraryLogic"]),
         .library(name: "Library", targets: ["Library"]),
     ],
     dependencies: [

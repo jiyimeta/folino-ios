@@ -1,4 +1,10 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+// Android: CGFloat is not available; map it to Double so the module compiles.
+// All storage is still Double-precision; the public API is unchanged.
+public typealias CGFloat = Double
+#endif
 import Foundation
 import SheetMusicCore
 
