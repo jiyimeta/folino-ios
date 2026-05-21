@@ -1,6 +1,6 @@
 import Domain
 import Foundation
-@testable import Library
+import LibraryLogic
 import Testing
 
 struct ScoreItemSortTests {

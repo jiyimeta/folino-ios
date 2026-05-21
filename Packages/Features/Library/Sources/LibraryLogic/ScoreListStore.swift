@@ -5,29 +5,29 @@ import Observation
 /// Drives any of the three leaf score list views (All / Tag-filtered / Playlist).
 @MainActor
 @Observable
-final class ScoreListViewModel {
-    enum Source: Hashable {
+public final class ScoreListStore {
+    public enum Source: Hashable, Sendable {
         case all
         case favorites
         case taggedWith(TagID)
         case playlist(orderedIDs: [ScoreItemID])
     }
 
-    let source: Source
-    let repository: any ScoreLibraryRepository
-    var sort: ScoreItemSort
-    var searchQuery = ""
+    public let source: Source
+    public let repository: any ScoreLibraryRepository
+    public var sort: ScoreItemSort
+    public var searchQuery = ""
 
     /// `true` when `source == .playlist(...)` and the current sort is the playlist's manual order (i.e. no explicit
     /// sort was picked).
-    var isManualOrderActive: Bool {
+    public var isManualOrderActive: Bool {
         if case .playlist = source { return manualOrder }
         return false
     }
 
     private var manualOrder: Bool
 
-    init(source: Source, repository: any ScoreLibraryRepository) {
+    public init(source: Source, repository: any ScoreLibraryRepository) {
         self.source = source
         self.repository = repository
         switch source {
@@ -41,18 +41,18 @@ final class ScoreListViewModel {
     }
 
     /// Switches off manual order; further reads honour `sort`.
-    func selectSort(_ next: ScoreItemSort) {
+    public func selectSort(_ next: ScoreItemSort) {
         sort = next
         manualOrder = false
     }
 
     /// Returns to the playlist's manual order. Only valid for `.playlist`.
-    func selectManualOrder() {
+    public func selectManualOrder() {
         guard case .playlist = source else { return }
         manualOrder = true
     }
 
-    var displayedItems: [ScoreItem] {
+    public var displayedItems: [ScoreItem] {
         let scoped = scope(repository.scoreItems)
         let filtered = applySearch(scoped)
         if isManualOrderActive {

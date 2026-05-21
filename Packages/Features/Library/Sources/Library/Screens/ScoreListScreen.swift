@@ -1,9 +1,10 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 import UtilityUI
 
 struct ScoreListScreen: View {
-    @Bindable var viewModel: ScoreListViewModel
+    @Bindable var viewModel: ScoreListStore
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void

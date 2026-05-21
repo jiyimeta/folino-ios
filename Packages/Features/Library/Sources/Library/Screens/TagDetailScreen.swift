@@ -1,4 +1,5 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
 struct TagDetailScreen: View {
@@ -9,7 +10,7 @@ struct TagDetailScreen: View {
     let onAddToPlaylist: (ScoreItem) -> Void
     let onTagDeleted: () -> Void
 
-    @State private var listVM: ScoreListViewModel
+    @State private var listVM: ScoreListStore
 
     init(
         tag: Tag,
@@ -26,7 +27,7 @@ struct TagDetailScreen: View {
         self.onAddToPlaylist = onAddToPlaylist
         self.onTagDeleted = onTagDeleted
         _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .taggedWith(tag.id), repository: library.repository),
+            wrappedValue: ScoreListStore(source: .taggedWith(tag.id), repository: library.repository),
         )
     }
 

@@ -1,4 +1,5 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
 struct FavoritesScreen: View {
@@ -7,7 +8,7 @@ struct FavoritesScreen: View {
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
 
-    @State private var listVM: ScoreListViewModel
+    @State private var listVM: ScoreListStore
 
     init(
         library: LibraryViewModel,
@@ -20,7 +21,7 @@ struct FavoritesScreen: View {
         self.onEditTags = onEditTags
         self.onAddToPlaylist = onAddToPlaylist
         _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .favorites, repository: library.repository),
+            wrappedValue: ScoreListStore(source: .favorites, repository: library.repository),
         )
     }
 
