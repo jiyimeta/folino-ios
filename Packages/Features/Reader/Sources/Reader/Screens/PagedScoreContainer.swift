@@ -478,10 +478,12 @@ private struct PagedZoomedSurface: View {
             let framedHeight = paddedHeight * zoom
             let currentIdx = min(max(pageState.pageIndex, 0), pages.count - 1)
             // Keep both neighbors pre-rendered so a page turn never has to spin up a fresh `ScoreView` at tap time —
-            // the pages already exist in the tree, only their offsets animate. Pages with `idx < currentIdx` sit at
-            // offset `-width` (off-screen leading); pages with `idx >= currentIdx` sit at offset `0`. `zIndex =
-            // -Double(idx)` keeps lower indices on top, so the previous page covers the current while sliding in
-            // (backward) and the current page covers the next while sliding off (forward).
+            // the pages already exist in the tree, only their offsets animate. Three-way baseline: `idx < currentIdx`
+            // sits at `-viewport.width` (off-screen leading), `idx == currentIdx` at `0`, `idx > currentIdx` at
+            // `+viewport.width` (off-screen trailing). Adding `pageState.dragTranslationX` lets a drag slide every
+            // page in unison so the neighbor reveals on the side the finger is pulling from. `zIndex = -Double(idx)`
+            // still keeps lower indices on top — irrelevant during the slide (pages don't overlap) but used when
+            // drag-following pushes a sub-pixel sliver past zero.
             let slideSet = Set([-1, 0, 1].compactMap { delta -> Int? in
                 let idx = currentIdx + delta
                 return (0 ..< pages.count).contains(idx) ? idx : nil
@@ -502,22 +504,35 @@ private struct PagedZoomedSurface: View {
                 ZStack(alignment: .topLeading) {
                     ForEach(windowIndices, id: \.self) { idx in
                         let inSlideWindow = slideSet.contains(idx)
-                        let baseOffset: CGFloat = idx >= currentIdx
-                            ? 0 : -viewport.width
+                        // Three-way baseline (was two-way `< current` / `>= current`). Now the page after current sits
+                        // off-screen *trailing* at `+viewport.width` so a leftward drag can reveal it; previous still
+                        // sits off-screen leading at `-viewport.width`. `freezeFirstPageOffset` overrides idx 0 to hold
+                        // at `0` during jump-from / jump-to-first transitions, same as before.
+                        let baseOffset: CGFloat = if idx < currentIdx {
+                            -viewport.width
+                        } else if idx == currentIdx {
+                            0
+                        } else {
+                            viewport.width
+                        }
                         let frozenFirstPage = idx == 0
                             && pageState.freezeFirstPageOffset
                         pageContent(forPage: idx, doc: doc)
-                            // Offset follows the same rule regardless of slide-window membership: pages with `idx <
-                            // currentIdx` sit off-screen leading at `-viewport.width`; others sit at `0`. Edge pages
-                            // stay at their slide-position so entering / leaving the window doesn't animate their
-                            // offset — only opacity crossfades. Otherwise idx 0's offset would slide right when leaving
-                            // the window (1 → 2) and slide left when re-entering (2 → 1), both visible on top of the
-                            // real prev / next slide.
+                            // Offset is `baseline + dragTranslationX`, where baseline is a pure function of `idx`
+                            // vs `currentIdx`: `< current` → `-viewport.width`, `== current` → `0`, `> current` →
+                            // `+viewport.width`. Drag-following adds the live finger translation; commit folds
+                            // `dragTranslationX` back to `0` inside the same `withAnimation` transaction that
+                            // bumps `pageIndex`, so each page interpolates from "old baseline + drag" to
+                            // "new baseline + 0" in one motion. Edge pages stay at their baseline so entering /
+                            // leaving the window doesn't animate their offset — only opacity crossfades.
                             //
-                            // For jumps that involve idx 0 the container raises `freezeFirstPageOffset` so idx 0 holds
-                            // at `0` for the duration — jump-to-first then fades in at center (like jump-to-last)
-                            // instead of sliding rightward from `-viewport.width`.
-                                .offset(x: frozenFirstPage ? 0 : baseOffset)
+                            // For jumps that involve idx 0 the container raises `freezeFirstPageOffset` so idx 0
+                            // holds at `0` for the duration — jump-to-first then fades in at center (like
+                            // jump-to-last) instead of sliding rightward from `-viewport.width`.
+                                .offset(
+                                    x: (frozenFirstPage ? 0 : baseOffset)
+                                        + pageState.dragTranslationX,
+                                )
                                 .opacity(inSlideWindow ? 1 : 0)
                                 .allowsHitTesting(inSlideWindow)
                                 // Subtracting `pages.count` for non-slide entries pushes every resident edge page below
