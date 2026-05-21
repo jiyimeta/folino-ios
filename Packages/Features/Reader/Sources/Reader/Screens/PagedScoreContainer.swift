@@ -5,6 +5,14 @@ import SheetMusicLayout
 import SheetMusicUI
 import SwiftUI
 
+/// Result of evaluating a page-swipe gesture release. `commit*` cases advance / retreat by one page; `cancel`
+/// snaps `dragTranslationX` back to 0 without changing `pageIndex`.
+enum PageSwipeOutcome: Equatable {
+    case commitPrevious
+    case commitNext
+    case cancel
+}
+
 /// Page-by-page Reader mode. Lays the score out at viewport width (same as `VerticalScoreContainer`), paginates the
 /// resulting systems by viewport height, and shows one page at a time. The full `ScoreView` is drawn behind a
 /// `.clipped()` band so tap-seek / playback cursor / AB-loop overlays continue to operate in full-document coordinates.
@@ -341,6 +349,40 @@ struct PagedScoreContainer: View {
     /// for every subsequent page (so the gap region above the new page's first system — which is where rehearsal marks
     /// live — renders on the new page, not the previous one).
     ///
+    /// Pure decision: given a drag's final translation, its `DragGesture.Value.predictedEndTranslation.width` (i.e.
+    /// the fling-projection), the page-band viewport width, and whether the current page is at either extreme, decide
+    /// whether the drag should commit a page turn or snap back.
+    ///
+    /// Rules:
+    /// - At first / last page, drags that would commit "off the edge" cancel regardless of distance (the rubber-band
+    ///   damping in the view never lets the visual travel cross the commit threshold, but this is the source of truth).
+    /// - Otherwise commit when either the static progress or the predicted-end progress exceeds 30 % of viewport
+    ///   width in the same direction. The 30 % threshold matches Apple's "page" feel; the predicted-end branch is the
+    ///   fling path that lets a fast, short drag still flip the page.
+    static func outcome(
+        translationX: CGFloat,
+        predictedEndX: CGFloat,
+        viewportWidth: CGFloat,
+        isAtFirstPage: Bool,
+        isAtLastPage: Bool,
+    ) -> PageSwipeOutcome {
+        guard viewportWidth > 0 else { return .cancel }
+        if translationX > 0, isAtFirstPage { return .cancel }
+        if translationX < 0, isAtLastPage { return .cancel }
+
+        let threshold: CGFloat = 0.3
+        let progress = translationX / viewportWidth
+        let predictedProgress = predictedEndX / viewportWidth
+
+        if progress > threshold || predictedProgress > threshold {
+            return .commitPrevious
+        }
+        if progress < -threshold || predictedProgress < -threshold {
+            return .commitNext
+        }
+        return .cancel
+    }
+
     /// Authored `<LayoutBreak>page` on a system's last measure closes the page immediately under `.honor` /
     /// `.ignoreSystemBreaks`; `.ignoreAll` lets pages keep packing until vertical overflow.
     static func paginate(
