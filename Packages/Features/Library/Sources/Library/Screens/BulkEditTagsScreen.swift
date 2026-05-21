@@ -1,10 +1,11 @@
 import Domain
 import Foundation
+import LibraryLogic
 import SwiftUI
 
 struct BulkEditTagsScreen: View {
     let selectedIDs: Set<ScoreItemID>
-    let library: LibraryViewModel
+    let library: LibraryStore
     let onCommit: () -> Void
 
     var body: some View {
@@ -26,8 +27,7 @@ struct BulkEditTagsScreen: View {
         do {
             try await library.repository.saveTag(tag)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
             return
         }
         await library.bulkAddTags(selectedIDs, tagIDs: [tag.id])

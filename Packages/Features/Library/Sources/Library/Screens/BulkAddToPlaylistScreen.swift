@@ -1,10 +1,11 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
 struct BulkAddToPlaylistScreen: View {
     let selectedIDs: Set<ScoreItemID>
     let orderedSelectedIDs: [ScoreItemID]
-    let library: LibraryViewModel
+    let library: LibraryStore
     let onCommit: () -> Void
 
     var body: some View {
@@ -31,8 +32,7 @@ struct BulkAddToPlaylistScreen: View {
         do {
             try await library.repository.savePlaylist(playlist)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
             return
         }
         onCommit()

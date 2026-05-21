@@ -1,11 +1,12 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 import UniformTypeIdentifiers
 import UtilityUI
 
 @MainActor
 public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, LeadingToolbar: View>: View {
-    @Bindable var viewModel: LibraryViewModel
+    @Bindable var viewModel: LibraryStore
     @Binding private var path: NavigationPath
     private let onOpenScore: (ScoreItem) -> Void
     private let readerDestination: (ScoreItem) -> ReaderContent
@@ -26,7 +27,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var renameScoreText = ""
 
     public init(
-        viewModel: LibraryViewModel,
+        viewModel: LibraryStore,
         path: Binding<NavigationPath>,
         onOpenScore: @escaping (ScoreItem) -> Void,
         @ViewBuilder readerDestination: @escaping (ScoreItem) -> ReaderContent,
@@ -57,7 +58,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                         guard let url = urls.first else { return }
                         Task { await viewModel.startImport(from: url) }
                     case let .failure(error):
-                        viewModel.errorAlertMessage = error.localizedDescription
+                        viewModel.currentError = .underlying(message: error.localizedDescription)
                     }
                 }
                 .navigationDestination(for: LibraryRoute.self) { route in
@@ -87,13 +88,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         .alert(
             Text("library.title", bundle: .module),
             isPresented: errorAlertBinding,
-            presenting: viewModel.errorAlertMessage,
+            presenting: viewModel.currentError,
         ) { _ in
-            Button { viewModel.errorAlertMessage = nil } label: {
+            Button { viewModel.currentError = nil } label: {
                 L10n.Common.ok
             }
-        } message: { msg in
-            Text(msg)
+        } message: { err in
+            Text(err.displayMessage, bundle: .module)
         }
         .alert(Text("library.playlist.create.title", bundle: .module), isPresented: $isCreatingPlaylist) {
             TextField(text: $newPlaylistName) { Text("library.playlist.namePlaceholder", bundle: .module) }
@@ -368,8 +369,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 
     private var errorAlertBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.errorAlertMessage != nil },
-            set: { isPresented in if !isPresented { viewModel.errorAlertMessage = nil } },
+            get: { viewModel.currentError != nil },
+            set: { isPresented in if !isPresented { viewModel.currentError = nil } },
         )
     }
 

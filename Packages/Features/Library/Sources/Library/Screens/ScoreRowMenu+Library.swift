@@ -1,12 +1,13 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
-/// Screen-tier convenience that wires `LibraryViewModel` into the pure `scoreRowMenu` builder. Used by every Screen
+/// Screen-tier convenience that wires `LibraryStore` into the pure `scoreRowMenu` builder. Used by every Screen
 /// that renders a score row.
 @MainActor
 func scoreRowMenu(
     item: ScoreItem,
-    library: LibraryViewModel,
+    library: LibraryStore,
     onOpen: @escaping (ScoreItem) -> Void,
     onRename: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,

@@ -1,4 +1,5 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
 /// Routing for `LibraryRoute` from the root screen. Extracted from `LibraryRootScreen` to keep that file under
@@ -7,7 +8,7 @@ import SwiftUI
 @ViewBuilder
 func libraryRootDestination(
     for route: LibraryRoute,
-    viewModel: LibraryViewModel,
+    viewModel: LibraryStore,
     onOpenScore: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,
     onAddToPlaylist: @escaping (ScoreItem) -> Void,

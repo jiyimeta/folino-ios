@@ -1,11 +1,12 @@
 import Domain
 import Foundation
+import LibraryLogic
 import SwiftUI
 import UtilityUI
 
 struct PlaylistDetailScreen: View {
     let playlist: Playlist
-    let library: LibraryViewModel
+    let library: LibraryStore
     let onOpen: (ScoreItem) -> Void
     let onPlaylistDeleted: () -> Void
 
@@ -153,8 +154,7 @@ struct PlaylistDetailScreen: View {
             try await library.repository.deletePlaylist(id: playlist.id)
             onPlaylistDeleted()
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
         }
     }
 
@@ -162,8 +162,7 @@ struct PlaylistDetailScreen: View {
         do {
             try await library.repository.savePlaylist(updated)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
         }
     }
 }

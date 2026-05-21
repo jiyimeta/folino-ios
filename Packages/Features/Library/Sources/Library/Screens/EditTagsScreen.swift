@@ -1,9 +1,10 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
 struct EditTagsScreen: View {
     let scoreItem: ScoreItem
-    let library: LibraryViewModel
+    let library: LibraryStore
 
     var body: some View {
         EditTagsSheet(

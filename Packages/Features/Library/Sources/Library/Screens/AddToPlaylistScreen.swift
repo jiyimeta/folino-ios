@@ -1,9 +1,10 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
 struct AddToPlaylistScreen: View {
     let scoreItem: ScoreItem
-    let library: LibraryViewModel
+    let library: LibraryStore
 
     var body: some View {
         AddToPlaylistSheet(
@@ -25,8 +26,7 @@ struct AddToPlaylistScreen: View {
         do {
             try await library.repository.savePlaylist(updated)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
         }
     }
 
@@ -39,8 +39,7 @@ struct AddToPlaylistScreen: View {
         do {
             try await library.repository.savePlaylist(playlist)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
         }
     }
 }

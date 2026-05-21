@@ -6,7 +6,7 @@ import UtilityUI
 /// Recently Deleted (trash) screen. Items are sorted most-recently-deleted first. Soft-delete is silent; this screen is
 /// where permanent removal and restoration happen, plus the 30-day retention window.
 struct RecentlyDeletedScreen: View {
-    let library: LibraryViewModel
+    let library: LibraryStore
     let onOpen: (ScoreItem) -> Void
 
     @State private var viewModel: RecentlyDeletedStore
@@ -15,7 +15,7 @@ struct RecentlyDeletedScreen: View {
     @State private var pendingPermanentDelete: ScoreItem?
     @State private var isShowingBulkPermanentDeletePopover = false
 
-    init(library: LibraryViewModel, onOpen: @escaping (ScoreItem) -> Void) {
+    init(library: LibraryStore, onOpen: @escaping (ScoreItem) -> Void) {
         self.library = library
         self.onOpen = onOpen
         _viewModel = State(wrappedValue: RecentlyDeletedStore(repository: library.repository))

@@ -4,7 +4,7 @@ import SwiftUI
 
 struct TagDetailScreen: View {
     let tag: Tag
-    let library: LibraryViewModel
+    let library: LibraryStore
     let onOpen: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
@@ -14,7 +14,7 @@ struct TagDetailScreen: View {
 
     init(
         tag: Tag,
-        library: LibraryViewModel,
+        library: LibraryStore,
         onOpen: @escaping (ScoreItem) -> Void,
         onEditTags: @escaping (ScoreItem) -> Void,
         onAddToPlaylist: @escaping (ScoreItem) -> Void,
@@ -53,8 +53,7 @@ struct TagDetailScreen: View {
         do {
             try await library.repository.saveTag(updated)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
         }
     }
 
@@ -63,8 +62,7 @@ struct TagDetailScreen: View {
             try await library.repository.deleteTag(id: tag.id)
             onTagDeleted()
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = LibraryError.from(error)
         }
     }
 }

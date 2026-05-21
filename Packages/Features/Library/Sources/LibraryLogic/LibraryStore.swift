@@ -2,56 +2,65 @@ import Domain
 import Foundation
 import Observation
 
+/// Platform-agnostic state and intent layer for the Library feature. Contains no SwiftUI or UIKit
+/// imports; localized error messages live in the iOS `Library` target (`LibraryErrorPresentation.swift`).
 @MainActor
 @Observable
-public final class LibraryViewModel {
-    let repository: any ScoreLibraryRepository
-    let importer: any ScoreFileImporter
-    let gateway: any ScoreFileGateway
-    let shareService: any ScoreShareService
+public final class LibraryStore {
+    public let repository: any ScoreLibraryRepository
+    public let importer: any ScoreFileImporter
+    public let gateway: any ScoreFileGateway
+    public let shareService: any ScoreShareService
 
-    var shareTarget: ShareTarget?
-    var isPreparingShare = false
+    public var shareTarget: ShareTarget?
+    public var isPreparingShare = false
 
     /// True while a file import is in flight (prepare or commit). Driven by `defer` blocks in `startImport` and
-    /// `commit` so it clears on success, duplicate detection, and any thrown error. The App composition root uses this
-    /// to show a loading HUD over the whole shell.
+    /// `commit` so it clears on success, duplicate detection, and any thrown error. The App composition root uses
+    /// this to show a loading HUD over the whole shell.
     public var isImporting = false
 
-    struct ShareTarget: Identifiable, Equatable {
-        let id: UUID
-        let urls: [URL]
-        init(urls: [URL]) {
+    public struct ShareTarget: Identifiable, Equatable, Sendable {
+        public let id: UUID
+        public let urls: [URL]
+        public init(urls: [URL]) {
             id = UUID()
             self.urls = urls
         }
     }
 
-    var errorAlertMessage: String?
+    /// Non-nil when an error occurs; cleared by `dismissImportUI` or when the user dismisses the alert.
+    public var currentError: LibraryError?
 
-    /// Set when an import succeeds; the App composition root watches this and pushes the Reader. Cleared by the watcher
-    /// after handling.
+    /// Set when an import succeeds; the App composition root watches this and pushes the Reader. Cleared by the
+    /// watcher after handling.
     public var pendingScoreToOpen: ScoreItem?
 
     /// Drives the `.fileImporter` sheet.
-    var isFileImporterPresented = false
+    public var isFileImporterPresented = false
 
     /// Dismiss any in-flight import-flow UI (file picker sheet, duplicate prompt, error alert). Called from the App
     /// layer when an external incoming action (file URL or share token) supersedes whatever the user was doing.
     public func dismissImportUI() {
         isFileImporterPresented = false
         duplicatePrompt = nil
-        errorAlertMessage = nil
+        currentError = nil
     }
 
-    /// Set when `prepareImport` returns at least one duplicate. The view presents a 3-button alert; choosing one of the
-    /// buttons drives `commitImport`.
-    var duplicatePrompt: DuplicatePrompt?
+    /// Set when `prepareImport` returns at least one duplicate. The view presents a 3-button alert; choosing one of
+    /// the buttons drives `commitImport`.
+    public var duplicatePrompt: DuplicatePrompt?
 
-    struct DuplicatePrompt: Identifiable, Equatable {
-        let id = UUID()
-        let plan: ImportPlan
-        let existing: ScoreItem
+    public struct DuplicatePrompt: Identifiable, Equatable, Sendable {
+        public let id: UUID
+        public let plan: ImportPlan
+        public let existing: ScoreItem
+
+        public init(plan: ImportPlan, existing: ScoreItem) {
+            id = UUID()
+            self.plan = plan
+            self.existing = existing
+        }
     }
 
     public init(
@@ -66,13 +75,13 @@ public final class LibraryViewModel {
         self.shareService = shareService
     }
 
-    func toggleFavorite(_ scoreItem: ScoreItem) async {
+    public func toggleFavorite(_ scoreItem: ScoreItem) async {
         var updated = scoreItem
         updated.isFavorite.toggle()
         await save(updated)
     }
 
-    func rename(_ scoreItem: ScoreItem, to newTitle: String) async {
+    public func rename(_ scoreItem: ScoreItem, to newTitle: String) async {
         let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != scoreItem.title else { return }
         var updated = scoreItem
@@ -80,80 +89,80 @@ public final class LibraryViewModel {
         await save(updated)
     }
 
-    func delete(_ scoreItem: ScoreItem) async {
+    public func delete(_ scoreItem: ScoreItem) async {
         do {
             try await repository.deleteScoreItem(id: scoreItem.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func deletePlaylist(_ playlist: Playlist) async {
+    public func deletePlaylist(_ playlist: Playlist) async {
         do {
             try await repository.deletePlaylist(id: playlist.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func deleteTag(_ tag: Tag) async {
+    public func deleteTag(_ tag: Tag) async {
         do {
             try await repository.deleteTag(id: tag.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func bulkDelete(_ ids: Set<ScoreItemID>) async {
+    public func bulkDelete(_ ids: Set<ScoreItemID>) async {
         for id in ids {
             do {
                 try await repository.deleteScoreItem(id: id)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = LibraryError.from(error)
                 return
             }
         }
     }
 
-    func restore(_ scoreItem: ScoreItem) async {
+    public func restore(_ scoreItem: ScoreItem) async {
         do {
             try await repository.restoreScoreItem(id: scoreItem.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func bulkRestore(_ ids: Set<ScoreItemID>) async {
+    public func bulkRestore(_ ids: Set<ScoreItemID>) async {
         for id in ids {
             do {
                 try await repository.restoreScoreItem(id: id)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = LibraryError.from(error)
                 return
             }
         }
     }
 
-    func permanentlyDelete(_ scoreItem: ScoreItem) async {
+    public func permanentlyDelete(_ scoreItem: ScoreItem) async {
         do {
             try await repository.permanentlyDeleteScoreItem(id: scoreItem.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func bulkPermanentlyDelete(_ ids: Set<ScoreItemID>) async {
+    public func bulkPermanentlyDelete(_ ids: Set<ScoreItemID>) async {
         for id in ids {
             do {
                 try await repository.permanentlyDeleteScoreItem(id: id)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = LibraryError.from(error)
                 return
             }
         }
     }
 
-    func bulkRemoveFromPlaylist(
+    public func bulkRemoveFromPlaylist(
         _ ids: Set<ScoreItemID>,
         from playlist: Playlist,
     ) async {
@@ -164,11 +173,11 @@ public final class LibraryViewModel {
         do {
             try await repository.savePlaylist(updated)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func bulkAddToPlaylist(
+    public func bulkAddToPlaylist(
         _ orderedIDs: [ScoreItemID],
         to playlist: Playlist,
     ) async {
@@ -181,11 +190,11 @@ public final class LibraryViewModel {
         do {
             try await repository.savePlaylist(updated)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func bulkAddTags(
+    public func bulkAddTags(
         _ ids: Set<ScoreItemID>,
         tagIDs: Set<TagID>,
     ) async {
@@ -199,24 +208,24 @@ public final class LibraryViewModel {
             do {
                 try await repository.saveScoreItem(updated)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = LibraryError.from(error)
                 return
             }
         }
     }
 
-    func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
+    public func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
         isPreparingShare = true
         defer { isPreparingShare = false }
         do {
             let url = try await shareService.prepareShare(item: item, format: format)
             shareTarget = ShareTarget(urls: [url])
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func requestBulkShare(_ items: [ScoreItem], format: ScoreShareFormat) async {
+    public func requestBulkShare(_ items: [ScoreItem], format: ScoreShareFormat) async {
         guard !items.isEmpty else { return }
         isPreparingShare = true
         defer { isPreparingShare = false }
@@ -227,51 +236,51 @@ public final class LibraryViewModel {
                 let url = try await shareService.prepareShare(item: item, format: format)
                 urls.append(url)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = LibraryError.from(error)
                 return
             }
         }
         shareTarget = ShareTarget(urls: urls)
     }
 
-    func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {
+    public func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {
         var updated = scoreItem
         updated.tagIDs = tagIDs
         await save(updated)
     }
 
-    func createPlaylist(name: String) async {
+    public func createPlaylist(name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let playlist = Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date())
         do {
             try await repository.savePlaylist(playlist)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func createTag(name: String) async {
+    public func createTag(name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let tag = Tag(name: trimmed, colorHex: "#5856D6")
         do {
             try await repository.saveTag(tag)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    func save(_ scoreItem: ScoreItem) async {
+    public func save(_ scoreItem: ScoreItem) async {
         do {
             try await repository.saveScoreItem(scoreItem)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
     }
 
-    /// Called by the `.fileImporter` `onCompletion`. Handles security-scoped access, prepareImport, and either commits
-    /// immediately or stages a duplicate prompt.
+    /// Called by the `.fileImporter` `onCompletion`. Handles security-scoped access, prepareImport, and either
+    /// commits immediately or stages a duplicate prompt.
     public func startImport(from sourceURL: URL) async {
         isImporting = true
         defer { isImporting = false }
@@ -283,7 +292,7 @@ public final class LibraryViewModel {
         do {
             plan = try await importer.prepareImport(sourceURL: sourceURL)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
             return
         }
         if let existing = plan.duplicates.first {
@@ -293,30 +302,14 @@ public final class LibraryViewModel {
         await commit(plan: plan, decision: .importAsNew)
     }
 
-    func commit(plan: ImportPlan, decision: ImportDecision) async {
+    public func commit(plan: ImportPlan, decision: ImportDecision) async {
         isImporting = true
         defer { isImporting = false }
         do {
             let item = try await importer.commitImport(plan, decision: decision)
             pendingScoreToOpen = item
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = LibraryError.from(error)
         }
-    }
-
-    private func describe(_ error: Error) -> String {
-        if let domain = error as? DomainError {
-            switch domain {
-            case .unsupportedFormat:
-                return String(localized: "library.import.error.unsupported", bundle: .module)
-            case .scoreParseFailed:
-                return String(localized: "library.import.error.invalidFile", bundle: .module)
-            case .persistenceFailed:
-                return String(localized: "library.import.error.saveFailed", bundle: .module)
-            case .scoreFileNotFound, .scoreWriteFailed, .syncFailed, .audioEngineFailed:
-                return domain.errorDescription ?? "\(domain)"
-            }
-        }
-        return (error as NSError).localizedDescription
     }
 }

@@ -1,4 +1,5 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 import UtilityUI
 
@@ -6,7 +7,7 @@ import UtilityUI
 /// (no confirmation) — the Recently Deleted screen handles permanent-delete confirmation via popover.
 @MainActor
 struct LibraryRootDeleteAlerts: ViewModifier {
-    let viewModel: LibraryViewModel
+    let viewModel: LibraryStore
     @Binding var pendingDeletePlaylist: Playlist?
     @Binding var pendingDeleteTag: Tag?
 
@@ -19,7 +20,7 @@ struct LibraryRootDeleteAlerts: ViewModifier {
 
 @MainActor
 private struct PlaylistAlert: ViewModifier {
-    let viewModel: LibraryViewModel
+    let viewModel: LibraryStore
     @Binding var pending: Playlist?
 
     func body(content: Content) -> some View {
@@ -44,7 +45,7 @@ private struct PlaylistAlert: ViewModifier {
 
 @MainActor
 private struct TagAlert: ViewModifier {
-    let viewModel: LibraryViewModel
+    let viewModel: LibraryStore
     @Binding var pending: Tag?
 
     func body(content: Content) -> some View {
@@ -77,7 +78,7 @@ private func presentationBinding<Value>(_ source: Binding<Value?>) -> Binding<Bo
 extension View {
     @MainActor
     func libraryRootDeleteAlerts(
-        viewModel: LibraryViewModel,
+        viewModel: LibraryStore,
         pendingDeletePlaylist: Binding<Playlist?>,
         pendingDeleteTag: Binding<Tag?>,
     ) -> some View {

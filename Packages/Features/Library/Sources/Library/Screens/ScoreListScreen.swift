@@ -5,7 +5,7 @@ import UtilityUI
 
 struct ScoreListScreen: View {
     @Bindable var viewModel: ScoreListStore
-    let library: LibraryViewModel
+    let library: LibraryStore
     let onOpen: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void

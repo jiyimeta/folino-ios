@@ -3,7 +3,7 @@ import LibraryLogic
 import SwiftUI
 
 struct AllScoresScreen: View {
-    let library: LibraryViewModel
+    let library: LibraryStore
     let onOpen: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
@@ -11,7 +11,7 @@ struct AllScoresScreen: View {
     @State private var listVM: ScoreListStore
 
     init(
-        library: LibraryViewModel,
+        library: LibraryStore,
         onOpen: @escaping (ScoreItem) -> Void,
         onEditTags: @escaping (ScoreItem) -> Void,
         onAddToPlaylist: @escaping (ScoreItem) -> Void,

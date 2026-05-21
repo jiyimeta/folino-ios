@@ -1,4 +1,5 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 import UtilityUI
 
@@ -6,7 +7,7 @@ import UtilityUI
 /// SwiftLint's file-length budget.
 @MainActor
 struct LibraryRootRenameScoreAlert: ViewModifier {
-    let viewModel: LibraryViewModel
+    let viewModel: LibraryStore
     @Binding var pending: ScoreItem?
     @Binding var text: String
 
@@ -38,7 +39,7 @@ struct LibraryRootRenameScoreAlert: ViewModifier {
 extension View {
     @MainActor
     func libraryRootRenameScoreAlert(
-        viewModel: LibraryViewModel,
+        viewModel: LibraryStore,
         pending: Binding<ScoreItem?>,
         text: Binding<String>,
     ) -> some View {

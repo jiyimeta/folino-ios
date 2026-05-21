@@ -1,6 +1,7 @@
 import Domain
 import ImportExport
 import Library
+import LibraryLogic
 import LicenseList
 import Reader
 import Settings
@@ -98,7 +99,7 @@ private struct ReadyShell: View {
     let scoresDirectory: URL
     let versionHistoryPresenter: VersionHistoryPresenter
 
-    @State private var libraryVM: LibraryViewModel
+    @State private var libraryVM: LibraryStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var compactPath: NavigationPath
     @State private var sidebarPath: NavigationPath
@@ -125,7 +126,7 @@ private struct ReadyShell: View {
         self.scoresDirectory = scoresDirectory
         self.versionHistoryPresenter = versionHistoryPresenter
         _libraryVM = State(
-            wrappedValue: LibraryViewModel(
+            wrappedValue: LibraryStore(
                 repository: repository,
                 importer: importer,
                 gateway: gateway,

@@ -1,8 +1,9 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 
 struct TagsListScreen: View {
-    let library: LibraryViewModel
+    let library: LibraryStore
 
     var body: some View {
         TagsListView(
