@@ -53,3 +53,10 @@ build/
 *.p8
 *.ipa
 *.dSYM.zip
+
+# Android pilot scaffold
+Android/.gradle/
+Android/local.properties
+Android/build/
+Android/app/build/
+Android/app/src/main/jniLibs/
