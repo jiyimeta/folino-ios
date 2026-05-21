@@ -804,9 +804,9 @@ private struct PagedZoomedSurface: View {
     private func pageSwipeGesture() -> some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .local)
             .onChanged { value in
-                // First-sample horizontal-dominance gate: reject vertical-leaning drags so a future vertical-scroll
-                // surface (not present today) wouldn't compete with the page swipe. Pure-horizontal drags satisfy
-                // `abs(dy) == 0`, well below `abs(dx) / 1.5`.
+                // Per-sample horizontal-dominance gate: a sample whose vertical component dominates is ignored,
+                // letting a future vertical-scroll surface (not present today) coexist without competing with the
+                // page swipe. Pure-horizontal drags satisfy `abs(dy) == 0`, well below `abs(dx) / 1.5`.
                 guard abs(value.translation.width)
                     > abs(value.translation.height) * 1.5
                 else { return }
