@@ -342,13 +342,23 @@ struct PagedScoreContainer: View {
         return raw < 0 ? -damped : damped
     }
 
-    /// Live drag → `dragTranslationX`. Applies rubber-band damping on the impossible-commit side. Idempotent for
-    /// gated-off drags (drops the update without touching state).
+    /// Live drag → `dragTranslationX`. Applies rubber-band damping on the impossible-commit side. If a drag is in
+    /// progress (`isDragging`) and the gate flips false mid-gesture — typically because a second finger landed and
+    /// started a pinch — treat the drag as cancelled: clear the flag and animate the band back to rest. A
+    /// subsequent `.onEnded` then no-ops via the `isDragging` guard in `onSwipeEnded`.
     private func onSwipeChanged(
         translationX: CGFloat,
         viewportWidth: CGFloat,
     ) {
-        guard pageSwipeEnabled else { return }
+        guard pageSwipeEnabled else {
+            if pageState.isDragging {
+                pageState.isDragging = false
+                withAnimation(.smooth(duration: 0.18)) {
+                    pageState.dragTranslationX = 0
+                }
+            }
+            return
+        }
         pageState.isDragging = true
         let atFirst = pageState.pageIndex == 0
         let atLast = pageState.pageIndex == pages.count - 1

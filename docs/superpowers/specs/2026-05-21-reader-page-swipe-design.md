@@ -45,10 +45,10 @@ two:
 - Lift before exceeding 8 pt → tap-seek fires as today.
 - Cross 8 pt → drag wins, tap-seek is cancelled.
 
-A first-sample dominance check rejects drags that are clearly vertical
-(`abs(dx) > abs(dy) * 1.5` on the first `onChanged` after passing `minimumDistance`). Page mode
-has no vertical scroll today, but the check costs nothing and prevents future regressions if a
-vertical-scroll surface is layered in.
+A per-sample dominance check rejects drag samples whose vertical component dominates
+(`abs(dx) > abs(dy) * 1.5` evaluated on every `onChanged`). Page mode has no vertical scroll
+today, but the check costs nothing and prevents future regressions if a vertical-scroll
+surface is layered in.
 
 ## Drag-following render model
 
