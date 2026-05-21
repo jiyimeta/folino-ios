@@ -572,7 +572,9 @@ private struct PagedZoomedSurface: View {
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor,
             )
             .coordinateSpace(name: "scoreSurface")
-            .gesture(tapSeekGesture(document: doc))
+            .gesture(tapSeekGesture(
+                document: doc, pageStartY: pageStartY, pageHeight: pageHeight,
+            ))
             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
             if viewModel.repeatModel.mode == .abLoop {
@@ -612,9 +614,22 @@ private struct PagedZoomedSurface: View {
         )
     }
 
-    private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
+    private func tapSeekGesture(
+        document: LayoutDocument,
+        pageStartY: CGFloat,
+        pageHeight: CGFloat,
+    ) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named("scoreSurface"))
             .onEnded { value in
+                // The named coordinate space spans the full doc (the inner `ScoreView` is `doc.size.height` tall and
+                // the wrapper offsets it up by `pageStartY`). The outer `.clipped()` clips rendering but not hit
+                // testing, so a tap on the blank band beneath the last visible system still resolves to a y that lives
+                // on the next page. Without this guard, `nearestCursor` would return that next-page system, the
+                // resulting `setManualCursor` would mutate `playbackCursor`, and `followCursor` would auto-turn to the
+                // next page — the user perceives this as the page advancing whenever they tap the lower screen area.
+                let pageEndY = pageStartY + pageHeight
+                guard value.location.y >= pageStartY,
+                      value.location.y <= pageEndY else { return }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.setManualCursor(cursor)
                 lastManualCursor = cursor
