@@ -10,6 +10,17 @@
 
 **Worktree:** Execution must happen on a worktree branched from local `main` (see `feedback_worktree_base_local_main`). The executing skill should create it via `superpowers:using-git-worktrees`.
 
+**Test runner:** The Library package declares `platforms: [.iOS(.v26)]` only, so `swift test` fails on the macOS host with platform-mismatch errors. The executor must drive iOS tests through Xcode via the `mcp__xcode__*` tools. Specifically: open the worktree's `Folino.xcodeproj` in Xcode (regenerate with `xcodegen generate` from the worktree root if needed), then run tests via `mcp__xcode__RunSomeTests` and builds via `mcp__xcode__BuildProject`. The plan's task steps below show conceptual commands (e.g. "run LibraryLogicTests"); translate them to the Xcode MCP call shape at execution time. Concretely:
+
+| Conceptual step               | Actual call                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| Build the Library package     | `mcp__xcode__BuildProject` (scheme: `Library` or `Folino`)                               |
+| Run all Library tests         | `mcp__xcode__RunAllTests` (scheme: `Library`)                                            |
+| Run a specific test suite     | `mcp__xcode__RunSomeTests` (scheme: `Library`, testIdentifiers: `["LibraryLogicTests/<Suite>"]`) |
+| Build the app                 | `mcp__xcode__BuildProject` (scheme: `Folino`)                                            |
+
+Confirm Xcode is running and the worktree's project is open via `mcp__xcode__XcodeListWindows` at the start of execution (per global CLAUDE.md).
+
 **Reference spec:** `docs/superpowers/specs/2026-05-21-android-share-architecture-design.md`
 
 ---
