@@ -173,10 +173,11 @@ struct PagedScoreContainer: View {
                 onSwipeChanged: { translationX in
                     onSwipeChanged(translationX: translationX, viewportWidth: viewport.width)
                 },
-                onSwipeEnded: { translationX, predictedEndX in
+                onSwipeEnded: { translationX, predictedEndX, velocityX in
                     onSwipeEnded(
                         translationX: translationX,
                         predictedEndX: predictedEndX,
+                        velocityX: velocityX,
                         viewportWidth: viewport.width,
                     )
                 },
@@ -353,7 +354,10 @@ struct PagedScoreContainer: View {
         guard pageSwipeEnabled else {
             if pageState.isDragging {
                 pageState.isDragging = false
-                withAnimation(.smooth(duration: 0.18)) {
+                withAnimation(Self.cancelAnimation(
+                    snapBackDistance: pageState.dragTranslationX,
+                    viewportWidth: viewportWidth,
+                )) {
                     pageState.dragTranslationX = 0
                 }
             }
@@ -376,6 +380,7 @@ struct PagedScoreContainer: View {
     private func onSwipeEnded(
         translationX: CGFloat,
         predictedEndX: CGFloat,
+        velocityX: CGFloat,
         viewportWidth: CGFloat,
     ) {
         guard pageState.isDragging else { return }
@@ -393,11 +398,20 @@ struct PagedScoreContainer: View {
 
         switch outcome {
         case .commitNext:
-            commitDragTurn(to: pageState.pageIndex + 1)
+            commitDragTurn(
+                to: pageState.pageIndex + 1,
+                velocityX: velocityX, viewportWidth: viewportWidth,
+            )
         case .commitPrevious:
-            commitDragTurn(to: pageState.pageIndex - 1)
+            commitDragTurn(
+                to: pageState.pageIndex - 1,
+                velocityX: velocityX, viewportWidth: viewportWidth,
+            )
         case .cancel:
-            withAnimation(.smooth(duration: 0.18)) {
+            withAnimation(Self.cancelAnimation(
+                snapBackDistance: pageState.dragTranslationX,
+                viewportWidth: viewportWidth,
+            )) {
                 pageState.dragTranslationX = 0
             }
         }
@@ -408,18 +422,80 @@ struct PagedScoreContainer: View {
     /// Drag-commit variant of `commitPageTurn`. Difference: mutates `pageIndex` and `dragTranslationX` inside the
     /// same `withAnimation` block so every page interpolates from "old baseline + drag" to "new baseline + 0" as
     /// one motion. No freeze-first-page handling — drag commits are always ±1, never jump-to-edge.
-    private func commitDragTurn(to target: Int) {
+    ///
+    /// The animation duration is derived from the release `velocityX` so a fast flick completes quickly while a
+    /// slow release falls back to the original `pageTransitionMaxDuration` feel.
+    private func commitDragTurn(to target: Int, velocityX: CGFloat, viewportWidth: CGFloat) {
         guard target >= 0, target < pages.count else {
-            withAnimation(.smooth(duration: 0.18)) {
+            withAnimation(Self.cancelAnimation(
+                snapBackDistance: pageState.dragTranslationX,
+                viewportWidth: viewportWidth,
+            )) {
                 pageState.dragTranslationX = 0
             }
             return
         }
-        withAnimation(Self.pageTransitionAnimation) {
+        let remaining = max(0, viewportWidth - abs(pageState.dragTranslationX))
+        let animation = Self.commitAnimation(
+            remainingDistance: remaining,
+            velocityMagnitude: abs(velocityX),
+            viewportWidth: viewportWidth,
+        )
+        withAnimation(animation) {
             pageState.pageIndex = target
             pageState.dragTranslationX = 0
         }
         pendingScroll = .immediate(.zero)
+    }
+
+    /// Cap on the commit animation duration. Matches the original fixed `pageTransitionAnimation` length so a slow
+    /// release feels identical to the tap-based page turn — the user only sees a faster transition when they
+    /// actually flicked the page.
+    private static let commitMaxDuration = 0.22
+    /// Floor on the commit animation duration. Prevents an aggressive flick from completing so quickly that the
+    /// motion is hard to follow.
+    private static let commitMinDuration = 0.10
+    /// Cap on the cancel animation duration. Matches the original snap-back length so a near-threshold cancel
+    /// (large `dragTranslationX`) still settles in the familiar time.
+    private static let cancelMaxDuration = 0.18
+    /// Floor on the cancel animation duration. A 50 pt snap-back at the proportional rate would otherwise be
+    /// nearly invisible.
+    private static let cancelMinDuration = 0.08
+
+    /// Commit animation whose duration matches the release velocity. The baseline speed (`viewportWidth /
+    /// commitMaxDuration`) acts as a floor on velocity, so slow releases use the same speed as the tap-based
+    /// page-turn animation; flick releases use their own (higher) speed, with the result clamped between
+    /// `commitMinDuration` and `commitMaxDuration`.
+    static func commitAnimation(
+        remainingDistance: CGFloat,
+        velocityMagnitude: CGFloat,
+        viewportWidth: CGFloat,
+    ) -> Animation {
+        guard viewportWidth > 0, remainingDistance > 0 else {
+            return .easeOut(duration: commitMaxDuration)
+        }
+        let baselineSpeed = Double(viewportWidth) / commitMaxDuration
+        let speed = max(Double(velocityMagnitude), baselineSpeed)
+        let raw = Double(remainingDistance) / speed
+        let duration = min(commitMaxDuration, max(commitMinDuration, raw))
+        return .easeOut(duration: duration)
+    }
+
+    /// Cancel animation whose duration scales with the snap-back distance. Pure distance-proportional with floor
+    /// and ceiling — velocity is not folded in because a cancel almost always means "the user backed off", so the
+    /// release speed is small or even reverses direction. Larger snap distances get the full `cancelMaxDuration`;
+    /// smaller ones settle faster down to `cancelMinDuration`.
+    static func cancelAnimation(
+        snapBackDistance: CGFloat,
+        viewportWidth: CGFloat,
+    ) -> Animation {
+        guard viewportWidth > 0 else {
+            return .smooth(duration: cancelMaxDuration)
+        }
+        let progress = min(max(Double(abs(snapBackDistance)) / Double(viewportWidth), 0), 1)
+        let raw = progress * cancelMaxDuration
+        let duration = min(cancelMaxDuration, max(cancelMinDuration, raw))
+        return .smooth(duration: duration)
     }
 
     private var scoreOptions: ScoreViewOptions {
@@ -559,6 +635,18 @@ struct PagedScoreContainer: View {
     }
 }
 
+/// Reads `pageState.dragTranslationX` in isolation and applies it as a horizontal `.offset` on `content`. This is the
+/// only place that touches `dragTranslationX` during rendering — moving the read out of `PagedZoomedSurface.body`
+/// stops the whole surface from re-evaluating on every gesture sample, leaving only this modifier's body to recompute
+/// while the finger is moving.
+private struct BandDragOffset: ViewModifier {
+    let pageState: PageState
+
+    func body(content: Content) -> some View {
+        content.offset(x: pageState.dragTranslationX)
+    }
+}
+
 private struct PagedZoomedSurface: View {
     @Bindable var viewModel: ReaderViewModel
     @Bindable var pinch: PinchState
@@ -580,7 +668,9 @@ private struct PagedZoomedSurface: View {
     let onLastPage: () -> Void
     let onDoubleTap: () -> Void
     let onSwipeChanged: (CGFloat) -> Void
-    let onSwipeEnded: (CGFloat, CGFloat) -> Void
+    /// `(translationX, predictedEndX, velocityX)` — finger lift values forwarded to the container's
+    /// `onSwipeEnded`. `velocityX` is `DragGesture.Value.velocity.width` (pt/s) at release.
+    let onSwipeEnded: (CGFloat, CGFloat, CGFloat) -> Void
     let showsHint: Bool
     let onAnyZoneTouchDown: () -> Void
 
@@ -595,10 +685,11 @@ private struct PagedZoomedSurface: View {
             // Keep both neighbors pre-rendered so a page turn never has to spin up a fresh `ScoreView` at tap time —
             // the pages already exist in the tree, only their offsets animate. Three-way baseline: `idx < currentIdx`
             // sits at `-viewport.width` (off-screen leading), `idx == currentIdx` at `0`, `idx > currentIdx` at
-            // `+viewport.width` (off-screen trailing). Adding `pageState.dragTranslationX` lets a drag slide every
-            // page in unison so the neighbor reveals on the side the finger is pulling from. `zIndex = -Double(idx)`
-            // still keeps lower indices on top — irrelevant during the slide (pages don't overlap) but used when
-            // drag-following pushes a sub-pixel sliver past zero.
+            // `+viewport.width` (off-screen trailing). The live finger translation is applied band-wide one level up
+            // (`.offset(x: pageState.dragTranslationX)` on the enclosing ZStack), so the whole strip slides as one
+            // compositing transform rather than `N` per-page offset updates. `zIndex = -Double(idx)` still keeps
+            // lower indices on top — irrelevant during the slide (pages don't overlap) but used when drag-following
+            // pushes a sub-pixel sliver past zero.
             let slideSet = Set([-1, 0, 1].compactMap { delta -> Int? in
                 let idx = currentIdx + delta
                 return (0 ..< pages.count).contains(idx) ? idx : nil
@@ -633,21 +724,17 @@ private struct PagedZoomedSurface: View {
                         let frozenFirstPage = idx == 0
                             && pageState.freezeFirstPageOffset
                         pageContent(forPage: idx, doc: doc)
-                            // Offset is `baseline + dragTranslationX`, where baseline is a pure function of `idx`
-                            // vs `currentIdx`: `< current` → `-viewport.width`, `== current` → `0`, `> current` →
-                            // `+viewport.width`. Drag-following adds the live finger translation; commit folds
-                            // `dragTranslationX` back to `0` inside the same `withAnimation` transaction that
-                            // bumps `pageIndex`, so each page interpolates from "old baseline + drag" to
-                            // "new baseline + 0" in one motion. Edge pages stay at their baseline so entering /
-                            // leaving the window doesn't animate their offset — only opacity crossfades.
+                            // Per-page offset is the pure `pageIndex`-derived baseline (`< current` →
+                            // `-viewport.width`, `== current` → `0`, `> current` → `+viewport.width`). The live
+                            // finger translation is applied once at the band level below — applying it per-page
+                            // would force `N` individual `.offset` mutations per gesture sample, which the SwiftUI
+                            // layout pass cannot keep up with on a 120 Hz device. Pinch follows the same model
+                            // (single `.scaleEffect` / `.offset` at the outer surface).
                             //
                             // For jumps that involve idx 0 the container raises `freezeFirstPageOffset` so idx 0
                             // holds at `0` for the duration — jump-to-first then fades in at center (like
                             // jump-to-last) instead of sliding rightward from `-viewport.width`.
-                                .offset(
-                                    x: (frozenFirstPage ? 0 : baseOffset)
-                                        + pageState.dragTranslationX,
-                                )
+                                .offset(x: frozenFirstPage ? 0 : baseOffset)
                                 .opacity(inSlideWindow ? 1 : 0)
                                 .allowsHitTesting(inSlideWindow)
                                 // Subtracting `pages.count` for non-slide entries pushes every resident edge page below
@@ -670,6 +757,15 @@ private struct PagedZoomedSurface: View {
                                 )
                     }
                 }
+                // Live drag translation applied once for the whole band — every page slides together as a
+                // compositing-level transform, the same pattern pinch uses. `.offset` does not affect layout, so
+                // the outer `.frame` + `.clipped()` below still clip to the fixed band rectangle while the
+                // contents slide through it.
+                //
+                // The read of `dragTranslationX` is isolated inside `BandDragOffset` so the enclosing
+                // `PagedZoomedSurface.body` does not invalidate on every drag sample — only the modifier's tiny
+                // body re-evaluates, the ForEach / ScoreView subtree stays intact.
+                .modifier(BandDragOffset(pageState: pageState))
                 // Clip neighbors to the page band. Without this, the pre-rendered previous page (offset
                 // `-viewport.width`) leaks out the leading side whenever the band does not fully cover the host (pinch
                 // zoom-out below 100 % and landscape orientations where `pageInsets.leading` adds a safe-area gap to
@@ -677,6 +773,13 @@ private struct PagedZoomedSurface: View {
                 .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
                 .clipped()
                 .padding(pageInsets)
+                // Single band-level swipe gesture (was previously attached per-page inside `scoreSurface`,
+                // which spawned one `DragGesture` per resident page — up to five concurrent recognizers, all
+                // firing onChanged from their own activation reference, producing oscillating `dragTranslationX`
+                // values and visible jitter). `minimumDistance: 8` lets a tap below the threshold still reach the
+                // per-page `tapSeekGesture` inside the ScoreView; crossing 8 pt activates the swipe and the
+                // tap-seek's `SpatialTapGesture` is rejected on release (high travel).
+                .simultaneousGesture(pageSwipeGesture())
 
                 // Tap zones extend `pageInsets.leading` / `pageInsets.trailing` outward so the tap-active (and visually
                 // highlighted) area reaches the host's edges in landscape, where there is otherwise a safe-area gutter
@@ -747,9 +850,6 @@ private struct PagedZoomedSurface: View {
             .gesture(tapSeekGesture(
                 document: doc, pageStartY: pageStartY, pageHeight: pageHeight,
             ))
-            // `minimumDistance: 8` lets a tap (under 8 pt) still reach `tapSeekGesture` via SwiftUI's distance-based
-            // disambiguation; crossing 8 pt activates the swipe and cancels tap-seek.
-            .simultaneousGesture(pageSwipeGesture())
             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
             if viewModel.repeatModel.mode == .abLoop {
@@ -823,7 +923,11 @@ private struct PagedZoomedSurface: View {
                 onSwipeChanged(value.translation.width)
             }
             .onEnded { value in
-                onSwipeEnded(value.translation.width, value.predictedEndTranslation.width)
+                onSwipeEnded(
+                    value.translation.width,
+                    value.predictedEndTranslation.width,
+                    value.velocity.width,
+                )
             }
     }
 
