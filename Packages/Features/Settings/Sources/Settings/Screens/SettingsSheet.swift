@@ -45,9 +45,6 @@ public struct SettingsSheet<LicenseContent: View>: View {
         NavigationStack {
             Form {
                 readerSection
-                if let provider {
-                    storageSection(provider: provider)
-                }
                 aboutSection
             }
             .navigationTitle(Text("settings.title", bundle: .module))
@@ -90,18 +87,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
                 }
             }
-            Toggle(isOn: $isPiPEnabled) {
-                Label {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("settings.reader.pictureInPicture", bundle: .module)
-                        Text("settings.reader.pictureInPicture.footer", bundle: .module)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "pip")
-                }
-            }
+            pictureInPictureToggle
             Toggle(isOn: $collapseMultiMeasureRests) {
                 Label {
                     Text("settings.reader.collapseMultiMeasureRests", bundle: .module)
@@ -110,21 +96,41 @@ public struct SettingsSheet<LicenseContent: View>: View {
                         .rotationEffect(.degrees(90))
                 }
             }
-            Toggle(isOn: $keepScreenAwake) {
-                Label {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("settings.reader.keepScreenAwake", bundle: .module)
-                        Text("settings.reader.keepScreenAwake.footer", bundle: .module)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "lock.slash")
-                }
-            }
+            keepScreenAwakeToggle
             readerLayoutRow
-        } header: {
-            Text("settings.reader.title", bundle: .module)
+            if let provider {
+                SoundfontPresetRow(provider: provider)
+            }
+        }
+    }
+
+    private var pictureInPictureToggle: some View {
+        Toggle(isOn: $isPiPEnabled) {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("settings.reader.pictureInPicture", bundle: .module)
+                    Text("settings.reader.pictureInPicture.footer", bundle: .module)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "pip")
+            }
+        }
+    }
+
+    private var keepScreenAwakeToggle: some View {
+        Toggle(isOn: $keepScreenAwake) {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("settings.reader.keepScreenAwake", bundle: .module)
+                    Text("settings.reader.keepScreenAwake.footer", bundle: .module)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "lock.slash")
+            }
         }
     }
 
@@ -151,10 +157,6 @@ public struct SettingsSheet<LicenseContent: View>: View {
             .frame(width: 132)
             .fixedSize()
         }
-    }
-
-    private func storageSection(provider: any MuseScoreGeneralProvider) -> some View {
-        SoundfontPresetSection(provider: provider)
     }
 
     private var aboutSection: some View {

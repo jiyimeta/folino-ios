@@ -3,10 +3,10 @@ import Foundation
 @testable import Settings
 import Testing
 
-struct SoundfontPresetSectionTests {
-    @Test func `section instantiates with a stub provider`() {
-        let section = SoundfontPresetSection(provider: StubProvider())
-        _ = section.body
+struct SoundfontPresetRowTests {
+    @Test func `row instantiates with a stub provider`() {
+        let row = SoundfontPresetRow(provider: StubProvider())
+        _ = row.body
     }
 }
 

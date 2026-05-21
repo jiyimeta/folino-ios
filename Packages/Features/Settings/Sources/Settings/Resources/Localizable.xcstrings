@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
     "•" : {
 
     },
@@ -446,40 +449,6 @@
         }
       }
     },
-    "settings.soundfont.highQuality.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "High quality audio"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高品質音源"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        }
-      }
-    },
     "settings.soundfont.delete.alert.confirm" : {
       "localizations" : {
         "en" : {
@@ -582,18 +551,30 @@
         }
       }
     },
-    "settings.soundfont.retry" : {
+    "settings.soundfont.drumKit.label" : {
+      "comment" : "Soundfont cache row label for a percussion patch",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Drum Kit (Program %lld)"
+          }
+        }
+      }
+    },
+    "settings.soundfont.highQuality.title" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Retry"
+            "value" : "High quality audio"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "再試行"
+            "value" : "高品質音源 (206MB)"
           }
         },
         "ko" : {
@@ -616,70 +597,14 @@
         }
       }
     },
-    "settings.soundfont.state.downloaded" : {
+    "settings.soundfont.patch.label" : {
+      "comment" : "Soundfont cache row label for a non-GM patch",
+      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloaded — playing in high quality."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ダウンロード済み — 高品質音源で再生中。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        }
-      }
-    },
-    "settings.soundfont.state.downloading" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloading… %d%%"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ダウンロード中 %d%%"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
+            "state" : "new",
+            "value" : "Bank %1$lld · Program %2$lld"
           }
         }
       }
@@ -718,70 +643,36 @@
         }
       }
     },
-    "settings.soundfont.state.optedOut" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off — using default lightweight soundfont"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "オフ — デフォルトの軽量音源で再生"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        }
-      }
-    },
     "settings.soundfont.state.waitingForWiFi" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Will download when Wi-Fi is available"
+            "value" : "Will download automatically when Wi-Fi is available. [Download Now](folino-action://download-now)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wi-Fi 接続時にダウンロード"
+            "value" : "Wi-Fi 接続時に自動でダウンロード開始します。[今すぐダウンロード](folino-action://download-now)"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
+            "state" : "translated",
+            "value" : "Wi-Fi 연결 시 자동으로 다운로드를 시작합니다. [지금 다운로드](folino-action://download-now)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
+            "state" : "translated",
+            "value" : "连接 Wi-Fi 时将自动开始下载。[立即下载](folino-action://download-now)"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
+            "state" : "translated",
+            "value" : "連線 Wi-Fi 時將自動開始下載。[立即下載](folino-action://download-now)"
           }
         }
       }
@@ -865,7 +756,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "高品質音源 (206 MB) をモバイル通信で今すぐダウンロードしますか? それとも Wi-Fi 接続を待ちますか?"
+            "value" : "高品質音源 (206 MB) をモバイル通信で今すぐダウンロードしますか?"
           }
         },
         "ko" : {
@@ -933,7 +824,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wi-Fi に未接続"
+            "value" : "モバイル通信でダウンロード"
           }
         },
         "ko" : {
@@ -967,59 +858,25 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wi-Fi を待つ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : ""
-          }
-        }
-      }
-    },
-    "settings.storage.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Storage"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ストレージ"
+            "value" : "Wi-Fi 接続時に自動で開始"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "저장공간"
+            "value" : "Wi-Fi 연결 시 자동 시작"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "存储"
+            "value" : "Wi-Fi 连接时自动开始"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "儲存空間"
+            "value" : "Wi-Fi 連線時自動開始"
           }
         }
       }
