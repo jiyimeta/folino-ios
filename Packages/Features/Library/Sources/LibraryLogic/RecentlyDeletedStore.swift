@@ -8,14 +8,14 @@ import Observation
 /// permanent deletes / soft-deletes propagate automatically.
 @MainActor
 @Observable
-final class RecentlyDeletedViewModel {
-    let repository: any ScoreLibraryRepository
+public final class RecentlyDeletedStore {
+    public let repository: any ScoreLibraryRepository
 
-    init(repository: any ScoreLibraryRepository) {
+    public init(repository: any ScoreLibraryRepository) {
         self.repository = repository
     }
 
-    var displayedItems: [ScoreItem] {
+    public var displayedItems: [ScoreItem] {
         repository.deletedScoreItems.sorted { lhs, rhs in
             (lhs.deletedAt ?? .distantPast) > (rhs.deletedAt ?? .distantPast)
         }

@@ -1,4 +1,5 @@
 import Domain
+import LibraryLogic
 import SwiftUI
 import UtilityUI
 
@@ -8,7 +9,7 @@ struct RecentlyDeletedScreen: View {
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
 
-    @State private var viewModel: RecentlyDeletedViewModel
+    @State private var viewModel: RecentlyDeletedStore
     @State private var editMode: EditMode = .inactive
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var pendingPermanentDelete: ScoreItem?
@@ -17,7 +18,7 @@ struct RecentlyDeletedScreen: View {
     init(library: LibraryViewModel, onOpen: @escaping (ScoreItem) -> Void) {
         self.library = library
         self.onOpen = onOpen
-        _viewModel = State(wrappedValue: RecentlyDeletedViewModel(repository: library.repository))
+        _viewModel = State(wrappedValue: RecentlyDeletedStore(repository: library.repository))
     }
 
     var body: some View {
