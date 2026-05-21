@@ -47,6 +47,11 @@ struct PagedScoreContainer: View {
     @State private var lastManualCursor: ScoreCursor?
     @State private var pinch = PinchState()
     @State private var committedZoom: CGFloat = 1.0
+    /// `playbackCursor` value captured the moment a page-swipe `DragGesture` starts (the `isDragging` false→true
+    /// transition). Compared against the cursor at gesture end to decide whether playback actually advanced through
+    /// pages during the swipe — only then should `followCursor` re-run. Without this, a paused-but-still-visible
+    /// cursor on a different page yanks the user back to the cursor's page on every swipe end.
+    @State private var swipeStartCursor: ScoreCursor?
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -360,6 +365,7 @@ struct PagedScoreContainer: View {
         guard pageSwipeEnabled else {
             if pageState.isDragging {
                 pageState.isDragging = false
+                swipeStartCursor = nil
                 withAnimation(Self.cancelAnimation(
                     snapBackDistance: pageState.dragTranslationX,
                     viewportWidth: viewportWidth,
@@ -368,6 +374,9 @@ struct PagedScoreContainer: View {
                 }
             }
             return
+        }
+        if !pageState.isDragging {
+            swipeStartCursor = playbackCursor
         }
         pageState.isDragging = true
         let atFirst = pageState.pageIndex == 0
@@ -380,9 +389,9 @@ struct PagedScoreContainer: View {
     }
 
     /// Drag release → run through `outcome` and dispatch. Commit folds `dragTranslationX` back into the
-    /// `commitPageTurn` animation; cancel snaps back with a shorter curve. Either way, `isDragging` clears and
-    /// `followCursor` re-runs against the current `playbackCursor` so playback-driven advancement that fired
-    /// during the drag is honoured exactly once at the end.
+    /// `commitPageTurn` animation; cancel snaps back with a shorter curve. Either way, `isDragging` clears and —
+    /// only when the playback cursor actually advanced during the gesture — `followCursor` re-runs so the page
+    /// catches up to active playback. A static cursor (paused playback) leaves the user's swipe destination alone.
     private func onSwipeEnded(
         translationX: CGFloat,
         predictedEndX: CGFloat,
@@ -401,6 +410,8 @@ struct PagedScoreContainer: View {
         )
 
         pageState.isDragging = false
+        let cursorAdvancedDuringSwipe = playbackCursor != swipeStartCursor
+        swipeStartCursor = nil
 
         switch outcome {
         case .commitNext:
@@ -422,7 +433,9 @@ struct PagedScoreContainer: View {
             }
         }
 
-        followCursor(playbackCursor)
+        if cursorAdvancedDuringSwipe {
+            followCursor(playbackCursor)
+        }
     }
 
     /// Drag-commit variant of `commitPageTurn`. Difference: mutates `pageIndex` and `dragTranslationX` inside the
