@@ -23,4 +23,16 @@ final class PageState {
     /// matching how the last page's transition naturally reads as a fade because idx-last's offset is `0` in every
     /// state.
     var freezeFirstPageOffset = false
+
+    /// Live drag translation while a page-swipe drag is tracking; `0` at rest. Every page's `.offset` in
+    /// `PagedZoomedSurface` adds this on top of its `pageIndex`-derived baseline, so the entire band slides with
+    /// the finger. On commit, mutating this back to `0` together with `pageIndex` inside one `withAnimation`
+    /// transaction makes the existing `pageTransitionAnimation` interpolate the residual slide; on cancel, animate
+    /// this alone back to `0`.
+    var dragTranslationX: CGFloat = 0
+
+    /// `true` while a page-swipe `DragGesture` is in progress (between first `onChanged` past the activation gate
+    /// and `onEnded`). While `true`, `PagedScoreContainer.followCursor` no-ops so a playback-driven `commitPageTurn`
+    /// does not yank the band out from under the finger. The drag-end handler reruns `followCursor` once.
+    var isDragging = false
 }
