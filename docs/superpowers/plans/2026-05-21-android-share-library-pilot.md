@@ -10,16 +10,20 @@
 
 **Worktree:** Execution must happen on a worktree branched from local `main` (see `feedback_worktree_base_local_main`). The executing skill should create it via `superpowers:using-git-worktrees`.
 
-**Test runner:** The Library package declares `platforms: [.iOS(.v26)]` only, so `swift test` fails on the macOS host with platform-mismatch errors. The executor must drive iOS tests through Xcode via the `mcp__xcode__*` tools. Specifically: open the worktree's `Folino.xcodeproj` in Xcode (regenerate with `xcodegen generate` from the worktree root if needed), then run tests via `mcp__xcode__RunSomeTests` and builds via `mcp__xcode__BuildProject`. The plan's task steps below show conceptual commands (e.g. "run LibraryLogicTests"); translate them to the Xcode MCP call shape at execution time. Concretely:
+**Test runner:** The Library package declares `platforms: [.iOS(.v26)]` only, so `swift test` fails on the macOS host with platform-mismatch errors. Use xcodebuild directly from the Library package directory — it auto-generates a `Library-Package` scheme that runs all SPM test targets in the package. Concretely:
 
-| Conceptual step               | Actual call                                                                              |
-| ----------------------------- | ---------------------------------------------------------------------------------------- |
-| Build the Library package     | `mcp__xcode__BuildProject` (scheme: `Library` or `Folino`)                               |
-| Run all Library tests         | `mcp__xcode__RunAllTests` (scheme: `Library`)                                            |
-| Run a specific test suite     | `mcp__xcode__RunSomeTests` (scheme: `Library`, testIdentifiers: `["LibraryLogicTests/<Suite>"]`) |
-| Build the app                 | `mcp__xcode__BuildProject` (scheme: `Folino`)                                            |
+| Conceptual step                   | Actual command                                                                                                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Run only LibraryLogicTests        | `cd Packages/Features/Library && xcodebuild test -scheme Library-Package -destination 'platform=iOS Simulator,name=iPhone 17' -skipPackagePluginValidation -only-testing:LibraryLogicTests` |
+| Run one specific suite            | append `-only-testing:LibraryLogicTests/LibraryErrorTests` (or whichever suite path)                                                                                            |
+| Run all Library package tests     | `cd Packages/Features/Library && xcodebuild test -scheme Library-Package -destination 'platform=iOS Simulator,name=iPhone 17' -skipPackagePluginValidation`                     |
+| Build the app                     | `mcp__xcode__BuildProject` with the worktree tab — Folino scheme is already active there.                                                                                       |
 
-Confirm Xcode is running and the worktree's project is open via `mcp__xcode__XcodeListWindows` at the start of execution (per global CLAUDE.md).
+Notes:
+- The Folino scheme (in `Folino.xcodeproj`) does NOT include SPM-package test targets; that's why we use `Library-Package` for unit tests.
+- xcodegen does not support adding SPM-internal test targets to project-level schemes, so we lean on Xcode's auto-generated `Library-Package` scheme rather than try to wire one through `project.yml`.
+- Pre-existing `LibraryViewModelTests.*error message*` cases fail on a Japanese-locale dev machine because the assertions expect English localizations. Tolerate these failures until Task 6, which removes `LibraryViewModel` and its localized-string error path; new tests in `LibraryLogicTests` assert on enum cases instead.
+- Confirm Xcode is running and the worktree's project is open via `mcp__xcode__XcodeListWindows` at the start of execution (per global CLAUDE.md). The MCP test tools (`RunSomeTests`/`RunAllTests`) bind to whatever active scheme the user has in Xcode — they're useful for app-level test runs (Folino scheme) but not for SPM-package tests in this project.
 
 **Reference spec:** `docs/superpowers/specs/2026-05-21-android-share-architecture-design.md`
 
