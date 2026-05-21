@@ -328,23 +328,37 @@ Message: `Move Library test fakes into LibraryLogicTests`
 
 ## Task 4: Extract `RecentlyDeletedStore` (smallest, 23-line VM)
 
+**Note (post-Task-3 amendment):** Task 3 deleted the original `Tests/LibraryTests/*ViewModelTests.swift` files (5 of them) because they no longer compiled after the Fakes move. So for Tasks 4-6, the test files are **created fresh in `LibraryLogicTests/`** (not `git mv`'d).
+
 **Files:**
 - Create: `Packages/Features/Library/Sources/LibraryLogic/RecentlyDeletedStore.swift`
 - Delete: `Packages/Features/Library/Sources/Library/RecentlyDeletedViewModel.swift`
-- Move: `Packages/Features/Library/Tests/LibraryTests/RecentlyDeletedViewModelTests.swift` → `Packages/Features/Library/Tests/LibraryLogicTests/RecentlyDeletedStoreTests.swift`
+- Create (fresh): `Packages/Features/Library/Tests/LibraryLogicTests/RecentlyDeletedStoreTests.swift`
 - Modify: `Packages/Features/Library/Sources/Library/Screens/RecentlyDeletedScreen.swift` (swap type name)
 
-- [ ] **Step 1: Move the existing tests file and rename**
+- [ ] **Step 1: Write the new test file**
 
-```bash
-git mv Packages/Features/Library/Tests/LibraryTests/RecentlyDeletedViewModelTests.swift \
-       Packages/Features/Library/Tests/LibraryLogicTests/RecentlyDeletedStoreTests.swift
+The original `RecentlyDeletedViewModelTests.swift` (now deleted) had a small handful of tests. Re-create them as `RecentlyDeletedStoreTests.swift` against the new `RecentlyDeletedStore` type. The behavior under test is "list is sorted by `deletedAt` descending"; structure tests as:
+
+```swift
+import Domain
+import LibraryLogic
+import Testing
+
+@Suite
+struct RecentlyDeletedStoreTests {
+    @Test
+    func sortsByDeletedAtDescending() async {
+        let repo = await FakeScoreLibraryRepository()
+        // ... populate repo.deletedScoreItems with items having different deletedAt dates ...
+        let store = await RecentlyDeletedStore(repository: repo)
+        let displayed = await store.displayedItems
+        // assert ordering
+    }
+}
 ```
 
-Edit the new file:
-- Change `import Library` to `import LibraryLogic`
-- Replace all references of `RecentlyDeletedViewModel` with `RecentlyDeletedStore`
-- Keep test names; just change the SUT type
+(Adjust `await` placement based on actor isolation of `RecentlyDeletedStore` and `FakeScoreLibraryRepository`. Inspect the existing fake's API in `Tests/LibraryLogicTests/Fakes/FakeScoreLibraryRepository.swift` before writing.)
 
 - [ ] **Step 2: Run tests — should fail (no `RecentlyDeletedStore` yet)**
 
@@ -419,19 +433,12 @@ Message: `Extract RecentlyDeletedStore into LibraryLogic`
 **Files:**
 - Create: `Packages/Features/Library/Sources/LibraryLogic/ScoreListStore.swift`
 - Delete: `Packages/Features/Library/Sources/Library/ScoreListViewModel.swift`
-- Move: `Packages/Features/Library/Tests/LibraryTests/ScoreListViewModelTests.swift` → `Packages/Features/Library/Tests/LibraryLogicTests/ScoreListStoreTests.swift`
+- Create (fresh): `Packages/Features/Library/Tests/LibraryLogicTests/ScoreListStoreTests.swift`
 - Modify: Consumers of `ScoreListViewModel` in `Sources/Library/Screens/` and `Sources/Library/Views/`
 
-- [ ] **Step 1: Move and rename the test file**
+- [ ] **Step 1: Write the new test file**
 
-```bash
-git mv Packages/Features/Library/Tests/LibraryTests/ScoreListViewModelTests.swift \
-       Packages/Features/Library/Tests/LibraryLogicTests/ScoreListStoreTests.swift
-```
-
-In the moved file:
-- Replace `import Library` with `import LibraryLogic`
-- Replace every `ScoreListViewModel` with `ScoreListStore`
+The original `ScoreListViewModelTests.swift` (now deleted by Task 3) covered: source-scoping (all / favorites / taggedWith / playlist), search filtering, sort selection, and `isManualOrderActive` semantics. Re-create those tests as `ScoreListStoreTests.swift` against the new `ScoreListStore` type. Use `FakeScoreLibraryRepository` from `Tests/LibraryLogicTests/Fakes/`. The behavior surface is unchanged from the ViewModel; only the type name differs.
 
 - [ ] **Step 2: Run tests — should fail**
 
@@ -597,29 +604,26 @@ This is the biggest move. The challenge is that `LibraryViewModel` currently emi
 **Files:**
 - Create: `Packages/Features/Library/Sources/LibraryLogic/LibraryStore.swift`
 - Delete: `Packages/Features/Library/Sources/Library/LibraryViewModel.swift`
-- Move: `Packages/Features/Library/Tests/LibraryTests/LibraryViewModelTests.swift` → `LibraryLogicTests/LibraryStoreTests.swift`
-- Move: `Packages/Features/Library/Tests/LibraryTests/LibraryViewModelBulkTests.swift` → `LibraryLogicTests/LibraryStoreBulkTests.swift`
-- Move: `Packages/Features/Library/Tests/LibraryTests/LibraryViewModelShareTests.swift` → `LibraryLogicTests/LibraryStoreShareTests.swift`
+- Create (fresh): `Packages/Features/Library/Tests/LibraryLogicTests/LibraryStoreTests.swift`
+- Create (fresh): `Packages/Features/Library/Tests/LibraryLogicTests/LibraryStoreBulkTests.swift`
+- Create (fresh): `Packages/Features/Library/Tests/LibraryLogicTests/LibraryStoreShareTests.swift`
 - Modify: `Packages/Features/Library/Sources/Library/Screens/LibraryRootScreen.swift`, `LibraryRootDeleteAlerts.swift`, `LibraryRootRenameScoreAlert.swift`, `LibraryRootDestinations.swift`, `LibraryRootCollapsibleSections.swift` (and any other consumer; identify via grep)
 - Create: `Packages/Features/Library/Sources/Library/LibraryErrorPresentation.swift` — maps `LibraryError` → `LocalizedStringKey`
 
-- [ ] **Step 1: Move and rename test files**
+- [ ] **Step 1: Write the new test files**
 
-```bash
-git mv Packages/Features/Library/Tests/LibraryTests/LibraryViewModelTests.swift \
-       Packages/Features/Library/Tests/LibraryLogicTests/LibraryStoreTests.swift
-git mv Packages/Features/Library/Tests/LibraryTests/LibraryViewModelBulkTests.swift \
-       Packages/Features/Library/Tests/LibraryLogicTests/LibraryStoreBulkTests.swift
-git mv Packages/Features/Library/Tests/LibraryTests/LibraryViewModelShareTests.swift \
-       Packages/Features/Library/Tests/LibraryLogicTests/LibraryStoreShareTests.swift
+The original `LibraryViewModelTests*.swift` files (now deleted by Task 3) covered three concern areas:
+- `LibraryStoreTests.swift`: CRUD operations + error path (was `LibraryViewModelTests.swift`)
+- `LibraryStoreBulkTests.swift`: bulk delete/restore/add/remove/share operations (was `LibraryViewModelBulkTests.swift`)
+- `LibraryStoreShareTests.swift`: share-related flows (was `LibraryViewModelShareTests.swift`)
+
+Re-create each suite under its new name in `LibraryLogicTests/`. Use `FakeScoreLibraryRepository`, `FakeScoreFileImporter`, `FakeScoreFileGateway`, `FakeScoreShareService` from `Tests/LibraryLogicTests/Fakes/`. Behavior assertions remain the same EXCEPT for error-path tests: replace the previously locale-dependent `vm.errorAlertMessage == "..."` assertions with enum-case assertions on `store.currentError`, e.g.:
+
+```swift
+#expect(store.currentError == .domain(.unsupportedFormat("xml")))
 ```
 
-In all three files:
-- Change `import Library` → `import LibraryLogic`
-- Replace every `LibraryViewModel` with `LibraryStore`
-- Wherever a test asserts on `errorAlertMessage` against a localized string, replace with `currentError` assertion on a `LibraryError` case. Example:
-  - Before: `#expect(vm.errorAlertMessage == "...")` → After: `#expect(store.currentError == .domain(.unsupportedFormat))`
-  - If a test relied on the exact localized text, change the assertion to check the enum case instead. The localized rendering is now Library (iOS) target's concern and is tested separately in Task 7.
+Or pattern-match for the `.underlying` case. The localized rendering is the iOS Library target's concern (see `LibraryErrorPresentation.swift` below) and is tested separately by smoke; do not assert on localized strings in `LibraryLogicTests`.
 
 - [ ] **Step 2: Run tests — they should fail (no `LibraryStore`)**
 
