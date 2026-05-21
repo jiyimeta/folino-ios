@@ -19,7 +19,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private var isMetronomeEnabled = false
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
-    private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
+    private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
 
     @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
     private var isPiPEnabled = false

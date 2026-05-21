@@ -8,7 +8,7 @@ struct VisualInspectorScreen: View {
     let score: Score
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
-    private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
+    private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
 
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false

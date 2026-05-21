@@ -12,7 +12,7 @@ public struct ReaderRootScreen: View {
     private let hidesBackButton: Bool
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
-    private var layoutModeRaw: String = ReaderLayoutMode.vertical.rawValue
+    private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
     private var isMetronomeEnabled = false
@@ -29,7 +29,7 @@ public struct ReaderRootScreen: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var layoutMode: ReaderLayoutMode {
-        ReaderLayoutMode(rawValue: layoutModeRaw) ?? .vertical
+        ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
     }
 
     public init(
