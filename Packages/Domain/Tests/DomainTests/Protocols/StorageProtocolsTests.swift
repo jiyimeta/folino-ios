@@ -9,6 +9,7 @@ import Testing
 @Observable
 private final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     var scoreItems: [ScoreItem] = []
+    var deletedScoreItems: [ScoreItem] = []
     var tags: [Domain.Tag] = []
     var playlists: [Playlist] = []
 
@@ -25,6 +26,14 @@ private final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     func deleteScoreItem(id: ScoreItemID) throws {
         scoreItems.removeAll { $0.id == id }
     }
+
+    func softDeleteScoreItem(id: ScoreItemID) throws {
+        scoreItems.removeAll { $0.id == id }
+    }
+
+    func restoreScoreItem(id _: ScoreItemID) throws {}
+    func permanentlyDeleteScoreItem(id _: ScoreItemID) throws {}
+    func pruneScoreItemsDeleted(before _: Date) throws {}
 
     func saveTag(_ tag: Domain.Tag) throws {
         if let idx = tags.firstIndex(where: { $0.id == tag.id }) {
