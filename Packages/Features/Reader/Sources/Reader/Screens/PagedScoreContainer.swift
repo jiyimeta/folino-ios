@@ -343,12 +343,6 @@ struct PagedScoreContainer: View {
         }
     }
 
-    /// Greedy paginator working in document-Y coordinates. Walks `systems` in order and closes the current page just
-    /// before a system whose bottom edge would extend past `pageTopDoc + pageHeight`. `pageTopDoc` is `0` for the first
-    /// page (so the title frame and any pre-system decorations are visible) and the previous page's last-system bottom
-    /// for every subsequent page (so the gap region above the new page's first system — which is where rehearsal marks
-    /// live — renders on the new page, not the previous one).
-    ///
     /// Pure decision: given a drag's final translation, its `DragGesture.Value.predictedEndTranslation.width` (i.e.
     /// the fling-projection), the page-band viewport width, and whether the current page is at either extreme, decide
     /// whether the drag should commit a page turn or snap back.
@@ -383,6 +377,12 @@ struct PagedScoreContainer: View {
         return .cancel
     }
 
+    /// Greedy paginator working in document-Y coordinates. Walks `systems` in order and closes the current page just
+    /// before a system whose bottom edge would extend past `pageTopDoc + pageHeight`. `pageTopDoc` is `0` for the first
+    /// page (so the title frame and any pre-system decorations are visible) and the previous page's last-system bottom
+    /// for every subsequent page (so the gap region above the new page's first system — which is where rehearsal marks
+    /// live — renders on the new page, not the previous one).
+    ///
     /// Authored `<LayoutBreak>page` on a system's last measure closes the page immediately under `.honor` /
     /// `.ignoreSystemBreaks`; `.ignoreAll` lets pages keep packing until vertical overflow.
     static func paginate(
