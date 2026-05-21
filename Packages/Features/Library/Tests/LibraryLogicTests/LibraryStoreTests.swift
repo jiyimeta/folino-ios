@@ -210,6 +210,72 @@ struct LibraryStoreTests {
         #expect(f.store.currentError == .domain(.persistenceFailed(reason: "io error")))
     }
 
+    // MARK: - savePlaylist
+
+    @Test func `save playlist persists updated playlist`() async {
+        let f = Self.makeStore()
+        var playlist = Playlist(name: "Original", orderedScoreItemIDs: [], createdAt: Self.base)
+        f.repo.playlists = [playlist]
+        playlist.name = "Renamed"
+        await f.store.savePlaylist(playlist)
+        #expect(f.repo.savedPlaylists.last?.name == "Renamed")
+        #expect(f.repo.playlists.first?.name == "Renamed")
+        #expect(f.store.currentError == nil)
+    }
+
+    @Test func `save playlist surfaces persistence error as currentError`() async {
+        let f = Self.makeStore()
+        let playlist = Playlist(name: "P", orderedScoreItemIDs: [], createdAt: Self.base)
+        f.repo.playlists = [playlist]
+        f.repo.savePlaylistError = .persistenceFailed(reason: "disk full")
+        await f.store.savePlaylist(playlist)
+        #expect(f.store.currentError == .domain(.persistenceFailed(reason: "disk full")))
+    }
+
+    // MARK: - saveTag
+
+    @Test func `save tag persists updated tag`() async {
+        let f = Self.makeStore()
+        var tag = Tag(name: "Original", colorHex: "#5856D6")
+        f.repo.tags = [tag]
+        tag.name = "Renamed"
+        await f.store.saveTag(tag)
+        #expect(f.repo.savedTags.last?.name == "Renamed")
+        #expect(f.repo.tags.first?.name == "Renamed")
+        #expect(f.store.currentError == nil)
+    }
+
+    @Test func `save tag surfaces persistence error as currentError`() async {
+        let f = Self.makeStore()
+        let tag = Tag(name: "T", colorHex: "#5856D6")
+        f.repo.tags = [tag]
+        f.repo.saveTagError = .persistenceFailed(reason: "disk full")
+        await f.store.saveTag(tag)
+        #expect(f.store.currentError == .domain(.persistenceFailed(reason: "disk full")))
+    }
+
+    // MARK: - repository accessor forwarding
+
+    @Test func `scoreItems forwards repository scoreItems`() {
+        let item = Self.makeItem(title: "A")
+        let f = Self.makeStore(scoreItems: [item])
+        #expect(f.store.scoreItems.map(\.id) == [item.id])
+    }
+
+    @Test func `tags forwards repository tags`() {
+        let f = Self.makeStore()
+        let tag = Tag(name: "Jazz", colorHex: "#5856D6")
+        f.repo.tags = [tag]
+        #expect(f.store.tags.map(\.id) == [tag.id])
+    }
+
+    @Test func `playlists forwards repository playlists`() {
+        let f = Self.makeStore()
+        let playlist = Playlist(name: "Recital", orderedScoreItemIDs: [], createdAt: Self.base)
+        f.repo.playlists = [playlist]
+        #expect(f.store.playlists.map(\.id) == [playlist.id])
+    }
+
     // MARK: - import
 
     private static func makePlan(duplicates: [ScoreItem] = []) -> ImportPlan {

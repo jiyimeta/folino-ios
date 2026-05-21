@@ -23,12 +23,12 @@ struct PlaylistsListScreen: View {
     }
 
     private var sortedPlaylists: [Playlist] {
-        library.repository.playlists.sorted {
+        library.playlists.sorted {
             $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
     }
 
     private var liveIDs: Set<ScoreItemID> {
-        Set(library.repository.scoreItems.map(\.id))
+        Set(library.scoreItems.map(\.id))
     }
 }

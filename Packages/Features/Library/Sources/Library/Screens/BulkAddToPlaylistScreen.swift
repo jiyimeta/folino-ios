@@ -12,7 +12,7 @@ struct BulkAddToPlaylistScreen: View {
         BulkAddToPlaylistSheet(
             selectionCount: selectedIDs.count,
             selectedIDs: selectedIDs,
-            allPlaylists: library.repository.playlists,
+            allPlaylists: library.playlists,
             onPick: { playlist in Task { await commitPick(playlist) } },
             onCreate: { name in Task { await commitCreate(name) } },
         )
@@ -29,12 +29,8 @@ struct BulkAddToPlaylistScreen: View {
             orderedScoreItemIDs: orderedSelectedIDs,
             createdAt: Date(),
         )
-        do {
-            try await library.repository.savePlaylist(playlist)
-        } catch {
-            library.currentError = LibraryError.from(error)
-            return
-        }
+        await library.savePlaylist(playlist)
+        guard library.playlists.contains(where: { $0.id == playlist.id }) else { return }
         onCommit()
     }
 }

@@ -10,7 +10,7 @@ struct AddToPlaylistScreen: View {
         AddToPlaylistSheet(
             scoreTitle: scoreItem.title,
             scoreItemID: scoreItem.id,
-            allPlaylists: library.repository.playlists,
+            allPlaylists: library.playlists,
             onToggle: { playlist in Task { await toggle(playlist) } },
             onCreate: { name in Task { await commitNewPlaylist(name) } },
         )
@@ -23,11 +23,7 @@ struct AddToPlaylistScreen: View {
         } else {
             updated.orderedScoreItemIDs.append(scoreItem.id)
         }
-        do {
-            try await library.repository.savePlaylist(updated)
-        } catch {
-            library.currentError = LibraryError.from(error)
-        }
+        await library.savePlaylist(updated)
     }
 
     private func commitNewPlaylist(_ name: String) async {
@@ -36,10 +32,6 @@ struct AddToPlaylistScreen: View {
             orderedScoreItemIDs: [scoreItem.id],
             createdAt: Date(),
         )
-        do {
-            try await library.repository.savePlaylist(playlist)
-        } catch {
-            library.currentError = LibraryError.from(error)
-        }
+        await library.savePlaylist(playlist)
     }
 }

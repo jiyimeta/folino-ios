@@ -19,13 +19,13 @@ struct TagsListScreen: View {
     }
 
     private var sortedTags: [Tag] {
-        library.repository.tags.sorted {
+        library.tags.sorted {
             $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
     }
 
     private func memberCount(of tag: Tag) -> Int {
-        library.repository.scoreItems.reduce(0) { acc, item in
+        library.scoreItems.reduce(0) { acc, item in
             acc + (item.tagIDs.contains(tag.id) ? 1 : 0)
         }
     }

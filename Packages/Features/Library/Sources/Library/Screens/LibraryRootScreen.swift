@@ -212,13 +212,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 
     @ViewBuilder
     private var rootList: some View {
-        let items = viewModel.repository.scoreItems
+        let items = viewModel.scoreItems
         let recents = items.mostRecentlyOpened(limit: 5)
 
         if items.isEmpty
-            && viewModel.repository.tags.isEmpty
-            && viewModel.repository.playlists.isEmpty
-            && viewModel.repository.deletedScoreItems.isEmpty
+            && viewModel.tags.isEmpty
+            && viewModel.playlists.isEmpty
+            && viewModel.deletedScoreItems.isEmpty
         {
             ContentUnavailableView {
                 Label {
@@ -233,12 +233,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             List {
                 browseSection(items: items)
                 LibraryRootPlaylistsSection(
-                    allPlaylists: viewModel.repository.playlists,
+                    allPlaylists: viewModel.playlists,
                     scoreItems: items,
                     onRequestDelete: { pendingDeletePlaylist = $0 },
                 )
                 LibraryRootTagsSection(
-                    allTags: viewModel.repository.tags,
+                    allTags: viewModel.tags,
                     scoreItems: items,
                     onRequestDelete: { pendingDeleteTag = $0 },
                 )
@@ -251,7 +251,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @ViewBuilder
     private func browseSection(items: [ScoreItem]) -> some View {
         let favoriteCount = items.filter(\.isFavorite).count
-        let trashCount = viewModel.repository.deletedScoreItems.count
+        let trashCount = viewModel.deletedScoreItems.count
         Section {
             NavigationLink(value: LibraryRoute.allScores) {
                 browseRow(title: "library.allScores", systemImage: "list.bullet", count: items.count)

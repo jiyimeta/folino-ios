@@ -31,7 +31,7 @@ func libraryRootDestination(
     case .tags:
         TagsListScreen(library: viewModel)
     case let .tagDetail(tagID):
-        if let tag = viewModel.repository.tags.first(where: { $0.id == tagID }) {
+        if let tag = viewModel.tags.first(where: { $0.id == tagID }) {
             TagDetailScreen(
                 tag: tag,
                 library: viewModel,
@@ -54,7 +54,7 @@ func libraryRootDestination(
     case .recentlyDeleted:
         RecentlyDeletedScreen(library: viewModel, onOpen: onOpenScore)
     case let .playlistDetail(playlistID):
-        if let playlist = viewModel.repository.playlists.first(where: { $0.id == playlistID }) {
+        if let playlist = viewModel.playlists.first(where: { $0.id == playlistID }) {
             PlaylistDetailScreen(
                 playlist: playlist,
                 library: viewModel,

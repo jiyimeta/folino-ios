@@ -11,7 +11,7 @@ struct BulkEditTagsScreen: View {
     var body: some View {
         BulkEditTagsSheet(
             selectionCount: selectedIDs.count,
-            allTags: library.repository.tags,
+            allTags: library.tags,
             onCommit: { tagIDs in Task { await commitUnion(tagIDs) } },
             onCreateTag: { name in Task { await commitCreate(name) } },
         )
@@ -24,12 +24,8 @@ struct BulkEditTagsScreen: View {
 
     private func commitCreate(_ name: String) async {
         let tag = Tag(name: name, colorHex: "#5856D6")
-        do {
-            try await library.repository.saveTag(tag)
-        } catch {
-            library.currentError = LibraryError.from(error)
-            return
-        }
+        await library.saveTag(tag)
+        guard library.tags.contains(where: { $0.id == tag.id }) else { return }
         await library.bulkAddTags(selectedIDs, tagIDs: [tag.id])
         onCommit()
     }

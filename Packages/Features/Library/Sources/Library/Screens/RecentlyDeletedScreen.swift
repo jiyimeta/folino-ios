@@ -18,7 +18,7 @@ struct RecentlyDeletedScreen: View {
     init(library: LibraryStore, onOpen: @escaping (ScoreItem) -> Void) {
         self.library = library
         self.onOpen = onOpen
-        _viewModel = State(wrappedValue: RecentlyDeletedStore(repository: library.repository))
+        _viewModel = State(wrappedValue: library.makeRecentlyDeletedStore())
     }
 
     var body: some View {

@@ -21,7 +21,7 @@ struct AllScoresScreen: View {
         self.onEditTags = onEditTags
         self.onAddToPlaylist = onAddToPlaylist
         _listVM = State(
-            wrappedValue: ScoreListStore(source: .all, repository: library.repository),
+            wrappedValue: library.makeScoreListStore(source: .all),
         )
     }
 

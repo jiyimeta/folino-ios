@@ -26,8 +26,12 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     var saveScoreItemError: DomainError?
     /// If non-nil, `deleteScoreItem(id:)` throws this error.
     var deleteScoreItemError: DomainError?
+    /// If non-nil, `saveTag(_:)` throws this error instead of saving.
+    var saveTagError: DomainError?
     /// If non-nil, `deleteTag(id:)` throws this error.
     var deleteTagError: DomainError?
+    /// If non-nil, `savePlaylist(_:)` throws this error instead of saving.
+    var savePlaylistError: DomainError?
     /// If non-nil, `deletePlaylist(id:)` throws this error.
     var deletePlaylistError: DomainError?
 
@@ -85,6 +89,7 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     func saveTag(_ tag: Tag) throws {
+        if let error = saveTagError { throw error }
         savedTags.append(tag)
         if let idx = tags.firstIndex(where: { $0.id == tag.id }) {
             tags[idx] = tag
@@ -103,6 +108,7 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     func savePlaylist(_ playlist: Playlist) throws {
+        if let error = savePlaylistError { throw error }
         savedPlaylists.append(playlist)
         if let idx = playlists.firstIndex(where: { $0.id == playlist.id }) {
             playlists[idx] = playlist

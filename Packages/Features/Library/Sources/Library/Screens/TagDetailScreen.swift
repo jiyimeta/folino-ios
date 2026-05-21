@@ -27,7 +27,7 @@ struct TagDetailScreen: View {
         self.onAddToPlaylist = onAddToPlaylist
         self.onTagDeleted = onTagDeleted
         _listVM = State(
-            wrappedValue: ScoreListStore(source: .taggedWith(tag.id), repository: library.repository),
+            wrappedValue: library.makeScoreListStore(source: .taggedWith(tag.id)),
         )
     }
 
@@ -50,19 +50,11 @@ struct TagDetailScreen: View {
     private func commitRename(_ newName: String) async {
         var updated = tag
         updated.name = newName
-        do {
-            try await library.repository.saveTag(updated)
-        } catch {
-            library.currentError = LibraryError.from(error)
-        }
+        await library.saveTag(updated)
     }
 
     private func commitDelete() async {
-        do {
-            try await library.repository.deleteTag(id: tag.id)
-            onTagDeleted()
-        } catch {
-            library.currentError = LibraryError.from(error)
-        }
+        await library.deleteTag(tag)
+        onTagDeleted()
     }
 }

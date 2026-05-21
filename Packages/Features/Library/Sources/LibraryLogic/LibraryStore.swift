@@ -7,10 +7,10 @@ import Observation
 @MainActor
 @Observable
 public final class LibraryStore {
-    public let repository: any ScoreLibraryRepository
-    public let importer: any ScoreFileImporter
-    public let gateway: any ScoreFileGateway
-    public let shareService: any ScoreShareService
+    let repository: any ScoreLibraryRepository
+    let importer: any ScoreFileImporter
+    let gateway: any ScoreFileGateway
+    let shareService: any ScoreShareService
 
     public var shareTarget: ShareTarget?
     public var isPreparingShare = false
@@ -74,6 +74,52 @@ public final class LibraryStore {
         self.gateway = gateway
         self.shareService = shareService
     }
+
+    // MARK: - Repository read-through accessors
+
+    /// Live score items (not in trash). Forwarded from the observed repository so screens never need to reach through
+    /// to `repository` directly.
+    public var scoreItems: [ScoreItem] {
+        repository.scoreItems
+    }
+
+    /// Items currently in the trash. Forwarded from the observed repository.
+    public var deletedScoreItems: [ScoreItem] {
+        repository.deletedScoreItems
+    }
+
+    /// All tags. Forwarded from the observed repository.
+    public var tags: [Tag] {
+        repository.tags
+    }
+
+    /// All playlists. Forwarded from the observed repository.
+    public var playlists: [Playlist] {
+        repository.playlists
+    }
+
+    // MARK: - Factory
+
+    /// Create a `ScoreListStore` bound to this store's repository. Callers get a live, observable list without
+    /// holding a direct reference to the underlying repository.
+    public func makeScoreListStore(source: ScoreListStore.Source) -> ScoreListStore {
+        ScoreListStore(source: source, repository: repository)
+    }
+
+    /// Create a `RecentlyDeletedStore` bound to this store's repository.
+    public func makeRecentlyDeletedStore() -> RecentlyDeletedStore {
+        RecentlyDeletedStore(repository: repository)
+    }
+
+    // MARK: - Share format helper
+
+    /// Selectable share formats for the given score item. Forwarded from the internal `shareService` so callers never
+    /// need a direct reference to the service.
+    public func availableShareFormats(for item: ScoreItem) async -> [ScoreShareFormatOption] {
+        await shareService.availableFormats(for: item)
+    }
+
+    // MARK: - Intent methods
 
     public func toggleFavorite(_ scoreItem: ScoreItem) async {
         var updated = scoreItem
@@ -264,6 +310,24 @@ public final class LibraryStore {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let tag = Tag(name: trimmed, colorHex: "#5856D6")
+        do {
+            try await repository.saveTag(tag)
+        } catch {
+            currentError = LibraryError.from(error)
+        }
+    }
+
+    /// Persist an existing playlist (e.g. after rename or member-order change). On failure, sets `currentError`.
+    public func savePlaylist(_ playlist: Playlist) async {
+        do {
+            try await repository.savePlaylist(playlist)
+        } catch {
+            currentError = LibraryError.from(error)
+        }
+    }
+
+    /// Persist an existing tag (e.g. after rename). On failure, sets `currentError`.
+    public func saveTag(_ tag: Tag) async {
         do {
             try await repository.saveTag(tag)
         } catch {

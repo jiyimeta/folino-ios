@@ -95,7 +95,7 @@ struct PlaylistDetailScreen: View {
     }
 
     private var orderedItems: [ScoreItem] {
-        let lookup = Dictionary(uniqueKeysWithValues: library.repository.scoreItems.map { ($0.id, $0) })
+        let lookup = Dictionary(uniqueKeysWithValues: library.scoreItems.map { ($0.id, $0) })
         return currentPlaylist().orderedScoreItemIDs.compactMap { lookup[$0] }
     }
 
@@ -126,7 +126,7 @@ struct PlaylistDetailScreen: View {
 
     /// Re-read the playlist on each touch so reorder/save round-trips work.
     private func currentPlaylist() -> Playlist {
-        library.repository.playlists.first(where: { $0.id == playlist.id }) ?? playlist
+        library.playlists.first(where: { $0.id == playlist.id }) ?? playlist
     }
 
     private func move(from offsets: IndexSet, to destination: Int) {
@@ -150,19 +150,11 @@ struct PlaylistDetailScreen: View {
     }
 
     private func commitDelete() async {
-        do {
-            try await library.repository.deletePlaylist(id: playlist.id)
-            onPlaylistDeleted()
-        } catch {
-            library.currentError = LibraryError.from(error)
-        }
+        await library.deletePlaylist(playlist)
+        onPlaylistDeleted()
     }
 
     private func save(_ updated: Playlist) async {
-        do {
-            try await library.repository.savePlaylist(updated)
-        } catch {
-            library.currentError = LibraryError.from(error)
-        }
+        await library.savePlaylist(updated)
     }
 }
