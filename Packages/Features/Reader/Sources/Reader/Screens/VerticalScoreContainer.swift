@@ -164,7 +164,6 @@ struct VerticalScoreContainer: View {
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
-                onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
             )
         }
         // `UIViewRepresentable` resolves safe area by shrinking its UIView frame (SwiftUI's own `ScrollView` keeps the
@@ -259,7 +258,6 @@ struct VerticalScoreContainer: View {
                 // fit-to-width shrink: at `viewportZoom == 1.0` the score wraps to viewport width, and zooming in
                 // scales that fit width.
                 viewModel.viewportZoom = targetZoom
-                viewModel.captureCurrentZoomAsLast()
                 pinch.magnification = 1.0
                 pinch.anchor = .center
 
@@ -386,7 +384,6 @@ private struct VerticalZoomedSurface: View {
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
-    let onDoubleTap: () -> Void
 
     var body: some View {
         if let doc = document {
@@ -404,11 +401,6 @@ private struct VerticalZoomedSurface: View {
                     width: framedWidth,
                     height: framedHeight,
                     alignment: .topLeading,
-                )
-                .simultaneousGesture(
-                    SpatialTapGesture(count: 2).onEnded { _ in
-                        onDoubleTap()
-                    },
                 )
         } else {
             Color.clear

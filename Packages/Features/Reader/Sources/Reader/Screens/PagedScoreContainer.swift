@@ -174,7 +174,6 @@ struct PagedScoreContainer: View {
                 onNextPage: { goToPage(delta: +1) },
                 onFirstPage: { goToFirstPage() },
                 onLastPage: { goToLastPage() },
-                onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
                 onSwipeChanged: { translationX in
                     onSwipeChanged(translationX: translationX, viewportWidth: viewport.width)
                 },
@@ -240,7 +239,6 @@ struct PagedScoreContainer: View {
                 }
             } else {
                 viewModel.viewportZoom = targetZoom
-                viewModel.captureCurrentZoomAsLast()
                 pinch.magnification = 1.0
                 pinch.anchor = .center
                 pinch.offsetX = 0
@@ -685,7 +683,6 @@ private struct PagedZoomedSurface: View {
     let onNextPage: () -> Void
     let onFirstPage: () -> Void
     let onLastPage: () -> Void
-    let onDoubleTap: () -> Void
     let onSwipeChanged: (CGFloat) -> Void
     /// `(translationX, predictedEndX, velocityX)` — finger lift values forwarded to the container's
     /// `onSwipeEnded`. `velocityX` is `DragGesture.Value.velocity.width` (pt/s) at release.
@@ -815,9 +812,6 @@ private struct PagedZoomedSurface: View {
                 width: framedWidth,
                 height: framedHeight,
                 alignment: .topLeading,
-            )
-            .simultaneousGesture(
-                SpatialTapGesture(count: 2).onEnded { _ in onDoubleTap() },
             )
         } else {
             Color.clear

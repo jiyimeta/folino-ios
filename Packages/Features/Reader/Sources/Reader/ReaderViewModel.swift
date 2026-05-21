@@ -44,7 +44,6 @@ final class ReaderViewModel {
 
     private(set) var playbackCursor: ScoreCursor?
     var viewportZoom: CGFloat = 1.0
-    var lastNonUnitZoom: CGFloat = 1.0
     var isPlaybackInspectorPresented = false
     var isVisualInspectorPresented = false
     var isPiPActive = false
@@ -512,22 +511,6 @@ final class ReaderViewModel {
 
     func resetZoom() {
         viewportZoom = 1.0
-    }
-
-    /// Records the current zoom as the value to restore on the next `toggleZoom`. Called from the gesture layer at the
-    /// end of a pinch.
-    func captureCurrentZoomAsLast() {
-        if viewportZoom > 1.0 {
-            lastNonUnitZoom = viewportZoom
-        }
-    }
-
-    func toggleZoom(targetIfZoomedOut: CGFloat) {
-        if viewportZoom > 1.0 {
-            resetZoom()
-        } else {
-            viewportZoom = lastNonUnitZoom > 1.0 ? lastNonUnitZoom : targetIfZoomedOut
-        }
     }
 
     func setManualCursor(_ cursor: ScoreCursor) {

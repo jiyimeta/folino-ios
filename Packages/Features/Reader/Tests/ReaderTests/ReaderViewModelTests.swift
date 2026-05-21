@@ -288,24 +288,6 @@ struct ReaderViewModelTests {
         #expect(vm.viewportZoom == 1.0)
     }
 
-    @Test func `toggle zoom goes from unit to target then back`() {
-        let vm = makeVMNoLoad()
-        #expect(vm.viewportZoom == 1.0)
-        vm.toggleZoom(targetIfZoomedOut: 2.0)
-        #expect(vm.viewportZoom == 2.0)
-        vm.toggleZoom(targetIfZoomedOut: 2.0)
-        #expect(vm.viewportZoom == 1.0)
-    }
-
-    @Test func `toggle zoom restores last non unit zoom`() {
-        let vm = makeVMNoLoad()
-        vm.viewportZoom = 3.5
-        vm.captureCurrentZoomAsLast()
-        vm.resetZoom()
-        vm.toggleZoom(targetIfZoomedOut: 2.0)
-        #expect(vm.viewportZoom == 3.5) // last remembered, not the default arg
-    }
-
     @Test func `playback inspector is toggleable`() {
         let vm = makeVMNoLoad()
         #expect(!vm.isPlaybackInspectorPresented)

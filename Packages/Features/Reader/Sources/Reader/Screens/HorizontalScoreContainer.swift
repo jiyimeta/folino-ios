@@ -114,7 +114,6 @@ struct HorizontalScoreContainer: View {
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
-                onDoubleTap: { viewModel.toggleZoom(targetIfZoomedOut: 2.0) },
             )
         }
         // Mirror `VerticalScoreContainer`: let the score reach the screen edges and slide under the translucent
@@ -215,7 +214,6 @@ struct HorizontalScoreContainer: View {
                 // the live offset reset — and only when the scroll view can't absorb it (`postFramedHeight ≤
                 // viewport.height`, scroll extent zero, `scrollToTarget.y` clamps to 0).
                 viewModel.viewportZoom = targetZoom
-                viewModel.captureCurrentZoomAsLast()
                 pinch.magnification = 1.0
                 pinch.anchor = .center
 
@@ -359,7 +357,6 @@ private struct HorizontalZoomedSurface: View {
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
-    let onDoubleTap: () -> Void
 
     var body: some View {
         if let doc = document {
@@ -380,11 +377,6 @@ private struct HorizontalZoomedSurface: View {
                     width: framedWidth,
                     height: framedHeight,
                     alignment: .topLeading,
-                )
-                .simultaneousGesture(
-                    SpatialTapGesture(count: 2).onEnded { _ in
-                        onDoubleTap()
-                    },
                 )
         } else {
             Color.clear
