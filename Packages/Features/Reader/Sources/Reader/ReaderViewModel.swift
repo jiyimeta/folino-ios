@@ -31,7 +31,16 @@ final class ReaderViewModel {
 
     private(set) var loadState: LoadState = .loading
     private(set) var scoreItem: ScoreItem
-    private(set) var preferences: ReaderPreferences
+    /// Persistence-of-record for `ReaderPreferences`. Sub-models observe their own state; this store is the
+    /// single mutator and the source of truth for re-normalization.
+    @ObservationIgnored private let preferencesStore: ReaderPreferencesStore
+
+    /// Convenience accessor for code paths that need the current preferences value (e.g. building
+    /// `PlaybackPreferences.initial` at engine load time).
+    var preferences: ReaderPreferences {
+        preferencesStore.preferences
+    }
+
     private(set) var isPlaying = false {
         didSet {
             guard oldValue != isPlaying else { return }
@@ -243,10 +252,10 @@ final class ReaderViewModel {
         self.defaultStaffSize = defaultStaffSize
         self.playbackController = playbackController
         self.museScoreGeneralProvider = museScoreGeneralProvider
-        preferences = ReaderPreferences(
+        preferencesStore = ReaderPreferencesStore(
             scoreItemID: scoreItem.id,
-            staffSize: defaultStaffSize,
-            hiddenStaves: [],
+            defaultStaffSize: defaultStaffSize,
+            repository: repository,
         )
         wireRepeatModel()
         wireTempoModel()
@@ -262,7 +271,7 @@ final class ReaderViewModel {
         mixerModel.host = self
         mixerModel.onChange = { [weak self] in
             guard let self else { return }
-            await mutatePreferences { prefs in
+            await preferencesStore.mutate { prefs in
                 prefs.staffProgramOverrides = self.mixerModel.staffProgramOverrides
                 prefs.staffVolumeOverrides = self.mixerModel.staffVolumeOverrides
             }
@@ -272,7 +281,7 @@ final class ReaderViewModel {
     private func wireLayoutModel() {
         layoutModel.onChange = { [weak self] in
             guard let self else { return }
-            await mutatePreferences { prefs in
+            await preferencesStore.mutate { prefs in
                 prefs.staffSize = self.layoutModel.staffSize
                 prefs.honorLayoutBreaks = self.layoutModel.honorLayoutBreaks
                 prefs.hiddenStaves = self.layoutModel.hiddenStaves
@@ -306,7 +315,7 @@ final class ReaderViewModel {
     private func wireTempoModel() {
         tempoModel.onChange = { [weak self] in
             guard let self else { return }
-            await mutatePreferences { prefs in
+            await preferencesStore.mutate { prefs in
                 prefs.tempoMultiplier = self.tempoModel.multiplier
             }
         }
@@ -316,7 +325,7 @@ final class ReaderViewModel {
     private func wireRepeatModel() {
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
-            await mutatePreferences { prefs in
+            await preferencesStore.mutate { prefs in
                 prefs.repeatMode = self.repeatModel.mode
                 prefs.abRepeat = self.repeatModel.abRange
             }
@@ -527,50 +536,11 @@ final class ReaderViewModel {
     // MARK: - Private
 
     private func loadOrSeedPreferences() async {
-        do {
-            if let stored = try await repository.loadReaderPreferences(for: scoreItem.id) {
-                preferences = stored
-                repeatModel.sync(from: stored)
-                tempoModel.sync(from: stored)
-                layoutModel.sync(from: stored)
-                mixerModel.sync(from: stored)
-                return
-            }
-        } catch {
-            // Fall through and seed defaults; persistence error is non-fatal here.
-        }
-        let seeded = ReaderPreferences(
-            scoreItemID: scoreItem.id,
-            staffSize: defaultStaffSize,
-            hiddenStaves: [],
-        )
-        preferences = seeded
-        repeatModel.sync(from: seeded)
-        tempoModel.sync(from: seeded)
-        layoutModel.sync(from: seeded)
-        mixerModel.sync(from: seeded)
-        try? await repository.saveReaderPreferences(seeded)
-    }
-
-    private func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
-        var copy = preferences
-        apply(&copy)
-        // Re-seat through the initializer so clamping rules in `ReaderPreferences.init` always run.
-        let normalized = ReaderPreferences(
-            id: copy.id,
-            scoreItemID: copy.scoreItemID,
-            staffSize: copy.staffSize,
-            hiddenStaves: copy.hiddenStaves,
-            staffProgramOverrides: copy.staffProgramOverrides,
-            staffVolumeOverrides: copy.staffVolumeOverrides,
-            staffClefOverrides: copy.staffClefOverrides,
-            tempoMultiplier: copy.tempoMultiplier,
-            honorLayoutBreaks: copy.honorLayoutBreaks,
-            repeatMode: copy.repeatMode,
-            abRepeat: copy.abRepeat,
-        )
-        preferences = normalized
-        try? await repository.saveReaderPreferences(normalized)
+        let prefs = await preferencesStore.loadOrSeed()
+        repeatModel.sync(from: prefs)
+        tempoModel.sync(from: prefs)
+        layoutModel.sync(from: prefs)
+        mixerModel.sync(from: prefs)
     }
 
     private func updateLastOpenedAtOnce() async {
