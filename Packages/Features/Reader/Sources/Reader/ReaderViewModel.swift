@@ -7,7 +7,6 @@ import SheetMusicCore
 
 @MainActor
 @Observable
-// swiftlint:disable:next type_body_length
 final class ReaderViewModel {
     enum LoadState {
         case loading
@@ -42,17 +41,8 @@ final class ReaderViewModel {
         preferencesStore.preferences
     }
 
-    private(set) var isPlaying = false {
-        didSet {
-            guard oldValue != isPlaying else { return }
-            applyPiPAutoStart()
-            // Playback start flips the auto-start permission on, so a backgrounded PiP could fire at any moment — flush
-            // any VisualInspector edits we deferred while paused.
-            if isPlaying { flushPendingPiPArmIfDirty() }
-        }
-    }
+    var playbackSession: ReaderPlaybackSession
 
-    private(set) var playbackCursor: ScoreCursor?
     var viewportZoom: CGFloat = 1.0
     var isPlaybackInspectorPresented = false
     var isVisualInspectorPresented = false
@@ -70,19 +60,19 @@ final class ReaderViewModel {
         let c = ScorePiPCoordinator()
         c.onPiPStarted = { [weak self] in self?.isPiPActive = true }
         c.onPiPStopped = { [weak self] in self?.isPiPActive = false }
-        c.isAppPlayingProvider = { [weak self] in self?.isPlaying ?? false }
+        c.isAppPlayingProvider = { [weak self] in self?.playbackSession.isPlaying ?? false }
         c.onSetPlaying = { [weak self] desired in
-            guard let self, isPlaying != desired else { return }
-            Task { await self.togglePlayback() }
+            guard let self, playbackSession.isPlaying != desired else { return }
+            Task { await self.playbackSession.togglePlayback() }
         }
         c.currentTimeProvider = { [weak self] in
-            self?.playbackController?.currentTimeSeconds ?? 0
+            self?.playbackSession.controller?.currentTimeSeconds ?? 0
         }
         c.totalTimeProvider = { [weak self] in
-            self?.playbackController?.totalTimeSeconds ?? 0
+            self?.playbackSession.controller?.totalTimeSeconds ?? 0
         }
         c.onSkip = { [weak self] seconds in
-            guard let controller = self?.playbackController else { return }
+            guard let controller = self?.playbackSession.controller else { return }
             Task { await controller.skip(bySeconds: seconds) }
         }
         pipCoordinatorBacking = c
@@ -131,7 +121,7 @@ final class ReaderViewModel {
     /// session is left intact when playback pauses; only the auto-start permission is withdrawn.
     private func applyPiPAutoStart() {
         guard isPiPSupported else { return }
-        pipCoordinator.setAutoStartFromBackground(isPiPEnabled && isPlaying)
+        pipCoordinator.setAutoStartFromBackground(isPiPEnabled && playbackSession.isPlaying)
     }
 
     func setCollapseMultiMeasureRests(_ enabled: Bool) {
@@ -158,7 +148,7 @@ final class ReaderViewModel {
     /// still finds a renderer attached.
     private func armPiPIfReady() {
         guard isPiPEnabled, case .loaded = loadState else { return }
-        if !hasArmedPiP || isPiPActive || isPlaying {
+        if !hasArmedPiP || isPiPActive || playbackSession.isPlaying {
             scheduleArm()
         } else {
             pipArmIsDirty = true
@@ -192,7 +182,7 @@ final class ReaderViewModel {
             try await pipCoordinator.arm(
                 score: visible,
                 staffSize: layoutModel.staffSize,
-                playbackCursor: playbackCursor,
+                playbackCursor: playbackSession.playbackCursor,
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
             )
             hasArmedPiP = true
@@ -213,29 +203,7 @@ final class ReaderViewModel {
     @ObservationIgnored
     private let defaultStaffSize: CGFloat
     @ObservationIgnored
-    let playbackController: (any PlaybackController)?
-    @ObservationIgnored
-    private let museScoreGeneralProvider: (any MuseScoreGeneralProvider)?
-    @ObservationIgnored
     private var hasUpdatedLastOpened = false
-    @ObservationIgnored
-    private var hasLoadedIntoPlayback = false
-    @ObservationIgnored
-    private var preloadTask: Task<Void, Error>?
-    /// `true` after the high-quality SF2 finishes downloading mid-session while the user is playing. Drained by the
-    /// `observeIsPlaying` handler on the next pause, which calls `playbackController.reloadSoundfont()` so the engine
-    /// re-consults its `SoundfontResolver` and the new file lands without interrupting active audio.
-    @ObservationIgnored
-    private var pendingSoundfontSwap = false
-    /// In-flight observation of the soundfont provider's `downloadState`. Cancelled on deinit so the loop drops its
-    /// provider reference and exits.
-    @ObservationIgnored
-    private var soundfontDownloadObservationTask: Task<Void, Never>?
-    /// Untranslated cursor as the engine published it. Kept so we can re-derive `playbackCursor` whenever
-    /// `hiddenStaves` changes — the engine doesn't know about visibility, so the same raw value can map to a different
-    /// visible representation across toggles.
-    @ObservationIgnored
-    private var rawPlaybackCursor: ScoreCursor?
 
     init(
         scoreItem: ScoreItem,
@@ -251,21 +219,20 @@ final class ReaderViewModel {
         self.gateway = gateway
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
-        self.playbackController = playbackController
-        self.museScoreGeneralProvider = museScoreGeneralProvider
         preferencesStore = ReaderPreferencesStore(
             scoreItemID: scoreItem.id,
             defaultStaffSize: defaultStaffSize,
             repository: repository,
         )
+        playbackSession = ReaderPlaybackSession(
+            controller: playbackController,
+            museScoreGeneralProvider: museScoreGeneralProvider,
+        )
         wireRepeatModel()
         wireTempoModel()
         wireLayoutModel()
         wireMixerModel()
-    }
-
-    deinit {
-        soundfontDownloadObservationTask?.cancel()
+        wirePlaybackSession()
     }
 
     private func wireMixerModel() {
@@ -294,18 +261,9 @@ final class ReaderViewModel {
         }
         layoutModel.onHiddenStavesChanged = { [weak self] in
             guard let self else { return }
-            // Re-translate against the new visibility so the cursor recovers immediately when the staff comes back, and
-            // falls back to .beat immediately when one is hidden mid-playback.
-            playbackCursor = loadState.score?.translateCursorForHiddenStaves(
-                rawPlaybackCursor,
-                hiddenStaves: layoutModel.hiddenStaves,
-            ) ?? rawPlaybackCursor
-            notifyPiPCursor()
-            // AVKit fixes the PiP window's aspect ratio at session start and won't renegotiate when we feed buffers
-            // with new dimensions. Dismiss any active session so the next background auto-start opens at the right
-            // shape. The subsequent `await onChange?()` in `LayoutSettingsModel` calls `armPiPIfReady` once the disk
-            // write yields, so we intentionally skip arming here to avoid the duplicate detached `LayoutEngine.layout`
-            // pass that this hot path would otherwise queue per toggle.
+            playbackSession.refreshTranslation()
+            // PiP dismiss-on-layout-change moves into Task 3's wiring; keep the existing inline call so
+            // behavior is identical mid-extraction.
             if isPiPActive {
                 pipCoordinator.dismissIfActive()
             }
@@ -320,7 +278,7 @@ final class ReaderViewModel {
                 prefs.tempoMultiplier = self.tempoModel.multiplier
             }
         }
-        tempoModel.controllerProvider = { [weak self] in self?.playbackController }
+        tempoModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
     }
 
     private func wireRepeatModel() {
@@ -332,83 +290,26 @@ final class ReaderViewModel {
             }
         }
         repeatModel.scoreProvider = { [weak self] in self?.loadState.score }
-        repeatModel.cursorProvider = { [weak self] in self?.playbackCursor }
-        repeatModel.controllerProvider = { [weak self] in self?.playbackController }
+        repeatModel.cursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
+        repeatModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
     }
 
-    /// Subscribe to the controller's cursor stream. Must be called from a view-lifecycle hook (`.task` / `.onAppear`) —
-    /// NOT from `init` — so only the VM that SwiftUI actually retains via `@State` registers its handler. Calling from
-    /// `init` regressed the playback cursor: SwiftUI re-evaluates the `@State(wrappedValue:)` expression on every
-    /// parent body pass, constructing a fresh VM each time, but keeps only the first as the persisted state. The
-    /// subsequent throwaway VMs all register handlers that capture themselves weakly, the last one wins, and once it's
-    /// deallocated the engine's cursor changes land on a `[weak self]` that's already nil.
-    func startObservingCursor() {
-        guard let controller = playbackController else { return }
-        controller.observeCursor { [weak self] value in
+    private func wirePlaybackSession() {
+        playbackSession.scoreProvider = { [weak self] in self?.loadState.score }
+        playbackSession.hiddenStavesProvider = { [weak self] in self?.layoutModel.hiddenStaves ?? [] }
+        playbackSession.preferencesProvider = { [weak self] in self?.preferencesStore.preferences }
+        playbackSession.scoreItemProvider = { [weak self] in self?.scoreItem }
+        playbackSession.onPlayingChanged = { [weak self] playing in
             guard let self else { return }
-            rawPlaybackCursor = value
-            playbackCursor = loadState.score?.translateCursorForHiddenStaves(
-                value,
-                hiddenStaves: layoutModel.hiddenStaves,
-            ) ?? value
-            notifyPiPCursor()
-            // The engine emits a nil cursor only when playback hits the end of the score (`PlaybackEngine.stop()`
-            // clears it; explicit `pause()` does not). Use that signal to flip the toolbar's play/pause glyph back to
-            // "play" — without this, isPlaying stays true forever after the score finishes naturally.
-            if value == nil, isPlaying {
-                isPlaying = false
-            }
+            applyPiPAutoStart()
+            if playing { flushPendingPiPArmIfDirty() }
         }
-        // Mirror the engine's play/pause state into the VM regardless of who flipped it (in-app toolbar, lock-screen
-        // Now Playing, audio session interruption, etc.) so PiP chrome and toolbar glyph stay accurate.
-        controller.observeIsPlaying { [weak self] playing in
-            guard let self else { return }
-            isPlaying = playing
-            if !playing, pendingSoundfontSwap {
-                pendingSoundfontSwap = false
-                Task { await self.playbackController?.reloadSoundfont() }
-            }
+        playbackSession.onCursorChanged = { [weak self] in
+            self?.pipCoordinatorBacking?.updatePlaybackCursor(self?.playbackSession.playbackCursor)
         }
-    }
-
-    /// Watch the high-quality soundfont download. If it finishes while the Reader is open, hot-swap the engine's SF2
-    /// without forcing the user to reopen the score — swap immediately when paused, or queue until the next pause when
-    /// actively playing so an audio cut is never introduced. One-shot per Reader session: once `.downloaded` arrives
-    /// the observer exits, because no further swap is needed (the file is now on disk for every subsequent score load).
-    /// Should be called from the same view-lifecycle hook as `startObservingCursor` for the same reason — only the
-    /// SwiftUI-retained VM should register.
-    func startObservingSoundfontDownload() {
-        guard let provider = museScoreGeneralProvider,
-              soundfontDownloadObservationTask == nil
-        else { return }
-        // Already downloaded at Reader open → the natural `controller.load(...)` will pick up the high-quality SF2 on
-        // its own, no swap needed.
-        if case .downloaded = provider.downloadState { return }
-        soundfontDownloadObservationTask = Task { @MainActor [weak self] in
-            let stream = Observations { provider.downloadState }
-            for await state in stream {
-                guard let self else { return }
-                if case .downloaded = state {
-                    handleSoundfontReady()
-                    return
-                }
-            }
+        playbackSession.onReadyForLoopForward = { [weak self] in
+            await self?.repeatModel.forwardLoopRangeToController()
         }
-    }
-
-    private func handleSoundfontReady() {
-        // Engine hasn't been primed yet → `prepareForPlayback` / `togglePlayback` will consume the new resolver URL on
-        // its initial `load`, so nothing to do here.
-        guard hasLoadedIntoPlayback else { return }
-        if isPlaying {
-            pendingSoundfontSwap = true
-        } else {
-            Task { await playbackController?.reloadSoundfont() }
-        }
-    }
-
-    private func notifyPiPCursor() {
-        pipCoordinatorBacking?.updatePlaybackCursor(playbackCursor)
     }
 
     func load() async {
@@ -426,112 +327,8 @@ final class ReaderViewModel {
         }
     }
 
-    /// Kick off the playback engine's `load` in the background as soon as the score is open, so the user usually finds
-    /// soundfonts ready by the time they tap play. Idempotent — re-entry while a preload is in flight or already
-    /// finished is a no-op.
-    func prepareForPlayback() async {
-        guard let controller = playbackController,
-              case let .loaded(score) = loadState,
-              !hasLoadedIntoPlayback,
-              preloadTask == nil
-        else { return }
-        let prefs = PlaybackPreferences.initial(
-            for: score,
-            readerPreferences: preferences,
-            scoreItemID: scoreItem.id,
-            defaultVolume: Self.defaultStaffVolume,
-        )
-        let task = Task<Void, Error> { [scoreItem] in
-            try await controller.load(
-                score: score, displayTitle: scoreItem.title, preferences: prefs,
-            )
-        }
-        preloadTask = task
-        do {
-            // Forward `.task` cancellation (user navigated away mid-prep) into the unstructured load — without this hop
-            // the engine load would keep running after the Reader disappears.
-            try await withTaskCancellationHandler {
-                try await task.value
-            } onCancel: {
-                task.cancel()
-            }
-            hasLoadedIntoPlayback = true
-            // `PlaybackPreferences` carries `abRepeat` but the engine's load path doesn't consume it (and prefs has no
-            // field for `repeatMode`'s .off / .loopAll / .abLoop distinction). Push the active range now that the score
-            // is loaded — without this, a persisted repeat mode appears in the inspector but playback runs without
-            // looping until the user touches the picker.
-            await repeatModel.forwardLoopRangeToController()
-        } catch {
-            // Cancellation or controller error — leave the slot clear so a subsequent toggle starts a fresh attempt.
-        }
-        preloadTask = nil
-    }
-
-    /// Tear down the audio engine and reset prepare-state so the system's auto-lock can take effect once the Reader is
-    /// off-screen. A subsequent `prepareForPlayback()` re-primes the engine for the same score on return.
-    func releaseEngine() async {
-        preloadTask?.cancel()
-        preloadTask = nil
-        await playbackController?.releaseEngine()
-        hasLoadedIntoPlayback = false
-    }
-
-    func togglePlayback() async {
-        guard let controller = playbackController,
-              case let .loaded(score) = loadState
-        else { return }
-        if !hasLoadedIntoPlayback {
-            let prefs = PlaybackPreferences.initial(
-                for: score,
-                readerPreferences: preferences,
-                scoreItemID: scoreItem.id,
-                defaultVolume: Self.defaultStaffVolume,
-            )
-            let task = preloadTask ?? Task<Void, Error> { [scoreItem] in
-                try await controller.load(
-                    score: score, displayTitle: scoreItem.title, preferences: prefs,
-                )
-            }
-            preloadTask = task
-            do {
-                try await task.value
-                hasLoadedIntoPlayback = true
-            } catch {
-                preloadTask = nil
-                return
-            }
-            // Same reason as in `prepareForPlayback`: push the persisted repeat state now that the engine has the
-            // score. Covers the case where the user taps play before `prepareForPlayback` ran (or while it's still in
-            // flight).
-            await repeatModel.forwardLoopRangeToController()
-            preloadTask = nil
-        }
-        if isPlaying {
-            await controller.pause()
-            isPlaying = false
-        } else {
-            do {
-                try await controller.play()
-                isPlaying = true
-            } catch {
-                isPlaying = false
-            }
-        }
-    }
-
     func resetZoom() {
         viewportZoom = 1.0
-    }
-
-    func setManualCursor(_ cursor: ScoreCursor) {
-        let engineCursor = loadState.score?.engineCursorForFilteredTap(
-            cursor,
-            hiddenStaves: layoutModel.hiddenStaves,
-        ) ?? cursor
-        rawPlaybackCursor = engineCursor
-        playbackCursor = cursor
-        guard let controller = playbackController else { return }
-        Task { await controller.setCursor(to: engineCursor) }
     }
 
     // MARK: - Private
@@ -567,6 +364,44 @@ final class ReaderViewModel {
             }
         }
         return (error as NSError).localizedDescription
+    }
+
+    // MARK: - Temporary forwarders (deleted in Task 4)
+
+    var isPlaying: Bool {
+        playbackSession.isPlaying
+    }
+
+    var playbackCursor: ScoreCursor? {
+        playbackSession.playbackCursor
+    }
+
+    var playbackController: (any PlaybackController)? {
+        playbackSession.controller
+    }
+
+    func prepareForPlayback() async {
+        await playbackSession.prepareForPlayback()
+    }
+
+    func releaseEngine() async {
+        await playbackSession.releaseEngine()
+    }
+
+    func togglePlayback() async {
+        await playbackSession.togglePlayback()
+    }
+
+    func startObservingCursor() {
+        playbackSession.startObservingCursor()
+    }
+
+    func startObservingSoundfontDownload() {
+        playbackSession.startObservingSoundfontDownload()
+    }
+
+    func setManualCursor(_ cursor: ScoreCursor) {
+        playbackSession.setManualCursor(cursor)
     }
 }
 
