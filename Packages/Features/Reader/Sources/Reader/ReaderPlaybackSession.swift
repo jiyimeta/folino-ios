@@ -12,7 +12,7 @@ final class ReaderPlaybackSession {
     private(set) var isPlaying = false
     private(set) var playbackCursor: ScoreCursor?
 
-    @ObservationIgnored private(set) var rawPlaybackCursor: ScoreCursor?
+    @ObservationIgnored private var rawPlaybackCursor: ScoreCursor?
 
     @ObservationIgnored let controller: (any PlaybackController)?
 
@@ -139,8 +139,8 @@ final class ReaderPlaybackSession {
     }
 
     /// Subscribe to the controller's cursor stream. Must be called from a view-lifecycle hook
-    /// (`.task` / `.onAppear`) — NOT from `init` — so only the session that SwiftUI actually retains
-    /// via `@State` registers its handler.
+    /// (`.task` / `.onAppear`) — NOT from `init` — so only the view model that SwiftUI actually
+    /// retains via `@State` registers its session's handler.
     func startObservingCursor() {
         guard let controller else { return }
         controller.observeCursor { [weak self] value in

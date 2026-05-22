@@ -1,4 +1,3 @@
-// swiftlint:disable file_length
 import CoreGraphics
 import Domain
 import Foundation
@@ -42,157 +41,11 @@ final class ReaderViewModel {
     }
 
     var playbackSession: ReaderPlaybackSession
+    var pipSession: ReaderPiPSession
 
     var viewportZoom: CGFloat = 1.0
     var isPlaybackInspectorPresented = false
     var isVisualInspectorPresented = false
-    var isPiPActive = false
-
-    var isPiPSupported: Bool {
-        ScorePiPCoordinator.isSupported
-    }
-
-    @ObservationIgnored
-    private var pipCoordinatorBacking: ScorePiPCoordinator?
-
-    var pipCoordinator: ScorePiPCoordinator {
-        if let c = pipCoordinatorBacking { return c }
-        let c = ScorePiPCoordinator()
-        c.onPiPStarted = { [weak self] in self?.isPiPActive = true }
-        c.onPiPStopped = { [weak self] in self?.isPiPActive = false }
-        c.isAppPlayingProvider = { [weak self] in self?.playbackSession.isPlaying ?? false }
-        c.onSetPlaying = { [weak self] desired in
-            guard let self, playbackSession.isPlaying != desired else { return }
-            Task { await self.playbackSession.togglePlayback() }
-        }
-        c.currentTimeProvider = { [weak self] in
-            self?.playbackSession.controller?.currentTimeSeconds ?? 0
-        }
-        c.totalTimeProvider = { [weak self] in
-            self?.playbackSession.controller?.totalTimeSeconds ?? 0
-        }
-        c.onSkip = { [weak self] seconds in
-            guard let controller = self?.playbackSession.controller else { return }
-            Task { await controller.skip(bySeconds: seconds) }
-        }
-        pipCoordinatorBacking = c
-        return c
-    }
-
-    @ObservationIgnored
-    private var isPiPEnabled = false
-    @ObservationIgnored
-    private var collapseMultiMeasureRests = false
-    /// In-flight PiP rearm task. `armPiPIfReady` cancels this before spawning a new one so back-to-back triggers (e.g.
-    /// the `onHiddenStavesChanged` → `onChange` pair fired by `toggleStaff`) collapse to a single arm against the
-    /// latest state instead of queuing N detached `LayoutEngine.layout` runs.
-    @ObservationIgnored
-    private var pendingArmTask: Task<Void, Never>?
-    /// True once `performPiPArm` has successfully attached a renderer in the current `isPiPEnabled` session. Cleared on
-    /// disable so the next enable arms eagerly even without an active PiP or playback.
-    @ObservationIgnored
-    private var hasArmedPiP = false
-    /// Set when `armPiPIfReady` postpones a rearm because no observer (active PiP or playing → imminent auto-start)
-    /// would have seen the result. `flushPendingPiPArmIfDirty` consumes the flag when an observer appears (`isPlaying`
-    /// flips true).
-    @ObservationIgnored
-    private var pipArmIsDirty = false
-
-    /// Applies the user's Settings preference. Driven by the `readerPictureInPictureEnabled` `@AppStorage` value in
-    /// `ReaderRootScreen`.
-    func setPiPEnabled(_ enabled: Bool) {
-        guard isPiPSupported else { return }
-        isPiPEnabled = enabled
-        applyPiPAutoStart()
-        if enabled {
-            armPiPIfReady()
-        } else {
-            pendingArmTask?.cancel()
-            pendingArmTask = nil
-            pipArmIsDirty = false
-            hasArmedPiP = false
-            pipCoordinator.dismissIfActive()
-            pipCoordinator.disarm()
-        }
-    }
-
-    /// Hands AVKit the current "may auto-present PiP on background" permission. We gate on `isPlaying` so PiP only
-    /// appears when the user backgrounds *during playback* — matching YouTube's behavior. An already-presenting PiP
-    /// session is left intact when playback pauses; only the auto-start permission is withdrawn.
-    private func applyPiPAutoStart() {
-        guard isPiPSupported else { return }
-        pipCoordinator.setAutoStartFromBackground(isPiPEnabled && playbackSession.isPlaying)
-    }
-
-    func setCollapseMultiMeasureRests(_ enabled: Bool) {
-        guard collapseMultiMeasureRests != enabled else { return }
-        collapseMultiMeasureRests = enabled
-        // Re-arm PiP immediately so a currently-armed session re-lays out with the new policy. No-op when PiP is
-        // disabled or the score hasn't finished loading — `armPiPIfReady` guards both.
-        armPiPIfReady()
-    }
-
-    /// Called from `ReaderRootScreen`'s `scenePhase` observer when the app returns to the foreground — the Settings
-    /// spec dismisses PiP on return regardless of why it started.
-    func dismissPiPOnForeground() {
-        guard isPiPActive else { return }
-        pipCoordinator.dismissIfActive()
-    }
-
-    /// Coalesced rearm trigger. The heavy layout step inside `pipCoordinator.arm` runs off the main actor, but it's
-    /// still wasted CPU when no observer would see the result — the user is paused in the foreground and PiP isn't
-    /// visible. In that case the arm is postponed; `flushPendingPiPArmIfDirty` consumes the postponement when an
-    /// observer appears.
-    ///
-    /// The first arm of each `isPiPEnabled` session always proceeds so a manual PiP start (via the system control)
-    /// still finds a renderer attached.
-    private func armPiPIfReady() {
-        guard isPiPEnabled, case .loaded = loadState else { return }
-        if !hasArmedPiP || isPiPActive || playbackSession.isPlaying {
-            scheduleArm()
-        } else {
-            pipArmIsDirty = true
-        }
-    }
-
-    private func scheduleArm() {
-        pipArmIsDirty = false
-        pendingArmTask?.cancel()
-        pendingArmTask = Task { [weak self] in
-            guard let self else { return }
-            await performPiPArm()
-        }
-    }
-
-    private func flushPendingPiPArmIfDirty() {
-        guard pipArmIsDirty else { return }
-        scheduleArm()
-    }
-
-    private func performPiPArm() async {
-        guard !Task.isCancelled,
-              isPiPEnabled,
-              case let .loaded(score) = loadState
-        else { return }
-        // Mirror the on-screen transformation so the PiP view sees the same staves and clefs as the main Reader pane.
-        let visible = score
-            .applying(clefOverrides: layoutModel.staffClefOverrides)
-            .filtered(hidingStaves: layoutModel.hiddenStaves)
-        do {
-            try await pipCoordinator.arm(
-                score: visible,
-                staffSize: layoutModel.staffSize,
-                playbackCursor: playbackSession.playbackCursor,
-                collapseMultiMeasureRests: collapseMultiMeasureRests,
-            )
-            hasArmedPiP = true
-        } catch is CancellationError {
-            // Superseded by a newer rearm; nothing to do.
-        } catch {
-            // Coordinator throws only when no display layer is attached (the host view hasn't mounted yet). Arming will
-            // retry once the view installs the layer and load() finishes — neither ordering is fatal.
-        }
-    }
 
     @ObservationIgnored
     private let repository: any ScoreLibraryRepository
@@ -228,11 +81,30 @@ final class ReaderViewModel {
             controller: playbackController,
             museScoreGeneralProvider: museScoreGeneralProvider,
         )
+        pipSession = ReaderPiPSession()
         wireRepeatModel()
         wireTempoModel()
         wireLayoutModel()
         wireMixerModel()
         wirePlaybackSession()
+        wirePiPSession()
+    }
+
+    private func wirePiPSession() {
+        pipSession.scoreProvider = { [weak self] in self?.loadState.score }
+        pipSession.isPlayingProvider = { [weak self] in self?.playbackSession.isPlaying ?? false }
+        pipSession.playbackCursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
+        pipSession.layoutSnapshotProvider = { [weak self] in self?.currentPiPLayoutSnapshot() }
+        pipSession.playbackController = playbackSession.controller
+        pipSession.onTogglePlayback = { [weak self] in await self?.playbackSession.togglePlayback() }
+    }
+
+    private func currentPiPLayoutSnapshot() -> PiPLayoutSnapshot {
+        PiPLayoutSnapshot(
+            staffSize: layoutModel.staffSize,
+            hiddenStaves: layoutModel.hiddenStaves,
+            clefOverrides: layoutModel.staffClefOverrides,
+        )
     }
 
     private func wireMixerModel() {
@@ -257,16 +129,12 @@ final class ReaderViewModel {
             }
             // Clef override edits land only through this path (hidden-staves changes also fire
             // `onHiddenStavesChanged`), so rebuild the PiP renderer here to pick them up.
-            armPiPIfReady()
+            pipSession.armIfReady()
         }
         layoutModel.onHiddenStavesChanged = { [weak self] in
             guard let self else { return }
             playbackSession.refreshTranslation()
-            // PiP dismiss-on-layout-change moves into Task 3's wiring; keep the existing inline call so
-            // behavior is identical mid-extraction.
-            if isPiPActive {
-                pipCoordinator.dismissIfActive()
-            }
+            pipSession.dismissIfActive()
         }
         layoutModel.scoreProvider = { [weak self] in self?.loadState.score }
     }
@@ -300,12 +168,10 @@ final class ReaderViewModel {
         playbackSession.preferencesProvider = { [weak self] in self?.preferencesStore.preferences }
         playbackSession.scoreItemProvider = { [weak self] in self?.scoreItem }
         playbackSession.onPlayingChanged = { [weak self] playing in
-            guard let self else { return }
-            applyPiPAutoStart()
-            if playing { flushPendingPiPArmIfDirty() }
+            self?.pipSession.onPlayingChanged(to: playing)
         }
         playbackSession.onCursorChanged = { [weak self] in
-            self?.pipCoordinatorBacking?.updatePlaybackCursor(self?.playbackSession.playbackCursor)
+            self?.pipSession.notifyCursorChanged()
         }
         playbackSession.onReadyForLoopForward = { [weak self] in
             await self?.repeatModel.forwardLoopRangeToController()
@@ -319,7 +185,7 @@ final class ReaderViewModel {
             let (score, _) = try await gateway.loadScore(fileURL: url)
             await loadOrSeedPreferences()
             loadState = .loaded(score)
-            armPiPIfReady()
+            pipSession.armIfReady()
             await updateLastOpenedAtOnce()
         } catch {
             let message = describe(error)
@@ -402,6 +268,26 @@ final class ReaderViewModel {
 
     func setManualCursor(_ cursor: ScoreCursor) {
         playbackSession.setManualCursor(cursor)
+    }
+
+    var isPiPSupported: Bool {
+        ReaderPiPSession.isSupported
+    }
+
+    var isPiPActive: Bool {
+        pipSession.isActive
+    }
+
+    func setPiPEnabled(_ enabled: Bool) {
+        pipSession.setEnabled(enabled)
+    }
+
+    func setCollapseMultiMeasureRests(_ enabled: Bool) {
+        pipSession.setCollapseMultiMeasureRests(enabled)
+    }
+
+    func dismissPiPOnForeground() {
+        pipSession.dismissIfActive()
     }
 }
 

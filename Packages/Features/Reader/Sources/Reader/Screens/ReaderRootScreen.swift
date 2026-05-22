@@ -65,7 +65,7 @@ public struct ReaderRootScreen: View {
             content
                 .safeAreaPadding(.top, ReaderTopOverlay.height)
             if viewModel.isPiPSupported {
-                ScorePiPHostView(coordinator: viewModel.pipCoordinator)
+                ScorePiPHostView(coordinator: viewModel.pipSession.coordinator)
                     .frame(width: 1, height: 1)
                     .opacity(0)
                     .allowsHitTesting(false)
