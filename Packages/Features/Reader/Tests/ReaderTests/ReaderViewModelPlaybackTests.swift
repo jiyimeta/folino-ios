@@ -37,13 +37,13 @@ struct ReaderViewModelPlaybackTests {
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
         )
-        vm.startObservingCursor()
+        vm.playbackSession.startObservingCursor()
         let target = ScoreCursor.beat(measureIndex: 4, tickInMeasure: 240)
         controller.emitCursor(target)
-        #expect(vm.playbackCursor == target)
+        #expect(vm.playbackSession.playbackCursor == target)
 
         controller.emitCursor(nil)
-        #expect(vm.playbackCursor == nil)
+        #expect(vm.playbackSession.playbackCursor == nil)
     }
 
     @Test func `cursor becoming nil after play resets is playing`() async {
@@ -65,12 +65,12 @@ struct ReaderViewModelPlaybackTests {
             playbackController: controller,
         )
         await vm.load()
-        vm.startObservingCursor()
-        await vm.togglePlayback()
-        #expect(vm.isPlaying)
+        vm.playbackSession.startObservingCursor()
+        await vm.playbackSession.togglePlayback()
+        #expect(vm.playbackSession.isPlaying)
 
         controller.emitCursor(nil)
-        #expect(!vm.isPlaying)
+        #expect(!vm.playbackSession.isPlaying)
     }
 
     @Test func `toggle playback loads plays then pauses`() async {
@@ -90,15 +90,15 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        await vm.togglePlayback()
+        await vm.playbackSession.togglePlayback()
         #expect(controller.loadCount == 1)
         #expect(controller.playCount == 1)
-        #expect(vm.isPlaying)
+        #expect(vm.playbackSession.isPlaying)
 
-        await vm.togglePlayback()
+        await vm.playbackSession.togglePlayback()
         #expect(controller.pauseCount == 1)
         #expect(controller.loadCount == 1) // load only happens once
-        #expect(!vm.isPlaying)
+        #expect(!vm.playbackSession.isPlaying)
     }
 
     @Test func `prepare for playback primes engine without showing alert`() async {
@@ -117,15 +117,15 @@ struct ReaderViewModelPlaybackTests {
             playbackController: controller,
         )
         await vm.load()
-        await vm.prepareForPlayback()
+        await vm.playbackSession.prepareForPlayback()
 
         #expect(controller.loadCount == 1)
 
         // First user-driven toggle should reuse the primed engine — no additional load.
-        await vm.togglePlayback()
+        await vm.playbackSession.togglePlayback()
         #expect(controller.loadCount == 1)
         #expect(controller.playCount == 1)
-        #expect(vm.isPlaying)
+        #expect(vm.playbackSession.isPlaying)
     }
 
     @Test func `toggle playback is no op when score not loaded`() async {
@@ -140,10 +140,10 @@ struct ReaderViewModelPlaybackTests {
             playbackController: controller,
         )
         // No `await vm.load()`.
-        await vm.togglePlayback()
+        await vm.playbackSession.togglePlayback()
         #expect(controller.loadCount == 0)
         #expect(controller.playCount == 0)
-        #expect(!vm.isPlaying)
+        #expect(!vm.playbackSession.isPlaying)
     }
 
     @Test func `toggle staff solo flips membership and forwards to controller`() async {
@@ -344,7 +344,7 @@ struct ReaderViewModelPlaybackTests {
             playbackController: controller,
         )
         await vm.load()
-        await vm.togglePlayback()
+        await vm.playbackSession.togglePlayback()
 
         let prefs = try #require(controller.lastLoadedPreferences)
         #expect(prefs.perStaff[0].gmProgram == 40) // violin uses score default
@@ -441,7 +441,7 @@ struct ReaderViewModelPlaybackTests {
             playbackController: controller,
         )
         await vm.load()
-        await vm.prepareForPlayback()
+        await vm.playbackSession.prepareForPlayback()
 
         let seeded = try #require(controller.lastLoadedPreferences)
         let staff0 = try #require(seeded.perStaff.first { $0.staffIndex == 0 })
@@ -470,7 +470,7 @@ struct ReaderViewModelPlaybackTests {
             playbackController: controller,
         )
         await vm.load()
-        await vm.prepareForPlayback()
+        await vm.playbackSession.prepareForPlayback()
 
         let seeded = try #require(controller.lastLoadedPreferences)
         let staff0 = try #require(seeded.perStaff.first { $0.staffIndex == 0 })

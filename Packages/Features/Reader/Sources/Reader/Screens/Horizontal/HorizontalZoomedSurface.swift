@@ -64,7 +64,7 @@ struct HorizontalZoomedSurface: View {
         SpatialTapGesture(coordinateSpace: .named("scoreSurface"))
             .onEnded { value in
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
-                viewModel.setManualCursor(cursor)
+                viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor
             }
     }

@@ -272,7 +272,7 @@ struct PagedZoomedSurface: View {
                 guard value.location.y >= pageStartY,
                       value.location.y <= pageEndY else { return }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
-                viewModel.setManualCursor(cursor)
+                viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor
             }
     }

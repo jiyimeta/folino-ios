@@ -28,8 +28,8 @@ struct ReaderViewModelManualCursorTests {
             playbackController: controller,
         )
         let cursor = ScoreCursor.beat(measureIndex: 3, tickInMeasure: 120)
-        vm.setManualCursor(cursor)
-        #expect(vm.playbackCursor == cursor)
+        vm.playbackSession.setManualCursor(cursor)
+        #expect(vm.playbackSession.playbackCursor == cursor)
     }
 
     @Test func `set manual cursor forwards to controller exactly once`() async {
@@ -44,7 +44,7 @@ struct ReaderViewModelManualCursorTests {
             playbackController: controller,
         )
         let cursor = ScoreCursor.beat(measureIndex: 1, tickInMeasure: 0)
-        vm.setManualCursor(cursor)
+        vm.playbackSession.setManualCursor(cursor)
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -62,7 +62,7 @@ struct ReaderViewModelManualCursorTests {
             playbackController: nil,
         )
         let cursor = ScoreCursor.beat(measureIndex: 7, tickInMeasure: 0)
-        vm.setManualCursor(cursor)
-        #expect(vm.playbackCursor == cursor)
+        vm.playbackSession.setManualCursor(cursor)
+        #expect(vm.playbackSession.playbackCursor == cursor)
     }
 }

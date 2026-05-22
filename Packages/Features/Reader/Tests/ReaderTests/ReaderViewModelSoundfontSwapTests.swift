@@ -54,9 +54,9 @@ struct ReaderViewModelSoundfontSwapTests {
             museScoreGeneralProvider: provider,
         )
         await vm.load()
-        await vm.prepareForPlayback()
-        vm.startObservingCursor()
-        vm.startObservingSoundfontDownload()
+        await vm.playbackSession.prepareForPlayback()
+        vm.playbackSession.startObservingCursor()
+        vm.playbackSession.startObservingSoundfontDownload()
 
         provider.downloadState = .downloaded
         await yieldForObservation()
@@ -77,10 +77,10 @@ struct ReaderViewModelSoundfontSwapTests {
             museScoreGeneralProvider: provider,
         )
         await vm.load()
-        vm.startObservingCursor()
-        vm.startObservingSoundfontDownload()
-        await vm.togglePlayback()
-        #expect(vm.isPlaying)
+        vm.playbackSession.startObservingCursor()
+        vm.playbackSession.startObservingSoundfontDownload()
+        await vm.playbackSession.togglePlayback()
+        #expect(vm.playbackSession.isPlaying)
 
         provider.downloadState = .downloaded
         await yieldForObservation()
@@ -108,9 +108,9 @@ struct ReaderViewModelSoundfontSwapTests {
             museScoreGeneralProvider: provider,
         )
         await vm.load()
-        await vm.prepareForPlayback()
-        vm.startObservingCursor()
-        vm.startObservingSoundfontDownload()
+        await vm.playbackSession.prepareForPlayback()
+        vm.playbackSession.startObservingCursor()
+        vm.playbackSession.startObservingSoundfontDownload()
         await yieldForObservation()
 
         // The natural `controller.load(...)` already picked up the high-quality SF2 — re-prepare would be wasted work.
@@ -133,8 +133,8 @@ struct ReaderViewModelSoundfontSwapTests {
             museScoreGeneralProvider: provider,
         )
         await vm.load()
-        vm.startObservingCursor()
-        vm.startObservingSoundfontDownload()
+        vm.playbackSession.startObservingCursor()
+        vm.playbackSession.startObservingSoundfontDownload()
         // Note: NOT calling prepareForPlayback / togglePlayback.
 
         provider.downloadState = .downloaded

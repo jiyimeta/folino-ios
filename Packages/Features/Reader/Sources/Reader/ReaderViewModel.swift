@@ -231,66 +231,20 @@ final class ReaderViewModel {
         }
         return (error as NSError).localizedDescription
     }
-
-    // MARK: - Temporary forwarders (deleted in Task 4)
-
-    var isPlaying: Bool {
-        playbackSession.isPlaying
-    }
-
-    var playbackCursor: ScoreCursor? {
-        playbackSession.playbackCursor
-    }
-
-    var playbackController: (any PlaybackController)? {
-        playbackSession.controller
-    }
-
-    func prepareForPlayback() async {
-        await playbackSession.prepareForPlayback()
-    }
-
-    func releaseEngine() async {
-        await playbackSession.releaseEngine()
-    }
-
-    func togglePlayback() async {
-        await playbackSession.togglePlayback()
-    }
-
-    func startObservingCursor() {
-        playbackSession.startObservingCursor()
-    }
-
-    func startObservingSoundfontDownload() {
-        playbackSession.startObservingSoundfontDownload()
-    }
-
-    func setManualCursor(_ cursor: ScoreCursor) {
-        playbackSession.setManualCursor(cursor)
-    }
-
-    var isPiPSupported: Bool {
-        ReaderPiPSession.isSupported
-    }
-
-    var isPiPActive: Bool {
-        pipSession.isActive
-    }
-
-    func setPiPEnabled(_ enabled: Bool) {
-        pipSession.setEnabled(enabled)
-    }
-
-    func setCollapseMultiMeasureRests(_ enabled: Bool) {
-        pipSession.setCollapseMultiMeasureRests(enabled)
-    }
-
-    func dismissPiPOnForeground() {
-        pipSession.dismissIfActive()
-    }
 }
 
 // MARK: - PlaybackMixerHost conformance
 
-extension ReaderViewModel: PlaybackMixerHost {}
+extension ReaderViewModel: PlaybackMixerHost {
+    /// Required by `PlaybackMixerHost`. Reads through `playbackSession` so `PlaybackMixerModel` can check whether
+    /// playback is active (e.g. to decide whether to show a mute indicator).
+    var isPlaying: Bool {
+        playbackSession.isPlaying
+    }
+
+    /// Required by `PlaybackMixerHost`. Reads through `playbackSession` so `PlaybackMixerModel` can forward volume,
+    /// mute, and program changes to the active controller without holding a direct reference to the session.
+    var playbackController: (any PlaybackController)? {
+        playbackSession.controller
+    }
+}

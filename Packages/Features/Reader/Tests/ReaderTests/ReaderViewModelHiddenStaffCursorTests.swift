@@ -64,7 +64,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             playbackController: controller,
         )
         await vm.load()
-        vm.startObservingCursor()
+        vm.playbackSession.startObservingCursor()
 
         let visibleID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
@@ -72,7 +72,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             elementIndex: 1, noteIndexInChord: 0,
         )
         controller.emitCursor(.item(.note(visibleID)))
-        #expect(vm.playbackCursor == .item(.note(visibleID)))
+        #expect(vm.playbackSession.playbackCursor == .item(.note(visibleID)))
     }
 
     @Test func `item cursor on hidden staff falls back to beat`() async {
@@ -87,7 +87,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             playbackController: controller,
         )
         await vm.load()
-        vm.startObservingCursor()
+        vm.playbackSession.startObservingCursor()
 
         let hiddenStaff = StaffAddress(partIndex: 0, staffIndexInPart: 1)
         await vm.layoutModel.toggleStaff(hiddenStaff)
@@ -97,7 +97,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             elementIndex: 1, noteIndexInChord: 0,
         )
         controller.emitCursor(.item(.note(hiddenID)))
-        #expect(vm.playbackCursor == .beat(measureIndex: 0, tickInMeasure: 480))
+        #expect(vm.playbackSession.playbackCursor == .beat(measureIndex: 0, tickInMeasure: 480))
     }
 
     /// Engine-side cursor on a visible staff whose full-score address differs from its filtered address (i.e. an
@@ -117,7 +117,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             playbackController: controller,
         )
         await vm.load()
-        vm.startObservingCursor()
+        vm.playbackSession.startObservingCursor()
 
         // Hide the FIRST staff so the visible staff's full address (0, 1) disagrees with its filtered address (0, 0).
         let hiddenStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
@@ -136,7 +136,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             measureIndex: 0, voiceIndex: 0,
             elementIndex: 1, noteIndexInChord: 0,
         )
-        #expect(vm.playbackCursor == .item(.note(filteredID)))
+        #expect(vm.playbackSession.playbackCursor == .item(.note(filteredID)))
     }
 
     @Test func `unhiding staff restores item cursor without engine emit`() async {
@@ -151,7 +151,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             playbackController: controller,
         )
         await vm.load()
-        vm.startObservingCursor()
+        vm.playbackSession.startObservingCursor()
 
         let hiddenStaff = StaffAddress(partIndex: 0, staffIndexInPart: 1)
         await vm.layoutModel.toggleStaff(hiddenStaff)
@@ -160,12 +160,12 @@ struct ReaderViewModelHiddenStaffCursorTests {
             elementIndex: 1, noteIndexInChord: 0,
         )
         controller.emitCursor(.item(.note(hiddenID)))
-        #expect(vm.playbackCursor == .beat(measureIndex: 0, tickInMeasure: 480))
+        #expect(vm.playbackSession.playbackCursor == .beat(measureIndex: 0, tickInMeasure: 480))
 
         // Bring the staff back. Engine hasn't emitted anything new — the cursor must recover to .item synthesized from
         // the stored raw.
         await vm.layoutModel.toggleStaff(hiddenStaff)
-        #expect(vm.playbackCursor == .item(.note(hiddenID)))
+        #expect(vm.playbackSession.playbackCursor == .item(.note(hiddenID)))
     }
 
     /// Tap-to-seek path: `nearestCursor` returns IDs addressed against the *filtered* score (because `LayoutDocument`
@@ -198,7 +198,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             measureIndex: 0, voiceIndex: 0,
             elementIndex: 1, noteIndexInChord: 0,
         )
-        vm.setManualCursor(.item(.note(filteredNote)))
+        vm.playbackSession.setManualCursor(.item(.note(filteredNote)))
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -232,7 +232,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0, voiceIndex: 0, elementIndex: 0,
         )
-        vm.setManualCursor(.item(.rest(filteredRest)))
+        vm.playbackSession.setManualCursor(.item(.rest(filteredRest)))
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -263,7 +263,7 @@ struct ReaderViewModelHiddenStaffCursorTests {
             measureIndex: 0, voiceIndex: 0,
             elementIndex: 0, noteIndexInChord: 0,
         )
-        vm.setManualCursor(.item(.note(note)))
+        vm.playbackSession.setManualCursor(.item(.note(note)))
         for _ in 0 ..< 5 {
             await Task.yield()
         }
@@ -282,13 +282,13 @@ struct ReaderViewModelHiddenStaffCursorTests {
             playbackController: controller,
         )
         await vm.load()
-        vm.startObservingCursor()
+        vm.playbackSession.startObservingCursor()
 
         await vm.layoutModel.toggleStaff(
             StaffAddress(partIndex: 0, staffIndexInPart: 1),
         )
         let beat = ScoreCursor.beat(measureIndex: 0, tickInMeasure: 240)
         controller.emitCursor(beat)
-        #expect(vm.playbackCursor == beat)
+        #expect(vm.playbackSession.playbackCursor == beat)
     }
 }

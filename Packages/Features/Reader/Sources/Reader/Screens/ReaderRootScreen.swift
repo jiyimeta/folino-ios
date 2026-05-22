@@ -64,7 +64,7 @@ public struct ReaderRootScreen: View {
         ZStack {
             content
                 .safeAreaPadding(.top, ReaderTopOverlay.height)
-            if viewModel.isPiPSupported {
+            if ReaderPiPSession.isSupported {
                 ScorePiPHostView(coordinator: viewModel.pipSession.coordinator)
                     .frame(width: 1, height: 1)
                     .opacity(0)
@@ -82,12 +82,12 @@ public struct ReaderRootScreen: View {
         .navigationTitle("")
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            viewModel.startObservingCursor()
-            viewModel.startObservingSoundfontDownload()
-            viewModel.setPiPEnabled(isPiPEnabled)
-            viewModel.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
+            viewModel.playbackSession.startObservingCursor()
+            viewModel.playbackSession.startObservingSoundfontDownload()
+            viewModel.pipSession.setEnabled(isPiPEnabled)
+            viewModel.pipSession.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
             await viewModel.load()
-            await viewModel.prepareForPlayback()
+            await viewModel.playbackSession.prepareForPlayback()
             // Initial sync: the engine starts up unaware of persisted state, so seed it from the @AppStorage value at
             // view start.
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
@@ -100,7 +100,7 @@ public struct ReaderRootScreen: View {
             // app's lifetime if we never tore it down. Release here so screen lock can resume once the user leaves the
             // Reader.
             let viewModel = viewModel
-            Task { await viewModel.releaseEngine() }
+            Task { await viewModel.playbackSession.releaseEngine() }
         }
         .onChange(of: keepScreenAwake) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
@@ -112,16 +112,16 @@ public struct ReaderRootScreen: View {
             Task { await viewModel.tempoModel.setMetronomeEnabled(newValue) }
         }
         .onChange(of: isPiPEnabled) { _, newValue in
-            viewModel.setPiPEnabled(newValue)
+            viewModel.pipSession.setEnabled(newValue)
         }
         .onChange(of: collapseMultiMeasureRests) { _, newValue in
-            viewModel.setCollapseMultiMeasureRests(newValue)
+            viewModel.pipSession.setCollapseMultiMeasureRests(newValue)
         }
         .onChange(of: scenePhase) { _, newValue in
             // The Settings spec dismisses PiP whenever the app returns to the foreground, regardless of how it was
             // started.
             if newValue == .active {
-                viewModel.dismissPiPOnForeground()
+                viewModel.pipSession.dismissIfActive()
             }
         }
     }
@@ -141,7 +141,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    playbackCursor: viewModel.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.playbackCursor,
                     viewModel: viewModel,
                 )
             case .horizontal:
@@ -150,7 +150,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    playbackCursor: viewModel.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.playbackCursor,
                     viewModel: viewModel,
                 )
             case .page:
@@ -159,7 +159,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    playbackCursor: viewModel.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.playbackCursor,
                     viewModel: viewModel,
                 )
             }

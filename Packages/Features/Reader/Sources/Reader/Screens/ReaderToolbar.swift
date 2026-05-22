@@ -45,13 +45,13 @@ struct ReaderTopOverlay: View {
     private func loadedActions(score: Score) -> some View {
         HStack(spacing: 12) {
             overlayButton(
-                systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill",
+                systemImage: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill",
                 label: Text(
-                    viewModel.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
+                    viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
                     bundle: .module,
                 ),
             ) {
-                Task { await viewModel.togglePlayback() }
+                Task { await viewModel.playbackSession.togglePlayback() }
             }
             .glassEffect(.regular.interactive())
 

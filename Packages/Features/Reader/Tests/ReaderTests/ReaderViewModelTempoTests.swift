@@ -120,7 +120,7 @@ struct ReaderViewModelTempoTests {
         )
 
         await vm.load()
-        await vm.prepareForPlayback()
+        await vm.playbackSession.prepareForPlayback()
 
         #expect(controller.lastLoadedPreferences?.tempoMultiplier == 0.75)
     }

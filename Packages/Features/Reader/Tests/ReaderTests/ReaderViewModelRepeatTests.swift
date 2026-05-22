@@ -58,7 +58,7 @@ struct ReaderViewModelRepeatTests {
     @Test func `set repeat A snaps to cursor measure head`() async {
         let (vm, _, repo) = Self.makeVM()
         await vm.load()
-        vm.setManualCursor(.beat(measureIndex: 4, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 4, tickInMeasure: 0))
 
         await vm.repeatModel.setA()
 
@@ -73,7 +73,7 @@ struct ReaderViewModelRepeatTests {
     @Test func `set repeat B snaps to cursor measure end`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
-        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
 
         await vm.repeatModel.setB()
 
@@ -89,9 +89,9 @@ struct ReaderViewModelRepeatTests {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
 
-        vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
         await vm.repeatModel.setA()
-        vm.setManualCursor(.beat(measureIndex: 5, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 5, tickInMeasure: 0))
         await vm.repeatModel.setA()
 
         // Still no B set — loop incomplete, abRepeat is nil. The pending A marker is updated to m5.
@@ -102,7 +102,7 @@ struct ReaderViewModelRepeatTests {
     @Test func `clear repeat A removes start but keeps end`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
-        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
         await vm.repeatModel.setA()
         await vm.repeatModel.setB()
         #expect(vm.repeatModel.abRange != nil)
@@ -118,7 +118,7 @@ struct ReaderViewModelRepeatTests {
     @Test func `clear repeat B removes end but keeps start`() async {
         let (vm, _, _) = Self.makeVM()
         await vm.load()
-        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
         await vm.repeatModel.setA()
         await vm.repeatModel.setB()
 
@@ -147,7 +147,7 @@ struct ReaderViewModelRepeatTests {
         await vm.load()
         await vm.repeatModel.setMode(.abLoop)
         let countBefore = controller.loopRangeCalls.count
-        vm.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 1, tickInMeasure: 0))
 
         await vm.repeatModel.setA()
 
@@ -160,9 +160,9 @@ struct ReaderViewModelRepeatTests {
         let (vm, controller, _) = Self.makeVM()
         await vm.load()
         await vm.repeatModel.setMode(.abLoop)
-        vm.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 2, tickInMeasure: 0))
         await vm.repeatModel.setA()
-        vm.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
+        vm.playbackSession.setManualCursor(.beat(measureIndex: 0, tickInMeasure: 0))
 
         await vm.repeatModel.setB()
 
@@ -197,7 +197,7 @@ struct ReaderViewModelRepeatTests {
         )
 
         await vm.load()
-        await vm.prepareForPlayback()
+        await vm.playbackSession.prepareForPlayback()
 
         #expect(controller.lastLoadedPreferences?.abRepeat?.start == chord)
         #expect(controller.lastLoadedPreferences?.abRepeat?.end == endChord)
@@ -226,7 +226,7 @@ struct ReaderViewModelRepeatTests {
         )
 
         await vm.load()
-        await vm.prepareForPlayback()
+        await vm.playbackSession.prepareForPlayback()
 
         let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
         #expect(last?.start == chord)
@@ -254,7 +254,7 @@ struct ReaderViewModelRepeatTests {
         )
 
         await vm.load()
-        await vm.prepareForPlayback()
+        await vm.playbackSession.prepareForPlayback()
 
         // Fixture: 6 measures, two chord-positions per measure. Full range = m0.chord0 .. m5.chord1.
         let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
@@ -288,7 +288,7 @@ struct ReaderViewModelRepeatTests {
 
         await vm.load()
         // Skip prepareForPlayback — exercise the lazy-load path inside togglePlayback.
-        await vm.togglePlayback()
+        await vm.playbackSession.togglePlayback()
 
         let last: ABRepeatRange? = controller.loopRangeCalls.last.flatMap(\.self)
         #expect(last?.start == chord)
