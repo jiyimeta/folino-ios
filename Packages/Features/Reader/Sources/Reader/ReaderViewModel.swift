@@ -35,8 +35,9 @@ final class ReaderViewModel {
     /// single mutator and the source of truth for re-normalization.
     @ObservationIgnored private let preferencesStore: ReaderPreferencesStore
 
-    /// Convenience accessor for code paths that need the current preferences value (e.g. building
-    /// `PlaybackPreferences.initial` at engine load time).
+    /// Convenience accessor for imperative code paths that need the current preferences value (e.g. building
+    /// `PlaybackPreferences.initial` at engine load time). Not observation-tracked — `preferencesStore` is
+    /// `@ObservationIgnored` by design. Views observe the four sub-models, never `preferences` directly.
     var preferences: ReaderPreferences {
         preferencesStore.preferences
     }
