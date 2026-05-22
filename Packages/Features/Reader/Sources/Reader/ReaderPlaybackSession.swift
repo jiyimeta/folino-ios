@@ -139,8 +139,13 @@ final class ReaderPlaybackSession {
     }
 
     /// Subscribe to the controller's cursor stream. Must be called from a view-lifecycle hook
-    /// (`.task` / `.onAppear`) — NOT from `init` — so only the view model that SwiftUI actually
-    /// retains via `@State` registers its session's handler.
+    /// (`.task` / `.onAppear`) — NOT from the view model's `init` — so only the view model that SwiftUI
+    /// actually retains via `@State` registers its session's handler. Calling from `init` regressed the
+    /// playback cursor: SwiftUI re-evaluates the `@State(wrappedValue:)` expression on every parent body
+    /// pass, constructing a fresh VM (and thus a fresh session) each time, but keeps only the first as
+    /// the persisted state. The subsequent throwaway sessions all register handlers that capture
+    /// themselves weakly, the last one wins, and once it's deallocated the engine's cursor changes land
+    /// on a `[weak self]` that's already nil.
     func startObservingCursor() {
         guard let controller else { return }
         controller.observeCursor { [weak self] value in
