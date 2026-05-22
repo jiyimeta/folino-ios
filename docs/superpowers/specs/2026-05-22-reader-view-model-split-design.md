@@ -83,7 +83,6 @@ final class ReaderPiPSession {
 
     func setEnabled(_ enabled: Bool)
     func setCollapseMultiMeasureRests(_ enabled: Bool)
-    func dismissOnForeground()
     func dismissIfActive()
     func notifyCursorChanged()
     func onPlayingChanged(to playing: Bool)
@@ -105,7 +104,8 @@ struct PiPLayoutSnapshot {
 - Existing `isPlaying.didSet` behavior (apply autostart + flush dirty arm) collapses into `onPlayingChanged(to:)`, called once per `isPlaying` transition from `ReaderPlaybackSession`.
 - `PiPLayoutSnapshot` keeps the three layout inputs (`staffSize`, `hiddenStaves`, `clefOverrides`) consistent at arm time — VM provides one snapshot per arm rather than three separate providers that could drift across closures.
 - The lazy `coordinator` constructor wires `onPiPStarted` / `onPiPStopped` / `isAppPlayingProvider` / `onSetPlaying` / `currentTimeProvider` / `totalTimeProvider` / `onSkip` against the session's providers + `onTogglePlayback`. The View Model no longer touches `ScorePiPCoordinator` directly.
-- `dismissOnForeground()` no-ops when not active; `dismissIfActive()` dismisses unconditionally when active. They are not merged because the call sites communicate different intents (foreground-return policy vs. layout-change forced refresh).
+- `dismissIfActive()` is a single method that no-ops when not active. Both call sites — foreground-return (Reader scenePhase observer) and hidden-staves change — use it.
+- `setEnabled(false)` performs full teardown: cancels `pendingArmTask`, clears `isDirty` and `hasArmed`, calls `dismissIfActive()`, and calls `coordinator.disarm()`. `setEnabled(true)` calls `applyAutoStart()` and `armIfReady()`.
 
 ### `ReaderPlaybackSession`
 
@@ -248,7 +248,7 @@ The View Model's `init` is the central wiring point. It:
     - `pipSession.layoutSnapshotProvider = { [weak self] in self?.currentPiPLayoutSnapshot() }`
     - `pipSession.playbackController = playbackController`
     - `pipSession.onTogglePlayback = { [weak self] in await self?.playbackSession.togglePlayback() }`
-4. Extends `LayoutSettingsModel.onHiddenStavesChanged` to call `playbackSession.refreshTranslation()` and, if `pipSession.isActive`, `pipSession.dismissIfActive()`.
+4. Extends `LayoutSettingsModel.onHiddenStavesChanged` to call `playbackSession.refreshTranslation()` and `pipSession.dismissIfActive()`.
 5. Extends the four `wire*Model` closures (where appropriate) to call `pipSession.armIfReady()` after persistence — currently only `wireLayoutModel` does this for clef override edits.
 
 `load()` shape:
@@ -297,7 +297,7 @@ Per agreed decision: views are migrated to call into the sub-objects directly. N
 | `viewModel.isPiPSupported` | `ReaderPiPSession.isSupported` |
 | `viewModel.setPiPEnabled(_:)` | `viewModel.pipSession.setEnabled(_:)` |
 | `viewModel.setCollapseMultiMeasureRests(_:)` | `viewModel.pipSession.setCollapseMultiMeasureRests(_:)` |
-| `viewModel.dismissPiPOnForeground()` | `viewModel.pipSession.dismissOnForeground()` |
+| `viewModel.dismissPiPOnForeground()` | `viewModel.pipSession.dismissIfActive()` |
 
 Properties left on the View Model (no rename): `loadState`, `scoreItem`, `viewportZoom`, `isPlaybackInspectorPresented`, `isVisualInspectorPresented`, `repeatModel`, `tempoModel`, `layoutModel`, `mixerModel`, `load()`, `resetZoom()`.
 
