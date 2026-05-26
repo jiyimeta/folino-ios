@@ -4,6 +4,7 @@
 .claude/settings.local.json
 .claude/*.local.*
 .claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Superpowers brainstorming session artefacts (mockups, viewer state)
 .superpowers/
