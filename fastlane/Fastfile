@@ -23,6 +23,9 @@ platform :ios do
       output_directory: "build/fastlane",
       output_name: "Folino-#{version}-#{build}.ipa",
       clean: true,
+      # Pin DerivedData to a stable path so the Firebase upload-symbols binary
+      # (under SourcePackages/checkouts) can be referenced below.
+      derived_data_path: "build/DerivedData",
       include_symbols: true,
       include_bitcode: false,
       xcargs: "-skipPackagePluginValidation -skipMacroValidation",
@@ -32,6 +35,17 @@ platform :ios do
         teamID: CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
       },
       export_xcargs: "-allowProvisioningUpdates"
+    )
+
+    # Upload dSYMs to Firebase Crashlytics so release crashes are symbolicated.
+    # gym uploads symbols to App Store Connect but NOT to Crashlytics; Crashlytics
+    # needs the dSYMs sent to Firebase separately. The Firebase upload-symbols
+    # binary lives under the SwiftPM checkouts of the derived_data_path pinned
+    # above (the default DerivedData dir is randomized and not referenceable).
+    upload_symbols_to_crashlytics(
+      dsym_path: lane_context[SharedValues::DSYM_OUTPUT_PATH],
+      gsp_path: "App/GoogleService-Info.plist",
+      binary_path: "build/DerivedData/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols"
     )
 
     # build_number is read from the IPA itself by upload_to_app_store, so do
