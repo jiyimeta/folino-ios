@@ -55,6 +55,9 @@ packages:
   Yams:
     url: https://github.com/jpsim/Yams
     from: 5.3.0
+  firebase-ios-sdk:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 11.0.0
 targets:
   Folino:
     type: application
@@ -84,12 +87,21 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SUPPORTS_MACCATALYST: NO
         GENERATE_INFOPLIST_FILE: NO
+      configs:
+        Release:
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    postBuildScripts:
+      - name: "Firebase Crashlytics Upload Symbols"
+        script: '"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"'
+        inputFiles:
+          - "${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}"
+          - "$(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)"
     dependencies:
       - package: Utility
         products: [UtilityCore, UtilityUI, Navigation]
       - package: Domain
       - package: Infrastructure
-        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles]
+        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting]
       - package: Library
       - package: Reader
       - package: Editor
