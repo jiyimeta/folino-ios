@@ -45,7 +45,7 @@ packages:
     from: 7.0.0
   swift-sheet-music:
     url: https://github.com/jiyimeta/swift-sheet-music.git
-    revision: b86ba90d468af22e90910f56bda59110962bb6ee
+    revision: 73169224f74b6221cadf4d0f2efea1018fdfebdd
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
     from: 0.63.2
