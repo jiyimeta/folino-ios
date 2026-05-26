@@ -87,6 +87,10 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SUPPORTS_MACCATALYST: NO
         GENERATE_INFOPLIST_FILE: NO
+        # The Crashlytics upload-symbols run script needs to read GoogleService-Info.plist, the dSYM, and reach the
+        # network; user script sandboxing blocks that and fails the build with "Could not get GOOGLE_APP_ID". Disable
+        # it for the app target only (the project default stays YES).
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
       configs:
         Release:
           DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
@@ -95,7 +99,7 @@ targets:
         script: '"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"'
         inputFiles:
           - "${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}"
-          - "$(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)"
+          - "$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)"
     dependencies:
       - package: Utility
         products: [UtilityCore, UtilityUI, Navigation]
