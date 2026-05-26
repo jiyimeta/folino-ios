@@ -6,6 +6,7 @@ import Reader
 import Settings
 import StoreKit
 import SwiftUI
+import UtilityCore
 import UtilityUI
 
 struct AppShellView: View {
@@ -210,6 +211,7 @@ private struct ReadyShell: View {
             SettingsSheet(
                 provider: bootstrap.museScoreGeneralProvider,
                 onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
+                crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
             ) {
                 LicenseListView()
             }

@@ -1,4 +1,5 @@
 import Audio
+import CrashReporting
 import Domain
 import Foundation
 import ImportExport
@@ -25,6 +26,7 @@ final class AppBootstrap {
     private(set) var soundfontResolver: GMSoundfontResolver?
     private(set) var shareService: LiveScoreShareService?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
+    private(set) var crashReporter: (any CrashReporter)?
     let shareDuplicateResolver = ShareDuplicateResolver()
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`. Last-wins: a second URL arriving before the
@@ -36,6 +38,9 @@ final class AppBootstrap {
     private(set) var pendingShareOpenAfter = false
 
     func start() {
+        let crashEnabled = UserDefaults.standard
+            .object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true
+        crashReporter = FirebaseCrashReporter.configure(collectionEnabled: crashEnabled)
         do {
             try prepareDirectories()
             cleanupLegacySoundfontCacheIfNeeded()
