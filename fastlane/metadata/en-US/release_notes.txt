@@ -1,5 +1,2 @@
-- Added a page view mode
-- Added a setting to prevent auto-lock
-- Improved score deletion
-- Improved file sharing from other apps
-- Added support for tremolo and portamento
+- Minor bug fixes
+- Added crash report submission
