@@ -4,6 +4,7 @@ import Observation
 @testable import Settings
 import SwiftUI
 import Testing
+import UtilityCore
 
 @MainActor
 struct SettingsSheetTests {
@@ -19,6 +20,24 @@ struct SettingsSheetTests {
         }
         _ = sheet.body
     }
+
+    @Test func `sheet constructs with an injected crash reporter`() {
+        let sheet = SettingsSheet(crashReporter: SpyCrashReporter()) { Text("License placeholder") }
+        _ = sheet.body
+    }
+}
+
+/// Test double for the crash-reporting injection seam. The privacy toggle's `onChange` side effect is verified
+/// end to end (a SwiftUI `@AppStorage` `onChange` cannot be driven from a value-level unit test); this spy pins the
+/// `init(crashReporter:)` parameter.
+private final class SpyCrashReporter: CrashReporter, @unchecked Sendable {
+    private(set) var collectionEnabledCalls: [Bool] = []
+    func setCollectionEnabled(_ enabled: Bool) {
+        collectionEnabledCalls.append(enabled)
+    }
+
+    func log(_: String) {}
+    func record(error _: Error) {}
 }
 
 @MainActor

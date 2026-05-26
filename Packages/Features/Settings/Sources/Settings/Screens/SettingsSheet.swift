@@ -1,6 +1,7 @@
 import Domain
 import Observation
 import SwiftUI
+import UtilityCore
 import UtilityUI
 
 @MainActor
@@ -9,6 +10,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private let provider: (any MuseScoreGeneralProvider)?
     private let versionHistoryLoader: any VersionHistoryLoader
     private let onVersionHistoryViewed: @MainActor () -> Void
+    private let crashReporter: any CrashReporter
     @Environment(\.dismiss) private var dismiss
     @State private var isFeedbackMailPresented = false
     @State private var feedbackMailResult: FeedbackMailComposeResult?
@@ -30,15 +32,20 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
 
+    @AppStorage(PrivacySettingsKey.crashReportingEnabled)
+    private var isCrashReportingEnabled = true
+
     public init(
         provider: (any MuseScoreGeneralProvider)? = nil,
         versionHistoryLoader: any VersionHistoryLoader = DefaultVersionHistoryLoader(),
         onVersionHistoryViewed: @escaping @MainActor () -> Void = {},
+        crashReporter: any CrashReporter = NoopCrashReporter(),
         @ViewBuilder licenseContent: @escaping () -> LicenseContent,
     ) {
         self.provider = provider
         self.versionHistoryLoader = versionHistoryLoader
         self.onVersionHistoryViewed = onVersionHistoryViewed
+        self.crashReporter = crashReporter
         self.licenseContent = licenseContent
     }
 
@@ -46,6 +53,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
         NavigationStack {
             Form {
                 readerSection
+                privacySection
                 aboutSection
             }
             .navigationTitle(Text("settings.title", bundle: .module))
@@ -102,6 +110,28 @@ public struct SettingsSheet<LicenseContent: View>: View {
             if let provider {
                 SoundfontPresetRow(provider: provider)
             }
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            Toggle(isOn: $isCrashReportingEnabled) {
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("settings.privacy.crashReporting.title", bundle: .module)
+                        Text("settings.privacy.crashReporting.footer", bundle: .module)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "ladybug")
+                }
+            }
+            .onChange(of: isCrashReportingEnabled) { _, newValue in
+                crashReporter.setCollectionEnabled(newValue)
+            }
+        } header: {
+            Text("settings.privacy.title", bundle: .module)
         }
     }
 
