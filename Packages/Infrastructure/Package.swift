@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "Soundfonts", targets: ["Soundfonts"]),
         .library(name: "Audio", targets: ["Audio"]),
         .library(name: "ScoreFiles", targets: ["ScoreFiles"]),
+        .library(name: "CrashReporting", targets: ["CrashReporting"]),
     ],
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
@@ -23,6 +24,8 @@ let package = Package(
             revision: "b86ba90d468af22e90910f56bda59110962bb6ee",
         ),
         .package(path: "../Domain"),
+        .package(path: "../Utility"),
+        .package(url: "https://github.com/firebase/firebase-ios-sdk", from: "11.0.0"),
     ],
     targets: [
         .target(
@@ -56,6 +59,14 @@ let package = Package(
                 "Domain",
                 .product(name: "SheetMusic", package: "swift-sheet-music"),
                 .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
+            ],
+            plugins: swiftLintPlugins,
+        ),
+        .target(
+            name: "CrashReporting",
+            dependencies: [
+                .product(name: "UtilityCore", package: "Utility"),
+                .product(name: "FirebaseCrashlytics", package: "firebase-ios-sdk"),
             ],
             plugins: swiftLintPlugins,
         ),
