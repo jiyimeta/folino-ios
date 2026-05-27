@@ -14,6 +14,11 @@ public enum DomainError: Error, Sendable, Equatable {
 
 extension DomainError: LocalizedError {
     public var errorDescription: String? {
+        // The `String(localized:defaultValue:bundle:)` initializer is Apple-Foundation only; swift-corelibs-foundation
+        // (Android / Linux) does not vend it. On non-Apple platforms fall back to the English default strings so the
+        // Domain module still compiles for the Android JNI staging chain. Domain errors are not surfaced to the Android
+        // client in this spike, so the missing localization has no user-visible effect there.
+        #if canImport(Darwin)
         switch self {
         case let .scoreFileNotFound(name):
             String(
@@ -58,5 +63,23 @@ extension DomainError: LocalizedError {
                 bundle: .module,
             )
         }
+        #else
+        switch self {
+        case let .scoreFileNotFound(name):
+            "Score file not found: \(name)"
+        case let .unsupportedFormat(ext):
+            "Unsupported file format: \(ext)"
+        case let .scoreParseFailed(reason):
+            "Could not parse score file: \(reason)"
+        case let .scoreWriteFailed(reason):
+            "Could not write score file: \(reason)"
+        case let .persistenceFailed(reason):
+            "Library save failed: \(reason)"
+        case let .syncFailed(reason):
+            "Sync failed: \(reason)"
+        case let .audioEngineFailed(reason):
+            "Audio engine error: \(reason)"
+        }
+        #endif
     }
 }

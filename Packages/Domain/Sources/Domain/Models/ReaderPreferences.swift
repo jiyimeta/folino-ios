@@ -1,4 +1,9 @@
+// On non-Apple platforms (Android, Linux) CoreGraphics is not a module; swift-corelibs-foundation vends CGFloat via the
+// Foundation import below. Guarding the CoreGraphics import keeps Domain cross-compilable for the Android JNI staging
+// chain (FolinoSettingsJNI → SettingsLogic → Domain).
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import SheetMusicCore
 
