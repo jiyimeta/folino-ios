@@ -4,7 +4,10 @@ import Foundation
 public struct DrainResult: Sendable {
     public let imported: [ScoreItemID]
     public let skipped: [Skip]
-    public let openAfter: ScoreItemID?
+    /// The score to open in the Reader once the drain completes, or `nil` when the user chose not to open or nothing
+    /// was imported. Carries the full `ScoreItem` (not just its ID) so the App layer can navigate without looking it up
+    /// in the repository's asynchronously-observed snapshot, which may not yet reflect the freshly-imported item.
+    public let openAfter: ScoreItem?
     public let createdPlaylistID: PlaylistID?
     public let targetPlaylistID: PlaylistID?
     public let targetPlaylistName: String?
@@ -16,7 +19,7 @@ public struct DrainResult: Sendable {
     public init(
         imported: [ScoreItemID],
         skipped: [Skip],
-        openAfter: ScoreItemID?,
+        openAfter: ScoreItem?,
         createdPlaylistID: PlaylistID?,
         targetPlaylistID: PlaylistID?,
         targetPlaylistName: String?,

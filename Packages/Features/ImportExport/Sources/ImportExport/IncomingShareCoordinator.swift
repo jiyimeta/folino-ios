@@ -83,7 +83,7 @@ public final class IncomingShareCoordinator {
         pairs.sort { $0.1 < $1.1 }
         var aggregatedImported: [ScoreItemID] = []
         var aggregatedSkipped: [Skip] = []
-        var aggregatedOpenAfter: ScoreItemID?
+        var aggregatedOpenAfter: ScoreItem?
         var aggregatedCreatedPlaylistID: PlaylistID?
         var aggregatedTargetPlaylistID: PlaylistID?
         var aggregatedTargetPlaylistName: String?
@@ -149,7 +149,7 @@ public final class IncomingShareCoordinator {
         return DrainResult(
             imported: importOutcome.imported,
             skipped: importOutcome.skipped,
-            openAfter: intent.openAfter ? importOutcome.lastOpenedID : nil,
+            openAfter: intent.openAfter ? importOutcome.lastOpened : nil,
             createdPlaylistID: resolution.createdPlaylistID,
             targetPlaylistID: finalPlaylist?.id,
             targetPlaylistName: finalPlaylist?.name,
@@ -213,7 +213,7 @@ public final class IncomingShareCoordinator {
     private struct ImportOutcome {
         var imported: [ScoreItemID] = []
         var skipped: [Skip] = []
-        var lastOpenedID: ScoreItemID?
+        var lastOpened: ScoreItem?
     }
 
     private func importFiles(intent: IncomingShareIntent, token: UUID) async -> ImportOutcome {
@@ -262,7 +262,7 @@ public final class IncomingShareCoordinator {
             } else {
                 let item = try await importer.commitImport(plan, decision: .importAsNew)
                 outcome.imported.append(item.id)
-                outcome.lastOpenedID = item.id
+                outcome.lastOpened = item
             }
         } catch {
             outcome.skipped.append(.init(
@@ -299,13 +299,13 @@ public final class IncomingShareCoordinator {
             switch decision {
             case .importAsNew:
                 outcome.imported.append(item.id)
-                outcome.lastOpenedID = item.id
+                outcome.lastOpened = item
             case .openExisting:
                 outcome.skipped.append(.init(
                     originalName: file.originalName,
                     reason: .duplicate(existingID: dup.id, existingTitle: dup.title),
                 ))
-                outcome.lastOpenedID = item.id
+                outcome.lastOpened = item
             }
         } catch {
             outcome.skipped.append(.init(

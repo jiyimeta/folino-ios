@@ -287,13 +287,12 @@ private struct ReadyShell: View {
     private func runDrain(coordinator: IncomingShareCoordinator, openAfter: Bool) async {
         let result = await coordinator.drain(token: nil)
         drainBannerMessage = DrainBannerComposer.message(for: result)
-        guard openAfter else { return }
 
-        if result.imported.count >= 2 {
+        switch ShareDrainNavigation.decide(for: result, openAfter: openAfter) {
+        case .none:
+            return
+        case let .openList(route):
             // Multi-file import: jump to the destination list, not Reader.
-            let route: LibraryRoute = result.targetPlaylistID
-                .map(LibraryRoute.playlistDetail)
-                ?? .allScores
             if horizontalSizeClass == .regular {
                 sidebarPath = NavigationPath()
                 sidebarPath.append(route)
@@ -303,24 +302,20 @@ private struct ReadyShell: View {
                 compactPath = NavigationPath()
                 compactPath.append(route)
             }
-        } else if let openID = result.openAfter,
-                  let item = repository.scoreItems.first(where: { $0.id == openID })
-        {
+        case let .openReader(item, playlistUnderneath):
             // Single import or dedupe-to-existing: push Reader, with the target playlist underneath so the Back
             // affordance lands there.
-            let playlistRoute: LibraryRoute? = result.targetPlaylistID
-                .map(LibraryRoute.playlistDetail)
             if horizontalSizeClass == .regular {
                 sidebarPath = NavigationPath()
-                if let playlistRoute {
-                    sidebarPath.append(playlistRoute)
+                if let playlistUnderneath {
+                    sidebarPath.append(playlistUnderneath)
                 }
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             } else {
                 compactPath = NavigationPath()
-                if let playlistRoute {
-                    compactPath.append(playlistRoute)
+                if let playlistUnderneath {
+                    compactPath.append(playlistUnderneath)
                 }
                 compactPath.append(item)
             }

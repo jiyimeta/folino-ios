@@ -73,6 +73,7 @@ struct IncomingShareCoordinatorTests {
     @Observable
     final class FakeRepository: ScoreLibraryRepository {
         var scoreItems: [ScoreItem] = []
+        var deletedScoreItems: [ScoreItem] = []
         var tags: [Domain.Tag] = []
         var playlists: [Playlist] = []
         var savedPlaylists: [Playlist] = []
@@ -90,6 +91,17 @@ struct IncomingShareCoordinatorTests {
         func deleteScoreItem(id: ScoreItemID) throws {
             scoreItems.removeAll { $0.id == id }
         }
+
+        func softDeleteScoreItem(id: ScoreItemID) throws {
+            scoreItems.removeAll { $0.id == id }
+        }
+
+        func restoreScoreItem(id _: ScoreItemID) throws {}
+        func permanentlyDeleteScoreItem(id: ScoreItemID) throws {
+            scoreItems.removeAll { $0.id == id }
+        }
+
+        func pruneScoreItemsDeleted(before _: Date) throws {}
 
         func saveTag(_ tag: Domain.Tag) throws {}
         func deleteTag(id: TagID) throws {}
@@ -241,7 +253,7 @@ struct IncomingShareCoordinatorTests {
         #expect(result.imported.count == 2)
         #expect(result.targetPlaylistID == existing.id)
         #expect(result.targetPlaylistName == "Practice")
-        #expect(result.openAfter == result.imported.last)
+        #expect(result.openAfter?.id == result.imported.last)
         let lastSaved = repo.savedPlaylists.last
         #expect(lastSaved?.orderedScoreItemIDs.count == 2)
         #expect(lastSaved?.orderedScoreItemIDs == result.imported)
@@ -311,7 +323,7 @@ struct IncomingShareCoordinatorTests {
         } else {
             Issue.record("expected duplicate reason")
         }
-        #expect(result.openAfter == existing.id)
+        #expect(result.openAfter?.id == existing.id)
     }
 
     @Test func `duplicate resolver routes decisions per file`() async throws {
