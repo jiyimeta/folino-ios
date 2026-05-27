@@ -54,3 +54,12 @@ build/
 *.p8
 *.ipa
 *.dSYM.zip
+
+# Android spike
+Android/.gradle/
+Android/build/
+Android/**/build/
+Android/.kotlin/
+Android/local.properties
+Android/**/src/main/jniLibs/
+Android/**/src/main/java-generated/
