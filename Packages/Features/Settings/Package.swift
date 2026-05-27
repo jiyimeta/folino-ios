@@ -17,13 +17,19 @@ let package = Package(
         .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
         .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+        // swift-wirelet v0.1.0-alpha.2 (pinned by revision, not semver)
+        // swiftlint:disable:next line_length
+        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "31be47c84fddf2834b3cccc05ff955dcd1f2668e"),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
     ],
     targets: [
         .target(
             name: "SettingsLogic",
-            dependencies: ["Domain"],
+            dependencies: [
+                "Domain",
+                .product(name: "Wirelet", package: "swift-wirelet"),
+            ],
             plugins: swiftLintPlugins,
         ),
         .target(
