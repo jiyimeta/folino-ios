@@ -1,5 +1,5 @@
 import Domain
-@testable import Settings
+@testable import SettingsLogic
 import Testing
 
 @MainActor

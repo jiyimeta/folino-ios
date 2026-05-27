@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import OSLog
 import Settings
+import SettingsLogic
 
 @MainActor
 @Observable

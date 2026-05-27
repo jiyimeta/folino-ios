@@ -1,10 +1,7 @@
 import Domain
 import Foundation
+import SettingsLogic
 import Yams
-
-public protocol VersionHistoryLoader: Sendable {
-    func load() throws -> [VersionHistoryEntry]
-}
 
 public struct DefaultVersionHistoryLoader: VersionHistoryLoader {
     public enum LoadError: Error {

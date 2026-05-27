@@ -1,4 +1,5 @@
 import Domain
+import SettingsLogic
 import SwiftUI
 
 /// Typed accessors for Settings-module localized strings that need to be resolved from outside the module (e.g. App

@@ -10,6 +10,7 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.iOS(.v26)],
     products: [
+        .library(name: "SettingsLogic", targets: ["SettingsLogic"]),
         .library(name: "Settings", targets: ["Settings"]),
     ],
     dependencies: [
@@ -21,8 +22,14 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "SettingsLogic",
+            dependencies: ["Domain"],
+            plugins: swiftLintPlugins,
+        ),
+        .target(
             name: "Settings",
             dependencies: [
+                "SettingsLogic",
                 "Domain",
                 .product(name: "DeviceKit", package: "DeviceKit"),
                 .product(name: "UtilityCore", package: "Utility"),
@@ -33,5 +40,6 @@ let package = Package(
             plugins: swiftLintPlugins,
         ),
         .testTarget(name: "SettingsTests", dependencies: ["Settings", "Domain"]),
+        .testTarget(name: "SettingsLogicTests", dependencies: ["SettingsLogic", "Domain"]),
     ],
 )
