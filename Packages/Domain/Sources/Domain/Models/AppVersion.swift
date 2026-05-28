@@ -34,14 +34,6 @@ public struct AppVersion: Hashable, Sendable, Comparable, CustomStringConvertibl
 
     public static let zero = AppVersion(0, 0, 0)
 
-    public static let current: AppVersion = {
-        let raw = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        guard let v = AppVersion(raw) else {
-            fatalError("CFBundleShortVersionString is missing or malformed: \(raw)")
-        }
-        return v
-    }()
-
     public static func < (lhs: AppVersion, rhs: AppVersion) -> Bool {
         if lhs.major != rhs.major { return lhs.major < rhs.major }
         if lhs.minor != rhs.minor { return lhs.minor < rhs.minor }
