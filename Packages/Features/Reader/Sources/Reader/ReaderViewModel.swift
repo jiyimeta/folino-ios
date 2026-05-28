@@ -54,7 +54,7 @@ final class ReaderViewModel {
     @ObservationIgnored
     private let scoresDirectory: URL
     @ObservationIgnored
-    private let defaultStaffSize: CGFloat
+    private let defaultStaffSize: Double
     @ObservationIgnored
     private var hasUpdatedLastOpened = false
 
@@ -63,7 +63,7 @@ final class ReaderViewModel {
         repository: any ScoreLibraryRepository,
         gateway: any ScoreFileGateway,
         scoresDirectory: URL,
-        defaultStaffSize: CGFloat = 14,
+        defaultStaffSize: Double = 14,
         playbackController: (any PlaybackController)? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
     ) {

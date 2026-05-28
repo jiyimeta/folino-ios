@@ -11,11 +11,11 @@ final class ReaderPreferencesStore {
 
     private let repository: any ScoreLibraryRepository
     private let scoreItemID: ScoreItem.ID
-    private let defaultStaffSize: CGFloat
+    private let defaultStaffSize: Double
 
     init(
         scoreItemID: ScoreItem.ID,
-        defaultStaffSize: CGFloat,
+        defaultStaffSize: Double,
         repository: any ScoreLibraryRepository,
     ) {
         self.scoreItemID = scoreItemID

@@ -1,4 +1,3 @@
-import CoreGraphics
 import Domain
 import Observation
 import SheetMusicCore
@@ -12,7 +11,7 @@ import SheetMusicCore
 @MainActor
 @Observable
 final class LayoutSettingsModel {
-    private(set) var staffSize: CGFloat = 14
+    private(set) var staffSize: Double = 14
     private(set) var honorLayoutBreaks = false
     private(set) var hiddenStaves: Set<StaffAddress> = []
     private(set) var staffClefOverrides: [StaffAddress: String] = [:]
