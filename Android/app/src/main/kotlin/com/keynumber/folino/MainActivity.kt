@@ -26,7 +26,6 @@ import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
 
-@OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,27 +47,35 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(prefs, items, onOpenLicenses = { nav.navigate("licenses") })
                         }
                         composable("licenses") {
-                            Scaffold(
-                                topBar = {
-                                    TopAppBar(
-                                        title = { Text("Licenses") },
-                                        navigationIcon = {
-                                            IconButton(onClick = { nav.popBackStack() }) {
-                                                Icon(
-                                                    Icons.AutoMirrored.Filled.ArrowBack,
-                                                    contentDescription = "Back",
-                                                )
-                                            }
-                                        },
-                                    )
-                                },
-                            ) { padding ->
-                                Box(Modifier.padding(padding)) { LicensesScreen() }
-                            }
+                            LicensesRoute(onBack = { nav.popBackStack() })
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// `TopAppBar` lives behind Material3's experimental API surface. Scoping the opt-in to this single composable keeps
+// the rest of MainActivity (notably `onCreate`) free of the experimental marker.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LicensesRoute(onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Licenses") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) { LicensesScreen() }
     }
 }
