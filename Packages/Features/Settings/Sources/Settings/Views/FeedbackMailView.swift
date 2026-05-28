@@ -1,9 +1,7 @@
 import DeviceKit
 import Foundation
-import SwiftUI
-
-#if canImport(MessageUI) && os(iOS)
 import MessageUI
+import SwiftUI
 
 enum FeedbackMailComposeResult: Equatable {
     case cancelled
@@ -60,26 +58,6 @@ struct FeedbackMailView: UIViewControllerRepresentable {
         }
     }
 }
-#else
-enum FeedbackMailComposeResult: Equatable {
-    case cancelled
-    case saved
-    case sent
-    case failed
-}
-
-struct FeedbackMailView: View {
-    @Binding var result: FeedbackMailComposeResult?
-
-    static var canSendMail: Bool {
-        false
-    }
-
-    var body: some View {
-        EmptyView()
-    }
-}
-#endif
 
 private enum FeedbackMailConfiguration {
     static let recipient = "jiyi.meta@gmail.com"
