@@ -57,7 +57,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                         guard let url = urls.first else { return }
                         Task { await viewModel.startImport(from: url) }
                     case let .failure(error):
-                        viewModel.errorAlertMessage = error.localizedDescription
+                        viewModel.currentError = error
                     }
                 }
                 .navigationDestination(for: LibraryRoute.self) { route in
@@ -87,13 +87,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         .alert(
             Text("library.title", bundle: .module),
             isPresented: errorAlertBinding,
-            presenting: viewModel.errorAlertMessage,
+            presenting: viewModel.currentError,
         ) { _ in
-            Button { viewModel.errorAlertMessage = nil } label: {
+            Button { viewModel.currentError = nil } label: {
                 L10n.Common.ok
             }
-        } message: { msg in
-            Text(msg)
+        } message: { error in
+            Text(describeLibraryError(error))
         }
         .alert(Text("library.playlist.create.title", bundle: .module), isPresented: $isCreatingPlaylist) {
             TextField(text: $newPlaylistName) { Text("library.playlist.namePlaceholder", bundle: .module) }
@@ -368,8 +368,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 
     private var errorAlertBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.errorAlertMessage != nil },
-            set: { isPresented in if !isPresented { viewModel.errorAlertMessage = nil } },
+            get: { viewModel.currentError != nil },
+            set: { isPresented in if !isPresented { viewModel.currentError = nil } },
         )
     }
 

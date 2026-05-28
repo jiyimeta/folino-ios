@@ -45,14 +45,14 @@ struct LibraryViewModelBulkTests {
 
         #expect(Set(f.repo.deletedScoreItemIDs) == [a.id, c.id])
         #expect(f.repo.scoreItems.map(\.id) == [b.id])
-        #expect(f.vm.errorAlertMessage == nil)
+        #expect(f.vm.currentError == nil)
     }
 
     @Test func `bulk delete empty is no op`() async {
         let f = Self.makeVM(scoreItems: [Self.makeItem(title: "A")])
         await f.vm.bulkDelete([])
         #expect(f.repo.deletedScoreItemIDs.isEmpty)
-        #expect(f.vm.errorAlertMessage == nil)
+        #expect(f.vm.currentError == nil)
     }
 
     @Test func `bulk delete stops at first error`() async {
@@ -64,7 +64,7 @@ struct LibraryViewModelBulkTests {
         await f.vm.bulkDelete([a.id, b.id])
 
         #expect(f.repo.deletedScoreItemIDs.isEmpty) // FakeRepo throws before recording
-        #expect(f.vm.errorAlertMessage != nil)
+        #expect(f.vm.currentError != nil)
     }
 
     // MARK: - bulkRestore

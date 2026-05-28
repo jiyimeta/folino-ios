@@ -91,7 +91,9 @@ struct LibraryViewModelTests {
         let f = Self.makeVM(scoreItems: [item])
         f.repo.saveScoreItemError = .persistenceFailed(reason: "disk full")
         await f.vm.toggleFavorite(item)
-        #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
+        if case .persistenceFailed = f.vm.currentError as? DomainError {} else {
+            Issue.record("expected .persistenceFailed")
+        }
     }
 
     @Test func `delete surfaces persistence error on alert`() async {
@@ -99,7 +101,9 @@ struct LibraryViewModelTests {
         let f = Self.makeVM(scoreItems: [item])
         f.repo.deleteScoreItemError = .persistenceFailed(reason: "io error")
         await f.vm.delete(item)
-        #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
+        if case .persistenceFailed = f.vm.currentError as? DomainError {} else {
+            Issue.record("expected .persistenceFailed")
+        }
     }
 
     @Test func `create playlist trimmed non empty persists`() async {
@@ -137,7 +141,7 @@ struct LibraryViewModelTests {
         await f.vm.deletePlaylist(playlist)
         #expect(f.repo.deletedPlaylistIDs == [playlist.id])
         #expect(f.repo.playlists.isEmpty)
-        #expect(f.vm.errorAlertMessage == nil)
+        #expect(f.vm.currentError == nil)
     }
 
     @Test func `delete playlist surfaces persistence error on alert`() async {
@@ -146,7 +150,9 @@ struct LibraryViewModelTests {
         f.repo.playlists = [playlist]
         f.repo.deletePlaylistError = .persistenceFailed(reason: "io error")
         await f.vm.deletePlaylist(playlist)
-        #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
+        if case .persistenceFailed = f.vm.currentError as? DomainError {} else {
+            Issue.record("expected .persistenceFailed")
+        }
     }
 
     @Test func `delete tag calls repository`() async {
@@ -156,7 +162,7 @@ struct LibraryViewModelTests {
         await f.vm.deleteTag(tag)
         #expect(f.repo.deletedTagIDs == [tag.id])
         #expect(f.repo.tags.isEmpty)
-        #expect(f.vm.errorAlertMessage == nil)
+        #expect(f.vm.currentError == nil)
     }
 
     @Test func `delete tag surfaces persistence error on alert`() async {
@@ -165,7 +171,9 @@ struct LibraryViewModelTests {
         f.repo.tags = [tag]
         f.repo.deleteTagError = .persistenceFailed(reason: "io error")
         await f.vm.deleteTag(tag)
-        #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
+        if case .persistenceFailed = f.vm.currentError as? DomainError {} else {
+            Issue.record("expected .persistenceFailed")
+        }
     }
 }
 
@@ -200,7 +208,7 @@ extension LibraryViewModelTests {
         }
         #expect(f.vm.pendingScoreToOpen?.id == imported.id)
         #expect(f.vm.duplicatePrompt == nil)
-        #expect(f.vm.errorAlertMessage == nil)
+        #expect(f.vm.currentError == nil)
     }
 
     @Test func `duplicate stages prompt instead of committing`() async {
@@ -252,14 +260,18 @@ extension LibraryViewModelTests {
         let f = Self.makeVM()
         f.importer.prepareImportErrors = [.unsupportedFormat("xyz")]
         await f.vm.startImport(from: URL(filePath: "/tmp/x.xyz"))
-        #expect(f.vm.errorAlertMessage == "folino can't open this file type.")
+        if case .unsupportedFormat = f.vm.currentError as? DomainError {} else {
+            Issue.record("expected .unsupportedFormat")
+        }
     }
 
     @Test func `parse error message`() async {
         let f = Self.makeVM()
         f.importer.prepareImportErrors = [.scoreParseFailed(reason: "bad bytes")]
         await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
-        #expect(f.vm.errorAlertMessage == "This file looks corrupted or isn't a valid score.")
+        if case .scoreParseFailed = f.vm.currentError as? DomainError {} else {
+            Issue.record("expected .scoreParseFailed")
+        }
     }
 
     @Test func `persistence error message`() async {
@@ -267,7 +279,9 @@ extension LibraryViewModelTests {
         f.importer.preparedPlans = [Self.makePlan()]
         f.importer.commitImportError = .persistenceFailed(reason: "disk full")
         await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
-        #expect(f.vm.errorAlertMessage == "There was a problem saving the score. Check available storage.")
+        if case .persistenceFailed = f.vm.currentError as? DomainError {} else {
+            Issue.record("expected .persistenceFailed")
+        }
     }
 }
 
@@ -299,7 +313,7 @@ extension LibraryViewModelTests {
         let f = Self.makeVM()
         f.importer.prepareImportErrors = [.scoreParseFailed(reason: "bad")]
         await f.vm.startImport(from: URL(filePath: "/tmp/x.mscx"))
-        #expect(f.vm.errorAlertMessage != nil)
+        #expect(f.vm.currentError != nil)
         #expect(f.vm.isImporting == false)
     }
 
@@ -317,7 +331,7 @@ extension LibraryViewModelTests {
         let plan = Self.makePlan()
         f.importer.commitImportError = .persistenceFailed(reason: "x")
         await f.vm.commit(plan: plan, decision: .importAsNew)
-        #expect(f.vm.errorAlertMessage != nil)
+        #expect(f.vm.currentError != nil)
         #expect(f.vm.isImporting == false)
     }
 }

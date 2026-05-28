@@ -26,8 +26,7 @@ struct BulkEditTagsScreen: View {
         do {
             try await library.repository.saveTag(tag)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = error
             return
         }
         await library.bulkAddTags(selectedIDs, tagIDs: [tag.id])

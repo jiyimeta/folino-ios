@@ -10,7 +10,7 @@ final class ReaderViewModel {
     enum LoadState {
         case loading
         case loaded(Score)
-        case failed(message: String)
+        case failed(error: Error)
 
         var score: Score? {
             if case let .loaded(score) = self { return score }
@@ -200,8 +200,7 @@ final class ReaderViewModel {
             pipSession.armIfReady()
             await updateLastOpenedAtOnce()
         } catch {
-            let message = describe(error)
-            loadState = .failed(message: message)
+            loadState = .failed(error: error)
         }
     }
 
@@ -227,44 +226,6 @@ final class ReaderViewModel {
         updated.lastOpenedAt = Date()
         scoreItem = updated
         try? await repository.saveScoreItem(updated)
-    }
-
-    private func describe(_ error: Error) -> String {
-        if let domain = error as? DomainError {
-            switch domain {
-            case .scoreFileNotFound:
-                return String(localized: "reader.error.fileMissing", bundle: .module)
-            case .scoreParseFailed:
-                return String(localized: "reader.error.corrupted", bundle: .module)
-            case .unsupportedFormat:
-                return String(localized: "reader.error.cannotOpen.unsupportedType", bundle: .module)
-            case let .scoreWriteFailed(reason):
-                return String(
-                    localized: "reader.error.fallback.scoreWriteFailed",
-                    defaultValue: "Could not write score file: \(reason)",
-                    bundle: .module,
-                )
-            case let .persistenceFailed(reason):
-                return String(
-                    localized: "reader.error.fallback.persistenceFailed",
-                    defaultValue: "Library save failed: \(reason)",
-                    bundle: .module,
-                )
-            case let .syncFailed(reason):
-                return String(
-                    localized: "reader.error.fallback.syncFailed",
-                    defaultValue: "Sync failed: \(reason)",
-                    bundle: .module,
-                )
-            case let .audioEngineFailed(reason):
-                return String(
-                    localized: "reader.error.fallback.audioEngineFailed",
-                    defaultValue: "Audio engine error: \(reason)",
-                    bundle: .module,
-                )
-            }
-        }
-        return (error as NSError).localizedDescription
     }
 }
 

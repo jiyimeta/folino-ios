@@ -27,7 +27,7 @@ public final class LibraryViewModel {
         }
     }
 
-    var errorAlertMessage: String?
+    var currentError: Error?
 
     /// Set when an import succeeds; the App composition root watches this and pushes the Reader. Cleared by the watcher
     /// after handling.
@@ -41,7 +41,7 @@ public final class LibraryViewModel {
     public func dismissImportUI() {
         isFileImporterPresented = false
         duplicatePrompt = nil
-        errorAlertMessage = nil
+        currentError = nil
     }
 
     /// Set when `prepareImport` returns at least one duplicate. The view presents a 3-button alert; choosing one of the
@@ -84,7 +84,7 @@ public final class LibraryViewModel {
         do {
             try await repository.deleteScoreItem(id: scoreItem.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -92,7 +92,7 @@ public final class LibraryViewModel {
         do {
             try await repository.deletePlaylist(id: playlist.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -100,7 +100,7 @@ public final class LibraryViewModel {
         do {
             try await repository.deleteTag(id: tag.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -109,7 +109,7 @@ public final class LibraryViewModel {
             do {
                 try await repository.deleteScoreItem(id: id)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = error
                 return
             }
         }
@@ -119,7 +119,7 @@ public final class LibraryViewModel {
         do {
             try await repository.restoreScoreItem(id: scoreItem.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -128,7 +128,7 @@ public final class LibraryViewModel {
             do {
                 try await repository.restoreScoreItem(id: id)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = error
                 return
             }
         }
@@ -138,7 +138,7 @@ public final class LibraryViewModel {
         do {
             try await repository.permanentlyDeleteScoreItem(id: scoreItem.id)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -147,7 +147,7 @@ public final class LibraryViewModel {
             do {
                 try await repository.permanentlyDeleteScoreItem(id: id)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = error
                 return
             }
         }
@@ -164,7 +164,7 @@ public final class LibraryViewModel {
         do {
             try await repository.savePlaylist(updated)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -181,7 +181,7 @@ public final class LibraryViewModel {
         do {
             try await repository.savePlaylist(updated)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -199,7 +199,7 @@ public final class LibraryViewModel {
             do {
                 try await repository.saveScoreItem(updated)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = error
                 return
             }
         }
@@ -212,7 +212,7 @@ public final class LibraryViewModel {
             let url = try await shareService.prepareShare(item: item, format: format)
             shareTarget = ShareTarget(urls: [url])
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -227,7 +227,7 @@ public final class LibraryViewModel {
                 let url = try await shareService.prepareShare(item: item, format: format)
                 urls.append(url)
             } catch {
-                errorAlertMessage = describe(error)
+                currentError = error
                 return
             }
         }
@@ -247,7 +247,7 @@ public final class LibraryViewModel {
         do {
             try await repository.savePlaylist(playlist)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -258,7 +258,7 @@ public final class LibraryViewModel {
         do {
             try await repository.saveTag(tag)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -266,7 +266,7 @@ public final class LibraryViewModel {
         do {
             try await repository.saveScoreItem(scoreItem)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
     }
 
@@ -283,7 +283,7 @@ public final class LibraryViewModel {
         do {
             plan = try await importer.prepareImport(sourceURL: sourceURL)
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
             return
         }
         if let existing = plan.duplicates.first {
@@ -300,45 +300,7 @@ public final class LibraryViewModel {
             let item = try await importer.commitImport(plan, decision: decision)
             pendingScoreToOpen = item
         } catch {
-            errorAlertMessage = describe(error)
+            currentError = error
         }
-    }
-
-    private func describe(_ error: Error) -> String {
-        if let domain = error as? DomainError {
-            switch domain {
-            case .unsupportedFormat:
-                return String(localized: "library.import.error.unsupported", bundle: .module)
-            case .scoreParseFailed:
-                return String(localized: "library.import.error.invalidFile", bundle: .module)
-            case .persistenceFailed:
-                return String(localized: "library.import.error.saveFailed", bundle: .module)
-            case let .scoreFileNotFound(name):
-                return String(
-                    localized: "library.error.fallback.scoreFileNotFound",
-                    defaultValue: "Score file not found: \(name)",
-                    bundle: .module,
-                )
-            case let .scoreWriteFailed(reason):
-                return String(
-                    localized: "library.error.fallback.scoreWriteFailed",
-                    defaultValue: "Could not write score file: \(reason)",
-                    bundle: .module,
-                )
-            case let .syncFailed(reason):
-                return String(
-                    localized: "library.error.fallback.syncFailed",
-                    defaultValue: "Sync failed: \(reason)",
-                    bundle: .module,
-                )
-            case let .audioEngineFailed(reason):
-                return String(
-                    localized: "library.error.fallback.audioEngineFailed",
-                    defaultValue: "Audio engine error: \(reason)",
-                    bundle: .module,
-                )
-            }
-        }
-        return (error as NSError).localizedDescription
     }
 }

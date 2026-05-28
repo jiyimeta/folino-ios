@@ -25,8 +25,7 @@ struct AddToPlaylistScreen: View {
         do {
             try await library.repository.savePlaylist(updated)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = error
         }
     }
 
@@ -39,8 +38,7 @@ struct AddToPlaylistScreen: View {
         do {
             try await library.repository.savePlaylist(playlist)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = error
         }
     }
 }

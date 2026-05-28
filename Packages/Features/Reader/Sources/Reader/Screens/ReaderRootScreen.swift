@@ -163,7 +163,7 @@ public struct ReaderRootScreen: View {
                     viewModel: viewModel,
                 )
             }
-        case let .failed(message):
+        case let .failed(error):
             ContentUnavailableView {
                 Label {
                     Text("reader.error.cannotOpen.title", bundle: .module)
@@ -171,7 +171,7 @@ public struct ReaderRootScreen: View {
                     Image(systemName: "exclamationmark.triangle")
                 }
             } description: {
-                Text(message)
+                Text(describeReaderError(error))
             } actions: {
                 Button { Task { await viewModel.load() } } label: {
                     Text("reader.error.retry", bundle: .module)
