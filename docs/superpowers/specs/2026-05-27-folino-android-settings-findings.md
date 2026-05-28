@@ -1,12 +1,33 @@
 # Folino Android Settings Spike — Findings
 
-Date: 2026-05-27  
-Spike spec: `docs/superpowers/specs/2026-05-27-folino-android-settings-spike-design.md`  
+Date: 2026-05-27 (completed 2026-05-28)
+Branch: `worktree-android-settings-spike`
+Spike spec: `docs/superpowers/specs/2026-05-27-folino-android-settings-spike-design.md`
 Spike plan: `docs/superpowers/plans/2026-05-27-folino-android-settings-spike.md`
 
 ---
 
-## 1. Environment setup
+## 1. Summary
+
+The spike validated that Folino's Settings screen can run on Android by sharing Foundation-only Swift
+logic cross-compiled via the Swift 6.3 Android SDK, exposed to Kotlin through swift-java JNI bindings, with
+data ferried across the JNI boundary via swift-wirelet binary codecs. A working screen ran on a physical
+Pixel 8a (Android 16, arm64-v8a): DataStore-backed toggle/layout preferences persist correctly, and the
+version-history section shows real Swift-decoded content — 8 versions from 1.5.1 to 1.2.0 with
+locale-resolved English descriptions, proving Swift executed `VersionHistoryEntry.init(from:)` with `Locale.current`
+on-device. The `*Logic` / `*` (UI) product split proposed in the 2026-05-21 spec works in practice: the
+`SettingsLogic` product (protocol + ViewModel + wire types + JSON loader) compiled unchanged for Android;
+only the UI layer required a full Compose reimplementation. Two minimal `#if canImport` guards were needed in
+Domain to make the cross-compile chain clean; iOS behavior was unchanged by those guards.
+
+Screenshots:
+
+- `/tmp/folino-settings-p3.png` — P3: DataStore toggles + placeholder version history header
+- `/tmp/folino-settings-p4.png` — P4: real Swift-decoded version history (8 entries, English descriptions)
+
+---
+
+## 2. Environment setup
 
 ### Toolchain
 
@@ -18,99 +39,300 @@ Spike plan: `docs/superpowers/plans/2026-05-27-folino-android-settings-spike.md`
 | Android Swift SDK name | `swift-6.3.2-RELEASE_android` |
 | SDK installed via | `swift sdk list` — already present at session start |
 
-Verified with `TOOLCHAINS=org.swift.632202605101a swift --version`. The banner shows `swift-6.3.2-RELEASE` (not `swiftlang-6.3.2`), confirming the open-source toolchain is active.
+Verified with `TOOLCHAINS=org.swift.632202605101a swift --version`. The banner shows `swift-6.3.2-RELEASE`
+(not `swiftlang-6.3.2`), confirming the open-source toolchain is active. **Apple's Xcode Swift rejects the
+SDK's Foundation swiftmodule** — the open-source toolchain must be used for all cross-compile steps.
 
 ### NDK
 
 | Item | Value |
 | --- | --- |
-| NDK version used | `28.2.13676358` |
+| NDK version | `28.2.13676358` |
 | NDK path | `~/Library/Android/sdk/ndk/28.2.13676358` |
-| Sysroot setup | `setup-android-sdk.sh` outcome: `success: ndk-sysroot re-linked to Android NDK at …/ndk/28.2.13676358/toolchains/llvm/prebuilt` |
+| Sysroot setup | `setup-android-sdk.sh` — must be run once per machine (or after NDK upgrade) |
 
-Script location: `~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh`. Must be re-run whenever the NDK version changes (it rewrites a sysroot symlink inside the artifactbundle).
+Script: `~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh`.
+It rewrites a sysroot symlink inside the artifactbundle; without it, cross-compilation fails with
+`'semaphore.h' file not found`. The script is idempotent.
 
-### Cross-compile smoke test
+### Cross-compile smoke test (Phase 0)
 
 Target: `aarch64-unknown-linux-android28`, product `SheetMusicCore` from `swift-sheet-music`, release mode.
 
-Command:
-```
+```sh
 TOOLCHAINS=org.swift.632202605101a SWIFT_SHEET_MUSIC_ANDROID=1 \
   swift build --package-path <ssm> --product SheetMusicCore \
   --swift-sdk aarch64-unknown-linux-android28 -c release
 ```
 
-Outcome: **SUCCESS** — `Build of product 'SheetMusicCore' complete! (538.47s)`.
-
-Notable observations:
-- The build invoked swift-java's `JExtractSwiftPlugin` to generate JNI thunks for `SheetMusicAndroidJNI` automatically as a build-tool plugin.
-- `libSheetMusicAndroidJNI.so` was linked as the final artifact.
-- Build time ~9 minutes on Apple M-series (first build; subsequent incremental builds will be much faster).
-- One warning during jextract: `Writing types in file group: DrawProgram.swift` — benign, pre-existing in SSM.
+Result: **BUILD SUCCESSFUL** — `Build of product 'SheetMusicCore' complete! (538.47s)`.
+First build ~9 minutes on Apple M-series; subsequent incremental builds are much faster.
+Notable: swift-java's `JExtractSwiftPlugin` runs automatically as a build-tool plugin; `libSheetMusicAndroidJNI.so`
+was the final artifact.
 
 ### swiftkit-core Maven local publish
 
-Source: `swift-sheet-music/.build/checkouts/swift-java` (resolved as a SwiftPM dependency of SSM).
+Source: `swift-sheet-music/.build/checkouts/swift-java` (the swift-java revision pinned in SSM's
+`Package.resolved`).
 
-Command:
-```
+```sh
 <swift-java-checkout>/gradlew -p <swift-java-checkout> :SwiftKitCore:publishToMavenLocal
 ```
 
-Outcome: **BUILD SUCCESSFUL in 42s**.
+Result: **BUILD SUCCESSFUL in 42s**. Artifact path: `~/.m2/repository/org/swift/swiftkit/swiftkit-core/1.0-SNAPSHOT/`.
 
-Artifact path: `~/.m2/repository/org/swift/swiftkit/swiftkit-core/1.0-SNAPSHOT/`
-
-Files present:
-- `swiftkit-core-1.0-SNAPSHOT.jar`
-- `swiftkit-core-1.0-SNAPSHOT.module`
-- `swiftkit-core-1.0-SNAPSHOT.pom`
-
-Note: Gradle printed one unchecked-operation warning from `SimpleCompletableFuture.java` — this is a pre-existing issue in swift-java, not a local problem. The publish completed cleanly.
+**swiftkit-core is not on Maven Central** — `publishToMavenLocal` is a required setup step on every fresh
+machine or CI runner. The `gradlew` wrapper in the SSM SwiftPM checkout is self-contained.
 
 ### JDK versions
 
-| JDK | Version | Notes |
+| JDK | Version | Role |
 | --- | --- | --- |
-| Host `java` (on `PATH`) | OpenJDK 18.0.1.1 (build 18.0.1.1+2-6) | AdoptOpenJDK / JAVA_HOME default |
-| Gradle-selected JDK for swiftkit-core publish | Azul Zulu 17.0.17 (`/Library/Java/JavaVirtualMachines/zulu-17.jdk`) | Gradle auto-toolchain via `org.gradle.java.installations.fromEnv=…JAVA_HOME_17…` in swift-java's `gradle.properties` |
+| Host `java` (PATH) | OpenJDK 18.0.1.1 (AdoptOpenJDK) | Default JAVA_HOME |
+| Gradle-selected for Folino Android builds | Azul Zulu 17.0.17 | Explicit override via `org.gradle.java.home` |
 
-Friction: swift-java's Gradle build detects JDK ≥ 21 for Foreign Function & Memory (FFM) modules. With JDK 17, those modules are skipped (`[swift-java] JDK 17 detected — skipping: SwiftKitFFM, Samples:…`). This is expected behavior — `SwiftKitFFM` is the Panama-based alternative to JNI; Folino uses JNI, not FFM. No action needed.
-
-For future Folino Android Gradle builds (AGP), minimum is JDK 17 (compatible). Consider targeting JDK 21 long-term for FFM access if the plan ever shifts to Panama-based interop.
+`org.gradle.java.home` in `Android/gradle.properties` currently hardcodes the Zulu-17 path
+(`/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home`). This is machine-specific and must be moved
+to a per-developer override (e.g. `~/.gradle/gradle.properties`) before the project is shared or added to CI.
 
 ### GitHub Packages credentials
 
-`~/.gradle/gradle.properties` contains `gpr.user` and `gpr.key` — credentials present, wirelet dependency resolution expected to work.
+`~/.gradle/gradle.properties` contains `gpr.user` and `gpr.key`. Required to resolve
+`io.github.jiyimeta:wirelet-*` from the wirelet GitHub Packages Maven repo.
 
-### Summary: frictions and surprises
+### Setup friction summary
 
-1. **NDK sysroot re-link is a one-time-per-clone step** (not per build). If the NDK is upgraded or the machine is re-provisioned, `setup-android-sdk.sh` must be re-run. The script is idempotent.
-2. **First cross-compile is ~9 minutes** because swift-java's build-tool plugins (StaticBuildConfigPlugin, JExtractSwiftPlugin) and all transitive Swift packages compile from scratch. Incremental rebuilds are much faster.
-3. **swiftkit-core is not on Maven Central** — `publishToMavenLocal` is a required setup step on every fresh machine/CI runner. The `gradlew` wrapper inside the SSM SwiftPM checkout is self-contained; no separate Gradle installation needed.
-4. **Gradle uses JDK 17, not 18** — Gradle auto-toolchain resolution picks Zulu 17 over AdoptOpenJDK 18 due to `org.gradle.java.installations.fromEnv` preference ordering. This is fine for the JNI path Folino uses.
-
----
-
-## 2. SettingsLogic package split
-
-_To be filled in Phase 1._
+| Step | Notes |
+| --- | --- |
+| NDK sysroot re-link | One-time per machine or NDK upgrade; idempotent |
+| swiftkit-core mavenLocal publish | One-time per machine/CI runner |
+| Zulu-17 JDK installed | AGP minimum; host OpenJDK 18 not usable for Android Gradle |
+| gpr.user/gpr.key in `~/.gradle/gradle.properties` | Required for wirelet dependency resolution |
+| First cross-compile ~9 min | Subsequent builds are incremental and much faster |
 
 ---
 
-## 3. FolinoSettingsJNI module + swift-java bindings
+## 3. What was shared cleanly (できること)
 
-_To be filled in Phase 2._
+### 3.1 SettingsLogic product (Phase 1, commit d1e4ff5 + fix 76881aa)
+
+The `SettingsLogic` SwiftPM product was extracted from the iOS `Settings` product by a behavior-preserving
+split. It contains:
+
+| Symbol | Type | Compiled on Android? |
+| --- | --- | --- |
+| `VersionHistoryLoader` | `protocol` (Foundation-only) | Yes |
+| `VersionHistoryViewModel` | `@Observable @MainActor class` | Yes (`libswiftObservation.so` ships in the SDK) |
+| `VersionHistoryWire` / `VersionHistoryWireList` | `@WireFormat` structs | Yes |
+| `JSONVersionHistoryLoader` | `struct` (pure Foundation + Codable) | Yes |
+| `versionHistoryWirePayload` | `func` | Yes |
+
+The Yams-backed `DefaultVersionHistoryLoader` and all SwiftUI views stayed in the iOS-only `Settings` product.
+iOS test suites were unaffected: SettingsLogicTests 3/3 green, SettingsTests 9/9 green.
+
+**Gotcha (76881aa):** `App/VersionHistoryPresenter.swift` and
+`Tests/FolinoTests/VersionHistoryPresenterTests.swift` both needed an explicit `import SettingsLogic`.
+Swift does not re-export a dependency's symbols through `import Settings`. The test import was missed
+initially and caused a clean-build compile error (`cannot find type 'VersionHistoryLoader'`).
+
+### 3.2 Domain platform guards (commit 25215e2)
+
+The cross-compile chain `FolinoSettingsJNI → SettingsLogic → Domain → SheetMusicCore` required two minimal
+guards in Domain. Both are iOS byte-identical; they only enable compilation on non-Apple platforms.
+
+**`Packages/Domain/Sources/Domain/Models/ReaderPreferences.swift`:**
+```swift
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+```
+`CGFloat` comes from Foundation on Android; `CoreGraphics` is Apple-only.
+
+**`Packages/Domain/Sources/Domain/DomainError.swift`:**
+```swift
+#if canImport(Darwin)
+    // String(localized:defaultValue:bundle:) — Apple Foundation only
+    ...
+#else
+    // English-default fallback
+    ...
+#endif
+```
+`swift-corelibs-foundation` does not vend the `String(localized:defaultValue:bundle:)` initializer.
+
+### 3.3 Wire type roundtrip
+
+`swift-wirelet 0.1.0-alpha.2` supports `[String]` fields AND nested `[@WireFormat]` arrays — no shape
+workarounds were needed. The roundtrip test (`VersionHistoryWireListRoundtripTests`) passes.
+
+### 3.4 @Observable on Android
+
+`@Observable` and `import Observation` compiled correctly on Android without modification. The SDK ships
+`libswiftObservation.so`. (Note: reactive observation across JNI was not exercised in this spike — see §6.)
 
 ---
 
-## 4. Android Gradle project scaffold + wirelet integration
+## 4. What had to be reimplemented natively in Compose (できないこと — UI layer)
 
-_To be filled in Phase 3._
+There is no shared UI path between iOS and Android. Every UI element was reimplemented in Jetpack Compose.
+
+| Settings element | iOS (SwiftUI) | Android (Compose) | Notes |
+| --- | --- | --- | --- |
+| Reader toggle rows (4 items) | `Toggle` in `Form` | `Switch` + `Row` in `LazyColumn` | Defaults match exactly |
+| Layout mode picker | Segmented `Picker` (V/H/P) | `SingleChoiceSegmentedButtonRow` | Same 3 options |
+| "Reader" section header | `Section` header | `Text(titleSmall)` | Plain text; SF Symbols absent |
+| Version history list | `VersionHistoryScreen` SwiftUI view | `items(versionHistory.size)` in LazyColumn | Correct data |
+| Soundfont picker row | `SoundfontPresetRow` | Not implemented (out of scope) | |
+| Feedback mail | `FeedbackMailView` (`MFMailComposeViewController`) | Not implemented (out of scope) | No Android equivalent |
+| License list | `LicenseListView` (iOS build-tool plugin) | Not implemented (out of scope) | |
+
+**SF Symbols have no Android equivalent.** All icon-bearing labels use plain text in the Compose
+reimplementation.
 
 ---
 
-## 5. End-to-end screen on emulator + shareability assessment
+## 5. What needs separate handling (別途対応が必要なこと)
 
-_To be filled in Phase 4/5._
+| Item | Reason | Required work |
+| --- | --- | --- |
+| Settings persistence (DataStore vs AppStorage) | `@AppStorage` / SwiftData don't exist on Android | Kotlin DataStore (done in spike); key contract not shared (see §6) |
+| Domain Android-compat audit | Two guards found; more likely exist as more Features are added to the chain | Systematic `#if canImport` audit of all Domain files before next feature |
+| Localization / `.xcstrings` | `String(localized:)` and `.xcstrings` have no Android path | Decide: share strings file + a script-based emitter, or maintain per-platform string resources |
+| Soundfont provider | `MuseScoreGeneralProvider` + download state machine; iOS-specific asset delivery | Full reimplementation needed on Android |
+| Crash reporting | Firebase Crashlytics iOS SDK | Firebase Crashlytics Android SDK (separate setup) |
+| Feedback mail | `MFMailComposeViewController` — iOS only | Android Intent-based mail; no shared code possible |
+| License list | `LicenseList` iOS build-tool plugin; Xcode-only | Android open-source disclosure is a separate toolchain concern |
+| SF Symbols | Apple-only | Use Material Icons or custom SVGs on Android; no shared asset |
+| Main-thread JNI decode | `MainActivity.onCreate` decodes on main thread (acceptable for spike) | Move to ViewModel + coroutine before production |
+| JNI error handling | `VersionHistoryBridge.decode` has no error handling; malformed payload crashes | Wrap in `runCatching` for production |
+
+---
+
+## 6. Architecture findings and unresolved decisions for productization
+
+### 6.1 The `*Logic` / `*` split is validated
+
+The `SettingsLogic` / `Settings` product split from the 2026-05-21 spec worked correctly in practice.
+Settings was a good first target because its shareable logic (`VersionHistoryViewModel` + the JSON loader)
+is stateless. The same split will be needed for every Feature intended for Android.
+
+### 6.2 `@Observable` reactive stores not exercised across JNI
+
+This spike used a one-shot JNI call (load-on-startup, not reactive). The 2026-05-21 spec flagged reactive
+observation across JNI as the main risk. A Reader or Editor pilot would need to validate that
+`@Observable`-backed ViewModels can drive Compose state correctly via a JNI event loop — this remains
+unvalidated.
+
+### 6.3 Domain needs a systematic Android-compat pass
+
+The two guards added in commit 25215e2 are the tip of the iceberg. A full audit of Domain (and any
+Foundation-only utility code shared with Android) is needed before more Features enter the cross-compile
+chain. Pay particular attention to: any `import CoreGraphics`, any `import UIKit`, any Apple-only
+`String(localized:...)` forms, and any `Bundle.module` lookups.
+
+### 6.4 Localization strategy is unresolved
+
+Domain's `DomainError` now silently falls back to English on Android. The spike did not address how
+`.xcstrings` content should reach Android. Options include:
+
+- A script that exports `.xcstrings` to Android `strings.xml` format at build time.
+- Duplicating user-visible strings per platform (maintenance burden, but keeps platforms decoupled).
+- Routing all localization through Swift (pass locale as input, return pre-localized strings over JNI).
+
+This decision should be made before any Feature with significant user-visible copy is ported.
+
+### 6.5 DataStore key contract is not shared
+
+`SettingsPrefs` uses plain string keys (`"reader.metronome.enabled"`, etc.) that are visually aligned with
+iOS `ReaderGlobalSettingsKey` / `PrivacySettingsKey` typed constants, but there is no compile-time
+contract ensuring they match. If a key is renamed on iOS, the Android side silently diverges. A shared
+key definition (even as a documentation table) is needed before production.
+
+### 6.6 swift-java + wirelet vs. `@_cdecl` plan
+
+The 2026-05-21 spec proposed using `@_cdecl` for the JNI boundary. The spike superseded that with
+swift-java jextract + wirelet. The swap held up: swift-java's static initializer (`SwiftLibraries.loadLibraryWithFallbacks`)
+handled `.so` load order correctly with no manual `System.loadLibrary` calls and no logcat errors.
+wirelet `0.1.0-alpha.2` generated correct `VersionHistoryWireListCodec` + model classes for the
+`kotlin.android` source set with a manual `dependsOn` wiring (the plugin v1 only auto-wires `kotlin.jvm`).
+
+### 6.7 In-tree `Android/` vs. standalone repo
+
+The spike placed the Android Gradle project under `Android/` in the iOS repo (mirroring swift-sheet-music's
+layout). This is a convenience for cross-compile path resolution (`packageRoot.resolve("Packages/...")`)
+but creates a monorepo-style coupling. A standalone `folino-android` repo would require publishing Swift
+products as a prebuilt artifact first. Decision deferred.
+
+### 6.8 swift-java version
+
+The spike pins `swiftlang/swift-java` at exact `0.3.0` (gated behind `FOLINO_ANDROID=1`). This is
+intentionally stricter than swift-sheet-music, which fetches swift-java unconditionally — the iOS manifest
+never references the swift-java dependency.
+
+---
+
+## 7. Cleanup / known issues before leaving spike status
+
+| Issue | Location | Fix |
+| --- | --- | --- |
+| Hardcoded Zulu-17 JDK path | `Android/gradle.properties` | Move to per-developer `~/.gradle/gradle.properties` or use Gradle toolchain API |
+| NDK host path hardcoded `darwin-x86_64` | `Scripts/android-build-libs.sh` (inherited from SSM) | Detect `uname -m`; use `darwin-aarch64` on Apple Silicon NDK if present |
+| Main-thread JNI + asset decode | `MainActivity.onCreate` | Move to ViewModel + `viewModelScope.launch` |
+| No error handling in `VersionHistoryBridge` | `Android/FolinoSettingsAndroid/src/main/kotlin/.../VersionHistory.kt` | Wrap in `runCatching`; return empty list on decode failure |
+| Stale "Phase 3" comments | `Android/FolinoSettingsAndroid/build.gradle.kts` | Clean up inline TODO comments |
+| `logLevel: "debug"` in swift-java config | `Packages/Features/Settings/Sources/FolinoSettingsJNI/swift-java.config` | Set to `"info"` or remove before production |
+| `items(list.size)` idiom | `SettingsScreen.kt` | Replace with idiomatic `items(list)` (LazyColumn extension) |
+| DataStore key contract not shared | `SettingsPrefs.kt` | Document or enforce parity with iOS typed constants |
+| Version-history loader test has no description assertions | `SettingsLogicTests` | `VersionHistoryEntry.localeUserInfoKey` is internal to Domain — either expose for tests or add integration coverage |
+
+---
+
+## 8. Reproduce from a clean checkout
+
+Prerequisites: Xcode 26+, open-source Swift toolchain `org.swift.632202605101a` installed, Android Studio,
+NDK 28.2.13676358, Azul Zulu 17 JDK, `gpr.user` / `gpr.key` in `~/.gradle/gradle.properties`.
+
+```sh
+# 1. Clone and enter the worktree branch
+git clone <repo> folino && cd folino
+git checkout worktree-android-settings-spike   # or use the worktree directly
+
+# 2. One-time NDK sysroot re-link
+~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+
+# 3. Publish swiftkit-core to mavenLocal
+# Locate the swift-java checkout via the swift-sheet-music dependency:
+SWIFT_JAVA_PATH=$(find .build/checkouts -name 'swift-java' -maxdepth 2 -type d | head -1)
+"$SWIFT_JAVA_PATH/gradlew" -p "$SWIFT_JAVA_PATH" :SwiftKitCore:publishToMavenLocal
+
+# 4. Cross-compile FolinoSettingsJNI and stage .so + Java bindings
+bash Scripts/android-build-libs.sh
+
+# 5. Build and run on a connected device (or emulator)
+cd Android
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n com.keynumber.folino/.MainActivity
+```
+
+Step 4 takes ~9 minutes on first run (subsequent builds are incremental). Both arm64-v8a and x86_64 ABIs
+are built by default; restrict with `FOLINO_ANDROID_ABIS=arm64-v8a bash Scripts/android-build-libs.sh`
+for faster local iteration.
+
+---
+
+## Appendix: commit log
+
+| SHA | Description |
+| --- | --- |
+| `f1a6aea` | Add findings scaffold with P0 toolchain notes |
+| `d1e4ff5` | Split SettingsLogic (version-history protocol + VM) out of Settings |
+| `76881aa` | Add missing SettingsLogic import to App version-history tests |
+| `083cee0` | Add Android Gradle scaffold (settings module + Compose app shell) |
+| `45e3fe4` | Compose Settings screen with DataStore-backed toggles |
+| `5d33064` | Add VersionHistoryWire @WireFormat types with roundtrip test |
+| `cbbd96d` | Add JSON version-history loader + wire payload helper for Android |
+| `25215e2` | Add Android-only FolinoSettingsJNI target (gated by FOLINO_ANDROID) |
+| `6d0e8fc` | Add android-build-libs.sh to cross-compile + stage FolinoSettingsJNI |
+| `46ca664` | Wire wirelet Kotlin codegen + JNI façade into FolinoSettingsAndroid |
+| `2decafd` | Render Swift-decoded version history in Compose via wirelet |
