@@ -25,7 +25,6 @@ let package = Package(
             dependencies: [
                 .product(name: "SheetMusicCore", package: "swift-sheet-music"),
             ],
-            resources: [.process("Resources")],
             plugins: swiftLintPlugins,
         ),
         .testTarget(name: "DomainTests", dependencies: ["Domain"]),
