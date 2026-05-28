@@ -1,8 +1,11 @@
 package com.keynumber.folino.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PictureInPicture
@@ -18,7 +21,11 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(prefs: SettingsPrefs, versionHistory: List<VersionHistoryItem>) {
+fun SettingsScreen(
+    prefs: SettingsPrefs,
+    versionHistory: List<VersionHistoryItem>,
+    onOpenLicenses: (() -> Unit)? = null,
+) {
     val scope = rememberCoroutineScope()
     val metronome by prefs.metronome.collectAsState(initial = false)
     val pip by prefs.pip.collectAsState(initial = false)
@@ -103,6 +110,32 @@ fun SettingsScreen(prefs: SettingsPrefs, versionHistory: List<VersionHistoryItem
             Column {
                 Text(v.version, style = MaterialTheme.typography.titleMedium)
                 v.descriptions.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
+            }
+        }
+        if (onOpenLicenses != null) {
+            item {
+                Spacer(Modifier.height(16.dp))
+                Text("About", style = MaterialTheme.typography.titleSmall)
+            }
+            item {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenLicenses() }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Description,
+                        contentDescription = "Licenses",
+                        modifier = Modifier.padding(end = 12.dp),
+                    )
+                    Text("Licenses", Modifier.weight(1f))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = null,
+                    )
+                }
             }
         }
     }

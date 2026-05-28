@@ -1,0 +1,11 @@
+package com.keynumber.folino.ui.licenses
+
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
+
+@Composable
+fun LicensesScreen() {
+    LibrariesContainer(modifier = Modifier.fillMaxSize())
+}

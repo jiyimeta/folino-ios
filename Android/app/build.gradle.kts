@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.mikepenz.aboutlibraries.plugin")
 }
 
 android {
@@ -44,6 +45,11 @@ android {
     }
 }
 
+aboutLibraries {
+    includePlatform = false
+    duplicationMode = com.mikepenz.aboutlibraries.plugin.DuplicateMode.MERGE
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
@@ -52,10 +58,14 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.navigation:navigation-compose:2.8.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
 
     implementation(project(":FolinoSettingsAndroid"))
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.android.material:material:1.12.0")
+
+    implementation("com.mikepenz:aboutlibraries-core:11.2.3")
+    implementation("com.mikepenz:aboutlibraries-compose-m3:11.2.3")
 }
