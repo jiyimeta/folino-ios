@@ -236,17 +236,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
         applyMasterVolume(value)
     }
 
-    /// Forward the per-score master output volume to the engine's master-gain stage. Clamped to `[0, 3]` (300%).
-    ///
-    /// TODO(master-gain): the engine call is stubbed until `swift-sheet-music` ships
-    /// `PlaybackEngine.setMasterGain(_:)` (tracked on the library's `feature/master-output-gain` branch). Once the
-    /// dependency is bumped, uncomment the `engine.setMasterGain(...)` line and drop the `_ = clamped` discard — the
-    /// clamp and the call sites (`applyPreferences`, `setMasterVolume`, and `reloadSoundfont` via `applyPreferences`)
-    /// are already wired. Until then master volume is persisted and surfaced in the UI but does not affect audio.
+    /// Forward the per-score master output volume to the engine's master-gain stage (post per-channel mixing, ahead
+    /// of the engine's peak limiter). `1.0` is unity. The engine clamps to `[0, 3]`; we clamp here too so the value
+    /// mirrors what the Reader persists. Called on load (`applyPreferences`), on every slider write
+    /// (`setMasterVolume`), and after a soundfont swap (`reloadSoundfont` replays `applyPreferences`).
     func applyMasterVolume(_ value: Double) {
-        let clamped = Float(min(max(value, 0), 3))
-        // engine.setMasterGain(clamped)
-        _ = clamped
+        engine.setMasterGain(Float(min(max(value, 0), 3)))
     }
 
     // MARK: - Now Playing / Remote Commands
