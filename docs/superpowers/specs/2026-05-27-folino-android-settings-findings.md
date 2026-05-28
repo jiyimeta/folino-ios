@@ -18,12 +18,24 @@ locale-resolved English descriptions, proving Swift executed `VersionHistoryEntr
 on-device. The `*Logic` / `*` (UI) product split proposed in the 2026-05-21 spec works in practice: the
 `SettingsLogic` product (protocol + ViewModel + wire types + JSON loader) compiled unchanged for Android;
 only the UI layer required a full Compose reimplementation. Two minimal `#if canImport` guards were needed in
-Domain to make the cross-compile chain clean; iOS behavior was unchanged by those guards.
+Domain at spike time; both have since been superseded by cleaner architectural fixes (see §1.1).
 
 Screenshots:
 
 - `/tmp/folino-settings-p3.png` — P3: DataStore toggles + placeholder version history header
 - `/tmp/folino-settings-p4.png` — P4: real Swift-decoded version history (8 entries, English descriptions)
+- `/tmp/folino-settings-final.png` — post-Fix state: Settings screen with Material icons + Licenses row
+- `/tmp/folino-licenses.png` — post-Fix state: AboutLibraries Licenses screen (populated dependency list)
+
+### 1.1 Follow-up fixes applied after initial spike
+
+Five follow-up commits moved items from "needs separate handling / known issue" to "applied":
+
+- **`0f75ba4`** Use Double for ReaderPreferences.staffSize; drop Domain's CoreGraphics dependency
+- **`bf40189`** Move DomainError's LocalizedError conformance from Domain to App
+- **`2828fec`** Add Material icons to Compose Settings rows (matching iOS SF Symbols)
+- **`f53ad4d`** Add AboutLibraries-powered Licenses screen reachable from Settings
+- **`1ed8204`** Narrow Material3 @OptIn from MainActivity class to LicensesRoute composable
 
 ---
 
@@ -42,6 +54,10 @@ Screenshots:
 Verified with `TOOLCHAINS=org.swift.632202605101a swift --version`. The banner shows `swift-6.3.2-RELEASE`
 (not `swiftlang-6.3.2`), confirming the open-source toolchain is active. **Apple's Xcode Swift rejects the
 SDK's Foundation swiftmodule** — the open-source toolchain must be used for all cross-compile steps.
+
+The spike-time `#if canImport(CoreGraphics)` and `#if canImport(Darwin)` guards in Domain (commit `25215e2`)
+have been superseded by `0f75ba4` and `bf40189` respectively. Domain no longer contains any `#if canImport`
+guards — it is Android-clean unconditionally.
 
 ### NDK
 
@@ -135,30 +151,31 @@ iOS test suites were unaffected: SettingsLogicTests 3/3 green, SettingsTests 9/9
 Swift does not re-export a dependency's symbols through `import Settings`. The test import was missed
 initially and caused a clean-build compile error (`cannot find type 'VersionHistoryLoader'`).
 
-### 3.2 Domain platform guards (commit 25215e2)
+### 3.2 Domain platform compatibility (spike commit 25215e2; superseded by 0f75ba4 + bf40189)
 
-The cross-compile chain `FolinoSettingsJNI → SettingsLogic → Domain → SheetMusicCore` required two minimal
-guards in Domain. Both are iOS byte-identical; they only enable compilation on non-Apple platforms.
+At spike time, two minimal `#if canImport` guards were added in Domain (commit `25215e2`). Both have since
+been replaced by cleaner fixes:
 
-**`Packages/Domain/Sources/Domain/Models/ReaderPreferences.swift`:**
-```swift
-#if canImport(CoreGraphics)
-import CoreGraphics
-#endif
-```
-`CGFloat` comes from Foundation on Android; `CoreGraphics` is Apple-only.
+**`staffSize` / CoreGraphics (`0f75ba4`):** All six `CGFloat` occurrences in
+`Packages/Domain/Sources/Domain/Models/ReaderPreferences.swift` (`staffSize` property, init param, Codable
+decode, `minStaffSize`, `maxStaffSize` constants) were changed to `Double`. Five downstream Reader files
+(`LayoutSettingsModel`, `ReaderPreferencesStore`, `ReaderViewModel`, `ReaderRootScreen`,
+`VisualInspectorScreen`) had explicit `CGFloat` annotations updated. SwiftUI views further downstream use
+SE-0307 implicit conversion (`Double` → `CGFloat`) — deliberate scope limit. The `#if canImport(CoreGraphics)`
+import guard was removed. iOS behavior is identical (`CGFloat == Double` on 64-bit Apple; JSON wire format
+unchanged). Domain now has zero `CGFloat` or CoreGraphics references.
 
-**`Packages/Domain/Sources/Domain/DomainError.swift`:**
-```swift
-#if canImport(Darwin)
-    // String(localized:defaultValue:bundle:) — Apple Foundation only
-    ...
-#else
-    // English-default fallback
-    ...
-#endif
-```
-`swift-corelibs-foundation` does not vend the `String(localized:defaultValue:bundle:)` initializer.
+**`DomainError` / Darwin (`bf40189`):** `DomainError` is now a pure
+`enum DomainError: Error, Sendable, Equatable { … }` with no `LocalizedError` conformance and no
+`String(localized:)` call. A new `App/DomainError+LocalizedError.swift` provides `@retroactive LocalizedError`
+conformance with the same switch, keeping the bundle reference in App. All seven `domain.error.*` localized
+string keys (× 5 locales) moved from `Packages/Domain/Sources/Domain/Resources/Localizable.xcstrings` to
+`App/Resources/Localizable.xcstrings` (byte-identical translations). Domain's `Resources/` directory was
+deleted; `Packages/Domain/Package.swift` no longer declares `resources:` for the Domain target. Because
+Features cannot import App, `LibraryViewModel.describe()` and `ReaderViewModel.describe()` received
+per-feature fallback strings (`library.error.fallback.*` / `reader.error.fallback.*` — 4 keys each, verbatim
+copies of the originals) for cases they format themselves. Screens that surface errors via
+`(error as? LocalizedError)?.errorDescription` work through App's extension at runtime.
 
 ### 3.3 Wire type roundtrip
 
@@ -180,14 +197,41 @@ There is no shared UI path between iOS and Android. Every UI element was reimple
 | --- | --- | --- | --- |
 | Reader toggle rows (4 items) | `Toggle` in `Form` | `Switch` + `Row` in `LazyColumn` | Defaults match exactly |
 | Layout mode picker | Segmented `Picker` (V/H/P) | `SingleChoiceSegmentedButtonRow` | Same 3 options |
-| "Reader" section header | `Section` header | `Text(titleSmall)` | Plain text; SF Symbols absent |
+| "Reader" section header | `Section` header | `Text(titleSmall)` | Plain text |
 | Version history list | `VersionHistoryScreen` SwiftUI view | `items(versionHistory.size)` in LazyColumn | Correct data |
 | Soundfont picker row | `SoundfontPresetRow` | Not implemented (out of scope) | |
 | Feedback mail | `FeedbackMailView` (`MFMailComposeViewController`) | Not implemented (out of scope) | No Android equivalent |
-| License list | `LicenseListView` (iOS build-tool plugin) | Not implemented (out of scope) | |
+| License list | `LicenseListView` (iOS build-tool plugin) | `LibrariesContainer` via AboutLibraries 11.2.3 (`f53ad4d`) | Navigated from Settings "About" section |
 
-**SF Symbols have no Android equivalent.** All icon-bearing labels use plain text in the Compose
-reimplementation.
+### 4.1 Material icons for Settings rows (commit 2828fec)
+
+`androidx.compose.material:material-icons-extended` (BOM-pinned) was added. `ToggleRow` now takes a
+leading `imageVector` parameter; all callers updated with `contentDescription` set per icon.
+
+| Settings row | SF Symbol (iOS) | Material Icon (Android) | Notes |
+| --- | --- | --- | --- |
+| Metronome | `metronome` | `Icons.Filled.MusicNote` | |
+| Picture-in-Picture | `pip` | `Icons.Filled.PictureInPicture` | |
+| Collapse rests | `arrow.up.and.down.text.horizontal` | `Icons.Filled.UnfoldLess` | |
+| Keep screen awake | `sun.max` | `Icons.Filled.ScreenLockPortrait` | Semantically imperfect; see §7 |
+| Layout mode | `square.split.2x1` | `Icons.Filled.ViewArray` | |
+| Version History header | (section header) | `Icons.Filled.History` | 8 dp padding (vs 12 dp in ToggleRow; see §7) |
+
+### 4.2 Licenses screen (commit f53ad4d + 1ed8204)
+
+- Root `Android/build.gradle.kts`: `id("com.mikepenz.aboutlibraries.plugin") version "11.2.3" apply false`.
+- App applies the plugin + runtime deps `aboutlibraries-core:11.2.3`, `aboutlibraries-compose-m3:11.2.3`,
+  and `androidx.navigation:navigation-compose:2.8.0`.
+- New `LicensesScreen.kt` wraps `LibrariesContainer` (M3).
+- `MainActivity.kt` hosts a `NavHost` with `settings` and `licenses` routes; the licenses route renders a
+  `Scaffold` + `TopAppBar("Licenses")` with a back arrow, extracted into a `private @Composable fun
+  LicensesRoute(onBack: () -> Unit)` (commit `1ed8204` narrowed `@OptIn(ExperimentalMaterial3Api::class)`
+  from class-level to this function).
+- `SettingsScreen.kt` has a new "About" section with a clickable "Licenses" row
+  (`Icons.Filled.Description`) that calls `onOpenLicenses`.
+- Runtime-verified on Pixel 6 Pro API 36 emulator: the Licenses screen renders a populated dependency list
+  (AboutLibraries 11.2.3, Activity 1.9.2, AppCompat 1.6.1, …) with Apache 2.0 badges.
+  Screenshots: `/tmp/folino-settings-final.png` and `/tmp/folino-licenses.png`.
 
 ---
 
@@ -195,16 +239,19 @@ reimplementation.
 
 | Item | Reason | Required work |
 | --- | --- | --- |
-| Settings persistence (DataStore vs AppStorage) | `@AppStorage` / SwiftData don't exist on Android | Kotlin DataStore (done in spike); key contract not shared (see §6) |
-| Domain Android-compat audit | Two guards found; more likely exist as more Features are added to the chain | Systematic `#if canImport` audit of all Domain files before next feature |
+| Settings persistence (DataStore vs AppStorage) | `@AppStorage` / SwiftData don't exist on Android | Kotlin DataStore (done in spike); key contract not shared (see §6.5) |
 | Localization / `.xcstrings` | `String(localized:)` and `.xcstrings` have no Android path | Decide: share strings file + a script-based emitter, or maintain per-platform string resources |
 | Soundfont provider | `MuseScoreGeneralProvider` + download state machine; iOS-specific asset delivery | Full reimplementation needed on Android |
 | Crash reporting | Firebase Crashlytics iOS SDK | Firebase Crashlytics Android SDK (separate setup) |
 | Feedback mail | `MFMailComposeViewController` — iOS only | Android Intent-based mail; no shared code possible |
-| License list | `LicenseList` iOS build-tool plugin; Xcode-only | Android open-source disclosure is a separate toolchain concern |
-| SF Symbols | Apple-only | Use Material Icons or custom SVGs on Android; no shared asset |
+| SF Symbols → Material Icons | Apple-only asset; mapping now implemented for Settings rows (`2828fec`) | Apply same mapping discipline to future screens; no shared asset |
 | Main-thread JNI decode | `MainActivity.onCreate` decodes on main thread (acceptable for spike) | Move to ViewModel + coroutine before production |
 | JNI error handling | `VersionHistoryBridge.decode` has no error handling; malformed payload crashes | Wrap in `runCatching` for production |
+| Yams-backed loader (iOS only) | `DefaultVersionHistoryLoader` uses Yams; stays in iOS `Settings` product | Android uses `JSONVersionHistoryLoader`; no change needed |
+
+**Items resolved since initial spike:** Domain CoreGraphics guards → fixed by `0f75ba4`. DomainError
+Android fallback → fixed by `bf40189`. License list has no Android path → resolved by AboutLibraries in
+`f53ad4d`. SF Symbol substitution for Settings rows → implemented in `2828fec` (mapping table above).
 
 ---
 
@@ -223,17 +270,23 @@ observation across JNI as the main risk. A Reader or Editor pilot would need to 
 `@Observable`-backed ViewModels can drive Compose state correctly via a JNI event loop — this remains
 unvalidated.
 
-### 6.3 Domain needs a systematic Android-compat pass
+### 6.3 Domain's Android-clean rule is now codified
 
-The two guards added in commit 25215e2 are the tip of the iceberg. A full audit of Domain (and any
-Foundation-only utility code shared with Android) is needed before more Features enter the cross-compile
-chain. Pay particular attention to: any `import CoreGraphics`, any `import UIKit`, any Apple-only
-`String(localized:...)` forms, and any `Bundle.module` lookups.
+The two `#if canImport` guards added at spike time (commit `25215e2`) were a minimal fix. The follow-up
+commits `0f75ba4` and `bf40189` replaced them with the correct architectural approach: Domain stays a pure
+value-type / protocol layer with no platform-specific imports; localization belongs in the UI tier (App or
+Feature). This rule is now enforced by the absence of any `#if canImport`, `CGFloat`, CoreGraphics, or
+`String(localized:)` call in Domain. Future Domain-compat audits should flag any regression to these
+patterns.
+
+The per-feature fallback string approach (`library.error.fallback.*` / `reader.error.fallback.*`) is a
+direct consequence of the Feature-can't-import-App rule: Features format their own error messages without
+reaching into App's `DomainError+LocalizedError` extension.
 
 ### 6.4 Localization strategy is unresolved
 
-Domain's `DomainError` now silently falls back to English on Android. The spike did not address how
-`.xcstrings` content should reach Android. Options include:
+Domain no longer carries localized strings (resolved by `bf40189`). The remaining question is how
+`.xcstrings` content for non-Domain strings should reach Android. Options include:
 
 - A script that exports `.xcstrings` to Android `strings.xml` format at build time.
 - Duplicating user-visible strings per platform (maintenance burden, but keeps platforms decoupled).
@@ -284,6 +337,10 @@ never references the swift-java dependency.
 | `items(list.size)` idiom | `SettingsScreen.kt` | Replace with idiomatic `items(list)` (LazyColumn extension) |
 | DataStore key contract not shared | `SettingsPrefs.kt` | Document or enforce parity with iOS typed constants |
 | Version-history loader test has no description assertions | `SettingsLogicTests` | `VersionHistoryEntry.localeUserInfoKey` is internal to Domain — either expose for tests or add integration coverage |
+| `defaultLocalization: "en"` residual in Domain | `Packages/Domain/Package.swift` | `bf40189` removed the `resources:` declaration but `defaultLocalization` remains; inert (no target uses it) but worth deleting |
+| Icon padding inconsistency | `SettingsScreen.kt` | Version History section header icon uses 8 dp padding; `ToggleRow` icons use 12 dp — minor visual inconsistency |
+| No `@Preview` for "About" section | `SettingsScreen.kt` | `onOpenLicenses` callback is optional; the "About" section renders only when non-nil, so a no-callback preview omits it; add a dedicated preview with a stub callback |
+| `Icons.Filled.ScreenLockPortrait` for "Keep screen awake" | `SettingsScreen.kt` | Icon implies lock-engaged; `BrightnessMedium` / `LightMode` would communicate "screen on" more directly; judgment call kept, review before production |
 
 ---
 
@@ -319,6 +376,9 @@ Step 4 takes ~9 minutes on first run (subsequent builds are incremental). Both a
 are built by default; restrict with `FOLINO_ANDROID_ABIS=arm64-v8a bash Scripts/android-build-libs.sh`
 for faster local iteration.
 
+The AboutLibraries license list is generated at `assembleDebug` time by the Gradle plugin — no extra step
+is needed. The Licenses screen is reachable from the Settings "About" section immediately after install.
+
 ---
 
 ## Appendix: commit log
@@ -336,3 +396,8 @@ for faster local iteration.
 | `6d0e8fc` | Add android-build-libs.sh to cross-compile + stage FolinoSettingsJNI |
 | `46ca664` | Wire wirelet Kotlin codegen + JNI façade into FolinoSettingsAndroid |
 | `2decafd` | Render Swift-decoded version history in Compose via wirelet |
+| `0f75ba4` | Use Double for ReaderPreferences.staffSize; drop Domain's CoreGraphics dependency |
+| `bf40189` | Move DomainError's LocalizedError conformance from Domain to App |
+| `2828fec` | Add Material icons to Compose Settings rows (matching iOS SF Symbols) |
+| `f53ad4d` | Add AboutLibraries-powered Licenses screen reachable from Settings |
+| `1ed8204` | Narrow Material3 @OptIn from MainActivity class to LicensesRoute composable |
