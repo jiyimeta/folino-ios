@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.2"
 }
 
 android {
@@ -36,3 +37,41 @@ dependencies {
     // wirelet-runtime provides BinaryReader/BinaryWriter used by wirelet-generated codecs.
     api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.2")
 }
+
+// `packageRoot` is the worktree root (one level above the Android/ Gradle root).
+val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
+
+wirelet {
+    // SwiftPM resolves swift-wirelet into Packages/Features/Settings/.build/checkouts
+    // at the revision pinned in Package.resolved; reuse that checkout for the emitter.
+    // Fall back to a repo-root .build/checkouts clone if the Settings checkout is absent.
+    val settingsCheckout = packageRoot.resolve("Packages/Features/Settings/.build/checkouts/swift-wirelet")
+    val rootCheckout = packageRoot.resolve(".build/checkouts/swift-wirelet")
+    swiftPackagePath.set(if (settingsCheckout.exists()) settingsCheckout else rootCheckout)
+    sources {
+        register("main") {
+            // Where the @WireFormat decls live (VersionHistoryWire / VersionHistoryWireList).
+            schemaPaths.from(packageRoot.resolve("Packages/Features/Settings/Sources/SettingsLogic"))
+            codecPackage.set("com.keynumber.folino.settings")
+            modelPackage.set("com.keynumber.folino.settings")
+            emitModels.set(true)
+        }
+    }
+}
+
+// Wire the wirelet-generated source directory into the Android source set
+// and make every Kotlin compile task depend on codegen. The wirelet plugin
+// v1 only hooks into kotlin.jvm; kotlin.android needs the same wiring added
+// manually here.
+val generateWireletCodecsMain = tasks.named("generateWireletCodecsMain")
+
+android {
+    sourceSets["main"].kotlin.srcDir(
+        generateWireletCodecsMain.flatMap {
+            (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletCodecs).outputDir
+        }
+    )
+}
+
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
+    .configureEach { dependsOn(generateWireletCodecsMain) }
