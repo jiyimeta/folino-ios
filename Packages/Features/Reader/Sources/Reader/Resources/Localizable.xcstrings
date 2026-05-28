@@ -182,19 +182,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Master Volume"
+            "value" : "Output"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "マスターボリューム"
+            "value" : "全体音量"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "마스터 볼륨"
+            "value" : "전체 음량"
           }
         },
         "zh-Hans" : {

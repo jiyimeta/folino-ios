@@ -1,7 +1,33 @@
 import Domain
+import Foundation
 import SheetMusicAudio
 import SheetMusicCore
 import SwiftUI
+
+/// Master-volume slider taper. The slider's value space is position `0…1`; linear amplitude is
+/// `position^N × maxMasterVolume`. Squaring (N = 2) sits between a strict-log dB taper (which can't
+/// include silence at 0) and a linear taper. It spreads the perceptually-important attenuation
+/// range across the lower half of the track and lands unity (amplitude 1.0) at position √(1/3) ≈
+/// 0.577 — about 58% along the slider — so the boost region (100 %–300 %) gets the upper ~42 %.
+/// N also matches Stevens' loudness exponent fairly well (perceived loudness ≈ amp^0.67, inverse
+/// ≈ 1.5; we use 2 because slightly steeper feels more natural for a single-finger drag at the
+/// soft end). The model continues to store / forward linear amplitude; only the slider's spatial
+/// mapping changes.
+private let masterVolumeCurveExponent = 2.0
+
+private func masterVolumeAmplitude(forSliderPosition position: Double) -> Double {
+    let clamped = min(max(position, 0), 1)
+    return pow(clamped, masterVolumeCurveExponent) * ReaderPreferences.maxMasterVolume
+}
+
+private func masterVolumeSliderPosition(forAmplitude amplitude: Double) -> Double {
+    let clamped = min(
+        max(amplitude, ReaderPreferences.minMasterVolume),
+        ReaderPreferences.maxMasterVolume,
+    )
+    let normalized = clamped / ReaderPreferences.maxMasterVolume
+    return pow(normalized, 1.0 / masterVolumeCurveExponent)
+}
 
 struct PlaybackInspectorScreen: View {
     let mixerModel: PlaybackMixerModel
@@ -14,25 +40,16 @@ struct PlaybackInspectorScreen: View {
 
     var body: some View {
         List {
-            // Two unheadered sections separate the tempo/metronome group (which the slider belongs to) from repeat mode
-            // — the gap makes it visually obvious the slider is not a metronome volume control.
+            // Whole-score transport / mix controls live in one section above the per-part mixer. Each row's distinct
+            // icon (metronome / tempo gauge / repeat / speaker) keeps them readable without section separators.
             Section {
                 metronomeRow
                 tempoRow
-            }
-
-            Section {
                 HStack {
                     Text("reader.inspector.repeatMode", bundle: .module)
                     Spacer()
                     RepeatModePicker(selection: $repeatModel.mode)
                 }
-            }
-
-            // Master output volume sits in its own section, just above the per-part mixer, so it reads as "the whole
-            // mix" rather than another per-staff control. Up to 300% to lift quietly-authored scores; the engine's
-            // limiter keeps the boost from clipping.
-            Section {
                 masterVolumeRow
             }
 
@@ -68,12 +85,14 @@ struct PlaybackInspectorScreen: View {
 
     @ViewBuilder
     private var masterVolumeRow: some View {
-        // Mirror `tempoRow`: route the slider through the model's transient `liveValue` so a double-tap reset isn't
-        // clobbered by the release-time writeback, and reuse the percentage label as the reset-to-100% button.
-        let volumeBinding = Binding<Double>(
-            get: { masterVolumeModel.displayValue },
-            set: { masterVolumeModel.setValue($0) },
+        // The slider operates in position space (0…1) so the linear-amplitude axis stretches non-linearly along the
+        // track — `amplitude = position² × maxMasterVolume`. The model still stores linear amplitude, and the percent
+        // readout below is the plain `amplitude × 100`. See `masterVolumeAmplitude(forSliderPosition:)` for why N=2.
+        let positionBinding = Binding<Double>(
+            get: { masterVolumeSliderPosition(forAmplitude: masterVolumeModel.displayValue) },
+            set: { masterVolumeModel.setValue(masterVolumeAmplitude(forSliderPosition: $0)) },
         )
+        let unityPosition = masterVolumeSliderPosition(forAmplitude: 1.0)
         HStack(spacing: 8) {
             Image(systemName: "speaker.wave.3.fill")
                 .foregroundStyle(Color.accentColor)
@@ -89,12 +108,12 @@ struct PlaybackInspectorScreen: View {
             }
 
             ResettableSlider(
-                value: volumeBinding,
-                range: ReaderPreferences.minMasterVolume ... ReaderPreferences.maxMasterVolume,
-                defaultValue: 1.0,
+                value: positionBinding,
+                range: 0 ... 1,
+                defaultValue: unityPosition,
                 onEditingChanged: { editing in
                     if !editing {
-                        let final = volumeBinding.wrappedValue
+                        let final = masterVolumeAmplitude(forSliderPosition: positionBinding.wrappedValue)
                         Task { await masterVolumeModel.commitValue(final) }
                     }
                 },
