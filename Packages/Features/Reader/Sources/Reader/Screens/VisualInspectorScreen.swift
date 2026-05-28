@@ -88,7 +88,7 @@ struct VisualInspectorScreen: View {
 
     @ViewBuilder
     private var staffSizeRow: some View {
-        let staffSize = Binding<CGFloat>(
+        let staffSize = Binding<Double>(
             get: { layoutModel.staffSize },
             set: { newValue in
                 let current = layoutModel.staffSize

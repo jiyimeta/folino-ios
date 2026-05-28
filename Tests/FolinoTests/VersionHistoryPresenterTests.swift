@@ -2,6 +2,7 @@ import Domain
 @testable import folino
 import Foundation
 @testable import Settings
+import SettingsLogic
 import Testing
 
 @MainActor

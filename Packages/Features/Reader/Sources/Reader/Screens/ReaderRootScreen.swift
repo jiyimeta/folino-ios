@@ -44,7 +44,7 @@ public struct ReaderRootScreen: View {
     ) {
         // Seed the device-class default at construction time. The view model only uses this if no persisted record
         // exists.
-        let initialDefault: CGFloat = 14 // TBD: device-class override (follow-up)
+        let initialDefault: Double = 14 // TBD: device-class override (follow-up)
         _viewModel = State(
             wrappedValue: ReaderViewModel(
                 scoreItem: scoreItem,

@@ -313,8 +313,30 @@ public final class LibraryViewModel {
                 return String(localized: "library.import.error.invalidFile", bundle: .module)
             case .persistenceFailed:
                 return String(localized: "library.import.error.saveFailed", bundle: .module)
-            case .scoreFileNotFound, .scoreWriteFailed, .syncFailed, .audioEngineFailed:
-                return domain.errorDescription ?? "\(domain)"
+            case let .scoreFileNotFound(name):
+                return String(
+                    localized: "library.error.fallback.scoreFileNotFound",
+                    defaultValue: "Score file not found: \(name)",
+                    bundle: .module,
+                )
+            case let .scoreWriteFailed(reason):
+                return String(
+                    localized: "library.error.fallback.scoreWriteFailed",
+                    defaultValue: "Could not write score file: \(reason)",
+                    bundle: .module,
+                )
+            case let .syncFailed(reason):
+                return String(
+                    localized: "library.error.fallback.syncFailed",
+                    defaultValue: "Sync failed: \(reason)",
+                    bundle: .module,
+                )
+            case let .audioEngineFailed(reason):
+                return String(
+                    localized: "library.error.fallback.audioEngineFailed",
+                    defaultValue: "Audio engine error: \(reason)",
+                    bundle: .module,
+                )
             }
         }
         return (error as NSError).localizedDescription

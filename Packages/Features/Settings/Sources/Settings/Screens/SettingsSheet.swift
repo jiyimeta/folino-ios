@@ -1,5 +1,6 @@
 import Domain
 import Observation
+import SettingsLogic
 import SwiftUI
 import UtilityCore
 import UtilityUI
