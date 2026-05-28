@@ -52,8 +52,7 @@ struct TagDetailScreen: View {
         do {
             try await library.repository.saveTag(updated)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = error
         }
     }
 
@@ -62,8 +61,7 @@ struct TagDetailScreen: View {
             try await library.repository.deleteTag(id: tag.id)
             onTagDeleted()
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = error
         }
     }
 }

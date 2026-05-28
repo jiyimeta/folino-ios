@@ -33,7 +33,7 @@ struct LibraryViewModelShareTests {
         share.prepareShareReturnURL = URL(fileURLWithPath: "/tmp/share/T.mscz")
         await vm.requestShare(Self.makeItem(), format: .museScoreV4)
         #expect(vm.shareTarget?.urls == [URL(fileURLWithPath: "/tmp/share/T.mscz")])
-        #expect(vm.errorAlertMessage == nil)
+        #expect(vm.currentError == nil)
         #expect(share.prepareShareCalls.count == 1)
         #expect(share.prepareShareCalls.first?.format == .museScoreV4)
     }
@@ -43,7 +43,9 @@ struct LibraryViewModelShareTests {
         share.prepareShareError = .scoreParseFailed(reason: "boom")
         await vm.requestShare(Self.makeItem(), format: .pdf)
         #expect(vm.shareTarget == nil)
-        #expect(vm.errorAlertMessage == "This file looks corrupted or isn't a valid score.")
+        if case .scoreParseFailed = vm.currentError as? DomainError {} else {
+            Issue.record("expected .scoreParseFailed")
+        }
     }
 
     @Test func `is preparing share toggles around the call`() async {
@@ -67,7 +69,7 @@ struct LibraryViewModelShareTests {
         #expect(share.prepareShareCalls.count == 3)
         #expect(share.prepareShareCalls.allSatisfy { $0.format == .pdf })
         #expect(vm.shareTarget?.urls.count == 3)
-        #expect(vm.errorAlertMessage == nil)
+        #expect(vm.currentError == nil)
     }
 
     @Test func `request bulk share empty is no op`() async {
@@ -82,7 +84,7 @@ struct LibraryViewModelShareTests {
         share.prepareShareError = .scoreParseFailed(reason: "boom")
         await vm.requestBulkShare([Self.makeItem(), Self.makeItem()], format: .pdf)
         #expect(vm.shareTarget == nil)
-        #expect(vm.errorAlertMessage != nil)
+        #expect(vm.currentError != nil)
     }
 }
 

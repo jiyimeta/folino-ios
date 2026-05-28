@@ -31,8 +31,7 @@ struct BulkAddToPlaylistScreen: View {
         do {
             try await library.repository.savePlaylist(playlist)
         } catch {
-            library.errorAlertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            library.currentError = error
             return
         }
         onCommit()
