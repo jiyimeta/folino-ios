@@ -6,6 +6,7 @@ import SwiftUI
 struct PlaybackInspectorScreen: View {
     let mixerModel: PlaybackMixerModel
     let tempoModel: TempoModel
+    let masterVolumeModel: MasterVolumeModel
     @Bindable var repeatModel: RepeatModel
     let score: Score
 
@@ -26,6 +27,13 @@ struct PlaybackInspectorScreen: View {
                     Spacer()
                     RepeatModePicker(selection: $repeatModel.mode)
                 }
+            }
+
+            // Master output volume sits in its own section, just above the per-part mixer, so it reads as "the whole
+            // mix" rather than another per-staff control. Up to 300% to lift quietly-authored scores; the engine's
+            // limiter keeps the boost from clipping.
+            Section {
+                masterVolumeRow
             }
 
             Section {
@@ -56,6 +64,45 @@ struct PlaybackInspectorScreen: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var masterVolumeRow: some View {
+        // Mirror `tempoRow`: route the slider through the model's transient `liveValue` so a double-tap reset isn't
+        // clobbered by the release-time writeback, and reuse the percentage label as the reset-to-100% button.
+        let volumeBinding = Binding<Double>(
+            get: { masterVolumeModel.displayValue },
+            set: { masterVolumeModel.setValue($0) },
+        )
+        HStack(spacing: 8) {
+            Image(systemName: "speaker.wave.3.fill")
+                .foregroundStyle(Color.accentColor)
+            Text("reader.inspector.masterVolume", bundle: .module)
+
+            Button {
+                Task { await masterVolumeModel.resetValue() }
+            } label: {
+                Text("\(Int((masterVolumeModel.displayValue * 100).rounded()))%")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .frame(minWidth: 44, alignment: .trailing)
+            }
+
+            ResettableSlider(
+                value: volumeBinding,
+                range: ReaderPreferences.minMasterVolume ... ReaderPreferences.maxMasterVolume,
+                defaultValue: 1.0,
+                onEditingChanged: { editing in
+                    if !editing {
+                        let final = volumeBinding.wrappedValue
+                        Task { await masterVolumeModel.commitValue(final) }
+                    }
+                },
+                onReset: {
+                    Task { await masterVolumeModel.resetValue() }
+                },
+            )
+        }
     }
 
     @ViewBuilder
@@ -169,21 +216,13 @@ struct PlaybackInspectorScreen: View {
         division: 480,
         parts: [
             Part(
-                id: "P0",
-                trackName: "Violin",
-                instrument: Instrument(
-                    id: "violin",
-                    channels: [InstrumentChannel(program: 40)], // GM 40 = Violin
-                ),
+                id: "P0", trackName: "Violin", // GM 40 = Violin
+                instrument: Instrument(id: "violin", channels: [InstrumentChannel(program: 40)]),
                 staves: [Staff()],
             ),
             Part(
-                id: "P1",
-                trackName: "Piano",
-                instrument: Instrument(
-                    id: "piano",
-                    channels: [InstrumentChannel(program: 0)], // GM 0 = Acoustic Grand Piano
-                ),
+                id: "P1", trackName: "Piano", // GM 0 = Acoustic Grand Piano
+                instrument: Instrument(id: "piano", channels: [InstrumentChannel(program: 0)]),
                 staves: [Staff(), Staff()],
             ),
         ],
@@ -201,6 +240,7 @@ struct PlaybackInspectorScreen: View {
             PlaybackInspectorScreen(
                 mixerModel: vm.mixerModel,
                 tempoModel: vm.tempoModel,
+                masterVolumeModel: vm.masterVolumeModel,
                 repeatModel: vm.repeatModel,
                 score: score,
             )

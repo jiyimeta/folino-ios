@@ -19,6 +19,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     var repeatMode: String
     var tempoMultiplier: Double?
     var abRepeat: String?
+    var masterVolume: Double
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -32,6 +33,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         case repeatMode = "repeat_mode"
         case tempoMultiplier = "tempo_multiplier"
         case abRepeat = "ab_repeat"
+        case masterVolume = "master_volume"
     }
 
     init(domain prefs: ReaderPreferences) {
@@ -65,6 +67,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         honorLayoutBreaks = prefs.honorLayoutBreaks
         repeatMode = prefs.repeatMode.rawValue
         tempoMultiplier = prefs.tempoMultiplier
+        masterVolume = prefs.masterVolume
         if let range = prefs.abRepeat,
            let data = try? JSONEncoder().encode(range)
         {
@@ -103,6 +106,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             honorLayoutBreaks: honorLayoutBreaks,
             repeatMode: decodedRepeatMode,
             abRepeat: decodedAbRepeat,
+            masterVolume: masterVolume,
         )
     }
 

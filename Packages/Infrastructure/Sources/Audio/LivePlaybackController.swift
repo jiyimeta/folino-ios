@@ -130,6 +130,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
             )
         }
         engine.setRate(Float(preferences.tempoMultiplier))
+        applyMasterVolume(preferences.masterVolume)
     }
 
     public func play() throws {
@@ -229,6 +230,23 @@ public final class LivePlaybackController: Domain.PlaybackController {
 
     public func setTempoMultiplier(_ value: Double) {
         engine.setRate(Float(value))
+    }
+
+    public func setMasterVolume(_ value: Double) {
+        applyMasterVolume(value)
+    }
+
+    /// Forward the per-score master output volume to the engine's master-gain stage. Clamped to `[0, 3]` (300%).
+    ///
+    /// TODO(master-gain): the engine call is stubbed until `swift-sheet-music` ships
+    /// `PlaybackEngine.setMasterGain(_:)` (tracked on the library's `feature/master-output-gain` branch). Once the
+    /// dependency is bumped, uncomment the `engine.setMasterGain(...)` line and drop the `_ = clamped` discard — the
+    /// clamp and the call sites (`applyPreferences`, `setMasterVolume`, and `reloadSoundfont` via `applyPreferences`)
+    /// are already wired. Until then master volume is persisted and surfaced in the UI but does not affect audio.
+    func applyMasterVolume(_ value: Double) {
+        let clamped = Float(min(max(value, 0), 3))
+        // engine.setMasterGain(clamped)
+        _ = clamped
     }
 
     // MARK: - Now Playing / Remote Commands

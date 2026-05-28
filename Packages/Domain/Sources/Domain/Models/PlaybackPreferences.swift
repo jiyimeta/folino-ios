@@ -56,6 +56,9 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
     public var perStaff: [StaffMixerState]
     public var tempoMultiplier: Double
     public var abRepeat: ABRepeatRange?
+    /// Master output volume seeded into the engine on load. `1.0` is unity; clamped to `[0, 3]` (300%). Mirrors
+    /// `ReaderPreferences.masterVolume` — see there for the limiter rationale.
+    public var masterVolume: Double
 
     public init(
         id: PlaybackPreferencesID = PlaybackPreferencesID(),
@@ -63,11 +66,13 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
         perStaff: [StaffMixerState],
         tempoMultiplier: Double,
         abRepeat: ABRepeatRange?,
+        masterVolume: Double = 1.0,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
         self.perStaff = perStaff
         self.tempoMultiplier = min(max(tempoMultiplier, 0.5), 2.0)
         self.abRepeat = abRepeat
+        self.masterVolume = min(max(masterVolume, 0), 3)
     }
 }

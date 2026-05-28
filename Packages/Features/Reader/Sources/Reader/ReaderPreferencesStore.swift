@@ -67,6 +67,7 @@ final class ReaderPreferencesStore {
             honorLayoutBreaks: copy.honorLayoutBreaks,
             repeatMode: copy.repeatMode,
             abRepeat: copy.abRepeat,
+            masterVolume: copy.masterVolume,
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)

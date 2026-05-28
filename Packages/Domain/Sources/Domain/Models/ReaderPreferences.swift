@@ -10,6 +10,11 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let maxStaffSize: CGFloat = 28
     public static let minTempoMultiplier = 0.5
     public static let maxTempoMultiplier = 2.0
+    /// Master-output-volume bounds. `1.0` is unity (the score's authored mix, unchanged); the slider can boost up to
+    /// `3.0` (300%) to compensate for quietly-authored scores or low-output soundfonts. A downstream peak limiter
+    /// in the audio engine keeps the boost from hard-clipping.
+    public static let minMasterVolume = 0.0
+    public static let maxMasterVolume = 3.0
     /// Minimum run length (in measures) at which the Reader collapses consecutive empty-rest measures into a single
     /// H-bar. Fixed — not user-tunable in this iteration.
     public static let multiMeasureRestThreshold = 2
@@ -57,6 +62,10 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public var repeatMode: RepeatMode
     /// Active A–B loop range. Only meaningful when `repeatMode == .abLoop`. `nil` when no range has been set.
     public var abRepeat: ABRepeatRange?
+    /// Per-score master output volume. `1.0` (default) is unity — the mix plays at the score's authored level.
+    /// Boosts up to `maxMasterVolume` (300%) raise the whole mix past per-staff CC7's ceiling; the engine
+    /// brick-wall-limits the result so a boost doesn't clip. Clamped to `[minMasterVolume, maxMasterVolume]`.
+    public var masterVolume: Double
 
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
@@ -70,6 +79,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         honorLayoutBreaks: Bool = true,
         repeatMode: RepeatMode = .off,
         abRepeat: ABRepeatRange? = nil,
+        masterVolume: Double = 1.0,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -86,12 +96,13 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.honorLayoutBreaks = honorLayoutBreaks
         self.repeatMode = repeatMode
         self.abRepeat = abRepeat
+        self.masterVolume = min(max(masterVolume, Self.minMasterVolume), Self.maxMasterVolume)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, scoreItemID, staffSize, hiddenStaves, staffProgramOverrides
         case staffVolumeOverrides, tempoMultiplier, honorLayoutBreaks
-        case repeatMode, abRepeat
+        case repeatMode, abRepeat, masterVolume
         case staffClefOverrides
     }
 
@@ -114,6 +125,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let honorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks) ?? true
         let mode = try c.decodeIfPresent(RepeatMode.self, forKey: .repeatMode) ?? .off
         let ab = try c.decodeIfPresent(ABRepeatRange.self, forKey: .abRepeat)
+        let master = try c.decodeIfPresent(Double.self, forKey: .masterVolume) ?? 1.0
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
             hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
@@ -121,6 +133,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             staffClefOverrides: clefOverrides,
             tempoMultiplier: tempo,
             honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab,
+            masterVolume: master,
         )
     }
 }

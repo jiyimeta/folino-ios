@@ -189,6 +189,55 @@ struct AppDatabaseTests {
         }
     }
 
+    @Test func `v 9 adds master volume column`() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+
+        try queue.read { db in
+            let cols = try db.columns(in: "reader_preferences").map(\.name)
+            #expect(cols.contains("master_volume"))
+        }
+    }
+
+    @Test func `v 9 defaults existing rows to unity master volume`() throws {
+        // Insert a row at the v8 schema (no master_volume), then run v9. The new column's DEFAULT 1.0 should backfill
+        // the pre-existing row so prior scores play unchanged.
+        let queue = try DatabaseQueue()
+        try AppMigrations.upToV8.migrate(queue)
+        let scoreID = "00000000-0000-0000-0000-000000000009"
+        let prefsID = "99999999-9999-9999-9999-999999999999"
+        try queue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO score_items (id, title, local_file_name, content_hash,
+                    size_bytes, length_beats, default_tempo_bpm, added_at)
+                VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+                """,
+                arguments: [scoreID],
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO reader_preferences
+                    (id, score_item_id, staff_size, hidden_staff_ids,
+                     staff_program_overrides, honor_layout_breaks)
+                VALUES (?, ?, 14, '[]', '[]', 1)
+                """,
+                arguments: [prefsID, scoreID],
+            )
+        }
+
+        try AppMigrations.all.migrate(queue)
+
+        try queue.read { db in
+            let value = try Row.fetchOne(
+                db,
+                sql: "SELECT master_volume FROM reader_preferences WHERE id = ?",
+                arguments: [prefsID],
+            )
+            #expect(value?["master_volume"] == 1.0 as Double?)
+        }
+    }
+
     @Test func `v 5 defaults existing rows to empty volume overrides JSON`() throws {
         // Insert a row at the v4 schema, then run v5. The new column's DEFAULT '[]' should backfill the pre-existing
         // row.

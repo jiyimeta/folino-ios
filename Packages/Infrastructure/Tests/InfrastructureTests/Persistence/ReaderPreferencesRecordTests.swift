@@ -228,6 +228,19 @@ struct ReaderPreferencesRecordTests {
         #expect(restored.tempoMultiplier == nil)
     }
 
+    @Test func `master volume round trips through domain`() throws {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            masterVolume: 2.5,
+        )
+        let record = ReaderPreferencesRecord(domain: prefs)
+        #expect(record.masterVolume == 2.5)
+        let restored = try record.toDomain()
+        #expect(restored.masterVolume == 2.5)
+    }
+
     @Test func `ab repeat round trips through domain`() throws {
         let start = ChordPath(systemIndex: 0, measureIndex: 1, voiceIndex: 0, chordIndex: 0)
         let end = ChordPath(systemIndex: 0, measureIndex: 3, voiceIndex: 0, chordIndex: 2)

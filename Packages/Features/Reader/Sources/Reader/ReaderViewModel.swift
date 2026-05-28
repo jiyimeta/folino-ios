@@ -24,6 +24,7 @@ final class ReaderViewModel {
     /// `$viewModel.repeatModel.mode` type-check — the chain needs the intermediate path to be writable.
     var repeatModel = RepeatModel()
     var tempoModel = TempoModel()
+    var masterVolumeModel = MasterVolumeModel()
     var layoutModel = LayoutSettingsModel()
     var mixerModel = PlaybackMixerModel()
 
@@ -84,6 +85,7 @@ final class ReaderViewModel {
         pipSession = ReaderPiPSession()
         wireRepeatModel()
         wireTempoModel()
+        wireMasterVolumeModel()
         wireLayoutModel()
         wireMixerModel()
         wirePlaybackSession()
@@ -149,6 +151,16 @@ final class ReaderViewModel {
         tempoModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
     }
 
+    private func wireMasterVolumeModel() {
+        masterVolumeModel.onChange = { [weak self] in
+            guard let self else { return }
+            await preferencesStore.mutate { prefs in
+                prefs.masterVolume = self.masterVolumeModel.value
+            }
+        }
+        masterVolumeModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
+    }
+
     private func wireRepeatModel() {
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
@@ -203,6 +215,7 @@ final class ReaderViewModel {
         let prefs = await preferencesStore.loadOrSeed()
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
+        masterVolumeModel.sync(from: prefs)
         layoutModel.sync(from: prefs)
         mixerModel.sync(from: prefs)
     }

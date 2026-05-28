@@ -33,6 +33,7 @@ extension PlaybackPreferences {
             perStaff: states,
             tempoMultiplier: readerPreferences.tempoMultiplier ?? 1.0,
             abRepeat: readerPreferences.abRepeat,
+            masterVolume: readerPreferences.masterVolume,
         )
     }
 }

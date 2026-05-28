@@ -93,6 +93,15 @@ type_name:
 identifier_name:
   min_length: 1
 
+# "master" is a standard audio term here (master volume / master bus / master gain — see
+# swift-sheet-music's `masterGain`), so it's dropped from the flagged set. slave / whitelist /
+# blacklist are still enforced.
+inclusive_language:
+  override_terms:
+    - slave
+    - whitelist
+    - blacklist
+
 large_tuple:
   warning: 4
 

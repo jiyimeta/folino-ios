@@ -74,6 +74,7 @@ struct ReaderTopOverlay: View {
                 PlaybackInspectorScreen(
                     mixerModel: viewModel.mixerModel,
                     tempoModel: viewModel.tempoModel,
+                    masterVolumeModel: viewModel.masterVolumeModel,
                     repeatModel: viewModel.repeatModel,
                     score: score,
                 )

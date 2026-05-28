@@ -235,6 +235,57 @@ struct ReaderPreferencesTests {
         #expect(prefs.staffClefOverrides.isEmpty)
     }
 
+    @Test func `master volume defaults to unity`() {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
+        )
+        #expect(prefs.masterVolume == 1.0)
+    }
+
+    @Test func `master volume is clamped to zero through three`() {
+        let below = ReaderPreferences(
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
+            masterVolume: -1.0,
+        )
+        #expect(below.masterVolume == 0)
+
+        let above = ReaderPreferences(
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
+            masterVolume: 9.0,
+        )
+        #expect(above.masterVolume == 3.0)
+
+        let inRange = ReaderPreferences(
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
+            masterVolume: 2.25,
+        )
+        #expect(inRange.masterVolume == 2.25)
+    }
+
+    @Test func `master volume round trips through codable`() throws {
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
+            masterVolume: 2.5,
+        )
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
+        #expect(decoded.masterVolume == 2.5)
+    }
+
+    @Test func `legacy JSON without master volume key decodes as unity`() throws {
+        // Additive-only schema change: rows persisted before masterVolume landed must still load at unity.
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
+        )
+        let encoded = try JSONEncoder().encode(prefs)
+        let jsonObject = try JSONSerialization.jsonObject(with: encoded)
+        var dict = try #require(jsonObject as? [String: Any])
+        dict.removeValue(forKey: "masterVolume")
+        let stripped = try JSONSerialization.data(withJSONObject: dict)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: stripped)
+        #expect(decoded.masterVolume == 1.0)
+    }
+
     @Test func `legacy JSON without tempo multiplier key decodes as nil`() throws {
         // Ensures additive-only schema change: rows persisted before tempoMultiplier landed must still load. We
         // synthesize the "legacy" shape by encoding the current struct and stripping the new key, so we don't have to

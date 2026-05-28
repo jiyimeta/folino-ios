@@ -40,6 +40,8 @@ private final class FakePlaybackController: PlaybackController {
         lastTempo = value
     }
 
+    func setMasterVolume(_ value: Double) {}
+
     func setStaffVolume(staff: Int, volume: Double) {}
     func setStaffMute(staff: Int, isMuted: Bool) {}
     func setStaffSolo(staff: Int, isSolo: Bool) {}

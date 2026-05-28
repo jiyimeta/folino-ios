@@ -15,6 +15,7 @@ final class FakePlaybackController: PlaybackController {
     private(set) var recordedSetCursorCalls: [ScoreCursor] = []
     private(set) var loopRangeCalls: [ABRepeatRange?] = []
     private(set) var tempoMultiplierCalls: [Double] = []
+    private(set) var masterVolumeCalls: [Double] = []
     private(set) var metronomeEnabledCalls: [Bool] = []
 
     var loadError: Error?
@@ -98,6 +99,10 @@ final class FakePlaybackController: PlaybackController {
 
     func setTempoMultiplier(_ value: Double) {
         tempoMultiplierCalls.append(value)
+    }
+
+    func setMasterVolume(_ value: Double) {
+        masterVolumeCalls.append(value)
     }
 
     func setStaffMute(staff _: Int, isMuted _: Bool) {}
