@@ -94,4 +94,15 @@ struct LiveScoreFileGatewayTests {
             Issue.record("unexpected error: \(error)")
         }
     }
+
+    @Test func `clean parse emits no diagnostics`() async throws {
+        let tmp = try TempDirectory()
+        let mscxURL = try Fixtures.writeToTempFile(
+            Fixtures.minimalMSCXData(), ext: "mscx", in: tmp.url,
+        )
+        let fake = FakeCrashReporter()
+        let gateway = LiveScoreFileGateway(crashReporter: fake)
+        _ = try await gateway.loadScore(fileURL: mscxURL)
+        #expect(fake.recordedErrors.isEmpty)
+    }
 }
