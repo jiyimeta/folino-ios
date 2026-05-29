@@ -16,7 +16,7 @@ let package = Package(
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            revision: "42d96d4f96d3c84e1bb981809c7ac9e959e90b23",
+            revision: "5138509e5b87541cde58df1368ca7e9c8e16bda5",
         ),
     ],
     targets: [
