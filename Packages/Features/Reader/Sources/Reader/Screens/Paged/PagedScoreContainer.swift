@@ -21,6 +21,7 @@ struct PagedScoreContainer: View {
     let staffSize: CGFloat
     let honorLayoutBreaks: Bool
     let collapseMultiMeasureRests: Bool
+    let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -81,6 +82,7 @@ struct PagedScoreContainer: View {
                     score: score, size: staffSize, width: contentWidth,
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    showInvisibleElements: showInvisibleElements,
                     pageHeight: viewportHeight,
                 )) {
                     await rebuildLayout(
@@ -241,6 +243,7 @@ struct PagedScoreContainer: View {
             multiMeasureRest: collapseMultiMeasureRests
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
+            showsInvisibleElements: showInvisibleElements,
         )
     }
 
@@ -312,6 +315,7 @@ struct PagedScoreContainer: View {
         let width: CGFloat
         let honorLayoutBreaks: Bool
         let collapseMultiMeasureRests: Bool
+        let showInvisibleElements: Bool
         let pageHeight: CGFloat
 
         init(
@@ -320,6 +324,7 @@ struct PagedScoreContainer: View {
             width: CGFloat,
             honorLayoutBreaks: Bool,
             collapseMultiMeasureRests: Bool,
+            showInvisibleElements: Bool,
             pageHeight: CGFloat,
         ) {
             scoreSignature = score.parts.count
@@ -330,6 +335,7 @@ struct PagedScoreContainer: View {
             self.width = width
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
+            self.showInvisibleElements = showInvisibleElements
             self.pageHeight = pageHeight
         }
     }

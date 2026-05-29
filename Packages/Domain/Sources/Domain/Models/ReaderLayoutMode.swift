@@ -28,6 +28,11 @@ public enum ReaderGlobalSettingsKey {
     /// using `MultiMeasureRestPolicy.collapse`. When false, measures render individually.
     public static let collapseMultiMeasureRests = "readerCollapseMultiMeasureRests"
 
+    /// Bool. When true, elements authored as invisible (`visible == false`) are still laid out and drawn greyed
+    /// (~50% opacity) via `ScoreViewOptions.showsInvisibleElements`. When false (the default), they are dropped
+    /// entirely — matching print behavior.
+    public static let showInvisibleElements = "readerShowInvisibleElements"
+
     /// Bool. When true, the device's idle timer is disabled while the Reader is on screen so the display does not dim
     /// or lock during practice. The Reader restores the idle timer when it disappears. Defaults to true at the
     /// `@AppStorage` site for first-launch users.

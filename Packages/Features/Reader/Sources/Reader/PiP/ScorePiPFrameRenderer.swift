@@ -110,6 +110,7 @@ final class ScorePiPFrameRenderer {
         score: Score,
         staffSize: CGFloat,
         collapseMultiMeasureRests: Bool,
+        showInvisibleElements: Bool,
     ) throws -> Prepared {
         let opts = ScoreViewOptions(
             staffSize: staffSize, systemGap: staffSize * 1.25,
@@ -119,6 +120,7 @@ final class ScorePiPFrameRenderer {
             multiMeasureRest: collapseMultiMeasureRests
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
+            showsInvisibleElements: showInvisibleElements,
         )
         let naturalWidth = LayoutEngine.naturalContentWidth(score: score, options: opts)
         let document = LayoutEngine.layout(
@@ -136,10 +138,16 @@ final class ScorePiPFrameRenderer {
     /// Convenience that runs `prepare` synchronously and chains into the `Prepared`-taking init. Used by tests where
     /// the off-main split would just add noise; production code goes through `ScorePiPCoordinator.arm` which calls
     /// `prepare` on a detached task.
-    convenience init(score: Score, staffSize: CGFloat, collapseMultiMeasureRests: Bool) throws {
+    convenience init(
+        score: Score,
+        staffSize: CGFloat,
+        collapseMultiMeasureRests: Bool,
+        showInvisibleElements: Bool,
+    ) throws {
         let prepared = try Self.prepare(
             score: score, staffSize: staffSize,
             collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showInvisibleElements: showInvisibleElements,
         )
         try self.init(score: score, prepared: prepared)
     }

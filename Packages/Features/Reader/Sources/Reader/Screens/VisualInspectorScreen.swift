@@ -13,6 +13,9 @@ struct VisualInspectorScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
 
+    @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
+    private var showInvisibleElements = false
+
     var body: some View {
         List {
             // Top-of-list "general" controls intentionally render without a section header — they apply to the whole
@@ -21,6 +24,7 @@ struct VisualInspectorScreen: View {
             staffSizeRow
             breakPolicyRow
             collapseRow
+            showInvisibleRow
 
             Section {
                 ForEach(score.parts.indices, id: \.self) { partIndex in
@@ -83,6 +87,12 @@ struct VisualInspectorScreen: View {
     private var collapseRow: some View {
         Toggle(isOn: $collapseMultiMeasureRests) {
             Text("reader.preferences.collapseMultiMeasureRests", bundle: .module)
+        }
+    }
+
+    private var showInvisibleRow: some View {
+        Toggle(isOn: $showInvisibleElements) {
+            Text("reader.preferences.showInvisibleElements", bundle: .module)
         }
     }
 

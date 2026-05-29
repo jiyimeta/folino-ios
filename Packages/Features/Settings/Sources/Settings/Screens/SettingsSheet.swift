@@ -30,6 +30,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
 
+    @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
+    private var showInvisibleElements = false
+
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
 
@@ -104,6 +107,13 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 } icon: {
                     Image(systemName: "rectangle.compress.vertical")
                         .rotationEffect(.degrees(90))
+                }
+            }
+            Toggle(isOn: $showInvisibleElements) {
+                Label {
+                    Text("settings.reader.showInvisibleElements", bundle: .module)
+                } icon: {
+                    Image(systemName: showInvisibleElements ? "eye" : "eye.slash")
                 }
             }
             keepScreenAwakeToggle

@@ -23,6 +23,9 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
 
+    @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
+    private var showInvisibleElements = false
+
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
 
@@ -86,6 +89,7 @@ public struct ReaderRootScreen: View {
             viewModel.playbackSession.startObservingSoundfontDownload()
             viewModel.pipSession.setEnabled(isPiPEnabled)
             viewModel.pipSession.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
+            viewModel.pipSession.setShowInvisibleElements(showInvisibleElements)
             await viewModel.load()
             await viewModel.playbackSession.prepareForPlayback()
             // Initial sync: the engine starts up unaware of persisted state, so seed it from the @AppStorage value at
@@ -117,6 +121,9 @@ public struct ReaderRootScreen: View {
         .onChange(of: collapseMultiMeasureRests) { _, newValue in
             viewModel.pipSession.setCollapseMultiMeasureRests(newValue)
         }
+        .onChange(of: showInvisibleElements) { _, newValue in
+            viewModel.pipSession.setShowInvisibleElements(newValue)
+        }
         .onChange(of: scenePhase) { _, newValue in
             // The Settings spec dismisses PiP whenever the app returns to the foreground, regardless of how it was
             // started.
@@ -141,6 +148,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.playbackCursor,
                     viewModel: viewModel,
                 )
@@ -150,6 +158,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.playbackCursor,
                     viewModel: viewModel,
                 )
@@ -159,6 +168,7 @@ public struct ReaderRootScreen: View {
                     staffSize: viewModel.layoutModel.staffSize,
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.playbackCursor,
                     viewModel: viewModel,
                 )

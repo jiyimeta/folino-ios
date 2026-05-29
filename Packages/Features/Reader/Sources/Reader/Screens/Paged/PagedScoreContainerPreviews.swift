@@ -25,6 +25,7 @@ private func paged(
         staffSize: staffSize,
         honorLayoutBreaks: false,
         collapseMultiMeasureRests: false,
+        showInvisibleElements: false,
         playbackCursor: nil,
         viewModel: vm,
     )

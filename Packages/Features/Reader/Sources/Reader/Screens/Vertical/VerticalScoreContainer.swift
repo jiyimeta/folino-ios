@@ -25,6 +25,7 @@ struct VerticalScoreContainer: View {
     let staffSize: CGFloat
     let honorLayoutBreaks: Bool
     let collapseMultiMeasureRests: Bool
+    let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -63,6 +64,7 @@ struct VerticalScoreContainer: View {
                     score: score, size: staffSize, width: layoutWidth,
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    showInvisibleElements: showInvisibleElements,
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }
@@ -242,6 +244,7 @@ struct VerticalScoreContainer: View {
             multiMeasureRest: collapseMultiMeasureRests
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
+            showsInvisibleElements: showInvisibleElements,
         )
     }
 
@@ -326,6 +329,7 @@ struct VerticalScoreContainer: View {
         let width: CGFloat
         let honorLayoutBreaks: Bool
         let collapseMultiMeasureRests: Bool
+        let showInvisibleElements: Bool
 
         init(
             score: Score,
@@ -333,6 +337,7 @@ struct VerticalScoreContainer: View {
             width: CGFloat,
             honorLayoutBreaks: Bool,
             collapseMultiMeasureRests: Bool,
+            showInvisibleElements: Bool,
         ) {
             // `Score` is Equatable but not Hashable. Use a cheap identity proxy: structural shape + opening clefs.
             // The opening-clef hash is what makes a clef override (a field-level edit that leaves parts.count / staff
@@ -345,6 +350,7 @@ struct VerticalScoreContainer: View {
             self.width = width
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
+            self.showInvisibleElements = showInvisibleElements
         }
     }
 }

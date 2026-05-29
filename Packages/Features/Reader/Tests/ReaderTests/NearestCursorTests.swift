@@ -23,6 +23,7 @@ struct NearestCursorTests {
             hasArpeggio: false, arpeggioRawType: nil,
             isBeamed: false, voiceIndex: 0,
             stemExtension: 0,
+            stemIsInvisible: false,
         )
     }
 

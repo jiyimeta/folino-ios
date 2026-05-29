@@ -105,7 +105,7 @@ private func chooseEvent(
     var best: (cursor: ScoreCursor, dx: CGFloat)?
     for element in measure.elements {
         switch element {
-        case let .chord(notes, _, stem, _, _, _, _, _, _):
+        case let .chord(notes, _, stem, _, _, _, _, _, _, _):
             guard let first = notes.first else { continue }
             let elementY = baseY + first.origin.y
             guard abs(elementY - staffMidY) <= staffYBand else { continue }

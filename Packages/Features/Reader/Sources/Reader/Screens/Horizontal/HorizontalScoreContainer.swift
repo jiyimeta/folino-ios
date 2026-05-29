@@ -12,6 +12,7 @@ struct HorizontalScoreContainer: View {
     let staffSize: CGFloat
     let honorLayoutBreaks: Bool
     let collapseMultiMeasureRests: Bool
+    let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
     @Bindable var viewModel: ReaderViewModel
 
@@ -40,6 +41,7 @@ struct HorizontalScoreContainer: View {
                     score: score, size: staffSize,
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    showInvisibleElements: showInvisibleElements,
                 )) {
                     await rebuildLayout()
                 }
@@ -181,6 +183,7 @@ struct HorizontalScoreContainer: View {
             multiMeasureRest: collapseMultiMeasureRests
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
+            showsInvisibleElements: showInvisibleElements,
         )
     }
 
@@ -260,12 +263,14 @@ struct HorizontalScoreContainer: View {
         let size: CGFloat
         let honorLayoutBreaks: Bool
         let collapseMultiMeasureRests: Bool
+        let showInvisibleElements: Bool
 
         init(
             score: Score,
             size: CGFloat,
             honorLayoutBreaks: Bool,
             collapseMultiMeasureRests: Bool,
+            showInvisibleElements: Bool,
         ) {
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
@@ -274,6 +279,7 @@ struct HorizontalScoreContainer: View {
             self.size = size
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
+            self.showInvisibleElements = showInvisibleElements
         }
     }
 }

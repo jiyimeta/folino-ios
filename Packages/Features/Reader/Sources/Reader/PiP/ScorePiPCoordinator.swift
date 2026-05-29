@@ -110,6 +110,7 @@ final class ScorePiPCoordinator: NSObject {
         staffSize: CGFloat,
         playbackCursor: ScoreCursor?,
         collapseMultiMeasureRests: Bool,
+        showInvisibleElements: Bool,
     ) async throws {
         guard let displayLayer else {
             throw NSError(
@@ -122,6 +123,7 @@ final class ScorePiPCoordinator: NSObject {
                 score: score,
                 staffSize: staffSize,
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
+                showInvisibleElements: showInvisibleElements,
             )
         }.value
         try Task.checkCancellation()

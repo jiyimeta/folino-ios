@@ -24,6 +24,7 @@ final class ReaderPiPSession {
     @ObservationIgnored private var coordinatorBacking: ScorePiPCoordinator?
     @ObservationIgnored private var isEnabled = false
     @ObservationIgnored private var collapseMultiMeasureRests = false
+    @ObservationIgnored private var showInvisibleElements = false
     @ObservationIgnored private var pendingArmTask: Task<Void, Never>?
     @ObservationIgnored private var hasArmed = false
     @ObservationIgnored private var isDirty = false
@@ -86,6 +87,12 @@ final class ReaderPiPSession {
     func setCollapseMultiMeasureRests(_ enabled: Bool) {
         guard collapseMultiMeasureRests != enabled else { return }
         collapseMultiMeasureRests = enabled
+        armIfReady()
+    }
+
+    func setShowInvisibleElements(_ enabled: Bool) {
+        guard showInvisibleElements != enabled else { return }
+        showInvisibleElements = enabled
         armIfReady()
     }
 
@@ -154,6 +161,7 @@ final class ReaderPiPSession {
                 staffSize: snapshot.staffSize,
                 playbackCursor: playbackCursorProvider(),
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
+                showInvisibleElements: showInvisibleElements,
             )
             hasArmed = true
         } catch is CancellationError {
