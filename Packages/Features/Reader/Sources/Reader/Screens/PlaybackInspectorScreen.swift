@@ -3,6 +3,7 @@ import Foundation
 import SheetMusicAudio
 import SheetMusicCore
 import SwiftUI
+import UtilityUI
 
 /// Master-volume slider taper. The slider's value space is position `0…1`; linear amplitude is
 /// `position^N × maxMasterVolume`. Squaring (N = 2) sits between a strict-log dB taper (which can't
@@ -38,11 +39,14 @@ struct PlaybackInspectorScreen: View {
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
 
+    @AppStorage("reader.inspector.playback.general.expanded") private var generalExpanded = true
+    @AppStorage("reader.inspector.playback.parts.expanded") private var partsExpanded = true
+
     var body: some View {
         List {
             // Whole-score transport / mix controls live in one section above the per-part mixer. Each row's distinct
-            // icon (metronome / tempo gauge / repeat / speaker) keeps them readable without section separators.
-            Section {
+            // icon (metronome / tempo gauge / repeat / speaker) keeps them readable without further separators.
+            CollapsibleSection(isExpanded: $generalExpanded) {
                 metronomeRow
                 tempoRow
                 HStack {
@@ -51,9 +55,11 @@ struct PlaybackInspectorScreen: View {
                     RepeatModePicker(selection: $repeatModel.mode)
                 }
                 masterVolumeRow
+            } header: {
+                Text("reader.inspector.section.general", bundle: .module)
             }
 
-            Section {
+            CollapsibleSection(isExpanded: $partsExpanded) {
                 ForEach(score.parts.indices, id: \.self) { partIndex in
                     let part = score.parts[partIndex]
                     VStack {
@@ -80,6 +86,7 @@ struct PlaybackInspectorScreen: View {
                 Text("reader.inspector.section.parts", bundle: .module)
             }
         }
+        .contentMargins(.top, 4, for: .scrollContent)
         .buttonStyle(.plain)
     }
 

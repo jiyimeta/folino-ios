@@ -2,6 +2,7 @@ import Domain
 import SheetMusicAudio
 import SheetMusicCore
 import SwiftUI
+import UtilityUI
 
 struct VisualInspectorScreen: View {
     let layoutModel: LayoutSettingsModel
@@ -16,17 +17,22 @@ struct VisualInspectorScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
     private var showInvisibleElements = false
 
+    @AppStorage("reader.inspector.visual.general.expanded") private var generalExpanded = true
+    @AppStorage("reader.inspector.visual.parts.expanded") private var partsExpanded = true
+
     var body: some View {
         List {
-            // Top-of-list "general" controls intentionally render without a section header — they apply to the whole
-            // score and the header would only repeat that with no information value.
-            layoutRow
-            staffSizeRow
-            breakPolicyRow
-            collapseRow
-            showInvisibleRow
+            CollapsibleSection(isExpanded: $generalExpanded) {
+                layoutRow
+                staffSizeRow
+                breakPolicyRow
+                collapseRow
+                showInvisibleRow
+            } header: {
+                Text("reader.inspector.section.general", bundle: .module)
+            }
 
-            Section {
+            CollapsibleSection(isExpanded: $partsExpanded) {
                 ForEach(score.parts.indices, id: \.self) { partIndex in
                     let part = score.parts[partIndex]
                     HStack {
@@ -47,6 +53,7 @@ struct VisualInspectorScreen: View {
                 Text("reader.inspector.section.parts", bundle: .module)
             }
         }
+        .contentMargins(.top, 4, for: .scrollContent)
         .buttonStyle(.plain)
     }
 

@@ -318,31 +318,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Output"
+            "value" : "Volume"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "全体音量"
+            "value" : "音量"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "전체 음량"
+            "value" : "음량"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "总音量"
+            "value" : "音量"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "總音量"
+            "value" : "音量"
           }
         }
       }
@@ -411,6 +411,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重複"
+          }
+        }
+      }
+    },
+    "reader.inspector.section.general" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全体"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整体"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整體"
           }
         }
       }

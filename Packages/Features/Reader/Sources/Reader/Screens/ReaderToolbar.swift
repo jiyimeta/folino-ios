@@ -79,7 +79,7 @@ struct ReaderTopOverlay: View {
                     score: score,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationCompactAdaptation(.sheet)
             }
 
