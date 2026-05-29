@@ -377,6 +377,7 @@
       }
     },
     "domain.error.audioEngineFailed" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -411,6 +412,7 @@
       }
     },
     "domain.error.persistenceFailed" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -445,6 +447,7 @@
       }
     },
     "domain.error.scoreFileNotFound" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -479,6 +482,7 @@
       }
     },
     "domain.error.scoreParseFailed" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -513,6 +517,7 @@
       }
     },
     "domain.error.scoreWriteFailed" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -547,6 +552,7 @@
       }
     },
     "domain.error.syncFailed" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -581,6 +587,7 @@
       }
     },
     "domain.error.unsupportedFormat" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
