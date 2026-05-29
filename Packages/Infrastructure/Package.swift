@@ -73,7 +73,10 @@ let package = Package(
         ),
         .testTarget(
             name: "InfrastructureTests",
-            dependencies: ["Persistence", "CloudSync", "Soundfonts", "Audio", "ScoreFiles"],
+            dependencies: [
+                "Persistence", "CloudSync", "Soundfonts", "Audio", "ScoreFiles",
+                .product(name: "UtilityCore", package: "Utility"),
+            ],
             resources: [.process("Resources")],
         ),
     ],
