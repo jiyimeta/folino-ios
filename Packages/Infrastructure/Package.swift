@@ -57,6 +57,7 @@ let package = Package(
             name: "ScoreFiles",
             dependencies: [
                 "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "SheetMusic", package: "swift-sheet-music"),
                 .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
             ],
