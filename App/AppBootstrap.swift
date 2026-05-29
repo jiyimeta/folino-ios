@@ -54,7 +54,7 @@ final class AppBootstrap {
                 scoresDirectory: AppPaths.scoresDirectory,
                 playlistsIndexPublisher: writer,
             )
-            let gateway = LiveScoreFileGateway()
+            let gateway = LiveScoreFileGateway(crashReporter: crashReporter ?? NoopCrashReporter())
             let importer = LiveScoreFileImporter(
                 gateway: gateway,
                 repository: repository,
