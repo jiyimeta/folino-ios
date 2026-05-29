@@ -1,2 +1,3 @@
+- Added a setting to adjust the master volume
+- Added a setting to show hidden elements
 - Minor bug fixes
-- Added crash report submission
