@@ -39,11 +39,9 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
             do {
                 let (score, diagnostics): (Score, [ScoreParseDiagnostic]) = switch format {
                 case .mscx:
-                    // TODO(parser-diagnostics): swap to MSCXParser.parseWithDiagnostics once the dependency lands.
-                    try (SheetMusic.loadScore(mscxData: data), [])
+                    try Self.result(from: MSCXParser.parseWithDiagnostics(data))
                 case .mscz:
-                    // TODO(parser-diagnostics): swap to MSCZReader.parseWithDiagnostics once the dependency lands.
-                    try (SheetMusic.loadScore(msczData: data), [])
+                    try Self.result(from: MSCZReader.parseWithDiagnostics(data))
                 case .musicXML:
                     try (SheetMusic.loadScore(musicXMLData: data), [])
                 case .mxl:
@@ -67,5 +65,10 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
     public func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
         // v1: swift-sheet-music has no Score → MSCX/MSCZ/MusicXML serializer. The Editor plan will fill this in.
         throw DomainError.unsupportedFormat(format.canonicalExtension)
+    }
+
+    /// Bridges a swift-sheet-music MSCX/MSCZ parse result into the gateway's `(Score, [ScoreParseDiagnostic])` shape.
+    private static func result(from parsed: MSCXParseResult) -> (Score, [ScoreParseDiagnostic]) {
+        (parsed.score, parsed.diagnostics.map(ScoreParseDiagnostic.init))
     }
 }

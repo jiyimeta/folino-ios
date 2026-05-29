@@ -9,6 +9,16 @@ enum Fixtures {
         return try Data(contentsOf: url)
     }
 
+    /// Loads `diagnostics-tremolo-unknown-subtype.mscx` bytes: a minimal valid score carrying an MS4
+    /// `<TremoloSingleChord><subtype>r128</subtype>` whose subtype the decoder does not recognise. Parsing drops the
+    /// tremolo and emits one `mscx.tremolo.unknownSubtype` warning. Hand-authored — no GPL fixture data.
+    static func unknownTremoloMSCXData() throws -> Data {
+        let url = try #require(
+            Bundle.module.url(forResource: "diagnostics-tremolo-unknown-subtype", withExtension: "mscx"),
+        )
+        return try Data(contentsOf: url)
+    }
+
     /// Synthesizes minimal `.mscz` bytes by packaging the bundled `.mscx` through `swift-sheet-music`'s MSCZ writer. No
     /// GPL fixture data.
     static func minimalMSCZData() throws -> Data {

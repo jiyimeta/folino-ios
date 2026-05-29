@@ -105,4 +105,18 @@ struct LiveScoreFileGatewayTests {
         _ = try await gateway.loadScore(fileURL: mscxURL)
         #expect(fake.recordedErrors.isEmpty)
     }
+
+    @Test func `unknown tremolo subtype is reported as one non-fatal`() async throws {
+        let tmp = try TempDirectory()
+        let mscxURL = try Fixtures.writeToTempFile(
+            Fixtures.unknownTremoloMSCXData(), ext: "mscx", in: tmp.url,
+        )
+        let fake = FakeCrashReporter()
+        let gateway = LiveScoreFileGateway(crashReporter: fake)
+        // The score still loads — the unknown tremolo is dropped, not fatal.
+        _ = try await gateway.loadScore(fileURL: mscxURL)
+        #expect(fake.recordedErrors.count == 1)
+        let recorded = try #require(fake.recordedErrors.first)
+        #expect((recorded as NSError).domain == "mscx.tremolo.unknownSubtype")
+    }
 }
