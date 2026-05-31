@@ -1,3 +1,10 @@
+- version: 1.5.3
+  descriptions:
+    - en: Minor bug fixes
+      ja: 軽微なバグ修正
+      ko: 사소한 버그 수정
+      zh-Hans: 修复细微问题
+      zh-Hant: 修正細微錯誤
 - version: 1.5.2
   descriptions:
     - en: Added a setting to adjust the master volume
