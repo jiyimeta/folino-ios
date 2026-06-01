@@ -79,7 +79,7 @@ public struct ReaderRootScreen: View {
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
                 )
                 Spacer()
-                ReaderBottomOverlay(viewModel: viewModel)
+                ReaderBottomOverlay(viewModel: viewModel, showSeekBar: false)
             }
         }
         .navigationTitle("")

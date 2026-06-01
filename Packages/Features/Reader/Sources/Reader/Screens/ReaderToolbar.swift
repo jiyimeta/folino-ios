@@ -65,6 +65,7 @@ struct ReaderTopOverlay: View {
                     masterVolumeModel: viewModel.masterVolumeModel,
                     repeatModel: viewModel.repeatModel,
                     score: score,
+                    playbackCursor: viewModel.playbackSession.playbackCursor,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)
                 .presentationDetents([.large])
@@ -104,90 +105,182 @@ struct ReaderTopOverlay: View {
     }
 }
 
-/// Bottom overlay hosting the reset-zoom pill (leading), the A/B loop endpoint buttons, and the primary transport
-/// pill (jump-to-start / step / play-pause, trailing). Lives outside the toolbar so it can sit on top of the score
-/// content rather than in the navigation bar, and keeps the transport within thumb reach at the bottom of the screen.
+/// Bottom overlay hosting the transport control. When `showSeekBar` is true it renders a full-width
+/// glass card (seek bar over the transport row); when false it keeps the compact right-aligned pill.
+/// Lives outside the toolbar so it sits on top of the score and keeps the transport within thumb reach.
 struct ReaderBottomOverlay: View {
     @Bindable var viewModel: ReaderViewModel
+    /// When true, render the full-width seek-bar card; when false, the compact transport pill.
+    let showSeekBar: Bool
+
+    @State private var isScrubbing = false
+    @State private var scrubFraction: Double = 0
+
+    /// Content height (above the bottom safe area) of the compact control — transport pill (44) plus
+    /// the surrounding `.padding()` (16 top + 16 bottom). Used by `ReaderRootScreen` to inset the
+    /// horizontal / page viewport so the score never renders under the control.
+    static let collapsedContentHeight: CGFloat = 76
+    /// Content height of the expanded card — seek row (~28) + spacing (8) + transport row (44) plus
+    /// top padding (12) and bottom padding (8). Excludes the safe-area bleed region.
+    static let expandedContentHeight: CGFloat = 100
+
+    private var loadedScore: Score? {
+        if case let .loaded(score) = viewModel.loadState { return score }
+        return nil
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            if viewModel.viewportZoom > 1.0 {
-                Button {
-                    viewModel.resetZoom()
-                } label: {
-                    Label {
-                        Text("reader.toolbar.resetZoom", bundle: .module)
-                    } icon: {
-                        Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                }
-            }
-            Spacer()
-            if viewModel.repeatModel.mode == .abLoop {
-                endpointButton(
-                    label: "A",
-                    isSet: viewModel.repeatModel.pendingRepeatA != nil,
-                    onSet: { Task { await viewModel.repeatModel.setA() } },
-                )
+        if showSeekBar, let score = loadedScore {
+            expandedLayout(score: score)
+        } else {
+            collapsedLayout
+        }
+    }
 
-                endpointButton(
-                    label: "B",
-                    isSet: viewModel.repeatModel.pendingRepeatB != nil,
-                    onSet: { Task { await viewModel.repeatModel.setB() } },
-                )
-            }
+    // MARK: Collapsed (today's layout)
+
+    private var collapsedLayout: some View {
+        HStack(spacing: 12) {
+            resetZoomButton
+            Spacer()
+            endpointButtons
             if case .loaded = viewModel.loadState {
-                transportButtons
+                transportPill
             }
         }
         .padding()
     }
 
-    /// Primary transport: jump-to-start, step back a measure, play/pause, step forward a measure (in that order).
-    /// Only shown once a score is loaded so the engine is ready to seek / play.
-    private var transportButtons: some View {
-        // The whole control is a single interactive liquid-glass pill (spacing 0), mirroring the top overlay's paired
-        // inspector buttons.
-        HStack(spacing: 0) {
-            // Same glyph as page mode's "jump to first page" tap zone — a custom symbol bundled with the Reader module
-            // (`PageTapZoneKind.first`), since no system SF Symbol matches the `arrow.uturn.backward.to.line` shape.
-            transportButton(
-                image: Image("arrow.uturn.backward.to.line", bundle: .module),
-                label: Text("reader.toolbar.jumpToStart", bundle: .module),
-            ) {
-                viewModel.playbackSession.seekToStart()
-            }
+    // MARK: Expanded (full-width seek card)
 
-            transportButton(
-                image: Image(systemName: "chevron.left.2"),
-                label: Text("reader.toolbar.stepBackward", bundle: .module),
-            ) {
-                viewModel.playbackSession.stepMeasureBackward()
+    private func expandedLayout(score: Score) -> some View {
+        VStack(spacing: 8) {
+            if viewModel.viewportZoom > 1.0 {
+                HStack { resetZoomButton; Spacer() }
+                    .padding(.horizontal)
             }
+            seekCard(score: score)
+        }
+    }
 
-            transportButton(
-                image: Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill"),
-                label: Text(
-                    viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
-                    bundle: .module,
-                ),
-            ) {
-                Task { await viewModel.playbackSession.togglePlayback() }
-            }
-
-            transportButton(
-                image: Image(systemName: "chevron.right.2"),
-                label: Text("reader.toolbar.stepForward", bundle: .module),
-            ) {
-                viewModel.playbackSession.stepMeasureForward()
+    private func seekCard(score: Score) -> some View {
+        VStack(spacing: 8) {
+            seekBar(score: score)
+            HStack(spacing: 0) {
+                transportButtonsContent
+                Spacer(minLength: 0)
+                endpointButtons
             }
         }
-        .glassEffect(.regular.interactive())
-        // Match the top overlay's button shadow so the transport pill reads with the same depth as the inspector pill.
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(alignment: .top) {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: 28))
+                .ignoresSafeArea(edges: .bottom)
+        }
+        .padding(.horizontal, 12)
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+    }
+
+    private func seekBar(score: Score) -> some View {
+        let total = score.notatedDurationSeconds
+        let fraction = Binding<Double>(
+            get: {
+                if isScrubbing { return scrubFraction }
+                guard total > 0, let cursor = viewModel.playbackSession.playbackCursor else { return 0 }
+                return min(max(score.seconds(at: cursor) / total, 0), 1)
+            },
+            set: { newValue in
+                scrubFraction = newValue
+                viewModel.playbackSession.updateScrub(toFraction: newValue)
+            },
+        )
+        return Slider(value: fraction, in: 0 ... 1) { editing in
+            isScrubbing = editing
+            if editing {
+                viewModel.playbackSession.beginScrub()
+            } else {
+                viewModel.playbackSession.endScrub()
+            }
+        }
+        .tint(.accentColor)
+        .accessibilityLabel(Text("reader.toolbar.seekBar", bundle: .module))
+    }
+
+    // MARK: Shared pieces
+
+    @ViewBuilder private var resetZoomButton: some View {
+        if viewModel.viewportZoom > 1.0 {
+            Button {
+                viewModel.resetZoom()
+            } label: {
+                Label {
+                    Text("reader.toolbar.resetZoom", bundle: .module)
+                } icon: {
+                    Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(.ultraThinMaterial, in: Capsule())
+            }
+        }
+    }
+
+    @ViewBuilder private var endpointButtons: some View {
+        if viewModel.repeatModel.mode == .abLoop {
+            endpointButton(
+                label: "A",
+                isSet: viewModel.repeatModel.pendingRepeatA != nil,
+                onSet: { Task { await viewModel.repeatModel.setA() } },
+            )
+            endpointButton(
+                label: "B",
+                isSet: viewModel.repeatModel.pendingRepeatB != nil,
+                onSet: { Task { await viewModel.repeatModel.setB() } },
+            )
+        }
+    }
+
+    private var transportPill: some View {
+        HStack(spacing: 0) { transportButtonsContent }
+            .glassEffect(.regular.interactive())
+            .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+    }
+
+    /// Primary transport buttons: jump-to-start, step back a measure, play/pause, step forward a measure. Shared
+    /// between the collapsed pill and the expanded card so the two layouts stay in sync.
+    @ViewBuilder private var transportButtonsContent: some View {
+        // Same glyph as page mode's "jump to first page" tap zone — a custom symbol bundled with the Reader module
+        // (`PageTapZoneKind.first`), since no system SF Symbol matches the `arrow.uturn.backward.to.line` shape.
+        transportButton(
+            image: Image("arrow.uturn.backward.to.line", bundle: .module),
+            label: Text("reader.toolbar.jumpToStart", bundle: .module),
+        ) {
+            viewModel.playbackSession.seekToStart()
+        }
+        transportButton(
+            image: Image(systemName: "chevron.left.2"),
+            label: Text("reader.toolbar.stepBackward", bundle: .module),
+        ) {
+            viewModel.playbackSession.stepMeasureBackward()
+        }
+        transportButton(
+            image: Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill"),
+            label: Text(
+                viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
+                bundle: .module,
+            ),
+        ) {
+            Task { await viewModel.playbackSession.togglePlayback() }
+        }
+        transportButton(
+            image: Image(systemName: "chevron.right.2"),
+            label: Text("reader.toolbar.stepForward", bundle: .module),
+        ) {
+            viewModel.playbackSession.stepMeasureForward()
+        }
     }
 
     private func transportButton(
@@ -231,5 +324,30 @@ struct ReaderBottomOverlay: View {
         .task {
             await vm.load()
         }
+}
+
+#Preview("Bottom overlay · seek bar") {
+    let score = Score(
+        division: 480,
+        parts: [
+            Part(
+                id: "P0",
+                instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+                staves: [Staff(measures: [Measure(voices: []), Measure(voices: []), Measure(voices: [])])],
+            ),
+        ],
+        metaTags: [:],
+    )
+    let vm = ReaderViewModel(
+        scoreItem: PreviewFakeRepository.sampleItem,
+        repository: PreviewFakeRepository(),
+        gateway: PreviewFakeGateway(score: score),
+        scoresDirectory: URL(filePath: "/tmp"),
+    )
+    return VStack {
+        Spacer()
+        ReaderBottomOverlay(viewModel: vm, showSeekBar: true)
+    }
+    .task { await vm.load() }
 }
 #endif

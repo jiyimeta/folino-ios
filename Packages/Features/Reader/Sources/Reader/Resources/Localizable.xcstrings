@@ -483,40 +483,6 @@
         }
       }
     },
-    "reader.inspector.tempo" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tempo"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "テンポ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "템포"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "速度"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "速度"
-          }
-        }
-      }
-    },
     "reader.pageMode.tapZone.first" : {
       "localizations" : {
         "en" : {
@@ -1807,6 +1773,15 @@
             "value" : "後退一小節"
           }
         }
+      }
+    },
+    "reader.toolbar.seekBar" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Playback position" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "再生位置" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "재생 위치" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放位置" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "播放位置" } }
       }
     },
     "reader.toolbar.stepForward" : {
