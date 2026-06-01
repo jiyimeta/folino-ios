@@ -134,70 +134,30 @@ git commit -m "build(deps): bump swift-wirelet to v0.2.2 and swift-sheet-music i
 
 ---
 
-## Phase 1 — Bridge de-risk spike
+## Phase 1 — Bridge de-risk (FOLDED — resolved by source inspection)
 
-> Validate the two highest-risk bridge behaviors with the *smallest possible* store before building the real store + UI: (a) a stored `[@WireFormat]` array round-trips to a live `StateFlow<List<…>>` that re-emits on mutation, and (b) a `@WireletExpose` method with a `Data` parameter marshals as a `ByteArray` argument. If (b) fails, the fallback is a one-field `@WireFormat` wrapper struct argument (proven by the example's `add(TodoItem)` → `ByteArray`).
-
-### Task 1.1: Minimal spike store + cross-compile smoke
-
-**Files:**
-- Create (temporary, in the JNI target dir): `Sources/FolinoLibraryJNI/_Spike.swift`
-
-- [ ] **Step 1: Write a throwaway spike store** alongside where the real one will live:
-
-```swift
-import Foundation
-import Observation
-import Wirelet
-import WireletObservable
-
-@WireFormat
-public struct SpikeRow: Equatable, Sendable {
-    public var id: String
-    public var label: String
-}
-
-@WireletObservable
-@Observable
-public final class SpikeStore {
-    public private(set) var rows: [SpikeRow] = []
-    public init() {}
-
-    @WireletExpose
-    public func addRaw(_ bytes: Data) {       // proves Data-param marshaling
-        rows.append(SpikeRow(id: "\(rows.count)", label: "\(bytes.count) bytes"))
-    }
-
-    @WireletExpose
-    public func remove(_ id: String) {        // proves String-param marshaling
-        rows.removeAll { $0.id == id }
-    }
-}
-```
-
-- [ ] **Step 2: Cross-compile the JNI target** (after Task 2.1 wires the target into `Package.swift`; if running 1.1 first, temporarily add a minimal `FolinoLibraryJNI` target with just this file). Confirm the `@_cdecl` symbols appear.
-
-Run: `FOLINO_ANDROID=1 TOOLCHAINS=org.swift.632202605101a swift build --package-path Packages/Features/Library --product FolinoLibraryJNI --swift-sdk aarch64-unknown-linux-android28 -c release`
-Expected: builds `libFolinoLibraryJNI.so`.
-
-Run: `nm -D Packages/Features/Library/.build/aarch64-unknown-linux-android28/release/libFolinoLibraryJNI.so | grep -i WireletObservable_SpikeStore`
-Expected: lists `..._rows_track`, `..._addRaw`, `..._remove`, `..._new`, `..._release` symbols. If `addRaw`'s symbol is missing or the Kotlin generation later rejects the `Data` param, switch to the wrapper-struct fallback (Step 3).
-
-- [ ] **Step 3 (fallback only): wrapper-struct variant** — if `Data` params are unsupported, define `@WireFormat struct MsczPayload { var bytes: Data }` and make the method `addRaw(_ payload: MsczPayload)`. Re-run Step 2.
-
-- [ ] **Step 4: Generate the Kotlin ViewModel from the spike** to confirm the emitter accepts the surface.
-
-Run (TestKit-style, via the Android module once Phase 3 scaffolds it, or via the CLI directly):
-`swift run --package-path ~/Developer/Personal/swift-packages/swift-wirelet emit-wirelet-observable --schema Packages/Features/Library/Sources/FolinoLibraryJNI --output /tmp/spike-vm`
-Expected: `/tmp/spike-vm/.../SpikeStoreViewModel.kt` exists, exposing `val rows: StateFlow<List<SpikeRow>>`, `fun addRaw(bytes: ByteArray)` (or `fun addRaw(payload: SpikeRow)` in the fallback), and `fun remove(id: String)`.
-
-- [ ] **Step 5: Record the outcome** (Data-param supported? yes/no) in the plan's Open-items and **delete `_Spike.swift`** before Phase 2.
-
-```bash
-rm Packages/Features/Library/Sources/FolinoLibraryJNI/_Spike.swift
-```
-
-No commit — this is a throwaway spike. The learning carries into Phase 2.
+> **Resolved during planning, no standalone spike needed.** The two original
+> de-risk questions are answered:
+>
+> 1. **Stored `[@WireFormat]` array → live `StateFlow<List<…>>`** — this is the
+>    bridge's *primary* supported path, proven end-to-end by the
+>    `observable-counter` example (`items: [TodoItem]` →
+>    `StateFlow<List<TodoItem>>`). The real store (Task 2.3) uses exactly this
+>    shape; the first real cross-compile (Task 3.1) + ViewModel generation
+>    (Task 3.2) are the environment gate **before** any UI work.
+> 2. **`Data` method parameter — UNSUPPORTED.** Confirmed by reading
+>    `WireletObservableSchema/Internal/InvokeArgClassifier.swift`: `classify`
+>    has cases only for `Bool` / primitive / `String` / `[@WireFormat]`;
+>    everything else (including `Data` and `[UInt8]`) falls through to
+>    `.wireFormat(typeName:)`, which would emit a broken `DataCodec` reference.
+>    **Resolution:** `importScore` takes a `String` filesystem **path**, not
+>    `Data` (String args are first-class). The Kotlin side copies the picked
+>    document into the app cache dir and passes its absolute path; Swift reads
+>    it with `MSCZReader.parse(contentsOf:)`. The bytes never cross JNI. This
+>    is already baked into Task 2.3 and Task 4.2 below.
+>
+> Net effect: no throwaway `_Spike.swift` target. Proceed directly to Phase 2;
+> treat Task 3.1/3.2 as the cross-compile-pipeline gate.
 
 ---
 
@@ -349,14 +309,14 @@ import Testing
 @testable import FolinoLibraryJNI
 
 @Suite struct LibraryAndroidStoreTests {
-    private func sampleMSCZ() throws -> Data {
-        let url = try #require(Bundle.module.url(forResource: "sample", withExtension: "mscz"))
-        return try Data(contentsOf: url)
+    /// The fixture's on-disk path (importScore takes a filesystem path).
+    private func samplePath() throws -> String {
+        try #require(Bundle.module.url(forResource: "sample", withExtension: "mscz")).path
     }
 
     @Test func importParsesTitleAndComposer() throws {
         let store = LibraryAndroidStore()
-        store.importScore(try sampleMSCZ())
+        store.importScore(try samplePath())
         #expect(store.scores.count == 1)
         let row = try #require(store.scores.first)
         #expect(row.title == "Gymnopédie No. 1")   // adjust to the fixture's actual workTitle
@@ -366,7 +326,7 @@ import Testing
 
     @Test func deleteRemovesById() throws {
         let store = LibraryAndroidStore()
-        store.importScore(try sampleMSCZ())
+        store.importScore(try samplePath())
         let id = try #require(store.scores.first?.id)
         store.delete(id)
         #expect(store.scores.isEmpty)
@@ -379,9 +339,9 @@ import Testing
         #expect(store.scores == [row])
     }
 
-    @Test func importOfGarbageIsIgnored() {
+    @Test func importOfNonexistentPathIsIgnored() {
         let store = LibraryAndroidStore()
-        store.importScore(Data([0, 1, 2, 3]))
+        store.importScore("/no/such/file.mscz")
         #expect(store.scores.isEmpty)
     }
 }
@@ -416,11 +376,19 @@ public final class LibraryAndroidStore {
 
     public init() {}
 
-    /// Parse an `.mscz` (Foundation-only path: zlib + XMLParser) and append
-    /// a row. Unparseable input is ignored (no crash, no row).
+    /// Parse the `.mscz` at `path` (a filesystem path — the Kotlin side
+    /// copies the picked document into the app cache dir and passes its
+    /// absolute path) and append a row. Foundation-only (zlib + XMLParser);
+    /// unparseable / unreadable input is ignored (no crash, no row).
+    ///
+    /// The bytes are passed by **path (String)**, not `Data`: the Observable
+    /// bridge's `@WireletExpose` arg classifier has no `Data`/`[UInt8]` case —
+    /// it would misclassify `Data` as a `@WireFormat` type and emit a broken
+    /// `DataCodec` reference. `String` args are first-class, so path-passing
+    /// is the robust route and avoids marshaling the bytes across JNI at all.
     @WireletExpose
-    public func importScore(_ msczBytes: Data) {
-        guard let score = try? MSCZReader.parse(msczBytes) else { return }
+    public func importScore(_ path: String) {
+        guard let score = try? MSCZReader.parse(contentsOf: URL(fileURLWithPath: path)) else { return }
         let title = score.metaTags["workTitle"] ?? ""
         let composer = score.metaTags["composer"] ?? ""
         scores.append(ScoreRowWire(id: UUID().uuidString, title: title, composer: composer))
@@ -432,14 +400,15 @@ public final class LibraryAndroidStore {
     }
 
     /// Re-insert a previously-removed row (drives the Compose "Undo" Snackbar).
+    /// `ScoreRowWire` is `@WireFormat`, so this arg marshals as a `ByteArray`
+    /// via `ScoreRowWireCodec` — the proven struct-arg path (cf. the
+    /// observable-counter example's `add(TodoItem)`).
     @WireletExpose
     public func insert(_ row: ScoreRowWire) {
         scores.append(row)
     }
 }
 ```
-
-> If Phase 1 found `Data` params unsupported, change `importScore(_ msczBytes: Data)` to take the `MsczPayload` wrapper and unwrap `payload.bytes` here.
 
 - [ ] **Step 5: Run — expect pass.** Adjust the expected title/composer in Step 2 to the fixture's real `metaTags` if they differ (read them once via a throwaway print or the diagnostics API).
 
@@ -729,8 +698,14 @@ fun LibraryScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes != null) viewModel.importScore(bytes)
+            // importScore takes a filesystem PATH (String), not bytes — the
+            // bridge can't marshal Data args. Copy the picked content:// doc
+            // into the app cache dir and hand Swift its absolute path.
+            val cacheFile = java.io.File(context.cacheDir, "import-${System.currentTimeMillis()}.mscz")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                cacheFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            viewModel.importScore(cacheFile.absolutePath)
         }
     }
 
@@ -1015,7 +990,7 @@ git commit -m "chore(android): Library pilot end-to-end smoke fixups"
 
 ## Open items / decisions resolved during build
 
-- **`Data` method-param support** — resolved by Phase 1 Task 1.1 (wrapper-struct fallback ready).
+- **`Data` method-param support** — RESOLVED: unsupported (InvokeArgClassifier has no Data case). `importScore` takes a `String` filesystem path; Kotlin copies the picked doc to cache dir and passes the absolute path.
 - **Undo mechanism** — chosen: `@WireletExpose func insert(_ row: ScoreRowWire)` on the Swift store (list stays authoritative in Swift).
 - **swift-sheet-music revision** — pin Folino to the Task 0.1 HEAD (the commit that bumps its swift-wirelet to v0.2.2). The cross-repo edit is **confirm-gated** (sibling repo).
 - **Observable Gradle task class name** — verify `GenerateWireletObservableViewModels` against plugin 0.2.2; the plugin may already auto-wire kotlin.android (making the manual `srcDir` block unnecessary).
