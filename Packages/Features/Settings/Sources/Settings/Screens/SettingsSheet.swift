@@ -36,6 +36,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
 
+    @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
+    private var showSeekBar = true
+
     @AppStorage(PrivacySettingsKey.crashReportingEnabled)
     private var isCrashReportingEnabled = true
 
@@ -117,6 +120,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 }
             }
             keepScreenAwakeToggle
+            seekBarToggle
             readerLayoutRow
             if let provider {
                 SoundfontPresetRow(provider: provider)
@@ -172,6 +176,16 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 }
             } icon: {
                 Image(systemName: "lock.slash")
+            }
+        }
+    }
+
+    private var seekBarToggle: some View {
+        Toggle(isOn: $showSeekBar) {
+            Label {
+                Text("settings.reader.showSeekBar", bundle: .module)
+            } icon: {
+                Image(systemName: "point.bottomleft.forward.to.point.topright.scurvepath")
             }
         }
     }
