@@ -12,10 +12,17 @@ import WireletObservable
 /// (the Observable bridge's supported StateFlow path). No injected
 /// `@Observable` repository, so the bridge's nested-observable limitation
 /// never applies.
+///
+/// `scores` is a plain `public var` (not `private(set)`): the
+/// `WireletObservableBridges` plugin emits a `_scores_set` write-back bridge
+/// for every `var` and does not honor `private(set)`, so the generated
+/// `me.scores = …` needs an accessible setter. This matches the framework
+/// convention (the observable-counter example uses plain `public var`).
+/// Mutation still flows only through the `@WireletExpose` methods in practice.
 @WireletObservable
 @Observable
 public final class LibraryAndroidStore {
-    public private(set) var scores: [ScoreRowWire] = []
+    public var scores: [ScoreRowWire] = []
 
     public init() {}
 
