@@ -1,7 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
-    id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.2"
+    id("io.github.jiyimeta.wirelet") version "0.2.2"
 }
 
 android {
@@ -35,7 +35,7 @@ dependencies {
     // Locally-published from the swift-java repo until it ships to Maven Central.
     api("org.swift.swiftkit:swiftkit-core:1.0-SNAPSHOT")
     // wirelet-runtime provides BinaryReader/BinaryWriter used by wirelet-generated codecs.
-    api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.2")
+    api("io.github.jiyimeta:wirelet-runtime:0.2.2")
 }
 
 // `packageRoot` is the worktree root (one level above the Android/ Gradle root).
