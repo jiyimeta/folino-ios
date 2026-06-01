@@ -15,10 +15,11 @@ var packageDependencies: [Package.Dependency] = [
 ]
 
 if isAndroid {
-    // Android cross-compile path: only the self-contained JNI target. It does
-    // NOT depend on Domain/Utility, so they are never pulled — the macOS host
-    // build (used for cross-compile + host tests) stays free of the iOS-only
-    // SwiftUI `Library` target, and the shared packages need no changes.
+    // Android cross-compile path: the self-contained JNI target plus Domain
+    // (Foundation + SheetMusicCore only, so it cross-compiles to Android and
+    // builds on the macOS host for tests). Domain provides `ScorePresentation`,
+    // the shared row-field derivation that keeps this store in lockstep with
+    // the iOS Library. Utility (iOS-only SwiftUI) is still not pulled.
     packageDependencies += [
         // swiftlint:disable:next line_length
         .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"),
@@ -26,6 +27,7 @@ if isAndroid {
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
             revision: "2f7128fae3b8e30371c2528a831a1ebf51e84891",
         ),
+        .package(path: "../../Domain"),
     ]
     products += [
         .library(name: "FolinoLibraryJNI", type: .dynamic, targets: ["FolinoLibraryJNI"]),
@@ -34,6 +36,7 @@ if isAndroid {
         .target(
             name: "FolinoLibraryJNI",
             dependencies: [
+                "Domain",
                 .product(name: "Wirelet", package: "swift-wirelet"),
                 .product(name: "WireletObservable", package: "swift-wirelet"),
                 .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),

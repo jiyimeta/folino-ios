@@ -1,3 +1,4 @@
+import Domain
 import Foundation
 import Observation
 import SheetMusicMSCX
@@ -32,10 +33,20 @@ public final class LibraryAndroidStore {
     /// / unreadable input is ignored (no crash, no row).
     @WireletExpose
     public func importScore(_ path: String) {
-        guard let score = try? MSCZReader.parse(contentsOf: URL(fileURLWithPath: path)) else { return }
-        let title = score.metaTags["workTitle"] ?? ""
-        let composer = score.metaTags["composer"] ?? ""
-        scores.append(ScoreRowWire(id: UUID().uuidString, title: title, composer: composer))
+        let url = URL(fileURLWithPath: path)
+        guard let score = try? MSCZReader.parse(contentsOf: url) else { return }
+        // Derive the row fields via the shared Domain presenter so this matches
+        // the iOS Library exactly (title = file name, subtitle = title-frame
+        // subtitle, composer = metaTag). The Kotlin side names the cache file
+        // with the original picked document's display name, so `lastPathComponent`
+        // is that original name.
+        let fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, score: score)
+        scores.append(ScoreRowWire(
+            id: UUID().uuidString,
+            title: fields.title,
+            subtitle: fields.subtitle ?? "",
+            composer: fields.composer ?? "",
+        ))
     }
 
     @WireletExpose

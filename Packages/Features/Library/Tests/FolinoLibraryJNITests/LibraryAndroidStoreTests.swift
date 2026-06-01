@@ -8,12 +8,14 @@ struct LibraryAndroidStoreTests {
         try #require(Bundle.module.url(forResource: "sample", withExtension: "mscz")).path
     }
 
-    @Test func `import parses title and composer`() throws {
+    @Test func `import derives title from file name and composer from metaTag`() throws {
         let store = LibraryAndroidStore()
         try store.importScore(samplePath())
         #expect(store.scores.count == 1)
         let row = try #require(store.scores.first)
-        #expect(row.title == "アイデア#0131")
+        // Title is the file name (sans extension) — matches the iOS importer,
+        // NOT the score's workTitle metaTag ("アイデア#0131").
+        #expect(row.title == "sample")
         #expect(row.composer == "Kiichi")
         #expect(!row.id.isEmpty)
     }
@@ -28,7 +30,7 @@ struct LibraryAndroidStoreTests {
 
     @Test func `insert re adds row`() {
         let store = LibraryAndroidStore()
-        let row = ScoreRowWire(id: "x", title: "T", composer: "C")
+        let row = ScoreRowWire(id: "x", title: "T", subtitle: "S", composer: "C")
         store.insert(row)
         #expect(store.scores == [row])
     }
