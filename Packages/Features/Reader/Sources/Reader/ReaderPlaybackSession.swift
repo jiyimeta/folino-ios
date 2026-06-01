@@ -12,6 +12,17 @@ final class ReaderPlaybackSession {
     private(set) var isPlaying = false
     private(set) var playbackCursor: ScoreCursor?
 
+    /// Provisional cursor shown while the user drags the seek bar. Non-nil only mid-scrub. The score
+    /// views render `displayCursor`, so they follow this instead of the live `playbackCursor`; audio
+    /// and the real cursor stay put until `endScrub()`.
+    private(set) var scrubCursor: ScoreCursor?
+
+    /// What the on-screen score should highlight and auto-scroll to: the provisional scrub position
+    /// when dragging, otherwise the live playback cursor.
+    var displayCursor: ScoreCursor? {
+        scrubCursor ?? playbackCursor
+    }
+
     @ObservationIgnored private var rawPlaybackCursor: ScoreCursor?
 
     @ObservationIgnored let controller: (any PlaybackController)?
@@ -245,6 +256,34 @@ final class ReaderPlaybackSession {
         onCursorChanged()
         guard let controller else { return }
         Task { await controller.setCursor(to: engineCursor) }
+    }
+
+    /// Begin an interactive seek-bar drag. Seeds the provisional cursor at the current real position so
+    /// the score doesn't jump before the first drag delta arrives.
+    func beginScrub() {
+        scrubCursor = playbackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)
+    }
+
+    /// Move the provisional cursor to `fraction` (0...1) of the notated timeline. Views following
+    /// `displayCursor` re-scroll / page; audio and the real cursor are untouched.
+    func updateScrub(toFraction fraction: Double) {
+        guard let score = scoreProvider() else { return }
+        let clamped = min(max(fraction, 0), 1)
+        scrubCursor = score.cursor(atSeconds: clamped * score.notatedDurationSeconds)
+        onCursorChanged()
+    }
+
+    /// Commit the drag: jump audio + the real cursor to the provisional position via the engine's
+    /// existing `setCursor(to:)`, then clear scrub state so `displayCursor` falls back to the live
+    /// cursor. A `.beat` cursor is staff-agnostic, so no hidden-staves translation is needed.
+    func endScrub() {
+        guard let target = scrubCursor else { return }
+        rawPlaybackCursor = target
+        playbackCursor = target
+        scrubCursor = nil
+        onCursorChanged()
+        guard let controller else { return }
+        Task { await controller.setCursor(to: target) }
     }
 
     /// Re-translate `rawPlaybackCursor` against the current hidden-staves set. Called by the owner
