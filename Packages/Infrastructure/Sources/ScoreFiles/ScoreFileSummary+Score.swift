@@ -12,6 +12,9 @@ extension ScoreFileSummary {
         let frameTexts = score.titleFrame?.texts ?? []
         let subtitle = frameTexts.first(where: { $0.style == .subtitle })?.text.nonEmpty
         let composer = score.metaTags["composer"]?.nonEmpty
+        let arranger = score.metaTags["arranger"]?.nonEmpty
+        let lyricist = score.metaTags["lyricist"]?.nonEmpty
+        let copyright = score.metaTags["copyright"]?.nonEmpty
 
         // Instrumentation: collect non-empty track names from parts; fall back to instrument long names when trackName
         // is nil.
@@ -35,6 +38,9 @@ extension ScoreFileSummary {
             title: nil,
             subtitle: subtitle,
             composer: composer,
+            arranger: arranger,
+            lyricist: lyricist,
+            copyright: copyright,
             instrumentationSummary: instrumentationSummary,
             lengthBeats: lengthBeats,
             defaultTempoBpm: defaultTempoBpm,
