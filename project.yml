@@ -30,6 +30,8 @@ packages:
     path: Packages/Domain
   Infrastructure:
     path: Packages/Infrastructure
+  ScoreUI:
+    path: Packages/ScoreUI
   Library:
     path: Packages/Features/Library
   Reader:
