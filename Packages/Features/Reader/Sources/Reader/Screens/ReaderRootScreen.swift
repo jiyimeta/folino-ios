@@ -149,7 +149,7 @@ public struct ReaderRootScreen: View {
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.displayCursor,
                     viewModel: viewModel,
                 )
             case .horizontal:
@@ -159,7 +159,7 @@ public struct ReaderRootScreen: View {
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.displayCursor,
                     viewModel: viewModel,
                 )
             case .page:
@@ -169,7 +169,7 @@ public struct ReaderRootScreen: View {
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.displayCursor,
                     viewModel: viewModel,
                 )
             }
