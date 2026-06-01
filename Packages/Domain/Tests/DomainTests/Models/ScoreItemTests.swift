@@ -70,6 +70,46 @@ struct ScoreItemTests {
         let decoded = try JSONDecoder().decode(ScoreItem.self, from: data)
         #expect(decoded.contentHash == item.contentHash)
     }
+
+    @Test func `new credit fields round-trip through Codable`() throws {
+        let item = ScoreItem(
+            title: "Sonata",
+            composer: "Beethoven",
+            arranger: "Liszt",
+            lyricist: "Schiller",
+            copyright: "© 1824",
+            instrumentationSummary: nil,
+            localFileName: "x.mscx",
+            contentHash: "h",
+            sizeBytes: 1,
+            lengthBeats: 0,
+            defaultTempoBpm: 120,
+            primaryKey: nil,
+            addedAt: Date(timeIntervalSince1970: 0),
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+        )
+        let data = try JSONEncoder().encode(item)
+        let decoded = try JSONDecoder().decode(ScoreItem.self, from: data)
+        #expect(decoded.arranger == "Liszt")
+        #expect(decoded.lyricist == "Schiller")
+        #expect(decoded.copyright == "© 1824")
+    }
+
+    @Test func `decoding legacy JSON without credit fields yields nil`() throws {
+        // A ScoreItem encoded before the new fields existed has no arranger/lyricist/copyright keys.
+        let json =
+            """
+            {"id":{"rawValue":"00000000-0000-0000-0000-000000000000"},"title":"Old",\
+            "localFileName":"o.mscx","contentHash":"h","sizeBytes":1,"lengthBeats":0,\
+            "defaultTempoBpm":120,"addedAt":0,"tagIDs":[],"isFavorite":false}
+            """
+        let decoded = try JSONDecoder().decode(ScoreItem.self, from: Data(json.utf8))
+        #expect(decoded.arranger == nil)
+        #expect(decoded.lyricist == nil)
+        #expect(decoded.copyright == nil)
+    }
 }
 
 extension ScoreItem {

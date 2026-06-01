@@ -10,6 +10,9 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public var title: String
     public var subtitle: String?
     public var composer: String?
+    public var arranger: String?
+    public var lyricist: String?
+    public var copyright: String?
     public var instrumentationSummary: String?
     /// Filename relative to the scores directory. Convention: `<id>.<canonical-extension>`.
     public var localFileName: String
@@ -34,6 +37,9 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         title: String,
         subtitle: String? = nil,
         composer: String?,
+        arranger: String? = nil,
+        lyricist: String? = nil,
+        copyright: String? = nil,
         instrumentationSummary: String?,
         localFileName: String,
         contentHash: String,
@@ -51,6 +57,9 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         self.title = title
         self.subtitle = subtitle
         self.composer = composer
+        self.arranger = arranger
+        self.lyricist = lyricist
+        self.copyright = copyright
         self.instrumentationSummary = instrumentationSummary
         self.localFileName = localFileName
         self.contentHash = contentHash
