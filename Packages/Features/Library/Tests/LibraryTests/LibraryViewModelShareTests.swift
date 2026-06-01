@@ -23,7 +23,8 @@ struct LibraryViewModelShareTests {
         let gateway = FakeScoreFileGateway()
         let share = FakeScoreShareService()
         let vm = LibraryViewModel(
-            repository: repo, importer: importer, gateway: gateway, shareService: share,
+            repository: repo, importer: importer, gateway: gateway,
+            shareService: share, metadataReader: FakeScoreMetadataReading(),
         )
         return (vm, share)
     }

@@ -22,6 +22,7 @@ struct LibraryViewModelTests {
         let importer: FakeScoreFileImporter
         let gateway: FakeScoreFileGateway
         let share: FakeScoreShareService
+        let metadataReader: FakeScoreMetadataReading
     }
 
     private static func makeVM(scoreItems: [ScoreItem] = []) -> VMFixture {
@@ -30,10 +31,15 @@ struct LibraryViewModelTests {
         let importer = FakeScoreFileImporter()
         let gateway = FakeScoreFileGateway()
         let share = FakeScoreShareService()
+        let metadataReader = FakeScoreMetadataReading()
         let vm = LibraryViewModel(
-            repository: repo, importer: importer, gateway: gateway, shareService: share,
+            repository: repo, importer: importer, gateway: gateway,
+            shareService: share, metadataReader: metadataReader,
         )
-        return VMFixture(vm: vm, repo: repo, importer: importer, gateway: gateway, share: share)
+        return VMFixture(
+            vm: vm, repo: repo, importer: importer, gateway: gateway,
+            share: share, metadataReader: metadataReader,
+        )
     }
 
     @Test func `toggle favorite flips and saves`() async {
@@ -333,5 +339,53 @@ extension LibraryViewModelTests {
         await f.vm.commit(plan: plan, decision: .importAsNew)
         #expect(f.vm.currentError != nil)
         #expect(f.vm.isImporting == false)
+    }
+}
+
+extension LibraryViewModelTests {
+    @Test func `save metadata trims title and stores all fields`() async {
+        let item = Self.makeItem(title: "Old")
+        let f = Self.makeVM(scoreItems: [item])
+        let fields = EditableScoreInfo(
+            title: "  New  ", subtitle: "Sub", composer: "C", arranger: "A", lyricist: "L", copyright: "©",
+        )
+        await f.vm.saveMetadata(item, fields: fields)
+        let saved = f.repo.savedScoreItems.last
+        #expect(saved?.title == "New")
+        #expect(saved?.composer == "C")
+        #expect(saved?.arranger == "A")
+        #expect(saved?.lyricist == "L")
+        #expect(saved?.copyright == "©")
+    }
+
+    @Test func `save metadata with blank title is ignored`() async {
+        let item = Self.makeItem(title: "Keep")
+        let f = Self.makeVM(scoreItems: [item])
+        let fields = EditableScoreInfo(
+            title: "   ", subtitle: "", composer: "", arranger: "", lyricist: "", copyright: "",
+        )
+        await f.vm.saveMetadata(item, fields: fields)
+        #expect(f.repo.savedScoreItems.isEmpty)
+    }
+
+    @Test func `load file metadata returns reader result`() async {
+        let item = Self.makeItem()
+        let f = Self.makeVM(scoreItems: [item])
+        f.metadataReader.result = .success(
+            ScoreFileMetadata(
+                source: .museScore(majorVersion: 4), composer: "C", arranger: "A", lyricist: nil, copyright: nil,
+            ),
+        )
+        let meta = await f.vm.loadFileMetadata(for: item)
+        #expect(meta?.source == .museScore(majorVersion: 4))
+        #expect(meta?.arranger == "A")
+    }
+
+    @Test func `load file metadata swallows errors as nil`() async {
+        let item = Self.makeItem()
+        let f = Self.makeVM(scoreItems: [item])
+        f.metadataReader.result = .failure(.scoreParseFailed(reason: "x"))
+        let meta = await f.vm.loadFileMetadata(for: item)
+        #expect(meta == nil)
     }
 }

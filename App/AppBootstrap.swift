@@ -25,6 +25,7 @@ final class AppBootstrap {
     private(set) var museScoreGeneralProvider: LiveMuseScoreGeneralProvider?
     private(set) var soundfontResolver: GMSoundfontResolver?
     private(set) var shareService: LiveScoreShareService?
+    private(set) var metadataReader: LiveScoreMetadataReader?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
     private(set) var crashReporter: (any CrashReporter)?
     let shareDuplicateResolver = ShareDuplicateResolver()
@@ -116,6 +117,10 @@ final class AppBootstrap {
             shareTempDirectory: AppPaths.shareTempDirectory,
             gateway: gateway,
             audioExporter: audioExporter,
+        )
+        metadataReader = LiveScoreMetadataReader(
+            gateway: gateway,
+            scoresDirectory: AppPaths.scoresDirectory,
         )
         playbackController = LivePlaybackController(soundfontResolver: resolver)
     }

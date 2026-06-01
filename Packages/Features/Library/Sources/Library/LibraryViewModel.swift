@@ -2,6 +2,17 @@ import Domain
 import Foundation
 import Observation
 
+/// Mutable form payload for the edit-info sheet. Empty strings are meaningful — saving an empty field clears it
+/// (persisted as `""`, which suppresses future file pre-fill).
+struct EditableScoreInfo: Equatable {
+    var title: String
+    var subtitle: String
+    var composer: String
+    var arranger: String
+    var lyricist: String
+    var copyright: String
+}
+
 @MainActor
 @Observable
 public final class LibraryViewModel {
@@ -9,6 +20,7 @@ public final class LibraryViewModel {
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
+    let metadataReader: any ScoreMetadataReading
 
     var shareTarget: ShareTarget?
     var isPreparingShare = false
@@ -59,11 +71,13 @@ public final class LibraryViewModel {
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
+        metadataReader: any ScoreMetadataReading,
     ) {
         self.repository = repository
         self.importer = importer
         self.gateway = gateway
         self.shareService = shareService
+        self.metadataReader = metadataReader
     }
 
     func toggleFavorite(_ scoreItem: ScoreItem) async {
@@ -77,6 +91,27 @@ public final class LibraryViewModel {
         guard !trimmed.isEmpty, trimmed != scoreItem.title else { return }
         var updated = scoreItem
         updated.title = trimmed
+        await save(updated)
+    }
+
+    /// Read the on-disk file's source + credit metaTags. Errors collapse to nil so a transient parse failure simply
+    /// leaves the source label / pre-fill empty instead of blocking editing.
+    func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata? {
+        try? await metadataReader.readMetadata(for: item)
+    }
+
+    /// Apply the edited fields to the item and persist. Title is required (trimmed, non-empty); other fields are stored
+    /// trimmed, with empties persisted as `""` so they are treated as explicit user values, not "never edited".
+    func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async {
+        let trimmedTitle = fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+        var updated = item
+        updated.title = trimmedTitle
+        updated.subtitle = fields.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.composer = fields.composer.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.arranger = fields.arranger.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.lyricist = fields.lyricist.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.copyright = fields.copyright.trimmingCharacters(in: .whitespacesAndNewlines)
         await save(updated)
     }
 

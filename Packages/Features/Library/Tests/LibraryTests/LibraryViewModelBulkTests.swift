@@ -29,6 +29,7 @@ struct LibraryViewModelBulkTests {
             importer: FakeScoreFileImporter(),
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(),
+            metadataReader: FakeScoreMetadataReading(),
         )
         return VMFixture(vm: vm, repo: repo)
     }

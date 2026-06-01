@@ -22,6 +22,7 @@ struct AppShellView: View {
                let importer = bootstrap.importer,
                let gateway = bootstrap.gateway,
                let shareService = bootstrap.shareService,
+               let metadataReader = bootstrap.metadataReader,
                bootstrap.isReady
             {
                 ReadyShell(
@@ -30,6 +31,7 @@ struct AppShellView: View {
                     importer: importer,
                     gateway: gateway,
                     shareService: shareService,
+                    metadataReader: metadataReader,
                     scoresDirectory: AppPaths.scoresDirectory,
                     versionHistoryPresenter: versionHistoryPresenter,
                 )
@@ -96,6 +98,7 @@ private struct ReadyShell: View {
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
+    let metadataReader: any ScoreMetadataReading
     let scoresDirectory: URL
     let versionHistoryPresenter: VersionHistoryPresenter
 
@@ -115,6 +118,7 @@ private struct ReadyShell: View {
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
+        metadataReader: any ScoreMetadataReading,
         scoresDirectory: URL,
         versionHistoryPresenter: VersionHistoryPresenter,
     ) {
@@ -123,6 +127,7 @@ private struct ReadyShell: View {
         self.importer = importer
         self.gateway = gateway
         self.shareService = shareService
+        self.metadataReader = metadataReader
         self.scoresDirectory = scoresDirectory
         self.versionHistoryPresenter = versionHistoryPresenter
         _libraryVM = State(
@@ -131,6 +136,7 @@ private struct ReadyShell: View {
                 importer: importer,
                 gateway: gateway,
                 shareService: shareService,
+                metadataReader: metadataReader,
             ),
         )
 
