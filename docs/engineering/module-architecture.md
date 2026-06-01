@@ -5,22 +5,24 @@ folino follows the same strict layered SPM-module shape as the reference project
 ## Layers
 
 ```
-App ──▶ Features ──▶ Domain ◀── swift-sheet-music
- │                    ▲
- └──▶ Infrastructure ─┘                Utility is reachable from any layer.
+App ──▶ Features ──┬─▶ Domain ◀── swift-sheet-music
+ │                 └─▶ ScoreUI ──▶ Domain
+ │                          └────▶ Utility
+ └──▶ Infrastructure ─▶ Domain         Utility is reachable from any layer.
 ```
 
 - **`Packages/Utility/`** — app-agnostic building blocks (`UtilityCore`, `UtilityUI`, `Navigation`). Must not import Domain / Infrastructure / Features / App. Designed to be lifted into OSS later.
 - **`Packages/Domain/`** — value types + protocols. folino-specific types (`LibraryItem`, `Playlist`, `Tag`, `AnnotationLayer`, `PlaybackPreferences`, `SoundfontPatch`) and protocols (`ScoreLibraryRepository`, `AnnotationStore`, `PlaybackController`, `SoundfontResolver`, `CloudSync`, `ScoreFileGateway`). Re-exports `SheetMusicCore` so Features see a single notation model. Foundation-only otherwise — no SwiftUI, no AVFoundation, no SDKs.
 - **`Packages/Infrastructure/`** — concrete adapters split into products: `Persistence` (GRDB / SQLite), `CloudSync` (CloudKit Private DB), `Soundfonts` (HTTPS download + cache), `Audio` (`SheetMusicAudio` adapter), `ScoreFiles` (wraps `SheetMusicMSCX` / `SheetMusicMusicXML` / `SheetMusicMIDI` behind `ScoreFileGateway`). Depends on Domain only.
-- **`Packages/Features/<Name>/`** — one package per feature: `Library`, `Reader`, `Editor`, `ImportExport`, `Settings`. Owns its views, view models, and navigation. Depends on Domain only.
+- **`Packages/Features/<Name>/`** — one package per feature: `Library`, `Reader`, `Editor`, `ImportExport`, `Settings`. Owns its views, view models, and navigation. Depends on Domain and the shared `ScoreUI` layer only.
+- **`Packages/ScoreUI/`** — shared, score-aware SwiftUI components reused across Features (e.g. the share-format menu `ShareSubmenu` and the `EditScoreInfoSheet` edit-info sheet, decoupled from any feature via the `ScoreInfoEditing` protocol). Depends on Domain + Utility only; must not depend on any Feature, Infrastructure, or App. Exists because such components need Domain types yet must be shared across Features without a `Feature → Feature` edge — which neither Domain (Foundation-only, no SwiftUI) nor Utility (Domain-free) can host. Keep it narrowly scoped to score-item presentation reused by ≥2 features; feature-specific UI stays in the feature.
 - **`App/`** — composition root. The only place that wires Infrastructure adapters into Feature view models.
 
 `swift-sheet-music` sits **outside** folino's layer graph as a SwiftPM dependency. It is consumed by Domain (for the model) and Infrastructure (for adapters). Features never import it directly.
 
 **Forbidden** (will be flagged in review):
 
-- Feature → Feature (lift shared code into Domain, or compose at App).
+- Feature → Feature (lift shared code into Domain, the shared `ScoreUI` layer, or compose at App).
 - Feature → Infrastructure (always go through a Domain protocol).
 - Feature → `swift-sheet-music` model / I/O modules directly (go through Domain re-exports for `SheetMusicCore`; route format I/O through `ScoreFileGateway`).
 
@@ -31,6 +33,7 @@ App ──▶ Features ──▶ Domain ◀── swift-sheet-music
   benefit. The Reader package consumes `ScoreView`, `PagedScoreView`, and
   `PlaybackCursorView` from `SheetMusicUI` directly.
 - Domain → Infrastructure / Features / App.
+- ScoreUI → Feature / Infrastructure / App (ScoreUI sits below Features; it may depend on Domain + Utility only).
 - Utility → anything else in this repo.
 
 ## Dependency Injection
