@@ -191,6 +191,18 @@ final class ReaderPlaybackSession {
         }
     }
 
+    /// Reset the playback position to the very start of the score (first measure, first tick) without touching the
+    /// play / pause state — a transport "rewind to top". The score containers observe `playbackCursor` and scroll /
+    /// page back to the opening measure. A `.beat` cursor is staff-agnostic, so no hidden-staves translation is needed.
+    func seekToStart() {
+        let start = ScoreCursor.beat(measureIndex: 0, tickInMeasure: 0)
+        rawPlaybackCursor = start
+        playbackCursor = start
+        onCursorChanged()
+        guard let controller else { return }
+        Task { await controller.setCursor(to: start) }
+    }
+
     func setManualCursor(_ cursor: ScoreCursor) {
         let hidden = hiddenStavesProvider()
         let engineCursor = scoreProvider()?.engineCursorForFilteredTap(

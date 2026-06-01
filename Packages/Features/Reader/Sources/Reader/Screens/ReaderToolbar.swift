@@ -1,7 +1,7 @@
 import SheetMusicCore
 import SwiftUI
 
-/// Top overlay hosting Back / Play / Inspector buttons. Rendered inside `ReaderRootScreen`'s `ZStack` so the score
+/// Top overlay hosting Back / Inspector buttons. Rendered inside `ReaderRootScreen`'s `ZStack` so the score
 /// stays visible behind the buttons — maximising the rendered staff area, which is core to the app's value proposition.
 ///
 /// We sidestep the standard `.toolbar { … }` route because on iOS 26.3.x physical devices
@@ -40,24 +40,12 @@ struct ReaderTopOverlay: View {
         .padding(.top, 4)
     }
 
-    /// Right-side buttons that depend on a loaded score: play/pause plus the paired inspector pill. Extracted from
-    /// `body` to keep the outer HStack closure under SwiftLint's body-length limit.
+    /// Right-side buttons that depend on a loaded score: the paired inspector pill. Play/pause moved to the bottom
+    /// overlay (`ReaderBottomOverlay`) so the primary transport controls sit within thumb reach. Extracted from `body`
+    /// to keep the outer HStack closure under SwiftLint's body-length limit.
     private func loadedActions(score: Score) -> some View {
-        HStack(spacing: 12) {
-            overlayButton(
-                systemImage: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill",
-                label: Text(
-                    viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
-                    bundle: .module,
-                ),
-            ) {
-                Task { await viewModel.playbackSession.togglePlayback() }
-            }
+        inspectorButtons(score: score)
             .glassEffect(.regular.interactive())
-
-            inspectorButtons(score: score)
-                .glassEffect(.regular.interactive())
-        }
     }
 
     /// Paired playback / visual inspector buttons sharing a single glass-pill background. Each button owns its own
@@ -116,13 +104,14 @@ struct ReaderTopOverlay: View {
     }
 }
 
-/// Bottom reset-zoom pill. Lives outside the toolbar so it can sit on top of the score content rather than in the
-/// navigation bar.
+/// Bottom overlay hosting the reset-zoom pill (leading), the A/B loop endpoint buttons, and the primary transport
+/// controls (jump-to-start + play/pause, trailing). Lives outside the toolbar so it can sit on top of the score content
+/// rather than in the navigation bar, and keeps the transport within thumb reach at the bottom of the screen.
 struct ReaderBottomOverlay: View {
     @Bindable var viewModel: ReaderViewModel
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             if viewModel.viewportZoom > 1.0 {
                 Button {
                     viewModel.resetZoom()
@@ -150,8 +139,55 @@ struct ReaderBottomOverlay: View {
                     onSet: { Task { await viewModel.repeatModel.setB() } },
                 )
             }
+            if case .loaded = viewModel.loadState {
+                transportButtons
+            }
         }
         .padding()
+    }
+
+    /// Jump-to-start and play/pause, ordered so play sits at the trailing edge (easiest to reach) with the rewind
+    /// button immediately to its left. Only shown once a score is loaded so the engine is ready to seek / play.
+    private var transportButtons: some View {
+        // Jump-to-start and play/pause share a single glass pill (spacing 0), mirroring the top overlay's paired
+        // inspector buttons.
+        HStack(spacing: 0) {
+            // Same glyph as page mode's "jump to first page" tap zone — a custom symbol bundled with the Reader module
+            // (`PageTapZoneKind.first`), since no system SF Symbol matches the `arrow.uturn.backward.to.line` shape.
+            transportButton(
+                image: Image("arrow.uturn.backward.to.line", bundle: .module),
+                label: Text("reader.toolbar.jumpToStart", bundle: .module),
+            ) {
+                viewModel.playbackSession.seekToStart()
+            }
+
+            transportButton(
+                image: Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill"),
+                label: Text(
+                    viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
+                    bundle: .module,
+                ),
+            ) {
+                Task { await viewModel.playbackSession.togglePlayback() }
+            }
+        }
+        .glassEffect(.regular.interactive())
+        // Match the top overlay's button shadow so the transport pill reads with the same depth as the inspector pill.
+        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+    }
+
+    private func transportButton(
+        image: Image,
+        label: Text,
+        action: @escaping () -> Void,
+    ) -> some View {
+        Button(action: action) {
+            image
+                .font(.system(size: 20, weight: .medium))
+                .frame(width: 44, height: 44)
+        }
+        .tint(.primary)
+        .accessibilityLabel(label)
     }
 
     private func endpointButton(
