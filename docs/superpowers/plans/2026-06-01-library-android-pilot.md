@@ -963,11 +963,28 @@ git commit -m "feat(android): Library screen, stub Reader, and bottom-nav shell"
 
 **Files:** none
 
-- [ ] **Step 1: Full rebuild** — re-run the cross-compile then assemble:
+- [ ] **Step 1: Full rebuild — MIND THE BUILD ORDER.**
 
-Run: `Scripts/android-build-library-libs.sh`
-Run: `Android/gradlew -p Android :app:assembleDebug`
-Expected: APK built, bundling both `libFolinoSettingsJNI.so` and `libFolinoLibraryJNI.so`.
+  **Critical ordering** (a sidecar dependency, learned in Phase 3): the
+  SwiftPM `WireletObservableBridges` plugin emits the `.so`'s `JNI_OnLoad`
+  (which `RegisterNatives`-maps the Kotlin `external fun`s to the `@_cdecl`
+  symbols) from `Packages/Features/Library/Sources/FolinoLibraryJNI/.wirelet-observable-jni.json`
+  — a sidecar **written by the wirelet Gradle observable codegen**. So the
+  Swift cross-compile must run *after* the Gradle codegen, or the `.so` will
+  lack `JNI_OnLoad` and the app will crash with `UnsatisfiedLinkError` at
+  runtime. The sidecar is gitignored (regenerated each build). Sequence:
+
+  1. Gradle observable codegen (writes/refreshes the sidecar):
+     `Android/gradlew -p Android :FolinoLibraryAndroid:generateWireletObservableViewModelsMain`
+  2. Swift cross-compile (reads the sidecar, emits `JNI_OnLoad`):
+     `Scripts/android-build-library-libs.sh`
+  3. Verify `JNI_OnLoad` is present in each ABI's `.so`:
+     `nm -D Android/FolinoLibraryAndroid/src/main/jniLibs/arm64-v8a/libFolinoLibraryJNI.so | grep JNI_OnLoad`
+     (and the same for `x86_64`) — must print a `JNI_OnLoad` line.
+  4. App assemble (bundles the `.so`s):
+     `Android/gradlew -p Android :app:assembleDebug`
+
+Expected: APK built, bundling both `libFolinoSettingsJNI.so` and `libFolinoLibraryJNI.so`, the Library `.so` carrying `JNI_OnLoad`.
 
 - [ ] **Step 2: Verify two-`.so` coexistence didn't break packaging** — confirm `app/build.gradle.kts` `packaging.jniLibs.pickFirsts += "**/libc++_shared.so"` still resolves the (now duplicated) runtime `.so`s. If the assemble fails on duplicate Swift-runtime `.so`s, extend `pickFirsts` to cover `**/libswift*.so` and `**/lib_Foundation*.so` (byte-identical across the two modules).
 
