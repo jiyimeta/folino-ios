@@ -22,26 +22,36 @@ struct ResettableSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let defaultValue: Double
+    /// Optional discrete increment. `nil` keeps the slider continuous (the default for the volume sliders); a non-nil
+    /// value snaps the thumb to multiples of `step` — the tempo slider sets this to 1 so it lands on whole BPM.
+    var step: Double?
     var onEditingChanged: (Bool) -> Void = { _ in }
     var onReset: () -> Void = {}
 
     @State private var detector = ThumbTapDetector()
 
     var body: some View {
-        Slider(
-            value: $value,
-            in: range,
-            onEditingChanged: { editing in
-                if !editing, detector.endTouchIsDoubleTap(at: value) {
-                    reset()
-                }
-                onEditingChanged(editing)
-            },
-        )
-        .overlay { tick }
-        .simultaneousGesture(
-            TapGesture(count: 2).onEnded { reset() },
-        )
+        slider
+            .overlay { tick }
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded { reset() },
+            )
+    }
+
+    @ViewBuilder
+    private var slider: some View {
+        if let step {
+            Slider(value: $value, in: range, step: step, onEditingChanged: handleEditingChanged)
+        } else {
+            Slider(value: $value, in: range, onEditingChanged: handleEditingChanged)
+        }
+    }
+
+    private func handleEditingChanged(_ editing: Bool) {
+        if !editing, detector.endTouchIsDoubleTap(at: value) {
+            reset()
+        }
+        onEditingChanged(editing)
     }
 
     private func reset() {

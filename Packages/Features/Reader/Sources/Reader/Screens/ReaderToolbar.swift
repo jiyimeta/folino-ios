@@ -65,6 +65,7 @@ struct ReaderTopOverlay: View {
                     masterVolumeModel: viewModel.masterVolumeModel,
                     repeatModel: viewModel.repeatModel,
                     score: score,
+                    playbackCursor: viewModel.playbackSession.playbackCursor,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)
                 .presentationDetents([.large])
