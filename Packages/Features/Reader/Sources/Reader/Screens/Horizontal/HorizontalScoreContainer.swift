@@ -210,20 +210,25 @@ struct HorizontalScoreContainer: View {
         let pad = 8 * doc.metrics.sp * zoom
 
         // Cursor frame in scroll-content coords: padded then scaled from top-leading. Mirrors
-        // `HorizontalZoomedSurface`'s composition.
-        let minX = (rect.minX + scorePadding) * zoom
-        let maxX = (rect.maxX + scorePadding) * zoom
+        // `HorizontalZoomedSurface`'s composition. Only Y rides on the cursor frame; X anchors on the whole measure.
         let minY = (rect.minY + scorePadding) * zoom
         let maxY = (rect.maxY + scorePadding) * zoom
 
         let curX = liveScrollOffset.x
         let curY = liveScrollOffset.y
 
-        let newX = adjustedScrollOffset(
-            currentOffset: curX,
-            targetMin: minX, targetMax: maxX,
-            viewportSize: viewport.width, pad: pad,
-        )
+        // X: when the cursor's measure overflows the viewport, park its leading edge at the screen's left edge rather
+        // than nudging minimally to the right edge. Matches the PiP renderer's `advanceScroll`, so both surfaces step
+        // measure-by-measure left.
+        let newX: CGFloat
+        if let measure = measureRect(for: cursor, in: doc) {
+            let measureMinX = (measure.minX + scorePadding) * zoom
+            let measureMaxX = (measure.maxX + scorePadding) * zoom
+            let fullyVisible = measureMinX >= curX && measureMaxX <= curX + viewport.width
+            newX = fullyVisible ? curX : max(0, measureMinX - pad)
+        } else {
+            newX = curX
+        }
         let newY = adjustedScrollOffset(
             currentOffset: curY,
             targetMin: minY, targetMax: maxY,
@@ -233,6 +238,23 @@ struct HorizontalScoreContainer: View {
         if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 { return }
 
         pendingScroll = .animated(CGPoint(x: newX, y: newY))
+    }
+
+    /// Scroll-content rect of the measure the cursor sits on, regardless of `.item` vs `.beat`. The auto-scroll trigger
+    /// is "the measure overflows the viewport", not "the cursor itself crosses an edge" — mirrors
+    /// `ScorePiPFrameRenderer.measureDocRect`. Scans every system so honored layout breaks (multi-row layouts) resolve.
+    private func measureRect(for cursor: ScoreCursor, in doc: LayoutDocument) -> CGRect? {
+        for system in doc.systems {
+            if let measure = system.measures.first(where: { $0.measureIndex == cursor.measureIndex }) {
+                return CGRect(
+                    x: system.origin.x + measure.origin.x,
+                    y: system.origin.y + measure.origin.y,
+                    width: measure.width,
+                    height: system.size.height,
+                )
+            }
+        }
+        return nil
     }
 
     /// Smallest scroll offset that keeps `[targetMin, targetMax]` inside the viewport with `pad` margin. Same shape as
