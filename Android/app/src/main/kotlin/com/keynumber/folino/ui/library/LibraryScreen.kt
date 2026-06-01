@@ -13,9 +13,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -47,6 +49,7 @@ import kotlinx.coroutines.launch
 fun LibraryScreen(
     viewModel: LibraryAndroidStoreViewModel,
     onOpenScore: (ScoreRowWire) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val scores by viewModel.scores.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -58,9 +61,13 @@ fun LibraryScreen(
     ) { uri ->
         if (uri != null) {
             // importScore takes a filesystem PATH (String), not bytes — the
-            // bridge can't marshal Data args. Copy the picked content://
-            // doc into the app cache dir and hand Swift its absolute path.
-            val cacheFile = java.io.File(context.cacheDir, "import-${System.currentTimeMillis()}.mscz")
+            // bridge can't marshal Data args. Copy the picked content:// doc
+            // into the app cache dir, naming the cache file with the picked
+            // document's ORIGINAL display name so the Swift side derives the
+            // library title from it (matching the iOS importer, which uses the
+            // file name — not the score's workTitle metaTag).
+            val displayName = originalDisplayName(context, uri)
+            val cacheFile = java.io.File(context.cacheDir, displayName)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 cacheFile.outputStream().use { output -> input.copyTo(output) }
             }
@@ -69,7 +76,19 @@ fun LibraryScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.library_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.library_title)) },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.nav_settings),
+                        )
+                    }
+                },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
             FloatingActionButton(onClick = {
@@ -139,8 +158,11 @@ private fun ScoreRow(row: ScoreRowWire, onClick: () -> Unit, onDelete: () -> Uni
             }
         },
     ) {
+        val title = row.title.ifEmpty { "Untitled" }
+        // Primary line mirrors the iOS row: "title subtitle".
+        val headline = if (row.subtitle.isEmpty()) title else "$title ${row.subtitle}"
         ListItem(
-            headlineContent = { Text(row.title.ifEmpty { "Untitled" }) },
+            headlineContent = { Text(headline) },
             supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
             leadingContent = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
             modifier = Modifier.clickable(onClick = onClick),
@@ -156,4 +178,20 @@ private fun EmptyState(modifier: Modifier) {
             Text(stringResource(R.string.library_empty_hint), style = MaterialTheme.typography.bodyMedium)
         }
     }
+}
+
+/// The picked document's original display name (e.g. "Now_is_the_time.mscz"),
+/// used to name the cache file so the Swift side derives the title from it.
+private fun originalDisplayName(context: android.content.Context, uri: android.net.Uri): String {
+    var name: String? = null
+    context.contentResolver.query(
+        uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null,
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0) name = cursor.getString(idx)
+        }
+    }
+    // Guard against path separators; fall back when the provider gives nothing.
+    return (name ?: "score.mscz").replace('/', '_')
 }
