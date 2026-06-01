@@ -2,6 +2,7 @@ import CoreGraphics
 import Domain
 import Foundation
 import Observation
+import ScoreUI
 import SheetMusicCore
 
 @MainActor
@@ -47,11 +48,18 @@ final class ReaderViewModel {
     var viewportZoom: CGFloat = 1.0
     var isPlaybackInspectorPresented = false
     var isVisualInspectorPresented = false
+    var isScoreInfoPresented = false
+    var shareTarget: ScoreShareTarget?
+    var isPreparingShare = false
 
     @ObservationIgnored
     private let repository: any ScoreLibraryRepository
     @ObservationIgnored
     private let gateway: any ScoreFileGateway
+    @ObservationIgnored
+    private let shareService: any ScoreShareService
+    @ObservationIgnored
+    private let metadataReader: any ScoreMetadataReading
     @ObservationIgnored
     private let scoresDirectory: URL
     @ObservationIgnored
@@ -63,6 +71,8 @@ final class ReaderViewModel {
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
         gateway: any ScoreFileGateway,
+        shareService: any ScoreShareService = NoopScoreShareService(),
+        metadataReader: any ScoreMetadataReading = NoopScoreMetadataReading(),
         scoresDirectory: URL,
         defaultStaffSize: Double = 14,
         playbackController: (any PlaybackController)? = nil,
@@ -71,6 +81,8 @@ final class ReaderViewModel {
         self.scoreItem = scoreItem
         self.repository = repository
         self.gateway = gateway
+        self.shareService = shareService
+        self.metadataReader = metadataReader
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
         preferencesStore = ReaderPreferencesStore(
@@ -208,6 +220,22 @@ final class ReaderViewModel {
         viewportZoom = 1.0
     }
 
+    func requestShare(format: ScoreShareFormat) async {
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+        do {
+            let url = try await shareService.prepareShare(item: scoreItem, format: format)
+            shareTarget = ScoreShareTarget(urls: [url])
+        } catch {
+            // Reader has no error banner yet; sharing failures are non-fatal and simply present nothing.
+        }
+    }
+
+    /// Lazy format options for the share menu — same source as Library.
+    func availableShareFormats() async -> [ScoreShareFormatOption] {
+        await shareService.availableFormats(for: scoreItem)
+    }
+
     // MARK: - Private
 
     private func loadOrSeedPreferences() async {
@@ -242,5 +270,31 @@ extension ReaderViewModel: PlaybackMixerHost {
     /// mute, and program changes to the active controller without holding a direct reference to the session.
     var playbackController: (any PlaybackController)? {
         playbackSession.controller
+    }
+}
+
+// MARK: - ScoreInfoEditing conformance
+
+extension ReaderViewModel: ScoreInfoEditing {
+    func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata? {
+        try? await metadataReader.readMetadata(for: item)
+    }
+
+    func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async {
+        let trimmedTitle = fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+        var updated = item
+        updated.title = trimmedTitle
+        updated.subtitle = fields.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.composer = fields.composer.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.arranger = fields.arranger.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.lyricist = fields.lyricist.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.copyright = fields.copyright.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            try await repository.saveScoreItem(updated)
+            scoreItem = updated
+        } catch {
+            // Non-fatal: keep the in-memory item; no Reader error banner yet.
+        }
     }
 }

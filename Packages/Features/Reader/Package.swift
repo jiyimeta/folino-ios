@@ -15,6 +15,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(path: "../../Domain"),
+        .package(path: "../../ScoreUI"),
         .package(path: "../../Utility"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
@@ -26,6 +27,7 @@ let package = Package(
             name: "Reader",
             dependencies: [
                 "Domain",
+                "ScoreUI",
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
                 .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
