@@ -67,4 +67,21 @@ struct ScoreFileImporterTests {
         let plan = try await importer.prepareImport(sourceURL: URL(fileURLWithPath: "/tmp/x.mid"))
         #expect(plan.duplicates.isEmpty)
     }
+
+    @Test func `score file summary carries credit fields`() {
+        let summary = ScoreFileSummary(
+            title: "T",
+            composer: "C",
+            arranger: "A",
+            lyricist: "L",
+            copyright: "©",
+            instrumentationSummary: "",
+            lengthBeats: 0,
+            defaultTempoBpm: 120,
+            primaryKey: nil,
+        )
+        #expect(summary.arranger == "A")
+        #expect(summary.lyricist == "L")
+        #expect(summary.copyright == "©")
+    }
 }

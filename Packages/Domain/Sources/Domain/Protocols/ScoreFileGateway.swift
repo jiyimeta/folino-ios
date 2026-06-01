@@ -6,6 +6,9 @@ public struct ScoreFileSummary: Hashable, Sendable {
     public var title: String?
     public var subtitle: String?
     public var composer: String?
+    public var arranger: String?
+    public var lyricist: String?
+    public var copyright: String?
     public var instrumentationSummary: String
     public var lengthBeats: Int
     public var defaultTempoBpm: Int
@@ -15,6 +18,9 @@ public struct ScoreFileSummary: Hashable, Sendable {
         title: String?,
         subtitle: String? = nil,
         composer: String?,
+        arranger: String? = nil,
+        lyricist: String? = nil,
+        copyright: String? = nil,
         instrumentationSummary: String,
         lengthBeats: Int,
         defaultTempoBpm: Int,
@@ -23,6 +29,9 @@ public struct ScoreFileSummary: Hashable, Sendable {
         self.title = title
         self.subtitle = subtitle
         self.composer = composer
+        self.arranger = arranger
+        self.lyricist = lyricist
+        self.copyright = copyright
         self.instrumentationSummary = instrumentationSummary
         self.lengthBeats = lengthBeats
         self.defaultTempoBpm = defaultTempoBpm
