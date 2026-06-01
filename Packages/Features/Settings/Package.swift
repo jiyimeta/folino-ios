@@ -55,7 +55,15 @@ var packageDependencies: [Package.Dependency] = [
 
 if isAndroid {
     packageDependencies += [
-        .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.3.0"),
+        .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
+        // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x
+        // (`OutputProtocol.standardOutput` / `ErrorOutputProtocol.standardError`).
+        // swift-subprocess 0.5.0 removed those static members, which breaks the
+        // jextract tool's compile under the swift-6.3.2 toolchain. Pin to 0.4.0
+        // (tag `0.4`) — the last release where that API still exists — so the
+        // JExtractSwiftPlugin tool builds. Remove once swift-java ships a release
+        // built against swift-subprocess 0.5+.
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
     ]
     products += [
         .library(
