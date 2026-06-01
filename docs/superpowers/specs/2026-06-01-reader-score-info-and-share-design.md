@@ -132,10 +132,11 @@ the same type, and the per-VM `requestShare` reads identically.
 - **Package.swift:** add `.package(path: "../../ScoreUI")` and the `ScoreUI`
   product to the `Reader` target dependencies.
 - **`ReaderViewModel`:**
-  - Add `let shareService: any ScoreShareService` to stored props and `init`.
-    (No other new injection needed — `repository: ScoreLibraryRepository` and
-    `gateway: ScoreFileGateway` are already present, which is all the metadata
-    load/save path requires.)
+  - Add `let shareService: any ScoreShareService` **and** `let metadataReader:
+    any ScoreMetadataReading` to stored props and `init`. (`metadataReader` is
+    required because `loadFileMetadata` reads credit metaTags via
+    `ScoreMetadataReading.readMetadata(for:)`, not via `gateway`. `repository`
+    is already present and covers `saveMetadata`'s persistence.)
   - Add `shareTarget: ScoreShareTarget?`, `isPreparingShare`,
     `isScoreInfoPresented` (and reuse `requestShare(format:)` mirroring
     Library's implementation).
