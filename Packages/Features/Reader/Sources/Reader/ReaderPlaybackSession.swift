@@ -193,14 +193,45 @@ final class ReaderPlaybackSession {
 
     /// Reset the playback position to the very start of the score (first measure, first tick) without touching the
     /// play / pause state — a transport "rewind to top". The score containers observe `playbackCursor` and scroll /
-    /// page back to the opening measure. A `.beat` cursor is staff-agnostic, so no hidden-staves translation is needed.
+    /// page back to the opening measure.
     func seekToStart() {
-        let start = ScoreCursor.beat(measureIndex: 0, tickInMeasure: 0)
-        rawPlaybackCursor = start
-        playbackCursor = start
+        seek(toMeasureStart: 0)
+    }
+
+    /// Advance the cursor to the start of the next measure (clamped to the last measure), preserving play / pause
+    /// state.
+    func stepMeasureForward() {
+        guard let score = scoreProvider() else { return }
+        let count = score.effectiveMeasureDurations().count
+        guard count > 0 else { return }
+        let current = (rawPlaybackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)).measureIndex
+        seek(toMeasureStart: min(current + 1, count - 1))
+    }
+
+    /// Step the cursor back by a measure, preserving play / pause state. If the cursor is still within the first beat
+    /// of its measure (before the 2nd beat begins), jump to the previous measure; otherwise restart the current
+    /// measure — the familiar media-player "previous" behaviour.
+    func stepMeasureBackward() {
+        guard let score = scoreProvider() else { return }
+        let count = score.effectiveMeasureDurations().count
+        guard count > 0 else { return }
+        let cursor = rawPlaybackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)
+        let measure = cursor.measureIndex
+        let beatTicks = score.beatTicks(atMeasure: measure) ?? score.division
+        let tick = score.tickInMeasure(of: cursor)
+        let target = tick < beatTicks ? measure - 1 : measure
+        seek(toMeasureStart: max(target, 0))
+    }
+
+    /// Seek the cursor to the first tick of `measureIndex` without changing play / pause state. A `.beat` cursor is
+    /// staff-agnostic, so no hidden-staves translation is needed.
+    private func seek(toMeasureStart measureIndex: Int) {
+        let target = ScoreCursor.beat(measureIndex: measureIndex, tickInMeasure: 0)
+        rawPlaybackCursor = target
+        playbackCursor = target
         onCursorChanged()
         guard let controller else { return }
-        Task { await controller.setCursor(to: start) }
+        Task { await controller.setCursor(to: target) }
     }
 
     func setManualCursor(_ cursor: ScoreCursor) {

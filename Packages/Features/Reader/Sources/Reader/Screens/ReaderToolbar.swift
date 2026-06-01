@@ -105,8 +105,8 @@ struct ReaderTopOverlay: View {
 }
 
 /// Bottom overlay hosting the reset-zoom pill (leading), the A/B loop endpoint buttons, and the primary transport
-/// controls (jump-to-start + play/pause, trailing). Lives outside the toolbar so it can sit on top of the score content
-/// rather than in the navigation bar, and keeps the transport within thumb reach at the bottom of the screen.
+/// pill (jump-to-start / step / play-pause, trailing). Lives outside the toolbar so it can sit on top of the score
+/// content rather than in the navigation bar, and keeps the transport within thumb reach at the bottom of the screen.
 struct ReaderBottomOverlay: View {
     @Bindable var viewModel: ReaderViewModel
 
@@ -146,10 +146,10 @@ struct ReaderBottomOverlay: View {
         .padding()
     }
 
-    /// Jump-to-start and play/pause, ordered so play sits at the trailing edge (easiest to reach) with the rewind
-    /// button immediately to its left. Only shown once a score is loaded so the engine is ready to seek / play.
+    /// Primary transport: jump-to-start, step back a measure, play/pause, step forward a measure (in that order).
+    /// Only shown once a score is loaded so the engine is ready to seek / play.
     private var transportButtons: some View {
-        // Jump-to-start and play/pause share a single glass pill (spacing 0), mirroring the top overlay's paired
+        // The whole control is a single interactive liquid-glass pill (spacing 0), mirroring the top overlay's paired
         // inspector buttons.
         HStack(spacing: 0) {
             // Same glyph as page mode's "jump to first page" tap zone — a custom symbol bundled with the Reader module
@@ -162,6 +162,13 @@ struct ReaderBottomOverlay: View {
             }
 
             transportButton(
+                image: Image(systemName: "chevron.left.2"),
+                label: Text("reader.toolbar.stepBackward", bundle: .module),
+            ) {
+                viewModel.playbackSession.stepMeasureBackward()
+            }
+
+            transportButton(
                 image: Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill"),
                 label: Text(
                     viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
@@ -169,6 +176,13 @@ struct ReaderBottomOverlay: View {
                 ),
             ) {
                 Task { await viewModel.playbackSession.togglePlayback() }
+            }
+
+            transportButton(
+                image: Image(systemName: "chevron.right.2"),
+                label: Text("reader.toolbar.stepForward", bundle: .module),
+            ) {
+                viewModel.playbackSession.stepMeasureForward()
             }
         }
         .glassEffect(.regular.interactive())
