@@ -106,8 +106,10 @@ final class AppBootstrap {
         museScoreGeneralProvider = provider
         let resolver = GMSoundfontResolver(provider: provider)
         soundfontResolver = resolver
+        let clickProvider = BundledMetronomeClickProvider()
         let audioExporter = LiveScoreAudioExporter(
             soundfontResolver: resolver,
+            metronomeClickProvider: clickProvider,
             metronomeEnabled: {
                 UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
             },
@@ -122,7 +124,10 @@ final class AppBootstrap {
             gateway: gateway,
             scoresDirectory: AppPaths.scoresDirectory,
         )
-        playbackController = LivePlaybackController(soundfontResolver: resolver)
+        playbackController = LivePlaybackController(
+            soundfontResolver: resolver,
+            metronomeClickProvider: clickProvider,
+        )
     }
 
     /// One-shot cleanup of the pre-GM per-patch SF2 cache. Old versions stored split-bank soundfonts at

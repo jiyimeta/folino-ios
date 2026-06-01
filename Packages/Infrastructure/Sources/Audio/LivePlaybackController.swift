@@ -49,8 +49,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
     var metronomeEnabled = true
     let logger = Logger(subsystem: "com.KeyNumber.Folino", category: "PlaybackController")
 
-    public init(soundfontResolver: any SheetMusicAudio.SoundfontResolver) {
-        engine = PlaybackEngine(soundfontResolver: soundfontResolver)
+    public init(
+        soundfontResolver: any SheetMusicAudio.SoundfontResolver,
+        metronomeClickProvider: (any MetronomeClickProvider)? = nil,
+    ) {
+        engine = PlaybackEngine(soundfontResolver: soundfontResolver, metronomeClickProvider: metronomeClickProvider)
         startObservingEngine()
         configureRemoteCommands()
     }
