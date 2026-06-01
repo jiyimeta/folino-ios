@@ -12,17 +12,26 @@ struct EditScoreInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var fields: EditableScoreInfo
+    /// The field values the sheet opened with (after file pre-fill). Compared against `fields` to detect unsaved edits.
+    @State private var baseline: EditableScoreInfo
     @State private var sourceKind: ScoreSourceKind?
     @State private var didLoad = false
+    @State private var showDiscardConfirmation = false
 
     init(viewModel: LibraryViewModel, item: ScoreItem) {
         self.viewModel = viewModel
         self.item = item
-        _fields = State(initialValue: EditableScoreInfo(item: item, fileMetadata: nil))
+        let initial = EditableScoreInfo(item: item, fileMetadata: nil)
+        _fields = State(initialValue: initial)
+        _baseline = State(initialValue: initial)
     }
 
     private var trimmedTitle: String {
         fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasChanges: Bool {
+        fields != baseline
     }
 
     var body: some View {
@@ -35,27 +44,57 @@ struct EditScoreInfoSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
             .task { await loadOnce() }
+            .interactiveDismissDisabled(hasChanges)
+            .alert(
+                Text("library.score.editInfo.discardAlert.title", bundle: .module),
+                isPresented: $showDiscardConfirmation,
+            ) {
+                Button(role: .cancel) {} label: {
+                    Text("library.score.editInfo.discardAlert.keepEditing", bundle: .module)
+                }
+                Button(role: .destructive) { dismiss() } label: {
+                    Text("library.score.editInfo.discardAlert.discard", bundle: .module)
+                }
+            }
         }
+    }
+
+    /// Gray hint shown in any empty editable field. The field's own label already names it, so the placeholder only
+    /// signals "no value yet — tap to set" rather than repeating the field name.
+    private var unsetPlaceholder: String {
+        String(localized: "library.score.field.unsetPlaceholder", bundle: .module)
     }
 
     private var creditsSection: some View {
         Section {
-            LabeledContent { TextField("", text: $fields.title) } label: {
+            LabeledContent {
+                TextField(unsetPlaceholder, text: $fields.title).singleLineEditFieldStyle()
+            } label: {
                 Text("library.score.field.title", bundle: .module)
             }
-            LabeledContent { TextField("", text: $fields.subtitle) } label: {
+            LabeledContent {
+                TextField(unsetPlaceholder, text: $fields.subtitle).singleLineEditFieldStyle()
+            } label: {
                 Text("library.score.field.subtitle", bundle: .module)
             }
-            LabeledContent { TextField("", text: $fields.composer) } label: {
+            LabeledContent {
+                TextField(unsetPlaceholder, text: $fields.composer).singleLineEditFieldStyle()
+            } label: {
                 Text("library.score.field.composer", bundle: .module)
             }
-            LabeledContent { TextField("", text: $fields.arranger) } label: {
+            LabeledContent {
+                TextField(unsetPlaceholder, text: $fields.arranger).singleLineEditFieldStyle()
+            } label: {
                 Text("library.score.field.arranger", bundle: .module)
             }
-            LabeledContent { TextField("", text: $fields.lyricist) } label: {
+            LabeledContent {
+                TextField(unsetPlaceholder, text: $fields.lyricist).singleLineEditFieldStyle()
+            } label: {
                 Text("library.score.field.lyricist", bundle: .module)
             }
-            LabeledContent { TextField("", text: $fields.copyright, axis: .vertical) } label: {
+            LabeledContent {
+                TextField(unsetPlaceholder, text: $fields.copyright, axis: .vertical).editFieldStyle()
+            } label: {
                 Text("library.score.field.copyright", bundle: .module)
             }
         }
@@ -80,7 +119,13 @@ struct EditScoreInfoSheet: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button { dismiss() } label: { L10n.Common.cancel }
+            Button {
+                if hasChanges {
+                    showDiscardConfirmation = true
+                } else {
+                    dismiss()
+                }
+            } label: { L10n.Common.cancel }
         }
         ToolbarItem(placement: .confirmationAction) {
             Button {
@@ -89,8 +134,12 @@ struct EditScoreInfoSheet: View {
                     await viewModel.saveMetadata(item, fields: snapshot)
                     dismiss()
                 }
-            } label: { L10n.Common.save }
-                .disabled(trimmedTitle.isEmpty)
+            } label: {
+                Label { L10n.Common.save } icon: { Image(systemName: "checkmark") }
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(trimmedTitle.isEmpty)
         }
     }
 
@@ -99,7 +148,9 @@ struct EditScoreInfoSheet: View {
         didLoad = true
         let meta = await viewModel.loadFileMetadata(for: item)
         sourceKind = meta?.source
-        fields = EditableScoreInfo(item: item, fileMetadata: meta)
+        let prefilled = EditableScoreInfo(item: item, fileMetadata: meta)
+        fields = prefilled
+        baseline = prefilled
     }
 
     /// Human-readable source label. MuseScore/MusicXML/MIDI/PDF are brand/format literals (identical across locales);
@@ -113,6 +164,20 @@ struct EditScoreInfoSheet: View {
         case .unknown, nil:
             String(localized: "library.score.source.unknown", bundle: .module)
         }
+    }
+}
+
+extension View {
+    /// Right-aligns an editable field's text so its content sits at the trailing edge of the row, matching the
+    /// read-only values in the info section.
+    fileprivate func editFieldStyle() -> some View {
+        multilineTextAlignment(.trailing)
+    }
+
+    /// `editFieldStyle()` plus a "Done" return key — the confirm-style key for single-line fields (iOS has no
+    /// checkmark return key, so `.done` is the closest "commit and dismiss the keyboard" affordance).
+    fileprivate func singleLineEditFieldStyle() -> some View {
+        editFieldStyle().submitLabel(.done)
     }
 }
 

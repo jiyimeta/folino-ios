@@ -1748,114 +1748,6 @@
         }
       }
     },
-    "library.score.editInfo.action" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit Info" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "情報を編集" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "정보 편집" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "编辑信息" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "編輯資訊" } }
-      }
-    },
-    "library.score.editInfo.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit Info" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "情報を編集" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "정보 편집" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "编辑信息" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "編輯資訊" } }
-      }
-    },
-    "library.score.field.arranger" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Arranger" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "編曲者" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "편곡자" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "编曲" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "編曲" } }
-      }
-    },
-    "library.score.field.composer" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Composer" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "作曲者" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "작곡가" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "作曲" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "作曲" } }
-      }
-    },
-    "library.score.field.copyright" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copyright" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "著作権" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "저작권" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "版权" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "版權" } }
-      }
-    },
-    "library.score.field.dateAdded" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Date Added" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "追加日時" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "추가 날짜" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加日期" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "加入日期" } }
-      }
-    },
-    "library.score.field.lyricist" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Lyricist" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "作詞者" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "작사가" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "作词" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "作詞" } }
-      }
-    },
-    "library.score.field.source" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Source" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ソース" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "소스" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "来源" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "來源" } }
-      }
-    },
-    "library.score.field.subtitle" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Subtitle" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サブタイトル" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "부제" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "副标题" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "副標題" } }
-      }
-    },
-    "library.score.field.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Title" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "タイトル" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "제목" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "标题" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "標題" } }
-      }
-    },
-    "library.score.info.section" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Information" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "情報" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "정보" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "信息" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "資訊" } }
-      }
-    },
-    "library.score.source.unknown" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unknown" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "不明" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "알 수 없음" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未知" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "未知" } }
-      }
-    },
     "library.score.delete.title" : {
       "localizations" : {
         "en" : {
@@ -1924,6 +1816,176 @@
         }
       }
     },
+    "library.score.editInfo.action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Info"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "情報を編集"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "정보 편집"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯資訊"
+          }
+        }
+      }
+    },
+    "library.score.editInfo.discardAlert.discard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard Changes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更を破棄"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "변경 사항 폐기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放弃更改"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "捨棄變更"
+          }
+        }
+      }
+    },
+    "library.score.editInfo.discardAlert.keepEditing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Editing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編集を続ける"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "계속 편집"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续编辑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "繼續編輯"
+          }
+        }
+      }
+    },
+    "library.score.editInfo.discardAlert.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard changes?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更を破棄しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "변경 사항을 폐기하시겠습니까?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放弃更改？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要捨棄變更嗎？"
+          }
+        }
+      }
+    },
+    "library.score.editInfo.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Info"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "情報を編集"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "정보 편집"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯資訊"
+          }
+        }
+      }
+    },
     "library.score.favorite.action" : {
       "localizations" : {
         "en" : {
@@ -1954,6 +2016,346 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收藏"
+          }
+        }
+      }
+    },
+    "library.score.field.arranger" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arranger"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編曲者"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "편곡자"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编曲"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編曲"
+          }
+        }
+      }
+    },
+    "library.score.field.composer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Composer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作曲者"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "작곡가"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作曲"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作曲"
+          }
+        }
+      }
+    },
+    "library.score.field.copyright" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copyright"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "著作権"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "저작권"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版权"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版權"
+          }
+        }
+      }
+    },
+    "library.score.field.dateAdded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date Added"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加日時"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가 날짜"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加日期"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入日期"
+          }
+        }
+      }
+    },
+    "library.score.field.lyricist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyricist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作詞者"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "작사가"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作詞"
+          }
+        }
+      }
+    },
+    "library.score.field.source" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ソース"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "소스"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源"
+          }
+        }
+      }
+    },
+    "library.score.field.unsetPlaceholder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(Not Set)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(未設定)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(미설정)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(未设置)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(未設定)"
+          }
+        }
+      }
+    },
+    "library.score.field.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サブタイトル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "부제"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "副标题"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "副標題"
+          }
+        }
+      }
+    },
+    "library.score.field.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイトル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "제목"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標題"
+          }
+        }
+      }
+    },
+    "library.score.info.section" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other Information"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "その他の情報"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기타 정보"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他資訊"
           }
         }
       }
@@ -1993,6 +2395,7 @@
       }
     },
     "library.score.rename.placeholder" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2027,6 +2430,7 @@
       }
     },
     "library.score.rename.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2056,6 +2460,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新命名樂譜"
+          }
+        }
+      }
+    },
+    "library.score.source.unknown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不明"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "알 수 없음"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知"
           }
         }
       }
