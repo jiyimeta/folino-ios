@@ -17,16 +17,16 @@ struct ReaderTransportControl: View {
     /// bottom padding, so it hugs the top of the bottom safe area. Used by `ReaderRootScreen` to inset the horizontal /
     /// page viewport so the score never renders under it.
     static let collapsedContentHeight: CGFloat = 44
-    /// Height the expanded card's content reserves above the bottom safe area — top 12 + seek ~28 +
-    /// spacing 8 + transport row 56 (the enlarged play/pause) + bottom 12 = 116. The glass background
-    /// additionally bleeds down into the safe area (stopping `cardMargin` from the physical edge), but
-    /// that region sits below the safe area where the score never renders, so the viewport inset only
-    /// needs the content height.
-    static let expandedContentHeight: CGFloat = 116
+    /// Height the expanded card's content reserves above the bottom safe area — top 12 + rehearsal-mark bar (32, with
+    /// an -8 overlap onto the seek bar) + seek ~28 + transport row 44 ≈ 108. Reserved unconditionally (even for scores
+    /// without rehearsal marks, which omit the mark bar) so the inset stays a constant. The glass background
+    /// additionally bleeds down into the safe area (stopping `cardMargin` from the physical edge), but that region sits
+    /// below the safe area where the score never renders, so the inset only needs the content height.
+    static let expandedContentHeight: CGFloat = 108
 
     /// Spacing on each side of the centered prev / play / next triad in the expanded card — kept short so step-back and
     /// step-forward sit close to the play/pause button, equidistant from it.
-    private static let transportTriadSpacing: CGFloat = 16
+    private static let transportTriadSpacing: CGFloat = 12
 
     /// Margin between the seek card and the screen edges (leading / trailing / bottom). Kept small so the card hugs the
     /// edges; the corner radius is derived from it so the card nests concentrically inside the device's rounded screen.
@@ -88,12 +88,19 @@ struct ReaderTransportControl: View {
     }
 
     private func seekCard(score: Score) -> some View {
-        VStack(spacing: 2) {
+        let marks = score.rehearsalMarks()
+        return VStack(spacing: 0) {
+            if !marks.isEmpty {
+                RehearsalMarkBar(marks: marks, currentFraction: displayFraction(score: score)) { cursor in
+                    viewModel.playbackSession.setManualCursor(cursor)
+                }
+                .padding(.bottom, -8)
+            }
             seekBar(score: score)
             transportRow
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
         .frame(maxWidth: Self.maxCardWidth)
         .background {
             // The glass invades the bottom safe area (`.ignoresSafeArea`) but its own `.padding(.bottom, cardMargin)`
@@ -106,8 +113,9 @@ struct ReaderTransportControl: View {
                 .padding(.bottom, Self.cardMargin)
                 .ignoresSafeArea(.container, edges: .bottom)
         }
-        .padding(.horizontal, Self.cardMargin)
+        .compositingGroup()
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+        .padding(.horizontal, Self.cardMargin)
     }
 
     /// Transport row. The prev / play / next triad is centered as one tight group, so play/pause sits at the card's
@@ -118,7 +126,7 @@ struct ReaderTransportControl: View {
         ZStack {
             HStack(spacing: Self.transportTriadSpacing) {
                 stepBackwardButton
-                playPauseButton(diameter: 56, glyphSize: 34)
+                playPauseButton(width: 56, height: 44, glyphSize: 34)
                 stepForwardButton
             }
 
@@ -130,17 +138,18 @@ struct ReaderTransportControl: View {
         }
     }
 
-    private func seekBar(score: Score) -> some View {
+    /// Position shown on the seek bar (and used to pick the frontmost rehearsal mark): the in-progress scrub value
+    /// while dragging, otherwise the live playback cursor's fraction.
+    private func displayFraction(score: Score) -> Double {
         let total = score.notatedDurationSeconds
-        let displayFraction: Double = if isScrubbing {
-            scrubFraction
-        } else if total > 0, let cursor = viewModel.playbackSession.playbackCursor {
-            min(max(score.seconds(at: cursor) / total, 0), 1)
-        } else {
-            0
-        }
-        return SeekBar(
-            fraction: displayFraction,
+        if isScrubbing { return scrubFraction }
+        guard total > 0, let cursor = viewModel.playbackSession.playbackCursor else { return 0 }
+        return min(max(score.seconds(at: cursor) / total, 0), 1)
+    }
+
+    private func seekBar(score: Score) -> some View {
+        SeekBar(
+            fraction: displayFraction(score: score),
             onScrubBegan: {
                 isScrubbing = true
                 viewModel.playbackSession.beginScrub()
@@ -174,49 +183,18 @@ struct ReaderTransportControl: View {
         }
     }
 
-    /// A and B repeat-endpoint buttons sharing a single capsule (used in both the collapsed pill and the expanded
-    /// card). Each half is tinted accent until its endpoint is set, so when only one is set the pill reads as accent on
-    /// exactly one half, split down the middle.
-    ///
-    /// `flat` drops the interactive liquid-glass treatment (and its shadow) for the expanded card, where the pill sits
-    /// on the card's own glass and a raised glass-on-glass would read as heavy; it falls back to a quiet material
-    /// capsule. The collapsed pill keeps the interactive glass so it matches the floating transport pill beside it.
+    /// A / B repeat-endpoint pill, shown only in AB-loop mode. `flat` selects the expanded card's quiet material look
+    /// over the collapsed layout's interactive glass + shadow.
     @ViewBuilder private func endpointButtons(flat: Bool) -> some View {
         if viewModel.repeatModel.mode == .abLoop {
-            let aSet = viewModel.repeatModel.pendingRepeatA != nil
-            let bSet = viewModel.repeatModel.pendingRepeatB != nil
-            let pill = HStack(spacing: 0) {
-                endpointHalf(label: "A") { Task { await viewModel.repeatModel.setA() } }
-                endpointHalf(label: "B") { Task { await viewModel.repeatModel.setB() } }
-            }
-            .background {
-                // Accent fill on the unset half (or both), split exactly at the center and clipped to the capsule so
-                // the pill ends stay rounded.
-                HStack(spacing: 0) {
-                    Rectangle().fill(aSet ? Color.clear : Color.accentColor)
-                    Rectangle().fill(bSet ? Color.clear : Color.accentColor)
-                }
-                .clipShape(.capsule)
-            }
-            if flat {
-                pill.background(.quaternary, in: .capsule)
-            } else {
-                pill
-                    .glassEffect(.regular.interactive(), in: .capsule)
-                    // Match the floating transport pill's elevation in the collapsed layout. The expanded card omits
-                    // this — there the pill sits flat on the card's own glass.
-                    .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-            }
+            ABEndpointPill(
+                aSet: viewModel.repeatModel.pendingRepeatA != nil,
+                bSet: viewModel.repeatModel.pendingRepeatB != nil,
+                flat: flat,
+                onSetA: { Task { await viewModel.repeatModel.setA() } },
+                onSetB: { Task { await viewModel.repeatModel.setB() } },
+            )
         }
-    }
-
-    private func endpointHalf(label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(verbatim: label)
-                .font(.system(size: 20, weight: .semibold))
-                .frame(width: 44, height: 44)
-        }
-        .tint(.primary)
     }
 
     private var transportPill: some View {
@@ -255,9 +233,10 @@ struct ReaderTransportControl: View {
         }
     }
 
-    /// Play/pause. `diameter` / `glyphSize` default to the standard transport size (used by the collapsed pill); the
-    /// expanded card passes larger values so play/pause reads as the primary control.
-    private func playPauseButton(diameter: CGFloat = 44, glyphSize: CGFloat = 20) -> some View {
+    /// Play/pause. `width` / `height` / `glyphSize` default to the standard transport size (used by the collapsed
+    /// pill); the expanded card passes a larger glyph and width so play/pause reads as the primary control while
+    /// keeping the row's 44pt height.
+    private func playPauseButton(width: CGFloat = 44, height: CGFloat = 44, glyphSize: CGFloat = 20) -> some View {
         transportButton(
             image: Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill"),
             label: Text(
@@ -265,7 +244,8 @@ struct ReaderTransportControl: View {
                 bundle: .module,
             ),
             glyphSize: glyphSize,
-            diameter: diameter,
+            width: width,
+            height: height,
         ) {
             Task { await viewModel.playbackSession.togglePlayback() }
         }
@@ -284,13 +264,14 @@ struct ReaderTransportControl: View {
         image: Image,
         label: Text,
         glyphSize: CGFloat = 20,
-        diameter: CGFloat = 44,
+        width: CGFloat = 44,
+        height: CGFloat = 44,
         action: @escaping () -> Void,
     ) -> some View {
         Button(action: action) {
             image
                 .font(.system(size: glyphSize, weight: .medium))
-                .frame(width: diameter, height: diameter)
+                .frame(width: width, height: height)
         }
         .tint(.primary)
         .accessibilityLabel(label)
@@ -307,6 +288,12 @@ private func transportPreviewViewModel() -> ReaderViewModel {
         count: 4,
     )
     let restMeasure = Measure(voices: [Voice(elements: restChords)])
+    /// Rehearsal marks on measures 0 and 2 — one short, one long (to exercise truncation) — so the mark bubbles render.
+    func marked(_ text: String) -> SystemMeasure {
+        SystemMeasure(elements: [
+            PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: text))),
+        ])
+    }
     let score = Score(
         division: 480,
         parts: [
@@ -316,6 +303,7 @@ private func transportPreviewViewModel() -> ReaderViewModel {
                 staves: [Staff(measures: [restMeasure, restMeasure, restMeasure])],
             ),
         ],
+        systemMeasures: [marked("A"), SystemMeasure(), marked("B — Chorus, softer")],
         metaTags: [:],
     )
     return ReaderViewModel(
