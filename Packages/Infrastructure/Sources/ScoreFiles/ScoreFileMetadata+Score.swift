@@ -32,9 +32,3 @@ extension ScoreSourceKind {
         }
     }
 }
-
-extension String {
-    fileprivate var nonEmpty: String? {
-        isEmpty ? nil : self
-    }
-}
