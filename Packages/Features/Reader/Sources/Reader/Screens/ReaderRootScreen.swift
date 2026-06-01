@@ -48,8 +48,8 @@ public struct ReaderRootScreen: View {
             0
         case .horizontal, .page:
             showSeekBar
-                ? ReaderBottomOverlay.expandedContentHeight
-                : ReaderBottomOverlay.collapsedContentHeight
+                ? ReaderTransportControl.expandedContentHeight
+                : ReaderTransportControl.collapsedContentHeight
         }
     }
 
@@ -98,7 +98,7 @@ public struct ReaderRootScreen: View {
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
                 )
                 Spacer()
-                ReaderBottomOverlay(viewModel: viewModel, showSeekBar: showSeekBar)
+                ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
             }
         }
         .navigationTitle("")
