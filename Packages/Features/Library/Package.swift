@@ -8,29 +8,44 @@ let swiftLintPlugins: [Target.PluginUsage] = [
     .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
 ]
 
-var products: [Product] = [
-    .library(name: "Library", targets: ["Library"]),
-]
+/// The iOS Library target uses UIKit/SwiftUI APIs unavailable on macOS. When
+/// building on the macOS host with FOLINO_ANDROID=1, we skip it so that
+/// `swift test --filter LibraryAndroidStoreTests` can run without platform
+/// errors in the unrelated iOS sources.
+let includeIOSLibrary = !isAndroid
 
-var targets: [Target] = [
-    .target(
-        name: "Library",
-        dependencies: [
-            "Domain",
-            .product(name: "UtilityCore", package: "Utility"),
-            .product(name: "UtilityUI", package: "Utility"),
-        ],
-        resources: [.process("Resources")],
-        plugins: swiftLintPlugins,
-    ),
-    .testTarget(name: "LibraryTests", dependencies: ["Library"]),
-]
+var products: [Product] = []
+if includeIOSLibrary {
+    products += [
+        .library(name: "Library", targets: ["Library"]),
+    ]
+}
 
-var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
-    .package(path: "../../Domain"),
-    .package(path: "../../Utility"),
-]
+var targets: [Target] = []
+if includeIOSLibrary {
+    targets += [
+        .target(
+            name: "Library",
+            dependencies: [
+                "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
+                .product(name: "UtilityUI", package: "Utility"),
+            ],
+            resources: [.process("Resources")],
+            plugins: swiftLintPlugins,
+        ),
+        .testTarget(name: "LibraryTests", dependencies: ["Library"]),
+    ]
+}
+
+var packageDependencies: [Package.Dependency] = []
+if includeIOSLibrary {
+    packageDependencies += [
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+        .package(path: "../../Domain"),
+        .package(path: "../../Utility"),
+    ]
+}
 
 if isAndroid {
     packageDependencies += [
@@ -67,7 +82,7 @@ if isAndroid {
 let package = Package(
     name: "Library",
     defaultLocalization: "en",
-    platforms: [.iOS(.v26)],
+    platforms: [.iOS(.v26), .macOS(.v14)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,
