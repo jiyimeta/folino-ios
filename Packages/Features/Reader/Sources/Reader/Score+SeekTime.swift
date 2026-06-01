@@ -30,6 +30,10 @@ extension Score {
     }
 
     /// Cumulative seconds from the score's start to `cursor`.
+    ///
+    /// For an `.item` cursor whose staff path cannot be resolved, `tickInMeasure(of:)` falls back to 0
+    /// (the measure downbeat). Callers that need exact intra-measure times for cross-staff playback should
+    /// prefer `.beat` cursors, which carry an explicit `tickInMeasure` and never fall back.
     func seconds(at cursor: ScoreCursor) -> Double {
         let lengths = measureTickLengths()
         guard !lengths.isEmpty else { return 0 }
@@ -63,6 +67,8 @@ extension Score {
             }
             elapsed += measureDuration
         }
+        // Unreachable at runtime — the isLast branch always returns on the final iteration —
+        // but the compiler requires a terminal return.
         return .beat(measureIndex: lengths.count - 1, tickInMeasure: lengths.last ?? 0)
     }
 }

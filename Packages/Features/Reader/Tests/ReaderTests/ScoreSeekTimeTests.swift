@@ -75,4 +75,24 @@ struct ScoreSeekTimeTests {
         #expect(s.notatedDurationSeconds == 0)
         #expect(s.cursor(atSeconds: 1) == .beat(measureIndex: 0, tickInMeasure: 0))
     }
+
+    @Test func `actual length shortens a pickup measure`() {
+        // Measure 0 is a 1/4 pickup (480 ticks @ division 480 → 0.5s @120 BPM); measure 1 is full 4/4 (2.0s).
+        let pickupLength = Fraction(numerator: 1, denominator: 4)
+        let measures = [Measure(voices: [], actualLength: pickupLength), Measure(voices: [])]
+        let part = Part(
+            id: "P0",
+            instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+            staves: [Staff(measures: measures)],
+        )
+        let systemMeasures = [
+            SystemMeasure(elements: [
+                PositionedSystemElement(position: .start, element: .tempo(Tempo(beatsPerSecond: 2.0))),
+            ]),
+            SystemMeasure(),
+        ]
+        let s = Score(division: 480, parts: [part], systemMeasures: systemMeasures, metaTags: [:])
+        #expect(abs(s.notatedDurationSeconds - 2.5) < 0.0001)
+        #expect(abs(s.seconds(at: .beat(measureIndex: 1, tickInMeasure: 0)) - 0.5) < 0.0001)
+    }
 }
