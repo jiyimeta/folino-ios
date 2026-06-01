@@ -1,5 +1,8 @@
+import Domain
+import ScoreUI
 import SheetMusicCore
 import SwiftUI
+import UtilityUI
 
 /// Top overlay hosting Back / Inspector buttons. Rendered inside `ReaderRootScreen`'s `ZStack` so the score
 /// stays visible behind the buttons — maximising the rendered staff area, which is core to the app's value proposition.
@@ -44,8 +47,44 @@ struct ReaderTopOverlay: View {
     /// overlay (`ReaderBottomOverlay`) so the primary transport controls sit within thumb reach. Extracted from `body`
     /// to keep the outer HStack closure under SwiftLint's body-length limit.
     private func loadedActions(score: Score) -> some View {
-        inspectorButtons(score: score)
-            .glassEffect(.regular.interactive())
+        HStack(spacing: 12) {
+            scoreActionButtons()
+            inspectorButtons(score: score)
+                .glassEffect(.regular.interactive())
+        }
+        .sheet(isPresented: $viewModel.isScoreInfoPresented) {
+            EditScoreInfoSheet(model: viewModel, item: viewModel.scoreItem)
+        }
+        .sheet(item: $viewModel.shareTarget) { target in
+            ActivityViewControllerRepresentable(items: target.urls)
+        }
+    }
+
+    /// The "this score" pill: score-info (opens the edit-info sheet) + share (lazy format menu). Sits left of the
+    /// inspector pill so document actions are grouped apart from playback/display settings.
+    private func scoreActionButtons() -> some View {
+        HStack(spacing: 0) {
+            overlayButton(
+                systemImage: "info.circle",
+                label: Text("reader.toolbar.showInfo", bundle: .module),
+            ) {
+                viewModel.isScoreInfoPresented = true
+            }
+
+            Menu {
+                ShareSubmenu(
+                    loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
+                    onShare: { format in
+                        Task { await viewModel.requestShare(format: format) }
+                    },
+                )
+            } label: {
+                overlayIcon("square.and.arrow.up")
+            }
+            .tint(.primary)
+            .accessibilityLabel(Text("reader.toolbar.share", bundle: .module))
+        }
+        .glassEffect(.regular.interactive())
     }
 
     /// Paired playback / visual inspector buttons sharing a single glass-pill background. Each button owns its own
@@ -96,12 +135,17 @@ struct ReaderTopOverlay: View {
         action: @escaping () -> Void,
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .medium))
-                .frame(width: 44, height: 44)
+            overlayIcon(systemImage)
         }
         .tint(.primary)
         .accessibilityLabel(label)
+    }
+
+    /// The 44×44 tappable glyph shared by the overlay's buttons and menus.
+    private func overlayIcon(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 20, weight: .medium))
+            .frame(width: 44, height: 44)
     }
 }
 
