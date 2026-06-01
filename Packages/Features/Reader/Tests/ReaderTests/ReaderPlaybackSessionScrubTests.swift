@@ -54,8 +54,11 @@ struct ReaderPlaybackSessionScrubTests {
         #expect(session.playbackCursor == .beat(measureIndex: 0, tickInMeasure: 0))
     }
 
-    @Test func `end scrub commits to the controller and clears scrub state`() async {
+    @Test func `end scrub seeks the controller by time and clears scrub state`() async {
         let controller = FakePlaybackController()
+        // 4-second engine timeline; current position at the start so the skip delta equals the absolute target time.
+        controller.totalTimeSeconds = 4
+        controller.currentTimeSeconds = 0
         let session = Self.session(controller: controller)
         session.beginScrub()
         session.updateScrub(toFraction: 0.5)
@@ -65,7 +68,9 @@ struct ReaderPlaybackSessionScrubTests {
         for _ in 0 ..< 5 {
             await Task.yield()
         }
-        #expect(controller.recordedSetCursorCalls == [.beat(measureIndex: 1, tickInMeasure: 0)])
+        // 0.5 of a 4s timeline = 2s; from position 0 that's a +2s skip. Cursor-based setCursor is no longer used.
+        #expect(controller.skipBySecondsCalls == [2.0])
+        #expect(controller.recordedSetCursorCalls.isEmpty)
     }
 
     @Test func `end scrub without a controller still updates the local cursor`() {
