@@ -15,6 +15,7 @@ enum AppMigrations {
         m.registerMigration("v7", migrate: migrateV7)
         m.registerMigration("v8", migrate: migrateV8)
         m.registerMigration("v9", migrate: migrateV9)
+        m.registerMigration("v10", migrate: migrateV10)
         return m
     }()
 
@@ -279,5 +280,16 @@ enum AppMigrations {
         ALTER TABLE reader_preferences
         ADD COLUMN master_volume REAL NOT NULL DEFAULT 1.0
         """)
+    }
+
+    // MARK: - v10
+
+    /// Adds the human-readable credit columns surfaced by the Library edit sheet. All are NULL for existing rows
+    /// (column default). NULL means "never edited" — the edit sheet pre-fills such fields from the on-disk file the
+    /// first time it opens; an explicit empty string means the user cleared the field.
+    private static func migrateV10(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE score_items ADD COLUMN arranger TEXT")
+        try db.execute(sql: "ALTER TABLE score_items ADD COLUMN lyricist TEXT")
+        try db.execute(sql: "ALTER TABLE score_items ADD COLUMN copyright TEXT")
     }
 }

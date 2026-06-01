@@ -42,4 +42,30 @@ struct ScoreItemRecordTests {
         let domain = try #require(fetched).toDomain(tagIDs: [])
         #expect(domain == item)
     }
+
+    @Test func `record round-trips credit fields`() throws {
+        let item = ScoreItem(
+            title: "T",
+            composer: "C",
+            arranger: "A",
+            lyricist: "L",
+            copyright: "©",
+            instrumentationSummary: nil,
+            localFileName: "x.mscx",
+            contentHash: "h",
+            sizeBytes: 1,
+            lengthBeats: 0,
+            defaultTempoBpm: 120,
+            primaryKey: nil,
+            addedAt: Date(timeIntervalSince1970: 0),
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+        )
+        let record = ScoreItemRecord(domain: item)
+        let back = try record.toDomain(tagIDs: [])
+        #expect(back.arranger == "A")
+        #expect(back.lyricist == "L")
+        #expect(back.copyright == "©")
+    }
 }

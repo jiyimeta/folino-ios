@@ -11,6 +11,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
     var title: String
     var subtitle: String?
     var composer: String?
+    var arranger: String?
+    var lyricist: String?
+    var copyright: String?
     var instrumentationSummary: String?
     var localFileName: String
     var contentHash: String
@@ -28,6 +31,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         case title
         case subtitle
         case composer
+        case arranger
+        case lyricist
+        case copyright
         case instrumentationSummary = "instrumentation_summary"
         case localFileName = "local_file_name"
         case contentHash = "content_hash"
@@ -46,6 +52,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         title = item.title
         subtitle = item.subtitle
         composer = item.composer
+        arranger = item.arranger
+        lyricist = item.lyricist
+        copyright = item.copyright
         instrumentationSummary = item.instrumentationSummary
         localFileName = item.localFileName
         contentHash = item.contentHash
@@ -68,6 +77,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
             title: title,
             subtitle: subtitle,
             composer: composer,
+            arranger: arranger,
+            lyricist: lyricist,
+            copyright: copyright,
             instrumentationSummary: instrumentationSummary,
             localFileName: localFileName,
             contentHash: contentHash,

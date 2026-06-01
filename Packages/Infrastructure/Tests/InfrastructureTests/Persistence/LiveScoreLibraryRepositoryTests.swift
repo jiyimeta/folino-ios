@@ -48,6 +48,25 @@ struct LiveScoreLibraryRepositoryTests {
         #expect(stored.title == "Prelude")
     }
 
+    @Test func `saving and reading back preserves credit fields`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        var item = makeBareItem(localFileName: "credits.mid", contentHash: "credits")
+        item.arranger = "A"
+        item.lyricist = "L"
+        item.copyright = "©"
+        try await repo.saveScoreItem(item)
+
+        try await waitFor { repo.scoreItems.contains { $0.id == item.id } }
+        let stored = try #require(repo.scoreItems.first { $0.id == item.id })
+        #expect(stored.arranger == "A")
+        #expect(stored.lyricist == "L")
+        #expect(stored.copyright == "©")
+    }
+
     @Test func `delete score item soft deletes and moves to trash`() async throws {
         let (db, lifetime) = try makeDatabase()
         let scoresDir = try TempDirectory()
