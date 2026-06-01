@@ -2,15 +2,18 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// Lazy-loading share submenu. Shows the placeholder formats (no `isOriginal` flag) until the menu first opens, then
-/// fetches the per-item options once via `loadFormats` and updates the rows in place. Loading on first open avoids
-/// parsing every score in a large list at row-appear time.
+/// The lazy-loaded share-format rows, suitable as the direct content of any `Menu`. Shows the placeholder formats (no
+/// `isOriginal` flag) until the menu first opens, then fetches the per-item options once via `loadFormats` and updates
+/// the rows in place. Loading on first open avoids parsing every score in a large list at row-appear time.
+///
+/// Use this directly as a `Menu`'s content for a standalone share button (one tap → formats). For a labeled "Share"
+/// row nested inside a larger context/ellipsis menu, use `ShareSubmenu`, which wraps this.
 @MainActor
-public struct ShareSubmenu: View {
+public struct ShareFormatMenuItems: View {
     let loadFormats: @Sendable () async -> [ScoreShareFormatOption]
     let onShare: (ScoreShareFormat) -> Void
 
-    @State private var options: [ScoreShareFormatOption] = ShareSubmenu.placeholderFormats
+    @State private var options: [ScoreShareFormatOption] = ShareFormatMenuItems.placeholderFormats
     @State private var hasLoaded = false
 
     public init(
@@ -22,29 +25,21 @@ public struct ShareSubmenu: View {
     }
 
     public var body: some View {
-        Menu {
-            ForEach(options, id: \.self) { option in
-                Button {
-                    onShare(option.format)
-                } label: {
-                    shareMenuLabel(option: option)
-                }
-            }
-            // Triggers exactly when the menu opens. The empty view disappears when the menu closes, cancelling the task
-            // — the `hasLoaded` flag stops the next open from refetching.
-            Color.clear.frame(width: 0, height: 0)
-                .task {
-                    guard !hasLoaded else { return }
-                    options = await loadFormats()
-                    hasLoaded = true
-                }
-        } label: {
-            Label {
-                L10n.Common.share
-            } icon: {
-                Image(systemName: "square.and.arrow.up")
+        ForEach(options, id: \.self) { option in
+            Button {
+                onShare(option.format)
+            } label: {
+                shareMenuLabel(option: option)
             }
         }
+        // Triggers exactly when the menu opens. The empty view disappears when the menu closes, cancelling the task
+        // — the `hasLoaded` flag stops the next open from refetching.
+        Color.clear.frame(width: 0, height: 0)
+            .task {
+                guard !hasLoaded else { return }
+                options = await loadFormats()
+                hasLoaded = true
+            }
     }
 
     static let placeholderFormats: [ScoreShareFormatOption] = [
@@ -54,6 +49,35 @@ public struct ShareSubmenu: View {
         ScoreShareFormatOption(format: .midi),
         ScoreShareFormatOption(format: .audioM4A),
     ]
+}
+
+/// A labeled "Share" row that opens a nested submenu of formats — for use inside a larger context/ellipsis menu (e.g.
+/// Library's score-row menu). Wraps `ShareFormatMenuItems`. A standalone share button should use `ShareFormatMenuItems`
+/// as its `Menu` content directly so the first tap expands the formats.
+@MainActor
+public struct ShareSubmenu: View {
+    let loadFormats: @Sendable () async -> [ScoreShareFormatOption]
+    let onShare: (ScoreShareFormat) -> Void
+
+    public init(
+        loadFormats: @escaping @Sendable () async -> [ScoreShareFormatOption],
+        onShare: @escaping (ScoreShareFormat) -> Void,
+    ) {
+        self.loadFormats = loadFormats
+        self.onShare = onShare
+    }
+
+    public var body: some View {
+        Menu {
+            ShareFormatMenuItems(loadFormats: loadFormats, onShare: onShare)
+        } label: {
+            Label {
+                L10n.Common.share
+            } icon: {
+                Image(systemName: "square.and.arrow.up")
+            }
+        }
+    }
 }
 
 @MainActor

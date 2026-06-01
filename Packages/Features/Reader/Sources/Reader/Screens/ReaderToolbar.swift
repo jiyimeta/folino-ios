@@ -72,7 +72,7 @@ struct ReaderTopOverlay: View {
             }
 
             Menu {
-                ShareSubmenu(
+                ShareFormatMenuItems(
                     loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
                     onShare: { format in
                         Task { await viewModel.requestShare(format: format) }
