@@ -1,4 +1,5 @@
 import Domain
+import ScoreUI
 import SwiftUI
 import UniformTypeIdentifiers
 import UtilityUI

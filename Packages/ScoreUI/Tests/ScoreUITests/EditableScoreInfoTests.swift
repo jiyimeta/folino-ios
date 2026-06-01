@@ -36,6 +36,13 @@ struct EditableScoreInfoTests {
         #expect(fields.composer == "File")
     }
 
+    @Test func `explicitly cleared field is not re-filled from file metadata`() {
+        // A stored empty string is an explicit user value ("I cleared this"), so it wins over the file's metaTag
+        // and the field stays empty rather than falling back to the on-disk value.
+        let fields = EditableScoreInfo(item: makeItem(composer: ""), fileMetadata: meta(composer: "File"))
+        #expect(fields.composer.isEmpty)
+    }
+
     @Test func `both nil yields empty string`() {
         let fields = EditableScoreInfo(item: makeItem(composer: nil), fileMetadata: meta(composer: nil))
         #expect(fields.composer.isEmpty)

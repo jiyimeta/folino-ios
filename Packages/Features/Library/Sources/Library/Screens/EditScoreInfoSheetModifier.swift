@@ -1,4 +1,5 @@
 import Domain
+import ScoreUI
 import SwiftUI
 
 /// Presents `EditScoreInfoSheet` for the bound item. Mirrors the old rename-alert modifier so each screen wires it
@@ -10,7 +11,7 @@ struct EditScoreInfoSheetModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content.sheet(item: $target) { item in
-            EditScoreInfoSheet(viewModel: viewModel, item: item)
+            EditScoreInfoSheet(model: viewModel, item: item)
         }
     }
 }

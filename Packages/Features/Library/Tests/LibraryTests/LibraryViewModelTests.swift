@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 @testable import Library
+import ScoreUI
 import Testing
 
 @MainActor

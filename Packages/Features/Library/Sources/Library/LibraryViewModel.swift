@@ -1,17 +1,7 @@
 import Domain
 import Foundation
 import Observation
-
-/// Mutable form payload for the edit-info sheet. Empty strings are meaningful — saving an empty field clears it
-/// (persisted as `""`, which suppresses future file pre-fill).
-struct EditableScoreInfo: Equatable {
-    var title: String
-    var subtitle: String
-    var composer: String
-    var arranger: String
-    var lyricist: String
-    var copyright: String
-}
+import ScoreUI
 
 @MainActor
 @Observable
@@ -22,22 +12,13 @@ public final class LibraryViewModel {
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
 
-    var shareTarget: ShareTarget?
+    var shareTarget: ScoreShareTarget?
     var isPreparingShare = false
 
     /// True while a file import is in flight (prepare or commit). Driven by `defer` blocks in `startImport` and
     /// `commit` so it clears on success, duplicate detection, and any thrown error. The App composition root uses this
     /// to show a loading HUD over the whole shell.
     public var isImporting = false
-
-    struct ShareTarget: Identifiable, Equatable {
-        let id: UUID
-        let urls: [URL]
-        init(urls: [URL]) {
-            id = UUID()
-            self.urls = urls
-        }
-    }
 
     var currentError: Error?
 
@@ -88,13 +69,13 @@ public final class LibraryViewModel {
 
     /// Read the on-disk file's source + credit metaTags. Errors collapse to nil so a transient parse failure simply
     /// leaves the source label / pre-fill empty instead of blocking editing.
-    func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata? {
+    public func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata? {
         try? await metadataReader.readMetadata(for: item)
     }
 
     /// Apply the edited fields to the item and persist. Title is required (trimmed, non-empty); other fields are stored
     /// trimmed, with empties persisted as `""` so they are treated as explicit user values, not "never edited".
-    func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async {
+    public func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async {
         let trimmedTitle = fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
         var updated = item
@@ -237,7 +218,7 @@ public final class LibraryViewModel {
         defer { isPreparingShare = false }
         do {
             let url = try await shareService.prepareShare(item: item, format: format)
-            shareTarget = ShareTarget(urls: [url])
+            shareTarget = ScoreShareTarget(urls: [url])
         } catch {
             currentError = error
         }
@@ -258,7 +239,7 @@ public final class LibraryViewModel {
                 return
             }
         }
-        shareTarget = ShareTarget(urls: urls)
+        shareTarget = ScoreShareTarget(urls: urls)
     }
 
     func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {
@@ -331,3 +312,5 @@ public final class LibraryViewModel {
         }
     }
 }
+
+extension LibraryViewModel: ScoreInfoEditing {}

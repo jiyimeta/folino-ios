@@ -16,12 +16,14 @@ let package = Package(
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
+        .package(path: "../../ScoreUI"),
     ],
     targets: [
         .target(
             name: "Library",
             dependencies: [
                 "Domain",
+                "ScoreUI",
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
             ],
