@@ -9,8 +9,7 @@ struct ScoreListScreen: View {
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
 
-    @State private var pendingRename: ScoreItem?
-    @State private var renameText = ""
+    @State private var editInfoTarget: ScoreItem?
     @State private var editMode: EditMode = .inactive
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var bulkSheet: BulkSheet?
@@ -28,20 +27,7 @@ struct ScoreListScreen: View {
 
     var body: some View {
         listContent
-            .alert(
-                Text("library.score.rename.title", bundle: .module),
-                isPresented: renameAlertBinding,
-                presenting: pendingRename,
-            ) { item in
-                TextField(text: $renameText) {
-                    Text("library.score.rename.placeholder", bundle: .module)
-                }
-                Button {
-                    let newTitle = renameText
-                    Task { await library.rename(item, to: newTitle) }
-                } label: { L10n.Common.save }
-                Button(role: .cancel) {} label: { L10n.Common.cancel }
-            }
+            .editScoreInfoSheet(viewModel: library, target: $editInfoTarget)
             .sheet(item: $bulkSheet) { which in
                 switch which {
                 case .addToPlaylist:
@@ -92,22 +78,12 @@ struct ScoreListScreen: View {
                 item: item,
                 library: library,
                 onOpen: onOpen,
-                onRename: { item in
-                    renameText = item.title
-                    pendingRename = item
-                },
+                onEditInfo: { item in editInfoTarget = item },
                 onEditTags: onEditTags,
                 onAddToPlaylist: onAddToPlaylist,
                 onRequestDelete: { item in Task { await library.delete(item) } },
             )
         }
-    }
-
-    private var renameAlertBinding: Binding<Bool> {
-        Binding(
-            get: { pendingRename != nil },
-            set: { isPresented in if !isPresented { pendingRename = nil } },
-        )
     }
 
     private var isPlaylistSource: Bool {

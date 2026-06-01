@@ -86,14 +86,6 @@ public final class LibraryViewModel {
         await save(updated)
     }
 
-    func rename(_ scoreItem: ScoreItem, to newTitle: String) async {
-        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != scoreItem.title else { return }
-        var updated = scoreItem
-        updated.title = trimmed
-        await save(updated)
-    }
-
     /// Read the on-disk file's source + credit metaTags. Errors collapse to nil so a transient parse failure simply
     /// leaves the source label / pre-fill empty instead of blocking editing.
     func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata? {

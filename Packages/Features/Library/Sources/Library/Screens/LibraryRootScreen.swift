@@ -22,8 +22,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 
     @State private var pendingDeletePlaylist: Playlist?
     @State private var pendingDeleteTag: Tag?
-    @State private var pendingRenameScore: ScoreItem?
-    @State private var renameScoreText = ""
+    @State private var editInfoTarget: ScoreItem?
 
     public init(
         viewModel: LibraryViewModel,
@@ -73,11 +72,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     readerDestination(item)
                 }
         }
-        .libraryRootRenameScoreAlert(
-            viewModel: viewModel,
-            pending: $pendingRenameScore,
-            text: $renameScoreText,
-        )
+        .editScoreInfoSheet(viewModel: viewModel, target: $editInfoTarget)
         .sheet(item: $editTagsTarget) { item in
             EditTagsScreen(scoreItem: item, library: viewModel)
         }
@@ -290,10 +285,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             item: item,
             library: viewModel,
             onOpen: onOpenScore,
-            onRename: { item in
-                renameScoreText = item.title
-                pendingRenameScore = item
-            },
+            onEditInfo: { item in editInfoTarget = item },
             onEditTags: { editTagsTarget = $0 },
             onAddToPlaylist: { addToPlaylistTarget = $0 },
             onRequestDelete: { item in Task { await viewModel.delete(item) } },
