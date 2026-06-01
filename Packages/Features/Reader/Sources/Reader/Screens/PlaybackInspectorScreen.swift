@@ -2,6 +2,7 @@ import Domain
 import Foundation
 import SheetMusicAudio
 import SheetMusicCore
+import SheetMusicLayoutApple
 import SwiftUI
 import UtilityUI
 
@@ -36,6 +37,9 @@ struct PlaybackInspectorScreen: View {
     let masterVolumeModel: MasterVolumeModel
     @Bindable var repeatModel: RepeatModel
     let score: Score
+    /// Live playback cursor. The tempo readout reads the score's effective tempo here so it tracks mid-score tempo
+    /// changes; `nil` (no cursor yet) resolves to the opening tempo.
+    let playbackCursor: ScoreCursor?
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
 
@@ -133,36 +137,93 @@ struct PlaybackInspectorScreen: View {
 
     @ViewBuilder
     private var tempoRow: some View {
+        // The slider works in absolute BPM space, stepped at whole beats-per-minute and anchored to the score's opening
+        // tempo (`referenceBpm`), so a drag lands on round BPM there. `tempoModel` still stores a unitless multiplier
+        // (bpm / referenceBpm), so persistence is unchanged — only the slider's value axis and the label switch to BPM.
+        //
+        // The readout, though, renders the marking *governing the cursor* as engraved — its beat glyph and beat-unit
+        // value (e.g. "♩ = 158" or, in a 6/8 section, "♩. = 120") — multiplied by the playback multiplier so it tracks
+        // both the live rate and mid-score tempo changes. The grey "<percent>%" line below stays put with the thumb.
+        //
         // Route the slider's binding through `tempoModel` (like the per-staff volume sliders go through `mixerModel`)
         // so the slider's release-time writeback lands in the model's transient `liveMultiplier` and `commitMultiplier`
         // / `resetMultiplier` can authoritatively clear it — a slider double-tap reset against a plain `@Binding` to
         // local `@State` is overwritten by the writeback and silently reverts.
-        let tempoBinding = Binding<Double>(
-            get: { tempoModel.displayMultiplier },
-            set: { tempoModel.setMultiplier($0) },
-        )
+        let referenceBpm = max(1, score.effectiveQuarterBpm(at: nil))
+        let minBpm = (referenceBpm * ReaderPreferences.minTempoMultiplier).rounded()
+        let maxBpm = (referenceBpm * ReaderPreferences.maxTempoMultiplier).rounded()
         HStack(spacing: 8) {
             Image(systemName: "gauge.open.with.lines.needle.33percent")
                 .foregroundStyle(Color.accentColor)
-            Text("reader.inspector.tempo", bundle: .module)
 
+            VStack(alignment: .leading, spacing: 4) {
+                tempoReadoutLine(referenceBpm: referenceBpm, minBpm: minBpm, maxBpm: maxBpm)
+                tempoSliderLine(referenceBpm: referenceBpm, minBpm: minBpm, maxBpm: maxBpm)
+            }
+        }
+    }
+
+    /// Top line of the tempo row: the engraved beat marking (glyph + value, tap to reset) and the ± stepper.
+    /// The marking governing the cursor supplies the beat note + printed value; `cursorTempoKey` (the section's quarter
+    /// bps) keys the roll animation — it changes only on a score-origin tempo change, not a slider / stepper edit.
+    @ViewBuilder
+    private func tempoReadoutLine(referenceBpm: Double, minBpm: Double, maxBpm: Double) -> some View {
+        // Stepper bumps the reference BPM by 1 and commits — one notch == one whole BPM at the opening tempo.
+        let stepperBpm = Binding<Double>(
+            get: { (tempoModel.displayMultiplier * referenceBpm).rounded() },
+            set: { newValue in
+                let clamped = min(max(newValue.rounded(), minBpm), maxBpm)
+                Task { await tempoModel.commitMultiplier(clamped / referenceBpm) }
+            },
+        )
+        let governing = score.governingTempo(at: playbackCursor)
+        let beatGlyph = governing?.beatGlyph ?? "\u{E1D5}"
+        let beatValue = Int(((governing?.beatsPerMinute ?? 120) * tempoModel.displayMultiplier).rounded())
+        let cursorTempoKey = governing?.beatsPerSecond ?? 2.0
+        HStack(spacing: 8) {
             Button {
                 Task { await tempoModel.resetMultiplier() }
             } label: {
-                Text("\(Int((tempoModel.displayMultiplier * 100).rounded()))%")
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.primary)
-                    .frame(minWidth: 44, alignment: .trailing)
+                HStack(spacing: 4) {
+                    TempoBeatGlyph(glyph: beatGlyph, fontSize: 18)
+                    Text(verbatim: "= \(beatValue)")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText(value: Double(beatValue)))
+                }
+                .animation(.default, value: cursorTempoKey)
             }
+            Spacer()
+            Stepper(value: stepperBpm, in: minBpm ... maxBpm, step: 1) {
+                EmptyView()
+            }
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    /// Bottom line of the tempo row: the grey percentage readout and the whole-BPM slider.
+    @ViewBuilder
+    private func tempoSliderLine(referenceBpm: Double, minBpm: Double, maxBpm: Double) -> some View {
+        let bpmBinding = Binding<Double>(
+            get: { tempoModel.displayMultiplier * referenceBpm },
+            set: { tempoModel.setMultiplier($0 / referenceBpm) },
+        )
+        let percent = Int((tempoModel.displayMultiplier * 100).rounded())
+        HStack(spacing: 8) {
+            Text(verbatim: "\(percent)%")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 40, alignment: .leading)
 
             ResettableSlider(
-                value: tempoBinding,
-                range: 0.5 ... 2.0,
-                defaultValue: 1.0,
+                value: bpmBinding,
+                range: minBpm ... maxBpm,
+                defaultValue: referenceBpm,
+                step: 1,
                 onEditingChanged: { editing in
                     if !editing {
-                        let final = tempoBinding.wrappedValue
-                        Task { await tempoModel.commitMultiplier(final) }
+                        Task { await tempoModel.commitMultiplier(bpmBinding.wrappedValue / referenceBpm) }
                     }
                 },
                 onReset: {
@@ -269,6 +330,7 @@ struct PlaybackInspectorScreen: View {
                 masterVolumeModel: vm.masterVolumeModel,
                 repeatModel: vm.repeatModel,
                 score: score,
+                playbackCursor: vm.playbackSession.playbackCursor,
             )
         }
 }

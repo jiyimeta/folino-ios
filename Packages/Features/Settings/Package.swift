@@ -46,9 +46,9 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
     .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
-    // swift-wirelet v0.1.0-alpha.2 (pinned by revision, not semver)
+    // swift-wirelet v0.2.2 (pinned by revision, not semver) — matches the revision swift-sheet-music requires.
     // swiftlint:disable:next line_length
-    .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "31be47c84fddf2834b3cccc05ff955dcd1f2668e"),
+    .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"),
     .package(path: "../../Domain"),
     .package(path: "../../Utility"),
 ]
