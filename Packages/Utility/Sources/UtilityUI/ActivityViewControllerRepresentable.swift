@@ -1,4 +1,3 @@
-#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -19,4 +18,3 @@ public struct ActivityViewControllerRepresentable: UIViewControllerRepresentable
 
     public func updateUIViewController(_: UIActivityViewController, context _: Context) {}
 }
-#endif

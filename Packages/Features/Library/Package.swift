@@ -8,46 +8,17 @@ let swiftLintPlugins: [Target.PluginUsage] = [
     .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
 ]
 
-/// The iOS Library target uses UIKit/SwiftUI APIs unavailable on macOS. When
-/// building on the macOS host with FOLINO_ANDROID=1, we skip it so that
-/// `swift test --filter LibraryAndroidStoreTests` can run without platform
-/// errors in the unrelated iOS sources.
-let includeIOSLibrary = !isAndroid
-
 var products: [Product] = []
-if includeIOSLibrary {
-    products += [
-        .library(name: "Library", targets: ["Library"]),
-    ]
-}
-
 var targets: [Target] = []
-if includeIOSLibrary {
-    targets += [
-        .target(
-            name: "Library",
-            dependencies: [
-                "Domain",
-                .product(name: "UtilityCore", package: "Utility"),
-                .product(name: "UtilityUI", package: "Utility"),
-            ],
-            resources: [.process("Resources")],
-            plugins: swiftLintPlugins,
-        ),
-        .testTarget(name: "LibraryTests", dependencies: ["Library"]),
-    ]
-}
-
-var packageDependencies: [Package.Dependency] = []
-if includeIOSLibrary {
-    packageDependencies += [
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
-        .package(path: "../../Domain"),
-        .package(path: "../../Utility"),
-    ]
-}
+var packageDependencies: [Package.Dependency] = [
+    .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+]
 
 if isAndroid {
+    // Android cross-compile path: only the self-contained JNI target. It does
+    // NOT depend on Domain/Utility, so they are never pulled — the macOS host
+    // build (used for cross-compile + host tests) stays free of the iOS-only
+    // SwiftUI `Library` target, and the shared packages need no changes.
     packageDependencies += [
         // swiftlint:disable:next line_length
         .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"),
@@ -76,6 +47,27 @@ if isAndroid {
             dependencies: ["FolinoLibraryJNI"],
             resources: [.process("Resources")],
         ),
+    ]
+} else {
+    packageDependencies += [
+        .package(path: "../../Domain"),
+        .package(path: "../../Utility"),
+    ]
+    products += [
+        .library(name: "Library", targets: ["Library"]),
+    ]
+    targets += [
+        .target(
+            name: "Library",
+            dependencies: [
+                "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
+                .product(name: "UtilityUI", package: "Utility"),
+            ],
+            resources: [.process("Resources")],
+            plugins: swiftLintPlugins,
+        ),
+        .testTarget(name: "LibraryTests", dependencies: ["Library"]),
     ]
 }
 

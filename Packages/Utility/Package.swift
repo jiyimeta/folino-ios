@@ -8,7 +8,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 let package = Package(
     name: "Utility",
     defaultLocalization: "en",
-    platforms: [.iOS(.v26), .macOS(.v14)],
+    platforms: [.iOS(.v26)],
     products: [
         .library(name: "UtilityCore", targets: ["UtilityCore"]),
         .library(name: "UtilityUI", targets: ["UtilityUI"]),
