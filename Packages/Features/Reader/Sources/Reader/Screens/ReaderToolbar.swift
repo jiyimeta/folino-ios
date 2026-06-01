@@ -157,7 +157,7 @@ struct ReaderBottomOverlay: View {
         VStack(spacing: 8) {
             if viewModel.viewportZoom > 1.0 {
                 HStack { resetZoomButton; Spacer() }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 12)
             }
             seekCard(score: score)
         }
@@ -166,7 +166,7 @@ struct ReaderBottomOverlay: View {
     private func seekCard(score: Score) -> some View {
         VStack(spacing: 8) {
             seekBar(score: score)
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
                 transportButtonsContent
                 Spacer(minLength: 0)
                 endpointButtons
