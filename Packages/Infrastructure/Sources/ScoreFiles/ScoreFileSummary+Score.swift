@@ -7,11 +7,10 @@ extension ScoreFileSummary {
     /// summary usable as a library-row payload. The Reader plan will sharpen these as needed.
     init(score: Score) {
         // Title is no longer derived from score metadata — the importer uses the source filename instead, and rename is
-        // a separate user action. Subtitle still comes from the title frame (`<VBox>`/`<Text>` with
-        // `<style>Subtitle</style>`); composer from the workTitle-adjacent `composer` metaTag.
-        let frameTexts = score.titleFrame?.texts ?? []
-        let subtitle = frameTexts.first(where: { $0.style == .subtitle })?.text.nonEmpty
-        let composer = score.metaTags["composer"]?.nonEmpty
+        // a separate user action. Subtitle and composer are derived by the shared `ScorePresentation` so the iOS row
+        // and the Android store stay in lockstep.
+        let subtitle = ScorePresentation.subtitle(from: score)
+        let composer = ScorePresentation.composer(from: score)
         let arranger = score.metaTags["arranger"]?.nonEmpty
         let lyricist = score.metaTags["lyricist"]?.nonEmpty
         let copyright = score.metaTags["copyright"]?.nonEmpty

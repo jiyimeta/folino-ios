@@ -101,7 +101,7 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
 
             let item = ScoreItem(
                 id: id,
-                title: plan.sourceURL.deletingPathExtension().lastPathComponent,
+                title: ScorePresentation.title(fromFilename: plan.sourceURL.lastPathComponent),
                 subtitle: plan.summary.subtitle,
                 composer: plan.summary.composer,
                 arranger: plan.summary.arranger,

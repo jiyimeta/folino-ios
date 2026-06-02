@@ -1,0 +1,10 @@
+<resources>
+    <string name="library_title">Library</string>
+    <string name="library_empty_title">No Scores Yet</string>
+    <string name="library_empty_hint">Import your first score to get started</string>
+    <string name="library_import">Import score</string>
+    <string name="library_deleted">Score deleted</string>
+    <string name="library_undo">Undo</string>
+    <string name="nav_library">Library</string>
+    <string name="nav_settings">Settings</string>
+</resources>

@@ -26,11 +26,13 @@ android {
 
     buildFeatures { compose = true }
 
-    // FolinoSettingsAndroid ships libc++_shared.so from the NDK.
-    // Pick first to resolve any merge collision — copies are byte-identical NDK artefacts.
+    // Both :FolinoSettingsAndroid and :FolinoLibraryAndroid stage the full
+    // Swift runtime (libswiftCore.so, libFoundation*.so, libc++_shared.so, …).
+    // The copies are byte-identical Swift-runtime artefacts across the two
+    // modules, so pick first on every .so to resolve the duplicate-merge.
     packaging {
         jniLibs {
-            pickFirsts += setOf("**/libc++_shared.so")
+            pickFirsts += setOf("**/libc++_shared.so", "**/*.so")
         }
     }
 
@@ -63,6 +65,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 
     implementation(project(":FolinoSettingsAndroid"))
+    implementation(project(":FolinoLibraryAndroid"))
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.android.material:material:1.12.0")
 

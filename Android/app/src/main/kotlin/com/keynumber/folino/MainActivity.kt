@@ -17,14 +17,26 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import com.keynumber.folino.settings.VersionHistoryBridge
+import com.keynumber.folino.ui.library.LibraryScreen
+import com.keynumber.folino.ui.library.ReaderStubScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,19 +47,22 @@ class MainActivity : ComponentActivity() {
         // setContent. Acceptable for this PoC (one small asset); production
         // should move the asset read + JNI round-trip off the main thread.
         val json = assets.open("VersionHistory.json").readBytes()
-        val items = VersionHistoryBridge.load(json)
+        val versionItems = VersionHistoryBridge.load(json)
             .map { VersionHistoryItem(it.version, it.descriptions) }
 
         setContent {
             MaterialTheme {
                 Surface {
-                    val nav = rememberNavController()
-                    NavHost(nav, startDestination = "settings") {
-                        composable("settings") {
-                            SettingsScreen(prefs, items, onOpenLicenses = { nav.navigate("licenses") })
+                    // Library is the main screen; Settings opens as a full-screen
+                    // destination (Android idiom) reached from a gear icon in the
+                    // Library app bar, with a back arrow to return.
+                    val rootNav = rememberNavController()
+                    NavHost(rootNav, startDestination = "library") {
+                        composable("library") {
+                            LibraryNavGraph(onOpenSettings = { rootNav.navigate("settings") })
                         }
-                        composable("licenses") {
-                            LicensesRoute(onBack = { nav.popBackStack() })
+                        composable("settings") {
+                            SettingsNavGraph(prefs, versionItems, onBack = { rootNav.popBackStack() })
                         }
                     }
                 }
@@ -56,8 +71,89 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// `TopAppBar` lives behind Material3's experimental API surface. Scoping the opt-in to this single composable keeps
-// the rest of MainActivity (notably `onCreate`) free of the experimental marker.
+@Composable
+private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
+    val nav = rememberNavController()
+    val context = LocalContext.current
+    val vm: LibraryAndroidStoreViewModel =
+        viewModel(factory = LibraryVMFactory(context.applicationContext))
+    NavHost(nav, startDestination = "list") {
+        composable("list") {
+            LibraryScreen(
+                viewModel = vm,
+                onOpenScore = { row ->
+                    nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}")
+                },
+                onOpenSettings = onOpenSettings,
+            )
+        }
+        composable(
+            "reader/{title}",
+            arguments = listOf(navArgument("title") { type = NavType.StringType }),
+        ) { entry ->
+            val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+            ReaderStubScreen(title = title, onBack = { nav.popBackStack() })
+        }
+    }
+}
+
+@Composable
+private fun SettingsNavGraph(
+    prefs: SettingsPrefs,
+    versionItems: List<VersionHistoryItem>,
+    onBack: () -> Unit,
+) {
+    val nav = rememberNavController()
+    NavHost(nav, startDestination = "settings") {
+        composable("settings") {
+            SettingsRoute(
+                prefs = prefs,
+                versionItems = versionItems,
+                onBack = onBack,
+                onOpenLicenses = { nav.navigate("licenses") },
+            )
+        }
+        composable("licenses") {
+            LicensesRoute(onBack = { nav.popBackStack() })
+        }
+    }
+}
+
+// `TopAppBar` lives behind Material3's experimental API surface. Scope the opt-in to the route wrappers.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsRoute(
+    prefs: SettingsPrefs,
+    versionItems: List<VersionHistoryItem>,
+    onBack: () -> Unit,
+    onOpenLicenses: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_settings)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            SettingsScreen(prefs, versionItems, onOpenLicenses = onOpenLicenses)
+        }
+    }
+}
+
+private class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T =
+        LibraryAndroidStoreViewModel.create(
+            store = com.keynumber.folino.library.RoomLibraryStore(context),
+        ) as T
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LicensesRoute(onBack: () -> Unit) {

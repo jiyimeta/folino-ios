@@ -46,7 +46,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
     .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
-    // swift-wirelet v0.2.2 (pinned by revision, not semver) — matches the revision swift-sheet-music requires.
+    // swift-wirelet v0.2.2 (pinned by revision, not semver)
     // swiftlint:disable:next line_length
     .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"),
     .package(path: "../../Domain"),
@@ -55,7 +55,15 @@ var packageDependencies: [Package.Dependency] = [
 
 if isAndroid {
     packageDependencies += [
-        .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.3.0"),
+        .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
+        // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x
+        // (`OutputProtocol.standardOutput` / `ErrorOutputProtocol.standardError`).
+        // swift-subprocess 0.5.0 removed those static members, which breaks the
+        // jextract tool's compile under the swift-6.3.2 toolchain. Pin to 0.4.0
+        // (tag `0.4`) — the last release where that API still exists — so the
+        // JExtractSwiftPlugin tool builds. Remove once swift-java ships a release
+        // built against swift-subprocess 0.5+.
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
     ]
     products += [
         .library(
