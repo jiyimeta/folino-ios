@@ -16,6 +16,13 @@ final class AppBootstrap {
     private(set) var isReady = false
     private(set) var failure: Error?
 
+    /// Guards `start()` against re-entry. `start()` is driven from a `.task` on `AppShellView` inside the
+    /// `WindowGroup`, which SwiftUI may run more than once — every iPad scene gets its own `AppShellView` + `.task`
+    /// sharing this single bootstrap, and a view-identity re-evaluation re-fires `.task` too. A second `start()` would
+    /// call `FirebaseApp.configure()` twice (the `appWasConfiguredTwice` FATAL seen in Crashlytics) and rebuild the
+    /// whole adapter stack. Matches the per-process idempotency the sibling `.task` coordinators already document.
+    private var didStart = false
+
     private(set) var database: AppDatabase?
     private(set) var repository: LiveScoreLibraryRepository?
     private(set) var gateway: LiveScoreFileGateway?
@@ -39,6 +46,8 @@ final class AppBootstrap {
     private(set) var pendingShareOpenAfter = false
 
     func start() {
+        guard !didStart else { return }
+        didStart = true
         let crashEnabled = UserDefaults.standard
             .object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true
         crashReporter = FirebaseCrashReporter.configure(collectionEnabled: crashEnabled)
