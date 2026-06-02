@@ -32,6 +32,37 @@ private final class FakeLibraryStore: LibraryStore {
     func deleteRecord(id: String) {
         records.removeAll { $0.id == id }
     }
+
+    var playlistRecords: [PlaylistRecordWire] = []
+    var playlistItems: [PlaylistItemWire] = []
+
+    func loadPlaylists() -> [PlaylistRecordWire] {
+        playlistRecords
+    }
+
+    func loadPlaylistItems() -> [PlaylistItemWire] {
+        playlistItems.sorted {
+            $0.playlistId == $1.playlistId ? $0.position < $1.position : $0.playlistId < $1.playlistId
+        }
+    }
+
+    func upsertPlaylist(_ record: PlaylistRecordWire) {
+        if let idx = playlistRecords.firstIndex(where: { $0.id == record.id }) {
+            playlistRecords[idx] = record
+        } else {
+            playlistRecords.append(record)
+        }
+    }
+
+    func replacePlaylistItems(_ playlistId: String, _ items: [PlaylistItemWire]) {
+        playlistItems.removeAll { $0.playlistId == playlistId }
+        playlistItems.append(contentsOf: items)
+    }
+
+    func deletePlaylist(id: String) {
+        playlistRecords.removeAll { $0.id == id }
+        playlistItems.removeAll { $0.playlistId == id }
+    }
 }
 
 struct LibraryAndroidStoreTests {

@@ -28,4 +28,20 @@ public protocol LibraryStore {
     /// Permanently remove a persisted row by id. Pairs with `removeFile` for a
     /// full purge (the Swift store calls both). Soft-delete does **not** call this.
     func deleteRecord(id: String)
+
+    /// Every persisted playlist row (without membership).
+    func loadPlaylists() -> [PlaylistRecordWire]
+
+    /// Every membership row, ordered by `(playlistId, position)`.
+    func loadPlaylistItems() -> [PlaylistItemWire]
+
+    /// Insert or replace a playlist row by `record.id`.
+    func upsertPlaylist(_ record: PlaylistRecordWire)
+
+    /// Replace ALL membership rows for `playlistId` with `items` (drop + reinsert
+    /// with the given positions) — mirrors the iOS `savePlaylist` semantics.
+    func replacePlaylistItems(_ playlistId: String, _ items: [PlaylistItemWire])
+
+    /// Remove a playlist row and all of its membership rows.
+    func deletePlaylist(id: String)
 }
