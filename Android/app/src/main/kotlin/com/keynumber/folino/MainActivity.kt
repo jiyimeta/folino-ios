@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Menu
@@ -47,6 +48,8 @@ import androidx.navigation.navArgument
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
+import com.keynumber.folino.ui.library.PlaylistDetailScreen
+import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.ReaderStubScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
@@ -102,7 +105,7 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
     val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
     // Reader is a detail pushed on top; only the top-level list destinations
     // expose the drawer (hamburger + edge swipe).
-    val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted"
+    val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted" || currentRoute == "playlists"
 
     fun switchTo(route: String) {
         scope.launch { drawerState.close() }
@@ -131,6 +134,13 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
                     label = { Text(stringResource(R.string.nav_all_scores)) },
                     selected = currentRoute == "list",
                     onClick = { switchTo("list") },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null) },
+                    label = { Text(stringResource(R.string.nav_playlists)) },
+                    selected = currentRoute == "playlists",
+                    onClick = { switchTo("playlists") },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
@@ -172,6 +182,32 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
                         nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}")
                     },
                     onOpenDrawer = openDrawer,
+                )
+            }
+            composable("playlists") {
+                PlaylistsListScreen(
+                    viewModel = vm,
+                    onOpenPlaylist = { id, name ->
+                        nav.navigate("playlist/$id/${URLEncoder.encode(name, "UTF-8")}")
+                    },
+                    onOpenDrawer = openDrawer,
+                )
+            }
+            composable(
+                "playlist/{id}/{name}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType },
+                ),
+            ) { entry ->
+                val id = entry.arguments?.getString("id") ?: ""
+                val name = URLDecoder.decode(entry.arguments?.getString("name") ?: "", "UTF-8")
+                PlaylistDetailScreen(
+                    viewModel = vm,
+                    playlistId = id,
+                    playlistName = name,
+                    onOpenScore = { row -> nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}") },
+                    onBack = { nav.popBackStack() },
                 )
             }
             composable(

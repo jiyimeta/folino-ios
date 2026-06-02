@@ -20,4 +20,21 @@
     <string name="recently_deleted_delete_confirm_message">This score and its file will be removed from this device.</string>
     <string name="recently_deleted_empty_title">Trash is Empty</string>
     <string name="recently_deleted_empty_hint">Deleted scores will appear here</string>
+    <string name="nav_playlists">Playlists</string>
+    <string name="playlists_title">Playlists</string>
+    <string name="playlists_empty_title">No playlists</string>
+    <string name="playlists_empty_hint">Tap + to create a playlist.</string>
+    <string name="playlists_create">New playlist</string>
+    <string name="playlists_name_hint">Playlist name</string>
+    <string name="playlists_member_count">%1$d scores</string>
+    <string name="playlists_delete">Delete playlist</string>
+    <string name="playlists_delete_confirm_title">Delete \"%1$s\"?</string>
+    <string name="playlists_delete_confirm_message">The scores stay in your library.</string>
+    <string name="playlists_rename">Rename</string>
+    <string name="playlist_remove_from">Remove from playlist</string>
+    <string name="playlist_reorder_handle">Reorder</string>
+    <string name="add_to_playlist">Add to playlist</string>
+    <string name="create">Create</string>
+    <string name="rename">Rename</string>
+    <string name="library_delete">Delete</string>
 </resources>

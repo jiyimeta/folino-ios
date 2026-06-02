@@ -73,4 +73,6 @@ dependencies {
 
     implementation("com.mikepenz:aboutlibraries-core:11.2.3")
     implementation("com.mikepenz:aboutlibraries-compose-m3:11.2.3")
+
+    implementation("sh.calvin.reorderable:reorderable:2.4.3")
 }
