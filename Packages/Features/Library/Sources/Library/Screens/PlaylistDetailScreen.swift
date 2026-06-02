@@ -95,7 +95,9 @@ struct PlaylistDetailScreen: View {
 
     private var orderedItems: [ScoreItem] {
         let lookup = Dictionary(uniqueKeysWithValues: library.repository.scoreItems.map { ($0.id, $0) })
-        return currentPlaylist().orderedScoreItemIDs.compactMap { lookup[$0] }
+        return PlaylistPresentation
+            .orderedLiveIDs(currentPlaylist(), liveIDs: Set(lookup.keys))
+            .compactMap { lookup[$0] }
     }
 
     private var orderedSelectedIDs: [ScoreItemID] {
@@ -138,7 +140,7 @@ struct PlaylistDetailScreen: View {
 
     private func removeFromPlaylist(_ item: ScoreItem) {
         var updated = currentPlaylist()
-        updated.orderedScoreItemIDs.removeAll { $0 == item.id }
+        updated.remove([item.id])
         Task { await save(updated) }
     }
 

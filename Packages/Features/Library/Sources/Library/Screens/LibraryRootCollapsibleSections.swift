@@ -62,9 +62,7 @@ struct LibraryRootPlaylistsSection: View {
 }
 
 private func liveMemberCount(of playlist: Playlist, liveIDs: Set<ScoreItemID>) -> Int {
-    playlist.orderedScoreItemIDs.reduce(0) { acc, id in
-        acc + (liveIDs.contains(id) ? 1 : 0)
-    }
+    PlaylistPresentation.liveMemberCount(playlist, liveIDs: liveIDs)
 }
 
 struct LibraryRootTagsSection: View {

@@ -8,9 +8,7 @@ struct PlaylistsListScreen: View {
         PlaylistsListView(
             playlists: sortedPlaylists,
             memberCount: { playlist in
-                playlist.orderedScoreItemIDs.reduce(0) { acc, id in
-                    acc + (liveIDs.contains(id) ? 1 : 0)
-                }
+                PlaylistPresentation.liveMemberCount(playlist, liveIDs: liveIDs)
             },
             onCreate: { name in
                 Task { await library.createPlaylist(name: name) }

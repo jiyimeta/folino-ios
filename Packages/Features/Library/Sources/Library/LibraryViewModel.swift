@@ -167,7 +167,7 @@ public final class LibraryViewModel {
     ) async {
         guard !ids.isEmpty else { return }
         var updated = playlist
-        updated.orderedScoreItemIDs.removeAll { ids.contains($0) }
+        updated.remove(ids)
         guard updated.orderedScoreItemIDs != playlist.orderedScoreItemIDs else { return }
         do {
             try await repository.savePlaylist(updated)
@@ -181,11 +181,9 @@ public final class LibraryViewModel {
         to playlist: Playlist,
     ) async {
         guard !orderedIDs.isEmpty else { return }
-        let existing = Set(playlist.orderedScoreItemIDs)
-        let toAppend = orderedIDs.filter { !existing.contains($0) }
-        guard !toAppend.isEmpty else { return }
         var updated = playlist
-        updated.orderedScoreItemIDs.append(contentsOf: toAppend)
+        updated.appendUnique(orderedIDs)
+        guard updated.orderedScoreItemIDs != playlist.orderedScoreItemIDs else { return }
         do {
             try await repository.savePlaylist(updated)
         } catch {

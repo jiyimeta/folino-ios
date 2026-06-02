@@ -17,11 +17,7 @@ struct AddToPlaylistScreen: View {
 
     private func toggle(_ playlist: Playlist) async {
         var updated = playlist
-        if let idx = updated.orderedScoreItemIDs.firstIndex(of: scoreItem.id) {
-            updated.orderedScoreItemIDs.remove(at: idx)
-        } else {
-            updated.orderedScoreItemIDs.append(scoreItem.id)
-        }
+        updated.toggleMembership(scoreItem.id)
         do {
             try await library.repository.savePlaylist(updated)
         } catch {
