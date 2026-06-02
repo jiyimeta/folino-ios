@@ -28,6 +28,10 @@ private final class FakeLibraryStore: LibraryStore {
     func removeFile(localFileName: String) {
         removedFiles.append(localFileName)
     }
+
+    func deleteRecord(id: String) {
+        records.removeAll { $0.id == id }
+    }
 }
 
 struct LibraryAndroidStoreTests {
@@ -111,5 +115,99 @@ struct LibraryAndroidStoreTests {
         store.delete("nonexistent")
         #expect(store.scores.isEmpty)
         #expect(backend.records.isEmpty)
+    }
+
+    @Test func `deletedScores lists soft-deleted rows sorted by deletedAt descending`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(
+                id: "old",
+                title: "Old",
+                subtitle: "",
+                composer: "",
+                localFileName: "old.mscz",
+                deletedAt: 100,
+            ),
+            ScoreRecordWire(
+                id: "live",
+                title: "Live",
+                subtitle: "",
+                composer: "",
+                localFileName: "live.mscz",
+                deletedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: "new",
+                title: "New",
+                subtitle: "",
+                composer: "",
+                localFileName: "new.mscz",
+                deletedAt: 200,
+            ),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        #expect(store.scores.map(\.id) == ["live"])
+        // most-recently-deleted first
+        #expect(store.deletedScores.map(\.id) == ["new", "old"])
+    }
+
+    @Test func `permanentlyDelete removes the record and its file, dropping it from both lists`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: "x", title: "X", subtitle: "", composer: "", localFileName: "x.mscz", deletedAt: 50),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        #expect(store.deletedScores.map(\.id) == ["x"])
+
+        store.permanentlyDelete("x")
+
+        #expect(store.deletedScores.isEmpty)
+        #expect(store.scores.isEmpty)
+        #expect(backend.records.isEmpty) // record deleted
+        #expect(backend.removedFiles == ["x.mscz"]) // file removed
+    }
+
+    @Test func `permanentlyDelete unknown id is a no-op`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: "x", title: "X", subtitle: "", composer: "", localFileName: "x.mscz", deletedAt: 50),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.permanentlyDelete("nope")
+        #expect(backend.records.map(\.id) == ["x"])
+        #expect(backend.removedFiles.isEmpty)
+    }
+
+    @Test func `restoreMany clears deletedAt for all given ids in one pass`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz", deletedAt: 10),
+            ScoreRecordWire(id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz", deletedAt: 20),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        #expect(store.deletedScores.count == 2)
+
+        store.restoreMany(["a", "b"])
+
+        #expect(store.deletedScores.isEmpty)
+        #expect(Set(store.scores.map(\.id)) == ["a", "b"])
+        #expect(backend.records.allSatisfy { $0.deletedAt == 0 })
+    }
+
+    @Test func `permanentlyDeleteMany purges all given ids and their files`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz", deletedAt: 10),
+            ScoreRecordWire(id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz", deletedAt: 20),
+            ScoreRecordWire(id: "c", title: "C", subtitle: "", composer: "", localFileName: "c.mscz", deletedAt: 0),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+
+        store.permanentlyDeleteMany(["a", "b"])
+
+        #expect(backend.records.map(\.id) == ["c"]) // live row untouched
+        #expect(Set(backend.removedFiles) == ["a.mscz", "b.mscz"])
+        #expect(store.deletedScores.isEmpty)
+        #expect(store.scores.map(\.id) == ["c"])
     }
 }

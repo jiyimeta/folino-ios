@@ -24,6 +24,7 @@ import WireletProvided
 public final class LibraryAndroidStore {
     @ObservationIgnored private let store: LibraryStore
     public var scores: [ScoreRowWire] = []
+    public var deletedScores: [ScoreRowWire] = []
 
     public init(store: LibraryStore) {
         self.store = store
@@ -69,6 +70,45 @@ public final class LibraryAndroidStore {
         setDeletedAt(id, 0)
     }
 
+    /// Permanent purge: remove the managed file, then the record (mirrors iOS
+    /// `permanentlyDeleteScoreItem`). Unknown id is a no-op.
+    @WireletExpose
+    public func permanentlyDelete(_ id: String) {
+        let all = store.loadAll()
+        guard let record = all.first(where: { $0.id == id }) else { return }
+        store.removeFile(localFileName: record.localFileName)
+        store.deleteRecord(id: id)
+        // Project from the local snapshot minus the purged row — no second loadAll().
+        reload(using: all.filter { $0.id != id })
+    }
+
+    /// Bulk restore: clear `deletedAt` for each id, then reload once (mirrors
+    /// `LibraryViewModel.bulkRestore` semantics on iOS). Unknown ids are skipped.
+    @WireletExpose
+    public func restoreMany(_ ids: [String]) {
+        var all = store.loadAll()
+        for id in ids {
+            guard let idx = all.firstIndex(where: { $0.id == id }) else { continue }
+            all[idx].deletedAt = 0
+            store.upsert(all[idx])
+        }
+        reload(using: all)
+    }
+
+    /// Bulk permanent purge (mirrors `LibraryViewModel.bulkPermanentlyDelete`):
+    /// remove file + record for each id, then reload once.
+    @WireletExpose
+    public func permanentlyDeleteMany(_ ids: [String]) {
+        let idSet = Set(ids)
+        let all = store.loadAll()
+        for record in all where idSet.contains(record.id) {
+            store.removeFile(localFileName: record.localFileName)
+            store.deleteRecord(id: record.id)
+        }
+        // Project from the local snapshot minus the purged rows — no second loadAll().
+        reload(using: all.filter { !idSet.contains($0.id) })
+    }
+
     private func setDeletedAt(_ id: String, _ stamp: Double) {
         var all = store.loadAll()
         guard let idx = all.firstIndex(where: { $0.id == id }) else { return }
@@ -77,12 +117,25 @@ public final class LibraryAndroidStore {
         reload(using: all)
     }
 
-    /// Rebuild the displayed list: live records (`deletedAt <= 0`) projected to
-    /// the display wire type. Pass `records` to reuse an already-loaded snapshot
-    /// and avoid a second backend read.
+    /// Rebuild the displayed lists: live records (`deletedAt <= 0`) in `scores`
+    /// and soft-deleted records (most-recently-trashed first) in `deletedScores`,
+    /// both projected to the display wire type. Pass `records` to reuse an
+    /// already-loaded snapshot and avoid a second backend read.
     private func reload(using records: [ScoreRecordWire]? = nil) {
-        scores = (records ?? store.loadAll())
+        let all = records ?? store.loadAll()
+        scores = all
             .filter { $0.deletedAt <= 0 }
-            .map { ScoreRowWire(id: $0.id, title: $0.title, subtitle: $0.subtitle, composer: $0.composer) }
+            .map(Self.row)
+        // Recently Deleted: soft-deleted rows, most-recently-trashed first
+        // (mirrors iOS RecentlyDeletedViewModel). Sorting happens here, before
+        // projection, so ScoreRowWire need not carry deletedAt.
+        deletedScores = all
+            .filter { $0.deletedAt > 0 }
+            .sorted { $0.deletedAt > $1.deletedAt }
+            .map(Self.row)
+    }
+
+    private static func row(_ record: ScoreRecordWire) -> ScoreRowWire {
+        ScoreRowWire(id: record.id, title: record.title, subtitle: record.subtitle, composer: record.composer)
     }
 }

@@ -31,6 +31,9 @@ interface ScoreRecordDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsert(record: ScoreRecordEntity)
+
+    @Query("DELETE FROM score_records WHERE id = :id")
+    fun delete(id: String)
 }
 
 @Database(entities = [ScoreRecordEntity::class], version = 1, exportSchema = false)
@@ -78,6 +81,10 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 deletedAt = record.deletedAt,
             ),
         )
+    }
+
+    override fun deleteRecord(id: String) {
+        dao.delete(id)
     }
 
     override fun copyImportedFile(fromPath: String, localFileName: String) {
