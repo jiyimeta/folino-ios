@@ -38,8 +38,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
-import io.github.jiyimeta.sheetmusic.compose.cursor.CursorFrame
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScoreCanvas
 import io.github.jiyimeta.sheetmusic.compose.render.ScoreTransform
@@ -114,9 +114,9 @@ private fun ReadyScore(
         val handle = scoreHandle ?: return@LaunchedEffect
         audioVm.currentCursor.collectLatest { cursor ->
             if (cursor == null) return@collectLatest
-            val frame = CursorFrame.decode(
-                SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(cursor)),
-            ) ?: return@collectLatest
+            val bytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(cursor))
+            if (bytes.isEmpty()) return@collectLatest
+            val frame = DecodedFrameCodec.decode(bytes)
             val newY = keepInViewOffsetY(
                 panY = transform.panOffset.y,
                 frameY = frame.y,
@@ -124,7 +124,6 @@ private fun ReadyScore(
                 pxPerMM = pxPerMM,
                 scale = transform.scale,
                 viewportH = viewportHeightPx,
-                contentHeightPx = (state.program.pages.first().heightMM * pxPerMM * transform.scale).toFloat(),
                 pad = padPx,
             )
             if (abs(newY - transform.panOffset.y) >= 0.5f) {
@@ -176,27 +175,23 @@ private fun keepInViewOffsetY(
     pxPerMM: Float,
     scale: Float,
     viewportH: Float,
-    contentHeightPx: Float,
     pad: Float,
 ): Float {
     if (pxPerMM <= 0f || viewportH <= 0f) return panY
     val contentMin = (frameY * pxPerMM * scale).toFloat()
     val contentMax = ((frameY + frameH) * pxPerMM * scale).toFloat()
-    val cur = -panY
     // Shared keep-in-view math (iOS + Android call the same Domain Swift via JNI).
+    // Work in scroll-offset space (scroll = -panY); the shared function already
+    // clamps the leading edge at 0, and a correctly-decoded cursor frame never
+    // targets past the content end, so no trailing clamp is needed here.
     val rawCur = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
-        cur.toDouble(),
+        (-panY).toDouble(),
         contentMin.toDouble(),
         contentMax.toDouble(),
         viewportH.toDouble(),
         pad.toDouble(),
     ).toFloat()
-    // Never scroll past the trailing content extent (top=0 .. content bottom).
-    // iOS gets this clamp natively from UIScrollView; Android pans an unbounded
-    // canvas, so clamp here (platform mechanics, not divergent logic).
-    val maxScroll = maxOf(0f, contentHeightPx - viewportH)
-    val newCur = rawCur.coerceIn(0f, maxScroll)
-    return -newCur
+    return -rawCur
 }
 
 @Composable
