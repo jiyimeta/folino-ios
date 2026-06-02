@@ -352,31 +352,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seek bar"
+            "value" : "Show seek bar"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "シークバー"
+            "value" : "シークバー表示"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "탐색 막대"
+            "value" : "탐색 막대 표시"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "进度条"
+            "value" : "显示进度条"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "進度列"
+            "value" : "顯示進度列"
           }
         }
       }
