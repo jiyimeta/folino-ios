@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Restore
@@ -53,7 +53,7 @@ import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 fun RecentlyDeletedScreen(
     viewModel: LibraryAndroidStoreViewModel,
     onOpenScore: (ScoreRowWire) -> Unit,
-    onBack: () -> Unit,
+    onOpenDrawer: () -> Unit,
 ) {
     val deleted by viewModel.deletedScores.collectAsStateWithLifecycle()
     var selectionMode by remember { mutableStateOf(false) }
@@ -109,8 +109,8 @@ fun RecentlyDeletedScreen(
                 TopAppBar(
                     title = { Text(stringResource(R.string.recently_deleted_title)) },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.nav_open_menu))
                         }
                     },
                 )

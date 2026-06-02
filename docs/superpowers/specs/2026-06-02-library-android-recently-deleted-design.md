@@ -35,8 +35,8 @@ matching the iOS Recently Deleted screen.
   rule-free primitive (delete a record by id).
 - **Android-only code is the minimum that can only be done on Android**: the Room
   DELETE query, the Compose Trash screen, the JNI wire methods.
-- **UI/UX placement follows Android idioms.** Entry via an **overflow menu**, not
-  an iOS-style in-list menu; permanent-delete confirmation via **AlertDialog**,
+- **UI/UX placement follows Android idioms.** Entry via the **navigation drawer**
+  (see note below), not an iOS-style in-list menu; permanent-delete confirmation via **AlertDialog**,
   not an iOS popover; bulk via the Material **Contextual Action Bar (CAB)**
   pattern (long-press to enter selection), not iOS `EditMode` + bottom bar. Only
   the *content* keeps iOS parity.
@@ -56,7 +56,7 @@ matching the iOS Recently Deleted screen.
 ## Architecture
 
 ```
- Compose LibraryScreen ──overflow menu──▶ RecentlyDeletedScreen
+ Compose LibraryScreen ──nav drawer──▶ RecentlyDeletedScreen
                                               │  vm.deletedScores (StateFlow)
                                               │  vm.restore(id) / vm.restoreMany(ids)
                                               │  vm.permanentlyDelete(id) / vm.permanentlyDeleteMany(ids)
@@ -123,9 +123,14 @@ method (Kotlin `NativeAdapter` + Swift proxy).
 
 ### 3. Compose UI
 
-**Entry point** — on the existing `LibraryScreen` top app bar, add an
-**overflow (3-dot) menu** with a "Recently Deleted" item that navigates to the
-Trash screen. (The gear Settings action stays as a direct app-bar icon.)
+**Entry point** — a **navigation drawer** (`ModalNavigationDrawer`) opened by a
+hamburger icon on the top app bar, holding **All Scores / Recently Deleted /
+Settings** as destinations. (Revised post-implementation: the spec originally
+proposed an overflow-menu item + a separate gear Settings icon, but on Android a
+Trash *destination* belongs in the nav drawer — alongside Settings and the future
+Favorites/Playlists/Tags sections — rather than the overflow menu, which is for
+*actions*. All Scores ↔ Recently Deleted switch as drawer peers; Settings opens
+full-screen. The gear icon + overflow entry were removed.)
 
 **`RecentlyDeletedScreen`** — consumes `vm.deletedScores` (already sorted).
 
@@ -185,7 +190,7 @@ array) and call-tracking for `deleteRecord` / `removeFile`.
 
 **Kotlin / device**: build the two `.so`s (codegen → cross-compile, verify
 `JNI_OnLoad`), `:app:installDebug`, launch on the Pixel 8a, and manually verify:
-import → delete (snackbar) → open overflow → Recently Deleted → row present →
+import → delete (snackbar) → open nav drawer → Recently Deleted → row present →
 swipe-restore returns it to the main list → re-delete → permanent-delete via menu
 → confirm → gone → long-press → multi-select → bulk restore / bulk permanent
 delete. Confirm survival across an app restart.
