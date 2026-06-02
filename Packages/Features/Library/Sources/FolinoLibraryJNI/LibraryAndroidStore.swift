@@ -253,4 +253,20 @@ public final class LibraryAndroidStore {
         persist(Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date()))
         reloadPlaylists()
     }
+
+    @WireletExpose
+    public func renamePlaylist(_ id: String, _ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, var playlist = domainPlaylist(id) else { return }
+        playlist.name = trimmed
+        persist(playlist)
+        reloadPlaylists()
+    }
+
+    @WireletExpose
+    public func deletePlaylist(_ id: String) {
+        store.deletePlaylist(id: id)
+        if selectedPlaylistID == id { selectedPlaylistID = nil }
+        reloadPlaylists()
+    }
 }

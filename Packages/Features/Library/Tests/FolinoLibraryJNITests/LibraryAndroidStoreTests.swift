@@ -254,4 +254,28 @@ struct LibraryAndroidStoreTests {
         #expect(store.playlists.allSatisfy { $0.memberCount == 0 })
         #expect(backend.playlistRecords.count == 2)
     }
+
+    @Test func `renamePlaylist updates the name; blank is ignored`() throws {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("Old")
+        let id = try #require(store.playlists.first).id
+
+        store.renamePlaylist(id, "New")
+        #expect(store.playlists.map(\.name) == ["New"])
+
+        store.renamePlaylist(id, "  ")
+        #expect(store.playlists.map(\.name) == ["New"]) // unchanged
+    }
+
+    @Test func `deletePlaylist removes the row and its membership`() throws {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("P")
+        let id = try #require(store.playlists.first).id
+
+        store.deletePlaylist(id)
+        #expect(store.playlists.isEmpty)
+        #expect(backend.playlistRecords.isEmpty)
+    }
 }
