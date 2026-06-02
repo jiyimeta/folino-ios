@@ -20,18 +20,24 @@ import SheetMusicCore
 @MainActor
 public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
     private let soundfontResolver: any SheetMusicAudio.SoundfontResolver
+    private let metronomeClickProvider: (any MetronomeClickProvider)?
     private let metronomeEnabled: @Sendable () -> Bool
 
     public init(
         soundfontResolver: any SheetMusicAudio.SoundfontResolver,
+        metronomeClickProvider: (any MetronomeClickProvider)? = nil,
         metronomeEnabled: @escaping @Sendable () -> Bool,
     ) {
         self.soundfontResolver = soundfontResolver
+        self.metronomeClickProvider = metronomeClickProvider
         self.metronomeEnabled = metronomeEnabled
     }
 
     public func exportM4A(score: Score, to url: URL) async throws {
-        let engine = PlaybackEngine(soundfontResolver: soundfontResolver)
+        let engine = PlaybackEngine(
+            soundfontResolver: soundfontResolver,
+            metronomeClickProvider: metronomeClickProvider,
+        )
         do {
             try engine.prepare(score: score)
         } catch {

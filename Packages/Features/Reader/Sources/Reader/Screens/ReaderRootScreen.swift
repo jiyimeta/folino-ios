@@ -29,10 +29,28 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
 
+    @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
+    private var showSeekBar = true
+
     @Environment(\.scenePhase) private var scenePhase
 
     private var layoutMode: ReaderLayoutMode {
         ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
+    }
+
+    /// Space the bottom control reserves above the score, applied only in horizontal / page modes —
+    /// vertical mode lets the score scroll under the floating control. The control overlays the
+    /// score's bottom edge whether or not the seek bar is shown, so both states inset; the expanded
+    /// card is taller than the compact pill.
+    private var bottomControlInset: CGFloat {
+        switch layoutMode {
+        case .vertical:
+            0
+        case .horizontal, .page:
+            showSeekBar
+                ? ReaderTransportControl.expandedContentHeight
+                : ReaderTransportControl.collapsedContentHeight
+        }
     }
 
     public init(
@@ -71,6 +89,7 @@ public struct ReaderRootScreen: View {
         ZStack {
             content
                 .safeAreaPadding(.top, ReaderTopOverlay.height)
+                .safeAreaPadding(.bottom, bottomControlInset)
             if ReaderPiPSession.isSupported {
                 ScorePiPHostView(coordinator: viewModel.pipSession.coordinator)
                     .frame(width: 1, height: 1)
@@ -83,7 +102,7 @@ public struct ReaderRootScreen: View {
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
                 )
                 Spacer()
-                ReaderBottomOverlay(viewModel: viewModel)
+                ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
             }
         }
         .navigationTitle("")
@@ -153,7 +172,7 @@ public struct ReaderRootScreen: View {
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.displayCursor,
                     viewModel: viewModel,
                 )
             case .horizontal:
@@ -163,7 +182,7 @@ public struct ReaderRootScreen: View {
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.displayCursor,
                     viewModel: viewModel,
                 )
             case .page:
@@ -173,7 +192,7 @@ public struct ReaderRootScreen: View {
                     honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
+                    playbackCursor: viewModel.playbackSession.displayCursor,
                     viewModel: viewModel,
                 )
             }

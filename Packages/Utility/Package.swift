@@ -16,12 +16,16 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+        .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
     ],
     targets: [
         .target(name: "UtilityCore", dependencies: [], plugins: swiftLintPlugins),
         .target(
             name: "UtilityUI",
-            dependencies: ["UtilityCore"],
+            dependencies: [
+                "UtilityCore",
+                .product(name: "DeviceKit", package: "DeviceKit"),
+            ],
             resources: [.process("Resources")],
             plugins: swiftLintPlugins,
         ),

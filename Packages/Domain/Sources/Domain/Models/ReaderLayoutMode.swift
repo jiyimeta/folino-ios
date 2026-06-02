@@ -42,4 +42,8 @@ public enum ReaderGlobalSettingsKey {
     /// onboarding hint in `PagedScoreContainer.TapOverlay`. Defaults to `false`; once flipped, stays true for the
     /// install lifetime.
     public static let pageTapHintDismissed = "readerPageTapHintDismissed"
+
+    /// Bool. When true, the Reader's bottom transport control shows a full-width time-based seek bar.
+    /// Defaults to `true` at the `@AppStorage` site. When false, only the compact transport pill shows.
+    public static let showSeekBarEnabled = "readerShowSeekBarEnabled"
 }

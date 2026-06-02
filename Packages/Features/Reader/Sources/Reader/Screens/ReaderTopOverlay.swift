@@ -43,9 +43,10 @@ struct ReaderTopOverlay: View {
         .padding(.top, 4)
     }
 
-    /// Right-side buttons that depend on a loaded score: the paired inspector pill. Play/pause moved to the bottom
-    /// overlay (`ReaderBottomOverlay`) so the primary transport controls sit within thumb reach. Extracted from `body`
-    /// to keep the outer HStack closure under SwiftLint's body-length limit.
+    /// Right-side buttons that depend on a loaded score: the "this score" pill (info + share) left of the paired
+    /// inspector pill. Play/pause moved to the bottom transport control (`ReaderTransportControl`) so the primary
+    /// transport controls sit within thumb reach. Extracted from `body` to keep the outer HStack closure under
+    /// SwiftLint's body-length limit.
     private func loadedActions(score: Score) -> some View {
         HStack(spacing: 12) {
             scoreActionButtons()
@@ -146,121 +147,6 @@ struct ReaderTopOverlay: View {
         Image(systemName: systemImage)
             .font(.system(size: 20, weight: .medium))
             .frame(width: 44, height: 44)
-    }
-}
-
-/// Bottom overlay hosting the reset-zoom pill (leading), the A/B loop endpoint buttons, and the primary transport
-/// pill (jump-to-start / step / play-pause, trailing). Lives outside the toolbar so it can sit on top of the score
-/// content rather than in the navigation bar, and keeps the transport within thumb reach at the bottom of the screen.
-struct ReaderBottomOverlay: View {
-    @Bindable var viewModel: ReaderViewModel
-
-    var body: some View {
-        HStack(spacing: 12) {
-            if viewModel.viewportZoom > 1.0 {
-                Button {
-                    viewModel.resetZoom()
-                } label: {
-                    Label {
-                        Text("reader.toolbar.resetZoom", bundle: .module)
-                    } icon: {
-                        Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                }
-            }
-            Spacer()
-            if viewModel.repeatModel.mode == .abLoop {
-                endpointButton(
-                    label: "A",
-                    isSet: viewModel.repeatModel.pendingRepeatA != nil,
-                    onSet: { Task { await viewModel.repeatModel.setA() } },
-                )
-
-                endpointButton(
-                    label: "B",
-                    isSet: viewModel.repeatModel.pendingRepeatB != nil,
-                    onSet: { Task { await viewModel.repeatModel.setB() } },
-                )
-            }
-            if case .loaded = viewModel.loadState {
-                transportButtons
-            }
-        }
-        .padding()
-    }
-
-    /// Primary transport: jump-to-start, step back a measure, play/pause, step forward a measure (in that order).
-    /// Only shown once a score is loaded so the engine is ready to seek / play.
-    private var transportButtons: some View {
-        // The whole control is a single interactive liquid-glass pill (spacing 0), mirroring the top overlay's paired
-        // inspector buttons.
-        HStack(spacing: 0) {
-            // Same glyph as page mode's "jump to first page" tap zone — a custom symbol bundled with the Reader module
-            // (`PageTapZoneKind.first`), since no system SF Symbol matches the `arrow.uturn.backward.to.line` shape.
-            transportButton(
-                image: Image("arrow.uturn.backward.to.line", bundle: .module),
-                label: Text("reader.toolbar.jumpToStart", bundle: .module),
-            ) {
-                viewModel.playbackSession.seekToStart()
-            }
-
-            transportButton(
-                image: Image(systemName: "chevron.left.2"),
-                label: Text("reader.toolbar.stepBackward", bundle: .module),
-            ) {
-                viewModel.playbackSession.stepMeasureBackward()
-            }
-
-            transportButton(
-                image: Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill"),
-                label: Text(
-                    viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
-                    bundle: .module,
-                ),
-            ) {
-                Task { await viewModel.playbackSession.togglePlayback() }
-            }
-
-            transportButton(
-                image: Image(systemName: "chevron.right.2"),
-                label: Text("reader.toolbar.stepForward", bundle: .module),
-            ) {
-                viewModel.playbackSession.stepMeasureForward()
-            }
-        }
-        .glassEffect(.regular.interactive())
-        // Match the top overlay's button shadow so the transport pill reads with the same depth as the inspector pill.
-        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-    }
-
-    private func transportButton(
-        image: Image,
-        label: Text,
-        action: @escaping () -> Void,
-    ) -> some View {
-        Button(action: action) {
-            image
-                .font(.system(size: 20, weight: .medium))
-                .frame(width: 44, height: 44)
-        }
-        .tint(.primary)
-        .accessibilityLabel(label)
-    }
-
-    private func endpointButton(
-        label: String,
-        isSet: Bool,
-        onSet: @escaping () -> Void,
-    ) -> some View {
-        Button(action: onSet) {
-            Text(verbatim: label)
-                .tint(.primary)
-                .font(.system(size: 20, weight: .semibold))
-                .frame(width: 44, height: 44)
-        }
-        .glassEffect(.regular.tint(isSet ? .clear : .accentColor).interactive())
     }
 }
 

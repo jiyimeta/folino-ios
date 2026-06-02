@@ -12,6 +12,20 @@ final class ReaderPlaybackSession {
     private(set) var isPlaying = false
     private(set) var playbackCursor: ScoreCursor?
 
+    /// Provisional cursor shown while the user drags the seek bar. Non-nil only mid-scrub. The score
+    /// views render `displayCursor`, so they follow this instead of the live `playbackCursor`; audio
+    /// and the real cursor stay put until `endScrub()`.
+    private(set) var scrubCursor: ScoreCursor?
+
+    /// What the on-screen score should highlight and auto-scroll to: the provisional scrub position
+    /// when dragging, otherwise the live playback cursor.
+    var displayCursor: ScoreCursor? {
+        scrubCursor ?? playbackCursor
+    }
+
+    /// Latest 0...1 fraction from `updateScrub`, used by `endScrub` to seek the audio by time on release.
+    @ObservationIgnored private var lastScrubFraction: Double = 0
+
     @ObservationIgnored private var rawPlaybackCursor: ScoreCursor?
 
     @ObservationIgnored let controller: (any PlaybackController)?
@@ -245,6 +259,43 @@ final class ReaderPlaybackSession {
         onCursorChanged()
         guard let controller else { return }
         Task { await controller.setCursor(to: engineCursor) }
+    }
+
+    /// Begin an interactive seek-bar drag. Seeds the provisional cursor at the current real position so
+    /// the score doesn't jump before the first drag delta arrives.
+    func beginScrub() {
+        scrubCursor = playbackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)
+    }
+
+    /// Move the provisional cursor to `fraction` (0...1) of the notated timeline. Views following
+    /// `displayCursor` re-scroll / page; audio and the real cursor are untouched.
+    func updateScrub(toFraction fraction: Double) {
+        guard let score = scoreProvider() else { return }
+        let clamped = min(max(fraction, 0), 1)
+        lastScrubFraction = clamped
+        scrubCursor = score.cursor(atSeconds: clamped * score.notatedDurationSeconds)
+        onCursorChanged()
+    }
+
+    /// Commit the drag. Seek the audio by TIME rather than by cursor: the engine resolves an arbitrary time to a
+    /// frame (`timeline.frame(atTime:)`), whereas `setCursor` resolves a cursor to a frame
+    /// (`timeline.frame(forCursor:)`) and silently no-ops on a `.beat` whose interpolated tick doesn't land on a
+    /// notated event — which is exactly what scrubbing produces. Move the real cursor to the provisional position for
+    /// immediate feedback (the engine's cursor stream then re-syncs it), and clear scrub state.
+    func endScrub() {
+        guard let target = scrubCursor else { return }
+        let fraction = lastScrubFraction
+        rawPlaybackCursor = target
+        playbackCursor = target
+        scrubCursor = nil
+        onCursorChanged()
+        guard let controller else { return }
+        Task {
+            // `fraction` is multiplier-invariant and `totalTimeSeconds` scales with the tempo multiplier, so the
+            // product lands at the right proportion of the engine's timeline regardless of the current rate.
+            let targetTime = fraction * controller.totalTimeSeconds
+            await controller.skip(bySeconds: targetTime - controller.currentTimeSeconds)
+        }
     }
 
     /// Re-translate `rawPlaybackCursor` against the current hidden-staves set. Called by the owner

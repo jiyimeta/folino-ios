@@ -17,6 +17,9 @@ struct VisualInspectorScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
     private var showInvisibleElements = false
 
+    @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
+    private var showSeekBar = true
+
     @AppStorage("reader.inspector.visual.general.expanded") private var generalExpanded = true
     @AppStorage("reader.inspector.visual.parts.expanded") private var partsExpanded = true
 
@@ -28,6 +31,7 @@ struct VisualInspectorScreen: View {
                 breakPolicyRow
                 collapseRow
                 showInvisibleRow
+                seekBarRow
             } header: {
                 Text("reader.inspector.section.general", bundle: .module)
             }
@@ -100,6 +104,14 @@ struct VisualInspectorScreen: View {
     private var showInvisibleRow: some View {
         Toggle(isOn: $showInvisibleElements) {
             Text("reader.preferences.showInvisibleElements", bundle: .module)
+        }
+    }
+
+    /// Toggles the bottom transport between the full-width seek-bar card and the compact pill. Shares the global
+    /// `showSeekBarEnabled` store with the Settings sheet, so flipping it here mirrors there (and vice versa).
+    private var seekBarRow: some View {
+        Toggle(isOn: $showSeekBar) {
+            Text("reader.inspector.showSeekBar", bundle: .module)
         }
     }
 
