@@ -2,7 +2,8 @@ package com.keynumber.folino.ui.library
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,15 +11,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -31,8 +40,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,16 +68,25 @@ fun LibraryScreen(
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    var selectionMode by remember { mutableStateOf(false) }
+    val selectedIds = remember { mutableStateListOf<String>() }
+    var singleAddTarget by remember { mutableStateOf<String?>(null) }
+    var showBulkAddSheet by remember { mutableStateOf(false) }
+
+    fun exitSelection() {
+        selectionMode = false
+        selectedIds.clear()
+    }
+
+    fun toggle(id: String) {
+        if (selectedIds.contains(id)) selectedIds.remove(id) else selectedIds.add(id)
+        if (selectedIds.isEmpty()) selectionMode = false
+    }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
-            // importScore takes a filesystem PATH (String), not bytes — the
-            // bridge can't marshal Data args. Copy the picked content:// doc
-            // into the app cache dir, naming the cache file with the picked
-            // document's ORIGINAL display name so the Swift side derives the
-            // library title from it (matching the iOS importer, which uses the
-            // file name — not the score's workTitle metaTag).
             val displayName = originalDisplayName(context, uri)
             val cacheFile = java.io.File(context.cacheDir, displayName)
             context.contentResolver.openInputStream(uri)?.use { input ->
@@ -77,22 +98,56 @@ fun LibraryScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.library_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onOpenDrawer) {
-                        Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.nav_open_menu))
-                    }
-                },
-            )
+            if (selectionMode) {
+                TopAppBar(
+                    title = { Text(selectedIds.size.toString()) },
+                    navigationIcon = {
+                        IconButton(onClick = { exitSelection() }) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel))
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            enabled = selectedIds.isNotEmpty(),
+                            onClick = {
+                                viewModel.beginBulkAddToPlaylist()
+                                showBulkAddSheet = true
+                            },
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.PlaylistAdd,
+                                contentDescription = stringResource(R.string.add_to_playlist),
+                            )
+                        }
+                        IconButton(
+                            enabled = selectedIds.isNotEmpty(),
+                            onClick = {
+                                viewModel.deleteMany(selectedIds.toList())
+                                exitSelection()
+                            },
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.library_delete))
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.library_title)) },
+                    navigationIcon = {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.nav_open_menu))
+                        }
+                    },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
-            FloatingActionButton(onClick = {
-                // .mscz has no registered MIME on most devices; widen to */* and rely
-                // on the parser to reject non-mscz input.
-                picker.launch(arrayOf("*/*"))
-            }) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.library_import)) }
+            if (!selectionMode) {
+                FloatingActionButton(onClick = { picker.launch(arrayOf("*/*")) }) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.library_import))
+                }
+            }
         },
     ) { padding ->
         if (scores.isEmpty()) {
@@ -110,7 +165,13 @@ fun LibraryScreen(
                 items(scores, key = { it.id }) { row ->
                     ScoreRow(
                         row = row,
-                        onClick = { onOpenScore(row) },
+                        selectionMode = selectionMode,
+                        selected = selectedIds.contains(row.id),
+                        onClick = { if (selectionMode) toggle(row.id) else onOpenScore(row) },
+                        onLongClick = {
+                            if (!selectionMode) selectionMode = true
+                            toggle(row.id)
+                        },
                         onDelete = {
                             viewModel.delete(row.id)
                             scope.launch {
@@ -121,49 +182,119 @@ fun LibraryScreen(
                                 if (result == SnackbarResult.ActionPerformed) viewModel.restore(row.id)
                             }
                         },
+                        onAddToPlaylist = {
+                            singleAddTarget = row.id
+                            viewModel.beginAddToPlaylist(row.id)
+                        },
                     )
                 }
             }
         }
     }
+
+    singleAddTarget?.let { id ->
+        AddToPlaylistSheet(
+            viewModel = viewModel,
+            scoreId = id,
+            bulkScoreIds = emptyList(),
+            onDismiss = { singleAddTarget = null },
+        )
+    }
+    if (showBulkAddSheet) {
+        AddToPlaylistSheet(
+            viewModel = viewModel,
+            scoreId = null,
+            bulkScoreIds = selectedIds.toList(),
+            onDismiss = {
+                showBulkAddSheet = false
+                exitSelection()
+            },
+        )
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-private fun ScoreRow(row: ScoreRowWire, onClick: () -> Unit, onDelete: () -> Unit) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = {
-            if (it == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                true
-            } else {
-                false
-            }
-        },
-    )
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        backgroundContent = {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Icon(Icons.Filled.Delete, contentDescription = null)
-            }
-        },
-    ) {
+private fun ScoreRow(
+    row: ScoreRowWire,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDelete: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+) {
+    val content: @Composable () -> Unit = {
+        var menu by remember { mutableStateOf(false) }
         val title = row.title.ifEmpty { "Untitled" }
-        // Primary line mirrors the iOS row: "title subtitle".
         val headline = if (row.subtitle.isEmpty()) title else "$title ${row.subtitle}"
         ListItem(
             headlineContent = { Text(headline) },
             supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
-            leadingContent = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
-            modifier = Modifier.clickable(onClick = onClick),
+            leadingContent = {
+                if (selectionMode) {
+                    Icon(
+                        if (selected) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                        contentDescription = null,
+                    )
+                } else {
+                    Icon(Icons.Filled.MusicNote, contentDescription = null)
+                }
+            },
+            trailingContent = {
+                if (!selectionMode) {
+                    Box {
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more))
+                        }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.add_to_playlist)) },
+                                onClick = {
+                                    menu = false
+                                    onAddToPlaylist()
+                                },
+                            )
+                        }
+                    }
+                }
+            },
+            colors = if (selected) {
+                ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            } else {
+                ListItemDefaults.colors()
+            },
+            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
         )
+    }
+
+    if (selectionMode) {
+        content()
+    } else {
+        val dismissState = rememberSwipeToDismissBoxState(
+            confirmValueChange = {
+                if (it == SwipeToDismissBoxValue.EndToStart) {
+                    onDelete()
+                    true
+                } else {
+                    false
+                }
+            },
+        )
+        SwipeToDismissBox(
+            state = dismissState,
+            enableDismissFromStartToEnd = false,
+            backgroundContent = {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = null)
+                }
+            },
+        ) { content() }
     }
 }
 
@@ -189,6 +320,5 @@ private fun originalDisplayName(context: android.content.Context, uri: android.n
             if (idx >= 0) name = cursor.getString(idx)
         }
     }
-    // Guard against path separators; fall back when the provider gives nothing.
     return (name ?: "score.mscz").replace('/', '_')
 }
