@@ -28,9 +28,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
+import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
-import com.keynumber.folino.ui.library.ReaderStubScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
@@ -82,17 +82,22 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
             LibraryScreen(
                 viewModel = vm,
                 onOpenScore = { row ->
-                    nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}")
+                    val t = URLEncoder.encode(row.title, "UTF-8")
+                    nav.navigate("reader/${row.id}/$t")
                 },
                 onOpenSettings = onOpenSettings,
             )
         }
         composable(
-            "reader/{title}",
-            arguments = listOf(navArgument("title") { type = NavType.StringType }),
+            "reader/{id}/{title}",
+            arguments = listOf(
+                navArgument("id") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType },
+            ),
         ) { entry ->
+            val id = entry.arguments?.getString("id") ?: ""
             val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
-            ReaderStubScreen(title = title, onBack = { nav.popBackStack() })
+            ReaderScreen(scoreId = id, title = title, onBack = { nav.popBackStack() })
         }
     }
 }
