@@ -36,9 +36,78 @@ interface ScoreRecordDao {
     fun delete(id: String)
 }
 
-@Database(entities = [ScoreRecordEntity::class], version = 1, exportSchema = false)
+@Entity(tableName = "playlists")
+data class PlaylistEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    @ColumnInfo(name = "created_at") val createdAt: Double,
+)
+
+@Entity(
+    tableName = "playlist_items",
+    primaryKeys = ["playlist_id", "score_item_id"],
+)
+data class PlaylistItemEntity(
+    @ColumnInfo(name = "playlist_id") val playlistId: String,
+    @ColumnInfo(name = "score_item_id") val scoreItemId: String,
+    val position: Int,
+)
+
+@Dao
+interface PlaylistDao {
+    @Query("SELECT * FROM playlists")
+    fun loadPlaylists(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlist_items ORDER BY playlist_id, position")
+    fun loadItems(): List<PlaylistItemEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertPlaylist(record: PlaylistEntity)
+
+    @Query("DELETE FROM playlist_items WHERE playlist_id = :playlistId")
+    fun deleteItems(playlistId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertItems(items: List<PlaylistItemEntity>)
+
+    @Query("DELETE FROM playlists WHERE id = :id")
+    fun deletePlaylist(id: String)
+
+    @androidx.room.Transaction
+    fun replaceItems(playlistId: String, items: List<PlaylistItemEntity>) {
+        deleteItems(playlistId)
+        insertItems(items)
+    }
+
+    @androidx.room.Transaction
+    fun deletePlaylistCascade(id: String) {
+        deleteItems(id)
+        deletePlaylist(id)
+    }
+}
+
+@Database(
+    entities = [ScoreRecordEntity::class, PlaylistEntity::class, PlaylistItemEntity::class],
+    version = 2,
+    exportSchema = false,
+)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun dao(): ScoreRecordDao
+    abstract fun playlistDao(): PlaylistDao
+}
+
+val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `playlists` " +
+                "(`id` TEXT NOT NULL, `name` TEXT NOT NULL, `created_at` REAL NOT NULL, PRIMARY KEY(`id`))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `playlist_items` " +
+                "(`playlist_id` TEXT NOT NULL, `score_item_id` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`playlist_id`, `score_item_id`))",
+        )
+    }
 }
 
 /**
@@ -58,9 +127,10 @@ class RoomLibraryStore(context: Context) : LibraryStore {
         context.applicationContext,
         LibraryDatabase::class.java,
         "folino-library.db",
-    ).allowMainThreadQueries().build()
+    ).allowMainThreadQueries().addMigrations(MIGRATION_1_2).build()
 
     private val dao = db.dao()
+    private val playlistDao = db.playlistDao()
 
     private val scoresDir: File =
         File(context.applicationContext.filesDir, "Scores").apply { mkdirs() }
@@ -93,5 +163,26 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun removeFile(localFileName: String) {
         File(scoresDir, localFileName).delete()
+    }
+
+    override fun loadPlaylists(): List<PlaylistRecordWire> =
+        playlistDao.loadPlaylists().map { PlaylistRecordWire(it.id, it.name, it.createdAt) }
+
+    override fun loadPlaylistItems(): List<PlaylistItemWire> =
+        playlistDao.loadItems().map { PlaylistItemWire(it.playlistId, it.scoreItemId, it.position) }
+
+    override fun upsertPlaylist(record: PlaylistRecordWire) {
+        playlistDao.upsertPlaylist(PlaylistEntity(record.id, record.name, record.createdAt))
+    }
+
+    override fun replacePlaylistItems(playlistId: String, items: List<PlaylistItemWire>) {
+        playlistDao.replaceItems(
+            playlistId,
+            items.map { PlaylistItemEntity(it.playlistId, it.scoreItemId, it.position) },
+        )
+    }
+
+    override fun deletePlaylist(id: String) {
+        playlistDao.deletePlaylistCascade(id)
     }
 }
