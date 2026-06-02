@@ -303,4 +303,39 @@ struct LibraryAndroidStoreTests {
         let q = try #require(store.playlists.first { $0.name == "Q" })
         #expect(q.memberCount == 2) // idC, idA (de-duped)
     }
+
+    @Test func `selectPlaylist exposes ordered live items`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("P")
+        let pid = try #require(store.playlists.first).id
+        store.bulkAddToPlaylist(pid, [a, b, c])
+
+        store.selectPlaylist(pid)
+        #expect(store.selectedPlaylistItems.map(\.id) == [a, b, c])
+    }
+
+    @Test func `setPlaylistOrder reorders live members`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("P")
+        let pid = try #require(store.playlists.first).id
+        store.bulkAddToPlaylist(pid, [a, b, c])
+        store.selectPlaylist(pid)
+
+        store.setPlaylistOrder(pid, [c, a, b])
+        #expect(store.selectedPlaylistItems.map(\.id) == [c, a, b])
+    }
 }

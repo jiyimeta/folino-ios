@@ -305,4 +305,24 @@ public final class LibraryAndroidStore {
         if selectedPlaylistID == id { selectedPlaylistID = nil }
         reloadPlaylists()
     }
+
+    @WireletExpose
+    public func selectPlaylist(_ id: String) {
+        selectedPlaylistID = id
+        reloadPlaylists()
+    }
+
+    /// Reorder a playlist to the given live order. Members hidden from the UI
+    /// (e.g. soft-deleted, not shown) are appended after, so they are not lost.
+    @WireletExpose
+    public func setPlaylistOrder(_ playlistId: String, _ orderedIds: [String]) {
+        guard var playlist = domainPlaylist(playlistId) else { return }
+        let members = Set(playlist.orderedScoreItemIDs)
+        let requested = orderedIds.compactMap(scoreItemID).filter { members.contains($0) }
+        let requestedSet = Set(requested)
+        let hidden = playlist.orderedScoreItemIDs.filter { !requestedSet.contains($0) }
+        playlist.orderedScoreItemIDs = requested + hidden
+        persist(playlist)
+        reloadPlaylists()
+    }
 }
