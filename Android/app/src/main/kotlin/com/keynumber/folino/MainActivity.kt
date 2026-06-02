@@ -45,9 +45,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
+import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
-import com.keynumber.folino.ui.library.ReaderStubScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
@@ -115,6 +115,13 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
         }
     }
 
+    // Library row tap → push the Reader, addressed by score id (Reader resolves
+    // filesDir/Scores/<id>.mscz); title rides along for the app bar.
+    val openReader: (com.keynumber.folino.library.ScoreRowWire) -> Unit = { row ->
+        val t = URLEncoder.encode(row.title, "UTF-8")
+        nav.navigate("reader/${row.id}/$t")
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = drawerCapable,
@@ -159,27 +166,27 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
             composable("list") {
                 LibraryScreen(
                     viewModel = vm,
-                    onOpenScore = { row ->
-                        nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}")
-                    },
+                    onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
                 )
             }
             composable("recentlyDeleted") {
                 RecentlyDeletedScreen(
                     viewModel = vm,
-                    onOpenScore = { row ->
-                        nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}")
-                    },
+                    onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
                 )
             }
             composable(
-                "reader/{title}",
-                arguments = listOf(navArgument("title") { type = NavType.StringType }),
+                "reader/{id}/{title}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("title") { type = NavType.StringType },
+                ),
             ) { entry ->
+                val id = entry.arguments?.getString("id") ?: ""
                 val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
-                ReaderStubScreen(title = title, onBack = { nav.popBackStack() })
+                ReaderScreen(scoreId = id, title = title, onBack = { nav.popBackStack() })
             }
         }
     }

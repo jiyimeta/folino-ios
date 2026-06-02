@@ -301,7 +301,8 @@ struct VerticalScoreContainer: View {
 
     /// Smallest scroll offset that keeps `[targetMin, targetMax]` inside the viewport with `pad` margin. Returns
     /// `currentOffset` unchanged when the target is already fully visible — preserves manual horizontal panning while
-    /// playback advances within the visible row.
+    /// playback advances within the visible row. Delegates to the shared `Domain.scrollOffsetKeepingInView` so iOS
+    /// and Android follow the cursor identically (parity: one implementation, no divergent Kotlin port).
     private func adjustedScrollOffset(
         currentOffset cur: CGFloat,
         targetMin: CGFloat,
@@ -309,18 +310,13 @@ struct VerticalScoreContainer: View {
         viewportSize: CGFloat,
         pad: CGFloat,
     ) -> CGFloat {
-        let viewMin = cur
-        let viewMax = cur + viewportSize
-        if targetMax - targetMin > viewportSize {
-            return max(0, targetMin)
-        }
-        if targetMin >= viewMin, targetMax <= viewMax {
-            return cur
-        }
-        if targetMin < viewMin {
-            return max(0, targetMin - pad)
-        }
-        return targetMax - viewportSize + pad
+        CGFloat(scrollOffsetKeepingInView(
+            current: Double(cur),
+            targetMin: Double(targetMin),
+            targetMax: Double(targetMax),
+            viewport: Double(viewportSize),
+            pad: Double(pad),
+        ))
     }
 
     private struct TaskKey: Hashable {
