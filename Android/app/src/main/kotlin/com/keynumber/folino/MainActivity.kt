@@ -31,6 +31,7 @@ import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
 import com.keynumber.folino.ui.library.ReaderStubScreen
+import com.keynumber.folino.ui.library.RecentlyDeletedScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
@@ -85,6 +86,16 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
                     nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}")
                 },
                 onOpenSettings = onOpenSettings,
+                onOpenRecentlyDeleted = { nav.navigate("recentlyDeleted") },
+            )
+        }
+        composable("recentlyDeleted") {
+            RecentlyDeletedScreen(
+                viewModel = vm,
+                onOpenScore = { row ->
+                    nav.navigate("reader/${URLEncoder.encode(row.title, "UTF-8")}")
+                },
+                onBack = { nav.popBackStack() },
             )
         }
         composable(
