@@ -70,19 +70,20 @@ public final class LibraryAndroidStore {
         setDeletedAt(id, 0)
     }
 
-    /// Permanent purge (iOS parity, `permanentlyDeleteScoreItem`): remove the
-    /// managed file, then the record. Unknown id is a no-op.
+    /// Permanent purge: remove the managed file, then the record (mirrors iOS
+    /// `permanentlyDeleteScoreItem`). Unknown id is a no-op.
     @WireletExpose
     public func permanentlyDelete(_ id: String) {
         let all = store.loadAll()
         guard let record = all.first(where: { $0.id == id }) else { return }
         store.removeFile(localFileName: record.localFileName)
         store.deleteRecord(id: id)
-        reload()
+        // Project from the local snapshot minus the purged row — no second loadAll().
+        reload(using: all.filter { $0.id != id })
     }
 
-    /// Bulk restore (iOS `bulkRestore`): clear `deletedAt` for each id, then
-    /// reload once. Unknown ids are skipped.
+    /// Bulk restore: clear `deletedAt` for each id, then reload once (mirrors
+    /// `LibraryViewModel.bulkRestore` semantics on iOS). Unknown ids are skipped.
     @WireletExpose
     public func restoreMany(_ ids: [String]) {
         var all = store.loadAll()
@@ -94,16 +95,18 @@ public final class LibraryAndroidStore {
         reload(using: all)
     }
 
-    /// Bulk permanent purge (iOS `bulkPermanentlyDelete`): remove file + record
-    /// for each id, then reload once.
+    /// Bulk permanent purge (mirrors `LibraryViewModel.bulkPermanentlyDelete`):
+    /// remove file + record for each id, then reload once.
     @WireletExpose
     public func permanentlyDeleteMany(_ ids: [String]) {
         let idSet = Set(ids)
-        for record in store.loadAll() where idSet.contains(record.id) {
+        let all = store.loadAll()
+        for record in all where idSet.contains(record.id) {
             store.removeFile(localFileName: record.localFileName)
             store.deleteRecord(id: record.id)
         }
-        reload()
+        // Project from the local snapshot minus the purged rows — no second loadAll().
+        reload(using: all.filter { !idSet.contains($0.id) })
     }
 
     private func setDeletedAt(_ id: String, _ stamp: Double) {

@@ -191,6 +191,7 @@ struct LibraryAndroidStoreTests {
 
         #expect(store.deletedScores.isEmpty)
         #expect(Set(store.scores.map(\.id)) == ["a", "b"])
+        #expect(backend.records.allSatisfy { $0.deletedAt == 0 })
     }
 
     @Test func `permanentlyDeleteMany purges all given ids and their files`() {
