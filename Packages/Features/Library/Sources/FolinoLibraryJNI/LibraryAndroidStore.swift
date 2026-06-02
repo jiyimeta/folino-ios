@@ -88,6 +88,7 @@ public final class LibraryAndroidStore {
         store.deleteRecord(id: id)
         // Project from the local snapshot minus the purged row — no second loadAll().
         reload(using: all.filter { $0.id != id })
+        reloadPlaylists()
     }
 
     /// Bulk restore: clear `deletedAt` for each id, then reload once (mirrors
@@ -101,6 +102,7 @@ public final class LibraryAndroidStore {
             store.upsert(all[idx])
         }
         reload(using: all)
+        reloadPlaylists()
     }
 
     /// Bulk permanent purge (mirrors `LibraryViewModel.bulkPermanentlyDelete`):
@@ -115,6 +117,7 @@ public final class LibraryAndroidStore {
         }
         // Project from the local snapshot minus the purged rows — no second loadAll().
         reload(using: all.filter { !idSet.contains($0.id) })
+        reloadPlaylists()
     }
 
     private func setDeletedAt(_ id: String, _ stamp: Double) {
@@ -123,6 +126,7 @@ public final class LibraryAndroidStore {
         all[idx].deletedAt = stamp
         store.upsert(all[idx])
         reload(using: all)
+        reloadPlaylists()
     }
 
     /// Rebuild the displayed lists: live records (`deletedAt <= 0`) in `scores`
@@ -148,6 +152,32 @@ public final class LibraryAndroidStore {
     }
 
     // MARK: - Playlists
+
+    @WireletExpose
+    public func beginAddToPlaylist(_ scoreId: String) {
+        addSheetScoreID = scoreId
+        refreshAddSheet(domain: loadDomainPlaylists())
+    }
+
+    @WireletExpose
+    public func beginBulkAddToPlaylist() {
+        addSheetScoreID = nil
+        refreshAddSheet(domain: loadDomainPlaylists())
+    }
+
+    /// Bulk soft-delete (All Scores CAB "Delete"); mirrors iOS `bulkDelete`.
+    @WireletExpose
+    public func deleteMany(_ ids: [String]) {
+        let now = Date().timeIntervalSince1970
+        var all = store.loadAll()
+        let idSet = Set(ids)
+        for idx in all.indices where idSet.contains(all[idx].id) {
+            all[idx].deletedAt = now
+            store.upsert(all[idx])
+        }
+        reload(using: all)
+        reloadPlaylists()
+    }
 
     private func scoreItemID(_ raw: String) -> ScoreItemID? {
         UUID(uuidString: raw).map(ScoreItemID.init(rawValue:))

@@ -338,4 +338,64 @@ struct LibraryAndroidStoreTests {
         store.setPlaylistOrder(pid, [c, a, b])
         #expect(store.selectedPlaylistItems.map(\.id) == [c, a, b])
     }
+
+    @Test func `beginAddToPlaylist marks playlists containing the score`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("P")
+        let pid = try #require(store.playlists.first).id
+        store.addToPlaylist(a, pid)
+
+        store.beginAddToPlaylist(a)
+        #expect(store.addSheetPlaylists.map(\.contains) == [true])
+        store.beginAddToPlaylist(b)
+        #expect(store.addSheetPlaylists.map(\.contains) == [false])
+
+        store.beginBulkAddToPlaylist()
+        #expect(store.addSheetPlaylists.map(\.contains) == [false])
+    }
+
+    @Test func `soft-deleting a member updates selected items and member count`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("P")
+        let pid = try #require(store.playlists.first).id
+        store.bulkAddToPlaylist(pid, [a, b, c])
+        store.selectPlaylist(pid)
+        #expect(store.selectedPlaylistItems.map(\.id) == [a, b, c])
+
+        store.delete(b) // soft-delete a playlist member
+        #expect(store.selectedPlaylistItems.map(\.id) == [a, c])
+        #expect(store.playlists.first?.memberCount == 2)
+    }
+
+    @Test func `deleteMany soft-deletes all and updates playlist counts`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("P")
+        let pid = try #require(store.playlists.first).id
+        store.bulkAddToPlaylist(pid, [a, b, c])
+
+        store.deleteMany([a, b])
+        #expect(Set(store.scores.map(\.id)) == [c])
+        #expect(store.deletedScores.count == 2)
+        #expect(store.playlists.first?.memberCount == 1)
+    }
 }
