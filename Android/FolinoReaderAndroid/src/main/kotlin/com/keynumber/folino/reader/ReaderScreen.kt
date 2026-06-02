@@ -28,15 +28,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
+import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
+import io.github.jiyimeta.sheetmusic.compose.cursor.CursorFrame
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScoreCanvas
 import io.github.jiyimeta.sheetmusic.compose.render.ScoreTransform
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
+import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.abs
 import kotlin.math.floor
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,33 +88,115 @@ fun ReaderScreen(
             when (val s = state) {
                 is ReaderState.Loading -> Text("Loading…")
                 is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
-                is ReaderState.Ready -> {
-                    var transform by remember { mutableStateOf(ScoreTransform()) }
-                    var pxPerMM by remember { mutableFloatStateOf(1f) }
-                    Box(Modifier.fillMaxSize()) {
-                        ScoreCanvas(
-                            page = s.program.pages.first(),
-                            fontProvider = fontProvider,
-                            transform = transform,
-                            onTransformChange = { transform = it },
-                            onPxPerMMChange = { pxPerMM = it },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        scoreHandle?.let { handle ->
-                            PlaybackCursorOverlay(
-                                scoreHandle = handle,
-                                cursorFlow = audioVm.currentCursor,
-                                pxPerMM = pxPerMM,
-                                scale = transform.scale,
-                                panOffset = transform.panOffset,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                }
+                is ReaderState.Ready -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
             }
         }
     }
+}
+
+@Composable
+private fun ReadyScore(
+    state: ReaderState.Ready,
+    scoreHandle: Long?,
+    fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
+    audioVm: ReaderAudioViewModel,
+) {
+    var transform by remember { mutableStateOf(ScoreTransform()) }
+    var pxPerMM by remember { mutableFloatStateOf(1f) }
+    var viewportHeightPx by remember { mutableFloatStateOf(0f) }
+    val padPx = with(LocalDensity.current) { 24.dp.toPx() }
+
+    // Auto-scroll to keep the playback cursor in view — mirrors the iOS
+    // VerticalScoreContainer behavior: scroll only when the cursor frame leaves
+    // the viewport, by the minimal amount (with a small padding), preserving
+    // manual pan while the cursor stays visible.
+    LaunchedEffect(scoreHandle) {
+        val handle = scoreHandle ?: return@LaunchedEffect
+        audioVm.currentCursor.collectLatest { cursor ->
+            if (cursor == null) return@collectLatest
+            val frame = CursorFrame.decode(
+                SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(cursor)),
+            ) ?: return@collectLatest
+            val newY = keepInViewOffsetY(
+                panY = transform.panOffset.y,
+                frameY = frame.y,
+                frameH = frame.height,
+                pxPerMM = pxPerMM,
+                scale = transform.scale,
+                viewportH = viewportHeightPx,
+                contentHeightPx = (state.program.pages.first().heightMM * pxPerMM * transform.scale).toFloat(),
+                pad = padPx,
+            )
+            if (abs(newY - transform.panOffset.y) >= 0.5f) {
+                transform = transform.copy(panOffset = transform.panOffset.copy(y = newY))
+            }
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { viewportHeightPx = it.height.toFloat() },
+    ) {
+        ScoreCanvas(
+            page = state.program.pages.first(),
+            fontProvider = fontProvider,
+            transform = transform,
+            onTransformChange = { transform = it },
+            onPxPerMMChange = { pxPerMM = it },
+            modifier = Modifier.fillMaxSize(),
+        )
+        scoreHandle?.let { handle ->
+            PlaybackCursorOverlay(
+                scoreHandle = handle,
+                cursorFlow = audioVm.currentCursor,
+                pxPerMM = pxPerMM,
+                scale = transform.scale,
+                panOffset = transform.panOffset,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
+ * Smallest pan-offset Y that keeps the cursor frame `[frameY, frameY+frameH]`
+ * (document mm) inside the viewport with `pad` margin. Returns the current
+ * `panY` unchanged when the cursor is already fully visible — preserving manual
+ * scrolling while playback advances within the visible region. Mirrors iOS
+ * `VerticalScoreContainer.adjustedScrollOffset`.
+ *
+ * Screen Y of a document point is `panY + docMm * pxPerMM * scale`; working in
+ * scroll-offset space (`scroll = -panY`) makes the math match iOS directly.
+ */
+private fun keepInViewOffsetY(
+    panY: Float,
+    frameY: Double,
+    frameH: Double,
+    pxPerMM: Float,
+    scale: Float,
+    viewportH: Float,
+    contentHeightPx: Float,
+    pad: Float,
+): Float {
+    if (pxPerMM <= 0f || viewportH <= 0f) return panY
+    val contentMin = (frameY * pxPerMM * scale).toFloat()
+    val contentMax = ((frameY + frameH) * pxPerMM * scale).toFloat()
+    val cur = -panY
+    // Shared keep-in-view math (iOS + Android call the same Domain Swift via JNI).
+    val rawCur = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
+        cur.toDouble(),
+        contentMin.toDouble(),
+        contentMax.toDouble(),
+        viewportH.toDouble(),
+        pad.toDouble(),
+    ).toFloat()
+    // Never scroll past the trailing content extent (top=0 .. content bottom).
+    // iOS gets this clamp natively from UIScrollView; Android pans an unbounded
+    // canvas, so clamp here (platform mechanics, not divergent logic).
+    val maxScroll = maxOf(0f, contentHeightPx - viewportH)
+    val newCur = rawCur.coerceIn(0f, maxScroll)
+    return -newCur
 }
 
 @Composable

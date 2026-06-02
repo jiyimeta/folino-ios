@@ -1,43 +1,90 @@
 // swift-tools-version: 6.3
+import Foundation
 import PackageDescription
+
+/// When FOLINO_ANDROID=1 is exported, the manifest adds the Swift→Kotlin JNI target (FolinoReaderJNI) plus the
+/// swift-java jextract plugin. iOS / xcodebuild builds never set the env var, so they never see the JNI target or
+/// the swift-java dependency — the Apple-only Reader target (SheetMusicUI / LayoutApple / SwiftUI) is unaffected.
+let isAndroid = ProcessInfo.processInfo.environment["FOLINO_ANDROID"] == "1"
 
 let swiftLintPlugins: [Target.PluginUsage] = [
     .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
 ]
 
+var packageDependencies: [Package.Dependency] = [
+    .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+    .package(path: "../../Domain"),
+    .package(path: "../../ScoreUI"),
+    .package(path: "../../Utility"),
+    .package(
+        url: "https://github.com/jiyimeta/swift-sheet-music.git",
+        revision: "70761806733a1e9cbbb58315bb4565ffd6c972df",
+    ),
+]
+
+var products: [Product] = [
+    .library(name: "Reader", targets: ["Reader"]),
+]
+
+var targets: [Target] = [
+    .target(
+        name: "Reader",
+        dependencies: [
+            "Domain",
+            "ScoreUI",
+            .product(name: "UtilityCore", package: "Utility"),
+            .product(name: "UtilityUI", package: "Utility"),
+            .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
+            .product(name: "SheetMusicLayoutApple", package: "swift-sheet-music"),
+            .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
+            .product(name: "SheetMusicUI", package: "swift-sheet-music"),
+        ],
+        resources: [.process("Resources")],
+        plugins: swiftLintPlugins,
+    ),
+    .testTarget(name: "ReaderTests", dependencies: ["Reader"]),
+]
+
+if isAndroid {
+    packageDependencies += [
+        .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
+        // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x; 0.5.0 removed APIs the
+        // jextract tool needs under swift-6.3.2. Pin to 0.4.0 (matches Settings/Library). Remove once swift-java
+        // ships against swift-subprocess 0.5+.
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
+    ]
+    products += [
+        .library(
+            name: "FolinoReaderJNI",
+            type: .dynamic,
+            targets: ["FolinoReaderJNI"],
+        ),
+    ]
+    targets += [
+        .target(
+            name: "FolinoReaderJNI",
+            dependencies: [
+                "Domain",
+                .product(name: "SwiftJava", package: "swift-java"),
+            ],
+            exclude: [
+                "swift-java.config",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ],
+            plugins: [
+                .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
+            ],
+        ),
+    ]
+}
+
 let package = Package(
     name: "Reader",
     defaultLocalization: "en",
     platforms: [.iOS(.v26)],
-    products: [
-        .library(name: "Reader", targets: ["Reader"]),
-    ],
-    dependencies: [
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
-        .package(path: "../../Domain"),
-        .package(path: "../../ScoreUI"),
-        .package(path: "../../Utility"),
-        .package(
-            url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            revision: "70761806733a1e9cbbb58315bb4565ffd6c972df",
-        ),
-    ],
-    targets: [
-        .target(
-            name: "Reader",
-            dependencies: [
-                "Domain",
-                "ScoreUI",
-                .product(name: "UtilityCore", package: "Utility"),
-                .product(name: "UtilityUI", package: "Utility"),
-                .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
-                .product(name: "SheetMusicLayoutApple", package: "swift-sheet-music"),
-                .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
-                .product(name: "SheetMusicUI", package: "swift-sheet-music"),
-            ],
-            resources: [.process("Resources")],
-            plugins: swiftLintPlugins,
-        ),
-        .testTarget(name: "ReaderTests", dependencies: ["Reader"]),
-    ],
+    products: products,
+    dependencies: packageDependencies,
+    targets: targets,
 )
