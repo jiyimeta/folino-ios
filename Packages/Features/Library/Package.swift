@@ -22,7 +22,7 @@ if isAndroid {
     // the iOS Library. Utility (iOS-only SwiftUI) is still not pulled.
     packageDependencies += [
         // swiftlint:disable:next line_length
-        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "8d08e035d0bda7d498984847906ccc35e5ffd086"),
+        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "24e9b4bd216be72539fbf965ed715d301ae3f012"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
             revision: "70761806733a1e9cbbb58315bb4565ffd6c972df",

@@ -24,8 +24,8 @@ android {
 }
 
 dependencies {
-    api("io.github.jiyimeta:wirelet-runtime:0.3.1")
-    api("io.github.jiyimeta:wirelet-observable-runtime:0.3.1")
+    api("io.github.jiyimeta:wirelet-runtime:0.3.2")
+    api("io.github.jiyimeta:wirelet-observable-runtime:0.3.2")
     api("androidx.lifecycle:lifecycle-viewmodel:2.8.7")
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.room:room-runtime:2.6.1")
