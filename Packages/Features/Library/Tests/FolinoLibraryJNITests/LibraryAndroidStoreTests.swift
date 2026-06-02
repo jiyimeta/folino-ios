@@ -278,4 +278,29 @@ struct LibraryAndroidStoreTests {
         #expect(store.playlists.isEmpty)
         #expect(backend.playlistRecords.isEmpty)
     }
+
+    @Test func `addToPlaylist appends unique; bulkAdd de-dupes; createWithScores seeds membership`() throws {
+        let idA = "00000000-0000-0000-0000-000000000001"
+        let idB = "00000000-0000-0000-0000-000000000002"
+        let idC = "00000000-0000-0000-0000-000000000003"
+        let backend = FakeLibraryStore()
+        backend.records = [(idA, "a"), (idB, "b"), (idC, "c")].map { id, title in
+            ScoreRecordWire(id: id, title: title, subtitle: "", composer: "", localFileName: "\(id).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createPlaylist("P")
+        let pid = try #require(store.playlists.first).id
+
+        store.addToPlaylist(idA, pid)
+        store.addToPlaylist(idA, pid) // duplicate ignored
+        store.bulkAddToPlaylist(pid, [idB, idA, idC]) // only idB, idC new
+        #expect(store.playlists.first?.memberCount == 3)
+
+        store.removeFromPlaylist(idB, pid)
+        #expect(store.playlists.first?.memberCount == 2)
+
+        store.createPlaylistWithScores("Q", [idC, idC, idA])
+        let q = try #require(store.playlists.first { $0.name == "Q" })
+        #expect(q.memberCount == 2) // idC, idA (de-duped)
+    }
 }

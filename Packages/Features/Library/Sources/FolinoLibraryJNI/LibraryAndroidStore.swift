@@ -247,6 +247,42 @@ public final class LibraryAndroidStore {
     }
 
     @WireletExpose
+    public func addToPlaylist(_ scoreId: String, _ playlistId: String) {
+        guard let sid = scoreItemID(scoreId), var playlist = domainPlaylist(playlistId) else { return }
+        playlist.appendUnique([sid])
+        persist(playlist)
+        reloadPlaylists()
+    }
+
+    @WireletExpose
+    public func removeFromPlaylist(_ scoreId: String, _ playlistId: String) {
+        guard let sid = scoreItemID(scoreId), var playlist = domainPlaylist(playlistId) else { return }
+        playlist.remove([sid])
+        persist(playlist)
+        reloadPlaylists()
+    }
+
+    @WireletExpose
+    public func bulkAddToPlaylist(_ playlistId: String, _ scoreIds: [String]) {
+        guard var playlist = domainPlaylist(playlistId) else { return }
+        let ids = scoreIds.compactMap(scoreItemID)
+        guard !ids.isEmpty else { return }
+        playlist.appendUnique(ids)
+        persist(playlist)
+        reloadPlaylists()
+    }
+
+    @WireletExpose
+    public func createPlaylistWithScores(_ name: String, _ scoreIds: [String]) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var playlist = Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date())
+        playlist.appendUnique(scoreIds.compactMap(scoreItemID))
+        persist(playlist)
+        reloadPlaylists()
+    }
+
+    @WireletExpose
     public func createPlaylist(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
