@@ -26,6 +26,6 @@ public protocol LibraryStore {
     func removeFile(localFileName: String)
 
     /// Permanently remove a persisted row by id. Pairs with `removeFile` for a
-    /// full purge (the Swift store calls both). Soft-delete does NOT call this.
+    /// full purge (the Swift store calls both). Soft-delete does **not** call this.
     func deleteRecord(id: String)
 }
