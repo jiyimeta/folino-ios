@@ -26,9 +26,17 @@ public final class LibraryAndroidStore {
     public var scores: [ScoreRowWire] = []
     public var deletedScores: [ScoreRowWire] = []
 
+    public var playlists: [PlaylistRowWire] = []
+    public var selectedPlaylistItems: [ScoreRowWire] = []
+    public var addSheetPlaylists: [PlaylistPickWire] = []
+
+    @ObservationIgnored private var selectedPlaylistID: String?
+    @ObservationIgnored private var addSheetScoreID: String?
+
     public init(store: LibraryStore) {
         self.store = store
         reload() // hydrate from persistence on launch
+        reloadPlaylists()
     }
 
     /// Parse the `.mscz` at `path` (the Kotlin side copies the picked document
@@ -137,5 +145,112 @@ public final class LibraryAndroidStore {
 
     private static func row(_ record: ScoreRecordWire) -> ScoreRowWire {
         ScoreRowWire(id: record.id, title: record.title, subtitle: record.subtitle, composer: record.composer)
+    }
+
+    // MARK: - Playlists
+
+    private func scoreItemID(_ raw: String) -> ScoreItemID? {
+        UUID(uuidString: raw).map(ScoreItemID.init(rawValue:))
+    }
+
+    /// Set of live (`deletedAt <= 0`) score IDs, for membership projection.
+    private func liveScoreIDs(_ records: [ScoreRecordWire]) -> Set<ScoreItemID> {
+        Set(records.filter { $0.deletedAt <= 0 }.compactMap { scoreItemID($0.id) })
+    }
+
+    /// Build Domain `Playlist` values from the backend's record + item rows
+    /// (items already ordered by position), mirroring iOS materialization.
+    private func loadDomainPlaylists() -> [Playlist] {
+        let items = store.loadPlaylistItems()
+        var idsByPlaylist: [String: [ScoreItemID]] = [:]
+        for item in items {
+            guard let sid = scoreItemID(item.scoreItemId) else { continue }
+            idsByPlaylist[item.playlistId, default: []].append(sid)
+        }
+        return store.loadPlaylists().compactMap { rec in
+            guard let uuid = UUID(uuidString: rec.id) else { return nil }
+            return Playlist(
+                id: PlaylistID(rawValue: uuid),
+                name: rec.name,
+                orderedScoreItemIDs: idsByPlaylist[rec.id] ?? [],
+                createdAt: Date(timeIntervalSince1970: rec.createdAt),
+            )
+        }
+    }
+
+    private func domainPlaylist(_ id: String) -> Playlist? {
+        loadDomainPlaylists().first { $0.id.rawValue.uuidString == id }
+    }
+
+    /// Persist a playlist: upsert its row, then drop + reinsert its membership
+    /// with explicit positions (iOS `savePlaylist` parity).
+    private func persist(_ playlist: Playlist) {
+        let pid = playlist.id.rawValue.uuidString
+        store.upsertPlaylist(PlaylistRecordWire(
+            id: pid,
+            name: playlist.name,
+            createdAt: playlist.createdAt.timeIntervalSince1970,
+        ))
+        let items = playlist.orderedScoreItemIDs.enumerated().map { offset, id in
+            PlaylistItemWire(playlistId: pid, scoreItemId: id.rawValue.uuidString, position: Int32(offset))
+        }
+        store.replacePlaylistItems(pid, items)
+    }
+
+    /// Recompute every playlist-derived observable from one backend snapshot.
+    private func reloadPlaylists() {
+        let domain = loadDomainPlaylists()
+        let records = store.loadAll()
+        let liveIDs = liveScoreIDs(records)
+
+        playlists = domain
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            .map {
+                PlaylistRowWire(
+                    id: $0.id.rawValue.uuidString,
+                    name: $0.name,
+                    memberCount: Int32(PlaylistPresentation.liveMemberCount($0, liveIDs: liveIDs)),
+                )
+            }
+
+        recomputeSelectedItems(domain: domain, records: records, liveIDs: liveIDs)
+        refreshAddSheet(domain: domain)
+    }
+
+    private func recomputeSelectedItems(domain: [Playlist], records: [ScoreRecordWire], liveIDs: Set<ScoreItemID>) {
+        guard let sel = selectedPlaylistID,
+              let playlist = domain.first(where: { $0.id.rawValue.uuidString == sel })
+        else {
+            selectedPlaylistItems = []
+            return
+        }
+        var rowByID: [ScoreItemID: ScoreRowWire] = [:]
+        for record in records where record.deletedAt <= 0 {
+            if let sid = scoreItemID(record.id) { rowByID[sid] = Self.row(record) }
+        }
+        selectedPlaylistItems = PlaylistPresentation
+            .orderedLiveIDs(playlist, liveIDs: liveIDs)
+            .compactMap { rowByID[$0] }
+    }
+
+    private func refreshAddSheet(domain: [Playlist]) {
+        let focus = addSheetScoreID.flatMap(scoreItemID)
+        addSheetPlaylists = domain
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            .map {
+                PlaylistPickWire(
+                    id: $0.id.rawValue.uuidString,
+                    name: $0.name,
+                    contains: focus.map($0.orderedScoreItemIDs.contains) ?? false,
+                )
+            }
+    }
+
+    @WireletExpose
+    public func createPlaylist(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        persist(Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date()))
+        reloadPlaylists()
     }
 }

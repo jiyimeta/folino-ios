@@ -241,4 +241,17 @@ struct LibraryAndroidStoreTests {
         #expect(store.deletedScores.isEmpty)
         #expect(store.scores.map(\.id) == ["c"])
     }
+
+    @Test func `createPlaylist adds a name-sorted row with zero live members`() {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+
+        store.createPlaylist("Recital")
+        store.createPlaylist("Daily")
+        store.createPlaylist("   ") // blank ignored
+
+        #expect(store.playlists.map(\.name) == ["Daily", "Recital"]) // localizedStandardCompare
+        #expect(store.playlists.allSatisfy { $0.memberCount == 0 })
+        #expect(backend.playlistRecords.count == 2)
+    }
 }
