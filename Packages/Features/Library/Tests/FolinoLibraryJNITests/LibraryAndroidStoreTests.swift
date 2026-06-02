@@ -28,6 +28,10 @@ private final class FakeLibraryStore: LibraryStore {
     func removeFile(localFileName: String) {
         removedFiles.append(localFileName)
     }
+
+    func deleteRecord(id: String) {
+        records.removeAll { $0.id == id }
+    }
 }
 
 struct LibraryAndroidStoreTests {

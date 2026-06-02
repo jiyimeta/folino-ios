@@ -24,4 +24,8 @@ public protocol LibraryStore {
     /// Remove a managed score file. Used by permanent purge (a future Trash
     /// screen); soft-delete does **not** call this.
     func removeFile(localFileName: String)
+
+    /// Permanently remove a persisted row by id. Pairs with `removeFile` for a
+    /// full purge (the Swift store calls both). Soft-delete does NOT call this.
+    func deleteRecord(id: String)
 }
