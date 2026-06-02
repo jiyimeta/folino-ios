@@ -87,6 +87,14 @@ Pure constructor injection. No DI library. View models take Domain protocols via
 - **Domain tests** are pure value-type unit tests.
 - **Infrastructure tests** can hit real SQLite / tmpdir file I/O. CloudKit, audio, and HTTPS adapters use fakes.
 
+## iOS / Android parity
+
+Folino is becoming cross-platform (iOS/iPadOS native; Android via `swift-wirelet` JNI bridges). Two rules govern how the two platforms relate:
+
+- **Logic / behavior → match iOS exactly, and share the code.** Business logic, domain rules, and persistence semantics (soft-delete representation, file-naming conventions, import flow, the presentation/derivation that maps a score to its displayed fields) must behave identically on both platforms. If a piece of logic would otherwise be duplicated between the iOS and Android paths, refactor it into shared code (Domain, or a shared Android-gated Swift target) and have both platforms call it. Keep Android-specific code to the minimum that *can only* be implemented on Android: the JNI bridge types (`@WireletObservable` / `@WireletProvided` and their wire `@WireFormat` projections), the Kotlin/Room/SQLite persistence backend, Android file I/O (`filesDir`, `content://` document pickers), and the Compose UI. Never reimplement iOS logic a second time as a divergent Android code path — lift it and reuse it.
+
+- **UI / UX placement → Android idioms are preferred.** Button placement, icons, copy/wording, navigation patterns, and screen transitions follow Android conventions (e.g. FAB for the primary action, swipe-to-dismiss + Snackbar undo, gear-icon Settings) rather than mirroring the iOS layout. The *content* shown stays at iOS parity; only the *presentation/placement* adapts to the platform.
+
 ## Build-Time Tooling
 
 These plugins run automatically on every `xcodebuild` / Xcode build — no manual invocation:
