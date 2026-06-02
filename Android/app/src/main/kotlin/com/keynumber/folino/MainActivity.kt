@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -73,7 +74,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
     val nav = rememberNavController()
-    val vm: LibraryAndroidStoreViewModel = viewModel(factory = LibraryVMFactory)
+    val context = LocalContext.current
+    val vm: LibraryAndroidStoreViewModel =
+        viewModel(factory = LibraryVMFactory(context.applicationContext))
     NavHost(nav, startDestination = "list") {
         composable("list") {
             LibraryScreen(
@@ -143,10 +146,12 @@ private fun SettingsRoute(
     }
 }
 
-private object LibraryVMFactory : ViewModelProvider.Factory {
+private class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        LibraryAndroidStoreViewModel.create() as T
+        LibraryAndroidStoreViewModel.create(
+            store = com.keynumber.folino.library.RoomLibraryStore(context),
+        ) as T
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

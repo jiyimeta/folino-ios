@@ -121,7 +121,7 @@ fun LibraryScreen(
                                     message = context.getString(R.string.library_deleted),
                                     actionLabel = context.getString(R.string.library_undo),
                                 )
-                                if (result == SnackbarResult.ActionPerformed) viewModel.insert(row)
+                                if (result == SnackbarResult.ActionPerformed) viewModel.restore(row.id)
                             }
                         },
                     )
