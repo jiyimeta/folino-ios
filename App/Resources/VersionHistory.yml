@@ -1,3 +1,20 @@
+- version: 1.6.0
+  descriptions:
+    - en: Added score info editing
+      ja: 楽譜情報の編集機能を追加
+      ko: 악보 정보 편집 기능 추가
+      zh-Hans: 新增乐谱信息编辑功能
+      zh-Hant: 新增樂譜資訊編輯功能
+    - en: Improved the metronome sound and tempo display
+      ja: メトロノーム音とテンポ表示を改善
+      ko: 메트로놈 소리와 템포 표시 개선
+      zh-Hans: 改进节拍器音效与速度显示
+      zh-Hant: 改善節拍器音效與速度顯示
+    - en: Added a seek bar with jump-to-position
+      ja: 再生バーとジャンプ機能を追加
+      ko: 재생 바와 위치 이동 기능 추가
+      zh-Hans: 新增播放条与跳转功能
+      zh-Hant: 新增播放列與跳轉功能
 - version: 1.5.3
   descriptions:
     - en: Minor bug fixes

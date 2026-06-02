@@ -1,1 +1,3 @@
-- Minor bug fixes
+- Added score info editing
+- Improved the metronome sound and tempo display
+- Added a seek bar with jump-to-position
