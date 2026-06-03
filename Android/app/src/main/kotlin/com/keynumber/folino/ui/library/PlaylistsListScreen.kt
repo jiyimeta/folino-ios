@@ -162,6 +162,7 @@ internal fun NameDialog(
     title: String,
     confirmLabel: String,
     initial: String = "",
+    nameHint: Int = R.string.playlists_name_hint,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -174,7 +175,7 @@ internal fun NameDialog(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                label = { Text(stringResource(R.string.playlists_name_hint)) },
+                label = { Text(stringResource(nameHint)) },
             )
         },
         confirmButton = {

@@ -138,6 +138,7 @@ fun TagDetailScreen(
             title = stringResource(R.string.tags_rename),
             confirmLabel = stringResource(R.string.rename),
             initial = tagName,
+            nameHint = R.string.tags_name_hint,
             onConfirm = { name ->
                 viewModel.renameTag(tagId, name)
                 showRename = false

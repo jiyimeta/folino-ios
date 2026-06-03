@@ -100,6 +100,7 @@ fun EditTagsSheet(
         NameDialog(
             title = stringResource(R.string.tags_create),
             confirmLabel = stringResource(R.string.create),
+            nameHint = R.string.tags_name_hint,
             onConfirm = { name ->
                 viewModel.createTag(name)
                 showCreate = false
