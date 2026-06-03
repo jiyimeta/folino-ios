@@ -10,7 +10,8 @@ import Yams
 /// entry is skipped rather than poisoning the whole load. Throws when the document root is missing or is not a
 /// sequence; callers that need resilience (the JNI helper) wrap the call in `try?`.
 public struct YAMLVersionHistoryLoader: VersionHistoryLoader {
-    public enum LoadError: Error {
+    public enum LoadError: Error, Equatable {
+        case invalidEncoding
         case unparseableRoot
     }
 
@@ -20,7 +21,9 @@ public struct YAMLVersionHistoryLoader: VersionHistoryLoader {
     }
 
     public func load() throws -> [VersionHistoryEntry] {
-        let yaml = String(bytes: data, encoding: .utf8) ?? ""
+        guard let yaml = String(data: data, encoding: .utf8) else {
+            throw LoadError.invalidEncoding
+        }
         guard let root = try Yams.compose(yaml: yaml) else {
             throw LoadError.unparseableRoot
         }

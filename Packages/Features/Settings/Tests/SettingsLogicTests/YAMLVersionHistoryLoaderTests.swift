@@ -47,8 +47,14 @@ struct YAMLVersionHistoryLoaderTests {
 
     @Test func `throws when root is not a sequence`() {
         let yaml = "version: 1.0.0\ndescriptions: []"
-        #expect(throws: (any Error).self) {
+        #expect(throws: YAMLVersionHistoryLoader.LoadError.unparseableRoot) {
             _ = try YAMLVersionHistoryLoader(data: Data(yaml.utf8)).load()
+        }
+    }
+
+    @Test func `throws on empty document`() {
+        #expect(throws: YAMLVersionHistoryLoader.LoadError.unparseableRoot) {
+            _ = try YAMLVersionHistoryLoader(data: Data("".utf8)).load()
         }
     }
 }
