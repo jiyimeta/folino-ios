@@ -427,4 +427,50 @@ struct LibraryAndroidStoreTests {
         #expect(store.deletedScores.count == 2)
         #expect(store.playlists.first?.memberCount == 1)
     }
+
+    @Test func `createTag adds a name-sorted row; blank ignored; default color`() {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+
+        store.createTag("Recital")
+        store.createTag("Daily")
+        store.createTag("   ") // blank ignored
+
+        #expect(store.tags.map(\.name) == ["Daily", "Recital"]) // localizedStandardCompare
+        #expect(store.tags.allSatisfy { $0.memberCount == 0 })
+        #expect(store.tags.allSatisfy { $0.colorHex == "#5856D6" })
+        #expect(backend.tagRecords.count == 2)
+    }
+
+    @Test func `renameTag updates name keeping color; blank ignored`() throws {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("Old")
+        let id = try #require(store.tags.first).id
+
+        store.renameTag(id, "New")
+        #expect(store.tags.map(\.name) == ["New"])
+        #expect(store.tags.first?.colorHex == "#5856D6") // color preserved
+
+        store.renameTag(id, "  ")
+        #expect(store.tags.map(\.name) == ["New"]) // unchanged
+    }
+
+    @Test func `deleteTag removes the row and its membership`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: a, title: "A", subtitle: "", composer: "", localFileName: "\(a).mscz", deletedAt: 0),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("P")
+        let id = try #require(store.tags.first).id
+        store.setTagAssigned(a, id, true)
+        #expect(store.tags.first?.memberCount == 1)
+
+        store.deleteTag(id)
+        #expect(store.tags.isEmpty)
+        #expect(backend.tagRecords.isEmpty)
+        #expect(backend.tagItems.isEmpty) // membership cascaded
+    }
 }

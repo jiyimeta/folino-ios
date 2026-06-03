@@ -1,3 +1,8 @@
+// The @WireletObservable bridge macro expands against members declared in this
+// type's primary body, so every @WireletExpose method (scores, playlists, tags)
+// must live here rather than in an extension — splitting them out would drop
+// them from the generated Kotlin bridge. That keeps this file over the limit.
+// swiftlint:disable file_length
 import Domain // ScoreFormat, ScorePresentation
 import Foundation
 import Observation
@@ -30,13 +35,22 @@ public final class LibraryAndroidStore {
     public var selectedPlaylistItems: [ScoreRowWire] = []
     public var addSheetPlaylists: [PlaylistPickWire] = []
 
+    public var tags: [TagRowWire] = []
+    public var selectedTagItems: [ScoreRowWire] = []
+    public var editSheetTags: [TagPickWire] = []
+
     @ObservationIgnored private var selectedPlaylistID: String?
     @ObservationIgnored private var addSheetScoreID: String?
+
+    // Set by selectTag (tag detail) and beginEditTags/beginBulkEditTags (edit sheet).
+    @ObservationIgnored private var selectedTagID: String?
+    @ObservationIgnored private var editSheetScoreID: String?
 
     public init(store: LibraryStore) {
         self.store = store
         reload() // hydrate from persistence on launch
         reloadPlaylists()
+        reloadTags()
     }
 
     /// Parse the `.mscz` at `path` (the Kotlin side copies the picked document
@@ -354,5 +368,103 @@ public final class LibraryAndroidStore {
         playlist.orderedScoreItemIDs = requested + hidden
         persist(playlist)
         reloadPlaylists()
+    }
+
+    // MARK: - Tags
+
+    /// tagId -> set of member scoreItemId strings, from the backend's join rows.
+    private func tagMembership() -> [String: Set<String>] {
+        var membership: [String: Set<String>] = [:]
+        for item in store.loadTagItems() {
+            membership[item.tagId, default: []].insert(item.scoreItemId)
+        }
+        return membership
+    }
+
+    /// Set of live (`deletedAt <= 0`) score id strings, for member-count math.
+    /// String-keyed counterpart of `liveScoreIDs` — tag membership (`TagItemWire`)
+    /// stores raw id strings, so the playlist code's `ScoreItemID` wrapper is skipped here.
+    private func liveScoreIDStrings(_ records: [ScoreRecordWire]) -> Set<String> {
+        Set(records.filter { $0.deletedAt <= 0 }.map(\.id))
+    }
+
+    /// Recompute every tag-derived observable from one backend snapshot.
+    private func reloadTags() {
+        let records = store.loadAll()
+        let live = liveScoreIDStrings(records)
+        let membership = tagMembership()
+        let tagRecords = store.loadTags()
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+
+        tags = tagRecords.map { rec in
+            let members = membership[rec.id] ?? []
+            return TagRowWire(
+                id: rec.id,
+                name: rec.name,
+                colorHex: rec.colorHex,
+                memberCount: Int32(members.intersection(live).count),
+            )
+        }
+        recomputeSelectedTagItems(records: records, membership: membership)
+        refreshEditSheet(tagRecords: tagRecords, membership: membership)
+    }
+
+    /// Live scores carrying `selectedTagID`, sorted by title (tags are unordered).
+    private func recomputeSelectedTagItems(records: [ScoreRecordWire], membership: [String: Set<String>]) {
+        guard let sel = selectedTagID else {
+            selectedTagItems = []
+            return
+        }
+        let members = membership[sel] ?? []
+        selectedTagItems = records
+            .filter { $0.deletedAt <= 0 && members.contains($0.id) }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            .map(Self.row)
+    }
+
+    /// Edit-tags sheet rows: every tag, `contains` reflecting the focused score
+    /// (nil focus = bulk sheet, all false).
+    private func refreshEditSheet(tagRecords: [TagRecordWire], membership: [String: Set<String>]) {
+        let focus = editSheetScoreID
+        editSheetTags = tagRecords.map { rec in
+            TagPickWire(
+                id: rec.id,
+                name: rec.name,
+                contains: focus.map { (membership[rec.id] ?? []).contains($0) } ?? false,
+            )
+        }
+    }
+
+    @WireletExpose
+    public func createTag(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        // iOS parity: default color is purple; no picker.
+        store.upsertTag(TagRecordWire(id: UUID().uuidString, name: trimmed, colorHex: "#5856D6"))
+        reloadTags()
+    }
+
+    @WireletExpose
+    public func renameTag(_ id: String, _ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let existing = store.loadTags().first(where: { $0.id == id }) else { return }
+        store.upsertTag(TagRecordWire(id: id, name: trimmed, colorHex: existing.colorHex))
+        reloadTags()
+    }
+
+    @WireletExpose
+    public func deleteTag(_ id: String) {
+        store.deleteTag(id: id)
+        if selectedTagID == id { selectedTagID = nil }
+        reloadTags()
+    }
+
+    /// Toggle one score's membership in one tag (single-score edit sheet).
+    @WireletExpose
+    public func setTagAssigned(_ scoreId: String, _ tagId: String, _ assigned: Bool) {
+        var members = tagMembership()[tagId] ?? []
+        if assigned { members.insert(scoreId) } else { members.remove(scoreId) }
+        store.replaceTagItems(tagId, members.map { TagItemWire(tagId: tagId, scoreItemId: $0) })
+        reloadTags()
     }
 }
