@@ -81,6 +81,28 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         .flatMapLatest { it?.loopRange ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // ── UI-facing controls without an engine-side observable ─────────
+    // The engine exposes setMasterVolume / setMetronomeEnabled but no StateFlow for
+    // either, so the inspector's UI state lives here (session-only, matching the Reader
+    // MVP — no persistence). Defaults mirror the engine's post-prepare defaults.
+    private val _masterVolume = MutableStateFlow(1.0f)
+    val masterVolume: StateFlow<Float> = _masterVolume.asStateFlow()
+
+    private val _metronomeEnabled = MutableStateFlow(false)
+    val metronomeEnabled: StateFlow<Boolean> = _metronomeEnabled.asStateFlow()
+
+    /** Sets master output volume (0..1) and reflects it for the inspector UI. */
+    fun setMasterVolume(volume: Float) {
+        _masterVolume.value = volume
+        engine.value?.setMasterVolume(volume)
+    }
+
+    /** Enables/disables the metronome and reflects it for the inspector UI. */
+    fun setMetronomeEnabled(enabled: Boolean) {
+        _metronomeEnabled.value = enabled
+        engine.value?.setMetronomeEnabled(enabled)
+    }
+
     fun preparePlayback(scoreHandle: Long) {
         viewModelScope.launch {
             val e = engine.filterNotNull().first()
