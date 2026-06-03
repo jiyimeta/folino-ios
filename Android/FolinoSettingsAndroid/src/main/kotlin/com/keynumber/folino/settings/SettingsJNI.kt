@@ -17,13 +17,13 @@ import com.keynumber.folino.settings.swiftjava.FolinoSettingsJNI as SwiftJavaJNI
 object SettingsJNI {
 
     /**
-     * Hands the raw `VersionHistory.json` bytes to Swift, which decodes
+     * Hands the raw `VersionHistory.yml` bytes to Swift, which decodes
      * them, resolves localized descriptions, and re-encodes the result as
      * a wirelet-format `VersionHistoryWireList` payload. Returns the
      * encoded bytes (decode via [VersionHistoryWireListCodec]).
      */
-    fun nativeLoadVersionHistory(jsonBytes: ByteArray): ByteArray {
+    fun nativeLoadVersionHistory(ymlBytes: ByteArray): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
-        return SwiftJavaJNI.nativeLoadVersionHistory(SwiftData.fromByteArray(jsonBytes, arena), arena).toByteArray()
+        return SwiftJavaJNI.nativeLoadVersionHistory(SwiftData.fromByteArray(ymlBytes, arena), arena).toByteArray()
     }
 }
