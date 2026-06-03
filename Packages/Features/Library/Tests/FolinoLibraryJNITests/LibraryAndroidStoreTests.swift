@@ -63,6 +63,35 @@ private final class FakeLibraryStore: LibraryStore {
         playlistRecords.removeAll { $0.id == id }
         playlistItems.removeAll { $0.playlistId == id }
     }
+
+    var tagRecords: [TagRecordWire] = []
+    var tagItems: [TagItemWire] = []
+
+    func loadTags() -> [TagRecordWire] {
+        tagRecords
+    }
+
+    func upsertTag(_ record: TagRecordWire) {
+        if let idx = tagRecords.firstIndex(where: { $0.id == record.id }) {
+            tagRecords[idx] = record
+        } else {
+            tagRecords.append(record)
+        }
+    }
+
+    func deleteTag(id: String) {
+        tagRecords.removeAll { $0.id == id }
+        tagItems.removeAll { $0.tagId == id }
+    }
+
+    func loadTagItems() -> [TagItemWire] {
+        tagItems
+    }
+
+    func replaceTagItems(_ tagId: String, _ items: [TagItemWire]) {
+        tagItems.removeAll { $0.tagId == tagId }
+        tagItems.append(contentsOf: items)
+    }
 }
 
 struct LibraryAndroidStoreTests {
@@ -397,5 +426,188 @@ struct LibraryAndroidStoreTests {
         #expect(Set(store.scores.map(\.id)) == [c])
         #expect(store.deletedScores.count == 2)
         #expect(store.playlists.first?.memberCount == 1)
+    }
+
+    @Test func `createTag adds a name-sorted row; blank ignored; default color`() {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+
+        store.createTag("Recital")
+        store.createTag("Daily")
+        store.createTag("   ") // blank ignored
+
+        #expect(store.tags.map(\.name) == ["Daily", "Recital"]) // localizedStandardCompare
+        #expect(store.tags.allSatisfy { $0.memberCount == 0 })
+        #expect(store.tags.allSatisfy { $0.colorHex == "#5856D6" })
+        #expect(backend.tagRecords.count == 2)
+    }
+
+    @Test func `renameTag updates name keeping color; blank ignored`() throws {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("Old")
+        let id = try #require(store.tags.first).id
+
+        store.renameTag(id, "New")
+        #expect(store.tags.map(\.name) == ["New"])
+        #expect(store.tags.first?.colorHex == "#5856D6") // color preserved
+
+        store.renameTag(id, "  ")
+        #expect(store.tags.map(\.name) == ["New"]) // unchanged
+    }
+
+    @Test func `deleteTag removes the row and its membership`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: a, title: "A", subtitle: "", composer: "", localFileName: "\(a).mscz", deletedAt: 0),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("P")
+        let id = try #require(store.tags.first).id
+        store.setTagAssigned(a, id, true)
+        #expect(store.tags.first?.memberCount == 1)
+
+        store.deleteTag(id)
+        #expect(store.tags.isEmpty)
+        #expect(backend.tagRecords.isEmpty)
+        #expect(backend.tagItems.isEmpty) // membership cascaded
+    }
+
+    @Test func `bulkAddTag unions scores into a tag without duplicates`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+
+        store.setTagAssigned(a, t, true)
+        store.bulkAddTag(t, [a, b, c]) // a already present → not duplicated
+        #expect(store.tags.first?.memberCount == 3)
+        #expect(backend.tagItems.count(where: { $0.tagId == t }) == 3)
+    }
+
+    @Test func `bulkAddTag with empty inputs is a no-op`() throws {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+
+        store.bulkAddTag(t, [])
+        #expect(store.tags.first?.memberCount == 0)
+        #expect(backend.tagItems.isEmpty)
+    }
+
+    @Test func `tag member count excludes soft-deleted scores`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a, b])
+        #expect(store.tags.first?.memberCount == 2)
+
+        store.delete(a) // soft-delete a member
+        #expect(store.tags.first?.memberCount == 1) // excluded from live count
+    }
+
+    @Test func `selectTag exposes its live members sorted by title`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(
+                id: a,
+                title: "Zebra",
+                subtitle: "",
+                composer: "",
+                localFileName: "\(a).mscz",
+                deletedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: b,
+                title: "Apple",
+                subtitle: "",
+                composer: "",
+                localFileName: "\(b).mscz",
+                deletedAt: 0,
+            ),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a, b])
+
+        store.selectTag(t)
+        // title-sorted: "Apple" (b) then "Zebra" (a)
+        #expect(store.selectedTagItems.map(\.id) == [b, a])
+    }
+
+    @Test func `beginEditTags marks tags containing the focused score`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.setTagAssigned(a, t, true)
+
+        store.beginEditTags(a)
+        #expect(store.editSheetTags.map(\.contains) == [true])
+        store.beginEditTags(b)
+        #expect(store.editSheetTags.map(\.contains) == [false])
+
+        store.beginBulkEditTags()
+        #expect(store.editSheetTags.map(\.contains) == [false]) // bulk: nothing pre-checked
+    }
+
+    @Test func `bulk soft-delete updates tag member count`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a, b, c])
+        #expect(store.tags.first?.memberCount == 3)
+
+        store.deleteMany([a, b])
+        #expect(store.tags.first?.memberCount == 1) // only c is live
+
+        store.restoreMany([a, b])
+        #expect(store.tags.first?.memberCount == 3) // back to live
+    }
+
+    @Test func `permanent purge keeps tag rows but drops purged members from count`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: a, title: "A", subtitle: "", composer: "", localFileName: "\(a).mscz", deletedAt: 0),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a])
+        #expect(store.tags.first?.memberCount == 1) // a is a live member
+
+        store.permanentlyDelete(a)
+        #expect(store.tags.map(\.name) == ["T"]) // tag row survives the purge
+        #expect(store.tags.first?.memberCount == 0) // purged member drops from the count
     }
 }

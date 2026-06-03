@@ -44,4 +44,21 @@ public protocol LibraryStore {
 
     /// Remove a playlist row and all of its membership rows.
     func deletePlaylist(id: String)
+
+    // MARK: - Tags
+
+    /// Every persisted tag row.
+    func loadTags() -> [TagRecordWire]
+
+    /// Insert or replace a tag row by `record.id`.
+    func upsertTag(_ record: TagRecordWire)
+
+    /// Remove a tag row AND all of its membership rows (cascade).
+    func deleteTag(id: String)
+
+    /// Every tag-membership row.
+    func loadTagItems() -> [TagItemWire]
+
+    /// Replace ALL membership rows for `tagId` with `items` (drop + reinsert).
+    func replaceTagItems(_ tagId: String, _ items: [TagItemWire])
 }

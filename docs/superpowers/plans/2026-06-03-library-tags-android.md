@@ -9,8 +9,8 @@
 **Tech Stack:** Swift 6.3, swift-wirelet (`@WireFormat` / `@WireletObservable` / `@WireletProvided`), Kotlin + Jetpack Compose (Material3), Room. Spec: `docs/superpowers/specs/2026-06-03-library-tags-android-design.md`.
 
 **Conventions used by this plan:**
-- Swift host tests run on macOS with `FOLINO_ANDROID=1` (the JNI target carries no SwiftLint plugin, so `swift test` works for it). Command:
-  `FOLINO_ANDROID=1 swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
+- Swift host tests run on macOS with `FOLINO_ANDROID=1` (the JNI target carries no SwiftLint plugin, so it builds on the host). Use `xcrun swift` — the bare `swift`/`swiftly` shim is broken on this machine (see memory `project_android_build_toolchain`). Command (verified green as baseline — 20 tests):
+  `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
 - The JNI `.so` rebuild + wirelet codegen: `Scripts/android-build-library-libs.sh`.
 - App build/install: `Android/gradlew -p Android :app:installDebug` (toolchain caveats: see memory `project_android_build_toolchain`).
 - Per CLAUDE.md, each Bash call is a single command — no `&&` chaining. Env-prefix form (`FOLINO_ANDROID=1 swift test …`) is one command and is fine.
@@ -138,7 +138,7 @@ public struct TagPickWire: Equatable, Sendable {
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `FOLINO_ANDROID=1 swift build --package-path Packages/Features/Library --product FolinoLibraryJNI`
+Run: `FOLINO_ANDROID=1 xcrun swift build --package-path Packages/Features/Library --product FolinoLibraryJNI`
 Expected: build succeeds (the new types compile; `@WireFormat` macro expands).
 
 - [ ] **Step 3: Commit**
@@ -216,7 +216,7 @@ Add this block to `FakeLibraryStore` in the test file (e.g. after the playlist `
 
 - [ ] **Step 3: Verify the test target still compiles (existing tests pass)**
 
-Run: `FOLINO_ANDROID=1 swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
+Run: `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
 Expected: PASS — all existing tests still green (the protocol grew but the store doesn't call the new methods yet; the fake satisfies the protocol so the target compiles).
 
 - [ ] **Step 4: Commit**
@@ -413,7 +413,7 @@ Add a new `// MARK: - Tags` section at the end of the type (before the final clo
 
 - [ ] **Step 3: Run the tests**
 
-Run: `FOLINO_ANDROID=1 swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
+Run: `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
 Expected: PASS (the three new CRUD tests + all existing tests).
 
 - [ ] **Step 4: Commit**
@@ -518,7 +518,7 @@ In the existing private `setDeletedAt(_:_:)` method (currently lines 123-130), a
 
 - [ ] **Step 3: Run the tests**
 
-Run: `FOLINO_ANDROID=1 swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
+Run: `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
@@ -607,7 +607,7 @@ Add to the `// MARK: - Tags` section:
 
 - [ ] **Step 3: Run the tests**
 
-Run: `FOLINO_ANDROID=1 swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
+Run: `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
@@ -690,7 +690,7 @@ Example (`deleteMany`):
 
 - [ ] **Step 3: Run the tests**
 
-Run: `FOLINO_ANDROID=1 swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
+Run: `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
 Expected: PASS (all tag + playlist + score tests green).
 
 - [ ] **Step 4: Commit**
@@ -1628,7 +1628,7 @@ Verify on-device:
 
 - [ ] **Step 3: Final full-suite Swift host test (regression guard)**
 
-Run: `FOLINO_ANDROID=1 swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
+Run: `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter LibraryAndroidStoreTests`
 Expected: all tag + playlist + score store tests PASS.
 
 - [ ] **Step 4: (Optional) record outcome**

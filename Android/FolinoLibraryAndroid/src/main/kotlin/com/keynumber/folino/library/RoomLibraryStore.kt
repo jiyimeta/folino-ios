@@ -86,14 +86,71 @@ interface PlaylistDao {
     }
 }
 
+@Entity(tableName = "tags")
+data class TagEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    @ColumnInfo(name = "color_hex") val colorHex: String,
+)
+
+@Entity(
+    tableName = "tag_items",
+    primaryKeys = ["tag_id", "score_item_id"],
+    indices = [androidx.room.Index("tag_id"), androidx.room.Index("score_item_id")],
+)
+data class TagItemEntity(
+    @ColumnInfo(name = "tag_id") val tagId: String,
+    @ColumnInfo(name = "score_item_id") val scoreItemId: String,
+)
+
+@Dao
+interface TagDao {
+    @Query("SELECT * FROM tags")
+    fun loadTags(): List<TagEntity>
+
+    @Query("SELECT * FROM tag_items")
+    fun loadItems(): List<TagItemEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertTag(record: TagEntity)
+
+    @Query("DELETE FROM tag_items WHERE tag_id = :tagId")
+    fun deleteItems(tagId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertItems(items: List<TagItemEntity>)
+
+    @Query("DELETE FROM tags WHERE id = :id")
+    fun deleteTag(id: String)
+
+    @androidx.room.Transaction
+    fun replaceItems(tagId: String, items: List<TagItemEntity>) {
+        deleteItems(tagId)
+        insertItems(items)
+    }
+
+    @androidx.room.Transaction
+    fun deleteTagCascade(id: String) {
+        deleteItems(id)
+        deleteTag(id)
+    }
+}
+
 @Database(
-    entities = [ScoreRecordEntity::class, PlaylistEntity::class, PlaylistItemEntity::class],
-    version = 2,
+    entities = [
+        ScoreRecordEntity::class,
+        PlaylistEntity::class,
+        PlaylistItemEntity::class,
+        TagEntity::class,
+        TagItemEntity::class,
+    ],
+    version = 3,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun dao(): ScoreRecordDao
     abstract fun playlistDao(): PlaylistDao
+    abstract fun tagDao(): TagDao
 }
 
 val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
@@ -107,6 +164,22 @@ val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
                 "(`playlist_id` TEXT NOT NULL, `score_item_id` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
                 "PRIMARY KEY(`playlist_id`, `score_item_id`))",
         )
+    }
+}
+
+val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `tags` " +
+                "(`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_hex` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `tag_items` " +
+                "(`tag_id` TEXT NOT NULL, `score_item_id` TEXT NOT NULL, " +
+                "PRIMARY KEY(`tag_id`, `score_item_id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_tag_items_tag_id` ON `tag_items` (`tag_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_tag_items_score_item_id` ON `tag_items` (`score_item_id`)")
     }
 }
 
@@ -127,10 +200,11 @@ class RoomLibraryStore(context: Context) : LibraryStore {
         context.applicationContext,
         LibraryDatabase::class.java,
         "folino-library.db",
-    ).allowMainThreadQueries().addMigrations(MIGRATION_1_2).build()
+    ).allowMainThreadQueries().addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
     private val dao = db.dao()
     private val playlistDao = db.playlistDao()
+    private val tagDao = db.tagDao()
 
     private val scoresDir: File =
         File(context.applicationContext.filesDir, "Scores").apply { mkdirs() }
@@ -184,5 +258,23 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun deletePlaylist(id: String) {
         playlistDao.deletePlaylistCascade(id)
+    }
+
+    override fun loadTags(): List<TagRecordWire> =
+        tagDao.loadTags().map { TagRecordWire(it.id, it.name, it.colorHex) }
+
+    override fun upsertTag(record: TagRecordWire) {
+        tagDao.upsertTag(TagEntity(record.id, record.name, record.colorHex))
+    }
+
+    override fun deleteTag(id: String) {
+        tagDao.deleteTagCascade(id)
+    }
+
+    override fun loadTagItems(): List<TagItemWire> =
+        tagDao.loadItems().map { TagItemWire(it.tagId, it.scoreItemId) }
+
+    override fun replaceTagItems(tagId: String, items: List<TagItemWire>) {
+        tagDao.replaceItems(tagId, items.map { TagItemEntity(it.tagId, it.scoreItemId) })
     }
 }
