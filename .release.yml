@@ -4,3 +4,8 @@ extra_locales:
   - ko
   - zh-Hans
   - zh-Hant
+# Android source of truth (ignored by ios-release; reserved for a future
+# android-release tool that mirrors this config). yq-based config readers
+# select only known keys, so this extra section is safely ignored.
+android:
+  history_yml: Android/app/src/main/assets/VersionHistory.yml
