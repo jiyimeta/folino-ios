@@ -141,6 +141,7 @@ public final class LibraryAndroidStore {
         store.upsert(all[idx])
         reload(using: all)
         reloadPlaylists()
+        reloadTags()
     }
 
     /// Rebuild the displayed lists: live records (`deletedAt <= 0`) in `scores`
@@ -456,6 +457,17 @@ public final class LibraryAndroidStore {
     public func deleteTag(_ id: String) {
         store.deleteTag(id: id)
         if selectedTagID == id { selectedTagID = nil }
+        reloadTags()
+    }
+
+    /// Union-add a set of scores into one tag (bulk CAB). Never removes existing
+    /// members; the per-tag slice of iOS `bulkAddTags`' union semantics.
+    @WireletExpose
+    public func bulkAddTag(_ tagId: String, _ scoreIds: [String]) {
+        guard !scoreIds.isEmpty else { return }
+        var members = tagMembership()[tagId] ?? []
+        members.formUnion(scoreIds)
+        store.replaceTagItems(tagId, members.map { TagItemWire(tagId: tagId, scoreItemId: $0) })
         reloadTags()
     }
 

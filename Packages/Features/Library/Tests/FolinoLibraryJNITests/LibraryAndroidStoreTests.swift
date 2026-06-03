@@ -473,4 +473,50 @@ struct LibraryAndroidStoreTests {
         #expect(backend.tagRecords.isEmpty)
         #expect(backend.tagItems.isEmpty) // membership cascaded
     }
+
+    @Test func `bulkAddTag unions scores into a tag without duplicates`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+
+        store.setTagAssigned(a, t, true)
+        store.bulkAddTag(t, [a, b, c]) // a already present → not duplicated
+        #expect(store.tags.first?.memberCount == 3)
+        #expect(backend.tagItems.count(where: { $0.tagId == t }) == 3)
+    }
+
+    @Test func `bulkAddTag with empty inputs is a no-op`() throws {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+
+        store.bulkAddTag(t, [])
+        #expect(store.tags.first?.memberCount == 0)
+        #expect(backend.tagItems.isEmpty)
+    }
+
+    @Test func `tag member count excludes soft-deleted scores`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a, b])
+        #expect(store.tags.first?.memberCount == 2)
+
+        store.delete(a) // soft-delete a member
+        #expect(store.tags.first?.memberCount == 1) // excluded from live count
+    }
 }
