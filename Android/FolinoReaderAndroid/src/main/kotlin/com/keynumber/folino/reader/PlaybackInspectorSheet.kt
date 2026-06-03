@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -149,7 +152,12 @@ private fun LabeledSlider(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(label, modifier = Modifier.width(56.dp))
+        Text(
+            label,
+            modifier = Modifier.width(56.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -157,7 +165,12 @@ private fun LabeledSlider(
             enabled = enabled,
             modifier = Modifier.weight(1f),
         )
-        Text(readout, modifier = Modifier.width(56.dp))
+        Text(
+            readout,
+            modifier = Modifier.width(56.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -188,12 +201,18 @@ private fun MixerRow(
                 onClick = { onSolo(!channel.isSoloed) },
                 label = { Text("S") },
                 enabled = enabled,
+                modifier = Modifier.semantics {
+                    contentDescription = if (channel.isSoloed) "Solo on" else "Solo off"
+                },
             )
             FilterChip(
                 selected = channel.isMuted,
                 onClick = { onMute(!channel.isMuted) },
                 label = { Text("M") },
                 enabled = enabled,
+                modifier = Modifier.semantics {
+                    contentDescription = if (channel.isMuted) "Mute on" else "Mute off"
+                },
             )
         }
         Row(
@@ -233,7 +252,9 @@ private fun ProgramPickerButton(
     onProgram: (Int) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val name = gmInstruments.firstOrNull { it.program == program }?.displayName ?: "Program $program"
+    val name = remember(program) {
+        GMInstrument.forProgram(program)?.displayName ?: "Program $program"
+    }
     Column {
         TextButton(onClick = { expanded = true }, enabled = enabled) {
             Text(
@@ -245,14 +266,20 @@ private fun ProgramPickerButton(
             Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose instrument")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            gmInstruments.forEach { instrument ->
-                DropdownMenuItem(
-                    text = { Text(instrument.displayName) },
-                    onClick = {
-                        onProgram(instrument.program)
-                        expanded = false
-                    },
-                )
+            Column(
+                Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                gmInstruments.forEach { instrument ->
+                    DropdownMenuItem(
+                        text = { Text(instrument.displayName) },
+                        onClick = {
+                            onProgram(instrument.program)
+                            expanded = false
+                        },
+                    )
+                }
             }
         }
     }
