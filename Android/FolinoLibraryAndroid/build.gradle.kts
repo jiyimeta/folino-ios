@@ -1,7 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
-    id("io.github.jiyimeta.wirelet") version "0.3.1"
+    id("io.github.jiyimeta.wirelet") version "0.3.2"
     id("com.google.devtools.ksp") version "2.0.20-1.0.25"
 }
 
