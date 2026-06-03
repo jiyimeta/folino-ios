@@ -37,4 +37,19 @@
     <string name="create">Create</string>
     <string name="rename">Rename</string>
     <string name="library_delete">Delete</string>
+    <string name="nav_tags">Tags</string>
+    <string name="tags_title">Tags</string>
+    <string name="tags_empty_title">No tags</string>
+    <string name="tags_empty_hint">Tap + to create a tag.</string>
+    <string name="tags_create">New tag</string>
+    <string name="tags_name_hint">Tag name</string>
+    <string name="tags_member_count">%1$d scores</string>
+    <string name="tags_delete">Delete tag</string>
+    <string name="tags_delete_confirm_title">Delete \"%1$s\"?</string>
+    <string name="tags_delete_confirm_message">The scores stay in your library.</string>
+    <string name="tags_rename">Rename</string>
+    <string name="edit_tags">Edit tags</string>
+    <string name="edit_tags_apply">Apply</string>
+    <string name="tag_add">Tag</string>
+    <string name="tag_remove_from">Remove from tag</string>
 </resources>
