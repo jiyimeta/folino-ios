@@ -71,8 +71,8 @@ class MainActivity : ComponentActivity() {
         // Spike note: synchronous JNI decode on the main thread before
         // setContent. Acceptable for this PoC (one small asset); production
         // should move the asset read + JNI round-trip off the main thread.
-        val json = assets.open("VersionHistory.json").readBytes()
-        val versionItems = VersionHistoryBridge.load(json)
+        val yml = assets.open("VersionHistory.yml").readBytes()
+        val versionItems = VersionHistoryBridge.load(yml)
             .map { VersionHistoryItem(it.version, it.descriptions) }
 
         setContent {
