@@ -1,5 +1,8 @@
 pluginManagement {
     repositories {
+        // wirelet 0.3.2 gradle plugin ([String] bulk-method StringCodec emitter)
+        // is published to mavenLocal until it ships to GitHub Packages.
+        mavenLocal()
         google()
         mavenCentral()
         gradlePluginPortal()
