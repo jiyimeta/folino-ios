@@ -128,6 +128,7 @@ final class AppBootstrap {
             shareTempDirectory: AppPaths.shareTempDirectory,
             gateway: gateway,
             audioExporter: audioExporter,
+            pdfRenderer: CoreGraphicsPDFRenderer(),
         )
         metadataReader = LiveScoreMetadataReader(
             gateway: gateway,

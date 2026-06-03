@@ -2,7 +2,6 @@ import Domain
 import Foundation
 import SheetMusic
 import SheetMusicMSCX
-import SheetMusicPDF
 
 /// Live `ScoreShareService` backed by `swift-sheet-music`. Companion to `LiveScoreFileGateway` in the same module.
 public struct LiveScoreShareService: ScoreShareService {
@@ -10,31 +9,24 @@ public struct LiveScoreShareService: ScoreShareService {
     private let shareTempDirectory: URL
     private let gateway: any ScoreFileGateway
     private let audioExporter: any ScoreAudioExporter
+    private let pdfRenderer: any ScorePDFRenderer
 
     public init(
         scoresDirectory: URL,
         shareTempDirectory: URL,
         gateway: any ScoreFileGateway,
         audioExporter: any ScoreAudioExporter,
+        pdfRenderer: any ScorePDFRenderer,
     ) {
         self.scoresDirectory = scoresDirectory
         self.shareTempDirectory = shareTempDirectory
         self.gateway = gateway
         self.audioExporter = audioExporter
-    }
-
-    /// Internal for tests. Replaces filesystem-hostile characters, trims to ≤100 chars, falls back to `"score"` if
-    /// empty.
-    static func sanitize(title: String) -> String {
-        let bad: Set<Character> = ["/", ":", "\\", "\u{0000}"]
-        let cleaned = String(title.map { bad.contains($0) ? "_" : $0 })
-        let stripped = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "_ "))
-        let candidate = stripped.isEmpty ? "score" : stripped
-        return String(candidate.prefix(100))
+        self.pdfRenderer = pdfRenderer
     }
 
     public func availableFormats(for item: ScoreItem) async -> [ScoreShareFormatOption] {
-        let formats: [ScoreShareFormat] = [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A]
+        let formats = ScoreShareFormat.allOrdered
         let original = await detectOriginalFormat(for: item)
         return formats.map { ScoreShareFormatOption(format: $0, isOriginal: $0 == original) }
     }
@@ -43,11 +35,11 @@ public struct LiveScoreShareService: ScoreShareService {
         item: ScoreItem,
         format: ScoreShareFormat,
     ) async throws -> URL {
-        let title = Self.sanitize(title: item.title)
+        let title = ScoreExportNaming.sanitize(title: item.title)
         let sourceURL = scoresDirectory.appending(path: item.localFileName)
         let (score, _) = try await gateway.loadScore(fileURL: sourceURL)
 
-        if Self.matchingFormat(for: score.source) == format {
+        if ScoreShareFormat.matching(for: score.source) == format {
             return try copyOriginalBytes(sourceURL: sourceURL, sanitizedTitle: title)
         }
 
@@ -67,23 +59,12 @@ public struct LiveScoreShareService: ScoreShareService {
 
     // MARK: - Source-based mapping
 
-    /// `ScoreSource` → matching `ScoreShareFormat`. Returns `nil` for sources we don't expose as shareable formats
-    /// today (MusicXML, PDF, MuseScore 2, unknown).
-    static func matchingFormat(for source: ScoreSource) -> ScoreShareFormat? {
-        switch source {
-        case .midi: .midi
-        case .museScore(.v4): .museScoreV4
-        case .museScore(.v3): .museScoreV3
-        case .museScore(.v2), .musicXML, .pdf, .unknown: nil
-        }
-    }
-
     /// Loads the item via the gateway just to read `Score.source` and map it to the matching share format. Errors map
     /// to `nil` so a transient parse failure simply leaves the menu unflagged instead of breaking it.
     private func detectOriginalFormat(for item: ScoreItem) async -> ScoreShareFormat? {
         let url = scoresDirectory.appending(path: item.localFileName)
         guard let result = try? await gateway.loadScore(fileURL: url) else { return nil }
-        return Self.matchingFormat(for: result.0.source)
+        return ScoreShareFormat.matching(for: result.0.source)
     }
 
     // MARK: - Original-bytes copy
@@ -132,9 +113,7 @@ public struct LiveScoreShareService: ScoreShareService {
         item: ScoreItem,
         sanitizedTitle: String,
     ) async throws -> URL {
-        let pdfData = try await MainActor.run {
-            try PDFExporter.export(score: score, options: PDFExporter.Options(title: item.title))
-        }
+        let pdfData = try await pdfRenderer.renderPDF(score: score, title: item.title)
         let destination = shareTempDirectory.appending(path: "\(sanitizedTitle).pdf")
         try? FileManager.default.removeItem(at: destination)
         do {
