@@ -49,7 +49,7 @@ import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
-import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.Label
 import com.keynumber.folino.ui.library.PlaylistDetailScreen
 import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
@@ -155,7 +155,7 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Outlined.Label, contentDescription = null) },
+                    icon = { Icon(Icons.AutoMirrored.Outlined.Label, contentDescription = null) },
                     label = { Text(stringResource(R.string.nav_tags)) },
                     selected = currentRoute == "tags",
                     onClick = { switchTo("tags") },

@@ -11,7 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -134,7 +134,7 @@ private fun TagRow(row: TagRowWire, onClick: () -> Unit, onRequestDelete: () -> 
     ListItem(
         headlineContent = { Text(row.name.ifEmpty { "Untitled" }) },
         supportingContent = { Text(stringResource(R.string.tags_member_count, row.memberCount)) },
-        leadingContent = { Icon(Icons.Outlined.Label, contentDescription = null) },
+        leadingContent = { Icon(Icons.AutoMirrored.Outlined.Label, contentDescription = null) },
         trailingContent = {
             Box {
                 IconButton(onClick = { menu = true }) {
