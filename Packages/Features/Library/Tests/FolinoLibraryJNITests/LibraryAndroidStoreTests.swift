@@ -519,4 +519,57 @@ struct LibraryAndroidStoreTests {
         store.delete(a) // soft-delete a member
         #expect(store.tags.first?.memberCount == 1) // excluded from live count
     }
+
+    @Test func `selectTag exposes its live members sorted by title`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(
+                id: a,
+                title: "Zebra",
+                subtitle: "",
+                composer: "",
+                localFileName: "\(a).mscz",
+                deletedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: b,
+                title: "Apple",
+                subtitle: "",
+                composer: "",
+                localFileName: "\(b).mscz",
+                deletedAt: 0,
+            ),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a, b])
+
+        store.selectTag(t)
+        // title-sorted: "Apple" (b) then "Zebra" (a)
+        #expect(store.selectedTagItems.map(\.id) == [b, a])
+    }
+
+    @Test func `beginEditTags marks tags containing the focused score`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.setTagAssigned(a, t, true)
+
+        store.beginEditTags(a)
+        #expect(store.editSheetTags.map(\.contains) == [true])
+        store.beginEditTags(b)
+        #expect(store.editSheetTags.map(\.contains) == [false])
+
+        store.beginBulkEditTags()
+        #expect(store.editSheetTags.map(\.contains) == [false]) // bulk: nothing pre-checked
+    }
 }

@@ -479,4 +479,22 @@ public final class LibraryAndroidStore {
         store.replaceTagItems(tagId, members.map { TagItemWire(tagId: tagId, scoreItemId: $0) })
         reloadTags()
     }
+
+    @WireletExpose
+    public func selectTag(_ id: String) {
+        selectedTagID = id
+        reloadTags()
+    }
+
+    @WireletExpose
+    public func beginEditTags(_ scoreId: String) {
+        editSheetScoreID = scoreId
+        reloadTags()
+    }
+
+    @WireletExpose
+    public func beginBulkEditTags() {
+        editSheetScoreID = nil
+        reloadTags()
+    }
 }
