@@ -39,37 +39,39 @@ class AudioScoreExporter(
 ) : ScoreAudioFileExporter {
 
     override fun exportAudio(scoreFilePath: String, outPath: String): Boolean {
-        var handle: ScoreHandle? = null
+        val bytes = File(scoreFilePath).readBytes()
+        val handle = ScoreHandle.load(bytes) ?: return false
         return try {
-            val bytes = File(scoreFilePath).readBytes()
-            val h = ScoreHandle.load(bytes) ?: return false
-            handle = h
-
-            val engine = engineFactory()
-            val pfd = ParcelFileDescriptor.open(
-                File(outPath),
-                ParcelFileDescriptor.MODE_CREATE or
-                    ParcelFileDescriptor.MODE_TRUNCATE or
-                    ParcelFileDescriptor.MODE_WRITE_ONLY,
-            )
-            pfd.use {
-                runBlocking {
-                    // exportAudioFile throws NoScorePrepared unless the handle
-                    // matches the most recent prepare() call.
-                    engine.prepare(h.raw)
-                    engine.exportAudioFile(
-                        outputFd = it,
-                        scoreHandle = h.raw,
-                        format = AudioFileFormat.M4a(),
-                        range = AudioExportRange.Full,
-                    )
+            handle.use { h ->
+                val outFile = File(outPath).apply { parentFile?.mkdirs() }
+                ParcelFileDescriptor.open(
+                    outFile,
+                    ParcelFileDescriptor.MODE_CREATE or
+                        ParcelFileDescriptor.MODE_TRUNCATE or
+                        ParcelFileDescriptor.MODE_WRITE_ONLY,
+                ).use { pfd ->
+                    val engine = engineFactory()
+                    try {
+                        runBlocking {
+                            // exportAudioFile throws NoScorePrepared unless the handle
+                            // matches the most recent prepare() call.
+                            engine.prepare(h.raw)
+                            engine.exportAudioFile(
+                                outputFd = pfd,
+                                scoreHandle = h.raw,
+                                format = AudioFileFormat.M4a(),
+                                range = AudioExportRange.Full,
+                            )
+                        }
+                    } finally {
+                        engine.close()
+                    }
                 }
             }
             true
         } catch (e: Exception) {
+            android.util.Log.w("AudioScoreExporter", "audio export failed for $scoreFilePath", e)
             false
-        } finally {
-            handle?.close()
         }
     }
 }

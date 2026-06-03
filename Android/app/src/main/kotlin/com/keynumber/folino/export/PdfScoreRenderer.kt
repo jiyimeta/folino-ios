@@ -84,6 +84,7 @@ class PdfScoreRenderer(context: Context) : ScorePdfRenderer {
             }
             true
         } catch (e: Exception) {
+            android.util.Log.w("PdfScoreRenderer", "pdf export failed for $scoreFilePath", e)
             false
         } finally {
             handle?.close()
