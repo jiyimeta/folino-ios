@@ -49,9 +49,12 @@ import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
+import androidx.compose.material.icons.outlined.Label
 import com.keynumber.folino.ui.library.PlaylistDetailScreen
 import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
+import com.keynumber.folino.ui.library.TagDetailScreen
+import com.keynumber.folino.ui.library.TagsListScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
@@ -105,7 +108,8 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
     val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
     // Reader is a detail pushed on top; only the top-level list destinations
     // expose the drawer (hamburger + edge swipe).
-    val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted" || currentRoute == "playlists"
+    val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted" ||
+        currentRoute == "playlists" || currentRoute == "tags"
 
     fun switchTo(route: String) {
         scope.launch { drawerState.close() }
@@ -148,6 +152,13 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
                     label = { Text(stringResource(R.string.nav_playlists)) },
                     selected = currentRoute == "playlists",
                     onClick = { switchTo("playlists") },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Outlined.Label, contentDescription = null) },
+                    label = { Text(stringResource(R.string.nav_tags)) },
+                    selected = currentRoute == "tags",
+                    onClick = { switchTo("tags") },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
@@ -209,6 +220,32 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
                     viewModel = vm,
                     playlistId = id,
                     playlistName = name,
+                    onOpenScore = openReader,
+                    onBack = { nav.popBackStack() },
+                )
+            }
+            composable("tags") {
+                TagsListScreen(
+                    viewModel = vm,
+                    onOpenTag = { id, name ->
+                        nav.navigate("tag/$id/${URLEncoder.encode(name, "UTF-8")}")
+                    },
+                    onOpenDrawer = openDrawer,
+                )
+            }
+            composable(
+                "tag/{id}/{name}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType },
+                ),
+            ) { entry ->
+                val id = entry.arguments?.getString("id") ?: ""
+                val name = URLDecoder.decode(entry.arguments?.getString("name") ?: "", "UTF-8")
+                TagDetailScreen(
+                    viewModel = vm,
+                    tagId = id,
+                    tagName = name,
                     onOpenScore = openReader,
                     onBack = { nav.popBackStack() },
                 )
