@@ -63,6 +63,35 @@ private final class FakeLibraryStore: LibraryStore {
         playlistRecords.removeAll { $0.id == id }
         playlistItems.removeAll { $0.playlistId == id }
     }
+
+    var tagRecords: [TagRecordWire] = []
+    var tagItems: [TagItemWire] = []
+
+    func loadTags() -> [TagRecordWire] {
+        tagRecords
+    }
+
+    func upsertTag(_ record: TagRecordWire) {
+        if let idx = tagRecords.firstIndex(where: { $0.id == record.id }) {
+            tagRecords[idx] = record
+        } else {
+            tagRecords.append(record)
+        }
+    }
+
+    func deleteTag(id: String) {
+        tagRecords.removeAll { $0.id == id }
+        tagItems.removeAll { $0.tagId == id }
+    }
+
+    func loadTagItems() -> [TagItemWire] {
+        tagItems
+    }
+
+    func replaceTagItems(_ tagId: String, _ items: [TagItemWire]) {
+        tagItems.removeAll { $0.tagId == tagId }
+        tagItems.append(contentsOf: items)
+    }
 }
 
 struct LibraryAndroidStoreTests {
