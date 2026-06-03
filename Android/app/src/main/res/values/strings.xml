@@ -52,4 +52,12 @@
     <string name="edit_tags_apply">Apply</string>
     <string name="tag_add">Tag</string>
     <string name="tag_remove_from">Remove from tag</string>
+    <string name="export">Export</string>
+    <string name="export_format_musescore4">MuseScore 4</string>
+    <string name="export_format_musescore3">MuseScore 3</string>
+    <string name="export_format_pdf">PDF</string>
+    <string name="export_format_midi">MIDI</string>
+    <string name="export_format_audio">Audio (M4A)</string>
+    <string name="export_original_badge">Original</string>
+    <string name="export_failed">Export failed</string>
 </resources>
