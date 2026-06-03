@@ -175,4 +175,15 @@ struct ExportScoreTests {
         let f = try makeFixture()
         #expect(f.store.exportFormats("nope").isEmpty)
     }
+
+    @Test func `museScoreV3 export copies source bytes verbatim`() throws {
+        let f = try makeFixture()
+        let path = f.store.exportScore(f.id, "museScoreV3", f.outDir.path)
+        #expect(path.hasSuffix(".mscz"))
+        let returnedURL = URL(fileURLWithPath: path)
+        let sourceURL = try #require(Bundle.module.url(forResource: "sample", withExtension: "mscz"))
+        let exportedData = try Data(contentsOf: returnedURL)
+        let originalData = try Data(contentsOf: sourceURL)
+        #expect(exportedData == originalData)
+    }
 }
