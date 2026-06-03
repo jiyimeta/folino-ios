@@ -41,6 +41,8 @@ if isAndroid {
                 .product(name: "WireletObservable", package: "swift-wirelet"),
                 .product(name: "WireletProvided", package: "swift-wirelet"),
                 .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
+                .product(name: "SheetMusicMIDI", package: "swift-sheet-music"),
+                .product(name: "SheetMusic", package: "swift-sheet-music"),
             ],
             plugins: [
                 .plugin(name: "WireletObservableBridges", package: "swift-wirelet"),
