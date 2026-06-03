@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -72,6 +73,8 @@ fun LibraryScreen(
     val selectedIds = remember { mutableStateListOf<String>() }
     var singleAddTarget by remember { mutableStateOf<String?>(null) }
     var showBulkAddSheet by remember { mutableStateOf(false) }
+    var singleTagTarget by remember { mutableStateOf<String?>(null) }
+    var showBulkTagSheet by remember { mutableStateOf(false) }
 
     fun exitSelection() {
         selectionMode = false
@@ -117,6 +120,18 @@ fun LibraryScreen(
                             Icon(
                                 Icons.AutoMirrored.Filled.PlaylistAdd,
                                 contentDescription = stringResource(R.string.add_to_playlist),
+                            )
+                        }
+                        IconButton(
+                            enabled = selectedIds.isNotEmpty(),
+                            onClick = {
+                                viewModel.beginBulkEditTags()
+                                showBulkTagSheet = true
+                            },
+                        ) {
+                            Icon(
+                                Icons.Outlined.Label,
+                                contentDescription = stringResource(R.string.tag_add),
                             )
                         }
                         IconButton(
@@ -186,6 +201,10 @@ fun LibraryScreen(
                             singleAddTarget = row.id
                             viewModel.beginAddToPlaylist(row.id)
                         },
+                        onEditTags = {
+                            singleTagTarget = row.id
+                            viewModel.beginEditTags(row.id)
+                        },
                     )
                 }
             }
@@ -211,6 +230,25 @@ fun LibraryScreen(
             },
         )
     }
+    singleTagTarget?.let { id ->
+        EditTagsSheet(
+            viewModel = viewModel,
+            scoreId = id,
+            bulkScoreIds = emptyList(),
+            onDismiss = { singleTagTarget = null },
+        )
+    }
+    if (showBulkTagSheet) {
+        EditTagsSheet(
+            viewModel = viewModel,
+            scoreId = null,
+            bulkScoreIds = selectedIds.toList(),
+            onDismiss = {
+                showBulkTagSheet = false
+                exitSelection()
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -223,6 +261,7 @@ private fun ScoreRow(
     onLongClick: () -> Unit,
     onDelete: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onEditTags: () -> Unit,
 ) {
     val content: @Composable () -> Unit = {
         var menu by remember { mutableStateOf(false) }
@@ -253,6 +292,13 @@ private fun ScoreRow(
                                 onClick = {
                                     menu = false
                                     onAddToPlaylist()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.edit_tags)) },
+                                onClick = {
+                                    menu = false
+                                    onEditTags()
                                 },
                             )
                         }
