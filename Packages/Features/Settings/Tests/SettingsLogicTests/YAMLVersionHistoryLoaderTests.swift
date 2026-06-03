@@ -57,4 +57,20 @@ struct YAMLVersionHistoryLoaderTests {
             _ = try YAMLVersionHistoryLoader(data: Data("".utf8)).load()
         }
     }
+
+    @Test func `wire payload round trips`() throws {
+        let payload = versionHistoryWirePayload(ymlData: Data(sampleYAML.utf8))
+        let list = try VersionHistoryWireList(decoding: payload)
+        #expect(list.entries.count == 2)
+        #expect(list.entries[0].version == "1.5.1")
+        #expect(list.entries[1].version == "1.5.0")
+        #expect(list.entries[0].descriptions.count == 2)
+        #expect(list.entries[1].descriptions.count == 1)
+    }
+
+    @Test func `wire payload yields empty list on garbage`() throws {
+        let payload = versionHistoryWirePayload(ymlData: Data("%%%not yaml".utf8))
+        let list = try VersionHistoryWireList(decoding: payload)
+        #expect(list.entries.isEmpty)
+    }
 }
