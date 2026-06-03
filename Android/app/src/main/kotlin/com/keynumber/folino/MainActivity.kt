@@ -319,6 +319,8 @@ private class LibraryVMFactory(private val context: android.content.Context) : V
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         LibraryAndroidStoreViewModel.create(
             store = com.keynumber.folino.library.RoomLibraryStore(context),
+            pdfRenderer = com.keynumber.folino.export.PdfScoreRenderer(context),
+            audioExporter = com.keynumber.folino.export.AudioScoreExporter(context),
         ) as T
 }
 
