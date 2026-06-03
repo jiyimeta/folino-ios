@@ -10,7 +10,7 @@ struct ScoreShareFormatTests {
         #expect(ScoreShareFormat.audioM4A.canonicalExtension == "m4a")
     }
 
-    @Test func `all ordered matches IOS menu order`() {
+    @Test func `all ordered matches iOS menu order`() {
         #expect(ScoreShareFormat.allOrdered == [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A])
     }
 
@@ -29,5 +29,7 @@ struct ScoreShareFormatTests {
         #expect(ScoreExportNaming.sanitize(title: "  __  ") == "score")
         #expect(ScoreExportNaming.sanitize(title: "") == "score")
         #expect(ScoreExportNaming.sanitize(title: String(repeating: "x", count: 200)).count == 100)
+        #expect(ScoreExportNaming.sanitize(title: "a\u{0000}b") == "a_b")
+        #expect(ScoreExportNaming.sanitize(title: "///") == "score")
     }
 }

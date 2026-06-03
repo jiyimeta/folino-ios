@@ -60,9 +60,7 @@ extension ScoreShareFormat {
     }
 
     /// The formats in display order — the single source for both the iOS menu and the Android sheet.
-    public static var allOrdered: [ScoreShareFormat] {
-        [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A]
-    }
+    public static let allOrdered: [ScoreShareFormat] = [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A]
 
     /// The share format that re-emits `source` byte-for-byte, or `nil` for sources we don't expose as a format
     /// (MuseScore 2, MusicXML, PDF, unknown).
