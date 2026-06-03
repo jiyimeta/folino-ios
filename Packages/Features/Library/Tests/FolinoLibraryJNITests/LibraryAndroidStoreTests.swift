@@ -572,4 +572,42 @@ struct LibraryAndroidStoreTests {
         store.beginBulkEditTags()
         #expect(store.editSheetTags.map(\.contains) == [false]) // bulk: nothing pre-checked
     }
+
+    @Test func `bulk soft-delete updates tag member count`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let b = "00000000-0000-0000-0000-0000000000b2"
+        let c = "00000000-0000-0000-0000-0000000000c3"
+        let backend = FakeLibraryStore()
+        backend.records = [a, b, c].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a, b, c])
+        #expect(store.tags.first?.memberCount == 3)
+
+        store.deleteMany([a, b])
+        #expect(store.tags.first?.memberCount == 1) // only c is live
+
+        store.restoreMany([a, b])
+        #expect(store.tags.first?.memberCount == 3) // back to live
+    }
+
+    @Test func `permanent purge keeps tag rows but drops purged members from count`() throws {
+        let a = "00000000-0000-0000-0000-0000000000a1"
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: a, title: "A", subtitle: "", composer: "", localFileName: "\(a).mscz", deletedAt: 0),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.createTag("T")
+        let t = try #require(store.tags.first).id
+        store.bulkAddTag(t, [a])
+        #expect(store.tags.first?.memberCount == 1) // a is a live member
+
+        store.permanentlyDelete(a)
+        #expect(store.tags.map(\.name) == ["T"]) // tag row survives the purge
+        #expect(store.tags.first?.memberCount == 0) // purged member drops from the count
+    }
 }

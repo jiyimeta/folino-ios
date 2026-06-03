@@ -103,6 +103,7 @@ public final class LibraryAndroidStore {
         // Project from the local snapshot minus the purged row — no second loadAll().
         reload(using: all.filter { $0.id != id })
         reloadPlaylists()
+        reloadTags()
     }
 
     /// Bulk restore: clear `deletedAt` for each id, then reload once (mirrors
@@ -117,6 +118,7 @@ public final class LibraryAndroidStore {
         }
         reload(using: all)
         reloadPlaylists()
+        reloadTags()
     }
 
     /// Bulk permanent purge (mirrors `LibraryViewModel.bulkPermanentlyDelete`):
@@ -132,6 +134,7 @@ public final class LibraryAndroidStore {
         // Project from the local snapshot minus the purged rows — no second loadAll().
         reload(using: all.filter { !idSet.contains($0.id) })
         reloadPlaylists()
+        reloadTags()
     }
 
     private func setDeletedAt(_ id: String, _ stamp: Double) {
@@ -192,6 +195,7 @@ public final class LibraryAndroidStore {
         }
         reload(using: all)
         reloadPlaylists()
+        reloadTags()
     }
 
     private func scoreItemID(_ raw: String) -> ScoreItemID? {
