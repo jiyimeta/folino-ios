@@ -1,12 +1,10 @@
 import Domain
 import Foundation
 import SettingsLogic
-import Yams
 
 public struct DefaultVersionHistoryLoader: VersionHistoryLoader {
     public enum LoadError: Error {
         case resourceNotFound(name: String)
-        case unparseableRoot
     }
 
     private let bundle: Bundle
@@ -21,16 +19,7 @@ public struct DefaultVersionHistoryLoader: VersionHistoryLoader {
         guard let url = bundle.url(forResource: resourceName, withExtension: "yml") else {
             throw LoadError.resourceNotFound(name: resourceName)
         }
-        let yaml = try String(contentsOf: url, encoding: .utf8)
-        // Parse to the YAML node tree first so we can iterate the top-level sequence and re-decode each child
-        // independently — a single malformed entry is then skipped instead of poisoning the whole load.
-        guard let root = try Yams.compose(yaml: yaml) else {
-            throw LoadError.unparseableRoot
-        }
-        guard case let .sequence(sequence) = root else {
-            throw LoadError.unparseableRoot
-        }
-        let decoder = YAMLDecoder()
-        return sequence.compactMap { try? decoder.decode(VersionHistoryEntry.self, from: $0) }
+        // Parsing + locale selection live in the shared SettingsLogic loader so iOS and Android share one path.
+        return try YAMLVersionHistoryLoader(data: Data(contentsOf: url)).load()
     }
 }
