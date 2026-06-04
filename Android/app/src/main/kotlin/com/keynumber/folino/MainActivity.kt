@@ -68,12 +68,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val prefs = SettingsPrefs(applicationContext)
 
-        // Spike note: synchronous JNI decode on the main thread before
-        // setContent. Acceptable for this PoC (one small asset); production
-        // should move the asset read + JNI round-trip off the main thread.
-        val json = assets.open("VersionHistory.json").readBytes()
-        val versionItems = VersionHistoryBridge.load(json)
-            .map { VersionHistoryItem(it.version, it.descriptions) }
+        // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
+        // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
+        // TEMPORARY GUARD — remove this `if` (always load) any time after 1.0.0 has shipped.
+        val versionItems =
+            if (BuildConfig.VERSION_NAME == "1.0.0") {
+                emptyList()
+            } else {
+                // Spike note: synchronous JNI decode on the main thread before setContent. Acceptable for this
+                // PoC (one small asset); production should move the asset read + JNI round-trip off the main thread.
+                val yml = assets.open("VersionHistory.yml").readBytes()
+                VersionHistoryBridge.load(yml)
+                    .map { VersionHistoryItem(it.version, it.descriptions) }
+            }
 
         setContent {
             MaterialTheme {

@@ -22,6 +22,7 @@ var targets: [Target] = [
         dependencies: [
             "Domain",
             .product(name: "Wirelet", package: "swift-wirelet"),
+            .product(name: "Yams", package: "Yams"),
         ],
         plugins: swiftLintPlugins,
     ),

@@ -24,7 +24,10 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     // Both :FolinoSettingsAndroid and :FolinoLibraryAndroid stage the full
     // Swift runtime (libswiftCore.so, libFoundation*.so, libc++_shared.so, …).

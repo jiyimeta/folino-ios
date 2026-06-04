@@ -1,0 +1,76 @@
+import Domain
+import Foundation
+@testable import SettingsLogic
+import Testing
+
+struct YAMLVersionHistoryLoaderTests {
+    private let sampleYAML =
+        """
+        - version: 1.5.1
+          descriptions:
+            - en: Bug fix
+              ja: ja-a
+              ko: ko-a
+              zh-Hans: ha
+              zh-Hant: ht
+            - en: Crash fix
+              ja: ja-b
+        - version: 1.5.0
+          descriptions:
+            - en: Page view
+              ja: ja-c
+        """
+
+    @Test func `loads entries from YAML`() throws {
+        let entries = try YAMLVersionHistoryLoader(data: Data(sampleYAML.utf8)).load()
+        #expect(entries.count == 2)
+        #expect(entries[0].version == AppVersion(1, 5, 1))
+        #expect(entries[1].version == AppVersion(1, 5, 0))
+        #expect(entries[0].descriptions.count == 2)
+        #expect(entries[1].descriptions.count == 1)
+    }
+
+    @Test func `skips malformed entries and keeps valid ones`() throws {
+        let yaml = """
+        - version: 1.1.0
+          descriptions:
+            - en: Good
+              ja: 良
+        - version: not-a-version
+          descriptions: []
+        - version: 1.0.0
+          descriptions: []
+        """
+        let entries = try YAMLVersionHistoryLoader(data: Data(yaml.utf8)).load()
+        #expect(entries.map(\.version) == [AppVersion(1, 1, 0), AppVersion(1, 0, 0)])
+    }
+
+    @Test func `throws when root is not a sequence`() {
+        let yaml = "version: 1.0.0\ndescriptions: []"
+        #expect(throws: YAMLVersionHistoryLoader.LoadError.unparseableRoot) {
+            _ = try YAMLVersionHistoryLoader(data: Data(yaml.utf8)).load()
+        }
+    }
+
+    @Test func `throws on empty document`() {
+        #expect(throws: YAMLVersionHistoryLoader.LoadError.unparseableRoot) {
+            _ = try YAMLVersionHistoryLoader(data: Data("".utf8)).load()
+        }
+    }
+
+    @Test func `wire payload round trips`() throws {
+        let payload = versionHistoryWirePayload(ymlData: Data(sampleYAML.utf8))
+        let list = try VersionHistoryWireList(decoding: payload)
+        #expect(list.entries.count == 2)
+        #expect(list.entries[0].version == "1.5.1")
+        #expect(list.entries[1].version == "1.5.0")
+        #expect(list.entries[0].descriptions.count == 2)
+        #expect(list.entries[1].descriptions.count == 1)
+    }
+
+    @Test func `wire payload yields empty list on garbage`() throws {
+        let payload = versionHistoryWirePayload(ymlData: Data("%%%not yaml".utf8))
+        let list = try VersionHistoryWireList(decoding: payload)
+        #expect(list.entries.isEmpty)
+    }
+}
