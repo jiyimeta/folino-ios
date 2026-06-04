@@ -91,12 +91,12 @@ struct ReaderTransportControl: View {
         let marks = score.rehearsalMarks()
         return VStack(spacing: 0) {
             if !marks.isEmpty {
-                RehearsalMarkBar(marks: marks, currentFraction: displayFraction(score: score)) { cursor in
+                RehearsalMarkBar(marks: marks, currentFraction: displayFraction) { cursor in
                     viewModel.playbackSession.setManualCursor(cursor)
                 }
                 .padding(.bottom, -8)
             }
-            seekBar(score: score)
+            seekBar
             transportRow
         }
         .padding(.horizontal, 20)
@@ -139,17 +139,17 @@ struct ReaderTransportControl: View {
     }
 
     /// Position shown on the seek bar (and used to pick the frontmost rehearsal mark): the in-progress scrub value
-    /// while dragging, otherwise the live playback cursor's fraction.
-    private func displayFraction(score: Score) -> Double {
-        let total = score.notatedDurationSeconds
+    /// while dragging, otherwise the live playback cursor's fraction. The live fraction comes from the session, which
+    /// maps the engine's full-score cursor (`playbackFraction`) — NOT the filtered display cursor, whose re-stamped
+    /// staff address would resolve `seconds(at:)` against the wrong staff under hidden staves.
+    private var displayFraction: Double {
         if isScrubbing { return scrubFraction }
-        guard total > 0, let cursor = viewModel.playbackSession.playbackCursor else { return 0 }
-        return min(max(score.seconds(at: cursor) / total, 0), 1)
+        return viewModel.playbackSession.playbackFraction
     }
 
-    private func seekBar(score: Score) -> some View {
+    private var seekBar: some View {
         SeekBar(
-            fraction: displayFraction(score: score),
+            fraction: displayFraction,
             onScrubBegan: {
                 isScrubbing = true
                 viewModel.playbackSession.beginScrub()

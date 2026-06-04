@@ -23,10 +23,28 @@ final class ReaderPlaybackSession {
         scrubCursor ?? playbackCursor
     }
 
+    /// Live playback position as a 0...1 fraction of the notated timeline, computed in FULL-SCORE coordinates.
+    ///
+    /// The seek bar must read this rather than mapping `playbackCursor` itself: `playbackCursor` carries *filtered*
+    /// staff addresses for the on-screen (hidden-staves) layout lookup, and `Score.seconds(at:)` resolves an `.item`
+    /// cursor's tick by walking that staff's voice. Fed the unfiltered score, a re-stamped `.item` cursor would walk a
+    /// *different* full-score staff — at best a wrong tick, at worst a crash on a whole-measure rest.
+    /// `rawPlaybackCursor` keeps the engine's original full-score address, so it resolves against the right staff.
+    /// Scrubbing is handled by the seek bar's own provisional fraction and intentionally not reflected here.
+    var playbackFraction: Double {
+        guard let score = scoreProvider() else { return 0 }
+        let total = score.notatedDurationSeconds
+        guard total > 0, let cursor = rawPlaybackCursor else { return 0 }
+        return min(max(score.seconds(at: cursor) / total, 0), 1)
+    }
+
     /// Latest 0...1 fraction from `updateScrub`, used by `endScrub` to seek the audio by time on release.
     @ObservationIgnored private var lastScrubFraction: Double = 0
 
-    @ObservationIgnored private var rawPlaybackCursor: ScoreCursor?
+    /// Engine's original full-score-addressed cursor (pre hidden-staves translation). Observed — `playbackFraction`
+    /// reads it, so the seek bar re-renders as it advances. Set in lockstep with `playbackCursor` on every cursor
+    /// update / seek.
+    private var rawPlaybackCursor: ScoreCursor?
 
     @ObservationIgnored let controller: (any PlaybackController)?
 

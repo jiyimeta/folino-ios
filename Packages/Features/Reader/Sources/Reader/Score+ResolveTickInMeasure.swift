@@ -17,10 +17,16 @@ extension Score {
               itemID.elementIndex <= elements.count
         else { return nil }
 
+        // Resolve `.measure` durations (whole-measure rests) against the bar's effective length before asking for
+        // ticks — `NoteDuration.ticks(division:)` traps on a raw `.measure`. This matters whenever the walked voice
+        // holds a whole-measure rest ahead of `elementIndex`, which happens for hidden-staff cursor translation: a
+        // visible-staff cursor re-stamped to a filtered address lands on a different full-score staff whose measure
+        // may carry such a rest. Mirrors `beatXInMeasure` in swift-sheet-music's CursorFrame.
+        let measureDuration = staff.measures.effectiveMeasureDurations()[itemID.measureIndex]
         var tick = 0
         for i in 0 ..< itemID.elementIndex {
             if case let .chord(chord) = elements[i] {
-                tick += chord.duration.ticks(division: division)
+                tick += chord.duration.resolved(in: measureDuration).ticks(division: division)
             }
         }
         return tick
