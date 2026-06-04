@@ -32,3 +32,21 @@ public func scrollOffsetKeepingInView(
     // Below the viewport: bring the bottom in with padding.
     return targetMax - viewport + pad
 }
+
+/// Horizontal auto-scroll offset for measure-anchored stepping. When the
+/// cursor's measure `[measureMin, measureMax]` is fully visible in the viewport
+/// `[current, current + viewport]`, the offset is unchanged (preserves manual
+/// scroll). Otherwise the measure's leading edge is parked at the viewport's
+/// left, minus `pad`, clamped at 0. Shared by iOS `HorizontalScoreContainer`
+/// and the Android Reader (parity: one implementation). All values share one
+/// coordinate space (scaled content pixels).
+public func horizontalMeasureScrollOffset(
+    current: Double,
+    measureMin: Double,
+    measureMax: Double,
+    viewport: Double,
+    pad: Double,
+) -> Double {
+    let fullyVisible = measureMin >= current && measureMax <= current + viewport
+    return fullyVisible ? current : max(0, measureMin - pad)
+}

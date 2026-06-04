@@ -44,3 +44,37 @@ struct ScrollFollowTests {
         #expect(result == 0) // max(0, 2 - 8)
     }
 }
+
+struct HorizontalMeasureScrollOffsetTests {
+    @Test func `fully visible measure does not move`() {
+        // measure [120,200] inside view [100,500] (viewport 400) → stay.
+        let r = horizontalMeasureScrollOffset(
+            current: 100, measureMin: 120, measureMax: 200, viewport: 400, pad: 8,
+        )
+        #expect(r == 100)
+    }
+
+    @Test func `measure right of viewport parks leading edge`() {
+        // measure [600,700] right of view [100,500] → park min-pad = 592.
+        let r = horizontalMeasureScrollOffset(
+            current: 100, measureMin: 600, measureMax: 700, viewport: 400, pad: 8,
+        )
+        #expect(r == 592)
+    }
+
+    @Test func `measure left of viewport parks leading edge clamped to zero`() {
+        // measure [4,40] left of view [100,500] → park min-pad = max(0,-4) = 0.
+        let r = horizontalMeasureScrollOffset(
+            current: 100, measureMin: 4, measureMax: 40, viewport: 400, pad: 8,
+        )
+        #expect(r == 0)
+    }
+
+    @Test func `measure wider than viewport parks leading edge`() {
+        // measure [600,1200] wider than viewport 400, not fully visible → 592.
+        let r = horizontalMeasureScrollOffset(
+            current: 100, measureMin: 600, measureMax: 1200, viewport: 400, pad: 8,
+        )
+        #expect(r == 592)
+    }
+}
