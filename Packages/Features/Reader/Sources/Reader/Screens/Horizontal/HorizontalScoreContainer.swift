@@ -220,14 +220,18 @@ struct HorizontalScoreContainer: View {
         // X: when the cursor's measure overflows the viewport, park its leading edge at the screen's left edge rather
         // than nudging minimally to the right edge. Matches the PiP renderer's `advanceScroll`, so both surfaces step
         // measure-by-measure left.
-        let newX: CGFloat
-        if let measure = measureRect(for: cursor, in: doc) {
-            let measureMinX = (measure.minX + scorePadding) * zoom
-            let measureMaxX = (measure.maxX + scorePadding) * zoom
-            let fullyVisible = measureMinX >= curX && measureMaxX <= curX + viewport.width
-            newX = fullyVisible ? curX : max(0, measureMinX - pad)
+        // Parity: the measure leading-edge anchoring now lives in
+        // Domain.horizontalMeasureScrollOffset (also called by the Android Reader).
+        let newX: CGFloat = if let measure = measureRect(for: cursor, in: doc) {
+            CGFloat(horizontalMeasureScrollOffset(
+                current: Double(curX),
+                measureMin: Double((measure.minX + scorePadding) * zoom),
+                measureMax: Double((measure.maxX + scorePadding) * zoom),
+                viewport: Double(viewport.width),
+                pad: Double(pad),
+            ))
         } else {
-            newX = curX
+            curX
         }
         let newY = adjustedScrollOffset(
             currentOffset: curY,
