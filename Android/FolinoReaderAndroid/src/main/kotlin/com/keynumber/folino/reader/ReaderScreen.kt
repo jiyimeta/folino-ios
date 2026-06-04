@@ -150,8 +150,8 @@ private fun ReadyScore(
             if (bytes.isEmpty()) return@collectLatest
             val frame = DecodedFrameCodec.decode(bytes)
 
-            val yMin = (frame.y * fitPxPerMM * scale)
-            val yMax = ((frame.y + frame.height) * fitPxPerMM * scale) + vPadPx * 2
+            val yMin = vPadPx + frame.y * fitPxPerMM * scale
+            val yMax = vPadPx + (frame.y + frame.height) * fitPxPerMM * scale
             val newY = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
                 vScroll.value.toDouble(),
                 yMin,
@@ -201,7 +201,7 @@ private fun ReadyScore(
                                 val ratio = newScale / scale
                                 if (ratio != 1f && !centroid.x.isNaN() && !centroid.y.isNaN()) {
                                     val newX = focalAdjustedOffset(hScroll.value.toFloat(), centroid.x, ratio)
-                                    val newY = focalAdjustedOffset(vScroll.value.toFloat(), centroid.y, ratio)
+                                    val newY = focalAdjustedOffset(vScroll.value.toFloat(), centroid.y, ratio, vPadPx)
                                     scale = newScale
                                     // scrollTo is a suspend fun; PointerInputScope is a restricted
                                     // coroutine scope that doesn't allow arbitrary launches. Use the
@@ -259,13 +259,22 @@ private fun ReadyScore(
 
 /**
  * New scroll offset (px) that keeps the content point under the pinch centroid
- * fixed across a zoom step of ratio `r = newScale / oldScale`. In scroll space a
- * content pixel at `scroll + centroid` must remain under `centroid` after the
- * content scales by `r`: `newScroll = r * (scroll + centroid) - centroid`. The
- * scroll state clamps the result to `[0, maxValue]`, so no clamp is needed here.
+ * fixed across a zoom step of ratio `r = newScale / oldScale`. Only the page
+ * content scales by `r`; a constant leading [pad] (the fixed vertical padding
+ * above the page, which does NOT scale with zoom) is held out of the scaling.
+ * In scroll space the content point under the centroid is at
+ * `scroll + centroid`; the scaling page part is `scroll + centroid - pad`, so
+ * after scaling by `r` the new offset is
+ * `pad + r * (scroll - pad + centroid) - centroid`. With `pad = 0` this reduces
+ * to the simple `r * (scroll + centroid) - centroid`. The scroll state clamps
+ * the result to `[0, maxValue]`, so no clamp is needed here.
  */
-private fun focalAdjustedOffset(currentScroll: Float, centroid: Float, ratio: Float): Float =
-    ratio * (currentScroll + centroid) - centroid
+private fun focalAdjustedOffset(
+    currentScroll: Float,
+    centroid: Float,
+    ratio: Float,
+    pad: Float = 0f,
+): Float = pad + ratio * (currentScroll - pad + centroid) - centroid
 
 @Composable
 private fun TransportBar(audioVm: ReaderAudioViewModel) {
