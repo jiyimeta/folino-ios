@@ -5,6 +5,7 @@
 .claude/*.local.*
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+.claude/scripts/
 
 # Superpowers brainstorming session artefacts (mockups, viewer state)
 .superpowers/
