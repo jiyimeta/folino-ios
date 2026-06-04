@@ -20,3 +20,22 @@ public func nativeScrollOffsetKeepingInView(
         pad: pad,
     )
 }
+
+/// swift-java (jextract) entry point for the Android Reader's horizontal
+/// measure-anchored auto-scroll. Pure delegation to the shared
+/// `Domain.horizontalMeasureScrollOffset` (parity — no divergent Kotlin port).
+public func nativeHorizontalMeasureScrollOffset(
+    current: Double,
+    measureMin: Double,
+    measureMax: Double,
+    viewport: Double,
+    pad: Double,
+) -> Double {
+    horizontalMeasureScrollOffset(
+        current: current,
+        measureMin: measureMin,
+        measureMax: measureMax,
+        viewport: viewport,
+        pad: pad,
+    )
+}
