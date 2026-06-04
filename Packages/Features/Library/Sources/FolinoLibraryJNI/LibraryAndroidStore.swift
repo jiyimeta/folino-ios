@@ -4,6 +4,7 @@
 // them from the generated Kotlin bridge. That keeps this file (and the type
 // body) over the limit.
 // swiftlint:disable file_length
+// swiftlint:disable type_body_length
 import Domain // ScoreFormat, ScorePresentation, ScoreShareFormat, ScoreExportNaming
 import Foundation
 import Observation
@@ -35,7 +36,6 @@ import WireletProvided
 /// at end of file).
 @WireletObservable
 @Observable
-// swiftlint:disable:next type_body_length
 public final class LibraryAndroidStore {
     @ObservationIgnored private let store: LibraryStore
     @ObservationIgnored private let pdfRenderer: ScorePdfRenderer
@@ -597,3 +597,5 @@ public final class LibraryAndroidStore {
         reloadTags()
     }
 }
+
+// swiftlint:enable type_body_length
