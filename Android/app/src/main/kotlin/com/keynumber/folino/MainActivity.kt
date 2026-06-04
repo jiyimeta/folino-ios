@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
+import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
@@ -91,7 +93,10 @@ class MainActivity : ComponentActivity() {
                     val rootNav = rememberNavController()
                     NavHost(rootNav, startDestination = "library") {
                         composable("library") {
-                            LibraryNavGraph(onOpenSettings = { rootNav.navigate("settings") })
+                            LibraryNavGraph(
+                                prefs = prefs,
+                                onOpenSettings = { rootNav.navigate("settings") },
+                            )
                         }
                         composable("settings") {
                             SettingsNavGraph(prefs, versionItems, onBack = { rootNav.popBackStack() })
@@ -104,7 +109,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
+private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
     val nav = rememberNavController()
     val context = LocalContext.current
     val vm: LibraryAndroidStoreViewModel =
@@ -266,7 +271,16 @@ private fun LibraryNavGraph(onOpenSettings: () -> Unit) {
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
                 val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
-                ReaderScreen(scoreId = id, title = title, onBack = { nav.popBackStack() })
+                // Reader display mode comes from the Settings → Layout pref (DataStore). Default
+                // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
+                // modes fall back to vertical scroll inside ReaderScreen.
+                val layoutPref by prefs.layoutMode.collectAsState(initial = "page")
+                ReaderScreen(
+                    scoreId = id,
+                    title = title,
+                    layoutMode = ReaderLayoutMode.fromPref(layoutPref),
+                    onBack = { nav.popBackStack() },
+                )
             }
         }
     }
