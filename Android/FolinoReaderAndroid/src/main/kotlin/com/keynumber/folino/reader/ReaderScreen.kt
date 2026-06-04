@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -66,6 +69,10 @@ fun ReaderScreen(
     LaunchedEffect(scoreId) { readerVm.load(scoreId) }
     LaunchedEffect(scoreHandle) { scoreHandle?.let { audioVm.preparePlayback(it) } }
 
+    var showInspector by remember { mutableStateOf(false) }
+    // Open at full height so the dense inspector shows as many rows as possible at once.
+    val inspectorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -77,7 +84,7 @@ fun ReaderScreen(
                 },
             )
         },
-        bottomBar = { TransportBar(audioVm) },
+        bottomBar = { TransportBar(audioVm, onOpenInspector = { showInspector = true }) },
     ) { padding ->
         Box(
             Modifier
@@ -91,6 +98,15 @@ fun ReaderScreen(
                 is ReaderState.Ready -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
             }
         }
+    }
+    if (showInspector) {
+        val openingQuarterBpm by readerVm.openingQuarterBpm.collectAsStateWithLifecycle()
+        PlaybackInspectorSheet(
+            audioVm = audioVm,
+            openingQuarterBpm = openingQuarterBpm,
+            sheetState = inspectorSheetState,
+            onDismiss = { showInspector = false },
+        )
     }
 }
 
@@ -195,7 +211,7 @@ private fun keepInViewOffsetY(
 }
 
 @Composable
-private fun TransportBar(audioVm: ReaderAudioViewModel) {
+private fun TransportBar(audioVm: ReaderAudioViewModel, onOpenInspector: () -> Unit) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val currentSecs by audioVm.currentTimeSeconds.collectAsStateWithLifecycle()
     val totalSecs by audioVm.totalTimeSeconds.collectAsStateWithLifecycle()
@@ -231,8 +247,11 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                     if (totalSecs > 0) engine?.seek(fraction * totalSecs)
                 },
                 enabled = isPrepared,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = onOpenInspector, enabled = isPrepared) {
+                Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+            }
         }
     }
 }
