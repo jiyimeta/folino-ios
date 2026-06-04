@@ -94,22 +94,26 @@ fun SettingsScreen(
                 }
             }
         }
-        item {
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.History,
-                    contentDescription = "Version History",
-                    modifier = Modifier.padding(end = 8.dp),
-                )
-                Text("Version History", style = MaterialTheme.typography.titleSmall)
+        // Empty when suppressed (e.g. the 1.0.0 first-release guard in MainActivity); hide the whole section,
+        // header included, so we never render a bare "Version History" heading with no entries.
+        if (versionHistory.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.History,
+                        contentDescription = "Version History",
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    Text("Version History", style = MaterialTheme.typography.titleSmall)
+                }
             }
-        }
-        items(versionHistory.size) { idx ->
-            val v = versionHistory[idx]
-            Column {
-                Text(v.version, style = MaterialTheme.typography.titleMedium)
-                v.descriptions.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
+            items(versionHistory.size) { idx ->
+                val v = versionHistory[idx]
+                Column {
+                    Text(v.version, style = MaterialTheme.typography.titleMedium)
+                    v.descriptions.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
+                }
             }
         }
         if (onOpenLicenses != null) {
