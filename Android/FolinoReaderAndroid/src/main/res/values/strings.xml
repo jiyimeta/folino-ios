@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_inspector_general">General</string>
+    <string name="reader_inspector_parts">Parts</string>
+    <string name="reader_part_untitled">Part</string>
+    <string name="reader_display_mode">Display mode</string>
+    <string name="reader_layout_vertical">Vertical</string>
+    <string name="reader_layout_horizontal">Horizontal</string>
+    <string name="reader_layout_page">Page</string>
+    <string name="reader_pref_staff_size">Staff size</string>
+    <string name="reader_pref_honor_breaks">Follow line and page breaks</string>
+    <string name="reader_pref_collapse_rests">Collapse multi-measure rests</string>
+    <string name="reader_pref_show_invisible">Show hidden elements</string>
+    <string name="reader_display_settings">Display settings</string>
+    <string name="reader_staff_hide">Hide staff</string>
+    <string name="reader_staff_show">Show staff</string>
+    <string name="reader_clef_choose">Choose clef</string>
+    <string name="reader_clef_reset">Reset to default</string>
+    <string name="reader_clef_treble">Treble</string>
+    <string name="reader_clef_treble8va">Treble 8va</string>
+    <string name="reader_clef_treble8vb">Treble 8vb</string>
+    <string name="reader_clef_treble15ma">Treble 15ma</string>
+    <string name="reader_clef_treble15mb">Treble 15mb</string>
+    <string name="reader_clef_bass">Bass</string>
+    <string name="reader_clef_bass8va">Bass 8va</string>
+    <string name="reader_clef_bass8vb">Bass 8vb</string>
+    <string name="reader_clef_soprano">Soprano</string>
+    <string name="reader_clef_alto">Alto</string>
+    <string name="reader_clef_tenor">Tenor</string>
+    <string name="reader_clef_baritone">Baritone</string>
+    <string name="reader_clef_percussion">Percussion</string>
+    <string name="reader_clef_percussion2">Percussion (alt)</string>
+</resources>
