@@ -69,6 +69,7 @@ import kotlin.math.floor
 fun ReaderScreen(
     scoreId: String,
     title: String,
+    layoutMode: ReaderLayoutMode = ReaderLayoutMode.VERTICAL,
     onBack: () -> Unit,
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
@@ -108,7 +109,15 @@ fun ReaderScreen(
             when (val s = state) {
                 is ReaderState.Loading -> Text("Loading…")
                 is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
-                is ReaderState.Ready -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
+                is ReaderState.Ready -> when (layoutMode) {
+                    ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
+                    // Page / Horizontal surfaces are not implemented yet; both fall back to the
+                    // vertical-scroll surface for now. Follow-up work replaces these branches with
+                    // dedicated PagedScore() / HorizontalScore() composables — this `when` is the
+                    // single branch point so those surfaces slot in without re-touching the wiring.
+                    ReaderLayoutMode.HORIZONTAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
+                    ReaderLayoutMode.PAGE -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
+                }
             }
         }
     }
