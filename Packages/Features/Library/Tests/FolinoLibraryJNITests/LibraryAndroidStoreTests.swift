@@ -2,6 +2,27 @@
 import Foundation
 import Testing
 
+/// No-op export primitives so the suite can keep constructing the store with a
+/// single backend argument; export routing is covered by `ExportScoreTests`.
+private final class NoopPdfRenderer: ScorePdfRenderer {
+    func renderPdf(_: String, _: String) -> Bool {
+        false
+    }
+}
+
+private final class NoopAudioExporter: ScoreAudioFileExporter {
+    func exportAudio(_: String, _: String) -> Bool {
+        false
+    }
+}
+
+extension LibraryAndroidStore {
+    /// Test convenience: construct with no-op export primitives.
+    fileprivate convenience init(store: LibraryStore) {
+        self.init(store: store, pdfRenderer: NoopPdfRenderer(), audioExporter: NoopAudioExporter())
+    }
+}
+
 /// In-memory fake of the Kotlin/Room backend. Records the copied files so the
 /// store's file-naming + copy orchestration can be asserted on the host.
 private final class FakeLibraryStore: LibraryStore {
@@ -27,6 +48,10 @@ private final class FakeLibraryStore: LibraryStore {
 
     func removeFile(localFileName: String) {
         removedFiles.append(localFileName)
+    }
+
+    func scoresDirectoryPath() -> String {
+        "/tmp"
     }
 
     func deleteRecord(id: String) {

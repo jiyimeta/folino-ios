@@ -22,7 +22,7 @@ if isAndroid {
     // the iOS Library. Utility (iOS-only SwiftUI) is still not pulled.
     packageDependencies += [
         // swiftlint:disable:next line_length
-        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "971ffb6b05f368d9495e06657f68ee56b4b9d053"),
+        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
             revision: "70761806733a1e9cbbb58315bb4565ffd6c972df",
@@ -41,6 +41,7 @@ if isAndroid {
                 .product(name: "WireletObservable", package: "swift-wirelet"),
                 .product(name: "WireletProvided", package: "swift-wirelet"),
                 .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
+                .product(name: "SheetMusicMIDI", package: "swift-sheet-music"),
             ],
             plugins: [
                 .plugin(name: "WireletObservableBridges", package: "swift-wirelet"),

@@ -61,4 +61,10 @@ public protocol LibraryStore {
 
     /// Replace ALL membership rows for `tagId` with `items` (drop + reinsert).
     func replaceTagItems(_ tagId: String, _ items: [TagItemWire])
+
+    // MARK: - Paths
+
+    /// Absolute path of the directory holding managed `<id>.<ext>` score files (Kotlin: `filesDir/Scores`). The store
+    /// composes per-file paths from this + `localFileName`.
+    func scoresDirectoryPath() -> String
 }

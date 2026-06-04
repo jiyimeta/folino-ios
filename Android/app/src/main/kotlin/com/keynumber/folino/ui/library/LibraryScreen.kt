@@ -3,6 +3,7 @@ package com.keynumber.folino.ui.library
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,7 +58,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
 import com.keynumber.folino.library.ScoreRowWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +81,14 @@ fun LibraryScreen(
     var singleTagTarget by remember { mutableStateOf<String?>(null) }
     var showBulkTagSheet by remember { mutableStateOf(false) }
 
+    var exportFormats by remember {
+        mutableStateOf<List<com.keynumber.folino.library.ScoreExportFormatWire>>(emptyList())
+    }
+    var exportTargets by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showExportSheet by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+    val exportFailedMsg = stringResource(R.string.export_failed)
+
     fun exitSelection() {
         selectionMode = false
         selectedIds.clear()
@@ -84,6 +97,38 @@ fun LibraryScreen(
     fun toggle(id: String) {
         if (selectedIds.contains(id)) selectedIds.remove(id) else selectedIds.add(id)
         if (selectedIds.isEmpty()) selectionMode = false
+    }
+
+    fun beginExport(ids: List<String>) {
+        if (ids.isEmpty()) return
+        exportTargets = ids
+        // Formats are identical across scores, so probe the first one. The probe parses the .mscz
+        // (file read + unzip) to flag the original format, so run it off the main thread.
+        scope.launch {
+            val formats = withContext(Dispatchers.Default) { viewModel.exportFormats(ids.first()) }
+            exportFormats = formats
+            showExportSheet = true
+        }
+    }
+
+    fun runExport(token: String) {
+        showExportSheet = false
+        val ids = exportTargets
+        scope.launch {
+            exporting = true
+            val dir = com.keynumber.folino.export.ScoreShareLauncher.exportsDir(context).absolutePath
+            // exportScore does heavy work and (for PDF/audio) calls back into Kotlin via
+            // runBlocking, so it must never run on the main thread.
+            val paths = withContext(Dispatchers.Default) {
+                ids.map { viewModel.exportScore(it, token, dir) }
+            }
+            exporting = false
+            if (paths.any { it.isEmpty() }) {
+                snackbarHost.showSnackbar(exportFailedMsg)
+                return@launch
+            }
+            com.keynumber.folino.export.ScoreShareLauncher.share(context, paths)
+        }
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -110,6 +155,15 @@ fun LibraryScreen(
                         }
                     },
                     actions = {
+                        IconButton(
+                            enabled = selectedIds.isNotEmpty(),
+                            onClick = { beginExport(selectedIds.toList()) },
+                        ) {
+                            Icon(
+                                Icons.Filled.IosShare,
+                                contentDescription = stringResource(R.string.export),
+                            )
+                        }
                         IconButton(
                             enabled = selectedIds.isNotEmpty(),
                             onClick = {
@@ -205,6 +259,7 @@ fun LibraryScreen(
                             singleTagTarget = row.id
                             viewModel.beginEditTags(row.id)
                         },
+                        onExport = { beginExport(listOf(row.id)) },
                     )
                 }
             }
@@ -249,6 +304,23 @@ fun LibraryScreen(
             },
         )
     }
+    if (showExportSheet) {
+        ExportFormatSheet(
+            formats = exportFormats,
+            onPick = { runExport(it) },
+            onDismiss = { showExportSheet = false },
+        )
+    }
+    if (exporting) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator()
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -262,6 +334,7 @@ private fun ScoreRow(
     onDelete: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onEditTags: () -> Unit,
+    onExport: () -> Unit,
 ) {
     val content: @Composable () -> Unit = {
         var menu by remember { mutableStateOf(false) }
@@ -287,6 +360,13 @@ private fun ScoreRow(
                             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.export)) },
+                                onClick = {
+                                    menu = false
+                                    onExport()
+                                },
+                            )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.add_to_playlist)) },
                                 onClick = {

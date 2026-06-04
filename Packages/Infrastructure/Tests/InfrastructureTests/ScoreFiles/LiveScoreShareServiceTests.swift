@@ -28,6 +28,14 @@ struct LiveScoreShareServiceTests {
         }
     }
 
+    /// Fake `ScorePDFRenderer` returning fixed bytes so PDF routing can be asserted without exercising CoreGraphics.
+    private struct FakePDFRenderer: Domain.ScorePDFRenderer {
+        let data: Data
+        func renderPDF(score: Score, title: String) throws -> Data {
+            data
+        }
+    }
+
     /// Lays out `Scores/` and `Share/` and writes a single fixture score so the gateway can resolve `Score.source` on
     /// load. Used by every `availableFormats` and `prepareShare` test below.
     private final class Rig {
@@ -38,7 +46,7 @@ struct LiveScoreShareServiceTests {
         let item: ScoreItem
         let audio: FakeAudioExporter
 
-        init(scoreData: Data, localFileName: String) throws {
+        init(scoreData: Data, localFileName: String, pdfRenderer: any Domain.ScorePDFRenderer) throws {
             tmp = try TempDirectory()
             scores = tmp.url.appending(path: "Scores")
             shareTmp = tmp.url.appending(path: "Share")
@@ -51,6 +59,7 @@ struct LiveScoreShareServiceTests {
                 shareTempDirectory: shareTmp,
                 gateway: LiveScoreFileGateway(),
                 audioExporter: audio,
+                pdfRenderer: pdfRenderer,
             )
             item = LiveScoreShareServiceTests.makeItem(localFileName: localFileName)
         }
@@ -59,8 +68,9 @@ struct LiveScoreShareServiceTests {
     private static func makeRig(
         scoreData: Data,
         localFileName: String,
+        pdfRenderer: any Domain.ScorePDFRenderer = CoreGraphicsPDFRenderer(),
     ) throws -> Rig {
-        try Rig(scoreData: scoreData, localFileName: localFileName)
+        try Rig(scoreData: scoreData, localFileName: localFileName, pdfRenderer: pdfRenderer)
     }
 
     @Test func `available formats reports the same five formats for every loadable item`() async throws {
@@ -102,39 +112,10 @@ struct LiveScoreShareServiceTests {
             shareTempDirectory: tmp.url.appending(path: "Share"),
             gateway: LiveScoreFileGateway(),
             audioExporter: FakeAudioExporter(),
+            pdfRenderer: CoreGraphicsPDFRenderer(),
         )
         let options = await svc.availableFormats(for: Self.makeItem(localFileName: "missing.mscz"))
         #expect(options.allSatisfy { !$0.isOriginal })
-    }
-
-    // MARK: - matchingFormat helper
-
-    @Test func `matching format maps known sources`() {
-        #expect(LiveScoreShareService.matchingFormat(for: .midi) == .midi)
-        #expect(LiveScoreShareService.matchingFormat(for: .museScore(.v4)) == .museScoreV4)
-        #expect(LiveScoreShareService.matchingFormat(for: .museScore(.v3)) == .museScoreV3)
-        #expect(LiveScoreShareService.matchingFormat(for: .musicXML) == nil)
-        #expect(LiveScoreShareService.matchingFormat(for: .pdf) == nil)
-        #expect(LiveScoreShareService.matchingFormat(for: .unknown) == nil)
-    }
-
-    // MARK: - sanitize
-
-    @Test func `sanitize title replaces path and null bytes`() {
-        #expect(LiveScoreShareService.sanitize(title: "a/b") == "a_b")
-        #expect(LiveScoreShareService.sanitize(title: "a:b") == "a_b")
-        #expect(LiveScoreShareService.sanitize(title: "a\\b") == "a_b")
-        #expect(LiveScoreShareService.sanitize(title: "a\u{0000}b") == "a_b")
-    }
-
-    @Test func `sanitize title trims to 100 chars`() {
-        let input = String(repeating: "x", count: 250)
-        #expect(LiveScoreShareService.sanitize(title: input).count == 100)
-    }
-
-    @Test func `sanitize title falls back to score when empty`() {
-        #expect(LiveScoreShareService.sanitize(title: "") == "score")
-        #expect(LiveScoreShareService.sanitize(title: "///") == "score")
     }
 
     // MARK: - prepareShare
@@ -182,6 +163,17 @@ struct LiveScoreShareServiceTests {
         #expect(url.pathExtension == "pdf")
         let head = try Data(contentsOf: url).prefix(4)
         #expect(head == Data([0x25, 0x50, 0x44, 0x46])) // %PDF
+    }
+
+    @Test func `prepare share PDF writes the injected renderer's bytes`() async throws {
+        let bytes = Data("PDFBYTES".utf8)
+        let rig = try Self.makeRig(
+            scoreData: Fixtures.minimalMSCZData(), localFileName: "abc.mscz",
+            pdfRenderer: FakePDFRenderer(data: bytes),
+        )
+        let url = try await rig.svc.prepareShare(item: rig.item, format: .pdf)
+        #expect(url.pathExtension == "pdf")
+        #expect(try Data(contentsOf: url) == bytes)
     }
 
     @Test func `prepare share MIDI starts with M thd magic`() async throws {

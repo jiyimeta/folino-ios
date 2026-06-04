@@ -79,4 +79,13 @@ dependencies {
     implementation("com.mikepenz:aboutlibraries-compose-m3:11.2.3")
 
     implementation("sh.calvin.reorderable:reorderable:2.4.3")
+
+    // Score export primitives (PdfScoreRenderer / AudioScoreExporter) draw via
+    // the shared sheet-music layout + render the score to audio. Reader uses
+    // these as `implementation` (not exposed transitively), so :app declares
+    // them directly. mavenLocal, published in Phase A.
+    implementation("io.github.jiyimeta:sheet-music-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-compose-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }

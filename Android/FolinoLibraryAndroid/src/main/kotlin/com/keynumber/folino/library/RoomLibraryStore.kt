@@ -209,6 +209,8 @@ class RoomLibraryStore(context: Context) : LibraryStore {
     private val scoresDir: File =
         File(context.applicationContext.filesDir, "Scores").apply { mkdirs() }
 
+    override fun scoresDirectoryPath(): String = scoresDir.absolutePath
+
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {
             ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt)

@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicCore
 
 /// Selectable share format on a library row.
 ///
@@ -45,4 +46,43 @@ public protocol ScoreShareService: Sendable {
         item: ScoreItem,
         format: ScoreShareFormat,
     ) async throws -> URL
+}
+
+extension ScoreShareFormat {
+    /// Canonical file extension for the produced file (no leading dot). MuseScore v3/v4 both emit `.mscz`.
+    public var canonicalExtension: String {
+        switch self {
+        case .museScoreV4, .museScoreV3: "mscz"
+        case .pdf: "pdf"
+        case .midi: "mid"
+        case .audioM4A: "m4a"
+        }
+    }
+
+    /// The formats in display order — the single source for both the iOS menu and the Android sheet.
+    public static let allOrdered: [ScoreShareFormat] = [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A]
+
+    /// The share format that re-emits `source` byte-for-byte, or `nil` for sources we don't expose as a format
+    /// (MuseScore 2, MusicXML, PDF, unknown).
+    public static func matching(for source: ScoreSource) -> ScoreShareFormat? {
+        switch source {
+        case .midi: .midi
+        case .museScore(.v4): .museScoreV4
+        case .museScore(.v3): .museScoreV3
+        case .museScore(.v2), .musicXML, .pdf, .unknown: nil
+        }
+    }
+}
+
+/// Pure filename derivation for exported scores, shared by iOS and Android so both produce identical filenames.
+public enum ScoreExportNaming {
+    /// Replace filesystem-hostile characters with `_`, trim leading/trailing `_`/space, fall back to `"score"` when
+    /// empty, and cap at 100 characters.
+    public static func sanitize(title: String) -> String {
+        let bad: Set<Character> = ["/", ":", "\\", "\u{0000}"]
+        let cleaned = String(title.map { bad.contains($0) ? "_" : $0 })
+        let stripped = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "_ "))
+        let candidate = stripped.isEmpty ? "score" : stripped
+        return String(candidate.prefix(100))
+    }
 }

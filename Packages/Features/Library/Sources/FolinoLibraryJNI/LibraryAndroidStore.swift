@@ -1,12 +1,18 @@
 // The @WireletObservable bridge macro expands against members declared in this
 // type's primary body, so every @WireletExpose method (scores, playlists, tags)
 // must live here rather than in an extension — splitting them out would drop
-// them from the generated Kotlin bridge. That keeps this file over the limit.
+// them from the generated Kotlin bridge. That keeps this file (and the type
+// body) over the limit.
 // swiftlint:disable file_length
-import Domain // ScoreFormat, ScorePresentation
+// swiftlint:disable type_body_length
+import Domain // ScoreFormat, ScorePresentation, ScoreShareFormat, ScoreExportNaming
 import Foundation
 import Observation
-import SheetMusicMSCX // MSCZReader.parse(contentsOf:)
+
+// SheetMusicMIDI (MidiRenderer/MidiWriter) is used directly rather than the umbrella `SheetMusic`, which
+// `@_exported import`s SheetMusicCore and would make `ScoreItemID` ambiguous with Domain's.
+import SheetMusicMIDI // MidiRenderer.render(score:), MidiWriter.write(_:)
+import SheetMusicMSCX // MSCZReader.parse(contentsOf:), MSCZWriter, MSCXEncoderOptions
 import Wirelet
 import WireletObservable
 import WireletProvided
@@ -24,10 +30,16 @@ import WireletProvided
 ///
 /// `scores` is a *stored* property reassigned wholesale on every mutation (the
 /// Observable bridge's supported `StateFlow` path).
+///
+/// The @WireletExpose methods (scores, playlists, tags, export) are all forced into the primary body by the
+/// bridge macro, so the class body exceeds the `type_body_length` limit by design (disabled below, re-enabled
+/// at end of file).
 @WireletObservable
 @Observable
 public final class LibraryAndroidStore {
     @ObservationIgnored private let store: LibraryStore
+    @ObservationIgnored private let pdfRenderer: ScorePdfRenderer
+    @ObservationIgnored private let audioExporter: ScoreAudioFileExporter
     public var scores: [ScoreRowWire] = []
     public var deletedScores: [ScoreRowWire] = []
 
@@ -46,8 +58,10 @@ public final class LibraryAndroidStore {
     @ObservationIgnored private var selectedTagID: String?
     @ObservationIgnored private var editSheetScoreID: String?
 
-    public init(store: LibraryStore) {
+    public init(store: LibraryStore, pdfRenderer: ScorePdfRenderer, audioExporter: ScoreAudioFileExporter) {
         self.store = store
+        self.pdfRenderer = pdfRenderer
+        self.audioExporter = audioExporter
         reload() // hydrate from persistence on launch
         reloadPlaylists()
         reloadTags()
@@ -167,6 +181,87 @@ public final class LibraryAndroidStore {
 
     private static func row(_ record: ScoreRecordWire) -> ScoreRowWire {
         ScoreRowWire(id: record.id, title: record.title, subtitle: record.subtitle, composer: record.composer)
+    }
+
+    // MARK: - Export
+
+    /// Map a wire token to the shared Domain `ScoreShareFormat`. Unknown → nil.
+    private func parseFormat(_ raw: String) -> ScoreShareFormat? {
+        switch raw {
+        case "museScoreV4": .museScoreV4
+        case "museScoreV3": .museScoreV3
+        case "pdf": .pdf
+        case "midi": .midi
+        case "audioM4A": .audioM4A
+        default: nil
+        }
+    }
+
+    /// Stable wire token for a `ScoreShareFormat` (paired with `parseFormat`).
+    private func token(for format: ScoreShareFormat) -> String {
+        switch format {
+        case .museScoreV4: "museScoreV4"
+        case .museScoreV3: "museScoreV3"
+        case .pdf: "pdf"
+        case .midi: "midi"
+        case .audioM4A: "audioM4A"
+        }
+    }
+
+    /// The export formats in display order plus which one re-emits the score's
+    /// original bytes (the `isOriginal` row, per `ScoreShareFormat.matching`).
+    /// Mirrors iOS `availableFormats(for:)`. Unknown id → empty list.
+    @WireletExpose
+    public func exportFormats(_ scoreId: String) -> [ScoreExportFormatWire] {
+        guard let record = store.loadAll().first(where: { $0.id == scoreId }) else { return [] }
+        let path = "\(store.scoresDirectoryPath())/\(record.localFileName)"
+        let original: ScoreShareFormat? = {
+            guard let score = try? MSCZReader.parse(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+            return ScoreShareFormat.matching(for: score.source)
+        }()
+        return ScoreShareFormat.allOrdered.map {
+            ScoreExportFormatWire(format: token(for: $0), isOriginal: $0 == original)
+        }
+    }
+
+    /// Materialize the chosen `format` for `scoreId` under `outDir` and return
+    /// the produced file's absolute path (`""` on any failure). Mirrors iOS
+    /// `prepareShare(item:format:)`: when the format matches the score's source
+    /// the original bytes are copied verbatim; otherwise the file is re-encoded
+    /// (MSCZ/MIDI in shared Swift) or rasterized via the injected Android-only
+    /// PDF / M4A primitives.
+    @WireletExpose
+    public func exportScore(_ scoreId: String, _ format: String, _ outDir: String) -> String {
+        guard let fmt = parseFormat(format),
+              let record = store.loadAll().first(where: { $0.id == scoreId }) else { return "" }
+        let sourcePath = "\(store.scoresDirectoryPath())/\(record.localFileName)"
+        let sourceURL = URL(fileURLWithPath: sourcePath)
+        guard let score = try? MSCZReader.parse(contentsOf: sourceURL) else { return "" }
+        let title = ScoreExportNaming.sanitize(title: record.title)
+        let outPath = "\(outDir)/\(title).\(fmt.canonicalExtension)"
+        let outURL = URL(fileURLWithPath: outPath)
+        try? FileManager.default.removeItem(at: outURL)
+
+        if ScoreShareFormat.matching(for: score.source) == fmt {
+            return (try? FileManager.default.copyItem(at: sourceURL, to: outURL)) != nil ? outPath : ""
+        }
+        switch fmt {
+        case .museScoreV4: return writeMSCZ(score, to: outURL, target: .v4) ? outPath : ""
+        case .museScoreV3: return writeMSCZ(score, to: outURL, target: .v3) ? outPath : ""
+        case .midi: return writeMIDI(score, to: outURL) ? outPath : ""
+        case .pdf: return pdfRenderer.renderPdf(sourcePath, outPath) ? outPath : ""
+        case .audioM4A: return audioExporter.exportAudio(sourcePath, outPath) ? outPath : ""
+        }
+    }
+
+    private func writeMIDI(_ score: Score, to url: URL) -> Bool {
+        // Mirrors SheetMusic.exportMIDI(score:) — render to SMF, then write the bytes.
+        guard let data = try? MidiWriter.write(MidiRenderer.render(score: score)) else { return false }
+        return (try? data.write(to: url)) != nil
+    }
+
+    private func writeMSCZ(_ score: Score, to url: URL, target: MSCXVersion) -> Bool {
+        (try? MSCZWriter.write(score: score, options: MSCXEncoderOptions(targetVersion: target), to: url)) != nil
     }
 
     // MARK: - Playlists
@@ -502,3 +597,5 @@ public final class LibraryAndroidStore {
         reloadTags()
     }
 }
+
+// swiftlint:enable type_body_length
