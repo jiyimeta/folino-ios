@@ -102,9 +102,13 @@ fun LibraryScreen(
     fun beginExport(ids: List<String>) {
         if (ids.isEmpty()) return
         exportTargets = ids
-        // Formats are identical across scores, so probe the first one.
-        exportFormats = viewModel.exportFormats(ids.first())
-        showExportSheet = true
+        // Formats are identical across scores, so probe the first one. The probe parses the .mscz
+        // (file read + unzip) to flag the original format, so run it off the main thread.
+        scope.launch {
+            val formats = withContext(Dispatchers.Default) { viewModel.exportFormats(ids.first()) }
+            exportFormats = formats
+            showExportSheet = true
+        }
     }
 
     fun runExport(token: String) {
