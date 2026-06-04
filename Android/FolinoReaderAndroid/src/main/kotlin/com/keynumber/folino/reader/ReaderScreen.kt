@@ -70,7 +70,8 @@ fun ReaderScreen(
     LaunchedEffect(scoreHandle) { scoreHandle?.let { audioVm.preparePlayback(it) } }
 
     var showInspector by remember { mutableStateOf(false) }
-    val inspectorSheetState = rememberModalBottomSheetState()
+    // Open at full height so the dense inspector shows as many rows as possible at once.
+    val inspectorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(
         topBar = {
@@ -99,8 +100,10 @@ fun ReaderScreen(
         }
     }
     if (showInspector) {
+        val openingQuarterBpm by readerVm.openingQuarterBpm.collectAsStateWithLifecycle()
         PlaybackInspectorSheet(
             audioVm = audioVm,
+            openingQuarterBpm = openingQuarterBpm,
             sheetState = inspectorSheetState,
             onDismiss = { showInspector = false },
         )

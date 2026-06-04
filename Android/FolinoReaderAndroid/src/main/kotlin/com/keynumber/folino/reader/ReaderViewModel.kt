@@ -27,6 +27,11 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     private val _scoreHandle = MutableStateFlow<Long?>(null)
     val scoreHandle: StateFlow<Long?> = _scoreHandle.asStateFlow()
 
+    // Opening quarter-note BPM (shared Swift `Score.openingQuarterBpm` via JNI), used by
+    // the inspector's tempo readout: "♩ = round(bpm × rate)". Defaults to 120.
+    private val _openingQuarterBpm = MutableStateFlow(120.0)
+    val openingQuarterBpm: StateFlow<Double> = _openingQuarterBpm.asStateFlow()
+
     private var handle: ScoreHandle? = null
 
     /** Resolve the Library's on-disk score file: filesDir/Scores/<id>.mscz */
@@ -59,6 +64,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
             }
             handle = h
             _scoreHandle.value = h.raw
+            _openingQuarterBpm.value = withContext(Dispatchers.Default) {
+                SheetMusicJNI.nativeOpeningQuarterBpm(h.raw)
+            }
 
             val programBytes = withContext(Dispatchers.Default) {
                 SheetMusicJNI.nativeComputeLayout(h.raw, PAGE_WIDTH_MM, PAGE_HEIGHT_MM)
