@@ -1,3 +1,10 @@
+- version: 1.6.1
+  descriptions:
+    - en: Fixed a rare crash that could occur during playback
+      ja: 再生時に稀に発生するクラッシュを修正
+      ko: 재생 중 드물게 발생하던 충돌 수정
+      zh-Hans: 修复播放时偶发的崩溃问题
+      zh-Hant: 修正播放時偶發的閃退問題
 - version: 1.6.0
   descriptions:
     - en: Added score info editing
