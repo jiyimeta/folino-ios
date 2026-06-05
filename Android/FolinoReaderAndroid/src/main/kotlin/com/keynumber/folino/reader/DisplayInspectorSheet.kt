@@ -1,5 +1,8 @@
 package com.keynumber.folino.reader
 
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,15 +46,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.PlatformTextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 /** Compact slider height so the dense General section doesn't dominate the sheet. */
@@ -79,7 +82,7 @@ fun DisplayInspectorSheet(
 ) {
     var generalExpanded by rememberSaveable { mutableStateOf(true) }
     var partsExpanded by rememberSaveable { mutableStateOf(true) }
-    val musicFont = rememberMusicFont()
+    val typeface = rememberBravuraTypeface()
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         LazyColumn(
@@ -145,7 +148,7 @@ fun DisplayInspectorSheet(
                         StaffRow(
                             staff = staff,
                             options = options,
-                            musicFont = musicFont,
+                            typeface = typeface,
                             onChange = onChange,
                         )
                     }
@@ -227,7 +230,7 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
 private fun StaffRow(
     staff: StaffDescriptor,
     options: LayoutOptions,
-    musicFont: FontFamily,
+    typeface: Typeface,
     onChange: (LayoutOptions) -> Unit,
 ) {
     val effectiveRaw = options.clefOverrides[staff.address] ?: staff.defaultClefRawType
@@ -239,7 +242,7 @@ private fun StaffRow(
     ) {
         ClefGlyphPicker(
             currentRaw = effectiveRaw,
-            musicFont = musicFont,
+            typeface = typeface,
             modifier = Modifier.weight(1f),
             onSelect = { choice ->
                 onChange(
@@ -274,33 +277,58 @@ private fun StaffRow(
 }
 
 /**
- * Text style for SMuFL clef glyphs. The Bravura font reports very large ascent/descent, which
- * otherwise inflates each row's height; trimming the line metrics to a fixed [lineHeight] keeps
- * the trigger button and dropdown rows compact.
+ * One clef "tile": a 5-line staff with the SMuFL glyph drawn at the staff line it anchors to.
+ * The staff background plus the anchor position are what distinguish the C-clef family (Soprano /
+ * Alto / Tenor / Baritone all share the cClef glyph). Mirrors the iOS ClefMenu tile. Drawn small
+ * via a native Canvas so the glyph's own large vertical metrics don't bloat the layout box.
  */
 @Composable
-private fun clefGlyphStyle() = MaterialTheme.typography.titleLarge.copy(
-    platformStyle = PlatformTextStyle(includeFontPadding = false),
-    lineHeightStyle = LineHeightStyle(
-        alignment = LineHeightStyle.Alignment.Center,
-        trim = LineHeightStyle.Trim.Both,
-    ),
-    lineHeight = 22.sp,
-)
+private fun ClefTile(choice: ClefChoice, typeface: Typeface, modifier: Modifier = Modifier) {
+    val lineColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val glyphColor = MaterialTheme.colorScheme.onSurface
+    Canvas(modifier.size(width = 34.dp, height = 38.dp)) {
+        val sp = 5.dp.toPx()
+        val staffHeight = sp * 4 // 5 lines = 4 spaces
+        val staffTop = (size.height - staffHeight) / 2f
+        for (i in 0..4) {
+            val y = staffTop + sp * i
+            drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        }
+        // Anchor: +Y is downward from the middle line; mirrors iOS ClefMenu's yOffset table.
+        val middleY = staffTop + sp * 2
+        val centerY = middleY + choice.anchorFromMiddleSp * sp
+        val paint = Paint().apply {
+            isAntiAlias = true
+            this.typeface = typeface
+            textSize = sp * 4 // SMuFL em = 4 staff spaces, so one space matches the drawn staff
+            color = glyphColor.toArgb()
+            textAlign = Paint.Align.CENTER
+        }
+        val fm = paint.fontMetrics
+        // Center the glyph box on centerY (matches iOS's anchor: .center) by deriving the baseline.
+        val baseline = centerY - (fm.ascent + fm.descent) / 2f
+        drawIntoCanvas {
+            it.nativeCanvas.drawText(
+                String(Character.toChars(choice.glyph)),
+                size.width / 2f,
+                baseline,
+                paint,
+            )
+        }
+    }
+}
 
 @Composable
 private fun ClefGlyphPicker(
     currentRaw: String,
-    musicFont: FontFamily,
+    typeface: Typeface,
     modifier: Modifier = Modifier,
     onSelect: (ClefChoice) -> Unit,
     onReset: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val glyphStyle = clefGlyphStyle()
     val currentChoice = ClefChoice.fromRawType(currentRaw)
-    val currentGlyph = currentChoice?.glyph?.let { String(Character.toChars(it)) }
-    // Always show a textual name so the button is meaningful even if the glyph font is unavailable.
+    // Always show a textual name so the button stays meaningful beside the glyph tile.
     val currentName = currentChoice?.let { localizedClefLabel(it) } ?: currentRaw
     // Family order: treble, bass, c, percussion (matches iOS ClefMenuChoice grouping).
     val choices = remember {
@@ -315,8 +343,8 @@ private fun ClefGlyphPicker(
             onClick = { expanded = true },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            if (currentGlyph != null) {
-                Text(text = currentGlyph, fontFamily = musicFont, style = glyphStyle)
+            if (currentChoice != null) {
+                ClefTile(choice = currentChoice, typeface = typeface)
                 Spacer(Modifier.width(8.dp))
             }
             Text(
@@ -333,7 +361,6 @@ private fun ClefGlyphPicker(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             choices.forEach { choice ->
-                val glyphString = String(Character.toChars(choice.glyph))
                 DropdownMenuItem(
                     contentPadding = rowPadding,
                     text = {
@@ -341,7 +368,7 @@ private fun ClefGlyphPicker(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(glyphString, fontFamily = musicFont, style = glyphStyle)
+                            ClefTile(choice = choice, typeface = typeface)
                             Text(localizedClefLabel(choice), style = MaterialTheme.typography.bodyMedium)
                         }
                     },
@@ -407,14 +434,15 @@ private fun localizedClefLabel(choice: ClefChoice): String = stringResource(
 )
 
 /**
- * The bundled SMuFL music font (Bravura). The asset ships in the SheetMusicComposeAndroid
+ * The bundled SMuFL music typeface (Bravura). The asset ships in the SheetMusicComposeAndroid
  * dependency at `fonts/Bravura.otf` and merges into the app's assets at build time, so the
- * library module resolves it at runtime via the app context's AssetManager.
+ * library module resolves it at runtime via the app context's AssetManager. Returned as an
+ * android.graphics.Typeface so the clef tiles can draw glyphs through a native Canvas.
  */
 @Composable
-private fun rememberMusicFont(): FontFamily {
+private fun rememberBravuraTypeface(): Typeface {
     val ctx = LocalContext.current
     return remember(ctx) {
-        FontFamily(Font(path = "fonts/Bravura.otf", assetManager = ctx.assets))
+        Typeface.createFromAsset(ctx.assets, "fonts/Bravura.otf")
     }
 }
