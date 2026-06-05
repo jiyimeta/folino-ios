@@ -77,19 +77,6 @@ final class ScoreListViewModel {
     }
 
     private func applySearch(_ items: [ScoreItem]) -> [ScoreItem] {
-        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return items }
-        let opts: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        return items.filter { item in
-            if item.title.range(of: trimmed, options: opts, locale: .current) != nil {
-                return true
-            }
-            if let composer = item.composer,
-               composer.range(of: trimmed, options: opts, locale: .current) != nil
-            {
-                return true
-            }
-            return false
-        }
+        items.filter { ScoreSearch.matches(title: $0.title, composer: $0.composer, query: searchQuery) }
     }
 }

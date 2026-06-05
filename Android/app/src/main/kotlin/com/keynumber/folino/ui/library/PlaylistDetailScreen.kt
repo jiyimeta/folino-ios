@@ -51,6 +51,10 @@ fun PlaylistDetailScreen(
 ) {
     LaunchedEffect(playlistId) { viewModel.selectPlaylist(playlistId) }
     val items by viewModel.selectedPlaylistItems.collectAsStateWithLifecycle()
+    var searchQuery by remember { mutableStateOf("") }
+    LaunchedEffect(searchQuery) { viewModel.setSearchQuery(searchQuery) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { viewModel.setSearchQuery("") } }
+    val searching = searchQuery.isNotBlank()
 
     // Local mirror so a drag reorders immediately; re-sync when the store emits.
     val local = remember { mutableStateListOf<ScoreRowWire>() }
@@ -106,56 +110,66 @@ fun PlaylistDetailScreen(
             )
         },
     ) { padding ->
-        if (local.isEmpty()) {
-            Box(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(stringResource(R.string.playlists_empty_hint), style = MaterialTheme.typography.bodyMedium)
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-            ) {
-                items(local, key = { it.id }) { row ->
-                    ReorderableItem(reorderState, key = row.id) {
-                        var rowMenu by remember { mutableStateOf(false) }
-                        val title = row.title.ifEmpty { "Untitled" }
-                        val headline = if (row.subtitle.isEmpty()) title else "$title ${row.subtitle}"
-                        ListItem(
-                            headlineContent = { Text(headline) },
-                            supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
-                            leadingContent = {
-                                IconButton(modifier = Modifier.draggableHandle(), onClick = {}) {
-                                    Icon(
-                                        Icons.Filled.DragHandle,
-                                        contentDescription = stringResource(R.string.playlist_reorder_handle),
-                                    )
-                                }
-                            },
-                            trailingContent = {
-                                Box {
-                                    IconButton(onClick = { rowMenu = true }) {
-                                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more))
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize(),
+        ) {
+            LibrarySearchField(query = searchQuery, onQueryChange = { searchQuery = it })
+            if (local.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        stringResource(
+                            if (searching) R.string.search_no_results else R.string.playlists_empty_hint,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(local, key = { it.id }) { row ->
+                        ReorderableItem(reorderState, key = row.id) {
+                            var rowMenu by remember { mutableStateOf(false) }
+                            val title = row.title.ifEmpty { "Untitled" }
+                            val headline = if (row.subtitle.isEmpty()) title else "$title ${row.subtitle}"
+                            ListItem(
+                                headlineContent = { Text(headline) },
+                                supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
+                                leadingContent = {
+                                    if (!searching) {
+                                        IconButton(modifier = Modifier.draggableHandle(), onClick = {}) {
+                                            Icon(
+                                                Icons.Filled.DragHandle,
+                                                contentDescription = stringResource(R.string.playlist_reorder_handle),
+                                            )
+                                        }
                                     }
-                                    DropdownMenu(expanded = rowMenu, onDismissRequest = { rowMenu = false }) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.playlist_remove_from)) },
-                                            onClick = {
-                                                rowMenu = false
-                                                viewModel.removeFromPlaylist(row.id, playlistId)
-                                            },
-                                        )
+                                },
+                                trailingContent = {
+                                    Box {
+                                        IconButton(onClick = { rowMenu = true }) {
+                                            Icon(
+                                                Icons.Filled.MoreVert,
+                                                contentDescription = stringResource(R.string.more),
+                                            )
+                                        }
+                                        DropdownMenu(expanded = rowMenu, onDismissRequest = { rowMenu = false }) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.playlist_remove_from)) },
+                                                onClick = {
+                                                    rowMenu = false
+                                                    viewModel.removeFromPlaylist(row.id, playlistId)
+                                                },
+                                            )
+                                        }
                                     }
-                                }
-                            },
-                            modifier = Modifier.clickable { onOpenScore(row) },
-                        )
+                                },
+                                modifier = Modifier.clickable { onOpenScore(row) },
+                            )
+                        }
                     }
                 }
             }
