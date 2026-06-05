@@ -127,11 +127,9 @@ fun ReaderScreen(
                 is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
                 is ReaderState.Ready -> when (layoutMode) {
                     ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
-                    // Page / Horizontal surfaces are not implemented yet; both fall back to the
-                    // vertical-scroll surface for now. Follow-up work replaces these branches with
-                    // dedicated PagedScore() / HorizontalScore() composables — this `when` is the
-                    // single branch point so those surfaces slot in without re-touching the wiring.
-                    ReaderLayoutMode.HORIZONTAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
+                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm)
+                    // Page has no dedicated surface yet; it falls back to the vertical-scroll
+                    // surface. This `when` is the single branch point for the render surfaces.
                     ReaderLayoutMode.PAGE -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
                 }
             }
@@ -378,4 +376,182 @@ private fun formatTime(seconds: Double): String {
     val minutes = floor(s / 60).toLong()
     val secs = floor(s % 60).toLong()
     return "%02d:%02d".format(minutes, secs)
+}
+
+// Horizontal mode renders at the same px-per-mm as vertical (A4-width basis), so
+// the staff is the same on-screen size in both modes. The page is wider than the
+// viewport (natural width → horizontal scroll) and shorter (single system →
+// vertical centering).
+private const val A4_WIDTH_MM = 210.0
+
+/**
+ * Horizontal scroll surface: the score is laid out as one natural-width row
+ * (`ReaderLayoutMode.HORIZONTAL` → the options-aware layout's `.horizontal`
+ * branch). Scrolls horizontally always, centers vertically when the single row
+ * is shorter than the viewport, and follows the playback cursor measure-by-
+ * measure (X parks the measure's leading edge; Y keeps it in view when zoomed
+ * taller than the viewport) via the shared Domain math over JNI.
+ */
+@Composable
+private fun HorizontalScore(
+    state: ReaderState.Ready,
+    scoreHandle: Long?,
+    fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
+    audioVm: ReaderAudioViewModel,
+) {
+    val page = state.program.pages.first()
+
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    var scale by remember { mutableFloatStateOf(1f) }
+
+    val vScroll = rememberScrollState()
+    val hScroll = rememberScrollState()
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
+    // Same px-per-mm as vertical mode (A4-width basis), independent of the natural
+    // page width.
+    val fitPxPerMM = if (viewportSize.width > 0) {
+        (viewportSize.width / A4_WIDTH_MM).toFloat()
+    } else {
+        0f
+    }
+    val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
+    val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
+
+    val padPx = with(density) { 24.dp.toPx() }
+
+    // Vertical scroll only when the zoomed row is taller than the viewport;
+    // otherwise it is centered vertically with no vertical interaction.
+    val needsVScroll = contentHeightPx > viewportSize.height + 0.5f
+
+    // Auto-scroll: X = measure-anchored leading-edge (measure frame + shared
+    // Domain fn); Y = keep-in-view, only meaningful when zoomed taller.
+    LaunchedEffect(scoreHandle, fitPxPerMM, scale) {
+        val handle = scoreHandle ?: return@LaunchedEffect
+        if (fitPxPerMM <= 0f) return@LaunchedEffect
+        audioVm.currentCursor.collectLatest { cursor ->
+            if (cursor == null) return@collectLatest
+            val cursorEnc = ScoreCursorCodec.encode(cursor)
+
+            val mBytes = SheetMusicJNI.nativeMeasureFrame(handle, cursorEnc)
+            if (mBytes.isNotEmpty()) {
+                val m = DecodedFrameCodec.decode(mBytes)
+                val xMin = m.x * fitPxPerMM * scale
+                val xMax = (m.x + m.width) * fitPxPerMM * scale
+                val newX = FolinoReaderJNI.nativeHorizontalMeasureScrollOffset(
+                    hScroll.value.toDouble(),
+                    xMin,
+                    xMax,
+                    viewportSize.width.toDouble(),
+                    padPx.toDouble(),
+                ).toFloat()
+                if (abs(newX - hScroll.value) >= 0.5f) {
+                    hScroll.animateScrollTo(newX.toInt().coerceAtLeast(0))
+                }
+            }
+
+            if (needsVScroll) {
+                val cBytes = SheetMusicJNI.nativeCursorFrame(handle, cursorEnc)
+                if (cBytes.isNotEmpty()) {
+                    val f = DecodedFrameCodec.decode(cBytes)
+                    val yMin = f.y * fitPxPerMM * scale
+                    val yMax = (f.y + f.height) * fitPxPerMM * scale
+                    val newY = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
+                        vScroll.value.toDouble(),
+                        yMin,
+                        yMax,
+                        viewportSize.height.toDouble(),
+                        padPx.toDouble(),
+                    ).toFloat()
+                    if (abs(newY - vScroll.value) >= 0.5f) {
+                        vScroll.animateScrollTo(newY.toInt().coerceAtLeast(0))
+                    }
+                }
+            }
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { viewportSize = it }
+            // Pinch zoom: only two-finger gestures are consumed; single-finger
+            // drags fall through to the scroll modifiers (native fling).
+            .pointerInput(fitPxPerMM) {
+                if (fitPxPerMM <= 0f) return@pointerInput
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val pressed = event.changes.count { it.pressed }
+                        if (pressed >= 2) {
+                            val zoom = event.calculateZoom()
+                            if (zoom != 1f) {
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                val newScale = (scale * zoom).coerceIn(1f, 8f)
+                                val ratio = newScale / scale
+                                if (ratio != 1f && !centroid.x.isNaN() && !centroid.y.isNaN()) {
+                                    val newX = focalAdjustedOffset(hScroll.value.toFloat(), centroid.x, ratio)
+                                    val newY = focalAdjustedOffset(vScroll.value.toFloat(), centroid.y, ratio)
+                                    scale = newScale
+                                    scope.launch { hScroll.scrollTo(newX.toInt().coerceAtLeast(0)) }
+                                    scope.launch { vScroll.scrollTo(newY.toInt().coerceAtLeast(0)) }
+                                }
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        val scrollModifier = if (needsVScroll) {
+            Modifier.horizontalScroll(hScroll).verticalScroll(vScroll)
+        } else {
+            Modifier.horizontalScroll(hScroll)
+        }
+
+        Box(scrollModifier, contentAlignment = Alignment.Center) {
+            // Outer box: full viewport height (when not vertically scrolling) so the
+            // short row centers vertically; inner box is the exact scaled page size.
+            Box(
+                Modifier.size(
+                    width = with(density) { contentWidthPx.toDp() },
+                    height = with(density) {
+                        (if (needsVScroll) {
+                            contentHeightPx
+                        } else {
+                            maxOf(contentHeightPx, viewportSize.height.toFloat())
+                        }).toDp()
+                    },
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier.size(
+                        width = with(density) { contentWidthPx.toDp() },
+                        height = with(density) { contentHeightPx.toDp() },
+                    ),
+                ) {
+                    ScorePage(
+                        page = page,
+                        fontProvider = fontProvider,
+                        pxPerMM = fitPxPerMM * scale,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    scoreHandle?.let { handle ->
+                        PlaybackCursorOverlay(
+                            scoreHandle = handle,
+                            cursorFlow = audioVm.currentCursor,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            panOffset = Offset.Zero,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
