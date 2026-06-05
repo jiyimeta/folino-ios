@@ -60,4 +60,6 @@
     <string name="export_format_audio">Audio (M4A)</string>
     <string name="export_original_badge">Original</string>
     <string name="export_failed">Export failed</string>
+    <string name="search_hint">Search</string>
+    <string name="search_no_results">No results</string>
 </resources>
