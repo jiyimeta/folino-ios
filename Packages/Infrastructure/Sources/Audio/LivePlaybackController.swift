@@ -134,6 +134,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         }
         engine.setRate(Float(preferences.tempoMultiplier))
         applyMasterVolume(preferences.masterVolume)
+        engine.setMasterTuning(cents: A4Reference.cents(forHz: preferences.a4ReferenceHz))
     }
 
     public func play() throws {
@@ -239,10 +240,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
         applyMasterVolume(value)
     }
 
-    /// Forward the per-score master output volume to the engine's master-gain stage (post per-channel mixing, ahead
-    /// of the engine's peak limiter). `1.0` is unity. The engine clamps to `[0, 3]`; we clamp here too so the value
-    /// mirrors what the Reader persists. Called on load (`applyPreferences`), on every slider write
-    /// (`setMasterVolume`), and after a soundfont swap (`reloadSoundfont` replays `applyPreferences`).
+    public func setMasterTuning(cents: Double) {
+        engine.setMasterTuning(cents: cents)
+    }
+
+    /// Forward master output volume to the engine's gain stage. `1.0` = unity; clamped to `[0, 3]`. Called on load,
+    /// every slider write (`setMasterVolume`), and after a soundfont swap (`reloadSoundfont` via `applyPreferences`).
     func applyMasterVolume(_ value: Double) {
         engine.setMasterGain(Float(min(max(value, 0), 3)))
     }
@@ -385,8 +388,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         center.nowPlayingInfo = info
         center.playbackState = isPlaying ? .playing : .paused
-        // Resync the cursor-sink's backward-jump detector so the next tick after an explicit publish (skip / seek /
-        // state change) doesn't re-trigger a redundant publish.
+        // Resync the cursor-sink's backward-jump detector so the next tick after a publish doesn't re-trigger it.
         lastObservedEngineTime = elapsed
     }
 }

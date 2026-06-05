@@ -46,4 +46,10 @@ public enum ReaderGlobalSettingsKey {
     /// Bool. When true, the Reader's bottom transport control shows a full-width time-based seek bar.
     /// Defaults to `true` at the `@AppStorage` site. When false, only the compact transport pill shows.
     public static let showSeekBarEnabled = "readerShowSeekBarEnabled"
+
+    /// Double. Global A4 reference frequency in Hz, applied to all scores unless a per-score override is set in
+    /// `ReaderPreferences.a4ReferenceHz`. Clamped to `[A4Reference.minHz, A4Reference.maxHz]`. Defaults to
+    /// `A4Reference.standardHz` (440 Hz) when absent. Key used by both `@AppStorage` (Settings UI, future) and
+    /// `UserDefaults.standard` (PlaybackPreferences builder, no-View context).
+    public static let a4ReferenceHz = "reader.a4ReferenceHz"
 }
