@@ -18,10 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.R
-import kotlin.math.log2
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @Composable
@@ -184,7 +183,8 @@ data class VersionHistoryItem(val version: String, val descriptions: List<String
 
 /**
  * Global A4 reference pitch slider row (415–466 Hz).
- * Displays both the Hz value and the cent offset from standard 440 Hz.
+ * Title shows "A4 = NNNHz" (mirroring iOS; no space before "Hz"). A description line below
+ * tells the user the value applies to all scores but can be overridden per-score.
  * Snaps to 432 or 440 Hz on release when within 1 Hz of either value.
  */
 @Composable
@@ -193,8 +193,6 @@ private fun A4SliderRow(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
 ) {
-    val cents = 1200.0 * log2(hz / 440.0)
-    val readout = "%.1f Hz  %+.1f¢".format(hz, cents)
     Column(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth(),
@@ -206,16 +204,17 @@ private fun A4SliderRow(
                 modifier = Modifier.padding(end = 12.dp),
             )
             Text(
-                stringResource(R.string.settings_a4_reference),
+                "A4 = ${hz.roundToInt()}Hz",
                 Modifier.weight(1f),
-            )
-            Text(
-                readout,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
+        Text(
+            stringResource(R.string.reader_settings_a4_description),
+            modifier = Modifier.padding(start = 36.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Slider(
             value = hz.toFloat(),
             onValueChange = onValueChange,

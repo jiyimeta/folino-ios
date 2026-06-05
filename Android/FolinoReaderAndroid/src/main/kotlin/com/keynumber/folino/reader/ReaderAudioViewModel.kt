@@ -99,6 +99,11 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _a4ReferenceHz = MutableStateFlow(440.0)
     val a4ReferenceHz: StateFlow<Double> = _a4ReferenceHz.asStateFlow()
 
+    // The global default A4 from SettingsPrefs, stored when the score is seeded so the
+    // inspector can display the per-score value's cents offset relative to the user's default.
+    private val _globalA4ReferenceHz = MutableStateFlow(440.0)
+    val globalA4ReferenceHz: StateFlow<Double> = _globalA4ReferenceHz.asStateFlow()
+
     /** Sets master output volume (0..1) and reflects it for the inspector UI. */
     fun setMasterVolume(volume: Float) {
         _masterVolume.value = volume
@@ -109,6 +114,16 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     fun setMetronomeEnabled(enabled: Boolean) {
         _metronomeEnabled.value = enabled
         engine.value?.setMetronomeEnabled(enabled)
+    }
+
+    /**
+     * Seeds the A4 reference pitch from the global SettingsPrefs default. Called once per
+     * score load (before [preparePlayback]) so the inspector can display the current per-score
+     * value's cents offset relative to the user's global preference.
+     */
+    fun seedGlobalA4ReferenceHz(hz: Double) {
+        _globalA4ReferenceHz.value = hz
+        setA4ReferenceHz(hz)
     }
 
     /**

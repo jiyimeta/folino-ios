@@ -31,5 +31,7 @@
     <string name="reader_clef_percussion">打击乐</string>
     <string name="reader_clef_percussion2">打击乐（替代）</string>
     <string name="reader_playback_a4_reference">A4</string>
+    <string name="reader_playback_a4_relative">%1$dHz %2$s音分</string>
+    <string name="reader_settings_a4_description">适用于所有乐谱播放的基准音高。每首乐谱可单独覆盖。</string>
     <string name="settings_a4_reference">A4 基准音</string>
 </resources>

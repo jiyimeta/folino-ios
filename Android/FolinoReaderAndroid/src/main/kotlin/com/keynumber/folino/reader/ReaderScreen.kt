@@ -92,9 +92,10 @@ fun ReaderScreen(
     LaunchedEffect(scoreId) { readerVm.load(scoreId) }
     LaunchedEffect(scoreHandle) {
         scoreHandle?.let {
-            // Seed the per-score live A4 from the global default before prepare,
-            // so the first prepare call picks up the user's preferred tuning.
-            audioVm.setA4ReferenceHz(globalA4ReferenceHz)
+            // Seed the per-score live A4 from the global default before prepare, so
+            // the first prepare call picks up the user's preferred tuning. Also stores
+            // the global default in the VM so the inspector can show the cents offset.
+            audioVm.seedGlobalA4ReferenceHz(globalA4ReferenceHz)
             audioVm.preparePlayback(it)
         }
     }
