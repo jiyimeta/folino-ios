@@ -1,4 +1,5 @@
 import Domain
+import Foundation
 import SheetMusicCore
 
 extension PlaybackPreferences {
@@ -28,12 +29,18 @@ extension PlaybackPreferences {
                 gmProgram: program,
             )
         }
+        let globalA4 = UserDefaults.standard.object(forKey: ReaderGlobalSettingsKey.a4ReferenceHz) as? Double
+            ?? A4Reference.standardHz
         return PlaybackPreferences(
             scoreItemID: scoreItemID,
             perStaff: states,
             tempoMultiplier: readerPreferences.tempoMultiplier ?? 1.0,
             abRepeat: readerPreferences.abRepeat,
             masterVolume: readerPreferences.masterVolume,
+            a4ReferenceHz: A4Reference.effectiveHz(
+                override: readerPreferences.a4ReferenceHz,
+                globalDefault: globalA4,
+            ),
         )
     }
 }
