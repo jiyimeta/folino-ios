@@ -107,4 +107,31 @@ struct ScoreSearchBridgeTests {
         store.setSearchQuery("")
         #expect(Set(store.scores.map(\.id)) == ["sonata", "prelude"])
     }
+
+    @Test func `setSearchQuery matches on composer`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(
+                id: "sonata",
+                title: "Moonlight Sonata",
+                subtitle: "",
+                composer: "Beethoven",
+                localFileName: "sonata.mscz",
+                deletedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: "prelude",
+                title: "Prelude",
+                subtitle: "",
+                composer: "Chopin",
+                localFileName: "prelude.mscz",
+                deletedAt: 0,
+            ),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+
+        // Query matches the composer field only — title "Prelude" has no "chopin".
+        store.setSearchQuery("chopin")
+        #expect(store.scores.map(\.id) == ["prelude"])
+    }
 }
