@@ -49,6 +49,10 @@ import androidx.navigation.navArgument
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderScreen
+import com.keynumber.folino.reader.clefOverridesPref
+import com.keynumber.folino.reader.hiddenStavesPref
+import com.keynumber.folino.reader.layoutOptionsFromPrefs
+import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -275,10 +279,32 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
                 val layoutPref by prefs.layoutMode.collectAsState(initial = "page")
+                val staffSize by prefs.staffSize.collectAsState(initial = 28.0)
+                val honorBreaks by prefs.honorBreaks.collectAsState(initial = true)
+                val collapseRests by prefs.collapseRests.collectAsState(initial = false)
+                val showInvisible by prefs.showInvisible.collectAsState(initial = false)
+                val hiddenStaves by prefs.hiddenStaves.collectAsState(initial = emptySet())
+                val clefOverrides by prefs.clefOverrides.collectAsState(initial = emptySet())
+                val scope = rememberCoroutineScope()
+                val displayOptions = layoutOptionsFromPrefs(
+                    layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
+                )
                 ReaderScreen(
                     scoreId = id,
                     title = title,
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
+                    displayOptions = displayOptions,
+                    onDisplayOptionsChange = { o ->
+                        scope.launch {
+                            prefs.setLayoutMode(o.mode.toPref())
+                            prefs.setStaffSize(o.staffSize)
+                            prefs.setHonorBreaks(o.honorLayoutBreaks)
+                            prefs.setCollapseRests(o.collapseMultiMeasureRests)
+                            prefs.setShowInvisible(o.showInvisibleElements)
+                            prefs.setHiddenStaves(o.hiddenStavesPref())
+                            prefs.setClefOverrides(o.clefOverridesPref())
+                        }
+                    },
                     onBack = { nav.popBackStack() },
                 )
             }

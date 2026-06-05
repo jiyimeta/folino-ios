@@ -61,6 +61,44 @@ data class LayoutOptions(
     }
 }
 
+/** Display mode -> DataStore string form. Inverse of [ReaderLayoutMode.fromPref]. */
+fun ReaderLayoutMode.toPref(): String = when (this) {
+    ReaderLayoutMode.VERTICAL -> "vertical"
+    ReaderLayoutMode.HORIZONTAL -> "horizontal"
+    ReaderLayoutMode.PAGE -> "page"
+}
+
+/** Hidden staves as DataStore string set ("<part>:<staff>"). */
+fun LayoutOptions.hiddenStavesPref(): Set<String> = hiddenStaves.map { it.encode() }.toSet()
+
+/** Clef overrides as DataStore string set ("<part>:<staff>=<raw>"). */
+fun LayoutOptions.clefOverridesPref(): Set<String> =
+    clefOverrides.map { (a, raw) -> "${a.encode()}=$raw" }.toSet()
+
+/** Rebuild a [LayoutOptions] from the flattened SettingsPrefs values. Inverse of the *Pref() projections. */
+fun layoutOptionsFromPrefs(
+    layoutMode: String,
+    staffSize: Double,
+    honorBreaks: Boolean,
+    collapseRests: Boolean,
+    showInvisible: Boolean,
+    hiddenStaves: Set<String>,
+    clefOverrides: Set<String>,
+): LayoutOptions = LayoutOptions(
+    mode = ReaderLayoutMode.fromPref(layoutMode),
+    staffSize = staffSize,
+    honorLayoutBreaks = honorBreaks,
+    collapseMultiMeasureRests = collapseRests,
+    showInvisibleElements = showInvisible,
+    hiddenStaves = hiddenStaves.mapNotNull { StaffAddress.parse(it) }.toSet(),
+    clefOverrides = clefOverrides.mapNotNull { entry ->
+        val eq = entry.indexOf('=')
+        if (eq <= 0) return@mapNotNull null
+        val addr = StaffAddress.parse(entry.substring(0, eq)) ?: return@mapNotNull null
+        addr to entry.substring(eq + 1)
+    }.toMap(),
+)
+
 /** One staff within a part, for the inspector's Parts section. */
 data class StaffDescriptor(val address: StaffAddress, val defaultClefRawType: String)
 

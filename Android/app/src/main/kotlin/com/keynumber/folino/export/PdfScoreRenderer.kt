@@ -60,7 +60,9 @@ class PdfScoreRenderer(context: Context) : ScorePdfRenderer {
             val h = ScoreHandle.load(bytes) ?: return false
             handle = h
 
-            val programBytes = SheetMusicJNI.nativeComputeLayout(h.raw, PAGE_WIDTH_MM, PAGE_HEIGHT_MM)
+            // PDF export uses default display options: an empty options blob makes
+            // nativeComputeLayout apply its built-in defaults (see SheetMusicJNI).
+            val programBytes = SheetMusicJNI.nativeComputeLayout(h.raw, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, ByteArray(0))
             if (programBytes.isEmpty()) return false
             val program = DrawProgramReader.decode(programBytes)
             if (program.pages.isEmpty()) return false
