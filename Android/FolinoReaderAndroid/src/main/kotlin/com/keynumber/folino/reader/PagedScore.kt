@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -141,6 +142,32 @@ fun PagedScore(
                     .fillMaxSize()
                     .background(Color.White)
                     .clipToBounds()
+                    // Tap-to-seek + audition, CENTER region only: the left/right 12 % edges are the
+                    // PageTapOverlay nav zones (page navigation), so a center tap seeks while edge taps
+                    // still turn pages. The page content is drawn page-local (from y=0) and translated
+                    // by panOffset; the hit-test wants ABSOLUTE document mm, so fold this page's band
+                    // top (pageTopPx) into the content offset — identical to the overlay's panOffset.
+                    .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, pageIndex, scale) {
+                        val handle = scoreHandle ?: return@pointerInput
+                        if (fitPxPerMM <= 0f) return@pointerInput
+                        val optionsBytes = layoutOptions.encode()
+                        val navZoneWidthPx = size.width * 0.12f
+                        detectTapGestures { offset ->
+                            // Ignore taps inside either edge nav zone — those belong to PageTapOverlay.
+                            if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {
+                                return@detectTapGestures
+                            }
+                            val cursor = nearestCursorForTap(
+                                tap = offset,
+                                contentOffsetPx = Offset(panOffset.x, panOffset.y - pageTopPx),
+                                pxPerMM = fitPxPerMM,
+                                scale = scale,
+                                scoreHandle = handle,
+                                layoutOptionsBytes = optionsBytes,
+                            ) ?: return@detectTapGestures
+                            audioVm.handleTap(cursor)
+                        }
+                    }
                     // Pinch-zoom + pan gesture lives INSIDE the pager page (not as a sibling overlay),
                     // so HorizontalPager still receives single-finger horizontal swipes at scale == 1.
                     // At scale == 1 single-finger drags are NOT consumed here → they reach the pager.

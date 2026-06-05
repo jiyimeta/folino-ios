@@ -18,7 +18,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(path: "../../Utility"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        revision: "de5c7c65a833376c56111b00cd1d08ddc3289c5d",
+        revision: "a157a9732b102c16957bfd2949ac22ba4c9d45ac",
     ),
 ]
 
