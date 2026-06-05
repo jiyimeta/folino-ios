@@ -30,4 +30,6 @@
     <string name="reader_clef_baritone">바리톤</string>
     <string name="reader_clef_percussion">타악기</string>
     <string name="reader_clef_percussion2">타악기 (대체)</string>
+    <string name="reader_playback_a4_reference">A4</string>
+    <string name="settings_a4_reference">A4 기준음</string>
 </resources>

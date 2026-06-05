@@ -30,4 +30,6 @@
     <string name="reader_clef_baritone">Baritone</string>
     <string name="reader_clef_percussion">Percussion</string>
     <string name="reader_clef_percussion2">Percussion (alt)</string>
+    <string name="reader_playback_a4_reference">A4</string>
+    <string name="settings_a4_reference">A4 reference</string>
 </resources>

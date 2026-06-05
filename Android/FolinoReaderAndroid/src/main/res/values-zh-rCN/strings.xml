@@ -30,4 +30,6 @@
     <string name="reader_clef_baritone">男中音</string>
     <string name="reader_clef_percussion">打击乐</string>
     <string name="reader_clef_percussion2">打击乐（替代）</string>
+    <string name="reader_playback_a4_reference">A4</string>
+    <string name="settings_a4_reference">A4 基准音</string>
 </resources>

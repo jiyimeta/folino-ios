@@ -30,4 +30,6 @@
     <string name="reader_clef_baritone">バリトン</string>
     <string name="reader_clef_percussion">パーカッション</string>
     <string name="reader_clef_percussion2">パーカッション (代替)</string>
+    <string name="reader_playback_a4_reference">A4</string>
+    <string name="settings_a4_reference">A4 基準音</string>
 </resources>

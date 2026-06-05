@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.math.log2
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderAudioViewModel(application: Application) : AndroidViewModel(application) {
@@ -91,6 +92,13 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _metronomeEnabled = MutableStateFlow(false)
     val metronomeEnabled: StateFlow<Boolean> = _metronomeEnabled.asStateFlow()
 
+    // A4 reference pitch (Hz). Session-only per the Reader MVP convention — no persistence here.
+    // Seeded from the global SettingsPrefs default at prepare time (see [preparePlayback]).
+    // The live value is the source of truth for the inspector slider; the engine is kept
+    // in sync via [setA4ReferenceHz].
+    private val _a4ReferenceHz = MutableStateFlow(440.0)
+    val a4ReferenceHz: StateFlow<Double> = _a4ReferenceHz.asStateFlow()
+
     /** Sets master output volume (0..1) and reflects it for the inspector UI. */
     fun setMasterVolume(volume: Float) {
         _masterVolume.value = volume
@@ -103,6 +111,16 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         engine.value?.setMetronomeEnabled(enabled)
     }
 
+    /**
+     * Sets the A4 reference pitch (Hz) and applies it to the engine as master-tuning cents
+     * relative to standard A4 = 440 Hz. Also reflects the new value for the inspector slider.
+     */
+    fun setA4ReferenceHz(hz: Double) {
+        _a4ReferenceHz.value = hz
+        val cents = 1200.0 * log2(hz / 440.0)
+        engine.value?.setMasterTuning(cents)
+    }
+
     fun preparePlayback(scoreHandle: Long) {
         viewModelScope.launch {
             val e = engine.filterNotNull().first()
@@ -110,6 +128,11 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
                 serviceBinder?.updateMetadata(title = meta.title, composer = meta.composer)
             }
             if (e.state.value != PlaybackState.STOPPED) return@launch
+            // Apply the current A4 reference pitch before prepare so the engine's
+            // internal masterTuningCents is set even if the engine wasn't connected when
+            // setA4ReferenceHz was first called (engine was null at that point).
+            val cents = 1200.0 * log2(_a4ReferenceHz.value / 440.0)
+            e.setMasterTuning(cents)
             try {
                 e.prepare(scoreHandle)
             } catch (ex: Exception) {

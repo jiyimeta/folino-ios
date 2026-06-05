@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
+import kotlin.math.log2
 import kotlin.math.roundToInt
 
 /** Compact slider height so the mixer's many rows don't dominate the sheet. */
@@ -85,6 +88,7 @@ fun PlaybackInspectorSheet(
     val rate by audioVm.currentRate.collectAsStateWithLifecycle()
     val masterVolume by audioVm.masterVolume.collectAsStateWithLifecycle()
     val metronomeEnabled by audioVm.metronomeEnabled.collectAsStateWithLifecycle()
+    val a4ReferenceHz by audioVm.a4ReferenceHz.collectAsStateWithLifecycle()
 
     val controlsEnabled = engine != null
     // GM catalog is shared Swift (loaded once via JNI, cached). Used by the program picker.
@@ -142,6 +146,14 @@ fun PlaybackInspectorSheet(
                             enabled = controlsEnabled,
                         )
                     }
+                }
+                item {
+                    A4SliderRow(
+                        hz = a4ReferenceHz,
+                        enabled = controlsEnabled,
+                        onValueChange = { audioVm.setA4ReferenceHz(it.toDouble()) },
+                        onValueChangeFinished = { audioVm.setA4ReferenceHz(snapA4Hz(a4ReferenceHz)) },
+                    )
                 }
             }
 
@@ -230,6 +242,60 @@ private fun IconSliderRow(
             readout,
             modifier = Modifier.width(64.dp),
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+/**
+ * Snaps [hz] to 432 or 440 when within ~1.0 Hz of either common reference pitch.
+ * Returns [hz] unchanged when not near a snap point.
+ */
+private fun snapA4Hz(hz: Double): Double = when {
+    kotlin.math.abs(hz - 432.0) <= 1.0 -> 432.0
+    kotlin.math.abs(hz - 440.0) <= 1.0 -> 440.0
+    else -> hz
+}
+
+/**
+ * A4 reference pitch slider row (415–466 Hz) with Hz and cents readout.
+ * Snaps to 432 or 440 on release when within 1 Hz of either value.
+ */
+@Composable
+private fun A4SliderRow(
+    hz: Double,
+    enabled: Boolean,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+) {
+    val cents = 1200.0 * log2(hz / 440.0)
+    val readout = "%.1f Hz  %+.1f¢".format(hz, cents)
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Default.MusicNote, contentDescription = null)
+        Text(
+            stringResource(R.string.reader_playback_a4_reference),
+            modifier = Modifier.width(76.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Slider(
+            value = hz.toFloat(),
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            valueRange = 415f..466f,
+            enabled = enabled,
+            modifier = Modifier.weight(1f).height(sliderHeight),
+        )
+        Text(
+            readout,
+            modifier = Modifier.width(64.dp),
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodySmall,
         )
