@@ -59,9 +59,10 @@ fun PagedScore(
     val scope = rememberCoroutineScope()
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-    var pagedPages by remember { mutableStateOf<List<EncodablePage>>(emptyList()) }
-    // Document-Y page boundaries (mm): [0, top1, …, contentBottom] from nativePageBreaks.
-    var breaksMm by remember { mutableStateOf(DoubleArray(0)) }
+    // Program pages + their matching document-Y boundaries, published TOGETHER as one state so the
+    // pager never renders a page before its boundary exists (two separate states updated by two
+    // sequential native calls is what crashed the page-mode switch).
+    var pagedData by remember { mutableStateOf<PagedData?>(null) }
     var scale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -76,12 +77,19 @@ fun PagedScore(
     // (incl. device rotation and any inspector edit that affects pagination).
     LaunchedEffect(scoreHandle, viewportHeightMm, layoutOptions) {
         if (scoreHandle != null && viewportHeightMm > 0.0) {
-            val program = readerVm.pagedProgram(basePage.widthMM, viewportHeightMm)
-            pagedPages = program?.pages ?: emptyList()
-            breaksMm = readerVm.pageBreaks(viewportHeightMm)
+            val pages = readerVm.pagedProgram(basePage.widthMM, viewportHeightMm)?.pages ?: emptyList()
+            val breaks = readerVm.pageBreaks(viewportHeightMm)
+            // Publish only when consistent (one boundary per page edge); otherwise keep the prior data.
+            pagedData = if (pages.isNotEmpty() && breaks.size == pages.size + 1) {
+                PagedData(pages, breaks)
+            } else {
+                null
+            }
         }
     }
 
+    val pagedPages = pagedData?.pages ?: emptyList()
+    val breaksMm = pagedData?.breaks ?: DoubleArray(0)
     val pageCount = pagedPages.size
     val pagerState = rememberPagerState(pageCount = { pageCount })
 
@@ -222,3 +230,6 @@ fun PagedScore(
         )
     }
 }
+
+/** Page program + its matching document-Y boundaries, held as one value so they update atomically. */
+private class PagedData(val pages: List<EncodablePage>, val breaks: DoubleArray)
