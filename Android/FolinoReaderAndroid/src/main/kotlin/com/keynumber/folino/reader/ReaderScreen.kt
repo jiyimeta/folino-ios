@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Tune
@@ -47,6 +48,7 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,6 +72,8 @@ fun ReaderScreen(
     scoreId: String,
     title: String,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.VERTICAL,
+    displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
+    onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
     onBack: () -> Unit,
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
@@ -82,10 +86,14 @@ fun ReaderScreen(
 
     LaunchedEffect(scoreId) { readerVm.load(scoreId) }
     LaunchedEffect(scoreHandle) { scoreHandle?.let { audioVm.preparePlayback(it) } }
+    // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
+    LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
 
     var showInspector by remember { mutableStateOf(false) }
+    var showDisplayInspector by remember { mutableStateOf(false) }
     // Open at full height so the dense inspector shows as many rows as possible at once.
     val inspectorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val displaySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(
         topBar = {
@@ -94,6 +102,14 @@ fun ReaderScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showDisplayInspector = true }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ViewList,
+                            contentDescription = stringResource(R.string.reader_display_settings),
+                        )
                     }
                 },
             )
@@ -128,6 +144,16 @@ fun ReaderScreen(
             openingQuarterBpm = openingQuarterBpm,
             sheetState = inspectorSheetState,
             onDismiss = { showInspector = false },
+        )
+    }
+    if (showDisplayInspector) {
+        val parts by readerVm.parts.collectAsStateWithLifecycle()
+        DisplayInspectorSheet(
+            options = displayOptions,
+            parts = parts,
+            sheetState = displaySheetState,
+            onDismiss = { showDisplayInspector = false },
+            onChange = onDisplayOptionsChange,
         )
     }
 }

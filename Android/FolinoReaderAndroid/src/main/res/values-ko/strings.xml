@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_inspector_general">전체</string>
+    <string name="reader_inspector_parts">파트</string>
+    <string name="reader_part_untitled">파트</string>
+    <string name="reader_display_mode">표시 모드</string>
+    <string name="reader_layout_vertical">세로 스크롤</string>
+    <string name="reader_layout_horizontal">가로 스크롤</string>
+    <string name="reader_layout_page">페이지</string>
+    <string name="reader_pref_staff_size">보표 크기</string>
+    <string name="reader_pref_honor_breaks">악보의 줄바꿈 및 페이지 나누기 따르기</string>
+    <string name="reader_pref_collapse_rests">여러 마디 쉼표 합치기</string>
+    <string name="reader_pref_show_invisible">숨겨진 요소 표시</string>
+    <string name="reader_display_settings">표시 설정</string>
+    <string name="reader_staff_hide">보표 숨기기</string>
+    <string name="reader_staff_show">보표 표시</string>
+    <string name="reader_clef_choose">음자리표 선택</string>
+    <string name="reader_clef_reset">기본값으로 복원</string>
+    <string name="reader_clef_treble">높은음</string>
+    <string name="reader_clef_treble8va">높은음 8va</string>
+    <string name="reader_clef_treble8vb">높은음 8vb</string>
+    <string name="reader_clef_treble15ma">높은음 15ma</string>
+    <string name="reader_clef_treble15mb">높은음 15mb</string>
+    <string name="reader_clef_bass">낮은음</string>
+    <string name="reader_clef_bass8va">낮은음 8va</string>
+    <string name="reader_clef_bass8vb">낮은음 8vb</string>
+    <string name="reader_clef_soprano">소프라노</string>
+    <string name="reader_clef_alto">알토</string>
+    <string name="reader_clef_tenor">테너</string>
+    <string name="reader_clef_baritone">바리톤</string>
+    <string name="reader_clef_percussion">타악기</string>
+    <string name="reader_clef_percussion2">타악기 (대체)</string>
+</resources>

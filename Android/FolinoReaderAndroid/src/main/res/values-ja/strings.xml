@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_inspector_general">全体</string>
+    <string name="reader_inspector_parts">パート</string>
+    <string name="reader_part_untitled">パート</string>
+    <string name="reader_display_mode">表示モード</string>
+    <string name="reader_layout_vertical">縦スクロール</string>
+    <string name="reader_layout_horizontal">横スクロール</string>
+    <string name="reader_layout_page">ページ</string>
+    <string name="reader_pref_staff_size">譜表サイズ</string>
+    <string name="reader_pref_honor_breaks">楽譜の改行・改ページに従う</string>
+    <string name="reader_pref_collapse_rests">複数小節休符をまとめる</string>
+    <string name="reader_pref_show_invisible">非表示要素を表示</string>
+    <string name="reader_display_settings">表示設定</string>
+    <string name="reader_staff_hide">譜表を非表示</string>
+    <string name="reader_staff_show">譜表を表示</string>
+    <string name="reader_clef_choose">音部記号を選択</string>
+    <string name="reader_clef_reset">デフォルトに戻す</string>
+    <string name="reader_clef_treble">ト音</string>
+    <string name="reader_clef_treble8va">ト音 8va</string>
+    <string name="reader_clef_treble8vb">ト音 8vb</string>
+    <string name="reader_clef_treble15ma">ト音 15ma</string>
+    <string name="reader_clef_treble15mb">ト音 15mb</string>
+    <string name="reader_clef_bass">ヘ音</string>
+    <string name="reader_clef_bass8va">ヘ音 8va</string>
+    <string name="reader_clef_bass8vb">ヘ音 8vb</string>
+    <string name="reader_clef_soprano">ソプラノ</string>
+    <string name="reader_clef_alto">アルト</string>
+    <string name="reader_clef_tenor">テナー</string>
+    <string name="reader_clef_baritone">バリトン</string>
+    <string name="reader_clef_percussion">パーカッション</string>
+    <string name="reader_clef_percussion2">パーカッション (代替)</string>
+</resources>

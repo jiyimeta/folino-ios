@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_inspector_general">整體</string>
+    <string name="reader_inspector_parts">聲部</string>
+    <string name="reader_part_untitled">聲部</string>
+    <string name="reader_display_mode">顯示模式</string>
+    <string name="reader_layout_vertical">垂直捲動</string>
+    <string name="reader_layout_horizontal">水平捲動</string>
+    <string name="reader_layout_page">頁面</string>
+    <string name="reader_pref_staff_size">譜表大小</string>
+    <string name="reader_pref_honor_breaks">遵循樂譜的換行與分頁</string>
+    <string name="reader_pref_collapse_rests">合併多小節休止符</string>
+    <string name="reader_pref_show_invisible">顯示隱藏元素</string>
+    <string name="reader_display_settings">顯示設定</string>
+    <string name="reader_staff_hide">隱藏譜表</string>
+    <string name="reader_staff_show">顯示譜表</string>
+    <string name="reader_clef_choose">選擇譜號</string>
+    <string name="reader_clef_reset">恢復預設</string>
+    <string name="reader_clef_treble">高音</string>
+    <string name="reader_clef_treble8va">高音 8va</string>
+    <string name="reader_clef_treble8vb">高音 8vb</string>
+    <string name="reader_clef_treble15ma">高音 15ma</string>
+    <string name="reader_clef_treble15mb">高音 15mb</string>
+    <string name="reader_clef_bass">低音</string>
+    <string name="reader_clef_bass8va">低音 8va</string>
+    <string name="reader_clef_bass8vb">低音 8vb</string>
+    <string name="reader_clef_soprano">女高音</string>
+    <string name="reader_clef_alto">中音</string>
+    <string name="reader_clef_tenor">次中音</string>
+    <string name="reader_clef_baritone">男中音</string>
+    <string name="reader_clef_percussion">打擊樂</string>
+    <string name="reader_clef_percussion2">打擊樂（替代）</string>
+</resources>

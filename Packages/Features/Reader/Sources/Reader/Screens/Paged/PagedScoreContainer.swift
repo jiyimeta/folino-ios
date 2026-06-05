@@ -257,7 +257,7 @@ struct PagedScoreContainer: View {
             )
         }.value
         guard !Task.isCancelled else { return }
-        let newPages = Self.paginate(
+        let newPages = LayoutPaginator.paginate(
             systems: newDoc.systems,
             pageHeight: pageHeight,
             policy: policy,
@@ -267,46 +267,6 @@ struct PagedScoreContainer: View {
         if pageState.pageIndex >= newPages.count {
             pageState.pageIndex = max(0, newPages.count - 1)
         }
-    }
-
-    /// Greedy paginator working in document-Y coordinates. Walks `systems` in order and closes the current page just
-    /// before a system whose bottom edge would extend past `pageTopDoc + pageHeight`. `pageTopDoc` is `0` for the first
-    /// page (so the title frame and any pre-system decorations are visible) and the previous page's last-system bottom
-    /// for every subsequent page (so the gap above the new page's first system — where rehearsal marks live — renders
-    /// on the new page, not the previous one).
-    ///
-    /// Authored `<LayoutBreak>page` on a system's last measure closes the page immediately under `.honor` /
-    /// `.ignoreSystemBreaks`; `.ignoreAll` lets pages keep packing until vertical overflow.
-    static func paginate(
-        systems: [LayoutSystem],
-        pageHeight: CGFloat,
-        policy: LayoutBreakPolicy,
-    ) -> [Range<Int>] {
-        guard !systems.isEmpty, pageHeight > 0 else { return [] }
-        var pages: [Range<Int>] = []
-        var pageStart = 0
-        var pageTopDoc: CGFloat = 0
-
-        for (index, system) in systems.enumerated() {
-            let systemBottom = system.origin.y + system.size.height
-            if index > pageStart, systemBottom - pageTopDoc > pageHeight {
-                pages.append(pageStart ..< index)
-                pageStart = index
-                pageTopDoc = systems[index - 1].origin.y
-                    + systems[index - 1].size.height
-            }
-            if policy != .ignoreAll,
-               system.measures.last?.pageBreak == true
-            {
-                pages.append(pageStart ..< (index + 1))
-                pageStart = index + 1
-                pageTopDoc = systemBottom
-            }
-        }
-        if pageStart < systems.count {
-            pages.append(pageStart ..< systems.count)
-        }
-        return pages
     }
 
     private struct TaskKey: Hashable {
