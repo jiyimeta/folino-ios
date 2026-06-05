@@ -65,6 +65,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// Boosts up to `maxMasterVolume` (300%) raise the whole mix past per-staff CC7's ceiling; the engine
     /// brick-wall-limits the result so a boost doesn't clip. Clamped to `[minMasterVolume, maxMasterVolume]`.
     public var masterVolume: Double
+    /// Per-score A4 reference override in Hz. `nil` = inherit the global default. Clamped to
+    /// `[A4Reference.minHz, A4Reference.maxHz]` when set.
+    public var a4ReferenceHz: Double?
 
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
@@ -79,6 +82,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         repeatMode: RepeatMode = .off,
         abRepeat: ABRepeatRange? = nil,
         masterVolume: Double = 1.0,
+        a4ReferenceHz: Double? = nil,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -96,12 +100,13 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.repeatMode = repeatMode
         self.abRepeat = abRepeat
         self.masterVolume = min(max(masterVolume, Self.minMasterVolume), Self.maxMasterVolume)
+        self.a4ReferenceHz = a4ReferenceHz.map(A4Reference.clamp)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, scoreItemID, staffSize, hiddenStaves, staffProgramOverrides
         case staffVolumeOverrides, tempoMultiplier, honorLayoutBreaks
-        case repeatMode, abRepeat, masterVolume
+        case repeatMode, abRepeat, masterVolume, a4ReferenceHz
         case staffClefOverrides
     }
 
@@ -125,6 +130,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let mode = try c.decodeIfPresent(RepeatMode.self, forKey: .repeatMode) ?? .off
         let ab = try c.decodeIfPresent(ABRepeatRange.self, forKey: .abRepeat)
         let master = try c.decodeIfPresent(Double.self, forKey: .masterVolume) ?? 1.0
+        let a4 = try c.decodeIfPresent(Double.self, forKey: .a4ReferenceHz)
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
             hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
@@ -133,6 +139,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             tempoMultiplier: tempo,
             honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab,
             masterVolume: master,
+            a4ReferenceHz: a4,
         )
     }
 }
