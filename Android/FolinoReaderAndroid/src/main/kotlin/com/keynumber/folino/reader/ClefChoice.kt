@@ -25,6 +25,22 @@ enum class ClefChoice(val rawType: String, val glyph: Int, val label: String) {
 
     val isPercussion: Boolean get() = this == PERCUSSION || this == PERCUSSION2
 
+    /**
+     * Vertical anchor of the glyph relative to the staff's middle line, in staff spaces
+     * (positive = downward). Mirrors iOS ClefMenu's yOffset table — this is what visually
+     * distinguishes the C-clef family (Soprano/Alto/Tenor/Baritone share one glyph).
+     */
+    val anchorFromMiddleSp: Int
+        get() = when (this) {
+            TREBLE_G, TREBLE_G8VA, TREBLE_G8VB, TREBLE_G15MA, TREBLE_G15MB -> 1
+            BASS_F, BASS_F8VA, BASS_F8VB -> -1
+            SOPRANO_C1 -> 2
+            ALTO_C3 -> 0
+            TENOR_C4 -> -1
+            BARITONE_C5 -> -2
+            PERCUSSION, PERCUSSION2 -> 0
+        }
+
     companion object {
         fun fromRawType(raw: String): ClefChoice? = entries.firstOrNull { it.rawType == raw }
         val trebleFamily = listOf(TREBLE_G, TREBLE_G8VA, TREBLE_G8VB, TREBLE_G15MA, TREBLE_G15MB)

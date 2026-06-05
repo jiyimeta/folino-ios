@@ -1,25 +1,31 @@
 package com.keynumber.folino.reader
 
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,19 +48,45 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.PlatformTextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 /** Compact slider height so the dense General section doesn't dominate the sheet. */
 private val sliderHeight = 24.dp
+
+/**
+ * Vertical inset by which the (deliberately tall) clef tile under-reports its layout height, so the
+ * Parts rows stay compact even though each tile is sized to clear its octave numerals. The popup
+ * tiles add an equal `padding(vertical = clefTileInset)` to keep the glyph inside their border.
+ */
+private val clefTileInset = 11.dp
+
+/**
+ * Compose analogue of SwiftUI `.padding(.vertical, -inset)`: the content is still measured and drawn
+ * at its full height, but reports `2 * inset` less to its parent and is offset up by `inset`. A clef
+ * tile tall enough to show its "8" / "15" octave numerals thus occupies a compact row, drawing its
+ * overflow into the surrounding space instead of inflating every Parts row. Must sit inside a parent
+ * that does not clip (the trigger uses a plain `clickable` row, not a `TextButton`, for this reason).
+ */
+private fun Modifier.negativeVerticalPadding(inset: Dp) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val dy = inset.roundToPx()
+    val height = (placeable.height - dy * 2).coerceAtLeast(0)
+    layout(placeable.width, height) { placeable.place(0, -dy) }
+}
 
 /**
  * Display-settings panel for the Reader (Android port of the iOS display inspector).
@@ -79,7 +111,7 @@ fun DisplayInspectorSheet(
 ) {
     var generalExpanded by rememberSaveable { mutableStateOf(true) }
     var partsExpanded by rememberSaveable { mutableStateOf(true) }
-    val musicFont = rememberMusicFont()
+    val typeface = rememberBravuraTypeface()
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         LazyColumn(
@@ -130,22 +162,12 @@ fun DisplayInspectorSheet(
                 ) { partsExpanded = !partsExpanded }
             }
             if (partsExpanded) {
-                parts.forEach { part ->
-                    item {
-                        Text(
-                            part.name.ifEmpty { stringResource(R.string.reader_part_untitled) },
-                            Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
-                    items(
-                        part.staves,
-                        key = { "${it.address.partIndex}-${it.address.staffIndexInPart}" },
-                    ) { staff ->
-                        StaffRow(
-                            staff = staff,
+                parts.forEachIndexed { index, part ->
+                    item(key = "part-$index") {
+                        PartRow(
+                            part = part,
                             options = options,
-                            musicFont = musicFont,
+                            typeface = typeface,
                             onChange = onChange,
                         )
                     }
@@ -223,24 +245,60 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
     }
 }
 
+/**
+ * One part: its name on the left, a right-aligned column of per-staff [clef, visibility] rows.
+ * Mirrors the iOS `VisualInspectorScreen` Parts layout (HStack { Text(name); VStack { staffRows } }).
+ */
 @Composable
-private fun StaffRow(
-    staff: StaffDescriptor,
+private fun PartRow(
+    part: PartDescriptor,
     options: LayoutOptions,
-    musicFont: FontFamily,
+    typeface: Typeface,
     onChange: (LayoutOptions) -> Unit,
 ) {
-    val effectiveRaw = options.clefOverrides[staff.address] ?: staff.defaultClefRawType
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            part.name.ifEmpty { stringResource(R.string.reader_part_untitled) },
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            part.staves.forEach { staff ->
+                StaffControls(staff, options, typeface, onChange)
+            }
+        }
+    }
+}
+
+/** Per-staff clef picker + visibility toggle, sized to wrap content (right-aligned in [PartRow]). */
+@Composable
+private fun StaffControls(
+    staff: StaffDescriptor,
+    options: LayoutOptions,
+    typeface: Typeface,
+    onChange: (LayoutOptions) -> Unit,
+) {
+    // Mirror iOS `LayoutSettingsModel.effectiveClef`: a staff with no authored opening clef (the
+    // JNI descriptor encodes that as an empty rawType) falls back to treble "G", matching what the
+    // layout engine synthesizes for such a staff. Without this the trigger would render blank.
+    val effectiveRaw =
+        options.clefOverrides[staff.address] ?: staff.defaultClefRawType.ifEmpty { "G" }
+    val hasOverride = staff.address in options.clefOverrides
     val hidden = staff.address in options.hiddenStaves
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ClefGlyphPicker(
             currentRaw = effectiveRaw,
-            musicFont = musicFont,
-            modifier = Modifier.weight(1f),
+            hasOverride = hasOverride,
+            typeface = typeface,
             onSelect = { choice ->
                 onChange(
                     options.copy(
@@ -274,95 +332,202 @@ private fun StaffRow(
 }
 
 /**
- * Text style for SMuFL clef glyphs. The Bravura font reports very large ascent/descent, which
- * otherwise inflates each row's height; trimming the line metrics to a fixed [lineHeight] keeps
- * the trigger button and dropdown rows compact.
+ * One clef "tile": a 5-line staff with the SMuFL glyph drawn at the staff line it anchors to.
+ * The staff background plus the anchor position are what distinguish the C-clef family (Soprano /
+ * Alto / Tenor / Baritone all share the cClef glyph). Mirrors the iOS ClefMenu tile. Drawn small
+ * via a native Canvas so the glyph's own large vertical metrics don't bloat the layout box.
  */
 @Composable
-private fun clefGlyphStyle() = MaterialTheme.typography.titleLarge.copy(
-    platformStyle = PlatformTextStyle(includeFontPadding = false),
-    lineHeightStyle = LineHeightStyle(
-        alignment = LineHeightStyle.Alignment.Center,
-        trim = LineHeightStyle.Trim.Both,
-    ),
-    lineHeight = 22.sp,
-)
+private fun ClefTile(
+    choice: ClefChoice,
+    typeface: Typeface,
+    modifier: Modifier = Modifier,
+    glyphColor: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    val lineColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // Height must clear the glyph's full ink box, not just the 5-line staff: octave clefs draw an
+    // "8" / "15" above (8va/15ma) or below (8vb/15mb) the clef, so a box only as tall as the staff
+    // clips them. The staff stays vertically centered (see staffTop below), giving symmetric room
+    // for the octave numerals. Mirrors the iOS ClefMenu tile (40×52pt). [negativeVerticalPadding]
+    // then claws back the extra height from the layout footprint so the Parts rows stay compact —
+    // the Compose equivalent of the iOS tile's `.padding(.vertical, -8)`.
+    Canvas(
+        modifier
+            .negativeVerticalPadding(clefTileInset)
+            .size(width = 36.dp, height = 60.dp),
+    ) {
+        val sp = 5.dp.toPx()
+        val staffHeight = sp * 4 // 5 lines = 4 spaces
+        val staffTop = (size.height - staffHeight) / 2f
+        for (i in 0..4) {
+            val y = staffTop + sp * i
+            drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        }
+        // Anchor: +Y is downward from the middle line; mirrors iOS ClefMenu's yOffset table.
+        val middleY = staffTop + sp * 2
+        val centerY = middleY + choice.anchorFromMiddleSp * sp
+        val paint = Paint().apply {
+            isAntiAlias = true
+            this.typeface = typeface
+            textSize = sp * 4 // SMuFL em = 4 staff spaces, so one space matches the drawn staff
+            color = glyphColor.toArgb()
+            textAlign = Paint.Align.CENTER
+        }
+        val fm = paint.fontMetrics
+        // Center the glyph box on centerY (matches iOS's anchor: .center) by deriving the baseline.
+        val baseline = centerY - (fm.ascent + fm.descent) / 2f
+        drawIntoCanvas {
+            it.nativeCanvas.drawText(
+                String(Character.toChars(choice.glyph)),
+                size.width / 2f,
+                baseline,
+                paint,
+            )
+        }
+    }
+}
 
+/**
+ * Per-staff clef picker. The trigger shows only the current clef glyph tile plus an up/down
+ * chevron (no textual name); tapping opens an anchored [DropdownMenu] — the Android equivalent of
+ * the iOS `.popover` — holding family-grouped rows of horizontally-scrolling clef tiles. Pitched
+ * staves show treble / bass / C families (with dividers); a percussion staff shows only the
+ * percussion family, mirroring iOS `ClefMenu`. The selected tile is highlighted, and a reset row
+ * appears only when this staff has an explicit override.
+ */
 @Composable
 private fun ClefGlyphPicker(
     currentRaw: String,
-    musicFont: FontFamily,
+    hasOverride: Boolean,
+    typeface: Typeface,
     modifier: Modifier = Modifier,
     onSelect: (ClefChoice) -> Unit,
     onReset: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val glyphStyle = clefGlyphStyle()
     val currentChoice = ClefChoice.fromRawType(currentRaw)
-    val currentGlyph = currentChoice?.glyph?.let { String(Character.toChars(it)) }
-    // Always show a textual name so the button is meaningful even if the glyph font is unavailable.
-    val currentName = currentChoice?.let { localizedClefLabel(it) } ?: currentRaw
-    // Family order: treble, bass, c, percussion (matches iOS ClefMenuChoice grouping).
-    val choices = remember {
-        ClefChoice.trebleFamily +
-            ClefChoice.bassFamily +
-            ClefChoice.cFamily +
-            ClefChoice.percussionFamily
-    }
-    val rowPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-    Column(modifier) {
-        TextButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
+    val isPercussion = currentChoice?.isPercussion == true
+    // Tint the trigger glyph with the accent color while an override is active (iOS parity).
+    val triggerTint =
+        if (hasOverride) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+    Box(modifier) {
+        // A plain clickable row (not a TextButton) so the tile's octave-numeral overflow is not
+        // clipped to a button surface; see [negativeVerticalPadding].
+        Row(
+            Modifier
+                .clickable { expanded = true }
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (currentGlyph != null) {
-                Text(text = currentGlyph, fontFamily = musicFont, style = glyphStyle)
-                Spacer(Modifier.width(8.dp))
+            if (currentChoice != null) {
+                ClefTile(choice = currentChoice, typeface = typeface, glyphColor = triggerTint)
+            } else {
+                Text(
+                    text = currentRaw,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text(
-                text = currentName,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
             Icon(
-                Icons.Default.ArrowDropDown,
+                Icons.Default.UnfoldMore,
                 contentDescription = stringResource(R.string.reader_clef_choose),
+                modifier = Modifier.size(16.dp),
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            choices.forEach { choice ->
-                val glyphString = String(Character.toChars(choice.glyph))
-                DropdownMenuItem(
-                    contentPadding = rowPadding,
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Text(glyphString, fontFamily = musicFont, style = glyphStyle)
-                            Text(localizedClefLabel(choice), style = MaterialTheme.typography.bodyMedium)
-                        }
-                    },
-                    onClick = {
-                        onSelect(choice)
+            Column(Modifier.width(264.dp).padding(vertical = 4.dp)) {
+                // Percussion staves stay on percussion clefs and pitched staves on pitched clefs;
+                // mixing the two would engrave nonsense, so each staff only sees its own family set.
+                if (isPercussion) {
+                    ClefTileRow(ClefChoice.percussionFamily, currentRaw, typeface) {
+                        onSelect(it)
                         expanded = false
-                    },
-                )
+                    }
+                } else {
+                    ClefTileRow(ClefChoice.trebleFamily, currentRaw, typeface) {
+                        onSelect(it)
+                        expanded = false
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    ClefTileRow(ClefChoice.bassFamily, currentRaw, typeface) {
+                        onSelect(it)
+                        expanded = false
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    ClefTileRow(ClefChoice.cFamily, currentRaw, typeface) {
+                        onSelect(it)
+                        expanded = false
+                    }
+                }
+                if (hasOverride) {
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    TextButton(
+                        onClick = {
+                            onReset()
+                            expanded = false
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.reader_clef_reset),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
             }
-            DropdownMenuItem(
-                contentPadding = rowPadding,
-                text = {
-                    Text(
-                        stringResource(R.string.reader_clef_reset),
-                        style = MaterialTheme.typography.bodyMedium,
+        }
+    }
+}
+
+/**
+ * One family's clef tiles in a horizontally-scrolling row (mirrors the iOS popover's per-family
+ * `ScrollView(.horizontal)`). The currently-selected tile gets an accent border + fill.
+ */
+@Composable
+private fun ClefTileRow(
+    choices: List<ClefChoice>,
+    currentRaw: String,
+    typeface: Typeface,
+    onSelect: (ClefChoice) -> Unit,
+) {
+    Row(
+        Modifier
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        choices.forEach { choice ->
+            val isCurrent = choice.rawType == currentRaw
+            val label = localizedClefLabel(choice)
+            val borderColor =
+                if (isCurrent) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                }
+            val background =
+                if (isCurrent) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                } else {
+                    Color.Transparent
+                }
+            ClefTile(
+                choice = choice,
+                typeface = typeface,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onSelect(choice) }
+                    .semantics { contentDescription = label }
+                    .background(background)
+                    .border(
+                        width = if (isCurrent) 2.dp else 1.dp,
+                        color = borderColor,
+                        shape = RoundedCornerShape(6.dp),
                     )
-                },
-                onClick = {
-                    onReset()
-                    expanded = false
-                },
+                    // Add back the height [ClefTile] withholds via negativeVerticalPadding so the
+                    // octave numerals stay inside this tile's border (mirrors iOS tile padding).
+                    .padding(horizontal = 4.dp, vertical = clefTileInset),
             )
         }
     }
@@ -407,14 +572,15 @@ private fun localizedClefLabel(choice: ClefChoice): String = stringResource(
 )
 
 /**
- * The bundled SMuFL music font (Bravura). The asset ships in the SheetMusicComposeAndroid
+ * The bundled SMuFL music typeface (Bravura). The asset ships in the SheetMusicComposeAndroid
  * dependency at `fonts/Bravura.otf` and merges into the app's assets at build time, so the
- * library module resolves it at runtime via the app context's AssetManager.
+ * library module resolves it at runtime via the app context's AssetManager. Returned as an
+ * android.graphics.Typeface so the clef tiles can draw glyphs through a native Canvas.
  */
 @Composable
-private fun rememberMusicFont(): FontFamily {
+private fun rememberBravuraTypeface(): Typeface {
     val ctx = LocalContext.current
     return remember(ctx) {
-        FontFamily(Font(path = "fonts/Bravura.otf", assetManager = ctx.assets))
+        Typeface.createFromAsset(ctx.assets, "fonts/Bravura.otf")
     }
 }
