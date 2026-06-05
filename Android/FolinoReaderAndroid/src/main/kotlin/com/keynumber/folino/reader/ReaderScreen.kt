@@ -75,6 +75,8 @@ fun ReaderScreen(
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
     onBack: () -> Unit,
+    pageTapHintDismissed: Boolean = false,
+    onDismissPageTapHint: () -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -127,12 +129,17 @@ fun ReaderScreen(
                 is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
                 is ReaderState.Ready -> when (layoutMode) {
                     ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
-                    // Page / Horizontal surfaces are not implemented yet; both fall back to the
-                    // vertical-scroll surface for now. Follow-up work replaces these branches with
-                    // dedicated PagedScore() / HorizontalScore() composables — this `when` is the
-                    // single branch point so those surfaces slot in without re-touching the wiring.
+                    // Horizontal surface not yet implemented; falls back to vertical scroll.
                     ReaderLayoutMode.HORIZONTAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
-                    ReaderLayoutMode.PAGE -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
+                    ReaderLayoutMode.PAGE -> PagedScore(
+                        state = s,
+                        scoreHandle = scoreHandle,
+                        fontProvider = fontProvider,
+                        audioVm = audioVm,
+                        readerVm = readerVm,
+                        pageTapHintDismissed = pageTapHintDismissed,
+                        onDismissPageTapHint = onDismissPageTapHint,
+                    )
                 }
             }
         }

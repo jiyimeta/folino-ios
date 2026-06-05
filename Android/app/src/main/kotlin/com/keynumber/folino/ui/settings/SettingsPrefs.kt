@@ -32,6 +32,8 @@ object SettingsKeys {
      * Callers build and parse the strings; rawType matches the sheet-music engine's clef type names.
      */
     val clefOverrides = stringSetPreferencesKey("reader.clefOverrides")
+    /** Set once the user has interacted with the page-mode tap-zone overlay; suppresses the onboarding hint. */
+    val pageTapHintDismissed = booleanPreferencesKey("reader.pageTapHintDismissed")
 }
 
 class SettingsPrefs(private val context: Context) {
@@ -45,6 +47,7 @@ class SettingsPrefs(private val context: Context) {
     val showInvisible: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showInvisible] ?: false }
     val hiddenStaves: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.hiddenStaves] ?: emptySet() }
     val clefOverrides: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.clefOverrides] ?: emptySet() }
+    val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
 
     suspend fun setMetronome(v: Boolean) = context.dataStore.edit { it[SettingsKeys.metronomeEnabled] = v }
     suspend fun setPip(v: Boolean) = context.dataStore.edit { it[SettingsKeys.pipEnabled] = v }
@@ -56,4 +59,5 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setShowInvisible(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showInvisible] = v }
     suspend fun setHiddenStaves(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.hiddenStaves] = v }
     suspend fun setClefOverrides(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.clefOverrides] = v }
+    suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
 }

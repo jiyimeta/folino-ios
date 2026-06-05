@@ -285,6 +285,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 val showInvisible by prefs.showInvisible.collectAsState(initial = false)
                 val hiddenStaves by prefs.hiddenStaves.collectAsState(initial = emptySet())
                 val clefOverrides by prefs.clefOverrides.collectAsState(initial = emptySet())
+                val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val scope = rememberCoroutineScope()
                 val displayOptions = layoutOptionsFromPrefs(
                     layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
@@ -305,6 +306,8 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                             prefs.setClefOverrides(o.clefOverridesPref())
                         }
                     },
+                    pageTapHintDismissed = hintDismissed,
+                    onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
                     onBack = { nav.popBackStack() },
                 )
             }

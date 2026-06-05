@@ -8,6 +8,7 @@ import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.compose.draw.DrawProgramReader
+import io.github.jiyimeta.sheetmusic.compose.draw.model.DrawProgram
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -166,6 +167,25 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 },
             )
         }
+    }
+
+    /** Multi-page program for page mode, paginated by the viewport height (mm). */
+    suspend fun pagedProgram(pageWidthMm: Double, pageHeightMm: Double): DrawProgram? {
+        val h = handle?.raw ?: return null
+        val bytes = withContext(Dispatchers.Default) {
+            SheetMusicJNI.nativeComputeLayout(h, pageWidthMm, pageHeightMm, layoutOptions.value.encode())
+        }
+        if (bytes.isEmpty()) return null
+        return try { DrawProgramReader.decode(bytes) } catch (e: Exception) { null }
+    }
+
+    /** Document-Y page-break offsets (mm) for the cached layout at the given page height. */
+    suspend fun pageBreaks(pageHeightMm: Double): DoubleArray {
+        val h = handle?.raw ?: return DoubleArray(0)
+        val bytes = withContext(Dispatchers.Default) {
+            SheetMusicJNI.nativePageBreaks(h, pageHeightMm, layoutOptions.value.encode())
+        }
+        return PageBreaksCodec.decode(bytes)
     }
 
     override fun onCleared() {
