@@ -26,6 +26,7 @@ final class ReaderViewModel {
     var repeatModel = RepeatModel()
     var tempoModel = TempoModel()
     var masterVolumeModel = MasterVolumeModel()
+    var a4ReferenceModel = A4ReferenceModel()
     var layoutModel = LayoutSettingsModel()
     var mixerModel = PlaybackMixerModel()
 
@@ -98,6 +99,7 @@ final class ReaderViewModel {
         wireRepeatModel()
         wireTempoModel()
         wireMasterVolumeModel()
+        wireA4ReferenceModel()
         wireLayoutModel()
         wireMixerModel()
         wirePlaybackSession()
@@ -173,6 +175,20 @@ final class ReaderViewModel {
         masterVolumeModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
     }
 
+    private func wireA4ReferenceModel() {
+        a4ReferenceModel.onChange = { [weak self] in
+            guard let self else { return }
+            await preferencesStore.mutate { prefs in
+                prefs.a4ReferenceHz = self.a4ReferenceModel.value
+            }
+        }
+        a4ReferenceModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
+        a4ReferenceModel.globalDefaultProvider = {
+            UserDefaults.standard.object(forKey: ReaderGlobalSettingsKey.a4ReferenceHz) as? Double
+                ?? A4Reference.standardHz
+        }
+    }
+
     private func wireRepeatModel() {
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
@@ -243,6 +259,7 @@ final class ReaderViewModel {
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
         masterVolumeModel.sync(from: prefs)
+        a4ReferenceModel.sync(from: prefs)
         layoutModel.sync(from: prefs)
         mixerModel.sync(from: prefs)
     }
