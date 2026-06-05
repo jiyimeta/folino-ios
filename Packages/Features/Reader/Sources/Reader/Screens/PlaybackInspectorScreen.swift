@@ -137,53 +137,6 @@ struct PlaybackInspectorScreen: View {
         }
     }
 
-    // Snap detent values and radius for the A4 slider: release within 1 Hz of 432 or 440 snaps to that value.
-    private let a4SnapDetents: [Double] = [432, 440]
-    private let a4SnapRadius = 1.0
-
-    @ViewBuilder
-    private var a4ReferenceRow: some View {
-        let hz = a4ReferenceModel.displayHz
-        let isOverriding = a4ReferenceModel.isOverriding
-        let hzBinding = Binding<Double>(
-            get: { a4ReferenceModel.displayHz },
-            set: { a4ReferenceModel.setValue($0) },
-        )
-        VStack(spacing: 4) {
-            HStack(spacing: 8) {
-                Image(systemName: "tuningfork")
-                    .foregroundStyle(isOverriding ? Color.accentColor : Color.secondary)
-                Text("reader.inspector.a4Reference.title", bundle: .module)
-                    .foregroundStyle(isOverriding ? Color.primary : Color.secondary)
-                Spacer()
-                if isOverriding {
-                    Button { Task { await a4ReferenceModel.resetValue() } } label: {
-                        Text("reader.inspector.a4Reference.reset", bundle: .module)
-                            .font(.caption).foregroundStyle(Color.accentColor)
-                    }
-                }
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(String(format: "%.1f Hz", hz))
-                        .font(.callout.monospacedDigit()).foregroundStyle(.primary)
-                    Text(String(format: "%+.1f¢", A4Reference.cents(forHz: hz)))
-                        .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                }
-            }
-            ResettableSlider(
-                value: hzBinding,
-                range: A4Reference.minHz ... A4Reference.maxHz,
-                defaultValue: A4Reference.standardHz,
-                onEditingChanged: { editing in
-                    guard !editing else { return }
-                    let snapped = a4SnapDetents.first { abs(hzBinding.wrappedValue - $0) <= a4SnapRadius }
-                        ?? hzBinding.wrappedValue
-                    Task { await a4ReferenceModel.commitValue(snapped) }
-                },
-                onReset: { Task { await a4ReferenceModel.resetValue() } },
-            )
-        }
-    }
-
     @ViewBuilder
     private var tempoRow: some View {
         // The slider works in absolute BPM space, stepped at whole beats-per-minute and anchored to the score's opening

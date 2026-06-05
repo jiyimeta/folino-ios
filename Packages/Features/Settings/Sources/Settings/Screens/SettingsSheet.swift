@@ -203,27 +203,28 @@ public struct SettingsSheet<LicenseContent: View>: View {
 
     private var a4ReferenceRow: some View {
         let displayHz = liveA4Hz ?? globalA4Hz
+        // Integer Hz only — round every slider write.
         let hzBinding = Binding<Double>(
             get: { displayHz },
-            set: { liveA4Hz = $0 },
+            set: { liveA4Hz = $0.rounded() },
         )
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label {
                     Text("settings.playback.a4Reference.title", bundle: .module)
+                        .foregroundStyle(.primary)
                 } icon: {
                     Image(systemName: "tuningfork")
+                        .foregroundStyle(Color.accentColor)
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(String(format: "%.1f Hz", displayHz))
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.primary)
-                    Text(String(format: "%+.1f¢", A4Reference.cents(forHz: displayHz)))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
+                Text(String(format: "A4 = %dHz", Int(displayHz.rounded())))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.primary)
             }
+            Text("settings.playback.a4Reference.description", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Slider(
                 value: hzBinding,
                 in: A4Reference.minHz ... A4Reference.maxHz,
@@ -233,7 +234,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
                         let snapped = a4SnapDetents.first {
                             abs(raw - $0) <= a4SnapRadius
                         } ?? raw
-                        globalA4Hz = A4Reference.clamp(snapped)
+                        globalA4Hz = A4Reference.clamp(snapped.rounded())
                         liveA4Hz = nil
                     }
                 },

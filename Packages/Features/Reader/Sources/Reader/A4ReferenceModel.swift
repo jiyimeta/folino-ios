@@ -35,6 +35,11 @@ final class A4ReferenceModel {
         value != nil
     }
 
+    /// The current global A4 default in Hz. The inspector shows the per-score value relative to this baseline.
+    var globalDefaultHz: Double {
+        globalDefaultProvider()
+    }
+
     func sync(from prefs: ReaderPreferences) {
         value = prefs.a4ReferenceHz
     }

@@ -7,36 +7,70 @@
     "•" : {
       "shouldTranslate" : false
     },
-    "settings.playback.a4Reference.title" : {
+    "settings.playback.a4Reference.description" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4 reference"
+            "value" : "The reference pitch applied to all scores. Each score can override it."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4基準音"
+            "value" : "すべての楽譜の再生に適用される基準です。楽譜ごとに上書きできます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4 기준음"
+            "value" : "모든 악보에 적용되는 기준입니다. 악보별로 재정의할 수 있습니다."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4 基准音"
+            "value" : "应用于所有乐谱的基准音。可按乐谱单独覆盖。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4 基準音"
+            "value" : "套用於所有樂譜的基準音。可依樂譜個別覆寫。"
+          }
+        }
+      }
+    },
+    "settings.playback.a4Reference.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default Calibration"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "既定キャリブレーション"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본 캘리브레이션"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认校准"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "預設校準"
           }
         }
       }

@@ -313,7 +313,78 @@
         }
       }
     },
+    "reader.inspector.a4Reference.centsUnit" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cents"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セント"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "센트"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音分"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音分"
+          }
+        }
+      }
+    },
+    "reader.inspector.a4Reference.relativeToGlobal" : {
+      "comment" : "%1$d = global default A4 in Hz, %2$@ = pre-formatted signed cents (e.g. +8, -100, ±0). Number/unit spacing is per-locale.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$dHz %2$@ cents"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$dHz %2$@セント"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$dHz %2$@센트"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$dHz %2$@音分"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$dHz %2$@音分"
+          }
+        }
+      }
+    },
     "reader.inspector.a4Reference.reset" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -348,35 +419,36 @@
       }
     },
     "reader.inspector.a4Reference.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4"
+            "value" : "Calibration"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4"
+            "value" : "キャリブレーション"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4"
+            "value" : "캘리브레이션"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4"
+            "value" : "校准"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A4"
+            "value" : "校準"
           }
         }
       }
@@ -1299,40 +1371,6 @@
         }
       }
     },
-    "reader.preferences.showInvisibleElements" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show hidden elements"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "非表示要素を表示"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "숨겨진 요소 표시"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示隐藏元素"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "顯示隱藏元素"
-          }
-        }
-      }
-    },
     "reader.preferences.honorBreaks" : {
       "localizations" : {
         "en" : {
@@ -1431,6 +1469,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "恢復預設"
+          }
+        }
+      }
+    },
+    "reader.preferences.showInvisibleElements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show hidden elements"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "非表示要素を表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "숨겨진 요소 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示隐藏元素"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示隱藏元素"
           }
         }
       }
@@ -1775,6 +1847,40 @@
         }
       }
     },
+    "reader.toolbar.seekBar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback position"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生位置"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생 위치"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放位置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放位置"
+          }
+        }
+      }
+    },
     "reader.toolbar.share" : {
       "localizations" : {
         "en" : {
@@ -1943,15 +2049,6 @@
             "value" : "後退一小節"
           }
         }
-      }
-    },
-    "reader.toolbar.seekBar" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Playback position" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "再生位置" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "재생 위치" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放位置" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "播放位置" } }
       }
     },
     "reader.toolbar.stepForward" : {
