@@ -95,10 +95,13 @@ func split(cents: Double) -> (coarseSemitones: Int, fineCents: Double)
   fineCents       = cents - 100 * coarseSemitones // ∈ [-50, +50]
 ```
 
-iOS feeds `(coarseSemitones, fineCents)` straight into params 901/902. Android also exposes
-`rpnControlChanges(cents:) -> [CC]` (built on `split`) returning the RPN `(controller, value)` pairs,
-bridged to Kotlin as a byte list and looped through `cc()` — so the RPN encoding has a single Swift
-source of truth and the only Android-specific code is the channel-iteration glue.
+iOS feeds `(coarseSemitones, fineCents)` straight into params 901/902. The Swift helper also exposes
+`rpnControlChanges(cents:) -> [CC]` (built on `split`) as the reference RPN encoding. Android does NOT
+bridge it: the RPN is FluidSynth-specific MIDI plumbing that iOS never uses, and adding a JNI symbol +
+`.so` regen to the fragile Android toolchain isn't worth it for ~12 lines of stable MIDI-standard
+math. Instead Android re-implements the same encoding in a small Kotlin `MasterTuning` object **with a
+unit test asserting the same golden CC sequences as the Swift tests**, so drift is caught. (The Kotlin
+side is Kotlin-only — no `.so` rebuild needed for this feature.)
 
 ### Application points
 
@@ -128,8 +131,9 @@ pushing ssm**, pushed only after approval, then Folino is re-pinned.
   helpers; `A4Reference.cents(forHz:)` convenience (Hz lives at the UI layer).
 - `SheetMusicAudioApple/PlaybackEngine`: `func setMasterTuning(cents: Double)` — sets global
   AudioUnit params 901/902 from `split`; remembers the value to re-apply after synth rebuild.
-- `SheetMusicAudioAndroid/AndroidPlaybackEngine`: `fun setMasterTuning(cents: Double)` — sends the
-  bridged RPN list via `cc()` to each melodic channel; remembers the value to re-apply after prepare.
+- `SheetMusicAudioAndroid/AndroidPlaybackEngine`: `fun setMasterTuning(cents: Double)` — builds the RPN
+  via the Kotlin `MasterTuning` mirror and sends it via `cc()` to each melodic staff channel (drums
+  skipped); remembers the value to re-apply after prepare. Kotlin-only; no JNI/`.so` change.
 - Example apps keep the A4 slider bound to the above (test bed + manual regression).
 
 ## Folino layering
