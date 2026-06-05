@@ -277,6 +277,13 @@ final class ReaderPlaybackSession {
         onCursorChanged()
         guard let controller else { return }
         Task { await controller.setCursor(to: engineCursor) }
+
+        // Audition the tapped note while stopped / paused only — never overlay a one-shot preview on a continuous
+        // playback stream. Use the engine (full-score addressed) cursor so the NoteID resolves against the score the
+        // engine prepared; rests fall through silently.
+        if !isPlaying, case let .item(.note(noteID)) = engineCursor {
+            Task { await controller.playPreview(noteID: noteID, duration: 0.5) }
+        }
     }
 
     /// Begin an interactive seek-bar drag. Seeds the provisional cursor at the current real position so
