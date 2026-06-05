@@ -13,6 +13,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private let onVersionHistoryViewed: @MainActor () -> Void
     private let crashReporter: any CrashReporter
     @Environment(\.dismiss) private var dismiss
+    /// Transient Hz value written during a drag so the readout tracks the finger without committing on every frame.
+    /// Committed to `globalA4Hz` (`@AppStorage`) on slider release.
+    @State private var liveA4Hz: Double?
     @State private var isFeedbackMailPresented = false
     @State private var feedbackMailResult: FeedbackMailComposeResult?
     @State private var isMailSavedAlertPresented = false
@@ -38,6 +41,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
 
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
     private var showSeekBar = true
+
+    @AppStorage(ReaderGlobalSettingsKey.a4ReferenceHz)
+    private var globalA4Hz = A4Reference.standardHz
 
     @AppStorage(PrivacySettingsKey.crashReportingEnabled)
     private var isCrashReportingEnabled = true
@@ -121,6 +127,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
             }
             keepScreenAwakeToggle
             seekBarToggle
+            a4ReferenceRow
             readerLayoutRow
             if let provider {
                 SoundfontPresetRow(provider: provider)
@@ -187,6 +194,51 @@ public struct SettingsSheet<LicenseContent: View>: View {
             } icon: {
                 Image(systemName: "point.bottomleft.forward.to.point.topright.scurvepath")
             }
+        }
+    }
+
+    /// Snap detents for the global A4 slider — same values as the per-score inspector.
+    private let a4SnapDetents: [Double] = [432, 440]
+    private let a4SnapRadius = 1.0
+
+    private var a4ReferenceRow: some View {
+        let displayHz = liveA4Hz ?? globalA4Hz
+        let hzBinding = Binding<Double>(
+            get: { displayHz },
+            set: { liveA4Hz = $0 },
+        )
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label {
+                    Text("settings.playback.a4Reference.title", bundle: .module)
+                } icon: {
+                    Image(systemName: "tuningfork")
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(String(format: "%.1f Hz", displayHz))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.primary)
+                    Text(String(format: "%+.1f¢", A4Reference.cents(forHz: displayHz)))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Slider(
+                value: hzBinding,
+                in: A4Reference.minHz ... A4Reference.maxHz,
+                onEditingChanged: { editing in
+                    if !editing {
+                        let raw = hzBinding.wrappedValue
+                        let snapped = a4SnapDetents.first {
+                            abs(raw - $0) <= a4SnapRadius
+                        } ?? raw
+                        globalA4Hz = A4Reference.clamp(snapped)
+                        liveA4Hz = nil
+                    }
+                },
+            )
+            .tint(.accentColor)
         }
     }
 

@@ -7,6 +7,40 @@
     "•" : {
       "shouldTranslate" : false
     },
+    "settings.playback.a4Reference.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A4 reference"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A4基準音"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A4 기준음"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A4 基准音"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A4 基準音"
+          }
+        }
+      }
+    },
     "settings.privacy.crashReporting.footer" : {
       "localizations" : {
         "en" : {
