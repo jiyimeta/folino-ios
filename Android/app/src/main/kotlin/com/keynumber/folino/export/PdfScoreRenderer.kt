@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.keynumber.folino.library.ScorePdfRenderer
+import com.keynumber.folino.reader.LayoutOptions
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
@@ -60,9 +61,12 @@ class PdfScoreRenderer(context: Context) : ScorePdfRenderer {
             val h = ScoreHandle.load(bytes) ?: return false
             handle = h
 
-            // PDF export uses default display options: an empty options blob makes
-            // nativeComputeLayout apply its built-in defaults (see SheetMusicJNI).
-            val programBytes = SheetMusicJNI.nativeComputeLayout(h.raw, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, ByteArray(0))
+            // PDF export uses default display options (vertical, 28pt, no overrides).
+            // nativeComputeLayout returns empty Data on an undecodable blob, so pass a
+            // real encoded LayoutOptions.DEFAULT rather than an empty array.
+            val programBytes = SheetMusicJNI.nativeComputeLayout(
+                h.raw, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, LayoutOptions.DEFAULT.encode(),
+            )
             if (programBytes.isEmpty()) return false
             val program = DrawProgramReader.decode(programBytes)
             if (program.pages.isEmpty()) return false
