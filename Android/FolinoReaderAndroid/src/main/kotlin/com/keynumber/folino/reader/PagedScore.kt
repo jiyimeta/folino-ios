@@ -43,6 +43,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+/** A4 page width (mm) — the wrap width page mode lays out to, scaled to fit the viewport width. */
+private const val PAGE_WIDTH_MM = 210.0
+
 @Composable
 fun PagedScore(
     state: ReaderState.Ready,
@@ -53,8 +56,6 @@ fun PagedScore(
     pageTapHintDismissed: Boolean,
     onDismissPageTapHint: () -> Unit,
 ) {
-    // The original (vertical) program supplies the page WIDTH used for fit-width scaling.
-    val basePage = state.program.pages.first()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
@@ -66,8 +67,12 @@ fun PagedScore(
     var scale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
-    val fitPxPerMM = if (basePage.widthMM > 0 && viewportSize.width > 0)
-        (viewportSize.width / basePage.widthMM).toFloat() else 0f
+    // Page width is the fixed A4 wrap width used by the .page layout. Deriving it from the live
+    // `state.program` instead briefly mismatches the (lagging) fetched pages during a mode switch —
+    // e.g. horizontal's full-score-wide page width applied to the new page's scale — which blows the
+    // content `.size` past Compose's Constraints limit and crashes.
+    val fitPxPerMM = if (viewportSize.width > 0)
+        (viewportSize.width / PAGE_WIDTH_MM).toFloat() else 0f
     val viewportHeightMm: Double = if (fitPxPerMM > 0f) (viewportSize.height / fitPxPerMM).toDouble() else 0.0
 
     // Observe layout options so a display-setting change also triggers a re-fetch.
@@ -77,7 +82,7 @@ fun PagedScore(
     // (incl. device rotation and any inspector edit that affects pagination).
     LaunchedEffect(scoreHandle, viewportHeightMm, layoutOptions) {
         if (scoreHandle != null && viewportHeightMm > 0.0) {
-            val pages = readerVm.pagedProgram(basePage.widthMM, viewportHeightMm)?.pages ?: emptyList()
+            val pages = readerVm.pagedProgram(PAGE_WIDTH_MM, viewportHeightMm)?.pages ?: emptyList()
             val breaks = readerVm.pageBreaks(viewportHeightMm)
             // Publish only when consistent (one boundary per page edge); otherwise keep the prior data.
             pagedData = if (pages.isNotEmpty() && breaks.size == pages.size + 1) {
