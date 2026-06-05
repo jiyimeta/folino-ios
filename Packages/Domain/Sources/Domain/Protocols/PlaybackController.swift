@@ -49,6 +49,10 @@ public protocol PlaybackController: Sendable {
     /// are clamped by the adapter.
     func setMasterVolume(_ value: Double) async
 
+    /// Retune playback to an A4 reference, expressed as a cents offset from 440 Hz
+    /// (use `A4Reference.cents(forHz:)`). Playback only — notation is unchanged.
+    func setMasterTuning(cents: Double) async
+
     func setStaffVolume(staff: Int, volume: Double) async
     func setStaffMute(staff: Int, isMuted: Bool) async
     func setStaffSolo(staff: Int, isSolo: Bool) async
