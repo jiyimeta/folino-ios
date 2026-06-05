@@ -29,13 +29,25 @@ CC sequence (per channel):
   101=127, 100=127                                     // RPN Null (lock)
 ```
 
-Both data-entry bytes (CC6 + CC38) are sent for each RPN because AUMIDISynth ignores the update until the full 14-bit value arrives (see `MIDISynthBuilder.setPitchBendSensitivity`).
+The CC sequence above is **Android-only** (FluidSynth honors it — confirmed). For iOS see the banner below.
 
 ---
 
-# Phase 0 — Spike: confirm Master Tuning RPN works (GATE)
+> ## ⚠️ MECHANISM UPDATE — Phase 0 spike PASSED (2026-06-05); iOS pivoted off RPN
+>
+> The spike resolved the mechanism. **This banner overrides the RPN-centric code in Phase 1–2 below where they conflict** (the per-task code there was written before the spike). Confirmed design:
+>
+> - **iOS — AudioUnit parameters, NOT MIDI RPN.** `AUMIDISynth` ignores Master Tuning RPNs (0,1/0,2) — verified silent. It exposes global-scope AudioUnit params **id 901 "Coarse Tuning"** (semitones, ±24) and **id 902 "Fine Tuning"** (cents, ±99). Retune with `AudioUnitSetParameter(synth.audioUnit, 901, kAudioUnitScope_Global, 0, Float(coarseSemitones), 0)` and `…, 902, …, Float(fineCents), 0)`. Global → covers all channels; zero latency/artifacts. No `MIDISynthBuilder` RPN helper and no `AVAudioUnitTimePitch` fallback needed.
+> - **Android — MIDI Master Tuning RPN via `cc()`** (FluidSynth honors it — confirmed (a)/(b)/(c) on Pixel 8a). Unchanged from Phase 3 below; no new C++/JNI.
+> - **Shared logic = the cents→(coarseSemitones, fineCents) split** (above), in `SheetMusicAudioCore`. iOS uses the split directly for params 901/902; Android additionally builds the RPN pairs from it (`rpnControlChanges(cents:)`).
+> - Retune **persisted across program change and seek** on both → no extra re-assert hooks beyond re-applying the stored value after `prepare`.
+> - The verification venue was the ssm example apps (per workflow rule); a stale-example fix (`ScoreViewModel` passing a default `LayoutOptions` blob to `nativeComputeLayout`) was needed to build the Android example and is part of this branch.
 
-**Goal:** Prove AUMIDISynth (iOS) and FluidSynth (Android) audibly retune from a hand-sent RPN sequence, and that the retune survives program change + seek. No production code yet.
+---
+
+# Phase 0 — Spike: confirm native synth tuning works (GATE) — ✅ PASSED
+
+**Goal:** Prove AUMIDISynth (iOS) and FluidSynth (Android) audibly retune, and that the retune survives program change + seek. **Outcome:** iOS via AudioUnit params 901/902 (RPN ignored); Android via RPN `cc()`. Both (a)/(b)/(c) OK. See banner above.
 
 ### Task 0.1: iOS spike in the ssm example app
 

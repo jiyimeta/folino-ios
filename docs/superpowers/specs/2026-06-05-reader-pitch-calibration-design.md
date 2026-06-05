@@ -45,102 +45,92 @@ cents = 1200 · log2(f / 440)
 415 Hz ≈ −101.0¢, 432 Hz ≈ −31.77¢, 442 Hz ≈ +7.85¢, 466 Hz ≈ +98.95¢.
 So the 415–466 Hz range is essentially **±100 cents (±1 semitone)**.
 
-## Chosen mechanism — Approach A: MIDI Master Tuning RPN
+## Chosen mechanism — native synth tuning, per platform (spike-confirmed)
 
-Both synths are driven by MIDI and both can be retuned **in-band** via the standard MIDI
-**Master Tuning** Registered Parameters — no new audio nodes, no SoundFont editing, no native
-synth additions:
+Both engines retune by setting their synth's own coarse-semitone + fine-cents tuning — no extra
+audio nodes, no SoundFont editing. The **shared logic is the cents→(coarse, fine) split**; the call
+that applies it differs per synth (iOS = AudioUnit parameters; Android = MIDI Master Tuning RPN).
+Details and spike results below.
 
-- **Master Fine Tuning** — RPN `00 01`, 14-bit data entry, center `0x2000` = 0¢, full range
-  **±100¢**.
-- **Master Coarse Tuning** — RPN `00 02`, data-entry MSB = `64 + semitones` (64 = no shift).
+> **Spike outcome (2026-06-05, both confirmed audibly in the ssm example apps).** The two synths
+> retune by **different mechanisms** — so the original "RPN on both" plan was revised. The
+> behavioral result is identical; only the engine-internal call differs. The Folino-side layers
+> below are unaffected (the engine API stays `setMasterTuning(cents:)`).
 
-Why this works on both platforms with existing plumbing:
+### iOS — AudioUnit Coarse/Fine Tuning parameters (NOT MIDI RPN)
 
-- **iOS** uses `AUMIDISynth` (`kAudioUnitSubType_MIDISynth`), chosen precisely because it honors
-  RPNs (the engine already relies on RPN `00 00` pitch-bend-sensitivity). Live CC is sent via
-  `MIDISynthBuilder.sendControlChange(...)`.
-- **Android** uses **FluidSynth**, which processes Master Fine/Coarse Tuning RPNs, and the JNI
-  layer **already exposes** `cc(handle, channel, controller, value)`
-  (`FluidSynthNative.kt` / `FluidSynthDriver.kt`).
+`AUMIDISynth` (`kAudioUnitSubType_MIDISynth`) **ignores** MIDI Master Fine/Coarse Tuning RPNs
+(0,1 / 0,2) — verified: sending them produces no audible change. It honors RPN 0,0 (pitch-bend
+sensitivity, which the engine already relies on) but not master tuning.
 
-So Approach A reduces to "send a fixed RPN CC sequence to each melodic channel." No new C++/JNI
-function and no new AVAudioUnit are required.
+It **does** expose global-scope AudioUnit tuning parameters (confirmed by dumping
+`kAudioUnitProperty_ParameterList`):
 
-### cents → RPN (shared pure logic)
+- id **901 "Coarse Tuning"** — RelativeSemiTones, range ±24
+- id **902 "Fine Tuning"** — Cents, range ±99
+- (id 900 "Gain", id 903 "Stereo Pan")
 
-Lives once in **`SheetMusicAudioCore`** (cross-platform Swift) so both platforms compute
-identical messages:
+Retune via `AudioUnitSetParameter(synth.audioUnit, 901, kAudioUnitScope_Global, 0, coarseSemitones, 0)`
+and `…, 902, …, fineCents, 0)`. Applies to every channel, zero latency, zero artifacts. Set/get both
+return `noErr` and the value sticks (headless-verified). This replaces the `AVAudioUnitTimePitch`
+fallback that was on standby — no extra audio node needed.
+
+### Android — MIDI Master Tuning RPN via FluidSynth `cc()` (confirmed honored)
+
+FluidSynth **does** process Master Fine/Coarse Tuning RPNs, and the JNI layer already exposes
+`cc(handle, channel, controller, value)` (`FluidSynthNative.kt` / `FluidSynthDriver.kt`). So Android
+sends the standard RPN CC sequence to each melodic channel — **no new C++/JNI function**:
+
+- **Master Fine Tuning** — RPN `00 01`, 14-bit data entry (`fine14 = 8192 + round(fineCents/100·8192)`).
+- **Master Coarse Tuning** — RPN `00 02`, data-entry MSB = `64 + coarseSemitones`.
+
+### Shared pure logic (cents → coarse/fine split)
+
+Both mechanisms derive from the same split, so it lives once in **`SheetMusicAudioCore`**
+(cross-platform Swift):
 
 ```
-func masterTuningRPN(cents: Double) -> [(controller: UInt8, value: UInt8)]
-  coarseSemitones = round(cents / 100)                 // ∈ {-1, 0, 1} for our range
-  fineCents       = cents - 100 * coarseSemitones      // ∈ [-50, +50]
-  fine14          = clamp(8192 + round(fineCents / 100 * 8192), 0, 16383)
-
-  return [
-    (101, 0), (100, 2), (6, UInt8(64 + coarseSemitones)),   // Coarse Tuning
-    (101, 0), (100, 1), (6, fine14 >> 7), (38, fine14 & 0x7F), // Fine Tuning
-    (101, 127), (100, 127),                                  // RPN Null (lock)
-  ]
+func split(cents: Double) -> (coarseSemitones: Int, fineCents: Double)
+  coarseSemitones = round(cents / 100)            // ∈ {-1, 0, 1} for the 415–466 range
+  fineCents       = cents - 100 * coarseSemitones // ∈ [-50, +50]
 ```
 
-(Master tuning = coarse semitones + fine cents, summed by the synth; this keeps fine within its
-±100¢ window even if the range later widens.)
+iOS feeds `(coarseSemitones, fineCents)` straight into params 901/902. Android also exposes
+`rpnControlChanges(cents:) -> [CC]` (built on `split`) returning the RPN `(controller, value)` pairs,
+bridged to Kotlin as a byte list and looped through `cc()` — so the RPN encoding has a single Swift
+source of truth and the only Android-specific code is the channel-iteration glue.
 
 ### Application points
 
-- Sent to **all melodic channels in use**, skipping the drum channel (MIDI ch 9, 0-indexed).
-- (Re)applied: (1) initially after program/synth setup in `prepare`; (2) whenever the user
-  changes the value; (3) after **seek** and after any **program change**, if the spike shows the
-  synth resets channel RPN state on those events (GM says master tuning persists across program
-  change, but the spike confirms per-synth behavior).
+- Applied to **all melodic channels** (drum channel 9 left at concert pitch). iOS's 901/902 are
+  global so they cover every channel at once; Android loops the RPN over each melodic channel.
+- (Re)applied: (1) after synth setup in `prepare` (persist the stored value across rebuilds);
+  (2) whenever the user changes it. Spike result: the retune **persisted across program change and
+  seek** on both synths, so no extra re-assert hooks are required.
 
-### Sharing across platforms
+## Verification spike — PASSED (2026-06-05)
 
-The `(controller, value)` list is produced **once in Swift** (`SheetMusicAudioCore`). iOS sends it
-directly. Android obtains the same list through a small JNI bridge export (e.g.
-`nativeMasterTuningRPN(cents) -> [Byte]`) and loops `cc()` over it — the only Android-specific code
-is the unavoidable channel-iteration glue. This honors the parity rule (shared logic, platform-only
-where it must be).
+Done in the ssm example apps with a temporary A4 slider:
 
-### Fallback — Approach B (only if the spike fails)
+- **iOS** (`Examples/Apple/SheetMusicExample`, run on macOS): RPN had no effect → pivoted to
+  `AudioUnitSetParameter` 901/902 → **(a) pitch tracks the slider with tempo unchanged, (b) persists
+  across program change, (c) persists across seek — all OK.**
+- **Android** (`Examples/Android`, Pixel 8a): RPN via `cc()` → **(a)/(b)/(c) all OK.** (Also fixed a
+  pre-existing stale-example compile error: `ScoreViewModel` now passes an encoded default
+  `LayoutOptions` blob to `nativeComputeLayout`.)
 
-If a synth does **not** honor Master Tuning RPNs:
-
-- **iOS:** insert `AVAudioUnitTimePitch` between `scoreGainMixer` and `sumMixer`, set
-  `.pitch = cents`, `.rate = 1`. Metronome joins at `sumMixer`, so it stays at 440. Cost: constant
-  phase-vocoder latency + minor artifacts.
-- **Android:** wrap `fluid_synth_set_gen(GEN_FINETUNE/GEN_COARSETUNE)` (or an octave-tuning table)
-  via new JNI; or pre-shift note numbers. Heavier — new native surface.
-
-Approach B is documented but **not built unless required**. The engine API
-(`setMasterTuning(cents:)`) is identical for A and B, so the Folino-side layers below are unchanged
-regardless of which mechanism lands.
-
-## Verification spike (gates the mechanism)
-
-**Before any Folino integration.** In the ssm example apps:
-
-1. Add a minimal A4 slider to the **iOS** example (`Examples/Apple/SheetMusicExample`) and the
-   **Android** example (`Examples/Android`) playback surface.
-2. Wire it to `setMasterTuning(cents:)`.
-3. Confirm audibly that pitch shifts correctly, **and persists across program change and seek**, on
-   both AUMIDISynth and FluidSynth.
-4. **Outcome gate:** both honor RPN → Approach A. Either fails → revisit (Approach B for the failing
-   platform), and report back before proceeding.
-
-Per workflow rule: verify in the ssm example apps, **report before pushing ssm**, push only after
-approval, then re-pin Folino.
+Per workflow rule: the production engine work is verified in the ssm example apps, **reported before
+pushing ssm**, pushed only after approval, then Folino is re-pinned.
 
 ## Engine API (swift-sheet-music)
 
-- `SheetMusicAudioCore`: `masterTuningRPN(cents:)` pure helper (+ a `cents(forA4Hz:)` convenience).
-- `SheetMusicAudioApple/PlaybackEngine`: `func setMasterTuning(cents: Double)` — sends RPN to all
-  melodic channels; remembers the value to reassert after seek/program-change.
-- `SheetMusicAudioAndroid/AndroidPlaybackEngine`: `fun setMasterTuning(cents: Double)` — same, via
-  `cc()`, using the bridged RPN list.
-- Example apps gain a slider bound to the above (test bed + manual regression).
+- `SheetMusicAudioCore`: `MasterTuning.split(cents:)` + `MasterTuning.rpnControlChanges(cents:)` pure
+  helpers; `A4Reference.cents(forHz:)` convenience (Hz lives at the UI layer).
+- `SheetMusicAudioApple/PlaybackEngine`: `func setMasterTuning(cents: Double)` — sets global
+  AudioUnit params 901/902 from `split`; remembers the value to re-apply after synth rebuild.
+- `SheetMusicAudioAndroid/AndroidPlaybackEngine`: `fun setMasterTuning(cents: Double)` — sends the
+  bridged RPN list via `cc()` to each melodic channel; remembers the value to re-apply after prepare.
+- Example apps keep the A4 slider bound to the above (test bed + manual regression).
 
 ## Folino layering
 
