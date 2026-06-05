@@ -3,7 +3,9 @@ package com.keynumber.folino.reader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -42,10 +44,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 /** Compact slider height so the dense General section doesn't dominate the sheet. */
@@ -268,6 +273,21 @@ private fun StaffRow(
     }
 }
 
+/**
+ * Text style for SMuFL clef glyphs. The Bravura font reports very large ascent/descent, which
+ * otherwise inflates each row's height; trimming the line metrics to a fixed [lineHeight] keeps
+ * the trigger button and dropdown rows compact.
+ */
+@Composable
+private fun clefGlyphStyle() = MaterialTheme.typography.titleLarge.copy(
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both,
+    ),
+    lineHeight = 22.sp,
+)
+
 @Composable
 private fun ClefGlyphPicker(
     currentRaw: String,
@@ -277,10 +297,11 @@ private fun ClefGlyphPicker(
     onReset: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val currentGlyph = ClefChoice.fromRawType(currentRaw)
-        ?.glyph
-        ?.let { String(Character.toChars(it)) }
-        ?: currentRaw
+    val glyphStyle = clefGlyphStyle()
+    val currentChoice = ClefChoice.fromRawType(currentRaw)
+    val currentGlyph = currentChoice?.glyph?.let { String(Character.toChars(it)) }
+    // Always show a textual name so the button is meaningful even if the glyph font is unavailable.
+    val currentName = currentChoice?.let { localizedClefLabel(it) } ?: currentRaw
     // Family order: treble, bass, c, percussion (matches iOS ClefMenuChoice grouping).
     val choices = remember {
         ClefChoice.trebleFamily +
@@ -288,15 +309,19 @@ private fun ClefGlyphPicker(
             ClefChoice.cFamily +
             ClefChoice.percussionFamily
     }
+    val rowPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
     Column(modifier) {
         TextButton(
             onClick = { expanded = true },
             modifier = Modifier.fillMaxWidth(),
         ) {
+            if (currentGlyph != null) {
+                Text(text = currentGlyph, fontFamily = musicFont, style = glyphStyle)
+                Spacer(Modifier.width(8.dp))
+            }
             Text(
-                text = currentGlyph,
-                fontFamily = musicFont,
-                style = MaterialTheme.typography.titleLarge,
+                text = currentName,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -310,17 +335,14 @@ private fun ClefGlyphPicker(
             choices.forEach { choice ->
                 val glyphString = String(Character.toChars(choice.glyph))
                 DropdownMenuItem(
+                    contentPadding = rowPadding,
                     text = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(
-                                glyphString,
-                                fontFamily = musicFont,
-                                style = MaterialTheme.typography.titleLarge,
-                            )
-                            Text(localizedClefLabel(choice))
+                            Text(glyphString, fontFamily = musicFont, style = glyphStyle)
+                            Text(localizedClefLabel(choice), style = MaterialTheme.typography.bodyMedium)
                         }
                     },
                     onClick = {
@@ -330,7 +352,13 @@ private fun ClefGlyphPicker(
                 )
             }
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.reader_clef_reset)) },
+                contentPadding = rowPadding,
+                text = {
+                    Text(
+                        stringResource(R.string.reader_clef_reset),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
                 onClick = {
                     onReset()
                     expanded = false
