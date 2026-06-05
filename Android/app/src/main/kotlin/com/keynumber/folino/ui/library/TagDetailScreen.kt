@@ -47,6 +47,9 @@ fun TagDetailScreen(
 ) {
     LaunchedEffect(tagId) { viewModel.selectTag(tagId) }
     val items by viewModel.selectedTagItems.collectAsStateWithLifecycle()
+    var searchQuery by remember { mutableStateOf("") }
+    LaunchedEffect(searchQuery) { viewModel.setSearchQuery(searchQuery) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { viewModel.setSearchQuery("") } }
 
     var showRename by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
@@ -87,47 +90,50 @@ fun TagDetailScreen(
             )
         },
     ) { padding ->
-        if (items.isEmpty()) {
-            Box(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(stringResource(R.string.tags_empty_hint), style = MaterialTheme.typography.bodyMedium)
-            }
-        } else {
-            LazyColumn(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-            ) {
-                items(items, key = { it.id }) { row ->
-                    var rowMenu by remember { mutableStateOf(false) }
-                    val title = row.title.ifEmpty { "Untitled" }
-                    val headline = if (row.subtitle.isEmpty()) title else "$title ${row.subtitle}"
-                    ListItem(
-                        headlineContent = { Text(headline) },
-                        supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
-                        leadingContent = { Icon(Icons.AutoMirrored.Outlined.Label, contentDescription = null) },
-                        trailingContent = {
-                            Box {
-                                IconButton(onClick = { rowMenu = true }) {
-                                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more))
-                                }
-                                DropdownMenu(expanded = rowMenu, onDismissRequest = { rowMenu = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.tag_remove_from)) },
-                                        onClick = {
-                                            rowMenu = false
-                                            viewModel.setTagAssigned(row.id, tagId, false)
-                                        },
-                                    )
-                                }
-                            }
-                        },
-                        modifier = Modifier.clickable { onOpenScore(row) },
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize(),
+        ) {
+            LibrarySearchField(query = searchQuery, onQueryChange = { searchQuery = it })
+            if (items.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        stringResource(
+                            if (searchQuery.isBlank()) R.string.tags_empty_hint else R.string.search_no_results,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
                     )
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(items, key = { it.id }) { row ->
+                        var rowMenu by remember { mutableStateOf(false) }
+                        val title = row.title.ifEmpty { "Untitled" }
+                        val headline = if (row.subtitle.isEmpty()) title else "$title ${row.subtitle}"
+                        ListItem(
+                            headlineContent = { Text(headline) },
+                            supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
+                            leadingContent = { Icon(Icons.AutoMirrored.Outlined.Label, contentDescription = null) },
+                            trailingContent = {
+                                Box {
+                                    IconButton(onClick = { rowMenu = true }) {
+                                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more))
+                                    }
+                                    DropdownMenu(expanded = rowMenu, onDismissRequest = { rowMenu = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.tag_remove_from)) },
+                                            onClick = {
+                                                rowMenu = false
+                                                viewModel.setTagAssigned(row.id, tagId, false)
+                                            },
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = Modifier.clickable { onOpenScore(row) },
+                        )
+                    }
                 }
             }
         }
