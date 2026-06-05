@@ -75,6 +75,8 @@ fun ReaderScreen(
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
     onBack: () -> Unit,
+    pageTapHintDismissed: Boolean = false,
+    onDismissPageTapHint: () -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -128,9 +130,15 @@ fun ReaderScreen(
                 is ReaderState.Ready -> when (layoutMode) {
                     ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm)
-                    // Page has no dedicated surface yet; it falls back to the vertical-scroll
-                    // surface. This `when` is the single branch point for the render surfaces.
-                    ReaderLayoutMode.PAGE -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
+                    ReaderLayoutMode.PAGE -> PagedScore(
+                        state = s,
+                        scoreHandle = scoreHandle,
+                        fontProvider = fontProvider,
+                        audioVm = audioVm,
+                        readerVm = readerVm,
+                        pageTapHintDismissed = pageTapHintDismissed,
+                        onDismissPageTapHint = onDismissPageTapHint,
+                    )
                 }
             }
         }
