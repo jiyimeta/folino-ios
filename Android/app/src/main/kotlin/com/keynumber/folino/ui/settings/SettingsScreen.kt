@@ -17,7 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.keynumber.folino.R
+import kotlin.math.log2
 import kotlinx.coroutines.launch
 
 @Composable
@@ -32,6 +36,7 @@ fun SettingsScreen(
     val collapse by prefs.collapseRests.collectAsState(initial = false)
     val keepAwake by prefs.keepAwake.collectAsState(initial = true)
     val layout by prefs.layoutMode.collectAsState(initial = "page")
+    val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
 
     LazyColumn(
         Modifier
@@ -93,6 +98,20 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+        item {
+            A4SliderRow(
+                hz = a4Hz,
+                onValueChange = { scope.launch { prefs.setA4ReferenceHz(it.toDouble()) } },
+                onValueChangeFinished = {
+                    val snapped = when {
+                        kotlin.math.abs(a4Hz - 432.0) <= 1.0 -> 432.0
+                        kotlin.math.abs(a4Hz - 440.0) <= 1.0 -> 440.0
+                        else -> a4Hz
+                    }
+                    if (snapped != a4Hz) scope.launch { prefs.setA4ReferenceHz(snapped) }
+                },
+            )
         }
         // Empty when suppressed (e.g. the 1.0.0 first-release guard in MainActivity); hide the whole section,
         // header included, so we never render a bare "Version History" heading with no entries.
@@ -162,3 +181,47 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
 }
 
 data class VersionHistoryItem(val version: String, val descriptions: List<String>)
+
+/**
+ * Global A4 reference pitch slider row (415–466 Hz).
+ * Displays both the Hz value and the cent offset from standard 440 Hz.
+ * Snaps to 432 or 440 Hz on release when within 1 Hz of either value.
+ */
+@Composable
+private fun A4SliderRow(
+    hz: Double,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+) {
+    val cents = 1200.0 * log2(hz / 440.0)
+    val readout = "%.1f Hz  %+.1f¢".format(hz, cents)
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.MusicNote,
+                contentDescription = stringResource(R.string.settings_a4_reference),
+                modifier = Modifier.padding(end = 12.dp),
+            )
+            Text(
+                stringResource(R.string.settings_a4_reference),
+                Modifier.weight(1f),
+            )
+            Text(
+                readout,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Slider(
+            value = hz.toFloat(),
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            valueRange = 415f..466f,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
