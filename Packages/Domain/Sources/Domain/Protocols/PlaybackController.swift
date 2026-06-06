@@ -40,6 +40,14 @@ public protocol PlaybackController: Sendable {
     func skip(bySeconds seconds: TimeInterval) async
 
     func setCursor(to cursor: ScoreCursor) async
+
+    /// Briefly sound a single note on its staff's instrument without disturbing the sequencer — used by the Reader to
+    /// audition the pitch the user tapped while playback is stopped / paused. The matching note-off is scheduled by the
+    /// engine, so the call is fire-and-forget. No-op when no score is loaded or the `NoteID` no longer resolves against
+    /// the loaded score. `NoteID` is re-exported from `SheetMusicCore`. The adapter supplies the engine's default
+    /// velocity; only `duration` is exposed here.
+    func playPreview(noteID: NoteID, duration: TimeInterval) async
+
     func setLoopRange(_ range: ABRepeatRange?) async
     func setMetronomeEnabled(_ enabled: Bool) async
     func setTempoMultiplier(_ value: Double) async

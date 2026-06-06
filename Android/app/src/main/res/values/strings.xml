@@ -62,4 +62,6 @@
     <string name="export_failed">Export failed</string>
     <string name="settings_a4_reference">A4 reference</string>
     <string name="reader_settings_a4_description">The reference pitch applied to all scores. Each score can override it.</string>
+    <string name="search_hint">Search</string>
+    <string name="search_no_results">No results</string>
 </resources>

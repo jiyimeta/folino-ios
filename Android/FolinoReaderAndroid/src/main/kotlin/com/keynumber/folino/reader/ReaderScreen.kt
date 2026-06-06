@@ -4,6 +4,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,6 +89,9 @@ fun ReaderScreen(
 
     val state by readerVm.state.collectAsStateWithLifecycle()
     val scoreHandle by readerVm.scoreHandle.collectAsStateWithLifecycle()
+    // The live layout-options snapshot the recompute loop feeds nativeComputeLayout; the tap
+    // hit-test must reuse this exact blob (its hidden-staff set) so re-addressing stays in lockstep.
+    val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
     LaunchedEffect(scoreId) { readerVm.load(scoreId) }
     LaunchedEffect(scoreHandle) {
@@ -139,8 +143,8 @@ fun ReaderScreen(
                 is ReaderState.Loading -> Text("Loading…")
                 is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
                 is ReaderState.Ready -> when (layoutMode) {
-                    ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm)
-                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm)
+                    ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
+                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
                     ReaderLayoutMode.PAGE -> PagedScore(
                         state = s,
                         scoreHandle = scoreHandle,
@@ -181,6 +185,7 @@ private fun ReadyScore(
     scoreHandle: Long?,
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
     audioVm: ReaderAudioViewModel,
+    layoutOptions: LayoutOptions,
 ) {
     val page = state.program.pages.first()
 
@@ -252,6 +257,27 @@ private fun ReadyScore(
         Modifier
             .fillMaxSize()
             .onSizeChanged { viewportSize = it }
+            // Tap-to-seek + audition. Lives in its own pointerInput so it coexists with the pinch
+            // detector below: detectTapGestures only fires on a tap (a down+up with no drag), while
+            // the pinch loop consumes two-finger moves — neither steals the other's events. The tap
+            // point is in this outer (viewport) px space; fold the scroll offsets and the fixed
+            // vertical padding into the content offset so the helper's divide yields document-mm.
+            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions) {
+                val handle = scoreHandle ?: return@pointerInput
+                if (fitPxPerMM <= 0f) return@pointerInput
+                val optionsBytes = layoutOptions.encode()
+                detectTapGestures { offset ->
+                    val cursor = nearestCursorForTap(
+                        tap = offset,
+                        contentOffsetPx = Offset(-hScroll.value.toFloat(), vPadPx - vScroll.value.toFloat()),
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        scoreHandle = handle,
+                        layoutOptionsBytes = optionsBytes,
+                    ) ?: return@detectTapGestures
+                    audioVm.handleTap(cursor)
+                }
+            }
             // Pinch zoom: only two-finger gestures are consumed here; single-finger
             // drags fall through to the scroll modifiers (native fling + overscroll).
             .pointerInput(fitPxPerMM) {
@@ -417,6 +443,7 @@ private fun HorizontalScore(
     scoreHandle: Long?,
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
     audioVm: ReaderAudioViewModel,
+    layoutOptions: LayoutOptions,
 ) {
     val page = state.program.pages.first()
 
@@ -495,6 +522,31 @@ private fun HorizontalScore(
         Modifier
             .fillMaxSize()
             .onSizeChanged { viewportSize = it }
+            // Tap-to-seek + audition. Separate pointerInput from the pinch loop (see ReadyScore).
+            // The single natural-width row scrolls horizontally always (fold hScroll into x) and
+            // is centered vertically when shorter than the viewport (fold that centering offset
+            // into y); when zoomed taller it scrolls vertically instead (fold vScroll into y).
+            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, needsVScroll) {
+                val handle = scoreHandle ?: return@pointerInput
+                if (fitPxPerMM <= 0f) return@pointerInput
+                val optionsBytes = layoutOptions.encode()
+                detectTapGestures { offset ->
+                    val yLead = if (needsVScroll) {
+                        -vScroll.value.toFloat()
+                    } else {
+                        (viewportSize.height - contentHeightPx) / 2f
+                    }
+                    val cursor = nearestCursorForTap(
+                        tap = offset,
+                        contentOffsetPx = Offset(-hScroll.value.toFloat(), yLead),
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        scoreHandle = handle,
+                        layoutOptionsBytes = optionsBytes,
+                    ) ?: return@detectTapGestures
+                    audioVm.handleTap(cursor)
+                }
+            }
             // Pinch zoom: only two-finger gestures are consumed; single-finger
             // drags fall through to the scroll modifiers (native fling).
             .pointerInput(fitPxPerMM) {

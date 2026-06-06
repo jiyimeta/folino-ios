@@ -89,6 +89,12 @@ final class FakePlaybackController: PlaybackController {
         recordedSetCursorCalls.append(cursor)
     }
 
+    private(set) var recordedPreviewCalls: [(noteID: NoteID, duration: TimeInterval)] = []
+
+    func playPreview(noteID: NoteID, duration: TimeInterval) {
+        recordedPreviewCalls.append((noteID: noteID, duration: duration))
+    }
+
     func setLoopRange(_ range: ABRepeatRange?) {
         loopRangeCalls.append(range)
     }

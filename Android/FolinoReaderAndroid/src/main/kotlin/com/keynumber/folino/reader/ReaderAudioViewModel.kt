@@ -14,6 +14,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -134,6 +135,24 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         _a4ReferenceHz.value = hz
         val cents = 1200.0 * log2(hz / 440.0)
         engine.value?.setMasterTuning(cents)
+    }
+
+    /**
+     * Apply a tapped-cursor selection: seek the engine to it always, and — only while playback is
+     * stopped/paused AND the tapped element is a note — audition that single note for 500 ms.
+     *
+     * Mirrors iOS `ReaderPlaybackSession.setManualCursor`: the seek moves the manual cursor
+     * unconditionally; the one-shot preview never overlays a continuous playback stream, and rests
+     * (or any non-note item) seek silently. [cursor] is the full-score engine-addressed cursor
+     * returned by `nativeNearestCursor`, so its NoteID resolves against the prepared score.
+     */
+    fun handleTap(cursor: ScoreCursor) {
+        val e = engine.value ?: return
+        e.seek(to = cursor)
+        if (state.value == PlaybackState.PLAYING) return
+        val item = (cursor as? ScoreCursor.Item)?.arg0 ?: return
+        val noteId = (item as? ScoreItemID.Note)?.arg0 ?: return
+        e.playPreview(noteId, durationMillis = 500L)
     }
 
     fun preparePlayback(scoreHandle: Long) {

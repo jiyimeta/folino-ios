@@ -53,10 +53,10 @@ struct RehearsalMarkBar: View {
         .frame(height: Self.height)
     }
 
-    /// Frontmost = the mark governing the current position; otherwise earlier marks sit in front of later ones.
+    /// Frontmost = the mark governing the current position; otherwise later marks sit in front of earlier ones.
     private func stackOrder(for mark: ReaderRehearsalMark, index: Int) -> Double {
         if mark.id == currentMarkID { return Double(marks.count + 1) }
-        return Double(marks.count - index)
+        return Double(index + 1)
     }
 }
 

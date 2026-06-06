@@ -70,6 +70,9 @@ fun LibraryScreen(
     onOpenDrawer: () -> Unit,
 ) {
     val scores by viewModel.scores.collectAsStateWithLifecycle()
+    var searchQuery by remember { mutableStateOf("") }
+    androidx.compose.runtime.LaunchedEffect(searchQuery) { viewModel.setSearchQuery(searchQuery) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { viewModel.setSearchQuery("") } }
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -219,48 +222,59 @@ fun LibraryScreen(
             }
         },
     ) { padding ->
-        if (scores.isEmpty()) {
-            EmptyState(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-            )
-        } else {
-            LazyColumn(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-            ) {
-                items(scores, key = { it.id }) { row ->
-                    ScoreRow(
-                        row = row,
-                        selectionMode = selectionMode,
-                        selected = selectedIds.contains(row.id),
-                        onClick = { if (selectionMode) toggle(row.id) else onOpenScore(row) },
-                        onLongClick = {
-                            if (!selectionMode) selectionMode = true
-                            toggle(row.id)
-                        },
-                        onDelete = {
-                            viewModel.delete(row.id)
-                            scope.launch {
-                                val result = snackbarHost.showSnackbar(
-                                    message = context.getString(R.string.library_deleted),
-                                    actionLabel = context.getString(R.string.library_undo),
-                                )
-                                if (result == SnackbarResult.ActionPerformed) viewModel.restore(row.id)
-                            }
-                        },
-                        onAddToPlaylist = {
-                            singleAddTarget = row.id
-                            viewModel.beginAddToPlaylist(row.id)
-                        },
-                        onEditTags = {
-                            singleTagTarget = row.id
-                            viewModel.beginEditTags(row.id)
-                        },
-                        onExport = { beginExport(listOf(row.id)) },
-                    )
+        Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize(),
+        ) {
+            // Hide search while in selection mode (CAB owns the bar/content focus).
+            if (!selectionMode) {
+                LibrarySearchField(query = searchQuery, onQueryChange = { searchQuery = it })
+            }
+            if (scores.isEmpty()) {
+                if (searchQuery.isBlank()) {
+                    EmptyState(Modifier.fillMaxSize())
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            stringResource(R.string.search_no_results),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(scores, key = { it.id }) { row ->
+                        ScoreRow(
+                            row = row,
+                            selectionMode = selectionMode,
+                            selected = selectedIds.contains(row.id),
+                            onClick = { if (selectionMode) toggle(row.id) else onOpenScore(row) },
+                            onLongClick = {
+                                if (!selectionMode) selectionMode = true
+                                toggle(row.id)
+                            },
+                            onDelete = {
+                                viewModel.delete(row.id)
+                                scope.launch {
+                                    val result = snackbarHost.showSnackbar(
+                                        message = context.getString(R.string.library_deleted),
+                                        actionLabel = context.getString(R.string.library_undo),
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) viewModel.restore(row.id)
+                                }
+                            },
+                            onAddToPlaylist = {
+                                singleAddTarget = row.id
+                                viewModel.beginAddToPlaylist(row.id)
+                            },
+                            onEditTags = {
+                                singleTagTarget = row.id
+                                viewModel.beginEditTags(row.id)
+                            },
+                            onExport = { beginExport(listOf(row.id)) },
+                        )
+                    }
                 }
             }
         }

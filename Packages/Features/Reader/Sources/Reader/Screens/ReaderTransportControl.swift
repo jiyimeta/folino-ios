@@ -97,6 +97,9 @@ struct ReaderTransportControl: View {
                 .padding(.bottom, -8)
             }
             seekBar
+                // Time readout sits in the empty band below the thin track. An overlay reserves no layout space, so the
+                // gap to the transport row and the buttons' tap targets stay exactly as they were.
+                    .overlay(alignment: .bottom) { timeReadout(score: score) }
             transportRow
         }
         .padding(.horizontal, 20)
@@ -163,6 +166,40 @@ struct ReaderTransportControl: View {
                 viewModel.playbackSession.endScrub()
             },
         )
+    }
+
+    /// Small current-position (leading) and remaining-time (trailing, with a leading minus) labels shown just below the
+    /// seek track. Both follow `displayFraction`, so they track the scrub thumb while dragging and the live cursor
+    /// otherwise. Non-interactive (`allowsHitTesting(false)`) so the seek drag underneath is unaffected.
+    private func timeReadout(score: Score) -> some View {
+        let duration = score.notatedDurationSeconds
+        let elapsed = min(max(displayFraction, 0), 1) * duration
+        let remaining = max(0, duration - elapsed)
+        return HStack {
+            Text(verbatim: Self.formatTime(elapsed))
+            Spacer(minLength: 0)
+            Text(verbatim: "-" + Self.formatTime(remaining))
+        }
+        .font(.system(size: 10))
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        // Nudge into the empty band above the transport glyphs. `offset` shifts only the rendered text, so the row's
+        // layout and the buttons' tap targets are still unaffected.
+        .offset(y: 5)
+        .allowsHitTesting(false)
+    }
+
+    /// Formats a non-negative second count as `mm:ss`, widening to `h:mm:ss` once it reaches an hour. Minutes are
+    /// zero-padded only when an hours field precedes them, matching the usual transport readout.
+    private static func formatTime(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded())
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
     }
 
     // MARK: Shared pieces
@@ -280,9 +317,11 @@ struct ReaderTransportControl: View {
 
 #if DEBUG
 /// Three quarter-rests-per-measure score so AB-loop endpoints can snap to a chord (`snapMeasureEnd` needs at least one
-/// `.chord` — rests count). Empty measures would let `setA` work but not `setB`.
+/// `.chord` — rests count). Empty measures would let `setA` work but not `setB`. With `includeMarks` false the score
+/// carries no rehearsal marks, so the seek card omits the mark bar — used to confirm the time readout (anchored to the
+/// seek bar) stays put whether or not marks are present.
 @MainActor
-private func transportPreviewViewModel() -> ReaderViewModel {
+private func transportPreviewViewModel(includeMarks: Bool = true) -> ReaderViewModel {
     let restChords = Array(
         repeating: VoiceElement.chord(Chord(duration: .quarter, notes: [])),
         count: 4,
@@ -303,7 +342,7 @@ private func transportPreviewViewModel() -> ReaderViewModel {
                 staves: [Staff(measures: [restMeasure, restMeasure, restMeasure])],
             ),
         ],
-        systemMeasures: [marked("A"), SystemMeasure(), marked("B — Chorus, softer")],
+        systemMeasures: includeMarks ? [marked("A"), SystemMeasure(), marked("B — Chorus, softer")] : [],
         metaTags: [:],
     )
     return ReaderViewModel(
@@ -325,6 +364,15 @@ private func configureTransportPreview(_ vm: ReaderViewModel) async {
 
 #Preview("Transport control · seek bar") {
     let vm = transportPreviewViewModel()
+    return VStack(spacing: 0) {
+        Color.clear.border(.orange)
+        ReaderTransportControl(viewModel: vm, showSeekBar: true)
+    }
+    .task { await configureTransportPreview(vm) }
+}
+
+#Preview("Transport control · seek bar (no marks)") {
+    let vm = transportPreviewViewModel(includeMarks: false)
     return VStack(spacing: 0) {
         Color.clear.border(.orange)
         ReaderTransportControl(viewModel: vm, showSeekBar: true)

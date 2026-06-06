@@ -34,6 +34,8 @@ private final class FakePlaybackController: PlaybackController {
         lastCursor = cursor
     }
 
+    func playPreview(noteID: NoteID, duration: TimeInterval) {}
+
     func setLoopRange(_ range: ABRepeatRange?) {}
     func setMetronomeEnabled(_ enabled: Bool) {}
     func setTempoMultiplier(_ value: Double) {

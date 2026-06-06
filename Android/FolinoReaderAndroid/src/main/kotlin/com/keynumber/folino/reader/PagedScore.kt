@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,6 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+/** A4 page width (mm) — the wrap width page mode lays out to, scaled to fit the viewport width. */
+private const val PAGE_WIDTH_MM = 210.0
+
 @Composable
 fun PagedScore(
     state: ReaderState.Ready,
@@ -53,20 +57,23 @@ fun PagedScore(
     pageTapHintDismissed: Boolean,
     onDismissPageTapHint: () -> Unit,
 ) {
-    // The original (vertical) program supplies the page WIDTH used for fit-width scaling.
-    val basePage = state.program.pages.first()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-    var pagedPages by remember { mutableStateOf<List<EncodablePage>>(emptyList()) }
-    // Document-Y page boundaries (mm): [0, top1, …, contentBottom] from nativePageBreaks.
-    var breaksMm by remember { mutableStateOf(DoubleArray(0)) }
+    // Program pages + their matching document-Y boundaries, published TOGETHER as one state so the
+    // pager never renders a page before its boundary exists (two separate states updated by two
+    // sequential native calls is what crashed the page-mode switch).
+    var pagedData by remember { mutableStateOf<PagedData?>(null) }
     var scale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
-    val fitPxPerMM = if (basePage.widthMM > 0 && viewportSize.width > 0)
-        (viewportSize.width / basePage.widthMM).toFloat() else 0f
+    // Page width is the fixed A4 wrap width used by the .page layout. Deriving it from the live
+    // `state.program` instead briefly mismatches the (lagging) fetched pages during a mode switch —
+    // e.g. horizontal's full-score-wide page width applied to the new page's scale — which blows the
+    // content `.size` past Compose's Constraints limit and crashes.
+    val fitPxPerMM = if (viewportSize.width > 0)
+        (viewportSize.width / PAGE_WIDTH_MM).toFloat() else 0f
     val viewportHeightMm: Double = if (fitPxPerMM > 0f) (viewportSize.height / fitPxPerMM).toDouble() else 0.0
 
     // Observe layout options so a display-setting change also triggers a re-fetch.
@@ -76,12 +83,19 @@ fun PagedScore(
     // (incl. device rotation and any inspector edit that affects pagination).
     LaunchedEffect(scoreHandle, viewportHeightMm, layoutOptions) {
         if (scoreHandle != null && viewportHeightMm > 0.0) {
-            val program = readerVm.pagedProgram(basePage.widthMM, viewportHeightMm)
-            pagedPages = program?.pages ?: emptyList()
-            breaksMm = readerVm.pageBreaks(viewportHeightMm)
+            val pages = readerVm.pagedProgram(PAGE_WIDTH_MM, viewportHeightMm)?.pages ?: emptyList()
+            val breaks = readerVm.pageBreaks(viewportHeightMm)
+            // Publish only when consistent (one boundary per page edge); otherwise keep the prior data.
+            pagedData = if (pages.isNotEmpty() && breaks.size == pages.size + 1) {
+                PagedData(pages, breaks)
+            } else {
+                null
+            }
         }
     }
 
+    val pagedPages = pagedData?.pages ?: emptyList()
+    val breaksMm = pagedData?.breaks ?: DoubleArray(0)
     val pageCount = pagedPages.size
     val pagerState = rememberPagerState(pageCount = { pageCount })
 
@@ -128,6 +142,32 @@ fun PagedScore(
                     .fillMaxSize()
                     .background(Color.White)
                     .clipToBounds()
+                    // Tap-to-seek + audition, CENTER region only: the left/right 12 % edges are the
+                    // PageTapOverlay nav zones (page navigation), so a center tap seeks while edge taps
+                    // still turn pages. The page content is drawn page-local (from y=0) and translated
+                    // by panOffset; the hit-test wants ABSOLUTE document mm, so fold this page's band
+                    // top (pageTopPx) into the content offset — identical to the overlay's panOffset.
+                    .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, pageIndex, scale) {
+                        val handle = scoreHandle ?: return@pointerInput
+                        if (fitPxPerMM <= 0f) return@pointerInput
+                        val optionsBytes = layoutOptions.encode()
+                        val navZoneWidthPx = size.width * 0.12f
+                        detectTapGestures { offset ->
+                            // Ignore taps inside either edge nav zone — those belong to PageTapOverlay.
+                            if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {
+                                return@detectTapGestures
+                            }
+                            val cursor = nearestCursorForTap(
+                                tap = offset,
+                                contentOffsetPx = Offset(panOffset.x, panOffset.y - pageTopPx),
+                                pxPerMM = fitPxPerMM,
+                                scale = scale,
+                                scoreHandle = handle,
+                                layoutOptionsBytes = optionsBytes,
+                            ) ?: return@detectTapGestures
+                            audioVm.handleTap(cursor)
+                        }
+                    }
                     // Pinch-zoom + pan gesture lives INSIDE the pager page (not as a sibling overlay),
                     // so HorizontalPager still receives single-finger horizontal swipes at scale == 1.
                     // At scale == 1 single-finger drags are NOT consumed here → they reach the pager.
@@ -222,3 +262,6 @@ fun PagedScore(
         )
     }
 }
+
+/** Page program + its matching document-Y boundaries, held as one value so they update atomically. */
+private class PagedData(val pages: List<EncodablePage>, val breaks: DoubleArray)

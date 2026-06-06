@@ -58,6 +58,14 @@ public final class LibraryAndroidStore {
     @ObservationIgnored private var selectedTagID: String?
     @ObservationIgnored private var editSheetScoreID: String?
 
+    // Search (iOS parity). `searchQuery` filters the three displayed score lists
+    // via the shared Domain `ScoreSearch`. Unfiltered backings let setSearchQuery
+    // recompute the observables without re-reading the backend.
+    @ObservationIgnored private var searchQuery = ""
+    @ObservationIgnored private var allScoreRows: [ScoreRowWire] = []
+    @ObservationIgnored private var selectedPlaylistRows: [ScoreRowWire] = []
+    @ObservationIgnored private var selectedTagRows: [ScoreRowWire] = []
+
     public init(store: LibraryStore, pdfRenderer: ScorePdfRenderer, audioExporter: ScoreAudioFileExporter) {
         self.store = store
         self.pdfRenderer = pdfRenderer
@@ -104,6 +112,16 @@ public final class LibraryAndroidStore {
     @WireletExpose
     public func restore(_ id: String) {
         setDeletedAt(id, 0)
+    }
+
+    /// Set the search query and recompute the three displayed score lists from
+    /// their unfiltered backings. iOS parity: empty query shows everything.
+    @WireletExpose
+    public func setSearchQuery(_ query: String) {
+        searchQuery = query
+        scores = searchFiltered(allScoreRows)
+        selectedPlaylistItems = searchFiltered(selectedPlaylistRows)
+        selectedTagItems = searchFiltered(selectedTagRows)
     }
 
     /// Permanent purge: remove the managed file, then the record (mirrors iOS
@@ -167,9 +185,10 @@ public final class LibraryAndroidStore {
     /// already-loaded snapshot and avoid a second backend read.
     private func reload(using records: [ScoreRecordWire]? = nil) {
         let all = records ?? store.loadAll()
-        scores = all
+        allScoreRows = all
             .filter { $0.deletedAt <= 0 }
             .map(Self.row)
+        scores = searchFiltered(allScoreRows)
         // Recently Deleted: soft-deleted rows, most-recently-trashed first
         // (mirrors iOS RecentlyDeletedViewModel). Sorting happens here, before
         // projection, so ScoreRowWire need not carry deletedAt.
@@ -181,6 +200,11 @@ public final class LibraryAndroidStore {
 
     private static func row(_ record: ScoreRecordWire) -> ScoreRowWire {
         ScoreRowWire(id: record.id, title: record.title, subtitle: record.subtitle, composer: record.composer)
+    }
+
+    /// Filter a row list by the current search query using the shared predicate.
+    private func searchFiltered(_ rows: [ScoreRowWire]) -> [ScoreRowWire] {
+        rows.filter { ScoreSearch.matches(title: $0.title, composer: $0.composer, query: searchQuery) }
     }
 
     // MARK: - Export
@@ -365,6 +389,7 @@ public final class LibraryAndroidStore {
         guard let sel = selectedPlaylistID,
               let playlist = domain.first(where: { $0.id.rawValue.uuidString == sel })
         else {
+            selectedPlaylistRows = []
             selectedPlaylistItems = []
             return
         }
@@ -372,9 +397,10 @@ public final class LibraryAndroidStore {
         for record in records where record.deletedAt <= 0 {
             if let sid = scoreItemID(record.id) { rowByID[sid] = Self.row(record) }
         }
-        selectedPlaylistItems = PlaylistPresentation
+        selectedPlaylistRows = PlaylistPresentation
             .orderedLiveIDs(playlist, liveIDs: liveIDs)
             .compactMap { rowByID[$0] }
+        selectedPlaylistItems = searchFiltered(selectedPlaylistRows)
     }
 
     private func refreshAddSheet(domain: [Playlist]) {
@@ -512,14 +538,16 @@ public final class LibraryAndroidStore {
     /// Live scores carrying `selectedTagID`, sorted by title (tags are unordered).
     private func recomputeSelectedTagItems(records: [ScoreRecordWire], membership: [String: Set<String>]) {
         guard let sel = selectedTagID else {
+            selectedTagRows = []
             selectedTagItems = []
             return
         }
         let members = membership[sel] ?? []
-        selectedTagItems = records
+        selectedTagRows = records
             .filter { $0.deletedAt <= 0 && members.contains($0.id) }
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             .map(Self.row)
+        selectedTagItems = searchFiltered(selectedTagRows)
     }
 
     /// Edit-tags sheet rows: every tag, `contains` reflecting the focused score
