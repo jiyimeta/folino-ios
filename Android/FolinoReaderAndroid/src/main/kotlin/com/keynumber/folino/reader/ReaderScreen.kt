@@ -78,6 +78,9 @@ fun ReaderScreen(
     onBack: () -> Unit,
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
+    /** Global A4 reference pitch default (Hz) from SettingsPrefs, seeded into the audio VM at
+     * prepare time so the per-score live value starts at the user's preferred tuning. */
+    globalA4ReferenceHz: Double = 440.0,
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -91,7 +94,15 @@ fun ReaderScreen(
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
     LaunchedEffect(scoreId) { readerVm.load(scoreId) }
-    LaunchedEffect(scoreHandle) { scoreHandle?.let { audioVm.preparePlayback(it) } }
+    LaunchedEffect(scoreHandle) {
+        scoreHandle?.let {
+            // Seed the per-score live A4 from the global default before prepare, so
+            // the first prepare call picks up the user's preferred tuning. Also stores
+            // the global default in the VM so the inspector can show the cents offset.
+            audioVm.seedGlobalA4ReferenceHz(globalA4ReferenceHz)
+            audioVm.preparePlayback(it)
+        }
+    }
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
     LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
 

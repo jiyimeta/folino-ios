@@ -34,6 +34,11 @@ object SettingsKeys {
     val clefOverrides = stringSetPreferencesKey("reader.clefOverrides")
     /** Set once the user has interacted with the page-mode tap-zone overlay; suppresses the onboarding hint. */
     val pageTapHintDismissed = booleanPreferencesKey("reader.pageTapHintDismissed")
+    /**
+     * Global A4 reference pitch in Hz. Shared key with the iOS side so both platforms default to
+     * the same persisted value when reading a cross-platform DataStore export.
+     */
+    val a4ReferenceHz = doublePreferencesKey("reader.a4ReferenceHz")
 }
 
 class SettingsPrefs(private val context: Context) {
@@ -48,6 +53,7 @@ class SettingsPrefs(private val context: Context) {
     val hiddenStaves: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.hiddenStaves] ?: emptySet() }
     val clefOverrides: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.clefOverrides] ?: emptySet() }
     val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
+    val a4ReferenceHz: Flow<Double> = context.dataStore.data.map { it[SettingsKeys.a4ReferenceHz] ?: 440.0 }
 
     suspend fun setMetronome(v: Boolean) = context.dataStore.edit { it[SettingsKeys.metronomeEnabled] = v }
     suspend fun setPip(v: Boolean) = context.dataStore.edit { it[SettingsKeys.pipEnabled] = v }
@@ -60,4 +66,5 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setHiddenStaves(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.hiddenStaves] = v }
     suspend fun setClefOverrides(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.clefOverrides] = v }
     suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
+    suspend fun setA4ReferenceHz(v: Double) = context.dataStore.edit { it[SettingsKeys.a4ReferenceHz] = v }
 }

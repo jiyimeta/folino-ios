@@ -116,6 +116,12 @@ final class FakePlaybackController: PlaybackController {
         masterVolumeCalls.append(value)
     }
 
+    private(set) var masterTuningCentsCalls: [Double] = []
+
+    func setMasterTuning(cents: Double) {
+        masterTuningCentsCalls.append(cents)
+    }
+
     func setStaffMute(staff _: Int, isMuted _: Bool) {}
     func setStaffSolo(staff: Int, isSolo: Bool) {
         staffSoloStates[staff] = isSolo

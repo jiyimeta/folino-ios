@@ -35,6 +35,7 @@ struct PlaybackInspectorScreen: View {
     let mixerModel: PlaybackMixerModel
     let tempoModel: TempoModel
     let masterVolumeModel: MasterVolumeModel
+    let a4ReferenceModel: A4ReferenceModel
     @Bindable var repeatModel: RepeatModel
     let transposeModel: TransposeModel
     let score: Score
@@ -61,6 +62,7 @@ struct PlaybackInspectorScreen: View {
                     RepeatModePicker(selection: $repeatModel.mode)
                 }
                 masterVolumeRow
+                a4ReferenceRow
             } header: {
                 Text("reader.inspector.section.general", bundle: .module)
             }
@@ -330,6 +332,7 @@ struct PlaybackInspectorScreen: View {
                 mixerModel: vm.mixerModel,
                 tempoModel: vm.tempoModel,
                 masterVolumeModel: vm.masterVolumeModel,
+                a4ReferenceModel: vm.a4ReferenceModel,
                 repeatModel: vm.repeatModel,
                 transposeModel: vm.transposeModel,
                 score: score,

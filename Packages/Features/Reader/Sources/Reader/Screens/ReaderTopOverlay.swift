@@ -103,6 +103,7 @@ struct ReaderTopOverlay: View {
                     mixerModel: viewModel.mixerModel,
                     tempoModel: viewModel.tempoModel,
                     masterVolumeModel: viewModel.masterVolumeModel,
+                    a4ReferenceModel: viewModel.a4ReferenceModel,
                     repeatModel: viewModel.repeatModel,
                     transposeModel: viewModel.transposeModel,
                     score: score,
