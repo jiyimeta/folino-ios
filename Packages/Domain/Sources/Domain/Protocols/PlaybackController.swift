@@ -52,8 +52,9 @@ public protocol PlaybackController: Sendable {
     func setMetronomeEnabled(_ enabled: Bool) async
     func setTempoMultiplier(_ value: Double) async
 
-    /// Set the live whole-score transpose in semitones (−7…+7). The engine shifts pitched channels by global coarse
-    /// tuning, leaving drums at concert pitch; no score reload. Out-of-range values are clamped by the adapter.
+    /// Set the live whole-score transpose in semitones (−7…+7).
+    /// The engine shifts pitched channels by global coarse tuning, leaving drums at concert pitch; no score reload.
+    /// Out-of-range values are clamped by the adapter.
     func setTranspose(semitones: Int) async
 
     /// Set the per-score master output volume. `1.0` is unity (the authored mix); values up to `3.0` (300%) boost the
