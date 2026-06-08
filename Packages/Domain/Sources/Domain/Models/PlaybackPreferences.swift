@@ -63,6 +63,10 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
     /// Clamped to `[A4Reference.minHz, A4Reference.maxHz]`. Mirrors `ReaderPreferences.a4ReferenceHz` but stores
     /// the resolved value (never `nil`) so the engine always has an explicit target.
     public var a4ReferenceHz: Double
+    /// Transposition offset in semitones seeded into the engine on load. `0` means no transposition; clamped to
+    /// `[-7, +7]`. Mirrors `ReaderPreferences.transposeSemitones` so a new score's `load(...)` always resets the
+    /// engine to the correct offset rather than inheriting the previous score's value.
+    public var transposeSemitones: Int
 
     public init(
         id: PlaybackPreferencesID = PlaybackPreferencesID(),
@@ -72,6 +76,7 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
         abRepeat: ABRepeatRange?,
         masterVolume: Double = 1.0,
         a4ReferenceHz: Double = 440,
+        transposeSemitones: Int = 0,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -80,5 +85,6 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
         self.abRepeat = abRepeat
         self.masterVolume = min(max(masterVolume, 0), 3)
         self.a4ReferenceHz = A4Reference.clamp(a4ReferenceHz)
+        self.transposeSemitones = min(max(transposeSemitones, -7), 7)
     }
 }

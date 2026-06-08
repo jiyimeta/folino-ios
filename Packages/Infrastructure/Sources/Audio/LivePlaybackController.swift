@@ -116,10 +116,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         applyPreferences(preferences)
     }
 
-    // `reloadSoundfont` lives in `LivePlaybackController+Reload.swift` — it needs the cached `loadedPreferences` and
-    // `metronomeEnabled` declared above plus `applyPreferences` / `publishNowPlayingInfo` below, but is otherwise
-    // self-contained.
-
+    /// `reloadSoundfont` lives in `LivePlaybackController+Reload.swift` — it needs the cached `loadedPreferences` and
+    /// `metronomeEnabled` declared above plus `applyPreferences` / `publishNowPlayingInfo` below, but is otherwise
+    /// self-contained.
     func applyPreferences(_ preferences: PlaybackPreferences) {
         for state in preferences.perStaff {
             engine.setVolume(
@@ -135,6 +134,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine.setRate(Float(preferences.tempoMultiplier))
         applyMasterVolume(preferences.masterVolume)
         engine.setMasterTuning(cents: A4Reference.cents(forHz: preferences.a4ReferenceHz))
+        engine.setTranspose(semitones: preferences.transposeSemitones)
     }
 
     public func play() throws {

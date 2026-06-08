@@ -41,6 +41,7 @@ extension PlaybackPreferences {
                 override: readerPreferences.a4ReferenceHz,
                 globalDefault: globalA4,
             ),
+            transposeSemitones: readerPreferences.transposeSemitones,
         )
     }
 }

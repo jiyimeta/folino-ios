@@ -176,6 +176,7 @@ public struct ReaderRootScreen: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.displayCursor,
+                    transposeSemitones: viewModel.transposeModel.semitones,
                     viewModel: viewModel,
                 )
             case .horizontal:
@@ -186,6 +187,7 @@ public struct ReaderRootScreen: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.displayCursor,
+                    transposeSemitones: viewModel.transposeModel.semitones,
                     viewModel: viewModel,
                 )
             case .page:
@@ -196,6 +198,7 @@ public struct ReaderRootScreen: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.displayCursor,
+                    transposeSemitones: viewModel.transposeModel.semitones,
                     viewModel: viewModel,
                 )
             }

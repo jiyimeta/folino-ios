@@ -55,13 +55,13 @@ struct PlaybackInspectorScreen: View {
             CollapsibleSection(isExpanded: $generalExpanded) {
                 metronomeRow
                 tempoRow
-                TransposeRow(transposeModel: transposeModel)
                 HStack {
                     Text("reader.inspector.repeatMode", bundle: .module)
                     Spacer()
                     RepeatModePicker(selection: $repeatModel.mode)
                 }
                 masterVolumeRow
+                TransposeRow(transposeModel: transposeModel)
                 a4ReferenceRow
             } header: {
                 Text("reader.inspector.section.general", bundle: .module)

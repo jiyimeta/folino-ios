@@ -27,6 +27,7 @@ private func paged(
         collapseMultiMeasureRests: false,
         showInvisibleElements: false,
         playbackCursor: nil,
+        transposeSemitones: 0,
         viewModel: vm,
     )
     .task { await vm.load() }

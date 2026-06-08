@@ -16,6 +16,7 @@ enum AppMigrations {
         m.registerMigration("v8", migrate: migrateV8)
         m.registerMigration("v9", migrate: migrateV9)
         m.registerMigration("v10", migrate: migrateV10)
+        m.registerMigration("v11", migrate: migrateV11)
         return m
     }()
 
@@ -291,5 +292,20 @@ enum AppMigrations {
         try db.execute(sql: "ALTER TABLE score_items ADD COLUMN arranger TEXT")
         try db.execute(sql: "ALTER TABLE score_items ADD COLUMN lyricist TEXT")
         try db.execute(sql: "ALTER TABLE score_items ADD COLUMN copyright TEXT")
+    }
+
+    // MARK: - v11
+
+    /// Adds the per-score transposition offset and A4 reference override to `reader_preferences`. Existing rows default
+    /// to 0 semitones (no transposition) and NULL Hz (inherit the global default), preserving prior behavior.
+    private static func migrateV11(_ db: Database) throws {
+        try db.execute(sql: """
+        ALTER TABLE reader_preferences
+        ADD COLUMN transpose_semitones INTEGER NOT NULL DEFAULT 0
+        """)
+        try db.execute(sql: """
+        ALTER TABLE reader_preferences
+        ADD COLUMN a4_reference_hz REAL
+        """)
     }
 }
