@@ -104,6 +104,7 @@ struct ReaderTopOverlay: View {
                     tempoModel: viewModel.tempoModel,
                     masterVolumeModel: viewModel.masterVolumeModel,
                     repeatModel: viewModel.repeatModel,
+                    transposeModel: viewModel.transposeModel,
                     score: score,
                     playbackCursor: viewModel.playbackSession.playbackCursor,
                 )
@@ -121,6 +122,7 @@ struct ReaderTopOverlay: View {
             .popover(isPresented: $viewModel.isVisualInspectorPresented) {
                 VisualInspectorScreen(
                     layoutModel: viewModel.layoutModel,
+                    transposeModel: viewModel.transposeModel,
                     score: score,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)

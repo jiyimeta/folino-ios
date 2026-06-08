@@ -36,6 +36,7 @@ struct PlaybackInspectorScreen: View {
     let tempoModel: TempoModel
     let masterVolumeModel: MasterVolumeModel
     @Bindable var repeatModel: RepeatModel
+    let transposeModel: TransposeModel
     let score: Score
     /// Live playback cursor. The tempo readout reads the score's effective tempo here so it tracks mid-score tempo
     /// changes; `nil` (no cursor yet) resolves to the opening tempo.
@@ -53,6 +54,7 @@ struct PlaybackInspectorScreen: View {
             CollapsibleSection(isExpanded: $generalExpanded) {
                 metronomeRow
                 tempoRow
+                TransposeRow(transposeModel: transposeModel)
                 HStack {
                     Text("reader.inspector.repeatMode", bundle: .module)
                     Spacer()
@@ -329,6 +331,7 @@ struct PlaybackInspectorScreen: View {
                 tempoModel: vm.tempoModel,
                 masterVolumeModel: vm.masterVolumeModel,
                 repeatModel: vm.repeatModel,
+                transposeModel: vm.transposeModel,
                 score: score,
                 playbackCursor: vm.playbackSession.playbackCursor,
             )
