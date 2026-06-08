@@ -120,6 +120,7 @@ final class ReaderViewModel {
             staffSize: layoutModel.staffSize,
             hiddenStaves: layoutModel.hiddenStaves,
             clefOverrides: layoutModel.staffClefOverrides,
+            transposeSemitones: transposeModel.semitones,
         )
     }
 
