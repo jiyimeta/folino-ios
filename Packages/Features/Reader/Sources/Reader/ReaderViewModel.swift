@@ -26,6 +26,7 @@ final class ReaderViewModel {
     var repeatModel = RepeatModel()
     var tempoModel = TempoModel()
     var masterVolumeModel = MasterVolumeModel()
+    var transposeModel = TransposeModel()
     var layoutModel = LayoutSettingsModel()
     var mixerModel = PlaybackMixerModel()
 
@@ -98,6 +99,7 @@ final class ReaderViewModel {
         wireRepeatModel()
         wireTempoModel()
         wireMasterVolumeModel()
+        wireTransposeModel()
         wireLayoutModel()
         wireMixerModel()
         wirePlaybackSession()
@@ -173,6 +175,17 @@ final class ReaderViewModel {
         masterVolumeModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
     }
 
+    private func wireTransposeModel() {
+        transposeModel.onChange = { [weak self] in
+            guard let self else { return }
+            await preferencesStore.mutate { prefs in
+                prefs.transposeSemitones = self.transposeModel.semitones
+            }
+            pipSession.armIfReady()
+        }
+        transposeModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
+    }
+
     private func wireRepeatModel() {
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
@@ -243,6 +256,7 @@ final class ReaderViewModel {
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
         masterVolumeModel.sync(from: prefs)
+        transposeModel.sync(from: prefs)
         layoutModel.sync(from: prefs)
         mixerModel.sync(from: prefs)
     }

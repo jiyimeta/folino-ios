@@ -65,6 +65,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// Boosts up to `maxMasterVolume` (300%) raise the whole mix past per-staff CC7's ceiling; the engine
     /// brick-wall-limits the result so a boost doesn't clip. Clamped to `[minMasterVolume, maxMasterVolume]`.
     public var masterVolume: Double
+    /// Per-score transposition offset in semitones. `0` (default) means no transposition. Clamped to
+    /// `[-7, +7]` (a diminished fifth / tritone either way), matching the engine's supported range.
+    public var transposeSemitones: Int
 
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
@@ -79,6 +82,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         repeatMode: RepeatMode = .off,
         abRepeat: ABRepeatRange? = nil,
         masterVolume: Double = 1.0,
+        transposeSemitones: Int = 0,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -96,6 +100,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.repeatMode = repeatMode
         self.abRepeat = abRepeat
         self.masterVolume = min(max(masterVolume, Self.minMasterVolume), Self.maxMasterVolume)
+        self.transposeSemitones = min(max(transposeSemitones, -7), 7)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -103,6 +108,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         case staffVolumeOverrides, tempoMultiplier, honorLayoutBreaks
         case repeatMode, abRepeat, masterVolume
         case staffClefOverrides
+        case transposeSemitones
     }
 
     public init(from decoder: Decoder) throws {
@@ -125,6 +131,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let mode = try c.decodeIfPresent(RepeatMode.self, forKey: .repeatMode) ?? .off
         let ab = try c.decodeIfPresent(ABRepeatRange.self, forKey: .abRepeat)
         let master = try c.decodeIfPresent(Double.self, forKey: .masterVolume) ?? 1.0
+        let transpose = try c.decodeIfPresent(Int.self, forKey: .transposeSemitones) ?? 0
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
             hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
@@ -133,6 +140,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             tempoMultiplier: tempo,
             honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab,
             masterVolume: master,
+            transposeSemitones: transpose,
         )
     }
 }
