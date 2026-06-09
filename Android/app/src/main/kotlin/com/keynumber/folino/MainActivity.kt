@@ -87,6 +87,11 @@ import java.net.URLEncoder
 
 class MainActivity : ComponentActivity(), PipHost {
 
+    companion object {
+        /** Extra key used by ShareTargetActivity to request opening a score after import. */
+        const val EXTRA_OPEN_SCORE_ID = "open_score_id"
+    }
+
     private val pipReceiver = PipActionReceiver()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -485,7 +490,7 @@ private fun SettingsRoute(
     }
 }
 
-private class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
+internal class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         LibraryAndroidStoreViewModel.create(
