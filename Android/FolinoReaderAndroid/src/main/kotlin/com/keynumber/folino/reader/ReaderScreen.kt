@@ -110,6 +110,15 @@ fun ReaderScreen(
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
+    /** Loads the persisted global repeat mode (suspending so the DataStore value is resolved before
+     * the controller is installed). */
+    initialRepeatModeLoader: suspend () -> RepeatMode = { RepeatMode.OFF },
+    /** Loads this score's persisted A–B range (per-score Room row), or null. */
+    loadAbRange: () -> AbRepeatRange? = { null },
+    /** Persists this score's A–B range (null clears it). */
+    persistAbRange: (AbRepeatRange?) -> Unit = {},
+    /** Persists the global sticky repeat mode. */
+    persistRepeatMode: (RepeatMode) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -123,6 +132,17 @@ fun ReaderScreen(
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
     LaunchedEffect(scoreId) { readerVm.load(scoreId) }
+    // Install the repeat controller once per score: resolve the persisted global mode (suspending)
+    // and wire per-score A–B persistence. The controller loads any saved A–B range here; the active
+    // loop is (re)applied after the engine finishes preparing.
+    LaunchedEffect(scoreId) {
+        audioVm.installRepeatController(
+            initialMode = initialRepeatModeLoader(),
+            loadRange = loadAbRange,
+            persistRange = persistAbRange,
+            persistMode = persistRepeatMode,
+        )
+    }
     LaunchedEffect(scoreHandle) {
         scoreHandle?.let {
             // Seed the per-score live A4 from the global default before prepare, so

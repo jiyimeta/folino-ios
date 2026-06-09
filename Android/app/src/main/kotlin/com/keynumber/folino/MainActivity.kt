@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -57,6 +58,8 @@ import androidx.navigation.navArgument
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import androidx.core.content.ContextCompat
 import com.keynumber.folino.reader.PipHost
+import com.keynumber.folino.reader.AbRepeatRange
+import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ReaderScreen
@@ -425,6 +428,9 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val scope = rememberCoroutineScope()
+                val context = LocalContext.current
+                // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
+                val abRepeatStore = remember(context) { com.keynumber.folino.library.RoomLibraryStore(context) }
                 val displayOptions = layoutOptionsFromPrefs(
                     layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
                 )
@@ -450,6 +456,14 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     pipEnabled = pipEnabled,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
+                    initialRepeatModeLoader = { RepeatMode.fromWire(prefs.repeatMode.first()) },
+                    loadAbRange = {
+                        abRepeatStore.loadAbRepeat(id)?.let { AbRepeatRange(it.first, it.second) }
+                    },
+                    persistAbRange = { r ->
+                        abRepeatStore.saveAbRepeat(id, r?.let { it.startMeasure to it.endMeasure })
+                    },
+                    persistRepeatMode = { m -> scope.launch { prefs.setRepeatMode(m.wire) } },
                     onBack = { nav.popBackStackIfResumed() },
                 )
             }
