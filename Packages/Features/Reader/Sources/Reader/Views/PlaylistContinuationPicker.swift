@@ -39,7 +39,7 @@ struct PlaylistContinuationPicker: View {
     @ViewBuilder
     private func icon(for mode: PlaylistContinuationMode) -> some View {
         switch mode {
-        case .off: Image(systemName: "arrow.forward.to.line.compact")
+        case .off: Image(systemName: "pause")
         case .playThrough: Image(systemName: "forward.end")
         case .loopPlaylist: Image(systemName: "repeat")
         }

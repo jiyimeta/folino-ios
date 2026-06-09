@@ -210,16 +210,18 @@ final class ReaderViewModel {
     }
 
     private func wireRepeatModel() {
+        // The repeat *mode* is global (persisted by `RepeatModel` itself via `RepeatModeStorage`); only the per-score
+        // A–B endpoints are saved here.
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
             await preferencesStore.mutate { prefs in
-                prefs.repeatMode = self.repeatModel.mode
                 prefs.abRepeat = self.repeatModel.abRange
             }
         }
         repeatModel.scoreProvider = { [weak self] in self?.loadState.score }
         repeatModel.cursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
         repeatModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
+        repeatModel.startObservingGlobalMode()
     }
 
     private func wirePlaybackSession() {
