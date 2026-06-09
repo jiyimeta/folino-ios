@@ -1,5 +1,8 @@
 package com.keynumber.folino
 
+import android.content.IntentFilter
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,7 +53,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
+import androidx.core.content.ContextCompat
+import com.keynumber.folino.reader.PipHost
 import com.keynumber.folino.reader.ReaderLayoutMode
+import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.reader.clefOverridesPref
 import com.keynumber.folino.reader.hiddenStavesPref
@@ -71,10 +78,21 @@ import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import java.net.URLEncoder
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PipHost {
+
+    private val pipReceiver = PipActionReceiver()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = SettingsPrefs(applicationContext)
+        val activity = this@MainActivity
+
+        ContextCompat.registerReceiver(
+            this,
+            pipReceiver,
+            IntentFilter(ReaderPipActions.ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
@@ -93,6 +111,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface {
+                    // Keep PiP params current: auto-enter flag (API 31+) and play/pause glyph.
+                    val pipEligible by ReaderPipController.eligible.collectAsState()
+                    val pipPlaying by ReaderPipController.isPlaying.collectAsState()
+                    val pipAspect by ReaderPipController.contentAspect.collectAsState()
+                    LaunchedEffect(pipEligible, pipPlaying, pipAspect) {
+                        runCatching {
+                            activity.setPictureInPictureParams(
+                                buildPipParams(activity, pipAspect, pipPlaying, autoEnter = pipEligible),
+                            )
+                        }.onFailure { android.util.Log.w("ReaderPip", "setPictureInPictureParams failed", it) }
+                    }
                     // Library is the main screen; Settings opens as a full-screen
                     // destination (Android idiom) reached from a gear icon in the
                     // Library app bar, with a back arrow to return.
@@ -111,6 +140,49 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // API 31+ auto-enters via setAutoEnterEnabled; older versions enter here when eligible.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && ReaderPipController.eligible.value) {
+            runCatching {
+                enterPictureInPictureMode(
+                    buildPipParams(
+                        this,
+                        ReaderPipController.contentAspect.value,
+                        ReaderPipController.isPlaying.value,
+                        autoEnter = false,
+                    ),
+                )
+            }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        ReaderPipController.setInPipMode(isInPictureInPictureMode)
+    }
+
+    override fun enterPipNow() {
+        runCatching {
+            enterPictureInPictureMode(
+                buildPipParams(
+                    this,
+                    ReaderPipController.contentAspect.value,
+                    ReaderPipController.isPlaying.value,
+                    autoEnter = false,
+                ),
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(pipReceiver) }
+        super.onDestroy()
     }
 }
 
@@ -289,6 +361,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 val clefOverrides by prefs.clefOverrides.collectAsState(initial = emptySet())
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
+                val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val scope = rememberCoroutineScope()
                 val displayOptions = layoutOptionsFromPrefs(
                     layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
@@ -312,6 +385,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
                     globalA4ReferenceHz = globalA4Hz,
+                    pipEnabled = pipEnabled,
                     onBack = { nav.popBackStackIfResumed() },
                 )
             }

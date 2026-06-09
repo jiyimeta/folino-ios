@@ -179,6 +179,25 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         return try { DrawProgramReader.decode(bytes) } catch (e: Exception) { null }
     }
 
+    /**
+     * One-shot horizontal (single-system) layout program for the Picture-in-Picture surface,
+     * independent of the user's current layout mode. Same native call as the recompute loop,
+     * with the mode forced to HORIZONTAL in the options blob.
+     */
+    suspend fun horizontalProgram(): DrawProgram? {
+        val h = handle?.raw ?: return null
+        val opts = layoutOptions.value.copy(mode = ReaderLayoutMode.HORIZONTAL)
+        val bytes = withContext(Dispatchers.Default) {
+            SheetMusicJNI.nativeComputeLayout(h, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, opts.encode())
+        }
+        if (bytes.isEmpty()) return null
+        return try {
+            DrawProgramReader.decode(bytes)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** Document-Y page-break offsets (mm) for the cached layout at the given page height. */
     suspend fun pageBreaks(pageHeightMm: Double): DoubleArray {
         val h = handle?.raw ?: return DoubleArray(0)
