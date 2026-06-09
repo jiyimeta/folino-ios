@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// AppShellView is the composition root that wires every Feature's root screen, navigation state, and incoming-URL /
+// share-drain handling for both compact and regular layouts; its breadth keeps it just over the file_length budget.
+
 import Domain
 import ImportExport
 import Library
@@ -107,6 +111,7 @@ private struct ReadyShell: View {
     @State private var compactPath: NavigationPath
     @State private var sidebarPath: NavigationPath
     @State private var detailScoreItem: ScoreItem?
+    @State private var detailPlaylistID: PlaylistID?
     @State private var isSettingsPresented = false
     @State private var columnVisibility: NavigationSplitViewVisibility
     @State private var navStateStore = NavigationStateStore()
@@ -170,6 +175,7 @@ private struct ReadyShell: View {
         versionHistoryPresenter.isSheetPresented = false
         if horizontalSizeClass == .regular {
             sidebarPath = NavigationPath()
+            detailPlaylistID = nil
             detailScoreItem = nil
             columnVisibility = .doubleColumn
         } else {
@@ -196,16 +202,13 @@ private struct ReadyShell: View {
                     path: $compactPath,
                     onOpenScore: { compactPath.append($0) },
                     readerDestination: { item in
-                        ReaderRootScreen(
-                            scoreItem: item,
-                            repository: repository,
-                            gateway: gateway,
-                            shareService: shareService,
-                            metadataReader: metadataReader,
-                            scoresDirectory: scoresDirectory,
-                            playbackController: bootstrap.playbackController,
-                            museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
-                        )
+                        makeReader(item: item, playlistID: nil)
+                    },
+                    playlistReaderDestination: { route in
+                        makeReader(item: route.scoreItem, playlistID: route.playlistID)
+                    },
+                    onOpenInPlaylist: { item, playlistID in
+                        compactPath.append(PlaylistReaderRoute(scoreItem: item, playlistID: playlistID))
                     },
                     licenseContent: { LicenseListView() },
                     leadingToolbarItem: { settingsButton },
@@ -231,6 +234,7 @@ private struct ReadyShell: View {
             libraryVM.pendingScoreToOpen = nil
             if horizontalSizeClass == .regular {
                 sidebarPath = NavigationPath()
+                detailPlaylistID = nil
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             } else {
@@ -318,6 +322,7 @@ private struct ReadyShell: View {
                 if let playlistUnderneath {
                     sidebarPath.append(playlistUnderneath)
                 }
+                detailPlaylistID = nil
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             } else {
@@ -330,18 +335,33 @@ private struct ReadyShell: View {
         }
     }
 
+    private func makeReader(
+        item: ScoreItem,
+        playlistID: PlaylistID?,
+        onBack: (() -> Void)? = nil,
+        hidesBackButton: Bool = false,
+    ) -> some View {
+        ReaderRootScreen(
+            scoreItem: item,
+            repository: repository,
+            gateway: gateway,
+            shareService: shareService,
+            metadataReader: metadataReader,
+            scoresDirectory: scoresDirectory,
+            playbackController: bootstrap.playbackController,
+            museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
+            playlistID: playlistID,
+            onBack: onBack,
+            hidesBackButton: hidesBackButton,
+        )
+    }
+
     @ViewBuilder
     private var detail: some View {
         if let item = detailScoreItem {
-            ReaderRootScreen(
-                scoreItem: item,
-                repository: repository,
-                gateway: gateway,
-                shareService: shareService,
-                metadataReader: metadataReader,
-                scoresDirectory: scoresDirectory,
-                playbackController: bootstrap.playbackController,
-                museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
+            makeReader(
+                item: item,
+                playlistID: detailPlaylistID,
                 onBack: { columnVisibility = .doubleColumn },
                 hidesBackButton: columnVisibility == .doubleColumn,
             )
@@ -358,18 +378,20 @@ private struct ReadyShell: View {
             viewModel: libraryVM,
             path: $sidebarPath,
             onOpenScore: { item in
+                detailPlaylistID = nil
                 detailScoreItem = item
                 columnVisibility = .detailOnly
             },
             readerDestination: { item in
-                ReaderRootScreen(
-                    scoreItem: item,
-                    repository: repository,
-                    gateway: gateway,
-                    shareService: shareService,
-                    metadataReader: metadataReader,
-                    scoresDirectory: scoresDirectory,
-                )
+                makeReader(item: item, playlistID: nil)
+            },
+            playlistReaderDestination: { route in
+                makeReader(item: route.scoreItem, playlistID: route.playlistID)
+            },
+            onOpenInPlaylist: { item, playlistID in
+                detailPlaylistID = playlistID
+                detailScoreItem = item
+                columnVisibility = .detailOnly
             },
             licenseContent: { LicenseListView() },
             leadingToolbarItem: { settingsButton },
