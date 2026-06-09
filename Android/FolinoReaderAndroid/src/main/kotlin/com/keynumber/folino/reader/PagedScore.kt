@@ -178,16 +178,34 @@ fun PagedScore(
                             do {
                                 val event = awaitPointerEvent()
                                 val activeCount = event.changes.count { it.pressed }
-                                val minPanX = -(size.width * (scale - 1f)).coerceAtLeast(0f)
-                                val minPanY = -(size.height * (scale - 1f)).coerceAtLeast(0f)
                                 if (activeCount >= 2) {
                                     val zoom = event.calculateZoom()
                                     if (zoom != 1f) {
                                         val c = event.calculateCentroid(useCurrent = true)
-                                        if (!c.x.isNaN()) scale = (scale * zoom).coerceIn(1f, 8f)
+                                        if (!c.x.isNaN() && !c.y.isNaN()) {
+                                            val newScale = (scale * zoom).coerceIn(1f, 8f)
+                                            val ratio = newScale / scale
+                                            if (ratio != 1f) {
+                                                // Anchor the zoom at the gesture centroid (iOS parity).
+                                                // The page content scales about its top-left (which sits
+                                                // at panOffset), so to keep the content point under the
+                                                // centroid `c` fixed across the scale step we move the
+                                                // offset to `c - ratio * (c - panOffset)`. Clamp with the
+                                                // NEW scale's pan bounds so the focal shift isn't undone.
+                                                val nMinPanX = -(size.width * (newScale - 1f)).coerceAtLeast(0f)
+                                                val nMinPanY = -(size.height * (newScale - 1f)).coerceAtLeast(0f)
+                                                panOffset = Offset(
+                                                    (c.x - ratio * (c.x - panOffset.x)).coerceIn(nMinPanX, 0f),
+                                                    (c.y - ratio * (c.y - panOffset.y)).coerceIn(nMinPanY, 0f),
+                                                )
+                                                scale = newScale
+                                            }
+                                        }
                                     }
                                     val pan = event.calculatePan()
                                     if (pan != Offset.Zero && scale > 1f) {
+                                        val minPanX = -(size.width * (scale - 1f)).coerceAtLeast(0f)
+                                        val minPanY = -(size.height * (scale - 1f)).coerceAtLeast(0f)
                                         panOffset = Offset(
                                             (panOffset.x + pan.x).coerceIn(minPanX, 0f),
                                             (panOffset.y + pan.y).coerceIn(minPanY, 0f),
@@ -197,6 +215,8 @@ fun PagedScore(
                                 } else if (activeCount == 1 && scale > 1f) {
                                     val pan = event.calculatePan()
                                     if (pan != Offset.Zero) {
+                                        val minPanX = -(size.width * (scale - 1f)).coerceAtLeast(0f)
+                                        val minPanY = -(size.height * (scale - 1f)).coerceAtLeast(0f)
                                         panOffset = Offset(
                                             (panOffset.x + pan.x).coerceIn(minPanX, 0f),
                                             (panOffset.y + pan.y).coerceIn(minPanY, 0f),
