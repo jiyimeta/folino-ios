@@ -36,4 +36,7 @@
     <string name="reader_playback_a4_relative">%1$dHz %2$s cents</string>
     <string name="reader_settings_a4_description">The reference pitch applied to all scores. Each score can override it.</string>
     <string name="settings_a4_reference">A4 reference</string>
+    <string name="reader_playback_play">Play</string>
+    <string name="reader_playback_pause">Pause</string>
+    <string name="reader_playback_stop">Stop</string>
 </resources>
