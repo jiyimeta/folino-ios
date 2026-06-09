@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ModalBottomSheet
@@ -33,6 +34,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -81,6 +83,8 @@ fun ReaderScreen(
     /** Global A4 reference pitch default (Hz) from SettingsPrefs, seeded into the audio VM at
      * prepare time so the per-score live value starts at the user's preferred tuning. */
     globalA4ReferenceHz: Double = 440.0,
+    /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
+    pipEnabled: Boolean = false,
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -106,11 +110,46 @@ fun ReaderScreen(
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
     LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
 
+    val pipActive by ReaderPipController.isInPipMode.collectAsStateWithLifecycle()
+    val playbackState by audioVm.state.collectAsStateWithLifecycle()
+    val pipParts by readerVm.parts.collectAsStateWithLifecycle()
+
+    // Publish PiP eligibility + window inputs while the Reader is on screen.
+    LaunchedEffect(state, pipEnabled, playbackState, pipParts) {
+        ReaderPipController.setStaffCount(pipParts.sumOf { it.staves.size })
+        ReaderPipController.setPlaying(playbackState == PlaybackState.PLAYING)
+        ReaderPipController.setEligible(
+            state is ReaderState.Ready && pipEnabled && playbackState == PlaybackState.PLAYING,
+        )
+    }
+
+    // Register transport hooks the in-window RemoteActions call; clear them on exit. ±10s is
+    // implemented via seek (the engine has no verified skip()): clamp to [0, total].
+    DisposableEffect(Unit) {
+        ReaderPipController.onTogglePlayPause = {
+            val e = audioVm.engine.value
+            if (audioVm.state.value == PlaybackState.PLAYING) e?.pause() else e?.play()
+        }
+        ReaderPipController.onSkip = { delta ->
+            audioVm.engine.value?.let { e ->
+                val target = (audioVm.currentTimeSeconds.value + delta)
+                    .coerceIn(0.0, audioVm.totalTimeSeconds.value)
+                e.seek(target)
+            }
+        }
+        onDispose { ReaderPipController.reset() }
+    }
+
     var showInspector by remember { mutableStateOf(false) }
     var showDisplayInspector by remember { mutableStateOf(false) }
     // Open at full height so the dense inspector shows as many rows as possible at once.
     val inspectorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val displaySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    if (pipActive) {
+        ReaderPipContent(readerVm = readerVm, audioVm = audioVm)
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -122,6 +161,15 @@ fun ReaderScreen(
                     }
                 },
                 actions = {
+                    if (pipEnabled) {
+                        val pipCtx = LocalContext.current
+                        IconButton(onClick = { (pipCtx.findActivity() as? PipHost)?.enterPipNow() }) {
+                            Icon(
+                                Icons.Filled.PictureInPicture,
+                                contentDescription = "Picture in Picture",
+                            )
+                        }
+                    }
                     IconButton(onClick = { showDisplayInspector = true }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ViewList,
