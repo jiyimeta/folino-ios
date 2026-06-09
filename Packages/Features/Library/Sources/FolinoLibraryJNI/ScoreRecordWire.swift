@@ -24,6 +24,9 @@ public struct ScoreRecordWire: Equatable, Sendable {
     public var title: String
     public var subtitle: String
     public var composer: String
+    public var arranger: String? // nil = never edited; "" = explicitly cleared
+    public var lyricist: String? // nil = never edited; "" = explicitly cleared
+    public var copyright: String? // nil = never edited; "" = explicitly cleared
     public var localFileName: String // "<id>.mscz" — built in Swift, iOS naming convention
     public var contentHash: String // SHA-256 hex of source bytes; "" for legacy rows
     public var deletedAt: Double // 0 == live; >0 == soft-deleted at that Unix time
@@ -35,6 +38,9 @@ public struct ScoreRecordWire: Equatable, Sendable {
         title: String,
         subtitle: String,
         composer: String,
+        arranger: String? = nil,
+        lyricist: String? = nil,
+        copyright: String? = nil,
         localFileName: String,
         contentHash: String = "",
         deletedAt: Double,
@@ -45,6 +51,9 @@ public struct ScoreRecordWire: Equatable, Sendable {
         self.title = title
         self.subtitle = subtitle
         self.composer = composer
+        self.arranger = arranger
+        self.lyricist = lyricist
+        self.copyright = copyright
         self.localFileName = localFileName
         self.contentHash = contentHash
         self.deletedAt = deletedAt

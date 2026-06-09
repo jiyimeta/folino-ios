@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.keynumber.folino.library.ScorePdfRenderer
@@ -169,32 +168,32 @@ class PdfScoreRenderer(context: Context) : ScorePdfRenderer {
                     glyphPaint.color = currentArgb
                     canvas.drawText(cmd.text, cmd.x.toFloat(), cmd.y.toFloat(), glyphPaint)
                 }
-                is DrawCommand.SetColor -> {
-                    currentArgb = cmd.argb.toInt()
-                }
                 is DrawCommand.StretchedGlyph -> {
-                    // Horizontally-stretched glyph (e.g. multi-measure rest H-bar). Mirrors
-                    // the ScoreCanvas Compose renderer: measure the glyph bounds, then
-                    // translate+scale so it fits between topY..bottomY with rightEdgeX as the
-                    // right edge, horizontally scaled by xScale.
+                    // System brace: a glyph stretched non-uniformly to fit a span.
+                    // Coordinates are mm (canvas pre-scaled mm -> pt), so unlike the
+                    // Compose renderer there is no pxPerMM factor. Mirrors iOS
+                    // StaffRenderer.smuflGlyphPathStretched.
                     glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) bravura else edwin
                     glyphPaint.textSize = cmd.fontSize.toFloat()
                     glyphPaint.color = currentArgb
                     val s = String(intArrayOf(cmd.codepoint.toInt()), 0, 1)
-                    val bounds = Rect()
+                    val bounds = android.graphics.Rect()
                     glyphPaint.getTextBounds(s, 0, s.length, bounds)
                     if (bounds.width() > 0 && bounds.height() > 0) {
                         val xScale = cmd.xScale.toFloat()
-                        val yScale = (cmd.bottomY - cmd.topY).toFloat() / bounds.height()
-                        val saveCount = canvas.save()
+                        val scaleY = (cmd.bottomY - cmd.topY).toFloat() / bounds.height()
+                        val save = canvas.save()
                         canvas.translate(
                             cmd.rightEdgeX.toFloat() - xScale * bounds.right,
-                            cmd.topY.toFloat() - yScale * bounds.top,
+                            cmd.topY.toFloat() - scaleY * bounds.top,
                         )
-                        canvas.scale(xScale, yScale)
+                        canvas.scale(xScale, scaleY)
                         canvas.drawText(s, 0f, 0f, glyphPaint)
-                        canvas.restoreToCount(saveCount)
+                        canvas.restoreToCount(save)
                     }
+                }
+                is DrawCommand.SetColor -> {
+                    currentArgb = cmd.argb.toInt()
                 }
             }
         }

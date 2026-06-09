@@ -81,6 +81,7 @@ import com.keynumber.folino.ui.library.TagDetailScreen
 import com.keynumber.folino.ui.library.TagsListScreen
 import com.keynumber.folino.ui.debug.DebugScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
+import com.keynumber.folino.ui.scoreinfo.EditScoreInfoScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
@@ -374,6 +375,7 @@ private fun LibraryNavGraph(
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
+                    onEditInfoForScore = { id -> nav.navigate("editInfo/$id") },
                 )
             }
             composable("recent") {
@@ -388,6 +390,7 @@ private fun LibraryNavGraph(
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
+                    onEditInfoForScore = { id -> nav.navigate("editInfo/$id") },
                 )
             }
             composable("debug") {
@@ -453,6 +456,19 @@ private fun LibraryNavGraph(
                 )
             }
             composable(
+                "editInfo/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id") ?: ""
+                EditScoreInfoScreen(
+                    load = { vm.scoreInfoForEditing(id) },
+                    onSave = { f ->
+                        vm.saveScoreInfo(id, f.title, f.subtitle, f.composer, f.arranger, f.lyricist, f.copyright)
+                    },
+                    onClose = { nav.popBackStackIfResumed() },
+                )
+            }
+            composable(
                 "reader/{id}/{title}",
                 arguments = listOf(
                     navArgument("id") { type = NavType.StringType },
@@ -482,6 +498,7 @@ private fun LibraryNavGraph(
                 ReaderScreen(
                     scoreId = id,
                     title = title,
+                    onEditInfo = { nav.navigate("editInfo/$id") },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->

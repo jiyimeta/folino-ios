@@ -16,6 +16,7 @@ fun FavoritesListScreen(
     viewModel: LibraryAndroidStoreViewModel,
     onOpenScore: (ScoreRowWire) -> Unit,
     onOpenDrawer: () -> Unit,
+    onEditInfoForScore: (String) -> Unit,
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     ScoreListScaffold(
@@ -26,6 +27,7 @@ fun FavoritesListScreen(
         emptyHintRes = R.string.favorites_empty_hint,
         onOpenScore = onOpenScore,
         onOpenDrawer = onOpenDrawer,
+        onEditInfoForScore = onEditInfoForScore,
         importAction = null,
     )
 }

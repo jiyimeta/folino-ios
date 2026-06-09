@@ -89,18 +89,17 @@ public final class LibraryViewModel {
         try? await metadataReader.readMetadata(for: item)
     }
 
-    /// Apply the edited fields to the item and persist. Title is required (trimmed, non-empty); other fields are stored
-    /// trimmed, with empties persisted as `""` so they are treated as explicit user values, not "never edited".
+    /// Apply the edited fields to the item and persist. Title is required; all fields are trimmed and empties stored
+    /// as `""`. Trim/validation is the shared `EditableScoreInfo.normalized()` rule (iOS + Android).
     public func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async {
-        let trimmedTitle = fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else { return }
+        guard let n = fields.normalized() else { return }
         var updated = item
-        updated.title = trimmedTitle
-        updated.subtitle = fields.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.composer = fields.composer.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.arranger = fields.arranger.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.lyricist = fields.lyricist.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.copyright = fields.copyright.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.title = n.title
+        updated.subtitle = n.subtitle
+        updated.composer = n.composer
+        updated.arranger = n.arranger
+        updated.lyricist = n.lyricist
+        updated.copyright = n.copyright
         await save(updated)
     }
 

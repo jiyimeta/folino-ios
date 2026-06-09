@@ -11,14 +11,19 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.ScreenLockPortrait
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.ViewArray
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -100,13 +105,44 @@ fun SettingsScreen(
                     modifier = Modifier.padding(end = 12.dp),
                 )
                 Text("Layout", Modifier.weight(1f))
-                SingleChoiceSegmentedButtonRow {
-                    listOf("vertical", "horizontal", "page").forEachIndexed { i, mode ->
-                        SegmentedButton(
-                            selected = layout == mode,
-                            onClick = { scope.launch { prefs.setLayoutMode(mode) } },
-                            shape = SegmentedButtonDefaults.itemShape(i, 3),
-                        ) { Text(mode.take(1).uppercase()) }
+                val layoutModes = listOf(
+                    Triple("vertical", "Vertical", Icons.Filled.SwapVert),
+                    Triple("horizontal", "Horizontal", Icons.Filled.SwapHoriz),
+                    Triple("page", "Page", Icons.Filled.AutoStories),
+                )
+                var expanded by remember { mutableStateOf(false) }
+                val current = layoutModes.firstOrNull { it.first == layout } ?: layoutModes.last()
+                Box {
+                    // Trigger row (icon + label + chevron) opens an anchored DropdownMenu — same
+                    // menu-picker pattern as the Reader display inspector's layout-mode control.
+                    Row(
+                        Modifier.clickable { expanded = true }
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text(current.second)
+                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        layoutModes.forEach { (raw, label, icon) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                leadingIcon = {
+                                    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                                },
+                                trailingIcon = if (raw == layout) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else {
+                                    null
+                                },
+                                onClick = {
+                                    scope.launch { prefs.setLayoutMode(raw) }
+                                    expanded = false
+                                },
+                            )
+                        }
                     }
                 }
             }
