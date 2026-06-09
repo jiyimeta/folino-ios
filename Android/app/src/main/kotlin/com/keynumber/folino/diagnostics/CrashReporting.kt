@@ -13,4 +13,13 @@ object CrashReporting {
     fun setCollectionEnabled(enabled: Boolean) {
         FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = enabled
     }
+
+    /**
+     * Record a non-fatal exception. The app keeps running; the report is uploaded on the next
+     * launch (subject to the collection-enabled flag). Used by the debug menu to exercise the
+     * Crashlytics pipeline without crashing.
+     */
+    fun recordNonFatal(throwable: Throwable) {
+        FirebaseCrashlytics.getInstance().recordException(throwable)
+    }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Menu
@@ -64,6 +65,7 @@ import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
 import com.keynumber.folino.ui.library.TagDetailScreen
 import com.keynumber.folino.ui.library.TagsListScreen
+import com.keynumber.folino.ui.debug.DebugScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
@@ -206,6 +208,19 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
+                // Debug-only entry to the Crashlytics test menu. Compiled out of release builds.
+                if (BuildConfig.DEBUG) {
+                    NavigationDrawerItem(
+                        icon = { Icon(Icons.Filled.BugReport, contentDescription = null) },
+                        label = { Text("Debug menu") },
+                        selected = currentRoute == "debug",
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            nav.navigate("debug")
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
             }
         },
     ) {
@@ -217,6 +232,9 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
                 )
+            }
+            composable("debug") {
+                DebugRoute(onBack = { nav.popBackStackIfResumed() })
             }
             composable("recentlyDeleted") {
                 RecentlyDeletedScreen(
@@ -385,6 +403,25 @@ private class LibraryVMFactory(private val context: android.content.Context) : V
             pdfRenderer = com.keynumber.folino.export.PdfScoreRenderer(context),
             audioExporter = com.keynumber.folino.export.AudioScoreExporter(context),
         ) as T
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DebugRoute(onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Debug menu") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) { DebugScreen() }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
