@@ -65,6 +65,10 @@ final class ReaderPlaybackSession {
     var onCursorChanged: () -> Void = {}
     var onReadyForLoopForward: () async -> Void = {}
 
+    /// Fired exactly when the engine reports end-of-score (`cursor == nil` while playing). The owner decides whether to
+    /// advance to the next playlist score. Not fired on manual pause/stop — only natural end.
+    var onReachedEnd: () async -> Void = {}
+
     init(
         controller: (any PlaybackController)?,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)?,
@@ -189,6 +193,7 @@ final class ReaderPlaybackSession {
             // the toolbar's play/pause glyph back to "play".
             if value == nil, isPlaying {
                 setPlaying(false)
+                Task { [weak self] in await self?.onReachedEnd() }
             }
         }
         controller.observeIsPlaying { [weak self] playing in
