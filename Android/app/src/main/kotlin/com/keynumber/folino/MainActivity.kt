@@ -1,5 +1,6 @@
 package com.keynumber.folino
 
+import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
@@ -37,7 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -92,6 +95,11 @@ class MainActivity : ComponentActivity(), PipHost {
         const val EXTRA_OPEN_SCORE_ID = "open_score_id"
     }
 
+    // Holds a score id delivered via EXTRA_OPEN_SCORE_ID (from ShareTargetActivity). Set on cold
+    // start (read from intent in setContent) and on re-delivery (onNewIntent). Consumed once by
+    // LibraryNavGraph's LaunchedEffect, then cleared to null so repeat taps don't re-navigate.
+    var pendingOpenScoreId: String? by mutableStateOf(null)
+
     private val pipReceiver = PipActionReceiver()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -126,6 +134,12 @@ class MainActivity : ComponentActivity(), PipHost {
                     .map { VersionHistoryItem(it.version, it.descriptions) }
             }
 
+        // Seed pending open from a cold-start EXTRA_OPEN_SCORE_ID (ShareTargetActivity → MainActivity).
+        intent?.getStringExtra(EXTRA_OPEN_SCORE_ID)?.let { id ->
+            intent.removeExtra(EXTRA_OPEN_SCORE_ID)
+            pendingOpenScoreId = id
+        }
+
         setContent {
             MaterialTheme {
                 Surface {
@@ -146,9 +160,12 @@ class MainActivity : ComponentActivity(), PipHost {
                     val rootNav = rememberNavController()
                     NavHost(rootNav, startDestination = "library") {
                         composable("library") {
+                            val activity = LocalContext.current as? MainActivity
                             LibraryNavGraph(
                                 prefs = prefs,
                                 onOpenSettings = { rootNav.navigate("settings") },
+                                pendingOpenScoreId = activity?.pendingOpenScoreId,
+                                onPendingOpenConsumed = { activity?.pendingOpenScoreId = null },
                             )
                         }
                         composable("settings") {
@@ -202,10 +219,26 @@ class MainActivity : ComponentActivity(), PipHost {
         runCatching { unregisterReceiver(pipReceiver) }
         super.onDestroy()
     }
+
+    // Called when MainActivity is already running and a second share finishes (singleTask / singleTop).
+    // Updates the Compose-observable state so LibraryNavGraph navigates without an Activity recreate.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_OPEN_SCORE_ID)?.let { id ->
+            intent.removeExtra(EXTRA_OPEN_SCORE_ID)
+            pendingOpenScoreId = id
+        }
+    }
 }
 
 @Composable
-private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
+private fun LibraryNavGraph(
+    prefs: SettingsPrefs,
+    onOpenSettings: () -> Unit,
+    pendingOpenScoreId: String? = null,
+    onPendingOpenConsumed: () -> Unit = {},
+) {
     val nav = rememberNavController()
     val context = LocalContext.current
     val vm: LibraryAndroidStoreViewModel =
@@ -436,6 +469,14 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     pipEnabled = pipEnabled,
                     onBack = { nav.popBackStackIfResumed() },
                 )
+            }
+        }
+        // Navigate to a just-imported score when ShareTargetActivity delivers a score id. The key
+        // is the id itself so that a new share while already in the reader re-triggers navigation.
+        LaunchedEffect(pendingOpenScoreId) {
+            pendingOpenScoreId?.let { id ->
+                onPendingOpenConsumed()
+                nav.navigate("reader/$id/0")
             }
         }
     }
