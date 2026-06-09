@@ -405,6 +405,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
+                val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val scope = rememberCoroutineScope()
                 val displayOptions = layoutOptionsFromPrefs(
                     layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
@@ -429,6 +430,8 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
                     globalA4ReferenceHz = globalA4Hz,
                     pipEnabled = pipEnabled,
+                    showSeekBar = showSeekBar,
+                    onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
                     onBack = { nav.popBackStackIfResumed() },
                 )
             }
