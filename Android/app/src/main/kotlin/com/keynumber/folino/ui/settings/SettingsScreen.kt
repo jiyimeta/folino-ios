@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.ScreenLockPortrait
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.ViewArray
 import androidx.compose.material3.*
@@ -49,6 +50,8 @@ fun SettingsScreen(
     val layout by prefs.layoutMode.collectAsState(initial = "page")
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
+    val soundfontVM = remember { com.keynumber.folino.soundfont.SoundfontController.viewModel(context) }
+    val sfState by soundfontVM.stateWire.collectAsState()
 
     LazyColumn(
         Modifier
@@ -123,6 +126,15 @@ fun SettingsScreen(
                     }
                     if (snapped != a4Hz) scope.launch { prefs.setA4ReferenceHz(snapped) }
                 },
+            )
+        }
+        item {
+            SoundfontRow(
+                state = sfState,
+                isWiFi = { soundfontVM.isWiFiNow() },
+                onSetOptedIn = { soundfontVM.setOptedIn(it) },
+                onDownloadNow = { soundfontVM.startDownloadAllowingCellular() },
+                onStop = { soundfontVM.cancelDownload() },
             )
         }
         item {
@@ -262,6 +274,138 @@ private fun ToggleRow(
             }
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/**
+ * High-quality SoundFont download row. Mirrors the iOS Reader settings entry: lets the user opt in to
+ * downloading the ≈206 MB high-fidelity SoundFont, shows download progress with a Stop affordance, and
+ * confirms before downloading over cellular or deleting the downloaded file (falling back to the bundled
+ * SoundFont). Opt-in / status is read from the shared SoundfontStateWire so iOS and Android stay in parity.
+ */
+@Composable
+private fun SoundfontRow(
+    state: com.keynumber.folino.soundfont.SoundfontStateWire,
+    isWiFi: () -> Boolean,
+    onSetOptedIn: (Boolean) -> Unit,
+    onDownloadNow: () -> Unit,
+    onStop: () -> Unit,
+) {
+    var showCellularDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val optedIn = state.isOptedIn
+
+    val subtitle = when (state.statusRaw) {
+        "downloading" -> "Downloading… ${(state.progress * 100).toInt()}%"
+        "failed" -> state.failureReason
+        "idle" -> if (optedIn) "Waiting for Wi-Fi" else "High-fidelity instruments (≈206 MB)"
+        else -> "" // downloaded
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.MusicNote,
+            contentDescription = "High-Quality SoundFont",
+            modifier = Modifier.padding(end = 12.dp),
+        )
+        Column(Modifier.weight(1f)) {
+            Text("High-Quality SoundFont")
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.statusRaw == "failed") {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            if (state.statusRaw == "idle" && optedIn) {
+                TextButton(onClick = onDownloadNow, contentPadding = PaddingValues(0.dp)) {
+                    Text("Download now")
+                }
+            }
+        }
+        when {
+            state.statusRaw == "downloading" -> {
+                CircularProgressIndicator(
+                    progress = { state.progress.toFloat() },
+                    modifier = Modifier.size(24.dp),
+                )
+                IconButton(onClick = onStop) {
+                    Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                }
+            }
+            state.statusRaw == "idle" && optedIn -> {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                IconButton(onClick = onStop) {
+                    Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                }
+            }
+            state.statusRaw == "idle" && !optedIn -> {
+                Switch(
+                    checked = false,
+                    onCheckedChange = {
+                        if (it) {
+                            if (isWiFi()) onSetOptedIn(true) else showCellularDialog = true
+                        }
+                    },
+                )
+            }
+            state.statusRaw == "downloaded" -> {
+                Switch(
+                    checked = true,
+                    onCheckedChange = { if (!it) showDeleteDialog = true },
+                )
+            }
+            state.statusRaw == "failed" -> {
+                Switch(
+                    checked = false,
+                    onCheckedChange = { if (it) onSetOptedIn(true) },
+                )
+            }
+        }
+    }
+
+    if (showCellularDialog) {
+        AlertDialog(
+            onDismissRequest = { showCellularDialog = false },
+            title = { Text("No Wi-Fi") },
+            text = { Text("You're not on Wi-Fi. The high-quality SoundFont is about 206 MB.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCellularDialog = false
+                    onDownloadNow()
+                }) { Text("Download over cellular") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCellularDialog = false
+                    onSetOptedIn(true)
+                }) { Text("Wait for Wi-Fi") }
+            },
+        )
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete download") },
+            text = { Text("Remove the high-quality SoundFont and use the bundled one?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    onSetOptedIn(false)
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 
