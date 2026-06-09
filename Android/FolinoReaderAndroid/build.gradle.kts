@@ -54,4 +54,6 @@ dependencies {
     implementation("io.github.jiyimeta:sheet-music-compose-android:0.0.0-SNAPSHOT")
     implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
     implementation("io.github.jiyimeta:sheet-music-android:0.0.0-SNAPSHOT")
+
+    testImplementation("junit:junit:4.13.2")
 }
