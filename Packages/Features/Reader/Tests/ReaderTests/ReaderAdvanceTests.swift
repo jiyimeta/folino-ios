@@ -4,8 +4,16 @@ import Foundation
 import Testing
 
 @MainActor
-@Suite("ReaderViewModel playlist advance")
+@Suite("ReaderViewModel playlist advance", .serialized)
 struct ReaderAdvanceTests {
+    private let defaults = UserDefaults.standard
+
+    /// Clears the playlist-continuation key so each test starts from the default `.playThrough` and
+    /// leaves no residue in global `UserDefaults` for sibling tests.
+    private func resetContinuation() {
+        defaults.removeObject(forKey: ReaderGlobalSettingsKey.playlistContinuationMode)
+    }
+
     /// Two distinct score items + a playlist linking them, all live, on a mutable fake repository.
     private func makeRepo() -> (PreviewFakeRepository, ScoreItem, ScoreItem, Playlist) {
         let a = ScoreItem(
@@ -48,12 +56,13 @@ struct ReaderAdvanceTests {
     }
 
     private func setContinuation(_ mode: PlaylistContinuationMode) {
-        UserDefaults.standard.set(mode.rawValue, forKey: ReaderGlobalSettingsKey.playlistContinuationMode)
+        defaults.set(mode.rawValue, forKey: ReaderGlobalSettingsKey.playlistContinuationMode)
     }
 
     @Test
     func `reaching end with playThrough advances A -> B`() async {
         let (repo, a, b, pl) = makeRepo()
+        resetContinuation()
         setContinuation(.playThrough)
         let vm = makeVM(repo: repo, item: a, playlistID: pl.id)
         await vm.load()
@@ -64,6 +73,7 @@ struct ReaderAdvanceTests {
     @Test
     func `reaching end at the last score with playThrough stays put`() async {
         let (repo, _, b, pl) = makeRepo()
+        resetContinuation()
         setContinuation(.playThrough)
         let vm = makeVM(repo: repo, item: b, playlistID: pl.id)
         await vm.load()
@@ -74,11 +84,24 @@ struct ReaderAdvanceTests {
     @Test
     func `standalone (no playlistID) never advances`() async {
         let (repo, a, _, _) = makeRepo()
+        resetContinuation()
         setContinuation(.playThrough)
         let vm = makeVM(repo: repo, item: a, playlistID: nil)
         await vm.load()
         await vm.handlePlaybackReachedEnd()
         #expect(vm.scoreItem.id == a.id)
         #expect(vm.isInPlaylist == false)
+    }
+
+    @Test
+    func `active repeat blocks advance even with continuation on`() async {
+        let (repo, a, _, pl) = makeRepo()
+        resetContinuation()
+        setContinuation(.playThrough)
+        let vm = makeVM(repo: repo, item: a, playlistID: pl.id)
+        await vm.load()
+        vm.repeatModel.mode = .loopAll
+        await vm.handlePlaybackReachedEnd()
+        #expect(vm.scoreItem.id == a.id)
     }
 }
