@@ -10,6 +10,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @Binding private var path: NavigationPath
     private let onOpenScore: (ScoreItem) -> Void
     private let readerDestination: (ScoreItem) -> ReaderContent
+    private let playlistReaderDestination: (PlaylistReaderRoute) -> ReaderContent
+    private let onOpenInPlaylist: (ScoreItem, PlaylistID) -> Void
     private let licenseContent: () -> LicenseContent
     private let leadingToolbarItem: () -> LeadingToolbar
 
@@ -30,6 +32,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         path: Binding<NavigationPath>,
         onOpenScore: @escaping (ScoreItem) -> Void,
         @ViewBuilder readerDestination: @escaping (ScoreItem) -> ReaderContent,
+        @ViewBuilder playlistReaderDestination: @escaping (PlaylistReaderRoute) -> ReaderContent,
+        onOpenInPlaylist: @escaping (ScoreItem, PlaylistID) -> Void,
         @ViewBuilder licenseContent: @escaping () -> LicenseContent,
         @ViewBuilder leadingToolbarItem: @escaping () -> LeadingToolbar = { EmptyView() },
     ) {
@@ -37,6 +41,8 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
         _path = path
         self.onOpenScore = onOpenScore
         self.readerDestination = readerDestination
+        self.playlistReaderDestination = playlistReaderDestination
+        self.onOpenInPlaylist = onOpenInPlaylist
         self.licenseContent = licenseContent
         self.leadingToolbarItem = leadingToolbarItem
     }
@@ -67,10 +73,14 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                         onOpenScore: onOpenScore,
                         onEditTags: { editTagsTarget = $0 },
                         onAddToPlaylist: { addToPlaylistTarget = $0 },
+                        onOpenInPlaylist: onOpenInPlaylist,
                     )
                 }
                 .navigationDestination(for: ScoreItem.self) { item in
                     readerDestination(item)
+                }
+                .navigationDestination(for: PlaylistReaderRoute.self) { route in
+                    playlistReaderDestination(route)
                 }
         }
         .editScoreInfoSheet(viewModel: viewModel, target: $editInfoTarget)
