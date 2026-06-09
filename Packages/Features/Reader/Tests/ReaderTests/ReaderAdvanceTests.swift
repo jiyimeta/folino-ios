@@ -104,4 +104,35 @@ struct ReaderAdvanceTests {
         await vm.handlePlaybackReachedEnd()
         #expect(vm.scoreItem.id == a.id)
     }
+
+    /// Regression: at natural end `PlaybackEngine.stop()` sets `state = .stopped` BEFORE `currentCursor = nil`,
+    /// so the `observeIsPlaying` stream flips `isPlaying` to false before the `observeCursor(nil)` arrives.
+    /// The cursor handler must therefore NOT guard on `isPlaying` (it would never pass) — it guards on
+    /// `hasLoadedIntoPlayback`. Drive the two handlers in that real order and assert the advance still fires.
+    @Test
+    func `end-of-score advances even when isPlaying flips false before the nil cursor`() async {
+        let (repo, a, b, pl) = makeRepo()
+        resetContinuation()
+        setContinuation(.playThrough)
+        let controller = FakePlaybackController()
+        let vm = ReaderViewModel(
+            scoreItem: a,
+            repository: repo,
+            gateway: PreviewFakeGateway(),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+            playlistID: pl.id,
+        )
+        await vm.load()
+        await vm.playbackSession.prepareForPlayback() // hasLoadedIntoPlayback = true
+        vm.playbackSession.startObservingCursor()
+        // Real engine ordering: state → .stopped (isPlaying false) first, THEN cursor → nil.
+        controller.emitIsPlaying(false)
+        controller.emitCursor(nil)
+        // onReachedEnd is dispatched onto a detached Task; let it and the async advance run.
+        for _ in 0 ..< 100 where vm.scoreItem.id == a.id {
+            await Task.yield()
+        }
+        #expect(vm.scoreItem.id == b.id)
+    }
 }

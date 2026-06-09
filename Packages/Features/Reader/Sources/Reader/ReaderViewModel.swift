@@ -62,20 +62,16 @@ final class ReaderViewModel {
     var shareTarget: ScoreShareTarget?
     var isPreparingShare = false
 
-    @ObservationIgnored
-    private let repository: any ScoreLibraryRepository
-    @ObservationIgnored
-    private let gateway: any ScoreFileGateway
-    @ObservationIgnored
-    private let shareService: any ScoreShareService
-    @ObservationIgnored
-    private let metadataReader: any ScoreMetadataReading
-    @ObservationIgnored
-    private let scoresDirectory: URL
-    @ObservationIgnored
-    private let defaultStaffSize: Double
-    @ObservationIgnored
-    private var hasUpdatedLastOpened = false
+    @ObservationIgnored private let repository: any ScoreLibraryRepository
+    @ObservationIgnored private let gateway: any ScoreFileGateway
+    @ObservationIgnored private let shareService: any ScoreShareService
+    @ObservationIgnored private let metadataReader: any ScoreMetadataReading
+    @ObservationIgnored private let scoresDirectory: URL
+    @ObservationIgnored private let defaultStaffSize: Double
+    @ObservationIgnored private var hasUpdatedLastOpened = false
+    /// Re-entrancy guard for `advance`: the in-flight engine teardown/reload can deliver a spurious `cursor == nil`
+    /// (→ `handlePlaybackReachedEnd`); this blocks a second advance mid-reload.
+    @ObservationIgnored private var isAdvancing = false
 
     init(
         scoreItem: ScoreItem,
@@ -295,6 +291,7 @@ final class ReaderViewModel {
     /// next live playlist score and auto-play it. No-op when standalone, when the current score is no longer in the
     /// live queue, or when the decision is `.stop`.
     func handlePlaybackReachedEnd() async {
+        guard !isAdvancing else { return }
         let queue = currentPlaylistQueue()
         guard let currentIndex = queue.firstIndex(of: scoreItem.id) else { return }
         let action = PlaylistPlaybackProgression.nextAction(
@@ -316,6 +313,8 @@ final class ReaderViewModel {
     /// preferences store, reload the score + preferences (which re-syncs every sub-model), then optionally auto-play.
     /// The view and the shared `PlaybackController` (and its cursor observer) stay mounted across the swap.
     func advance(to newItem: ScoreItem, autoPlay: Bool) async {
+        isAdvancing = true
+        defer { isAdvancing = false }
         await playbackSession.releaseEngine()
         scoreItem = newItem
         preferencesStore = ReaderPreferencesStore(
