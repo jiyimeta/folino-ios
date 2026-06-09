@@ -11,6 +11,7 @@ func libraryRootDestination(
     onOpenScore: @escaping (ScoreItem) -> Void,
     onEditTags: @escaping (ScoreItem) -> Void,
     onAddToPlaylist: @escaping (ScoreItem) -> Void,
+    onOpenInPlaylist: @escaping (ScoreItem, PlaylistID) -> Void,
 ) -> some View {
     switch route {
     case .allScores:
@@ -57,7 +58,7 @@ func libraryRootDestination(
             PlaylistDetailScreen(
                 playlist: playlist,
                 library: viewModel,
-                onOpen: onOpenScore,
+                onOpenInPlaylist: onOpenInPlaylist,
                 onPlaylistDeleted: { /* same comment as tag */ },
             )
         } else {

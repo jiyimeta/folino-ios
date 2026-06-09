@@ -65,6 +65,10 @@ final class ReaderPlaybackSession {
     var onCursorChanged: () -> Void = {}
     var onReadyForLoopForward: () async -> Void = {}
 
+    /// Fired exactly when the engine reports end-of-score (`cursor == nil` while playing). The owner decides whether to
+    /// advance to the next playlist score. Not fired on manual pause/stop — only natural end.
+    var onReachedEnd: () async -> Void = {}
+
     init(
         controller: (any PlaybackController)?,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)?,
@@ -184,11 +188,17 @@ final class ReaderPlaybackSession {
             guard let self else { return }
             rawPlaybackCursor = value
             applyCursorTranslation(value)
-            // The engine emits a nil cursor only when playback hits the end of the score
-            // (PlaybackEngine.stop() clears it; explicit pause() does not). Use that signal to flip
-            // the toolbar's play/pause glyph back to "play".
-            if value == nil, isPlaying {
+            // A nil cursor means the engine called `stop()` — either playback reached the end of the score
+            // or we tore the engine down via `releaseEngine()` (explicit `pause()` does NOT nil the cursor).
+            // Guard on `hasLoadedIntoPlayback`, NOT `isPlaying`: `PlaybackEngine.stop()` sets `state = .stopped`
+            // *before* `currentCursor = nil`, so the `observeIsPlaying` stream has already flipped `isPlaying`
+            // to false by the time this nil arrives — an `isPlaying` guard would never pass at natural end
+            // (the playlist auto-advance would never fire). `hasLoadedIntoPlayback` is still true at natural end
+            // and is cleared synchronously inside `releaseEngine()` before its teardown nil is delivered, so it
+            // distinguishes "reached the end while loaded" from "we tore the engine down".
+            if value == nil, hasLoadedIntoPlayback {
                 setPlaying(false)
+                Task { [weak self] in await self?.onReachedEnd() }
             }
         }
         controller.observeIsPlaying { [weak self] playing in

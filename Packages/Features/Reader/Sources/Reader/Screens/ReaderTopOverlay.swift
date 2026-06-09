@@ -108,6 +108,7 @@ struct ReaderTopOverlay: View {
                     transposeModel: viewModel.transposeModel,
                     score: score,
                     playbackCursor: viewModel.playbackSession.playbackCursor,
+                    isInPlaylist: viewModel.isInPlaylist,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)
                 .presentationDetents([.large])

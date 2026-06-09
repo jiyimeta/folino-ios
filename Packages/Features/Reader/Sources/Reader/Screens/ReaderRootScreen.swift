@@ -62,6 +62,7 @@ public struct ReaderRootScreen: View {
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
+        playlistID: PlaylistID? = nil,
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
     ) {
@@ -79,6 +80,7 @@ public struct ReaderRootScreen: View {
                 defaultStaffSize: initialDefault,
                 playbackController: playbackController,
                 museScoreGeneralProvider: museScoreGeneralProvider,
+                playlistID: playlistID,
             ),
         )
         self.onBack = onBack

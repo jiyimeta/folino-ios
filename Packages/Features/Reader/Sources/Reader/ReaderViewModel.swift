@@ -33,15 +33,23 @@ final class ReaderViewModel {
 
     private(set) var loadState: LoadState = .loading
     private(set) var scoreItem: ScoreItem
+    /// The playlist this Reader is traversing, or `nil` when opened standalone. Drives the inspector's continuation
+    /// control and end-of-score auto-advance. The live ordered queue is re-derived from the repository on demand.
+    @ObservationIgnored private let playlistID: PlaylistID?
     /// Persistence-of-record for `ReaderPreferences`. Sub-models observe their own state; this store is the
     /// single mutator and the source of truth for re-normalization.
-    @ObservationIgnored private let preferencesStore: ReaderPreferencesStore
+    @ObservationIgnored private var preferencesStore: ReaderPreferencesStore
 
     /// Convenience accessor for imperative code paths that need the current preferences value (e.g. building
     /// `PlaybackPreferences.initial` at engine load time). Not observation-tracked — `preferencesStore` is
     /// `@ObservationIgnored` by design. Views observe the four sub-models, never `preferences` directly.
     var preferences: ReaderPreferences {
         preferencesStore.preferences
+    }
+
+    /// Whether the inspector should show the playlist-continuation control. True only when opened from a playlist.
+    var isInPlaylist: Bool {
+        playlistID != nil
     }
 
     var playbackSession: ReaderPlaybackSession
@@ -54,20 +62,16 @@ final class ReaderViewModel {
     var shareTarget: ScoreShareTarget?
     var isPreparingShare = false
 
-    @ObservationIgnored
-    private let repository: any ScoreLibraryRepository
-    @ObservationIgnored
-    private let gateway: any ScoreFileGateway
-    @ObservationIgnored
-    private let shareService: any ScoreShareService
-    @ObservationIgnored
-    private let metadataReader: any ScoreMetadataReading
-    @ObservationIgnored
-    private let scoresDirectory: URL
-    @ObservationIgnored
-    private let defaultStaffSize: Double
-    @ObservationIgnored
-    private var hasUpdatedLastOpened = false
+    @ObservationIgnored private let repository: any ScoreLibraryRepository
+    @ObservationIgnored private let gateway: any ScoreFileGateway
+    @ObservationIgnored private let shareService: any ScoreShareService
+    @ObservationIgnored private let metadataReader: any ScoreMetadataReading
+    @ObservationIgnored private let scoresDirectory: URL
+    @ObservationIgnored private let defaultStaffSize: Double
+    @ObservationIgnored private var hasUpdatedLastOpened = false
+    /// Re-entrancy guard for `advance`: the in-flight engine teardown/reload can deliver a spurious `cursor == nil`
+    /// (→ `handlePlaybackReachedEnd`); this blocks a second advance mid-reload.
+    @ObservationIgnored private var isAdvancing = false
 
     init(
         scoreItem: ScoreItem,
@@ -79,8 +83,10 @@ final class ReaderViewModel {
         defaultStaffSize: Double = 14,
         playbackController: (any PlaybackController)? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
+        playlistID: PlaylistID? = nil,
     ) {
         self.scoreItem = scoreItem
+        self.playlistID = playlistID
         self.repository = repository
         self.gateway = gateway
         self.shareService = shareService
@@ -230,6 +236,9 @@ final class ReaderViewModel {
         playbackSession.onReadyForLoopForward = { [weak self] in
             await self?.repeatModel.forwardLoopRangeToController()
         }
+        playbackSession.onReachedEnd = { [weak self] in
+            await self?.handlePlaybackReachedEnd()
+        }
     }
 
     func load() async {
@@ -267,6 +276,62 @@ final class ReaderViewModel {
     }
 
     // MARK: - Private
+
+    /// The live, ordered `ScoreItemID`s of the playlist being traversed, filtered to items that still exist.
+    /// Empty when standalone or when the playlist no longer exists.
+    private func currentPlaylistQueue() -> [Domain.ScoreItemID] {
+        guard let playlistID,
+              let playlist = repository.playlists.first(where: { $0.id == playlistID })
+        else { return [] }
+        let liveIDs = Set(repository.scoreItems.map(\.id))
+        return PlaylistPresentation.orderedLiveIDs(playlist, liveIDs: liveIDs)
+    }
+
+    /// Called when the engine reports end-of-score. Decides via `PlaylistPlaybackProgression` whether to advance to the
+    /// next live playlist score and auto-play it. No-op when standalone, when the current score is no longer in the
+    /// live queue, or when the decision is `.stop`.
+    func handlePlaybackReachedEnd() async {
+        guard !isAdvancing else { return }
+        let queue = currentPlaylistQueue()
+        guard let currentIndex = queue.firstIndex(of: scoreItem.id) else { return }
+        let action = PlaylistPlaybackProgression.nextAction(
+            currentIndex: currentIndex,
+            count: queue.count,
+            repeatMode: repeatModel.mode,
+            continuation: PlaylistContinuationStorage.current(),
+        )
+        switch action {
+        case .stop:
+            return
+        case let .advance(toIndex):
+            guard let nextItem = repository.scoreItems.first(where: { $0.id == queue[toIndex] }) else { return }
+            await advance(to: nextItem, autoPlay: true)
+        }
+    }
+
+    /// Retarget this Reader to a different score *in place*: tear down the engine, swap the score item and its
+    /// preferences store, reload the score + preferences (which re-syncs every sub-model), then optionally auto-play.
+    /// The view and the shared `PlaybackController` (and its cursor observer) stay mounted across the swap.
+    func advance(to newItem: ScoreItem, autoPlay: Bool) async {
+        isAdvancing = true
+        defer { isAdvancing = false }
+        await playbackSession.releaseEngine()
+        scoreItem = newItem
+        preferencesStore = ReaderPreferencesStore(
+            scoreItemID: newItem.id,
+            defaultStaffSize: defaultStaffSize,
+            repository: repository,
+        )
+        hasUpdatedLastOpened = false
+        await load()
+        await playbackSession.prepareForPlayback()
+        // Re-seed the global metronome state into the freshly-loaded engine (mirrors ReaderRootScreen's `.task`).
+        let metronomeEnabled = UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
+        await tempoModel.setMetronomeEnabled(metronomeEnabled)
+        if autoPlay {
+            await playbackSession.togglePlayback()
+        }
+    }
 
     private func loadOrSeedPreferences() async {
         let prefs = await preferencesStore.loadOrSeed()

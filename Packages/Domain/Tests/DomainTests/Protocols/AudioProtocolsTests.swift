@@ -42,6 +42,8 @@ private final class FakePlaybackController: PlaybackController {
         lastTempo = value
     }
 
+    func setTranspose(semitones _: Int) {}
+
     func setMasterVolume(_ value: Double) {}
     func setMasterTuning(cents _: Double) {}
 

@@ -6,7 +6,8 @@ import UtilityUI
 struct PlaylistDetailScreen: View {
     let playlist: Playlist
     let library: LibraryViewModel
-    let onOpen: (ScoreItem) -> Void
+    /// Opens a score while recording that it came from this playlist, so the Reader can traverse the playlist.
+    let onOpenInPlaylist: (ScoreItem, PlaylistID) -> Void
     let onPlaylistDeleted: () -> Void
 
     @State private var selectedIDs: Set<ScoreItemID> = []
@@ -33,7 +34,7 @@ struct PlaylistDetailScreen: View {
         PlaylistDetailView(
             playlistName: playlist.name,
             items: orderedItems,
-            onOpen: onOpen,
+            onOpen: { item in onOpenInPlaylist(item, playlist.id) },
             onMove: { offsets, destination in move(from: offsets, to: destination) },
             onRemoveFromPlaylist: { item in removeFromPlaylist(item) },
             onRename: { newName in Task { await commitRename(newName) } },
