@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "946123941821",
+    "project_id": "folino-app",
+    "storage_bucket": "folino-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:946123941821:android:77c9f3518ca7c70a4854d4",
+        "android_client_info": {
+          "package_name": "com.keynumber.folino"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCokrTeqdLbRpYCiCE652RbrC7WIIGAh4g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
