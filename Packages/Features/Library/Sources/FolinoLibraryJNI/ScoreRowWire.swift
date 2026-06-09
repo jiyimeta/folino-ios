@@ -10,11 +10,13 @@ public struct ScoreRowWire: Equatable, Sendable {
     public var title: String
     public var subtitle: String
     public var composer: String
+    public var isFavorite: Bool
 
-    public init(id: String, title: String, subtitle: String, composer: String) {
+    public init(id: String, title: String, subtitle: String, composer: String, isFavorite: Bool = false) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.composer = composer
+        self.isFavorite = isFavorite
     }
 }
