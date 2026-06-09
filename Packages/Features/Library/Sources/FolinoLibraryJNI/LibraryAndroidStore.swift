@@ -169,8 +169,9 @@ public final class LibraryAndroidStore {
         reload(using: all)
     }
 
-    /// Pre-filled fields + read-only info for the edit-info screen. Stored values only here (a later task adds
-    /// file-metaTag fallback + the parsed source label). `addedAt` comes from the score file's creation date.
+    /// Pre-filled fields + read-only info for the edit-info screen. Parses the score file on demand to supply
+    /// file-metaTag fallback for never-edited credit fields and the parsed source label. `addedAt` comes from the
+    /// score file's creation date.
     @WireletExpose
     public func scoreInfoForEditing(_ id: String) -> EditScoreInfoWire {
         guard let record = store.loadAll().first(where: { $0.id == id }) else {
@@ -185,18 +186,20 @@ public final class LibraryAndroidStore {
                 addedAt: 0,
             )
         }
+        let path = "\(store.scoresDirectoryPath())/\(record.localFileName)"
+        let url = URL(fileURLWithPath: path)
+        let fileMeta = (try? MSCZReader.parse(contentsOf: url)).map { ScoreFileMetadata(score: $0) }
         let prefill = EditableScoreInfo.prefilled(
             title: record.title, subtitle: record.subtitle, composer: record.composer,
             arranger: record.arranger, lyricist: record.lyricist, copyright: record.copyright,
-            fileMetadata: nil,
+            fileMetadata: fileMeta,
         )
-        let path = "\(store.scoresDirectoryPath())/\(record.localFileName)"
         let addedAt = (try? FileManager.default.attributesOfItem(atPath: path)[.creationDate] as? Date)?
             .timeIntervalSince1970 ?? 0
         return EditScoreInfoWire(
             title: prefill.title, subtitle: prefill.subtitle, composer: prefill.composer,
             arranger: prefill.arranger, lyricist: prefill.lyricist, copyright: prefill.copyright,
-            source: "", addedAt: addedAt,
+            source: fileMeta?.source.displayLabel ?? "", addedAt: addedAt,
         )
     }
 
