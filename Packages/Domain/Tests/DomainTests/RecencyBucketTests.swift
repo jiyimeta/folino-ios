@@ -1,4 +1,4 @@
-@testable import Domain
+import Domain
 import Foundation
 import Testing
 
