@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
@@ -36,6 +37,7 @@ fun SettingsScreen(
     val keepAwake by prefs.keepAwake.collectAsState(initial = true)
     val layout by prefs.layoutMode.collectAsState(initial = "page")
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
+    val crashReporting by prefs.crashReporting.collectAsState(initial = true)
 
     LazyColumn(
         Modifier
@@ -112,6 +114,22 @@ fun SettingsScreen(
                 },
             )
         }
+        item {
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.settings_privacy_title), style = MaterialTheme.typography.titleSmall)
+        }
+        item {
+            ToggleRow(
+                icon = Icons.Filled.BugReport,
+                title = stringResource(R.string.settings_privacy_crash_title),
+                subtitle = stringResource(R.string.settings_privacy_crash_description),
+                checked = crashReporting,
+                onChange = { v ->
+                    scope.launch { prefs.setCrashReporting(v) }
+                    com.keynumber.folino.diagnostics.CrashReporting.setCollectionEnabled(v)
+                },
+            )
+        }
         // Empty when suppressed (e.g. the 1.0.0 first-release guard in MainActivity); hide the whole section,
         // header included, so we never render a bare "Version History" heading with no entries.
         if (versionHistory.isNotEmpty()) {
@@ -164,7 +182,13 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun ToggleRow(
+    icon: ImageVector,
+    title: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    subtitle: String? = null,
+) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -174,7 +198,16 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
             contentDescription = title,
             modifier = Modifier.padding(end = 12.dp),
         )
-        Text(title, Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(title)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }

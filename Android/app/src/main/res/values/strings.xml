@@ -64,4 +64,7 @@
     <string name="reader_settings_a4_description">The reference pitch applied to all scores. Each score can override it.</string>
     <string name="search_hint">Search</string>
     <string name="search_no_results">No results</string>
+    <string name="settings_privacy_title">Privacy</string>
+    <string name="settings_privacy_crash_title">Send crash reports</string>
+    <string name="settings_privacy_crash_description">Helps fix bugs by sharing anonymous crash diagnostics. Never linked to you.</string>
 </resources>
