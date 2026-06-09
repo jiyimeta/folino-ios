@@ -1,30 +1,53 @@
 import Domain
 import SwiftUI
 
-/// Three-state segmented control for the global playlist-continuation setting. Shown only in playlist context.
+/// Three-state menu picker for the global playlist-continuation setting. Shown only in playlist context.
 struct PlaylistContinuationPicker: View {
     @Binding var selection: PlaylistContinuationMode
 
     var body: some View {
-        Picker("", selection: $selection) {
-            Text("reader.inspector.continuation.off", bundle: .module)
-                .tag(PlaylistContinuationMode.off)
-            Text("reader.inspector.continuation.playThrough", bundle: .module)
-                .tag(PlaylistContinuationMode.playThrough)
-            Text("reader.inspector.continuation.loopPlaylist", bundle: .module)
-                .tag(PlaylistContinuationMode.loopPlaylist)
+        Menu {
+            Picker("", selection: $selection) {
+                ForEach(PlaylistContinuationMode.allCases, id: \.self) { mode in
+                    Label {
+                        Text(titleKey(for: mode), bundle: .module)
+                    } icon: {
+                        icon(for: mode)
+                    }
+                    .tag(mode)
+                }
+            }
+            .labelsHidden()
+        } label: {
+            // Self-built label so the selected value truncates to one line (a `.menu` Picker wraps its inline value).
+            InspectorMenuValueLabel {
+                icon(for: selection)
+            } title: {
+                Text(titleKey(for: selection), bundle: .module)
+            }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        // No `.fixedSize()`: it pins the segmented control's tall intrinsic height, which the enclosing `List` reserves
-        // as the row's cell height (a large vertical gap around the control on device). Matching `RepeatModePicker`, we
-        // let the control fill the row width and clamp its height so the row stays as compact as the slider rows.
-        .frame(height: 24)
+    }
+
+    private func titleKey(for mode: PlaylistContinuationMode) -> LocalizedStringKey {
+        switch mode {
+        case .off: "reader.inspector.continuation.off"
+        case .playThrough: "reader.inspector.continuation.playThrough"
+        case .loopPlaylist: "reader.inspector.continuation.loopPlaylist"
+        }
+    }
+
+    @ViewBuilder
+    private func icon(for mode: PlaylistContinuationMode) -> some View {
+        switch mode {
+        case .off: Image(systemName: "arrow.forward.to.line.compact")
+        case .playThrough: Image(systemName: "forward.end")
+        case .loopPlaylist: Image(systemName: "repeat")
+        }
     }
 }
 
 #if DEBUG
 #Preview {
-    PlaylistContinuationPicker(selection: .constant(.playThrough))
+    PlaylistContinuationPicker(selection: .constant(.loopPlaylist))
 }
 #endif

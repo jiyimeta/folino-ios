@@ -144,8 +144,11 @@ struct PlaybackInspectorScreen: View {
 
     private var repeatModeRow: some View {
         HStack {
+            Image(systemName: "repeat")
+                .foregroundStyle(Color.accentColor)
             Text("reader.inspector.repeatMode", bundle: .module)
-            Spacer()
+                .layoutPriority(1)
+            Spacer(minLength: 8)
             RepeatModePicker(selection: $repeatModel.mode)
         }
     }
@@ -160,7 +163,8 @@ struct PlaybackInspectorScreen: View {
                 Image(systemName: "music.note.list")
                     .foregroundStyle(Color.accentColor)
                 Text("reader.inspector.continuation", bundle: .module)
-                Spacer()
+                    .layoutPriority(1)
+                Spacer(minLength: 8)
                 PlaylistContinuationPicker(selection: $continuationMode)
                     .disabled(repeatActive)
             }
