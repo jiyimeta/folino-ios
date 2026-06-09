@@ -23,28 +23,22 @@ public struct SettingsSheet<LicenseContent: View>: View {
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
     private var isMetronomeEnabled = false
-
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
-
     @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
     private var isPiPEnabled = false
-
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
-
     @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
     private var showInvisibleElements = false
-
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
-
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
     private var showSeekBar = true
-
+    @AppStorage(ReaderGlobalSettingsKey.playlistContinuationMode)
+    private var continuationMode: PlaylistContinuationMode = .playThrough
     @AppStorage(ReaderGlobalSettingsKey.a4ReferenceHz)
     private var globalA4Hz = A4Reference.standardHz
-
     @AppStorage(PrivacySettingsKey.crashReportingEnabled)
     private var isCrashReportingEnabled = true
 
@@ -127,11 +121,14 @@ public struct SettingsSheet<LicenseContent: View>: View {
             }
             keepScreenAwakeToggle
             seekBarToggle
+            continuationRow
             a4ReferenceRow
             readerLayoutRow
             if let provider {
                 SoundfontPresetRow(provider: provider)
             }
+        } footer: {
+            Text("settings.reader.continuation.footer", bundle: .module)
         }
     }
 
@@ -193,6 +190,23 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 Text("settings.reader.showSeekBar", bundle: .module)
             } icon: {
                 Image(systemName: "point.bottomleft.forward.to.point.topright.scurvepath")
+            }
+        }
+    }
+
+    private var continuationRow: some View {
+        Picker(selection: $continuationMode) {
+            Text("settings.reader.continuation.off", bundle: .module)
+                .tag(PlaylistContinuationMode.off)
+            Text("settings.reader.continuation.playThrough", bundle: .module)
+                .tag(PlaylistContinuationMode.playThrough)
+            Text("settings.reader.continuation.loopPlaylist", bundle: .module)
+                .tag(PlaylistContinuationMode.loopPlaylist)
+        } label: {
+            Label {
+                Text("settings.reader.continuation", bundle: .module)
+            } icon: {
+                Image(systemName: "music.note.list")
             }
         }
     }
