@@ -12,8 +12,12 @@ data class StagedShareFile(val path: String, val originalName: String)
 // WARNING: must be kept in sync with Domain ShareImportPolicy.acceptedExtensions (JNI-opaque, can't be read from Kotlin).
 private val ACCEPTED = setOf("mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid")
 
-private fun isAccepted(name: String): Boolean =
+/// `true` when `name`'s extension is an accepted score format (iOS ShareImportPolicy parity).
+/// Single Kotlin gate shared by the share-sheet/open-with transport and the Library "+" picker.
+fun isAcceptedScoreFilename(name: String): Boolean =
     name.substringAfterLast('.', "").lowercase() in ACCEPTED
+
+private fun isAccepted(name: String): Boolean = isAcceptedScoreFilename(name)
 
 private fun displayName(context: Context, uri: Uri): String {
     if (uri.scheme == "file") return File(uri.path ?: "").name
