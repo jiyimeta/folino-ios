@@ -63,36 +63,42 @@ class AndroidSoundfontDownloader(
 
     private suspend fun poll(staging: File, destination: File) {
         while (scope.isActive && currentId != -1L) {
-            val query = DownloadManager.Query().setFilterById(currentId)
-            dm.query(query).use { c: Cursor ->
-                if (!c.moveToFirst()) {
-                    finish(failure = "download not found")
-                    return
-                }
-                val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> {
-                        destination.parentFile?.mkdirs()
-                        staging.copyTo(destination, overwrite = true)
-                        staging.delete()
-                        finish(failure = null)
+            // Guard the whole tick: an unexpected throw (e.g. a missing DownloadManager column) must not kill the
+            // scope permanently, which would silently brick every future start() until the process restarts.
+            try {
+                dm.query(DownloadManager.Query().setFilterById(currentId)).use { c: Cursor ->
+                    if (!c.moveToFirst()) {
+                        finish(failure = "download not found")
                         return
                     }
-                    DownloadManager.STATUS_FAILED -> {
-                        val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-                        finish(failure = "download failed (reason $reason)")
-                        return
-                    }
-                    else -> {
-                        val soFar = c.getLong(
-                            c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR),
-                        )
-                        val total = c.getLong(
-                            c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES),
-                        )
-                        if (total > 0) onProgress(soFar.toDouble() / total.toDouble())
+                    val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    when (status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            destination.parentFile?.mkdirs()
+                            staging.copyTo(destination, overwrite = true)
+                            staging.delete()
+                            finish(failure = null)
+                            return
+                        }
+                        DownloadManager.STATUS_FAILED -> {
+                            val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                            finish(failure = "download failed (reason $reason)")
+                            return
+                        }
+                        else -> {
+                            val soFar = c.getLong(
+                                c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR),
+                            )
+                            val total = c.getLong(
+                                c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES),
+                            )
+                            if (total > 0) onProgress(soFar.toDouble() / total.toDouble())
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                finish(failure = "download error: ${e.message}")
+                return
             }
             delay(500)
         }
