@@ -34,6 +34,10 @@ object SettingsKeys {
     val clefOverrides = stringSetPreferencesKey("reader.clefOverrides")
     /** Set once the user has interacted with the page-mode tap-zone overlay; suppresses the onboarding hint. */
     val pageTapHintDismissed = booleanPreferencesKey("reader.pageTapHintDismissed")
+    /** Whether the Reader shows the full-width seek bar (true) or the floating play FAB (false).
+     * Default true mirrors iOS `ReaderGlobalSettingsKey.showSeekBarEnabled`. UI-only; not part of
+     * the JNI layout blob. */
+    val showSeekBar = booleanPreferencesKey("reader.showSeekBar.enabled")
     /**
      * Global A4 reference pitch in Hz. Shared key with the iOS side so both platforms default to
      * the same persisted value when reading a cross-platform DataStore export.
@@ -59,6 +63,7 @@ class SettingsPrefs(private val context: Context) {
     val hiddenStaves: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.hiddenStaves] ?: emptySet() }
     val clefOverrides: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.clefOverrides] ?: emptySet() }
     val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
+    val showSeekBar: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showSeekBar] ?: true }
     val a4ReferenceHz: Flow<Double> = context.dataStore.data.map { it[SettingsKeys.a4ReferenceHz] ?: 440.0 }
     val crashReporting: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.crashReportingEnabled] ?: true }
@@ -74,6 +79,7 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setHiddenStaves(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.hiddenStaves] = v }
     suspend fun setClefOverrides(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.clefOverrides] = v }
     suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
+    suspend fun setShowSeekBar(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showSeekBar] = v }
     suspend fun setA4ReferenceHz(v: Double) = context.dataStore.edit { it[SettingsKeys.a4ReferenceHz] = v }
 
     suspend fun setCrashReporting(v: Boolean) =
