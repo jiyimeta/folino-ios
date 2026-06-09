@@ -55,6 +55,7 @@ import com.keynumber.folino.reader.clefOverridesPref
 import com.keynumber.folino.reader.hiddenStavesPref
 import com.keynumber.folino.reader.layoutOptionsFromPrefs
 import com.keynumber.folino.reader.toPref
+import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.LibraryScreen
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -67,7 +68,9 @@ import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -75,6 +78,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = SettingsPrefs(applicationContext)
+
+        // Re-apply the persisted crash-reporting opt-out before any UI. Synchronous read mirrors the
+        // VersionHistory spike pattern below; DataStore is the source of truth (iOS re-applies the
+        // UserDefaults flag at bootstrap the same way). Default true = opt-in.
+        val crashEnabled = runBlocking { prefs.crashReporting.first() }
+        CrashReporting.setCollectionEnabled(crashEnabled)
 
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
