@@ -245,10 +245,10 @@ public final class LibraryAndroidStore {
         reloadTags()
     }
 
-    /// Rebuild the displayed lists: live records (`deletedAt <= 0`) in `scores`
-    /// and soft-deleted records (most-recently-trashed first) in `deletedScores`,
-    /// both projected to the display wire type. Pass `records` to reuse an
-    /// already-loaded snapshot and avoid a second backend read.
+    /// Rebuild the displayed lists: live records (`deletedAt <= 0`) in `scores`, favorites in `favorites`,
+    /// soft-deleted records (most-recently-trashed first) in `deletedScores`, and the recently-opened buckets
+    /// (`recentToday`/`recentThisWeek`/`recentEarlier`, via `reloadRecents`), all projected to the display wire
+    /// type. Pass `records` to reuse an already-loaded snapshot and avoid a second backend read.
     private func reload(using records: [ScoreRecordWire]? = nil) {
         let all = records ?? store.loadAll()
         allScoreRows = all
@@ -639,8 +639,11 @@ public final class LibraryAndroidStore {
         // Domain tag identity is keyed by UUID, so we round-trip through `Tag` and map the result back to the
         // backend records via the id string. The edit sheet (`refreshEditSheet`) stays alphabetical.
         let openInfo = loadScoreOpenInfo(records)
-        let domainTags = tagRecords.map {
-            Tag(id: TagID(rawValue: UUID(uuidString: $0.id) ?? UUID()), name: $0.name, colorHex: $0.colorHex)
+        // Skip any non-UUID id rather than minting a fresh UUID (which would mismatch the membership key and emit a
+        // phantom id to Kotlin) — mirrors `loadDomainPlaylists`. All ids written by this store are UUID strings.
+        let domainTags = tagRecords.compactMap { rec -> Tag? in
+            guard let uuid = UUID(uuidString: rec.id) else { return nil }
+            return Tag(id: TagID(rawValue: uuid), name: rec.name, colorHex: rec.colorHex)
         }
         tags = tagsByRecentlyUsed(domainTags, openInfo: openInfo, limit: domainTags.count).map { tag in
             let id = tag.id.rawValue.uuidString
