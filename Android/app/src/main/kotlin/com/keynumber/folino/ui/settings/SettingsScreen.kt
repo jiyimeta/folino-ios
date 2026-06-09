@@ -53,6 +53,18 @@ fun SettingsScreen(
     val soundfontVM = remember { com.keynumber.folino.soundfont.SoundfontController.viewModel(context) }
     val sfState by soundfontVM.stateWire.collectAsState()
 
+    // Self-heal: while the bridge reports an in-flight download, periodically re-evaluate from disk. The moment the
+    // file is fully written, `startDownloadIfNeeded()` flips the state to `downloaded`, so the UI always converges
+    // even if a terminal observable update is ever missed. A no-op while the file is genuinely still downloading.
+    LaunchedEffect(sfState.statusRaw) {
+        if (sfState.statusRaw == "downloading") {
+            while (true) {
+                kotlinx.coroutines.delay(1500)
+                soundfontVM.startDownloadIfNeeded()
+            }
+        }
+    }
+
     LazyColumn(
         Modifier
             .fillMaxSize()
