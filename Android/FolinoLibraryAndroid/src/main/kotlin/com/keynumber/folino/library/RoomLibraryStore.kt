@@ -21,6 +21,7 @@ data class ScoreRecordEntity(
     val subtitle: String,
     val composer: String,
     @ColumnInfo(name = "local_file_name") val localFileName: String,
+    @ColumnInfo(name = "content_hash") val contentHash: String = "",
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
 )
@@ -145,7 +146,7 @@ interface TagDao {
         TagEntity::class,
         TagItemEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -184,7 +185,16 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {
-            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt, it.isFavorite)
+            ScoreRecordWire(
+                id = it.id,
+                title = it.title,
+                subtitle = it.subtitle,
+                composer = it.composer,
+                localFileName = it.localFileName,
+                contentHash = it.contentHash,
+                deletedAt = it.deletedAt,
+                isFavorite = it.isFavorite,
+            )
         }
 
     override fun upsert(record: ScoreRecordWire) {
@@ -195,6 +205,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 subtitle = record.subtitle,
                 composer = record.composer,
                 localFileName = record.localFileName,
+                contentHash = record.contentHash,
                 deletedAt = record.deletedAt,
                 isFavorite = record.isFavorite,
             ),
@@ -212,6 +223,22 @@ class RoomLibraryStore(context: Context) : LibraryStore {
     override fun removeFile(localFileName: String) {
         File(scoresDir, localFileName).delete()
     }
+
+    override fun sha256(path: String): String =
+        try {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            File(path).inputStream().use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    md.update(buf, 0, n)
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        } catch (e: Exception) {
+            ""
+        }
 
     override fun loadPlaylists(): List<PlaylistRecordWire> =
         playlistDao.loadPlaylists().map { PlaylistRecordWire(it.id, it.name, it.createdAt) }

@@ -112,7 +112,7 @@ public final class LibraryAndroidStore {
     public func importShared(
         _ paths: [String],
         _ originalNames: [String],
-        _ playlistMode: Int,
+        _ playlistMode: Int32,
         _ playlistId: String,
         _ newPlaylistName: String,
         _ openAfter: Bool,
