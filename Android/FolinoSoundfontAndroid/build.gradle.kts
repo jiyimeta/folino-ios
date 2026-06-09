@@ -27,6 +27,8 @@ dependencies {
     api("io.github.jiyimeta:wirelet-observable-runtime:0.3.2")
     api("androidx.lifecycle:lifecycle-viewmodel:2.8.7")
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.core:core-ktx:1.13.1")
 }
 
 val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
