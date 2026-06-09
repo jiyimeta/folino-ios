@@ -20,22 +20,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -188,23 +190,50 @@ fun DisplayInspectorSheet(
 @Composable
 private fun LayoutModeRow(mode: ReaderLayoutMode, onSelect: (ReaderLayoutMode) -> Unit) {
     val modes = listOf(
-        ReaderLayoutMode.VERTICAL to R.string.reader_layout_vertical,
-        ReaderLayoutMode.HORIZONTAL to R.string.reader_layout_horizontal,
-        ReaderLayoutMode.PAGE to R.string.reader_layout_page,
+        Triple(ReaderLayoutMode.VERTICAL, R.string.reader_layout_vertical, Icons.Default.SwapVert),
+        Triple(ReaderLayoutMode.HORIZONTAL, R.string.reader_layout_horizontal, Icons.Default.SwapHoriz),
+        Triple(ReaderLayoutMode.PAGE, R.string.reader_layout_page, Icons.Default.AutoStories),
     )
-    Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    var expanded by remember { mutableStateOf(false) }
+    val current = modes.first { it.first == mode }
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             stringResource(R.string.reader_display_mode),
             style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
         )
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 2.dp)) {
-            modes.forEachIndexed { index, (m, labelRes) ->
-                SegmentedButton(
-                    selected = mode == m,
-                    onClick = { onSelect(m) },
-                    shape = SegmentedButtonDefaults.itemShape(index, modes.size),
-                ) {
-                    Text(stringResource(labelRes))
+        Box {
+            // Trigger mirrors the clef picker: a plain clickable row (icon + label + chevron) that
+            // opens an anchored DropdownMenu — the Android equivalent of the iOS layout-mode picker.
+            Row(
+                Modifier.clickable { expanded = true }.padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
+                Text(stringResource(current.second), style = MaterialTheme.typography.bodyMedium)
+                Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                modes.forEach { (m, labelRes, icon) ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(labelRes)) },
+                        leadingIcon = {
+                            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                        },
+                        trailingIcon = if (m == mode) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        } else {
+                            null
+                        },
+                        onClick = {
+                            onSelect(m)
+                            expanded = false
+                        },
+                    )
                 }
             }
         }

@@ -1,5 +1,6 @@
 package com.keynumber.folino
 
+import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
@@ -37,7 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -66,6 +69,7 @@ import com.keynumber.folino.reader.layoutOptionsFromPrefs
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
+import com.keynumber.folino.ui.theme.FolinoTheme
 import com.keynumber.folino.ui.library.FavoritesListScreen
 import com.keynumber.folino.ui.library.RecentScreen
 import com.keynumber.folino.ui.library.LibraryScreen
@@ -78,6 +82,7 @@ import com.keynumber.folino.ui.library.TagDetailScreen
 import com.keynumber.folino.ui.library.TagsListScreen
 import com.keynumber.folino.ui.debug.DebugScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
+import com.keynumber.folino.ui.scoreinfo.EditScoreInfoScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
@@ -88,6 +93,20 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 class MainActivity : ComponentActivity(), PipHost {
+
+    companion object {
+        /** Extra key used by ShareTargetActivity to request opening a score after import. */
+        const val EXTRA_OPEN_SCORE_ID = "open_score_id"
+        /** Extra key used by ShareTargetActivity to pass the imported score's display title. */
+        const val EXTRA_OPEN_SCORE_TITLE = "open_score_title"
+    }
+
+    // Holds a score id delivered via EXTRA_OPEN_SCORE_ID (from ShareTargetActivity). Set on cold
+    // start (read from intent in setContent) and on re-delivery (onNewIntent). Consumed once by
+    // LibraryNavGraph's LaunchedEffect, then cleared to null so repeat taps don't re-navigate.
+    var pendingOpenScoreId: String? by mutableStateOf(null)
+    // Companion title for pendingOpenScoreId; may be null/empty if the import result had no title.
+    var pendingOpenScoreTitle: String? by mutableStateOf(null)
 
     private val pipReceiver = PipActionReceiver()
 
@@ -123,8 +142,16 @@ class MainActivity : ComponentActivity(), PipHost {
                     .map { VersionHistoryItem(it.version, it.descriptions) }
             }
 
+        // Seed pending open from a cold-start EXTRA_OPEN_SCORE_ID (ShareTargetActivity → MainActivity).
+        intent?.getStringExtra(EXTRA_OPEN_SCORE_ID)?.let { id ->
+            intent.removeExtra(EXTRA_OPEN_SCORE_ID)
+            pendingOpenScoreId = id
+            pendingOpenScoreTitle = intent.getStringExtra(EXTRA_OPEN_SCORE_TITLE)
+            intent.removeExtra(EXTRA_OPEN_SCORE_TITLE)
+        }
+
         setContent {
-            MaterialTheme {
+            FolinoTheme {
                 Surface {
                     // Keep PiP params current: auto-enter flag (API 31+) and play/pause glyph.
                     val pipEligible by ReaderPipController.eligible.collectAsState()
@@ -143,9 +170,16 @@ class MainActivity : ComponentActivity(), PipHost {
                     val rootNav = rememberNavController()
                     NavHost(rootNav, startDestination = "library") {
                         composable("library") {
+                            val activity = LocalContext.current as? MainActivity
                             LibraryNavGraph(
                                 prefs = prefs,
                                 onOpenSettings = { rootNav.navigate("settings") },
+                                pendingOpenScoreId = activity?.pendingOpenScoreId,
+                                pendingOpenScoreTitle = activity?.pendingOpenScoreTitle,
+                                onPendingOpenConsumed = {
+                                    activity?.pendingOpenScoreId = null
+                                    activity?.pendingOpenScoreTitle = null
+                                },
                             )
                         }
                         composable("settings") {
@@ -199,10 +233,29 @@ class MainActivity : ComponentActivity(), PipHost {
         runCatching { unregisterReceiver(pipReceiver) }
         super.onDestroy()
     }
+
+    // Called when MainActivity is already running and a second share finishes (singleTask / singleTop).
+    // Updates the Compose-observable state so LibraryNavGraph navigates without an Activity recreate.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_OPEN_SCORE_ID)?.let { id ->
+            intent.removeExtra(EXTRA_OPEN_SCORE_ID)
+            pendingOpenScoreId = id
+            pendingOpenScoreTitle = intent.getStringExtra(EXTRA_OPEN_SCORE_TITLE)
+            intent.removeExtra(EXTRA_OPEN_SCORE_TITLE)
+        }
+    }
 }
 
 @Composable
-private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
+private fun LibraryNavGraph(
+    prefs: SettingsPrefs,
+    onOpenSettings: () -> Unit,
+    pendingOpenScoreId: String? = null,
+    pendingOpenScoreTitle: String? = null,
+    onPendingOpenConsumed: () -> Unit = {},
+) {
     val nav = rememberNavController()
     val context = LocalContext.current
     val vm: LibraryAndroidStoreViewModel =
@@ -323,6 +376,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
+                    onEditInfoForScore = { id -> nav.navigate("editInfo/$id") },
                 )
             }
             composable("recent") {
@@ -337,6 +391,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
+                    onEditInfoForScore = { id -> nav.navigate("editInfo/$id") },
                 )
             }
             composable("debug") {
@@ -402,6 +457,19 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 )
             }
             composable(
+                "editInfo/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id") ?: ""
+                EditScoreInfoScreen(
+                    load = { vm.scoreInfoForEditing(id) },
+                    onSave = { f ->
+                        vm.saveScoreInfo(id, f.title, f.subtitle, f.composer, f.arranger, f.lyricist, f.copyright)
+                    },
+                    onClose = { nav.popBackStackIfResumed() },
+                )
+            }
+            composable(
                 "reader/{id}/{title}",
                 arguments = listOf(
                     navArgument("id") { type = NavType.StringType },
@@ -431,6 +499,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 ReaderScreen(
                     scoreId = id,
                     title = title,
+                    onEditInfo = { nav.navigate("editInfo/$id") },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
@@ -452,6 +521,15 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
                     onBack = { nav.popBackStackIfResumed() },
                 )
+            }
+        }
+        // Navigate to a just-imported score when ShareTargetActivity delivers a score id. The key
+        // is the id itself so that a new share while already in the reader re-triggers navigation.
+        LaunchedEffect(pendingOpenScoreId) {
+            pendingOpenScoreId?.let { id ->
+                onPendingOpenConsumed()
+                val t = URLEncoder.encode(pendingOpenScoreTitle.orEmpty(), "UTF-8")
+                nav.navigate("reader/$id/$t")
             }
         }
     }
@@ -506,7 +584,7 @@ private fun SettingsRoute(
     }
 }
 
-private class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
+internal class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         LibraryAndroidStoreViewModel.create(

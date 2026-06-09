@@ -36,6 +36,20 @@ public struct ScoreFileMetadata: Hashable, Sendable {
     }
 }
 
+extension ScoreSourceKind {
+    /// Brand/format label for the read-only Info row. Brand literals are NOT localized (iOS parity). `.unknown`
+    /// returns "" so the UI can substitute its own localized "Unknown".
+    public var displayLabel: String {
+        switch self {
+        case let .museScore(majorVersion): "MuseScore \(majorVersion)"
+        case .musicXML: "MusicXML"
+        case .midi: "MIDI"
+        case .pdf: "PDF"
+        case .unknown: ""
+        }
+    }
+}
+
 /// Parses an existing library item's on-disk file to recover its `ScoreFileMetadata`. The parse happens on demand
 /// (when the edit sheet opens), mirroring how `ScoreShareService` reads `Score.source` lazily — never eagerly per
 /// library row.

@@ -126,8 +126,23 @@ public final class IncomingShareCoordinator {
             try? FileManager.default.removeItem(at: tokenURL)
             return .empty
         }
-        let resolution = await resolvePlaylist(intent: intent)
-        if case let .failed(name, _) = resolution {
+
+        let filesDir = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
+        let files = intent.files.map {
+            SharedImportFile(
+                path: filesDir.appending(path: $0.originalName, directoryHint: .notDirectory).path,
+                originalName: $0.originalName,
+            )
+        }
+        let choice = Self.choice(from: intent)
+
+        let iosImporter = IOSShareImporter(importer: importer, duplicateResolver: duplicateResolver, logger: logger)
+        let playlistTarget = IOSSharePlaylistTarget(repository: repository, clock: clock, logger: logger)
+        let coordinator = SharedImportCoordinator(importer: iosImporter, target: playlistTarget)
+
+        let shared = await coordinator.run(files: files, choice: choice, openAfter: intent.openAfter)
+
+        if let failedName = shared.playlistCreateFailureName {
             // Preserve the staged token on disk so the user can retry on the next drain (cold launch). The spec
             // mandates: nothing is imported, and the banner reports `Couldn't create playlist "<name>"`.
             return DrainResult(
@@ -136,24 +151,65 @@ public final class IncomingShareCoordinator {
                 openAfter: nil,
                 createdPlaylistID: nil,
                 targetPlaylistID: nil,
-                targetPlaylistName: name,
-                playlistCreateFailure: name,
+                targetPlaylistName: failedName,
+                playlistCreateFailure: failedName,
             )
         }
-        let importOutcome = await importFiles(intent: intent, token: token)
-        let finalPlaylist = await appendImportsToPlaylist(
-            current: resolution.playlist,
-            imported: importOutcome.imported,
-        )
+
         try? FileManager.default.removeItem(at: tokenURL)
+
+        let imported = shared.importedIDs.compactMap { UUID(uuidString: $0).map(ScoreItemID.init(rawValue:)) }
+        let skipped = shared.skipped.map { Self.skip(from: $0) }
+        let openAfter = shared.openAfterID.flatMap { iosImporter.itemsByID[$0] }
+        let createdID = shared.createdPlaylistID.flatMap { UUID(uuidString: $0).map(PlaylistID.init(rawValue:)) }
+        let targetID = shared.targetPlaylistID.flatMap { UUID(uuidString: $0).map(PlaylistID.init(rawValue:)) }
+        let targetName = shared.targetPlaylistID.flatMap { playlistTarget.namesByID[$0] }
+
         return DrainResult(
-            imported: importOutcome.imported,
-            skipped: importOutcome.skipped,
-            openAfter: intent.openAfter ? importOutcome.lastOpened : nil,
-            createdPlaylistID: resolution.createdPlaylistID,
-            targetPlaylistID: finalPlaylist?.id,
-            targetPlaylistName: finalPlaylist?.name,
+            imported: imported,
+            skipped: skipped,
+            openAfter: openAfter,
+            createdPlaylistID: createdID,
+            targetPlaylistID: targetID,
+            targetPlaylistName: targetName,
         )
+    }
+
+    private static func choice(from intent: IncomingShareIntent) -> PlaylistChoice {
+        if let id = intent.playlistID { return .existing(id) }
+        if let name = intent.newPlaylistName, !name.isEmpty { return .createNew(name: name) }
+        return .libraryOnly
+    }
+
+    private static func skip(from s: SharedImportSkip) -> Skip {
+        let reason: SkipReason = switch s.reason {
+        case .missingFile:
+            .unreadable(NSError(
+                domain: "ImportExport",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "staged share file was missing"],
+            ))
+        case .parseFailed:
+            .parseFailed(NSError(
+                domain: "ImportExport",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "shared score file could not be parsed"],
+            ))
+        case .persistenceFailed:
+            .persistenceFailed(NSError(
+                domain: "ImportExport",
+                code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "shared score could not be saved"],
+            ))
+        case let .duplicate(existingID, existingTitle):
+            // existingID is `dup.id.rawValue.uuidString` produced by IOSShareImporter, so this UUID parse cannot
+            // realistically fail; the fallback is purely defensive (a crash mid-drain would be worse).
+            .duplicate(
+                existingID: UUID(uuidString: existingID).map(ScoreItemID.init(rawValue:)) ?? ScoreItemID(),
+                existingTitle: existingTitle,
+            )
+        }
+        return Skip(originalName: s.originalName, reason: reason)
     }
 
     // MARK: - Helpers
@@ -166,167 +222,5 @@ public final class IncomingShareCoordinator {
             return nil
         }
         return intent
-    }
-
-    private enum PlaylistResolution {
-        case none
-        case existing(Playlist)
-        case created(Playlist)
-        case failed(name: String, error: any Error)
-
-        var playlist: Playlist? {
-            switch self {
-            case .none, .failed: nil
-            case let .existing(p), let .created(p): p
-            }
-        }
-
-        var createdPlaylistID: PlaylistID? {
-            if case let .created(p) = self { return p.id }
-            return nil
-        }
-    }
-
-    private func resolvePlaylist(intent: IncomingShareIntent) async -> PlaylistResolution {
-        if let existingID = intent.playlistID,
-           let existing = repository.playlists.first(where: { $0.id == existingID })
-        {
-            return .existing(existing)
-        }
-        guard let newName = intent.newPlaylistName, !newName.isEmpty else {
-            return .none
-        }
-        let playlist = Playlist(
-            name: newName,
-            orderedScoreItemIDs: [],
-            createdAt: clock.now(),
-        )
-        do {
-            try await repository.savePlaylist(playlist)
-            return .created(playlist)
-        } catch {
-            logger.error("failed to create new playlist: \(String(describing: error))")
-            return .failed(name: newName, error: error)
-        }
-    }
-
-    private struct ImportOutcome {
-        var imported: [ScoreItemID] = []
-        var skipped: [Skip] = []
-        var lastOpened: ScoreItem?
-    }
-
-    private func importFiles(intent: IncomingShareIntent, token: UUID) async -> ImportOutcome {
-        var outcome = ImportOutcome()
-        let filesURL = AppGroupPaths.tokenFilesURL(token: token, in: appGroupContainer)
-        let isMultiFile = intent.files.count > 1
-        for file in intent.files {
-            let sourceURL = filesURL.appending(path: file.originalName, directoryHint: .notDirectory)
-            guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                outcome.skipped.append(.init(
-                    originalName: file.originalName,
-                    reason: .unreadable(NSError(
-                        domain: "ImportExport",
-                        code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "missing staged file"],
-                    )),
-                ))
-                continue
-            }
-            await importSingleFile(
-                sourceURL: sourceURL,
-                file: file,
-                isMultiFile: isMultiFile,
-                outcome: &outcome,
-            )
-        }
-        return outcome
-    }
-
-    private func importSingleFile(
-        sourceURL: URL,
-        file: IncomingShareIntent.File,
-        isMultiFile: Bool,
-        outcome: inout ImportOutcome,
-    ) async {
-        do {
-            let plan = try await importer.prepareImport(sourceURL: sourceURL)
-            if let dup = plan.duplicates.first {
-                await handleDuplicate(
-                    plan: plan,
-                    dup: dup,
-                    file: file,
-                    isMultiFile: isMultiFile,
-                    outcome: &outcome,
-                )
-            } else {
-                let item = try await importer.commitImport(plan, decision: .importAsNew)
-                outcome.imported.append(item.id)
-                outcome.lastOpened = item
-            }
-        } catch {
-            outcome.skipped.append(.init(
-                originalName: file.originalName,
-                reason: .parseFailed(error),
-            ))
-        }
-    }
-
-    /// Routes a detected duplicate through the resolver (if provided) so the App layer can surface a per-file alert.
-    /// Falls back to silent `openExisting` when no resolver is wired (e.g., tests).
-    private func handleDuplicate(
-        plan: ImportPlan,
-        dup: ScoreItem,
-        file: IncomingShareIntent.File,
-        isMultiFile: Bool,
-        outcome: inout ImportOutcome,
-    ) async {
-        let decision: ImportDecision? = if let duplicateResolver {
-            await duplicateResolver.resolveDuplicate(plan: plan, existing: dup, isMultiFile: isMultiFile)
-        } else {
-            .openExisting(dup.id)
-        }
-        guard let decision else {
-            // User cancelled — skip without committing.
-            outcome.skipped.append(.init(
-                originalName: file.originalName,
-                reason: .duplicate(existingID: dup.id, existingTitle: dup.title),
-            ))
-            return
-        }
-        do {
-            let item = try await importer.commitImport(plan, decision: decision)
-            switch decision {
-            case .importAsNew:
-                outcome.imported.append(item.id)
-                outcome.lastOpened = item
-            case .openExisting:
-                outcome.skipped.append(.init(
-                    originalName: file.originalName,
-                    reason: .duplicate(existingID: dup.id, existingTitle: dup.title),
-                ))
-                outcome.lastOpened = item
-            }
-        } catch {
-            outcome.skipped.append(.init(
-                originalName: file.originalName,
-                reason: .persistenceFailed(error),
-            ))
-        }
-    }
-
-    private func appendImportsToPlaylist(
-        current: Playlist?,
-        imported: [ScoreItemID],
-    ) async -> Playlist? {
-        guard var playlist = current, !imported.isEmpty else { return current }
-        playlist.orderedScoreItemIDs.append(contentsOf: imported)
-        do {
-            try await repository.savePlaylist(playlist)
-            return playlist
-        } catch {
-            logger.error("failed to update playlist with imports: \(String(describing: error))")
-            return current
-        }
     }
 }

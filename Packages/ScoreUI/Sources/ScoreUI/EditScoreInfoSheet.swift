@@ -156,14 +156,10 @@ public struct EditScoreInfoSheet: View {
     /// Human-readable source label. MuseScore/MusicXML/MIDI/PDF are brand/format literals (identical across locales);
     /// only "Unknown" / a missing parse is localized.
     static func sourceLabel(_ kind: ScoreSourceKind?) -> String {
-        switch kind {
-        case let .museScore(major): "MuseScore \(major)"
-        case .musicXML: "MusicXML"
-        case .midi: "MIDI"
-        case .pdf: "PDF"
-        case .unknown, nil:
-            String(localized: "scoreUI.source.unknown", bundle: .module)
-        }
+        // Brand/format literals come from the shared `ScoreSourceKind.displayLabel` (also used by Android); only the
+        // empty (unknown / missing parse) case is localized here.
+        let label = kind?.displayLabel ?? ""
+        return label.isEmpty ? String(localized: "scoreUI.source.unknown", bundle: .module) : label
     }
 }
 
