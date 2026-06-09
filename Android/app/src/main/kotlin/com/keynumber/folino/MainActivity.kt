@@ -287,6 +287,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 val clefOverrides by prefs.clefOverrides.collectAsState(initial = emptySet())
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
+                val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val scope = rememberCoroutineScope()
                 val displayOptions = layoutOptionsFromPrefs(
                     layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
@@ -310,6 +311,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
                     globalA4ReferenceHz = globalA4Hz,
+                    pipEnabled = pipEnabled,
                     onBack = { nav.popBackStack() },
                 )
             }
