@@ -102,7 +102,10 @@ struct ExportScoreTests {
         let local = "\(id).mscz"
         try FileManager.default.copyItem(at: fixture, to: backend.dir.appendingPathComponent(local))
         backend.records = [
-            ScoreRecordWire(id: id, title: "My Song", subtitle: "", composer: "", localFileName: local, deletedAt: 0),
+            ScoreRecordWire(
+                id: id, title: "My Song", subtitle: "", composer: "",
+                localFileName: local, deletedAt: 0, lastOpenedAt: 0,
+            ),
         ]
         let pdf = FakePdfRenderer()
         let audio = FakeAudioExporter()

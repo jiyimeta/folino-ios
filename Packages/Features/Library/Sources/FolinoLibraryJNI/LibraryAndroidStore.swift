@@ -98,6 +98,7 @@ public final class LibraryAndroidStore {
             composer: fields.composer ?? "",
             localFileName: localFileName,
             deletedAt: 0,
+            lastOpenedAt: 0,
         ))
         reload()
     }
