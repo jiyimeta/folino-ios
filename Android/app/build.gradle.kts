@@ -5,6 +5,7 @@ plugins {
     id("com.mikepenz.aboutlibraries.plugin")
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
+    id("io.github.takahirom.roborazzi") version "1.32.0"
 }
 
 android {
@@ -18,6 +19,7 @@ android {
         versionCode = 1
         versionName = "0.1"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -65,6 +67,32 @@ aboutLibraries {
     duplicationMode = com.mikepenz.aboutlibraries.plugin.DuplicateMode.MERGE
 }
 
+// Copy captured PNGs into the fastlane supply tree.
+//   <buildDir>/outputs/roborazzi/<deviceAlias>/<playLocale>/<NN>.png
+//   -> Android/fastlane/metadata/android/<playLocale>/images/<phoneScreenshots|tenInchScreenshots>/<NN>.png
+tasks.register("collectScreenshots") {
+    description = "Pull device screenshots and copy into fastlane/metadata/android/<locale>/images/*"
+    group = "screenshot"
+    dependsOn("connectedDebugAndroidTest")
+    doLast {
+        val src = layout.buildDirectory.dir("outputs/roborazzi").get().asFile
+        val deviceToImageDir = mapOf("phone" to "phoneScreenshots", "tablet" to "tenInchScreenshots")
+        val fastlaneRoot = rootProject.file("fastlane/metadata/android")
+        deviceToImageDir.forEach { (deviceAlias, imageDir) ->
+            val deviceDir = src.resolve(deviceAlias)
+            if (!deviceDir.exists()) return@forEach
+            deviceDir.listFiles()?.filter { it.isDirectory }?.forEach { localeDir ->
+                val target = fastlaneRoot.resolve("${localeDir.name}/images/$imageDir")
+                target.mkdirs()
+                localeDir.listFiles()?.filter { it.extension == "png" }?.forEach { png ->
+                    png.copyTo(target.resolve(png.name), overwrite = true)
+                }
+            }
+        }
+        println("Screenshots collected into $fastlaneRoot")
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
@@ -76,6 +104,18 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+
+    // Instrumented screenshot harness (androidTest, runs on a connected device — the Reader renders
+    // sheet music via native JNI that cannot run on the host JVM, so this is NOT a Robolectric test).
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.0")
+    androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.0")
+    androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-android:1.32.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     implementation(project(":FolinoSettingsAndroid"))
     implementation(project(":FolinoLibraryAndroid"))
