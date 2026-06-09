@@ -2,8 +2,9 @@ import SheetMusicCore
 import SwiftUI
 
 /// A row of rehearsal-mark "speech bubbles" laid out above the seek bar by each mark's time fraction. Tapping a bubble
-/// seeks to that mark. Sized to match the seek bar's width (both live inside the card's content padding), so a bubble
-/// at fraction `f` lines up with the seek bar's position `f`.
+/// seeks to that mark; dragging across the bar discretely seeks to whichever mark is nearest the finger, snapping from
+/// mark to mark as it moves. Sized to match the seek bar's width (both live inside the card's content padding), so a
+/// bubble at fraction `f` lines up with the seek bar's position `f`.
 ///
 /// Two behaviors keep dense / edge-of-bar marks usable:
 /// - **Stacking order:** the mark governing the current position (the last one at or before `currentFraction`) is drawn
@@ -21,6 +22,10 @@ struct RehearsalMarkBar: View {
     /// Measured body width per mark id, used to clamp the body within the bar.
     @State private var bodyWidths: [String: CGFloat] = [:]
 
+    /// Id of the mark last seeked to during an in-progress drag, so a continuous drag only re-seeks when it crosses
+    /// into a new mark's neighborhood (discrete, mark-to-mark snapping) rather than firing on every touch update.
+    @State private var draggedMarkID: String?
+
     private var currentMarkID: String? {
         marks.last { $0.fraction <= currentFraction }?.id
     }
@@ -28,29 +33,57 @@ struct RehearsalMarkBar: View {
     var body: some View {
         GeometryReader { geometry in
             let barWidth = geometry.size.width
-            ForEach(Array(marks.enumerated()), id: \.element.id) { index, mark in
-                let trueX = barWidth * mark.fraction
-                let width = bodyWidths[mark.id] ?? 0
-                let half = width / 2
-                // Keep the body fully on the bar; the tail still points at `trueX` via its offset.
-                let center = width > 0 ? min(max(trueX, half), max(half, barWidth - half)) : trueX
-                let rawTailOffset = trueX - center
-                // Keep the tail under the rounded body, not sliding off its end.
-                let maxTailOffset = max(0, half - 12)
-                let tailOffset = min(max(rawTailOffset, -maxTailOffset), maxTailOffset)
+            ZStack {
+                // Transparent full-bar hit layer so a drag registers anywhere across the bar — including the gaps
+                // between bubbles. It sits behind the bubbles, so taps still land on the bubble buttons in front.
+                Color.clear.contentShape(Rectangle())
 
-                RehearsalMarkButton(
-                    text: mark.text,
-                    isCurrent: mark.id == currentMarkID,
-                    tailOffset: tailOffset,
-                    action: { onSeek(mark.cursor) },
-                    onBodyWidthChange: { bodyWidths[mark.id] = $0 },
-                )
-                .position(x: center, y: Self.height / 2)
-                .zIndex(stackOrder(for: mark, index: index))
+                ForEach(Array(marks.enumerated()), id: \.element.id) { index, mark in
+                    let trueX = barWidth * mark.fraction
+                    let width = bodyWidths[mark.id] ?? 0
+                    let half = width / 2
+                    // Keep the body fully on the bar; the tail still points at `trueX` via its offset.
+                    let center = width > 0 ? min(max(trueX, half), max(half, barWidth - half)) : trueX
+                    let rawTailOffset = trueX - center
+                    // Keep the tail under the rounded body, not sliding off its end.
+                    let maxTailOffset = max(0, half - 12)
+                    let tailOffset = min(max(rawTailOffset, -maxTailOffset), maxTailOffset)
+
+                    RehearsalMarkButton(
+                        text: mark.text,
+                        isCurrent: mark.id == currentMarkID,
+                        tailOffset: tailOffset,
+                        action: { onSeek(mark.cursor) },
+                        onBodyWidthChange: { bodyWidths[mark.id] = $0 },
+                    )
+                    .position(x: center, y: Self.height / 2)
+                    .zIndex(stackOrder(for: mark, index: index))
+                }
             }
+            // Drag-to-select: maps the finger's x to the nearest mark and seeks to it, snapping discretely between
+            // marks. `minimumDistance` keeps short presses falling through to the bubble buttons (precise taps), while
+            // anything past the threshold becomes a drag. Re-seeks live (not just on release) as the nearest mark
+            // changes — `simultaneousGesture`, not `gesture`, so the drag is recognized alongside the bubble buttons
+            // instead of waiting for a button's press to resolve at touch-up (else every seek defers to drag end).
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in
+                        let fraction = min(max(value.location.x / barWidth, 0), 1)
+                        guard let mark = nearestMark(toFraction: fraction) else { return }
+                        if mark.id != draggedMarkID {
+                            draggedMarkID = mark.id
+                            onSeek(mark.cursor)
+                        }
+                    }
+                    .onEnded { _ in draggedMarkID = nil },
+            )
         }
         .frame(height: Self.height)
+    }
+
+    /// The mark whose time fraction lies closest to `fraction` (the drag's normalized x), used to snap a drag to it.
+    private func nearestMark(toFraction fraction: Double) -> ReaderRehearsalMark? {
+        marks.min { abs($0.fraction - fraction) < abs($1.fraction - fraction) }
     }
 
     /// Frontmost = the mark governing the current position; otherwise later marks sit in front of earlier ones.
