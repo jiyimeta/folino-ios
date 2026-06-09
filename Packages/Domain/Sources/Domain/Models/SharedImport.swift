@@ -74,3 +74,75 @@ public struct SharedImportResult: Sendable, Equatable {
         self.playlistCreateFailureName = playlistCreateFailureName
     }
 }
+
+/// Platform-agnostic share-import orchestration: resolve the playlist target, import each file, append imported ids to
+/// the target, and pick the open-after id. All platform I/O lives behind the two injected protocols. Mirrors the iOS
+/// `IncomingShareCoordinator` per-token sequence, including "new-playlist creation failed ⇒ import nothing".
+public struct SharedImportCoordinator: Sendable {
+    private let importer: any SharedImportFileImporting
+    private let target: any SharedImportPlaylistTargeting
+
+    public init(importer: any SharedImportFileImporting, target: any SharedImportPlaylistTargeting) {
+        self.importer = importer
+        self.target = target
+    }
+
+    public func run(files: [SharedImportFile], choice: PlaylistChoice, openAfter: Bool) async -> SharedImportResult {
+        var result = SharedImportResult()
+
+        // 1. Resolve playlist target.
+        var targetPlaylistID: String?
+        switch choice {
+        case .libraryOnly:
+            break
+        case let .existing(id):
+            let raw = id.rawValue.uuidString
+            // A playlist deleted between pick and import silently falls back to library-only (iOS
+            // IncomingShareCoordinator.resolvePlaylist parity: an unresolved existing id becomes .none).
+            if target.playlistExists(id: raw) { targetPlaylistID = raw }
+        case let .createNew(name):
+            // A blank/whitespace-only name falls back to library-only (iOS parity: trimmed-empty newPlaylistName
+            // resolves to .none). The Android share UI also disables Save while the name field is blank.
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                if let newID = target.createPlaylist(name: trimmed) {
+                    targetPlaylistID = newID
+                    result.createdPlaylistID = newID
+                } else {
+                    // iOS parity: nothing is imported; the banner reports the failed name.
+                    result.playlistCreateFailureName = trimmed
+                    return result
+                }
+            }
+        }
+
+        // 2. Import each file.
+        let isMultiFile = files.count > 1
+        var lastOpen: String?
+        for file in files {
+            switch await importer.importFile(file, isMultiFile: isMultiFile) {
+            case let .imported(id):
+                result.importedIDs.append(id)
+                lastOpen = id
+            case let .duplicate(existingID, existingTitle):
+                result.skipped.append(.init(
+                    originalName: file.originalName,
+                    reason: .duplicate(existingID: existingID, existingTitle: existingTitle),
+                ))
+                lastOpen = existingID
+            case let .skipped(reason):
+                result.skipped.append(.init(originalName: file.originalName, reason: reason))
+            }
+        }
+
+        // 3. Append to playlist (imported-only; duplicates stay in the library and are not re-added to the playlist).
+        if let pid = targetPlaylistID {
+            if !result.importedIDs.isEmpty { target.append(scoreIDs: result.importedIDs, toPlaylistID: pid) }
+            result.targetPlaylistID = pid
+        }
+
+        // 4. Open-after.
+        if openAfter { result.openAfterID = lastOpen }
+        return result
+    }
+}
