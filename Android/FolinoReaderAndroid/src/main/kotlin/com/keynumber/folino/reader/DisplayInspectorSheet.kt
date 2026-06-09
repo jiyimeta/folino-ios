@@ -108,6 +108,8 @@ fun DisplayInspectorSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onChange: (LayoutOptions) -> Unit,
+    showSeekBar: Boolean = true,
+    onShowSeekBarChange: (Boolean) -> Unit = {},
 ) {
     var generalExpanded by rememberSaveable { mutableStateOf(true) }
     var partsExpanded by rememberSaveable { mutableStateOf(true) }
@@ -149,6 +151,12 @@ fun DisplayInspectorSheet(
                         label = stringResource(R.string.reader_pref_show_invisible),
                         checked = options.showInvisibleElements,
                     ) { onChange(options.copy(showInvisibleElements = it)) }
+                }
+                item {
+                    SwitchRow(
+                        label = stringResource(R.string.reader_pref_show_seek_bar),
+                        checked = showSeekBar,
+                    ) { onShowSeekBarChange(it) }
                 }
             }
 
