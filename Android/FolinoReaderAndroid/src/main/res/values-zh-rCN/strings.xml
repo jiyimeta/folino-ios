@@ -11,6 +11,7 @@
     <string name="reader_pref_honor_breaks">遵循乐谱的换行与分页</string>
     <string name="reader_pref_collapse_rests">合并多小节休止符</string>
     <string name="reader_pref_show_invisible">显示隐藏元素</string>
+    <string name="reader_pref_show_seek_bar">显示进度条</string>
     <string name="reader_display_settings">显示设置</string>
     <string name="reader_staff_hide">隐藏谱表</string>
     <string name="reader_staff_show">显示谱表</string>

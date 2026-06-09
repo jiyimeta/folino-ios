@@ -1,4 +1,5 @@
 import Domain
+import Foundation
 import Observation
 import SheetMusicCore
 
@@ -11,16 +12,15 @@ import SheetMusicCore
 @MainActor
 @Observable
 final class RepeatModel {
-    /// SwiftUI bindings write through `mode` directly. Reads are tracked via the macro-generated observation registrar
-    /// like any other stored property. The `didSet` defers persistence + controller push to a Task so that picker
-    /// writes stay synchronous; tests use `setMode(_:)` to await both side effects.
+    /// Global, sticky repeat mode (shared across every score, like the playlist-continuation mode). SwiftUI bindings
+    /// write through `mode` directly; the `didSet` persists to the global key synchronously and defers the controller
+    /// push to a Task. The A–B endpoints (`abRange`) stay per-score. Tests use `setMode(_:)` to await the push.
     var mode: RepeatMode = .off {
         didSet {
             guard mode != oldValue, !isSyncing else { return }
+            RepeatModeStorage.set(mode)
             Task { [weak self] in
-                guard let self else { return }
-                await onChange?()
-                await forwardLoopRangeToController()
+                await self?.forwardLoopRangeToController()
             }
         }
     }
@@ -38,6 +38,10 @@ final class RepeatModel {
     /// `ReaderPreferences`.
     @ObservationIgnored private var isSyncing = false
 
+    /// Watches `UserDefaults` for external writes to the global repeat-mode key (e.g. from Settings) so an already-open
+    /// Reader reflects them live and re-pushes its loop range. Cancelled on deinit.
+    @ObservationIgnored private var globalModeObservation: Task<Void, Never>?
+
     /// Either the user's staged A endpoint (a candidate that hasn't yet formed a complete loop) or the persisted start
     /// of an existing `abRange`. Callers don't care which — they just want "what point represents A right now."
     var pendingRepeatA: ChordPath? {
@@ -48,15 +52,36 @@ final class RepeatModel {
         pendingB ?? abRange?.end
     }
 
-    /// Apply a persisted slice loaded from disk. Resets the in-flight endpoints — they're UI-transient and don't
+    /// Apply persisted state on load: the repeat *mode* comes from the global key (sticky across scores) and the A–B
+    /// endpoints from this score's `ReaderPreferences`. Resets the in-flight endpoints — they're UI-transient and don't
     /// survive a fresh load.
     func sync(from prefs: ReaderPreferences) {
         isSyncing = true
         defer { isSyncing = false }
-        mode = prefs.repeatMode
+        mode = RepeatModeStorage.current()
         abRange = prefs.abRepeat
         pendingA = nil
         pendingB = nil
+    }
+
+    /// Begins watching the global repeat-mode key. Idempotent. Call once after the parent finishes wiring.
+    func startObservingGlobalMode() {
+        guard globalModeObservation == nil else { return }
+        globalModeObservation = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: UserDefaults.didChangeNotification) {
+                guard let self else { return }
+                let latest = RepeatModeStorage.current()
+                guard latest != mode else { continue }
+                isSyncing = true
+                mode = latest
+                isSyncing = false
+                await forwardLoopRangeToController()
+            }
+        }
+    }
+
+    deinit {
+        globalModeObservation?.cancel()
     }
 
     /// Awaitable counterpart to the `mode` binding setter. Tests and any async context that needs to observe
@@ -66,7 +91,7 @@ final class RepeatModel {
         isSyncing = true
         mode = value
         isSyncing = false
-        await onChange?()
+        RepeatModeStorage.set(value)
         await forwardLoopRangeToController()
     }
 

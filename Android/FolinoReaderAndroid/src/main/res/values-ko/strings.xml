@@ -11,6 +11,7 @@
     <string name="reader_pref_honor_breaks">악보의 줄바꿈 및 페이지 나누기 따르기</string>
     <string name="reader_pref_collapse_rests">여러 마디 쉼표 합치기</string>
     <string name="reader_pref_show_invisible">숨겨진 요소 표시</string>
+    <string name="reader_pref_show_seek_bar">탐색 막대 표시</string>
     <string name="reader_display_settings">표시 설정</string>
     <string name="reader_staff_hide">보표 숨기기</string>
     <string name="reader_staff_show">보표 표시</string>

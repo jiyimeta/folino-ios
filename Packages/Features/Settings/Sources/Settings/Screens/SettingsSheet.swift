@@ -35,6 +35,8 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private var keepScreenAwake = true
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
     private var showSeekBar = true
+    @AppStorage(ReaderGlobalSettingsKey.repeatMode)
+    private var repeatMode: RepeatMode = .off
     @AppStorage(ReaderGlobalSettingsKey.playlistContinuationMode)
     private var continuationMode: PlaylistContinuationMode = .playThrough
     @AppStorage(ReaderGlobalSettingsKey.a4ReferenceHz)
@@ -121,7 +123,8 @@ public struct SettingsSheet<LicenseContent: View>: View {
             }
             keepScreenAwakeToggle
             seekBarToggle
-            continuationRow
+            RepeatModeSettingRow(mode: $repeatMode)
+            PlaylistContinuationSettingRow(mode: $continuationMode)
             a4ReferenceRow
             readerLayoutRow
             if let provider {
@@ -190,23 +193,6 @@ public struct SettingsSheet<LicenseContent: View>: View {
                 Text("settings.reader.showSeekBar", bundle: .module)
             } icon: {
                 Image(systemName: "point.bottomleft.forward.to.point.topright.scurvepath")
-            }
-        }
-    }
-
-    private var continuationRow: some View {
-        Picker(selection: $continuationMode) {
-            Text("settings.reader.continuation.off", bundle: .module)
-                .tag(PlaylistContinuationMode.off)
-            Text("settings.reader.continuation.playThrough", bundle: .module)
-                .tag(PlaylistContinuationMode.playThrough)
-            Text("settings.reader.continuation.loopPlaylist", bundle: .module)
-                .tag(PlaylistContinuationMode.loopPlaylist)
-        } label: {
-            Label {
-                Text("settings.reader.continuation", bundle: .module)
-            } icon: {
-                Image(systemName: "music.note.list")
             }
         }
     }

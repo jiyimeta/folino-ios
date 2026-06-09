@@ -12,7 +12,11 @@ struct LibraryRootPlaylistsSection: View {
     var body: some View {
         if !allPlaylists.isEmpty {
             let total = allPlaylists.count
-            let topN = playlistsByRecentlyUsed(allPlaylists, scoreItems: scoreItems, limit: 5)
+            let topN = playlistsByRecentlyUsed(
+                allPlaylists,
+                openInfo: scoreItems.map(\.openInfo),
+                limit: 5,
+            )
             // `scoreItems` is the repository's live snapshot; build the set once so each row's member count excludes
             // soft-deleted items.
             let liveIDs = Set(scoreItems.map(\.id))
@@ -75,7 +79,11 @@ struct LibraryRootTagsSection: View {
     var body: some View {
         if !allTags.isEmpty {
             let total = allTags.count
-            let topN = tagsByRecentlyUsed(allTags, scoreItems: scoreItems, limit: 5)
+            let topN = tagsByRecentlyUsed(
+                allTags,
+                openInfo: scoreItems.map(\.openInfo),
+                limit: 5,
+            )
             CollapsibleSection(isExpanded: $expanded, count: total) {
                 if expanded {
                     ForEach(topN) { tag in

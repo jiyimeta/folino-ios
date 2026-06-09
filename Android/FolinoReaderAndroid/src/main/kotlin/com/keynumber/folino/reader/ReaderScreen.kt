@@ -4,6 +4,10 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +15,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -22,15 +28,21 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.contentColorFor
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -45,6 +57,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -69,6 +83,13 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
 
+/** Bottom inset reserved for the floating playback FAB cluster, so fixed-position score content
+ * (horizontal / page modes) is not hidden under it. Sized to exactly the FAB's occupied height —
+ * the FAB (56) plus the Scaffold's default 16 edge margin — so the score region's bottom edge just
+ * meets the FAB's top with no whitespace gap above it. Vertical mode does not use this — its
+ * scrolling content passes under the FAB, matching iOS (vertical inset 0). */
+private val fabClusterReservedHeight = 72.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -85,6 +106,9 @@ fun ReaderScreen(
     globalA4ReferenceHz: Double = 440.0,
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
+    /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
+    showSeekBar: Boolean = true,
+    onShowSeekBarChange: (Boolean) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -179,6 +203,9 @@ fun ReaderScreen(
                             )
                         }
                     }
+                    IconButton(onClick = { showInspector = true }) {
+                        Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+                    }
                     IconButton(onClick = { showDisplayInspector = true }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ViewList,
@@ -188,12 +215,27 @@ fun ReaderScreen(
                 },
             )
         },
-        bottomBar = { TransportBar(audioVm, onOpenInspector = { showInspector = true }) },
+        bottomBar = { if (showSeekBar) TransportBar(audioVm) },
+        floatingActionButton = { if (!showSeekBar) PlaybackFab(audioVm) },
+        floatingActionButtonPosition = FabPosition.End,
     ) { padding ->
         Box(
             Modifier
                 .padding(padding)
-                .fillMaxSize(),
+                .fillMaxSize()
+                // Fill the whole content area (incl. the band the floating FAB sits over) with the
+                // same white the score page draws on, so the seek-bar-off bottom area reads as one
+                // continuous white surface rather than the theme background tint.
+                .background(Color.White)
+                .padding(
+                    bottom = if (!showSeekBar &&
+                        (layoutMode == ReaderLayoutMode.HORIZONTAL || layoutMode == ReaderLayoutMode.PAGE)
+                    ) {
+                        fabClusterReservedHeight
+                    } else {
+                        0.dp
+                    },
+                ),
             contentAlignment = Alignment.Center,
         ) {
             when (val s = state) {
@@ -232,6 +274,8 @@ fun ReaderScreen(
             sheetState = displaySheetState,
             onDismiss = { showDisplayInspector = false },
             onChange = onDisplayOptionsChange,
+            showSeekBar = showSeekBar,
+            onShowSeekBarChange = onShowSeekBarChange,
         )
     }
 }
@@ -428,7 +472,7 @@ private fun focalAdjustedOffset(
 ): Float = pad + ratio * (currentScroll - pad + centroid) - centroid
 
 @Composable
-private fun TransportBar(audioVm: ReaderAudioViewModel, onOpenInspector: () -> Unit) {
+private fun TransportBar(audioVm: ReaderAudioViewModel) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val currentSecs by audioVm.currentTimeSeconds.collectAsStateWithLifecycle()
     val totalSecs by audioVm.totalTimeSeconds.collectAsStateWithLifecycle()
@@ -436,38 +480,231 @@ private fun TransportBar(audioVm: ReaderAudioViewModel, onOpenInspector: () -> U
 
     val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // Keep the bar clear of the gesture / navigation bar at the bottom of the screen.
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        // Thumbless YouTube-Music-style seek bar; thickens while scrubbing.
+        ReaderSeekBar(
+            fraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f,
+            enabled = isPrepared,
+            onSeek = { fraction -> if (totalSecs > 0) engine?.seek(fraction * totalSecs) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        // Transport row with the time readout OVERLAID on its top band rather than stacked above it
+        // in the Column (iOS's `.overlay` idiom). The readout occupies a fixed [timeRowHeight] band
+        // 4dp below the seek bar; the larger transport buttons are bottom-aligned so they rise only
+        // [buttonTimeOverlap] into that band — a slight, controlled intrusion. The leading readout
+        // (current time) overlaps the top of jump-to-start; play/pause is centered, clear of the
+        // edge readouts.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
+                .height(timeRowHeight + transportButtonSize - buttonTimeOverlap),
         ) {
+            Row(
+                Modifier.fillMaxWidth().align(Alignment.TopCenter).height(timeRowHeight),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = formatTime(currentSecs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = formatTime(totalSecs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // jump-to-start: no circle, but the same icon size and tap target as play/pause. Pinned
+            // to the leading edge. Step / prev-next-measure buttons intentionally not ported.
             IconButton(
+                onClick = { if (isPrepared) engine?.seek(0.0) },
+                enabled = isPrepared,
+                modifier = Modifier.align(Alignment.BottomStart).size(transportButtonSize),
+            ) {
+                Icon(
+                    Icons.Default.SkipPrevious,
+                    contentDescription = "Jump to start",
+                    modifier = Modifier.size(transportIconSize),
+                )
+            }
+            // play/pause: filled circular button, centered, primary control.
+            FilledIconButton(
                 onClick = {
                     if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
                 },
                 enabled = isPrepared,
+                modifier = Modifier.align(Alignment.BottomCenter).size(transportButtonSize),
             ) {
                 if (playback == PlaybackState.PLAYING) {
-                    Icon(Icons.Default.Pause, contentDescription = "Pause")
+                    Icon(
+                        Icons.Default.Pause,
+                        contentDescription = "Pause",
+                        modifier = Modifier.size(transportIconSize),
+                    )
                 } else {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Play",
+                        modifier = Modifier.size(transportIconSize),
+                    )
                 }
             }
-            Text(
-                text = "${formatTime(currentSecs)} / ${formatTime(totalSecs)}",
-                style = MaterialTheme.typography.bodySmall,
+        }
+    }
+}
+
+/** Tap target / circle size for the ON-state transport buttons (play/pause + jump-to-start). Larger
+ * than the Material default so the controls read as the primary action and rise into the overlaid
+ * time-readout band above them. */
+private val transportButtonSize = 56.dp
+
+/** Glyph size inside [transportButtonSize] buttons — shared by play/pause and jump-to-start so the
+ * two read as the same control family (only the filled circle distinguishes play/pause). */
+private val transportIconSize = 30.dp
+
+/** Height of the overlaid time-readout band between the seek bar and the transport buttons. */
+private val timeRowHeight = 18.dp
+
+/** How far the (bottom-aligned) transport buttons rise into the time-readout band above them — a
+ * slight intrusion so the controls sit close to the readout without a full empty row between. */
+private val buttonTimeOverlap = 4.dp
+
+/**
+ * Thumbless seek bar in the YouTube-Music idiom: a thin rounded track (filled active portion over a
+ * lighter inactive remainder) with no draggable thumb, which thickens while the user scrubs. Tap or
+ * horizontal drag anywhere along the bar seeks. The row is a fixed height equal to the thickened
+ * track, so the active portion's bottom edge stays put and the 4dp gap to the time readout below
+ * does not shift as the bar grows. iOS has its own custom SeekBar; this mirrors that intent rather
+ * than using a Material thumb slider.
+ *
+ * @param fraction current playback position, 0..1.
+ * @param onSeek invoked with the new 0..1 fraction on tap and on each drag move.
+ */
+@Composable
+private fun ReaderSeekBar(
+    fraction: Float,
+    enabled: Boolean,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragging by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableFloatStateOf(0f) }
+    // While scrubbing, follow the finger (dragFraction) instead of the live playback fraction, so
+    // the bar doesn't fight engine-seek latency.
+    val shown = (if (dragging) dragFraction else fraction).coerceIn(0f, 1f)
+
+    val activeHeight = 8.dp
+    val trackThickness by animateDpAsState(
+        targetValue = if (dragging) activeHeight else 4.dp,
+        label = "seekTrackThickness",
+    )
+
+    val activeColor =
+        if (enabled) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val inactiveColor = MaterialTheme.colorScheme.surfaceVariant
+
+    Canvas(
+        modifier
+            .fillMaxWidth()
+            .height(activeHeight)
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures { offset ->
+                    onSeek((offset.x / size.width).coerceIn(0f, 1f))
+                }
+            }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        dragging = true
+                        dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                        onSeek(dragFraction)
+                    },
+                    onDragEnd = { dragging = false },
+                    onDragCancel = { dragging = false },
+                    onHorizontalDrag = { change, _ ->
+                        dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                        onSeek(dragFraction)
+                    },
+                )
+            },
+    ) {
+        val centerY = size.height / 2f
+        val stroke = trackThickness.toPx()
+        drawLine(
+            color = inactiveColor,
+            start = Offset(0f, centerY),
+            end = Offset(size.width, centerY),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
+        if (shown > 0f) {
+            drawLine(
+                color = activeColor,
+                start = Offset(0f, centerY),
+                end = Offset(size.width * shown, centerY),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
             )
-            Slider(
-                value = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f,
-                onValueChange = { fraction ->
-                    if (totalSecs > 0) engine?.seek(fraction * totalSecs)
-                },
-                enabled = isPrepared,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onOpenInspector, enabled = isPrepared) {
-                Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+        }
+    }
+}
+
+/**
+ * Floating transport cluster shown when the seek bar is hidden (iOS "collapsed/floating" parity,
+ * adapted to Android's FAB idiom). A small jump-to-start FAB sits left of the primary play/pause
+ * FAB at the bottom-end. Step (prev/next measure) and the rehearsal-mark bar are intentionally
+ * not ported. Actions are guarded on the prepared state, matching [TransportBar].
+ */
+@Composable
+private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
+    val playback by audioVm.state.collectAsStateWithLifecycle()
+    val engine by audioVm.engine.collectAsStateWithLifecycle()
+    val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
+
+    // FABs have no `enabled` param, so we dim their colors when not prepared to mirror
+    // [TransportBar]'s `enabled = isPrepared` affordance (Material disabled-color convention).
+    val fabContainerColor =
+        if (isPrepared) FloatingActionButtonDefaults.containerColor
+        else MaterialTheme.colorScheme.surfaceVariant
+    val fabContentColor =
+        if (isPrepared) contentColorFor(FloatingActionButtonDefaults.containerColor)
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        SmallFloatingActionButton(
+            onClick = { if (isPrepared) engine?.seek(0.0) },
+            containerColor = fabContainerColor,
+            contentColor = fabContentColor,
+        ) {
+            Icon(Icons.Default.SkipPrevious, contentDescription = "Jump to start")
+        }
+        FloatingActionButton(
+            onClick = {
+                if (isPrepared) {
+                    if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
+                }
+            },
+            containerColor = fabContainerColor,
+            contentColor = fabContentColor,
+        ) {
+            if (playback == PlaybackState.PLAYING) {
+                Icon(Icons.Default.Pause, contentDescription = "Pause")
+            } else {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play")
             }
         }
     }

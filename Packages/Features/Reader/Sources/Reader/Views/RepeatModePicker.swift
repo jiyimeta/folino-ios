@@ -39,7 +39,7 @@ struct RepeatModePicker: View {
     @ViewBuilder
     private func icon(for mode: RepeatMode) -> some View {
         switch mode {
-        case .off: Image(systemName: "arrow.forward.to.line.compact")
+        case .off: Image(systemName: "repeat.badge.xmark")
         case .loopAll: Image(systemName: "repeat.1")
         // Custom asset (no SF Symbol for A–B). Its large intrinsic size can't be tamed by a SwiftUI `.frame` in a menu
         // label, so pre-rasterize it to symbol scale and keep it a template so it tints like the others.
