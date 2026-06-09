@@ -12,6 +12,10 @@ extension Instrument {
 
 @MainActor
 struct ScorePiPFrameRendererTests {
+    init() {
+        _ = LayoutTestSupport.installed
+    }
+
     @Test func `init succeeds for valid score`() throws {
         _ = try ScorePiPFrameRenderer(
             score: makeScore(), staffSize: 28,
@@ -38,12 +42,24 @@ struct ScorePiPFrameRendererTests {
         #expect(renderer.renderFrame(playbackCursor: cursor) != nil)
     }
 
-    /// Minimal Score with one part / one staff / one measure. Modeled after the `makeScore()` helper in
-    /// `ScoreFilteringTests.swift`.
+    /// Minimal Score with one part / one staff / one measure containing a quarter-note chord so the layout engine
+    /// produces at least one system. A staff with no measures causes `LayoutEngine` to emit zero systems, which makes
+    /// `ScorePiPFrameRenderer.prepare` throw "Layout produced no systems".
     private func makeScore() -> Score {
+        let voice = Voice(elements: [
+            .chord(Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 60, tpc: 14)],
+            )),
+        ])
+        let staff = Staff(
+            staffType: "stdNormal",
+            group: "pitched",
+            measures: [Measure(voices: [voice])],
+        )
         let part = Part(
             id: "P0", trackName: "Test", instrument: .empty,
-            staves: [Staff(staffType: "stdNormal", group: "pitched")],
+            staves: [staff],
         )
         return Score(division: 480, parts: [part], metaTags: [:])
     }
