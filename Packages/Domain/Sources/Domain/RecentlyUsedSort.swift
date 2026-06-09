@@ -14,6 +14,13 @@ public struct ScoreOpenInfo: Sendable, Equatable {
     }
 }
 
+extension ScoreItem {
+    /// The minimal recently-used projection of this score.
+    public var openInfo: ScoreOpenInfo {
+        ScoreOpenInfo(id: id, lastOpenedAt: lastOpenedAt, tagIDs: tagIDs)
+    }
+}
+
 /// Top-N playlists ordered by the most recent `lastOpenedAt` of any contained score. Empty playlists, or playlists
 /// whose every contained ID has no `lastOpenedAt`, fall back to `createdAt`. Ties tiebreak by `name` ascending.
 public func playlistsByRecentlyUsed(

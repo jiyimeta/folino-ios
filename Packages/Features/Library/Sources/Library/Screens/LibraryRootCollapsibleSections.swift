@@ -14,7 +14,7 @@ struct LibraryRootPlaylistsSection: View {
             let total = allPlaylists.count
             let topN = playlistsByRecentlyUsed(
                 allPlaylists,
-                openInfo: scoreItems.map { ScoreOpenInfo(id: $0.id, lastOpenedAt: $0.lastOpenedAt, tagIDs: $0.tagIDs) },
+                openInfo: scoreItems.map(\.openInfo),
                 limit: 5,
             )
             // `scoreItems` is the repository's live snapshot; build the set once so each row's member count excludes
@@ -81,7 +81,7 @@ struct LibraryRootTagsSection: View {
             let total = allTags.count
             let topN = tagsByRecentlyUsed(
                 allTags,
-                openInfo: scoreItems.map { ScoreOpenInfo(id: $0.id, lastOpenedAt: $0.lastOpenedAt, tagIDs: $0.tagIDs) },
+                openInfo: scoreItems.map(\.openInfo),
                 limit: 5,
             )
             CollapsibleSection(isExpanded: $expanded, count: total) {
