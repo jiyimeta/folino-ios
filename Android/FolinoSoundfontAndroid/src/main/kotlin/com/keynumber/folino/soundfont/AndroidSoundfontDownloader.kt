@@ -3,7 +3,7 @@ package com.keynumber.folino.soundfont
 import android.app.DownloadManager
 import android.content.Context
 import android.database.Cursor
-import android.net.Uri
+import android.util.Log
 import androidx.core.net.toUri
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -36,19 +36,35 @@ class AndroidSoundfontDownloader(
 
     override fun start(remoteURL: String, destinationPath: String, allowCellular: Boolean) {
         if (currentId != -1L) return // idempotent: a transfer is already running
-        val staging = File(appContext.cacheDir, "MuseScore_General.sf2.part")
+        // DownloadManager runs in the system process and cannot write to our internal cacheDir/filesDir; it can
+        // only write to our app-specific EXTERNAL files dir. Stage there, then copy into the internal final path.
+        val external = appContext.getExternalFilesDir(null)
+        if (external == null) {
+            onFailed("external storage unavailable")
+            return
+        }
+        val staging = File(external, STAGING_NAME)
         staging.delete()
-        val request = DownloadManager.Request(remoteURL.toUri())
-            .setDestinationUri(Uri.fromFile(staging))
-            .setAllowedNetworkTypes(
-                if (allowCellular) {
-                    DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
-                } else {
-                    DownloadManager.Request.NETWORK_WIFI
-                },
-            )
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
-        currentId = dm.enqueue(request)
+        try {
+            val request = DownloadManager.Request(remoteURL.toUri())
+                .setDestinationInExternalFilesDir(appContext, null, STAGING_NAME)
+                .setAllowedNetworkTypes(
+                    if (allowCellular) {
+                        DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
+                    } else {
+                        DownloadManager.Request.NETWORK_WIFI
+                    },
+                )
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
+            currentId = dm.enqueue(request)
+        } catch (e: Exception) {
+            // Surface the failure as a retryable .failed state (and log, in case the callback's late-bound
+            // ViewModel holder isn't wired yet during first construction).
+            currentId = -1L
+            Log.e("FolinoSoundfont", "DownloadManager.enqueue failed", e)
+            onFailed("could not start download: ${e.message}")
+            return
+        }
         pollJob = scope.launch { poll(staging, File(destinationPath)) }
     }
 
@@ -108,5 +124,9 @@ class AndroidSoundfontDownloader(
         currentId = -1L
         pollJob = null
         if (failure == null) onFinished() else onFailed(failure)
+    }
+
+    private companion object {
+        const val STAGING_NAME = "MuseScore_General.sf2.part"
     }
 }
