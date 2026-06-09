@@ -42,8 +42,12 @@ struct PlaybackInspectorScreen: View {
     /// Live playback cursor. The tempo readout reads the score's effective tempo here so it tracks mid-score tempo
     /// changes; `nil` (no cursor yet) resolves to the opening tempo.
     let playbackCursor: ScoreCursor?
+    /// True when the Reader was opened from a playlist — gates whether the continuation row is shown.
+    let isInPlaylist: Bool
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
+    @AppStorage(ReaderGlobalSettingsKey.playlistContinuationMode)
+    private var continuationMode: PlaylistContinuationMode = .playThrough
 
     @AppStorage("reader.inspector.playback.general.expanded") private var generalExpanded = true
     @AppStorage("reader.inspector.playback.parts.expanded") private var partsExpanded = true
@@ -55,10 +59,9 @@ struct PlaybackInspectorScreen: View {
             CollapsibleSection(isExpanded: $generalExpanded) {
                 metronomeRow
                 tempoRow
-                HStack {
-                    Text("reader.inspector.repeatMode", bundle: .module)
-                    Spacer()
-                    RepeatModePicker(selection: $repeatModel.mode)
+                repeatModeRow
+                if isInPlaylist {
+                    continuationRow
                 }
                 masterVolumeRow
                 TransposeRow(transposeModel: transposeModel)
@@ -136,6 +139,36 @@ struct PlaybackInspectorScreen: View {
                     Task { await masterVolumeModel.resetValue() }
                 },
             )
+        }
+    }
+
+    private var repeatModeRow: some View {
+        HStack {
+            Text("reader.inspector.repeatMode", bundle: .module)
+            Spacer()
+            RepeatModePicker(selection: $repeatModel.mode)
+        }
+    }
+
+    @ViewBuilder
+    private var continuationRow: some View {
+        // The continuation control is subordinate to per-score repeat: when repeat is looping this score it is
+        // disabled, with a caption explaining why playback won't advance.
+        let repeatActive = repeatModel.mode != .off
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "music.note.list")
+                    .foregroundStyle(Color.accentColor)
+                Text("reader.inspector.continuation", bundle: .module)
+                Spacer()
+                PlaylistContinuationPicker(selection: $continuationMode)
+                    .disabled(repeatActive)
+            }
+            if repeatActive {
+                Text("reader.inspector.continuation.repeatActive", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -337,6 +370,7 @@ struct PlaybackInspectorScreen: View {
                 transposeModel: vm.transposeModel,
                 score: score,
                 playbackCursor: vm.playbackSession.playbackCursor,
+                isInPlaylist: true,
             )
         }
 }
