@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
  */
 class EnginePlayer(
     private val engine: AndroidPlaybackEngine,
+    private val interruptions: PlaybackFocusController,
     serviceScope: CoroutineScope,
     private val mediaItemFlow: StateFlow<MediaItem>,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
@@ -96,11 +97,19 @@ class EnginePlayer(
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-        if (playWhenReady) engine.play() else engine.pause()
+        // Gate playback on audio focus: if another app holds exclusive focus and denies us, stay paused
+        // rather than playing on top of it. getState() re-derives playWhenReady from the engine, so a
+        // denied request settles back to "paused" with no stuck intent.
+        if (playWhenReady) {
+            if (interruptions.acquire()) engine.play()
+        } else {
+            engine.pause()
+        }
         return Futures.immediateVoidFuture()
     }
 
     override fun handleStop(): ListenableFuture<*> {
+        interruptions.release()
         engine.stop()
         return Futures.immediateVoidFuture()
     }
