@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.CrashReporting
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -126,7 +127,7 @@ fun SettingsScreen(
                 checked = crashReporting,
                 onChange = { v ->
                     scope.launch { prefs.setCrashReporting(v) }
-                    com.keynumber.folino.diagnostics.CrashReporting.setCollectionEnabled(v)
+                    CrashReporting.setCollectionEnabled(v)
                 },
             )
         }
