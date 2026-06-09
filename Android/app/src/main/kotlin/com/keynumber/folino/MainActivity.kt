@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +57,7 @@ import com.keynumber.folino.reader.hiddenStavesPref
 import com.keynumber.folino.reader.layoutOptionsFromPrefs
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.settings.VersionHistoryBridge
+import com.keynumber.folino.ui.library.FavoritesListScreen
 import com.keynumber.folino.ui.library.LibraryScreen
 import androidx.compose.material.icons.automirrored.outlined.Label
 import com.keynumber.folino.ui.library.PlaylistDetailScreen
@@ -127,7 +129,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
     // Reader is a detail pushed on top; only the top-level list destinations
     // expose the drawer (hamburger + edge swipe).
     val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted" ||
-        currentRoute == "playlists" || currentRoute == "tags"
+        currentRoute == "playlists" || currentRoute == "tags" || currentRoute == "favorites"
 
     fun switchTo(route: String) {
         scope.launch { drawerState.close() }
@@ -163,6 +165,13 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     label = { Text(stringResource(R.string.nav_all_scores)) },
                     selected = currentRoute == "list",
                     onClick = { switchTo("list") },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Filled.Star, contentDescription = null) },
+                    label = { Text(stringResource(R.string.nav_favorites)) },
+                    selected = currentRoute == "favorites",
+                    onClick = { switchTo("favorites") },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
@@ -204,6 +213,13 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
         NavHost(nav, startDestination = "list") {
             composable("list") {
                 LibraryScreen(
+                    viewModel = vm,
+                    onOpenScore = openReader,
+                    onOpenDrawer = openDrawer,
+                )
+            }
+            composable("favorites") {
+                FavoritesListScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
