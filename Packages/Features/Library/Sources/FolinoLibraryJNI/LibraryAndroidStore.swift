@@ -90,6 +90,7 @@ public final class LibraryAndroidStore {
         let id = UUID().uuidString
         // Shared iOS naming convention: "<id>.<canonicalExtension>".
         let localFileName = "\(id).\(ScoreFormat.mscz.canonicalExtension)"
+        let hash = store.sha256(path: path)
         store.copyImportedFile(fromPath: path, localFileName: localFileName)
         store.upsert(ScoreRecordWire(
             id: id,
@@ -97,6 +98,7 @@ public final class LibraryAndroidStore {
             subtitle: fields.subtitle ?? "",
             composer: fields.composer ?? "",
             localFileName: localFileName,
+            contentHash: hash,
             deletedAt: 0,
         ))
         reload()
