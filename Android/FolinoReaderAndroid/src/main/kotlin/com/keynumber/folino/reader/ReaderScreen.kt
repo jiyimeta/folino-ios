@@ -22,12 +22,16 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -69,6 +73,11 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
 
+/** Bottom inset reserved for the floating playback FAB cluster, so fixed-position score content
+ * (horizontal / page modes) is not hidden under it. Vertical mode does not use this — its scrolling
+ * content passes under the FAB, matching iOS (vertical inset 0). */
+private val fabClusterReservedHeight = 88.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -85,6 +94,9 @@ fun ReaderScreen(
     globalA4ReferenceHz: Double = 440.0,
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
+    /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
+    showSeekBar: Boolean = true,
+    onShowSeekBarChange: (Boolean) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -179,6 +191,9 @@ fun ReaderScreen(
                             )
                         }
                     }
+                    IconButton(onClick = { showInspector = true }) {
+                        Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+                    }
                     IconButton(onClick = { showDisplayInspector = true }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ViewList,
@@ -188,11 +203,22 @@ fun ReaderScreen(
                 },
             )
         },
-        bottomBar = { TransportBar(audioVm, onOpenInspector = { showInspector = true }) },
+        bottomBar = { if (showSeekBar) TransportBar(audioVm) },
+        floatingActionButton = { if (!showSeekBar) PlaybackFab(audioVm) },
+        floatingActionButtonPosition = FabPosition.End,
     ) { padding ->
         Box(
             Modifier
                 .padding(padding)
+                .padding(
+                    bottom = if (!showSeekBar &&
+                        (layoutMode == ReaderLayoutMode.HORIZONTAL || layoutMode == ReaderLayoutMode.PAGE)
+                    ) {
+                        fabClusterReservedHeight
+                    } else {
+                        0.dp
+                    },
+                )
                 .fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
@@ -232,6 +258,8 @@ fun ReaderScreen(
             sheetState = displaySheetState,
             onDismiss = { showDisplayInspector = false },
             onChange = onDisplayOptionsChange,
+            showSeekBar = showSeekBar,
+            onShowSeekBarChange = onShowSeekBarChange,
         )
     }
 }
@@ -428,7 +456,7 @@ private fun focalAdjustedOffset(
 ): Float = pad + ratio * (currentScroll - pad + centroid) - centroid
 
 @Composable
-private fun TransportBar(audioVm: ReaderAudioViewModel, onOpenInspector: () -> Unit) {
+private fun TransportBar(audioVm: ReaderAudioViewModel) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val currentSecs by audioVm.currentTimeSeconds.collectAsStateWithLifecycle()
     val totalSecs by audioVm.totalTimeSeconds.collectAsStateWithLifecycle()
@@ -466,8 +494,42 @@ private fun TransportBar(audioVm: ReaderAudioViewModel, onOpenInspector: () -> U
                 enabled = isPrepared,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = onOpenInspector, enabled = isPrepared) {
-                Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+        }
+    }
+}
+
+/**
+ * Floating transport cluster shown when the seek bar is hidden (iOS "collapsed/floating" parity,
+ * adapted to Android's FAB idiom). A small jump-to-start FAB sits left of the primary play/pause
+ * FAB at the bottom-end. Step (prev/next measure) and the rehearsal-mark bar are intentionally
+ * not ported. Actions are guarded on the prepared state, matching [TransportBar].
+ */
+@Composable
+private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
+    val playback by audioVm.state.collectAsStateWithLifecycle()
+    val engine by audioVm.engine.collectAsStateWithLifecycle()
+    val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        SmallFloatingActionButton(
+            onClick = { if (isPrepared) engine?.seek(0.0) },
+        ) {
+            Icon(Icons.Default.SkipPrevious, contentDescription = "Jump to start")
+        }
+        FloatingActionButton(
+            onClick = {
+                if (isPrepared) {
+                    if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
+                }
+            },
+        ) {
+            if (playback == PlaybackState.PLAYING) {
+                Icon(Icons.Default.Pause, contentDescription = "Pause")
+            } else {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play")
             }
         }
     }
