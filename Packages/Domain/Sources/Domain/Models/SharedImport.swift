@@ -43,7 +43,7 @@ public protocol SharedImportFileImporting: Sendable {
 
 /// Platform playlist operations the coordinator needs. All ids are UUID strings.
 public protocol SharedImportPlaylistTargeting: Sendable {
-    func playlistExists(id: String) -> Bool
+    func playlistExists(id: String) async -> Bool
     /// Create a playlist; return its new id, or `nil` if creation failed.
     func createPlaylist(name: String) async -> String?
     func append(scoreIDs: [String], toPlaylistID id: String) async
@@ -99,7 +99,7 @@ public struct SharedImportCoordinator: Sendable {
             let raw = id.rawValue.uuidString
             // A playlist deleted between pick and import silently falls back to library-only (iOS
             // IncomingShareCoordinator.resolvePlaylist parity: an unresolved existing id becomes .none).
-            if target.playlistExists(id: raw) { targetPlaylistID = raw }
+            if await target.playlistExists(id: raw) { targetPlaylistID = raw }
         case let .createNew(name):
             // A blank/whitespace-only name falls back to library-only (iOS parity: trimmed-empty newPlaylistName
             // resolves to .none). The Android share UI also disables Save while the name field is blank.

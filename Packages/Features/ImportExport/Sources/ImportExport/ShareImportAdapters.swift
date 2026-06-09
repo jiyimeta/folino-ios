@@ -74,7 +74,8 @@ final class IOSSharePlaylistTarget: @preconcurrency SharedImportPlaylistTargetin
         self.logger = logger
     }
 
-    func playlistExists(id: String) -> Bool {
+    // swiftlint:disable:next async_without_await
+    func playlistExists(id: String) async -> Bool {
         guard let uuid = UUID(uuidString: id) else { return false }
         if let p = repository.playlists.first(where: { $0.id == PlaylistID(rawValue: uuid) }) {
             namesByID[id] = p.name
