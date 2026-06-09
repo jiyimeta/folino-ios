@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.mikepenz.aboutlibraries.plugin")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -46,6 +48,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Upload native symbols for the bundled .so (Swift runtime, Oboe/FluidSynth) so native
+            // crashes are symbolicated in release. NDK crash *capture* works in all build types via
+            // the firebase-crashlytics-ndk dependency below; this only affects symbolication of
+            // release builds. Some prebuilt libs may be stripped — unsymbolicated frames are
+            // acceptable and do not fail the build.
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                nativeSymbolUploadEnabled = true
+            }
         }
     }
 }
@@ -88,4 +98,7 @@ dependencies {
     implementation("io.github.jiyimeta:sheet-music-compose-android:0.0.0-SNAPSHOT")
     implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-crashlytics-ndk")
 }

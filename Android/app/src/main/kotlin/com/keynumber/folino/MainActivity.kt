@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Menu
@@ -63,6 +64,7 @@ import com.keynumber.folino.reader.clefOverridesPref
 import com.keynumber.folino.reader.hiddenStavesPref
 import com.keynumber.folino.reader.layoutOptionsFromPrefs
 import com.keynumber.folino.reader.toPref
+import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.FavoritesListScreen
 import com.keynumber.folino.ui.library.LibraryScreen
@@ -72,11 +74,14 @@ import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
 import com.keynumber.folino.ui.library.TagDetailScreen
 import com.keynumber.folino.ui.library.TagsListScreen
+import com.keynumber.folino.ui.debug.DebugScreen
 import com.keynumber.folino.ui.licenses.LicensesScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -95,6 +100,12 @@ class MainActivity : ComponentActivity(), PipHost {
             IntentFilter(ReaderPipActions.ACTION),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+
+        // Re-apply the persisted crash-reporting opt-out before any UI. Synchronous read mirrors the
+        // VersionHistory spike pattern below; DataStore is the source of truth (iOS re-applies the
+        // UserDefaults flag at bootstrap the same way). Default true = opt-in.
+        val crashEnabled = runBlocking { prefs.crashReporting.first() }
+        CrashReporting.setCollectionEnabled(crashEnabled)
 
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
@@ -278,6 +289,19 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
+                // Debug-only entry to the Crashlytics test menu. Compiled out of release builds.
+                if (BuildConfig.DEBUG) {
+                    NavigationDrawerItem(
+                        icon = { Icon(Icons.Filled.BugReport, contentDescription = null) },
+                        label = { Text("Debug menu") },
+                        selected = currentRoute == "debug",
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            nav.navigate("debug")
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
             }
         },
     ) {
@@ -296,6 +320,9 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
                 )
+            }
+            composable("debug") {
+                DebugRoute(onBack = { nav.popBackStackIfResumed() })
             }
             composable("recentlyDeleted") {
                 RecentlyDeletedScreen(
@@ -466,6 +493,25 @@ private class LibraryVMFactory(private val context: android.content.Context) : V
             pdfRenderer = com.keynumber.folino.export.PdfScoreRenderer(context),
             audioExporter = com.keynumber.folino.export.AudioScoreExporter(context),
         ) as T
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DebugRoute(onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Debug menu") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) { DebugScreen() }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
