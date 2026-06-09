@@ -112,15 +112,24 @@ fun ReaderScreen(
 
     val pipActive by ReaderPipController.isInPipMode.collectAsStateWithLifecycle()
     val playbackState by audioVm.state.collectAsStateWithLifecycle()
-    val pipParts by readerVm.parts.collectAsStateWithLifecycle()
 
-    // Publish PiP eligibility + window inputs while the Reader is on screen.
-    LaunchedEffect(state, pipEnabled, playbackState, pipParts) {
-        ReaderPipController.setStaffCount(pipParts.sumOf { it.staves.size })
+    // Publish PiP eligibility while the Reader is on screen.
+    LaunchedEffect(state, pipEnabled, playbackState) {
         ReaderPipController.setPlaying(playbackState == PlaybackState.PLAYING)
         ReaderPipController.setEligible(
             state is ReaderState.Ready && pipEnabled && playbackState == PlaybackState.PLAYING,
         )
+    }
+
+    // Publish the PiP window aspect from the horizontal system height so the visible system just
+    // fits the window (no vertical overflow → no broken vertical auto-scroll). The horizontal
+    // surface scales A4 width to the window width, so aspect = A4_WIDTH_MM / systemHeightMM.
+    // Recomputed when the score or display options change. Gated on pipEnabled to avoid the extra
+    // native layout when PiP is off.
+    LaunchedEffect(scoreHandle, layoutOptions, pipEnabled) {
+        if (!pipEnabled || scoreHandle == null) return@LaunchedEffect
+        val page = readerVm.horizontalProgram()?.pages?.firstOrNull() ?: return@LaunchedEffect
+        ReaderPipController.setContentAspect(pipAspectForSystemHeight(page.heightMM, A4_WIDTH_MM))
     }
 
     // Register transport hooks the in-window RemoteActions call; clear them on exit. ±10s is

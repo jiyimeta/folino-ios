@@ -32,10 +32,13 @@ object ReaderPipController {
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
     fun setPlaying(value: Boolean) { _isPlaying.value = value }
 
-    private val _staffCount = MutableStateFlow(2)
-    /** Total staff count of the open score; drives the PiP window aspect ratio. */
-    val staffCount: StateFlow<Int> = _staffCount.asStateFlow()
-    fun setStaffCount(value: Int) { _staffCount.value = value }
+    private val _contentAspect = MutableStateFlow(PIP_MAX_ASPECT)
+    /**
+     * Desired PiP window aspect ratio (width / height), already clamped to Android's range, chosen
+     * so the visible horizontal system just fits the window. Drives `setAspectRatio`.
+     */
+    val contentAspect: StateFlow<Double> = _contentAspect.asStateFlow()
+    fun setContentAspect(value: Double) { _contentAspect.value = value }
 
     /** Toggle play/pause on the live engine. Registered by the Reader; invoked by the receiver. */
     @Volatile var onTogglePlayPause: (() -> Unit)? = null

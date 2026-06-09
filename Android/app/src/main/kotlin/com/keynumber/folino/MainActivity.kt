@@ -112,13 +112,13 @@ class MainActivity : ComponentActivity(), PipHost {
                     // Keep PiP params current: auto-enter flag (API 31+) and play/pause glyph.
                     val pipEligible by ReaderPipController.eligible.collectAsState()
                     val pipPlaying by ReaderPipController.isPlaying.collectAsState()
-                    val pipStaff by ReaderPipController.staffCount.collectAsState()
-                    LaunchedEffect(pipEligible, pipPlaying, pipStaff) {
+                    val pipAspect by ReaderPipController.contentAspect.collectAsState()
+                    LaunchedEffect(pipEligible, pipPlaying, pipAspect) {
                         runCatching {
                             activity.setPictureInPictureParams(
-                                buildPipParams(activity, pipStaff, pipPlaying, autoEnter = pipEligible),
+                                buildPipParams(activity, pipAspect, pipPlaying, autoEnter = pipEligible),
                             )
-                        }
+                        }.onFailure { android.util.Log.w("ReaderPip", "setPictureInPictureParams failed", it) }
                     }
                     // Library is the main screen; Settings opens as a full-screen
                     // destination (Android idiom) reached from a gear icon in the
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity(), PipHost {
                 enterPictureInPictureMode(
                     buildPipParams(
                         this,
-                        ReaderPipController.staffCount.value,
+                        ReaderPipController.contentAspect.value,
                         ReaderPipController.isPlaying.value,
                         autoEnter = false,
                     ),
@@ -170,7 +170,7 @@ class MainActivity : ComponentActivity(), PipHost {
             enterPictureInPictureMode(
                 buildPipParams(
                     this,
-                    ReaderPipController.staffCount.value,
+                    ReaderPipController.contentAspect.value,
                     ReaderPipController.isPlaying.value,
                     autoEnter = false,
                 ),

@@ -24,18 +24,19 @@ object ReaderPipActions {
 }
 
 /**
- * Build PiP params: aspect ratio from staff count, the three RemoteActions (−10s, play/pause,
- * +10s), and — on Android 12+ — auto-enter when eligible. The play/pause glyph reflects [isPlaying].
+ * Build PiP params: the window [aspect] (width/height, already content-derived; re-clamped here for
+ * safety), the three RemoteActions (−10s, play/pause, +10s), and — on Android 12+ — auto-enter when
+ * eligible. The play/pause glyph reflects [isPlaying].
  */
 fun buildPipParams(
     activity: Activity,
-    staffCount: Int,
+    aspect: Double,
     isPlaying: Boolean,
     autoEnter: Boolean,
 ): PictureInPictureParams {
-    val aspect = pipAspectClamped(staffCount)
+    val clamped = pipAspectClamped(aspect)
     val builder = PictureInPictureParams.Builder()
-        .setAspectRatio(Rational((aspect * 100).roundToInt(), 100))
+        .setAspectRatio(Rational((clamped * 100).roundToInt(), 100))
         .setActions(
             listOf(
                 remoteAction(
