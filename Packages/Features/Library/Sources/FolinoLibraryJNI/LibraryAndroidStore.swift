@@ -158,6 +158,70 @@ public final class LibraryAndroidStore {
         setFavoriteMany(ids, false)
     }
 
+    /// Persist edited credit fields for a score. Title is required; all fields are trimmed and empties stored as `""`
+    /// (an explicit "cleared" value). Uses the shared `EditableScoreInfo.normalized()` rule (iOS parity). No-op on
+    /// blank title or unknown id.
+    @WireletExpose
+    public func saveScoreInfo(
+        _ id: String,
+        _ title: String,
+        _ subtitle: String,
+        _ composer: String,
+        _ arranger: String,
+        _ lyricist: String,
+        _ copyright: String,
+    ) {
+        let fields = EditableScoreInfo(
+            title: title, subtitle: subtitle, composer: composer,
+            arranger: arranger, lyricist: lyricist, copyright: copyright,
+        )
+        guard let n = fields.normalized() else { return }
+        var all = store.loadAll()
+        guard let idx = all.firstIndex(where: { $0.id == id }) else { return }
+        all[idx].title = n.title
+        all[idx].subtitle = n.subtitle
+        all[idx].composer = n.composer
+        all[idx].arranger = n.arranger
+        all[idx].lyricist = n.lyricist
+        all[idx].copyright = n.copyright
+        store.upsert(all[idx])
+        reload(using: all)
+    }
+
+    /// Pre-filled fields + read-only info for the edit-info screen. Parses the score file on demand to supply
+    /// file-metaTag fallback for never-edited credit fields and the parsed source label. `addedAt` comes from the
+    /// score file's creation date.
+    @WireletExpose
+    public func scoreInfoForEditing(_ id: String) -> EditScoreInfoWire {
+        guard let record = store.loadAll().first(where: { $0.id == id }) else {
+            return EditScoreInfoWire(
+                title: "",
+                subtitle: "",
+                composer: "",
+                arranger: "",
+                lyricist: "",
+                copyright: "",
+                source: "",
+                addedAt: 0,
+            )
+        }
+        let path = "\(store.scoresDirectoryPath())/\(record.localFileName)"
+        let url = URL(fileURLWithPath: path)
+        let fileMeta = (try? MSCZReader.parse(contentsOf: url)).map { ScoreFileMetadata(score: $0) }
+        let prefill = EditableScoreInfo.prefilled(
+            title: record.title, subtitle: record.subtitle, composer: record.composer,
+            arranger: record.arranger, lyricist: record.lyricist, copyright: record.copyright,
+            fileMetadata: fileMeta,
+        )
+        let addedAt = (try? FileManager.default.attributesOfItem(atPath: path)[.creationDate] as? Date)?
+            .timeIntervalSince1970 ?? 0
+        return EditScoreInfoWire(
+            title: prefill.title, subtitle: prefill.subtitle, composer: prefill.composer,
+            arranger: prefill.arranger, lyricist: prefill.lyricist, copyright: prefill.copyright,
+            source: fileMeta?.source.displayLabel ?? "", addedAt: addedAt,
+        )
+    }
+
     private func setFavorite(_ id: String, _ value: Bool) {
         var all = store.loadAll()
         guard let idx = all.firstIndex(where: { $0.id == id }), all[idx].isFavorite != value else { return }

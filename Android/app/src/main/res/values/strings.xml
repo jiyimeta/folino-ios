@@ -77,4 +77,21 @@
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_privacy_crash_title">Send crash reports</string>
     <string name="settings_privacy_crash_description">Helps fix bugs by sharing anonymous crash diagnostics. Never linked to you.</string>
+    <string name="edit_info">Edit info</string>
+    <string name="edit_info_save">Save</string>
+    <string name="edit_info_section_credits">Credits</string>
+    <string name="edit_info_section_info">Info</string>
+    <string name="edit_info_field_title">Title</string>
+    <string name="edit_info_field_subtitle">Subtitle</string>
+    <string name="edit_info_field_composer">Composer</string>
+    <string name="edit_info_field_arranger">Arranger</string>
+    <string name="edit_info_field_lyricist">Lyricist</string>
+    <string name="edit_info_field_copyright">Copyright</string>
+    <string name="edit_info_info_source">Source</string>
+    <string name="edit_info_info_date_added">Date added</string>
+    <string name="edit_info_source_unknown">Unknown</string>
+    <string name="edit_info_close">Close</string>
+    <string name="edit_info_discard_title">Discard changes?</string>
+    <string name="edit_info_discard_keep">Keep editing</string>
+    <string name="edit_info_discard_confirm">Discard</string>
 </resources>

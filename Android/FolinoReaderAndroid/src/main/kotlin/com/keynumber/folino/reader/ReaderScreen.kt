@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -99,6 +100,7 @@ fun ReaderScreen(
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
     onBack: () -> Unit,
+    onEditInfo: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
     /** Global A4 reference pitch default (Hz) from SettingsPrefs, seeded into the audio VM at
@@ -202,6 +204,12 @@ fun ReaderScreen(
                                 contentDescription = "Picture in Picture",
                             )
                         }
+                    }
+                    IconButton(onClick = onEditInfo) {
+                        Icon(
+                            Icons.Outlined.Info,
+                            contentDescription = stringResource(R.string.reader_edit_info),
+                        )
                     }
                     IconButton(onClick = { showInspector = true }) {
                         Icon(Icons.Default.Tune, contentDescription = "Playback controls")

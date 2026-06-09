@@ -20,6 +20,9 @@ data class ScoreRecordEntity(
     val title: String,
     val subtitle: String,
     val composer: String,
+    val arranger: String? = null,
+    val lyricist: String? = null,
+    val copyright: String? = null,
     @ColumnInfo(name = "local_file_name") val localFileName: String,
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
     @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Double = 0.0, // 0 == never opened
@@ -185,7 +188,19 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {
-            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt, it.lastOpenedAt, it.isFavorite)
+            ScoreRecordWire(
+                id = it.id,
+                title = it.title,
+                subtitle = it.subtitle,
+                composer = it.composer,
+                arranger = it.arranger,
+                lyricist = it.lyricist,
+                copyright = it.copyright,
+                localFileName = it.localFileName,
+                deletedAt = it.deletedAt,
+                lastOpenedAt = it.lastOpenedAt,
+                isFavorite = it.isFavorite,
+            )
         }
 
     override fun upsert(record: ScoreRecordWire) {
@@ -195,6 +210,9 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 title = record.title,
                 subtitle = record.subtitle,
                 composer = record.composer,
+                arranger = record.arranger,
+                lyricist = record.lyricist,
+                copyright = record.copyright,
                 localFileName = record.localFileName,
                 deletedAt = record.deletedAt,
                 lastOpenedAt = record.lastOpenedAt,
