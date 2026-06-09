@@ -35,10 +35,13 @@ struct ReaderViewModelSoundfontSwapTests {
     }
 
     /// Park the main actor briefly so `Observations`-backed tasks scheduled by mutations get a chance to run before the
-    /// next assertion. 50 ms is comfortably larger than the framework's coalescing window without slowing the suite
-    /// noticeably; the assertion-then-yield pattern is repeated rather than gambled on a single wait.
-    private func yieldForObservation() async {
-        try? await Task.sleep(for: .milliseconds(50))
+    /// next assertion. Polls with a 10 ms tick up to 500 ms total so the check fires as soon as the condition settles
+    /// rather than waiting for a fixed sleep — resilient against a busy simulator where 50 ms flat is too short.
+    private func yieldForObservation(until condition: @MainActor () -> Bool = { true }) async {
+        let deadline = Date.now.addingTimeInterval(0.5)
+        repeat {
+            try? await Task.sleep(for: .milliseconds(10))
+        } while !condition() && Date.now < deadline
     }
 
     @Test func `download finishing while paused triggers immediate reload`() async {
@@ -59,7 +62,7 @@ struct ReaderViewModelSoundfontSwapTests {
         vm.playbackSession.startObservingSoundfontDownload()
 
         provider.downloadState = .downloaded
-        await yieldForObservation()
+        await yieldForObservation(until: { controller.reloadSoundfontCount == 1 })
 
         #expect(controller.reloadSoundfontCount == 1)
     }
@@ -90,7 +93,7 @@ struct ReaderViewModelSoundfontSwapTests {
         // Engine pauses (user tap, lock-screen control, audio interruption, ...): the observer should drain the pending
         // swap and call `reloadSoundfont` on this transition.
         controller.emitIsPlaying(false)
-        await yieldForObservation()
+        await yieldForObservation(until: { controller.reloadSoundfontCount == 1 })
 
         #expect(controller.reloadSoundfontCount == 1)
     }
