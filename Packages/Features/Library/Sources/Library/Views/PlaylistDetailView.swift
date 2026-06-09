@@ -15,6 +15,8 @@ struct PlaylistDetailView: View {
     let onBulkShare: (ScoreShareFormat) -> Void
     let onBulkAddToPlaylist: () -> Void
     let onBulkEditTags: () -> Void
+    let onBulkFavorite: () -> Void
+    let allBulkFavorited: Bool
     let onBulkDelete: () -> Void
 
     @State private var editMode: EditMode = .inactive
@@ -70,6 +72,8 @@ struct PlaylistDetailView: View {
                     onShare: onBulkShare,
                     onAddToPlaylist: onBulkAddToPlaylist,
                     onEditTags: onBulkEditTags,
+                    allFavorited: allBulkFavorited,
+                    onFavorite: onBulkFavorite,
                     onDelete: onBulkDelete,
                 )
             }
@@ -160,6 +164,8 @@ private struct PlaylistDetailViewPreviewHost: View {
                 onBulkShare: { _ in },
                 onBulkAddToPlaylist: {},
                 onBulkEditTags: {},
+                onBulkFavorite: {},
+                allBulkFavorited: false,
                 onBulkDelete: {},
             )
         }

@@ -44,6 +44,15 @@ struct PlaylistDetailScreen: View {
             onBulkShare: { format in performBulkShare(format) },
             onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
             onBulkEditTags: { bulkSheet = .editTags },
+            onBulkFavorite: {
+                let ids = selectedIDs
+                let makeFavorite = !allSelectedFavorited
+                Task {
+                    await library.bulkSetFavorite(ids, favorite: makeFavorite)
+                    selectedIDs = []
+                }
+            },
+            allBulkFavorited: allSelectedFavorited,
             onBulkDelete: { bulkDeletePrompt = BulkDeletePrompt(count: selectedIDs.count) },
         )
         .sheet(item: $bulkSheet) { which in
@@ -107,6 +116,11 @@ struct PlaylistDetailScreen: View {
 
     private var selectedItems: [ScoreItem] {
         orderedItems.filter { selectedIDs.contains($0.id) }
+    }
+
+    private var allSelectedFavorited: Bool {
+        let items = selectedItems
+        return !items.isEmpty && items.allSatisfy(\.isFavorite)
     }
 
     private var bulkAvailableShareFormats: [ScoreShareFormat] {

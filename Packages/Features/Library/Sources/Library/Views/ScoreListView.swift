@@ -45,6 +45,8 @@ struct ScoreListView<RowMenu: View>: View {
     let onBulkShare: (ScoreShareFormat) -> Void
     let onBulkAddToPlaylist: () -> Void
     let onBulkEditTags: () -> Void
+    let onBulkFavorite: () -> Void
+    let allSelectedFavorited: Bool
     let onBulkDelete: () -> Void
     @ViewBuilder let rowMenu: (ScoreItem) -> RowMenu
 
@@ -69,6 +71,8 @@ struct ScoreListView<RowMenu: View>: View {
                         onShare: onBulkShare,
                         onAddToPlaylist: onBulkAddToPlaylist,
                         onEditTags: onBulkEditTags,
+                        allFavorited: allSelectedFavorited,
+                        onFavorite: onBulkFavorite,
                         onDelete: onBulkDelete,
                     )
                 }
@@ -277,6 +281,8 @@ private struct ScoreListViewPreviewHost: View {
                 onBulkShare: { _ in },
                 onBulkAddToPlaylist: {},
                 onBulkEditTags: {},
+                onBulkFavorite: {},
+                allSelectedFavorited: false,
                 onBulkDelete: {},
             ) { _ in
                 Button {} label: { L10n.Common.open }

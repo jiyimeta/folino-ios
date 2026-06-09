@@ -8,6 +8,8 @@ struct BulkActionBar: View {
     let onShare: (ScoreShareFormat) -> Void
     let onAddToPlaylist: () -> Void
     let onEditTags: () -> Void
+    let allFavorited: Bool
+    let onFavorite: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -63,6 +65,16 @@ struct BulkActionBar: View {
                 Image(systemName: "tag")
             }
         }
+        Button(action: onFavorite) {
+            Label {
+                let key: LocalizedStringKey = allFavorited
+                    ? "library.score.unfavorite.action"
+                    : "library.score.favorite.action"
+                Text(key, bundle: .module)
+            } icon: {
+                Image(systemName: allFavorited ? "star.slash" : "star")
+            }
+        }
     }
 }
 
@@ -96,6 +108,8 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
                 onShare: { _ in },
                 onAddToPlaylist: {},
                 onEditTags: {},
+                allFavorited: false,
+                onFavorite: {},
                 onDelete: {},
             )
         }
@@ -110,6 +124,8 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
         onShare: { _ in },
         onAddToPlaylist: {},
         onEditTags: {},
+        allFavorited: false,
+        onFavorite: {},
         onDelete: {},
     )
 }

@@ -66,6 +66,15 @@ struct ScoreListScreen: View {
             onBulkShare: { format in performBulkShare(format) },
             onBulkAddToPlaylist: { bulkSheet = .addToPlaylist },
             onBulkEditTags: { bulkSheet = .editTags },
+            onBulkFavorite: {
+                let ids = selectedIDs
+                let makeFavorite = !allSelectedFavorited
+                Task {
+                    await library.bulkSetFavorite(ids, favorite: makeFavorite)
+                    exitSelectionMode()
+                }
+            },
+            allSelectedFavorited: allSelectedFavorited,
             onBulkDelete: {
                 let ids = selectedIDs
                 Task {
@@ -103,6 +112,11 @@ struct ScoreListScreen: View {
 
     private var selectedItems: [ScoreItem] {
         viewModel.displayedItems.filter { selectedIDs.contains($0.id) }
+    }
+
+    private var allSelectedFavorited: Bool {
+        let items = selectedItems
+        return !items.isEmpty && items.allSatisfy(\.isFavorite)
     }
 
     private var bulkAvailableShareFormats: [ScoreShareFormat] {
