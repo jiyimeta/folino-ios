@@ -438,7 +438,7 @@ private const val A4_WIDTH_MM = 210.0
  * taller than the viewport) via the shared Domain math over JNI.
  */
 @Composable
-private fun HorizontalScore(
+internal fun HorizontalScore(
     state: ReaderState.Ready,
     scoreHandle: Long?,
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
