@@ -18,12 +18,12 @@ public final class MuseScoreGeneralAndroidStore {
     // swiftlint:disable:next line_length
     @ObservationIgnored private let remoteURL = "https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/unsplit/MuseScore_General.sf2"
 
-    public var stateWire: SoundfontStateWire = .init(statusRaw: "idle", progress: 0, failureReason: "")
+    public var stateWire: SoundfontStateWire = .init(statusRaw: "idle", progress: 0, failureReason: "", isOptedIn: true)
     public var isOptedIn = true
     public var presetRaw: String = SoundfontPreset.lightweight.rawValue
 
     @ObservationIgnored private var downloadState: SoundfontDownloadState = .idle {
-        didSet { stateWire = Self.wire(downloadState); recomputePreset() }
+        didSet { refreshStateWire(); recomputePreset() }
     }
 
     public init(downloader: SoundfontDownloader, reachability: SoundfontReachability, prefs: SoundfontPrefsStore) {
@@ -56,13 +56,18 @@ public final class MuseScoreGeneralAndroidStore {
         presetRaw = SoundfontDownloadReducer.preset(isOptedIn: isOptedIn, isDownloaded: isDownloaded).rawValue
     }
 
-    private static func wire(_ state: SoundfontDownloadState) -> SoundfontStateWire {
+    private static func wire(_ state: SoundfontDownloadState, isOptedIn: Bool) -> SoundfontStateWire {
         switch state {
-        case .idle: .init(statusRaw: "idle", progress: 0, failureReason: "")
-        case let .downloading(progress): .init(statusRaw: "downloading", progress: progress, failureReason: "")
-        case .downloaded: .init(statusRaw: "downloaded", progress: 0, failureReason: "")
-        case let .failed(reason): .init(statusRaw: "failed", progress: 0, failureReason: reason)
+        case .idle: .init(statusRaw: "idle", progress: 0, failureReason: "", isOptedIn: isOptedIn)
+        case let .downloading(progress):
+            .init(statusRaw: "downloading", progress: progress, failureReason: "", isOptedIn: isOptedIn)
+        case .downloaded: .init(statusRaw: "downloaded", progress: 0, failureReason: "", isOptedIn: isOptedIn)
+        case let .failed(reason): .init(statusRaw: "failed", progress: 0, failureReason: reason, isOptedIn: isOptedIn)
         }
+    }
+
+    private func refreshStateWire() {
+        stateWire = Self.wire(downloadState, isOptedIn: isOptedIn)
     }
 
     // MARK: - Commands (Kotlin -> Swift)
@@ -72,6 +77,7 @@ public final class MuseScoreGeneralAndroidStore {
         prefs.saveOptedIn(value: value)
         isOptedIn = value
         recomputePreset()
+        refreshStateWire()
         if value {
             startDownloadIfNeeded()
         } else {
