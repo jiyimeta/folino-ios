@@ -26,11 +26,13 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -510,12 +512,23 @@ private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
+    // FABs have no `enabled` param, so we dim their colors when not prepared to mirror
+    // [TransportBar]'s `enabled = isPrepared` affordance (Material disabled-color convention).
+    val fabContainerColor =
+        if (isPrepared) FloatingActionButtonDefaults.containerColor
+        else MaterialTheme.colorScheme.surfaceVariant
+    val fabContentColor =
+        if (isPrepared) contentColorFor(FloatingActionButtonDefaults.containerColor)
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SmallFloatingActionButton(
             onClick = { if (isPrepared) engine?.seek(0.0) },
+            containerColor = fabContainerColor,
+            contentColor = fabContentColor,
         ) {
             Icon(Icons.Default.SkipPrevious, contentDescription = "Jump to start")
         }
@@ -525,6 +538,8 @@ private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
                     if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
                 }
             },
+            containerColor = fabContainerColor,
+            contentColor = fabContentColor,
         ) {
             if (playback == PlaybackState.PLAYING) {
                 Icon(Icons.Default.Pause, contentDescription = "Pause")
