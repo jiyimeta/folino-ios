@@ -67,6 +67,22 @@ public final class LibraryViewModel {
         await save(updated)
     }
 
+    func bulkSetFavorite(_ ids: Set<ScoreItemID>, favorite: Bool) async {
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            guard let item = repository.scoreItems.first(where: { $0.id == id }) else { continue }
+            guard item.isFavorite != favorite else { continue }
+            var updated = item
+            updated.isFavorite = favorite
+            do {
+                try await repository.saveScoreItem(updated)
+            } catch {
+                currentError = error
+                return
+            }
+        }
+    }
+
     /// Read the on-disk file's source + credit metaTags. Errors collapse to nil so a transient parse failure simply
     /// leaves the source label / pre-fill empty instead of blocking editing.
     public func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata? {

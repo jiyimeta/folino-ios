@@ -209,4 +209,42 @@ struct LibraryViewModelBulkTests {
 
         #expect(f.repo.savedScoreItems.isEmpty)
     }
+
+    // MARK: - bulkSetFavorite
+
+    @Test func `bulk set favorite true marks all selected`() async {
+        let a = Self.makeItem(title: "A")
+        let b = Self.makeItem(title: "B")
+        let f = Self.makeVM(scoreItems: [a, b])
+
+        await f.vm.bulkSetFavorite([a.id, b.id], favorite: true)
+
+        #expect(f.repo.scoreItems.first { $0.id == a.id }?.isFavorite == true)
+        #expect(f.repo.scoreItems.first { $0.id == b.id }?.isFavorite == true)
+    }
+
+    @Test func `bulk set favorite false clears all selected`() async {
+        var a = Self.makeItem(title: "A"); a.isFavorite = true
+        var b = Self.makeItem(title: "B"); b.isFavorite = true
+        let f = Self.makeVM(scoreItems: [a, b])
+
+        await f.vm.bulkSetFavorite([a.id, b.id], favorite: false)
+
+        #expect(f.repo.scoreItems.allSatisfy { $0.isFavorite == false })
+    }
+
+    @Test func `bulk set favorite skips items already in the target state`() async {
+        var a = Self.makeItem(title: "A"); a.isFavorite = true
+        let f = Self.makeVM(scoreItems: [a])
+
+        await f.vm.bulkSetFavorite([a.id], favorite: true)
+
+        #expect(f.repo.savedScoreItems.isEmpty) // no write — already favorited
+    }
+
+    @Test func `bulk set favorite empty is no op`() async {
+        let f = Self.makeVM(scoreItems: [Self.makeItem(title: "A")])
+        await f.vm.bulkSetFavorite([], favorite: true)
+        #expect(f.repo.savedScoreItems.isEmpty)
+    }
 }
