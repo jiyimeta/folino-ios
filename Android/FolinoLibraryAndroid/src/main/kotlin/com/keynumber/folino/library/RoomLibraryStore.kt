@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
 
 /** Room row — 1:1 with the Swift `ScoreRecordWire`. */
@@ -20,6 +22,9 @@ data class ScoreRecordEntity(
     val title: String,
     val subtitle: String,
     val composer: String,
+    val arranger: String? = null,
+    val lyricist: String? = null,
+    val copyright: String? = null,
     @ColumnInfo(name = "local_file_name") val localFileName: String,
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
@@ -145,13 +150,21 @@ interface TagDao {
         TagEntity::class,
         TagItemEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun dao(): ScoreRecordDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun tagDao(): TagDao
+}
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE score_records ADD COLUMN arranger TEXT")
+        db.execSQL("ALTER TABLE score_records ADD COLUMN lyricist TEXT")
+        db.execSQL("ALTER TABLE score_records ADD COLUMN copyright TEXT")
+    }
 }
 
 /**
@@ -171,7 +184,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
         context.applicationContext,
         LibraryDatabase::class.java,
         "folino-library.db",
-    ).allowMainThreadQueries().fallbackToDestructiveMigration().build()
+    ).allowMainThreadQueries().addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration().build()
 
     private val dao = db.dao()
     private val playlistDao = db.playlistDao()
@@ -184,7 +197,18 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {
-            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt, it.isFavorite)
+            ScoreRecordWire(
+                id = it.id,
+                title = it.title,
+                subtitle = it.subtitle,
+                composer = it.composer,
+                arranger = it.arranger,
+                lyricist = it.lyricist,
+                copyright = it.copyright,
+                localFileName = it.localFileName,
+                deletedAt = it.deletedAt,
+                isFavorite = it.isFavorite,
+            )
         }
 
     override fun upsert(record: ScoreRecordWire) {
@@ -194,6 +218,9 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 title = record.title,
                 subtitle = record.subtitle,
                 composer = record.composer,
+                arranger = record.arranger,
+                lyricist = record.lyricist,
+                copyright = record.copyright,
                 localFileName = record.localFileName,
                 deletedAt = record.deletedAt,
                 isFavorite = record.isFavorite,
