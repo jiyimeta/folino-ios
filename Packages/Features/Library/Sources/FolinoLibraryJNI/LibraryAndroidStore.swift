@@ -44,6 +44,10 @@ public final class LibraryAndroidStore {
     public var deletedScores: [ScoreRowWire] = []
     public var favorites: [ScoreRowWire] = []
 
+    public var recentToday: [ScoreRowWire] = []
+    public var recentThisWeek: [ScoreRowWire] = []
+    public var recentEarlier: [ScoreRowWire] = []
+
     public var playlists: [PlaylistRowWire] = []
     public var selectedPlaylistItems: [ScoreRowWire] = []
     public var addSheetPlaylists: [PlaylistPickWire] = []
@@ -114,6 +118,20 @@ public final class LibraryAndroidStore {
     @WireletExpose
     public func restore(_ id: String) {
         setDeletedAt(id, 0)
+    }
+
+    /// Stamp `lastOpenedAt = now` for `id` and rebuild the displayed lists. Called from the Android navigation
+    /// layer the moment a score is opened (iOS parity: ReaderViewModel.updateLastOpenedAtOnce). Once per open by
+    /// construction — the caller fires it once per navigation. Unknown id is a no-op.
+    @WireletExpose
+    public func markOpened(_ id: String) {
+        var all = store.loadAll()
+        guard let idx = all.firstIndex(where: { $0.id == id }) else { return }
+        all[idx].lastOpenedAt = Date().timeIntervalSince1970
+        store.upsert(all[idx])
+        reload(using: all)
+        reloadPlaylists()
+        reloadTags()
     }
 
     /// Mark a score as a favorite (iOS parity: flips `ScoreItem.isFavorite`).
@@ -245,6 +263,31 @@ public final class LibraryAndroidStore {
             .filter { $0.deletedAt > 0 }
             .sorted { $0.deletedAt > $1.deletedAt }
             .map(Self.row)
+        reloadRecents(from: all)
+    }
+
+    /// Live, opened records (deletedAt <= 0 && lastOpenedAt > 0), newest first, classified into the three
+    /// recency buckets via the shared Domain classifier. Mirrors iOS recency grouping; uses the device's clock.
+    private func reloadRecents(from records: [ScoreRecordWire]) {
+        let calendar = Calendar.current
+        let now = Date()
+        let opened = records
+            .filter { $0.deletedAt <= 0 && $0.lastOpenedAt > 0 }
+            .sorted { $0.lastOpenedAt > $1.lastOpenedAt }
+        var today: [ScoreRowWire] = []
+        var week: [ScoreRowWire] = []
+        var earlier: [ScoreRowWire] = []
+        for record in opened {
+            let date = Date(timeIntervalSince1970: record.lastOpenedAt)
+            switch RecencyBucket.classify(date, now: now, calendar: calendar) {
+            case .today: today.append(Self.row(record))
+            case .thisWeek: week.append(Self.row(record))
+            case .earlier: earlier.append(Self.row(record))
+            }
+        }
+        recentToday = today
+        recentThisWeek = week
+        recentEarlier = earlier
     }
 
     private static func row(_ record: ScoreRecordWire) -> ScoreRowWire {
@@ -376,6 +419,20 @@ public final class LibraryAndroidStore {
         UUID(uuidString: raw).map(ScoreItemID.init(rawValue:))
     }
 
+    /// Project live records into the minimal `[ScoreOpenInfo]` the recently-used sort helpers consume.
+    private func loadScoreOpenInfo(_ records: [ScoreRecordWire]) -> [ScoreOpenInfo] {
+        var tagsByScore: [String: Set<TagID>] = [:]
+        for item in store.loadTagItems() {
+            guard let uuid = UUID(uuidString: item.tagId) else { continue }
+            tagsByScore[item.scoreItemId, default: []].insert(TagID(rawValue: uuid))
+        }
+        return records.compactMap { record in
+            guard let sid = scoreItemID(record.id) else { return nil }
+            let opened = record.lastOpenedAt > 0 ? Date(timeIntervalSince1970: record.lastOpenedAt) : nil
+            return ScoreOpenInfo(id: sid, lastOpenedAt: opened, tagIDs: tagsByScore[record.id] ?? [])
+        }
+    }
+
     /// Set of live (`deletedAt <= 0`) score IDs, for membership projection.
     private func liveScoreIDs(_ records: [ScoreRecordWire]) -> Set<ScoreItemID> {
         Set(records.filter { $0.deletedAt <= 0 }.compactMap { scoreItemID($0.id) })
@@ -425,9 +482,10 @@ public final class LibraryAndroidStore {
         let domain = loadDomainPlaylists()
         let records = store.loadAll()
         let liveIDs = liveScoreIDs(records)
+        let openInfo = loadScoreOpenInfo(records)
 
-        playlists = domain
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        // Recently-used order (reorder, not top-N): limit == count keeps every playlist.
+        playlists = playlistsByRecentlyUsed(domain, openInfo: openInfo, limit: domain.count)
             .map {
                 PlaylistRowWire(
                     id: $0.id.rawValue.uuidString,
@@ -577,12 +635,20 @@ public final class LibraryAndroidStore {
         let tagRecords = store.loadTags()
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
 
-        tags = tagRecords.map { rec in
-            let members = membership[rec.id] ?? []
+        // Recently-used order for the main tags list (reorder, not top-N): limit == count keeps every tag.
+        // Domain tag identity is keyed by UUID, so we round-trip through `Tag` and map the result back to the
+        // backend records via the id string. The edit sheet (`refreshEditSheet`) stays alphabetical.
+        let openInfo = loadScoreOpenInfo(records)
+        let domainTags = tagRecords.map {
+            Tag(id: TagID(rawValue: UUID(uuidString: $0.id) ?? UUID()), name: $0.name, colorHex: $0.colorHex)
+        }
+        tags = tagsByRecentlyUsed(domainTags, openInfo: openInfo, limit: domainTags.count).map { tag in
+            let id = tag.id.rawValue.uuidString
+            let members = membership[id] ?? []
             return TagRowWire(
-                id: rec.id,
-                name: rec.name,
-                colorHex: rec.colorHex,
+                id: id,
+                name: tag.name,
+                colorHex: tag.colorHex,
                 memberCount: Int32(members.intersection(live).count),
             )
         }
