@@ -43,27 +43,27 @@ selection mode.
 - `Packages/Infrastructure/Sources/Persistence/Records/ScoreItemRecord.swift`
   already maps it to the `is_favorite` column (created in GRDB migration v1).
 
-### Android — Room v3 → v4
+### Android — collapse to a fresh v1 schema (pre-release)
+
+Android has not shipped its first release, so we are free to destroy existing
+(dev-only) databases and we do **not** want to carry migration history. Rather
+than adding a `MIGRATION_3_4`, collapse the whole schema back to a single v1:
 
 - Add `@ColumnInfo("is_favorite") val isFavorite: Boolean` (default `false`)
   to `ScoreRecordEntity` in
   `Android/FolinoLibraryAndroid/src/main/kotlin/com/keynumber/folino/library/RoomLibraryStore.kt`.
-- New migration following the Tags `MIGRATION_2_3` precedent:
-
-  ```kotlin
-  val MIGRATION_3_4 = object : Migration(3, 4) {
-      override fun migrate(db: SupportSQLiteDatabase) {
-          db.execSQL(
-              "ALTER TABLE `score_records` ADD COLUMN `is_favorite` INTEGER NOT NULL DEFAULT 0"
-          )
-      }
-  }
-  ```
-
-- Bump `@Database(..., version = 4)` and register `MIGRATION_3_4` in
-  `.addMigrations(...)`.
-- Existing rows migrate with `is_favorite = 0` (not favorited), preserving all
-  data.
+- **Reset `@Database(..., version = 1)`.** The v1 schema is whatever Room
+  derives from the current entity set — which already includes playlists,
+  playlist_items, tags, tag_items, and now `score_records.is_favorite`. There
+  is no separate hand-written CREATE for the new column; the entity defines it.
+- **Delete the migration objects** `MIGRATION_1_2` and `MIGRATION_2_3` and
+  remove the `.addMigrations(...)` call entirely. No `MIGRATION_3_4` is added.
+- **Add `.fallbackToDestructiveMigration()`** so any existing dev install
+  (currently at DB version 3) is wiped and rebuilt at v1 cleanly instead of
+  crashing on the version downgrade. This is acceptable precisely because the
+  app is pre-release.
+- iOS persistence is untouched — this collapse is Android-Room-only and does
+  not affect the iOS GRDB schema or its migration history.
 
 ## Shared logic & wirelet bridge
 
@@ -155,8 +155,10 @@ list call, so the two platforms cannot drift. (iOS already filters with
 ## Testing
 
 - **Android store**: `setFavorite` single + bulk persists; favorites filter
-  returns only favorited scores; **v3→v4 migration preserves existing rows**
-  with `is_favorite = 0`.
+  returns only favorited scores; a freshly created v1 DB has the
+  `is_favorite` column and defaults new scores to not-favorited. (No migration
+  test — there is no migration to test; destructive fallback wipes any older
+  dev DB.)
 - **iOS**: bulk favorite over a selection toggles all selected scores using the
   all-favorited → remove / otherwise → add rule; the shared filter returns the
   expected set.
@@ -164,10 +166,11 @@ list call, so the two platforms cannot drift. (iOS already filters with
 
 ## Verification
 
-- **Android** (per project rule): build, install on Pixel, launch, and verify
-  the v3→v4 migration on a device that has existing (pre-favorites) data;
-  exercise star toggle, drawer entry, FavoritesListScreen, and CAB bulk
-  favorite.
+- **Android** (per project rule): build, install on Pixel, launch. Because the
+  DB is reset to v1 with destructive fallback, an existing dev install is wiped
+  on first launch — confirm the app starts cleanly with an empty/rebuilt
+  library rather than crashing. Then exercise star toggle, drawer entry,
+  FavoritesListScreen, and CAB bulk favorite.
 - **iOS**: build the `Library` package scheme and the app; confirm the new
   bulk-favorite action. Manual run is left to the user per the iOS no-launch
   rule.
@@ -183,7 +186,7 @@ list call, so the two platforms cannot drift. (iOS already filters with
 - iOS selection-mode toolbar (Library Screens) — bulk favorite action + strings
 
 **Android**
-- `Android/FolinoLibraryAndroid/.../library/RoomLibraryStore.kt` — entity column, `MIGRATION_3_4`, version bump
+- `Android/FolinoLibraryAndroid/.../library/RoomLibraryStore.kt` — entity column, reset to `version = 1`, delete `MIGRATION_1_2`/`MIGRATION_2_3` + `.addMigrations(...)`, add `.fallbackToDestructiveMigration()`
 - `Android/app/.../MainActivity.kt` — drawer entry + `favorites` route + `drawerCapable`
 - `Android/app/.../ui/library/FavoritesListScreen.kt` — new
 - `Android/app/.../ui/library/LibraryScreen.kt` — row star toggle, overflow item, CAB favorite action
