@@ -22,6 +22,7 @@ data class ScoreRecordEntity(
     val composer: String,
     @ColumnInfo(name = "local_file_name") val localFileName: String,
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
+    @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
 )
 
 @Dao
@@ -144,43 +145,13 @@ interface TagDao {
         TagEntity::class,
         TagItemEntity::class,
     ],
-    version = 3,
+    version = 1,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun dao(): ScoreRecordDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun tagDao(): TagDao
-}
-
-val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
-    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS `playlists` " +
-                "(`id` TEXT NOT NULL, `name` TEXT NOT NULL, `created_at` REAL NOT NULL, PRIMARY KEY(`id`))",
-        )
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS `playlist_items` " +
-                "(`playlist_id` TEXT NOT NULL, `score_item_id` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
-                "PRIMARY KEY(`playlist_id`, `score_item_id`))",
-        )
-    }
-}
-
-val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
-    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS `tags` " +
-                "(`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_hex` TEXT NOT NULL, PRIMARY KEY(`id`))",
-        )
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS `tag_items` " +
-                "(`tag_id` TEXT NOT NULL, `score_item_id` TEXT NOT NULL, " +
-                "PRIMARY KEY(`tag_id`, `score_item_id`))",
-        )
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_tag_items_tag_id` ON `tag_items` (`tag_id`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_tag_items_score_item_id` ON `tag_items` (`score_item_id`)")
-    }
 }
 
 /**
@@ -200,7 +171,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
         context.applicationContext,
         LibraryDatabase::class.java,
         "folino-library.db",
-    ).allowMainThreadQueries().addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+    ).allowMainThreadQueries().fallbackToDestructiveMigration().build()
 
     private val dao = db.dao()
     private val playlistDao = db.playlistDao()
@@ -213,7 +184,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {
-            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt)
+            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt, it.isFavorite)
         }
 
     override fun upsert(record: ScoreRecordWire) {
@@ -225,6 +196,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 composer = record.composer,
                 localFileName = record.localFileName,
                 deletedAt = record.deletedAt,
+                isFavorite = record.isFavorite,
             ),
         )
     }
