@@ -45,8 +45,8 @@ public protocol SharedImportFileImporting: Sendable {
 public protocol SharedImportPlaylistTargeting: Sendable {
     func playlistExists(id: String) -> Bool
     /// Create a playlist; return its new id, or `nil` if creation failed.
-    func createPlaylist(name: String) -> String?
-    func append(scoreIDs: [String], toPlaylistID id: String)
+    func createPlaylist(name: String) async -> String?
+    func append(scoreIDs: [String], toPlaylistID id: String) async
 }
 
 /// Aggregated outcome (platform-neutral, UUID strings). Each platform maps this to its own richer result if needed.
@@ -105,7 +105,7 @@ public struct SharedImportCoordinator: Sendable {
             // resolves to .none). The Android share UI also disables Save while the name field is blank.
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
-                if let newID = target.createPlaylist(name: trimmed) {
+                if let newID = await target.createPlaylist(name: trimmed) {
                     targetPlaylistID = newID
                     result.createdPlaylistID = newID
                 } else {
@@ -137,7 +137,7 @@ public struct SharedImportCoordinator: Sendable {
 
         // 3. Append to playlist (imported-only; duplicates stay in the library and are not re-added to the playlist).
         if let pid = targetPlaylistID {
-            if !result.importedIDs.isEmpty { target.append(scoreIDs: result.importedIDs, toPlaylistID: pid) }
+            if !result.importedIDs.isEmpty { await target.append(scoreIDs: result.importedIDs, toPlaylistID: pid) }
             result.targetPlaylistID = pid
         }
 
