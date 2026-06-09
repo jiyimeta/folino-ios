@@ -45,6 +45,10 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // Soundfont download bridge: the reader playback service prefers the downloaded high-quality SF2
+    // and hot-swaps the engine onto it via SoundfontController + the generated store view model.
+    implementation(project(":FolinoSoundfontAndroid"))
+
     // Runtime support for the swift-java-generated bindings under java-generated/
     // (FolinoReaderJNI → shared Domain scroll-follow logic). Locally published to
     // mavenLocal from Packages/Features/Settings/.build/checkouts/swift-java.

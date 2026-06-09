@@ -42,8 +42,15 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             val local = binder as ReaderPlaybackService.LocalBinder
             serviceBinder = local
             _engine.value = local.engine
+            // A soundfont hot-swap re-prepares the engine and resets these session-only prefs (the engine
+            // can't report them back), so re-push them after the swap rebuilds the synth.
+            local.setOnSoundfontReloaded {
+                local.engine.setMasterVolume(_masterVolume.value)
+                local.engine.setMetronomeEnabled(_metronomeEnabled.value)
+            }
         }
         override fun onServiceDisconnected(name: ComponentName) {
+            serviceBinder?.setOnSoundfontReloaded(null)
             serviceBinder = null
             _engine.value = null
         }
@@ -169,6 +176,9 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             e.setMasterTuning(cents)
             try {
                 e.prepare(scoreHandle)
+                // Record the handle so the service can re-prepare (hot-swap) the engine when a
+                // high-quality soundfont download completes.
+                serviceBinder?.notePreparedScore(scoreHandle)
             } catch (ex: Exception) {
                 android.util.Log.e("ReaderAudioVM", "prepare failed: ${ex.message}", ex)
             }
