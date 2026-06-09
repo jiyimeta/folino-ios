@@ -8,6 +8,12 @@ import Testing
 struct ReaderAdvanceTests {
     private let defaults = UserDefaults.standard
 
+    /// The repeat mode is now global / sticky, so clear it before each test (the suite is `.serialized`) — otherwise a
+    /// test that sets `.loopAll` would block advance in the next test.
+    init() {
+        defaults.removeObject(forKey: ReaderGlobalSettingsKey.repeatMode)
+    }
+
     /// Clears the playlist-continuation key so each test starts from the default `.playThrough` and
     /// leaves no residue in global `UserDefaults` for sibling tests.
     private func resetContinuation() {

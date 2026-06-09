@@ -14,6 +14,10 @@ import Wirelet
 /// `contentHash` is the lowercase SHA-256 hex digest of the score's source bytes at
 /// import time, used for duplicate detection on re-import. `""` when unknown
 /// (e.g. legacy rows that pre-date hash recording).
+///
+/// `lastOpenedAt` mirrors the iOS `ScoreItem.lastOpenedAt: Date?`: it is the
+/// Unix time at which the score was last opened in the Reader, or `0` when the
+/// score has never been opened. Same `0`-sentinel convention as `deletedAt`.
 @WireFormat
 public struct ScoreRecordWire: Equatable, Sendable {
     public var id: String
@@ -23,6 +27,7 @@ public struct ScoreRecordWire: Equatable, Sendable {
     public var localFileName: String // "<id>.mscz" — built in Swift, iOS naming convention
     public var contentHash: String // SHA-256 hex of source bytes; "" for legacy rows
     public var deletedAt: Double // 0 == live; >0 == soft-deleted at that Unix time
+    public var lastOpenedAt: Double // 0 == never opened; >0 == Unix time of last open
     public var isFavorite: Bool // mirrors iOS ScoreItem.isFavorite
 
     public init(
@@ -33,6 +38,7 @@ public struct ScoreRecordWire: Equatable, Sendable {
         localFileName: String,
         contentHash: String = "",
         deletedAt: Double,
+        lastOpenedAt: Double,
         isFavorite: Bool = false,
     ) {
         self.id = id
@@ -42,6 +48,7 @@ public struct ScoreRecordWire: Equatable, Sendable {
         self.localFileName = localFileName
         self.contentHash = contentHash
         self.deletedAt = deletedAt
+        self.lastOpenedAt = lastOpenedAt
         self.isFavorite = isFavorite
     }
 }

@@ -23,6 +23,7 @@ data class ScoreRecordEntity(
     @ColumnInfo(name = "local_file_name") val localFileName: String,
     @ColumnInfo(name = "content_hash") val contentHash: String = "",
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
+    @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Double = 0.0, // 0 == never opened
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
 )
 
@@ -146,7 +147,10 @@ interface TagDao {
         TagEntity::class,
         TagItemEntity::class,
     ],
-    version = 2,
+    // Pre-release: schema is collapsed to a single canonical v1 (no migration
+    // history). Schema changes destructively reset via fallbackToDestructiveMigration
+    // (+ ...OnDowngrade for dev devices that ran a throwaway higher version).
+    version = 1,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -172,7 +176,10 @@ class RoomLibraryStore(context: Context) : LibraryStore {
         context.applicationContext,
         LibraryDatabase::class.java,
         "folino-library.db",
-    ).allowMainThreadQueries().fallbackToDestructiveMigration().build()
+    ).allowMainThreadQueries()
+        .fallbackToDestructiveMigration()
+        .fallbackToDestructiveMigrationOnDowngrade()
+        .build()
 
     private val dao = db.dao()
     private val playlistDao = db.playlistDao()
@@ -193,6 +200,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 localFileName = it.localFileName,
                 contentHash = it.contentHash,
                 deletedAt = it.deletedAt,
+                lastOpenedAt = it.lastOpenedAt,
                 isFavorite = it.isFavorite,
             )
         }
@@ -207,6 +215,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 localFileName = record.localFileName,
                 contentHash = record.contentHash,
                 deletedAt = record.deletedAt,
+                lastOpenedAt = record.lastOpenedAt,
                 isFavorite = record.isFavorite,
             ),
         )

@@ -52,6 +52,12 @@ public enum ReaderGlobalSettingsKey {
     /// `@AppStorage` site. Has no effect when the Reader was opened standalone or when a per-score repeat is active.
     public static let playlistContinuationMode = "readerPlaylistContinuationMode"
 
+    /// `RepeatMode.rawValue` (String). Global, sticky — one repeat mode shared by every score (mirrors how
+    /// `playlistContinuationMode` works). Defaults to `RepeatMode.off`. Only the *mode* is global; the A–B loop's
+    /// actual measure endpoints stay per-score in `ReaderPreferences.abRepeat`. Edited from both the Reader playback
+    /// inspector and Settings.
+    public static let repeatMode = "readerRepeatMode"
+
     /// Double. Global A4 reference frequency in Hz, applied to all scores unless a per-score override is set in
     /// `ReaderPreferences.a4ReferenceHz`. Clamped to `[A4Reference.minHz, A4Reference.maxHz]`. Defaults to
     /// `A4Reference.standardHz` (440 Hz) when absent. Key used by both `@AppStorage` (Settings UI, future) and

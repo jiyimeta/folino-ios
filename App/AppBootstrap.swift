@@ -91,6 +91,8 @@ final class AppBootstrap {
             Task { [weak self] in
                 do {
                     try await repository.refresh()
+                    // One-shot: carry the last-opened score's (formerly per-score) repeat mode into the new global key.
+                    await self?.migrateRepeatModeFromLastOpenedScoreIfNeeded(repository)
                     // Best-effort purge of trash items past the 30-day retention window. Failures don't block
                     // readiness.
                     try? await repository.pruneScoreItemsDeleted(
@@ -158,6 +160,26 @@ final class AppBootstrap {
     }
 
     private static let legacySoundfontCacheCleanupDidRunKey = "soundfont.legacyCacheCleanupDidRun"
+
+    /// One-shot migration of the repeat mode from per-score to global. The repeat mode used to be stored per-score in
+    /// `ReaderPreferences`; it is now a single sticky value in `UserDefaults`. On the first launch after that change we
+    /// seed the global value from the most-recently-opened score so the user's last repeat choice carries over instead
+    /// of silently resetting to off. Gated on the global key being absent, so it runs exactly once and never clobbers a
+    /// value the user has since changed.
+    private func migrateRepeatModeFromLastOpenedScoreIfNeeded(_ repository: LiveScoreLibraryRepository) async {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: ReaderGlobalSettingsKey.repeatMode) == nil else { return }
+        let lastOpened = repository.scoreItems
+            .filter { $0.lastOpenedAt != nil }
+            .max { ($0.lastOpenedAt ?? .distantPast) < ($1.lastOpenedAt ?? .distantPast) }
+        // Default to `.off` for a fresh install (no history) or if the score's preferences can't be read — writing the
+        // key either way marks the migration done so it doesn't re-check on every launch.
+        var mode = RepeatMode.off
+        if let lastOpened, let prefs = try? await repository.loadReaderPreferences(for: lastOpened.id) {
+            mode = prefs.repeatMode
+        }
+        defaults.set(mode.rawValue, forKey: ReaderGlobalSettingsKey.repeatMode)
+    }
 
     private func prepareDirectories() throws {
         try FileManager.default.createDirectory(
