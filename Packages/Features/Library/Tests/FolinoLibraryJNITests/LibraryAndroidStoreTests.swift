@@ -635,4 +635,79 @@ struct LibraryAndroidStoreTests {
         #expect(store.tags.map(\.name) == ["T"]) // tag row survives the purge
         #expect(store.tags.first?.memberCount == 0) // purged member drops from the count
     }
+
+    // MARK: - Favorites
+
+    @Test func `favorite sets the flag, surfaces it on the row, and lists it under favorites`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz", deletedAt: 0),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        #expect(store.favorites.isEmpty)
+        #expect(store.scores.first?.isFavorite == false)
+
+        store.favorite("a")
+
+        #expect(store.scores.first?.isFavorite == true)
+        #expect(store.favorites.map(\.id) == ["a"])
+        #expect(backend.records.first?.isFavorite == true)
+    }
+
+    @Test func `unfavorite clears the flag and removes it from favorites`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(
+                id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz",
+                deletedAt: 0, isFavorite: true,
+            ),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        #expect(store.favorites.map(\.id) == ["a"])
+
+        store.unfavorite("a")
+
+        #expect(store.favorites.isEmpty)
+        #expect(store.scores.first?.isFavorite == false)
+        #expect(backend.records.first?.isFavorite == false)
+    }
+
+    @Test func `favorites excludes soft-deleted scores`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(
+                id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz",
+                deletedAt: 0, isFavorite: true,
+            ),
+            ScoreRecordWire(
+                id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz",
+                deletedAt: 999, isFavorite: true,
+            ),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        // Only the live favorite shows.
+        #expect(store.favorites.map(\.id) == ["a"])
+    }
+
+    @Test func `favoriteMany favorites all; unfavoriteMany clears all`() {
+        let backend = FakeLibraryStore()
+        backend.records = ["a", "b", "c"].map {
+            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+        }
+        let store = LibraryAndroidStore(store: backend)
+
+        store.favoriteMany(["a", "c"])
+        #expect(Set(store.favorites.map(\.id)) == ["a", "c"])
+
+        store.unfavoriteMany(["a", "c"])
+        #expect(store.favorites.isEmpty)
+    }
+
+    @Test func `favorite unknown id is a no-op`() {
+        let backend = FakeLibraryStore()
+        let store = LibraryAndroidStore(store: backend)
+        store.favorite("nope")
+        #expect(store.favorites.isEmpty)
+        #expect(backend.records.isEmpty)
+    }
 }

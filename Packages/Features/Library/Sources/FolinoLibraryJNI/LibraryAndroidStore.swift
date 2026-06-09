@@ -42,6 +42,7 @@ public final class LibraryAndroidStore {
     @ObservationIgnored private let audioExporter: ScoreAudioFileExporter
     public var scores: [ScoreRowWire] = []
     public var deletedScores: [ScoreRowWire] = []
+    public var favorites: [ScoreRowWire] = []
 
     public var playlists: [PlaylistRowWire] = []
     public var selectedPlaylistItems: [ScoreRowWire] = []
@@ -114,12 +115,62 @@ public final class LibraryAndroidStore {
         setDeletedAt(id, 0)
     }
 
+    /// Mark a score as a favorite (iOS parity: flips `ScoreItem.isFavorite`).
+    @WireletExpose
+    public func favorite(_ id: String) {
+        setFavorite(id, true)
+    }
+
+    /// Clear a score's favorite flag.
+    @WireletExpose
+    public func unfavorite(_ id: String) {
+        setFavorite(id, false)
+    }
+
+    /// Bulk favorite (All Scores CAB). No-op for ids already favorited.
+    @WireletExpose
+    public func favoriteMany(_ ids: [String]) {
+        setFavoriteMany(ids, true)
+    }
+
+    /// Bulk unfavorite (All Scores CAB).
+    @WireletExpose
+    public func unfavoriteMany(_ ids: [String]) {
+        setFavoriteMany(ids, false)
+    }
+
+    private func setFavorite(_ id: String, _ value: Bool) {
+        var all = store.loadAll()
+        guard let idx = all.firstIndex(where: { $0.id == id }), all[idx].isFavorite != value else { return }
+        all[idx].isFavorite = value
+        store.upsert(all[idx])
+        reload(using: all)
+        reloadPlaylists()
+        reloadTags()
+    }
+
+    private func setFavoriteMany(_ ids: [String], _ value: Bool) {
+        let idSet = Set(ids)
+        var all = store.loadAll()
+        var changed = false
+        for idx in all.indices where idSet.contains(all[idx].id) && all[idx].isFavorite != value {
+            all[idx].isFavorite = value
+            store.upsert(all[idx])
+            changed = true
+        }
+        guard changed else { return }
+        reload(using: all)
+        reloadPlaylists()
+        reloadTags()
+    }
+
     /// Set the search query and recompute the three displayed score lists from
     /// their unfiltered backings. iOS parity: empty query shows everything.
     @WireletExpose
     public func setSearchQuery(_ query: String) {
         searchQuery = query
         scores = searchFiltered(allScoreRows)
+        favorites = searchFiltered(allScoreRows.filter(\.isFavorite))
         selectedPlaylistItems = searchFiltered(selectedPlaylistRows)
         selectedTagItems = searchFiltered(selectedTagRows)
     }
@@ -189,6 +240,7 @@ public final class LibraryAndroidStore {
             .filter { $0.deletedAt <= 0 }
             .map(Self.row)
         scores = searchFiltered(allScoreRows)
+        favorites = searchFiltered(allScoreRows.filter(\.isFavorite))
         // Recently Deleted: soft-deleted rows, most-recently-trashed first
         // (mirrors iOS RecentlyDeletedViewModel). Sorting happens here, before
         // projection, so ScoreRowWire need not carry deletedAt.
@@ -199,7 +251,13 @@ public final class LibraryAndroidStore {
     }
 
     private static func row(_ record: ScoreRecordWire) -> ScoreRowWire {
-        ScoreRowWire(id: record.id, title: record.title, subtitle: record.subtitle, composer: record.composer)
+        ScoreRowWire(
+            id: record.id,
+            title: record.title,
+            subtitle: record.subtitle,
+            composer: record.composer,
+            isFavorite: record.isFavorite,
+        )
     }
 
     /// Filter a row list by the current search query using the shared predicate.
