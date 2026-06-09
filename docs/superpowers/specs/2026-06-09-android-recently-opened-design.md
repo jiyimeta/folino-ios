@@ -37,15 +37,17 @@ The Android Library follows the established split: **all policy lives in Swift**
 Derivation logic (grouping, recently-used ordering) lives in **shared Domain** so iOS and Android compute identically.
 
 ```
-Reader opens score
-  └─▶ shared repository.saveScoreItem(item with lastOpenedAt = now)   [iOS path reused]
-        └─▶ Swift LibraryAndroidStore.upsert(ScoreRecordWire)         [policy: 0-sentinel mapping]
+Score opened (any list row → openReader lambda in MainActivity)
+  └─▶ vm.markOpened(id)  [@WireletExpose]
+        └─▶ Swift LibraryAndroidStore.markOpened: set record.lastOpenedAt = now, upsert  [policy: 0-sentinel]
               └─▶ Kotlin RoomLibraryStore.upsert → score_records.last_opened_at
 
 Recent screen / Playlists / Tags
-  └─▶ load ScoreItems (lastOpenedAt populated)
-        └─▶ Domain helpers: groupByRecency(now:) / mostRecentlyOpened / playlistsByRecentlyUsed / tagsByRecentlyUsed
-              └─▶ Compose renders grouped / ordered lists
+  └─▶ Swift LibraryAndroidStore reloads from records (lastOpenedAt populated)
+        └─▶ Domain helpers (Swift-side, before projection):
+              RecencyBucket.classify(date:now:calendar:)  → recentToday/recentThisWeek/recentEarlier
+              playlistsByRecentlyUsed / tagsByRecentlyUsed (on [ScoreOpenInfo])  → ordered playlists/tags
+              └─▶ Compose renders the projected, already-grouped/ordered lists verbatim
 ```
 
 ## 4. Persistence & wire (Android)
@@ -76,34 +78,50 @@ Folded into the **fresh v1** `score_records` table definition. `RoomLibraryStore
 
 ## 5. Shared Domain logic
 
-### 5.1 Already shared (reuse as-is)
-- `[ScoreItem].mostRecentlyOpened(limit:)` — `Domain/ScoreItemRootSections.swift`. Excludes `nil` `lastOpenedAt`. The Recent screen calls it with a large/effectively-unbounded limit to get the full history.
+### 5.1 Already shared (reuse as-is, iOS-only consumer)
+- `[ScoreItem].mostRecentlyOpened(limit:)` — `Domain/ScoreItemRootSections.swift`. Excludes `nil` `lastOpenedAt`. Used by the iOS 5-item shelf; **Android does not use it** (Android groups records directly via §5.2). Left unchanged.
 
-### 5.2 New shared helper — recency grouping
-Add to Domain a pure, testable grouping function:
+### 5.2 New shared classifier — recency bucket
+The Android wire carries no `[ScoreItem]`, so grouping is expressed as a pure per-date classifier (no `ScoreItem` dependency), keeping the parity-sensitive boundary rules in one shared place:
 
 ```swift
-public enum RecencyBucket: Sendable { case today, thisWeek, earlier }
+public enum RecencyBucket: Sendable, Equatable { case today, thisWeek, earlier }
 
-extension [ScoreItem] {
-    /// Opened items (lastOpenedAt != nil), sorted desc, partitioned into Today / This week / Earlier
-    /// using `calendar` against `now`. `now` and `calendar` are injected for testability;
-    /// callers pass the device's current date and `Calendar.current`.
-    public func groupedByRecency(now: Date, calendar: Calendar) -> [(RecencyBucket, [ScoreItem])]
+public extension RecencyBucket {
+    /// Classify `date` relative to `now` using `calendar`. Callers pass the device's
+    /// current date and `Calendar.current`. Both injected for testability.
+    static func classify(_ date: Date, now: Date, calendar: Calendar) -> RecencyBucket
 }
 ```
 
-- Boundaries use the device's local calendar: **Today** = same calendar day as `now`; **This week** = within the current week (per `calendar`) but not today; **Earlier** = everything else. Trashed items (`deletedAt != nil`) are filtered out by the caller before grouping (the Recent screen passes the live list).
-- Empty buckets are omitted from the result.
+- Boundaries (device's local calendar): **today** = same calendar day as `now`; **thisWeek** = same `.weekOfYear` granularity as `now` (respects `calendar.firstWeekday`) but not today; **earlier** = everything else.
+- Each platform owns its own partition+sort loop over this classifier. The Android `LibraryAndroidStore` sorts live opened records by `lastOpenedAt` desc, classifies each, and fills three `[ScoreRowWire]` buckets; empty buckets render no section. Trashed records (`deletedAt > 0`) and never-opened records (`lastOpenedAt == 0`) are excluded before classifying.
 
-### 5.3 Lift `LibrarySort` helpers into Domain
-Move `playlistsByRecentlyUsed(_:scoreItems:limit:)` and `tagsByRecentlyUsed(_:scoreItems:limit:)` from `Packages/Features/Library/Sources/Library/LibrarySort.swift` into Domain, making them `public`. Update the iOS Library to import them from Domain (mechanical; behavior unchanged). Android then calls the same functions. This is a move within existing packages — no new package, no new layer boundary.
+### 5.3 Lift recently-used helpers into Domain (on a minimal projection)
+Move `playlistsByRecentlyUsed` and `tagsByRecentlyUsed` from `Packages/Features/Library/Sources/Library/LibrarySort.swift` into Domain (public). **Refactor their input from `scoreItems: [ScoreItem]` to a minimal projection** because the Android wire cannot build a full `ScoreItem`:
 
-## 6. Reader write-back (Android)
+```swift
+public struct ScoreOpenInfo: Sendable, Equatable {
+    public let id: ScoreItemID
+    public let lastOpenedAt: Date?
+    public let tagIDs: Set<TagID>
+    public init(id: ScoreItemID, lastOpenedAt: Date?, tagIDs: Set<TagID>)
+}
 
-iOS stamps the timestamp once per open via `ReaderViewModel.updateLastOpenedAtOnce()` → `repository.saveScoreItem(updated)`. Android reuses this shared code path rather than reimplementing it.
+public func playlistsByRecentlyUsed(_ playlists: [Playlist], openInfo: [ScoreOpenInfo], limit: Int) -> [Playlist]
+public func tagsByRecentlyUsed(_ tags: [Tag], openInfo: [ScoreOpenInfo], limit: Int) -> [Tag]
+```
 
-**Integration point to resolve in the plan:** the Android Reader currently has no path to the Library store. The implementation must wire score-open so it invokes the shared "mark opened" save (set `lastOpenedAt = now`, save once per open — never repeatedly while reading). The plan must identify the concrete seam (shared repository reference vs. a JNI callback into `LibraryAndroidStore`) and confirm the once-per-open guard mirrors `hasUpdatedLastOpened`.
+Body logic is unchanged (max `lastOpenedAt` over members; `createdAt` / `.distantPast` fallbacks; `name` tiebreak). iOS call sites (`LibraryRootCollapsibleSections.swift:15,78`) adapt with one `.map { ScoreOpenInfo(id: $0.id, lastOpenedAt: $0.lastOpenedAt, tagIDs: $0.tagIDs) }`. Existing `LibrarySortTests` move to `DomainTests` and construct `ScoreOpenInfo` directly. This is a move + signature refinement within existing packages — no new package, no new layer boundary, behavior identical.
+
+## 6. Score-open write-back (Android) — resolved
+
+The Android Reader has **no** reference to the Library store, and all score-open navigation funnels through one lambda — `openReader` in `MainActivity.LibraryNavGraph` (`MainActivity.kt:217`), used by every list (All / Recently Deleted / Playlist detail / Tag detail / the new Recent). So the seam is there, not in the Reader:
+
+- Add `@WireletExpose public func markOpened(_ id: String)` to `LibraryAndroidStore` (mirrors the `setDeletedAt` pattern: load records, set the row's `lastOpenedAt = Date().timeIntervalSince1970`, `upsert`, then `reload()` + `reloadPlaylists()` + `reloadTags()`). Unknown id is a no-op.
+- Call `vm.markOpened(row.id)` inside `openReader`, before `nav.navigate(...)`.
+
+This is **once per open by construction** (the lambda fires once per navigation, never during reading) and reuses the existing record-mutation path. `FolinoReaderAndroid` is untouched. Opening a trashed score from Recently Deleted still stamps harmlessly — the Recent screen filters `deletedAt > 0` out regardless.
 
 ## 7. UI (Android Compose)
 
@@ -114,32 +132,28 @@ iOS stamps the timestamp once per open via `ReaderViewModel.updateLastOpenedAtOn
 - Default landing destination is **unchanged** (`list` / All Scores). Recent is one drawer tap away.
 
 ### 7.2 `RecentScreen`
-- Loads live (non-trashed) score items, calls `groupedByRecency(now:calendar:)`.
-- Renders a `LazyColumn` with **section headers Today / This week / Earlier** (omit empty sections), rows reuse the existing score-row composable.
-- Row tap → navigate to Reader (which re-stamps `lastOpenedAt`, so the item floats to Today on return).
-- **Empty state** when no score has ever been opened: a centered message (e.g. "まだ楽譜を開いていません" — final copy per the Android string catalog; user-facing brand stays lowercase `folino`).
+- Consumes three `StateFlow<List<ScoreRowWire>>` projected by the store (`recentToday`, `recentThisWeek`, `recentEarlier`) — grouping happens Swift-side (§5.2); Compose renders verbatim.
+- Renders a `LazyColumn` with **section headers Today / This week / Earlier** (omit a section whose list is empty), rows reuse the existing `ScoreRow` composable and `openReader`.
+- Row tap → `openReader` (which calls `markOpened`, so the item floats to Today on return).
+- **Empty state** when all three lists are empty: a centered message (e.g. "まだ楽譜を開いていません" — final copy per the Android string catalog; user-facing brand stays lowercase `folino`).
 - Read-only: no overflow "remove", no multi-select.
 
 ### 7.3 Playlists & Tags ordering
-- Playlists list and Tags list render in **recently-used order** via the lifted Domain helpers (§5.3), passing the current score-item set. Visual rows unchanged.
+- `reloadPlaylists` / `reloadTags` in `LibraryAndroidStore` sort via the lifted Domain helpers (§5.3) with `limit = full count` (reorder, not top-N) before projecting to `PlaylistRowWire` / `TagRowWire`. The Kotlin `PlaylistsListScreen` / `TagsListScreen` already render the projected order verbatim — **no Kotlin changes**.
 
 ## 8. Testing
 
-**Domain (Swift Testing — `@Suite`/`@Test`/`#expect`):**
-- `groupedByRecency`: today/thisWeek/earlier boundary cases with injected `now` + fixed `Calendar` (item exactly at midnight boundary, item 6 days ago, week rollover); `nil` `lastOpenedAt` excluded; empty buckets omitted; descending order within a bucket.
-- `mostRecentlyOpened`: regression for the large-limit (full-history) call.
-- `playlistsByRecentlyUsed` / `tagsByRecentlyUsed`: move existing iOS tests with the functions; confirm empty/fallback/tiebreak behavior intact after the lift.
+**Domain (Swift Testing — `@Suite`/`@Test`/`#expect`; the high-value, fully-runnable layer):**
+- `RecencyBucket.classify`: boundary cases with injected `now` + a fixed Gregorian `Calendar` (same instant → today; earlier same day → today; yesterday same week → thisWeek; 8 days ago → earlier; week-rollover around `firstWeekday`).
+- `playlistsByRecentlyUsed` / `tagsByRecentlyUsed`: ported from `LibrarySortTests`, rewritten to construct `ScoreOpenInfo`; confirm max-over-members ordering, `createdAt` / `.distantPast` fallbacks, and `name` tiebreak intact after the refactor.
 
-**Android:**
-- `RoomLibraryStore` round-trip: `upsert` with `lastOpenedAt > 0` and `== 0` reads back identically; `loadAll` carries the column.
-- Wire mapping (`0 ⇄ nil`) covered by a Swift store test.
+**Android & Swift bridge (verified by build + Pixel install/launch, per the project's Android habit — the `FolinoLibraryJNI` / Room targets are not in the iOS test loop):**
+- `lastOpenedAt` round-trips: open a score → it appears under Today in Recent; relaunch → still present (Room persisted); never-opened scores absent.
+- Playlists/Tags reorder by recent use after opening a member.
 - No migration test (collapsed v1, per §0).
-
-**Reader:**
-- Android once-per-open guard: opening a score sets `lastOpenedAt`, and it is not re-stamped on subsequent in-session interactions.
 
 ## 9. Open items for the plan
 
-1. Resolve the Reader→Library-store seam (§6) — the one genuinely unknown integration point.
-2. Confirm exact "This week" semantics against `Calendar.current.firstWeekday` so iOS and Android agree if/when iOS adopts `groupedByRecency`.
-3. String catalog entry + final Japanese empty-state copy.
+1. ~~Reader→store seam~~ — resolved in §6 (`markOpened` via `openReader`).
+2. Confirm "This week" matches `Calendar.current.firstWeekday` so the boundary reads naturally for the locale.
+3. String catalog entry (`R.string.nav_recent`) + final Japanese empty-state copy.
