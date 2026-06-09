@@ -199,11 +199,28 @@ abstract class LibraryDatabase : RoomDatabase() {
  * Kotlin in-memory cache with background write-through (see spec §Risks).
  */
 class RoomLibraryStore(context: Context) : LibraryStore {
-    private val db = Room.databaseBuilder(
-        context.applicationContext,
-        LibraryDatabase::class.java,
-        "folino-library.db",
-    ).allowMainThreadQueries().addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration().build()
+    private val db = sharedDatabase(context)
+
+    private companion object {
+        @Volatile
+        private var sharedDb: LibraryDatabase? = null
+
+        /**
+         * Process-wide singleton DB so multiple [RoomLibraryStore] instances (the JNI-injected store
+         * and the per-score AB-repeat accessor constructed from composition) share one connection
+         * pool + invalidation tracker — Room's recommended pattern, and avoids leaking a connection
+         * per Reader entry.
+         */
+        fun sharedDatabase(context: Context): LibraryDatabase =
+            sharedDb ?: synchronized(this) {
+                sharedDb ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    LibraryDatabase::class.java,
+                    "folino-library.db",
+                ).allowMainThreadQueries().addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration().build()
+                    .also { sharedDb = it }
+            }
+    }
 
     private val dao = db.dao()
     private val playlistDao = db.playlistDao()
