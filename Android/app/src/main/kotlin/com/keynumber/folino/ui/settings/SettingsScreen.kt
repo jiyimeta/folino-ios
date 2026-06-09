@@ -17,7 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.keynumber.folino.R
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @Composable
@@ -32,6 +35,7 @@ fun SettingsScreen(
     val collapse by prefs.collapseRests.collectAsState(initial = false)
     val keepAwake by prefs.keepAwake.collectAsState(initial = true)
     val layout by prefs.layoutMode.collectAsState(initial = "page")
+    val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
 
     LazyColumn(
         Modifier
@@ -93,6 +97,20 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+        item {
+            A4SliderRow(
+                hz = a4Hz,
+                onValueChange = { scope.launch { prefs.setA4ReferenceHz(it.toDouble()) } },
+                onValueChangeFinished = {
+                    val snapped = when {
+                        kotlin.math.abs(a4Hz - 432.0) <= 1.0 -> 432.0
+                        kotlin.math.abs(a4Hz - 440.0) <= 1.0 -> 440.0
+                        else -> a4Hz
+                    }
+                    if (snapped != a4Hz) scope.launch { prefs.setA4ReferenceHz(snapped) }
+                },
+            )
         }
         // Empty when suppressed (e.g. the 1.0.0 first-release guard in MainActivity); hide the whole section,
         // header included, so we never render a bare "Version History" heading with no entries.
@@ -162,3 +180,47 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
 }
 
 data class VersionHistoryItem(val version: String, val descriptions: List<String>)
+
+/**
+ * Global A4 reference pitch slider row (415–466 Hz).
+ * Title shows "A4 = NNNHz" (mirroring iOS; no space before "Hz"). A description line below
+ * tells the user the value applies to all scores but can be overridden per-score.
+ * Snaps to 432 or 440 Hz on release when within 1 Hz of either value.
+ */
+@Composable
+private fun A4SliderRow(
+    hz: Double,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.MusicNote,
+                contentDescription = stringResource(R.string.settings_a4_reference),
+                modifier = Modifier.padding(end = 12.dp),
+            )
+            Text(
+                "A4 = ${hz.roundToInt()}Hz",
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Text(
+            stringResource(R.string.reader_settings_a4_description),
+            modifier = Modifier.padding(start = 36.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = hz.toFloat(),
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            valueRange = 415f..466f,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}

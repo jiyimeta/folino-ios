@@ -68,6 +68,8 @@ final class ReaderPreferencesStore {
             repeatMode: copy.repeatMode,
             abRepeat: copy.abRepeat,
             masterVolume: copy.masterVolume,
+            transposeSemitones: copy.transposeSemitones,
+            a4ReferenceHz: copy.a4ReferenceHz,
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)

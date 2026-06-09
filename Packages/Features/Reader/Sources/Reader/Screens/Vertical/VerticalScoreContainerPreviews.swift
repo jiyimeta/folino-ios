@@ -24,6 +24,7 @@ import SwiftUI
         collapseMultiMeasureRests: false,
         showInvisibleElements: false,
         playbackCursor: nil,
+        transposeSemitones: 0,
         viewModel: vm,
     )
     .frame(width: 600, height: 500)
@@ -51,6 +52,7 @@ private func abLoopPreview(prefs: ReaderPreferences) -> some View {
         collapseMultiMeasureRests: false,
         showInvisibleElements: false,
         playbackCursor: nil,
+        transposeSemitones: 0,
         viewModel: vm,
     )
     .frame(width: 600, height: 500)

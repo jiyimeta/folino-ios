@@ -43,6 +43,7 @@ private final class FakePlaybackController: PlaybackController {
     }
 
     func setMasterVolume(_ value: Double) {}
+    func setMasterTuning(cents _: Double) {}
 
     func setStaffVolume(staff: Int, volume: Double) {}
     func setStaffMute(staff: Int, isMuted: Bool) {}

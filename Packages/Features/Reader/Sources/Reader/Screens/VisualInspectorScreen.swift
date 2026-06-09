@@ -6,6 +6,7 @@ import UtilityUI
 
 struct VisualInspectorScreen: View {
     let layoutModel: LayoutSettingsModel
+    let transposeModel: TransposeModel
     let score: Score
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
@@ -28,6 +29,7 @@ struct VisualInspectorScreen: View {
             CollapsibleSection(isExpanded: $generalExpanded) {
                 layoutRow
                 staffSizeRow
+                TransposeRow(transposeModel: transposeModel)
                 breakPolicyRow
                 collapseRow
                 showInvisibleRow

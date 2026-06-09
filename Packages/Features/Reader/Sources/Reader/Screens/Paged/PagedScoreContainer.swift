@@ -23,6 +23,10 @@ struct PagedScoreContainer: View {
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
+    /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
+    /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
+    /// task never re-runs.
+    let transposeSemitones: Int
     @Bindable var viewModel: ReaderViewModel
 
     @State var document: LayoutDocument?
@@ -84,6 +88,7 @@ struct PagedScoreContainer: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     pageHeight: viewportHeight,
+                    transposeSemitones: transposeSemitones,
                 )) {
                     await rebuildLayout(
                         width: contentWidth,
@@ -277,6 +282,7 @@ struct PagedScoreContainer: View {
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
         let pageHeight: CGFloat
+        let transposeSemitones: Int
 
         init(
             score: Score,
@@ -286,17 +292,20 @@ struct PagedScoreContainer: View {
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
             pageHeight: CGFloat,
+            transposeSemitones: Int,
         ) {
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)
                 ^ score.openingClefSignature
+                ^ (transposeSemitones << 24)
             self.size = size
             self.width = width
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
             self.showInvisibleElements = showInvisibleElements
             self.pageHeight = pageHeight
+            self.transposeSemitones = transposeSemitones
         }
     }
 }

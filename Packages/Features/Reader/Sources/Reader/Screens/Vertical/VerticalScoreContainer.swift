@@ -27,6 +27,10 @@ struct VerticalScoreContainer: View {
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
+    /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
+    /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
+    /// task never re-runs.
+    let transposeSemitones: Int
     @Bindable var viewModel: ReaderViewModel
 
     @State private var document: LayoutDocument?
@@ -65,6 +69,7 @@ struct VerticalScoreContainer: View {
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
+                    transposeSemitones: transposeSemitones,
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }
@@ -326,6 +331,7 @@ struct VerticalScoreContainer: View {
         let honorLayoutBreaks: Bool
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
+        let transposeSemitones: Int
 
         init(
             score: Score,
@@ -334,6 +340,7 @@ struct VerticalScoreContainer: View {
             honorLayoutBreaks: Bool,
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
+            transposeSemitones: Int,
         ) {
             // `Score` is Equatable but not Hashable. Use a cheap identity proxy: structural shape + opening clefs.
             // The opening-clef hash is what makes a clef override (a field-level edit that leaves parts.count / staff
@@ -342,11 +349,13 @@ struct VerticalScoreContainer: View {
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)
                 ^ score.openingClefSignature
+                ^ (transposeSemitones << 24)
             self.size = size
             self.width = width
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
             self.showInvisibleElements = showInvisibleElements
+            self.transposeSemitones = transposeSemitones
         }
     }
 }

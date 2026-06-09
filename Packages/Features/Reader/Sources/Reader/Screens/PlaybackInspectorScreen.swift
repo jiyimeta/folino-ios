@@ -35,7 +35,9 @@ struct PlaybackInspectorScreen: View {
     let mixerModel: PlaybackMixerModel
     let tempoModel: TempoModel
     let masterVolumeModel: MasterVolumeModel
+    let a4ReferenceModel: A4ReferenceModel
     @Bindable var repeatModel: RepeatModel
+    let transposeModel: TransposeModel
     let score: Score
     /// Live playback cursor. The tempo readout reads the score's effective tempo here so it tracks mid-score tempo
     /// changes; `nil` (no cursor yet) resolves to the opening tempo.
@@ -59,6 +61,8 @@ struct PlaybackInspectorScreen: View {
                     RepeatModePicker(selection: $repeatModel.mode)
                 }
                 masterVolumeRow
+                TransposeRow(transposeModel: transposeModel)
+                a4ReferenceRow
             } header: {
                 Text("reader.inspector.section.general", bundle: .module)
             }
@@ -328,7 +332,9 @@ struct PlaybackInspectorScreen: View {
                 mixerModel: vm.mixerModel,
                 tempoModel: vm.tempoModel,
                 masterVolumeModel: vm.masterVolumeModel,
+                a4ReferenceModel: vm.a4ReferenceModel,
                 repeatModel: vm.repeatModel,
+                transposeModel: vm.transposeModel,
                 score: score,
                 playbackCursor: vm.playbackSession.playbackCursor,
             )

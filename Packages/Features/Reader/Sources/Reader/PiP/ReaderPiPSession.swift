@@ -11,6 +11,7 @@ struct PiPLayoutSnapshot {
     let staffSize: CGFloat
     let hiddenStaves: Set<StaffAddress>
     let clefOverrides: [StaffAddress: String]
+    let transposeSemitones: Int
 }
 
 /// Wraps `ScorePiPCoordinator` with the session-lifecycle policy that previously lived inline in
@@ -154,6 +155,7 @@ final class ReaderPiPSession {
         else { return }
         let visible = score
             .applying(clefOverrides: snapshot.clefOverrides)
+            .transposed(bySemitones: snapshot.transposeSemitones)
             .filtered(hidingStaves: snapshot.hiddenStaves)
         do {
             try await coordinator.arm(

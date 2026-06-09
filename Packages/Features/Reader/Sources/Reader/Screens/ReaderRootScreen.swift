@@ -163,7 +163,10 @@ public struct ReaderRootScreen: View {
             ProgressView().controlSize(.large)
         case let .loaded(score):
             let withClefs = score.applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
-            let visible = withClefs.filtered(hidingStaves: viewModel.layoutModel.hiddenStaves)
+            // Transpose sits between clef overrides and the hidden-staves filter. It preserves note IDs and ticks, so
+            // the playback cursor translation downstream is unaffected.
+            let transposed = withClefs.transposed(bySemitones: viewModel.transposeModel.semitones)
+            let visible = transposed.filtered(hidingStaves: viewModel.layoutModel.hiddenStaves)
             switch layoutMode {
             case .vertical:
                 VerticalScoreContainer(
@@ -173,6 +176,7 @@ public struct ReaderRootScreen: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.displayCursor,
+                    transposeSemitones: viewModel.transposeModel.semitones,
                     viewModel: viewModel,
                 )
             case .horizontal:
@@ -183,6 +187,7 @@ public struct ReaderRootScreen: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.displayCursor,
+                    transposeSemitones: viewModel.transposeModel.semitones,
                     viewModel: viewModel,
                 )
             case .page:
@@ -193,6 +198,7 @@ public struct ReaderRootScreen: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.displayCursor,
+                    transposeSemitones: viewModel.transposeModel.semitones,
                     viewModel: viewModel,
                 )
             }

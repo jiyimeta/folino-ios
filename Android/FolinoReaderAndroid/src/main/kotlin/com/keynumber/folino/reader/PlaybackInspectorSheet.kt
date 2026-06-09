@@ -2,6 +2,7 @@ package com.keynumber.folino.reader
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,9 +17,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
@@ -28,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -43,14 +48,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
+import kotlin.math.ln
 import kotlin.math.roundToInt
 
 /** Compact slider height so the mixer's many rows don't dominate the sheet. */
@@ -85,6 +94,8 @@ fun PlaybackInspectorSheet(
     val rate by audioVm.currentRate.collectAsStateWithLifecycle()
     val masterVolume by audioVm.masterVolume.collectAsStateWithLifecycle()
     val metronomeEnabled by audioVm.metronomeEnabled.collectAsStateWithLifecycle()
+    val a4ReferenceHz by audioVm.a4ReferenceHz.collectAsStateWithLifecycle()
+    val globalA4ReferenceHz by audioVm.globalA4ReferenceHz.collectAsStateWithLifecycle()
 
     val controlsEnabled = engine != null
     // GM catalog is shared Swift (loaded once via JNI, cached). Used by the program picker.
@@ -142,6 +153,19 @@ fun PlaybackInspectorSheet(
                             enabled = controlsEnabled,
                         )
                     }
+                }
+                item {
+                    A4ReferenceRow(
+                        hz = a4ReferenceHz,
+                        globalHz = globalA4ReferenceHz,
+                        enabled = controlsEnabled,
+                        onValueChange = { audioVm.setA4ReferenceHz(it.toDouble()) },
+                        onValueChangeFinished = { audioVm.setA4ReferenceHz(snapA4Hz(a4ReferenceHz)) },
+                        onStep = { delta ->
+                            val next = (a4ReferenceHz + delta).coerceIn(415.0, 466.0)
+                            audioVm.setA4ReferenceHz(next)
+                        },
+                    )
                 }
             }
 
@@ -233,6 +257,135 @@ private fun IconSliderRow(
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodySmall,
         )
+    }
+}
+
+/**
+ * Snaps [hz] to 432 or 440 when within ~1.0 Hz of either common reference pitch.
+ * Returns [hz] unchanged when not near a snap point.
+ */
+private fun snapA4Hz(hz: Double): Double = when {
+    kotlin.math.abs(hz - 432.0) <= 1.0 -> 432.0
+    kotlin.math.abs(hz - 440.0) <= 1.0 -> 440.0
+    else -> hz
+}
+
+/**
+ * A4 pitch-calibration row. Mirrors the iOS inspector design:
+ * - Top line: "A4 = NNNHz" readout + compact ± stepper (1 Hz steps, 415–466 Hz range).
+ * - Bottom line: global-relative readout ("440Hz +8セント") pinned to a fixed width so
+ *   the slider never reflows, followed by the full-range whole-hertz slider.
+ *
+ * Stepping from the inherited global value or moving the slider creates a per-score override.
+ * Snaps to 432 or 440 Hz on slider release when within 1 Hz of either value.
+ */
+@Composable
+private fun A4ReferenceRow(
+    hz: Double,
+    globalHz: Double,
+    enabled: Boolean,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    onStep: (Double) -> Unit,
+) {
+    // Cents offset of [hz] from [globalHz], same formula as iOS: 1200·log2(hz/globalHz).
+    val centsOffset = (1200.0 * (ln(hz) - ln(globalHz)) / ln(2.0)).roundToInt()
+    val signedCents = if (centsOffset == 0) "±0" else "%+d".format(centsOffset)
+    val relativeReadout = stringResource(
+        R.string.reader_playback_a4_relative,
+        globalHz.roundToInt(),
+        signedCents,
+    )
+    // Widest sizing string: 3-digit Hz + signed 3-digit cents (e.g. "888Hz -888セント").
+    val sizingReadout = stringResource(R.string.reader_playback_a4_relative, 888, "-888")
+
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Tuning-fork icon, accent-tinted to match iOS.
+        Icon(
+            Icons.Default.MusicNote,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // ── Top line: readout + ± stepper ───────────────────────
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "A4 = ${hz.roundToInt()}Hz",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                // ± stepper: two compact IconButtons mirroring iOS's Stepper control.
+                IconButton(
+                    onClick = { onStep(-1.0) },
+                    enabled = enabled && hz > 415.0,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Remove,
+                        contentDescription = "Decrease A4",
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                IconButton(
+                    onClick = { onStep(+1.0) },
+                    enabled = enabled && hz < 466.0,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Increase A4",
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+            // ── Bottom line: fixed-width relative readout + slider ──
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Fixed-width Box: the hidden sizing text pins the width; the real text overlays it.
+                Box {
+                    // Invisible widest-possible string to reserve the full column width.
+                    Text(
+                        text = sizingReadout,
+                        modifier = Modifier.alpha(0f),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = relativeReadout,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                Slider(
+                    value = hz.toFloat(),
+                    onValueChange = onValueChange,
+                    onValueChangeFinished = onValueChangeFinished,
+                    valueRange = 415f..466f,
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f).height(sliderHeight),
+                )
+            }
+        }
     }
 }
 

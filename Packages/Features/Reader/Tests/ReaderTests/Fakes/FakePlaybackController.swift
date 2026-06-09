@@ -17,6 +17,7 @@ final class FakePlaybackController: PlaybackController {
     private(set) var tempoMultiplierCalls: [Double] = []
     private(set) var masterVolumeCalls: [Double] = []
     private(set) var metronomeEnabledCalls: [Bool] = []
+    private(set) var transposeSemitoneCalls: [Int] = []
 
     var loadError: Error?
     var playError: Error?
@@ -103,12 +104,22 @@ final class FakePlaybackController: PlaybackController {
         metronomeEnabledCalls.append(enabled)
     }
 
+    func setTranspose(semitones: Int) {
+        transposeSemitoneCalls.append(semitones)
+    }
+
     func setTempoMultiplier(_ value: Double) {
         tempoMultiplierCalls.append(value)
     }
 
     func setMasterVolume(_ value: Double) {
         masterVolumeCalls.append(value)
+    }
+
+    private(set) var masterTuningCentsCalls: [Double] = []
+
+    func setMasterTuning(cents: Double) {
+        masterTuningCentsCalls.append(cents)
     }
 
     func setStaffMute(staff _: Int, isMuted _: Bool) {}
