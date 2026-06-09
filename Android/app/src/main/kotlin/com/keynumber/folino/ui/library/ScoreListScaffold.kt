@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -379,7 +381,23 @@ private fun ScoreRow(
         val headline = if (row.subtitle.isEmpty()) title else "$title ${row.subtitle}"
         ListItem(
             headlineContent = { Text(headline) },
-            supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
+            supportingContent = {
+                if (row.isFavorite || row.composer.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (row.isFavorite) {
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = stringResource(R.string.favorite_indicator),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .padding(end = 4.dp),
+                            )
+                        }
+                        if (row.composer.isNotEmpty()) Text(row.composer)
+                    }
+                }
+            },
             leadingContent = {
                 if (selectionMode) {
                     Icon(
