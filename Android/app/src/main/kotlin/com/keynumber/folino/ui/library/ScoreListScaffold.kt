@@ -77,6 +77,7 @@ fun ScoreListScaffold(
     emptyHintRes: Int,
     onOpenScore: (ScoreRowWire) -> Unit,
     onOpenDrawer: () -> Unit,
+    onEditInfoForScore: (String) -> Unit,
     importAction: (() -> Unit)? = null,
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -292,6 +293,7 @@ fun ScoreListScaffold(
                                 viewModel.beginEditTags(row.id)
                             },
                             onExport = { beginExport(listOf(row.id)) },
+                            onEditInfo = { onEditInfoForScore(row.id) },
                         )
                     }
                 }
@@ -369,6 +371,7 @@ private fun ScoreRow(
     onAddToPlaylist: () -> Unit,
     onEditTags: () -> Unit,
     onExport: () -> Unit,
+    onEditInfo: () -> Unit,
 ) {
     val content: @Composable () -> Unit = {
         var menu by remember { mutableStateOf(false) }
@@ -426,6 +429,13 @@ private fun ScoreRow(
                                 onClick = {
                                     menu = false
                                     onEditTags()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.edit_info)) },
+                                onClick = {
+                                    menu = false
+                                    onEditInfo()
                                 },
                             )
                         }

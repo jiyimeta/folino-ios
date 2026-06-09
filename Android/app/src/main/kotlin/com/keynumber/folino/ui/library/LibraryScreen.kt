@@ -15,6 +15,7 @@ fun LibraryScreen(
     viewModel: LibraryAndroidStoreViewModel,
     onOpenScore: (ScoreRowWire) -> Unit,
     onOpenDrawer: () -> Unit,
+    onEditInfoForScore: (String) -> Unit,
 ) {
     val scores by viewModel.scores.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -39,6 +40,7 @@ fun LibraryScreen(
         emptyHintRes = R.string.library_empty_hint,
         onOpenScore = onOpenScore,
         onOpenDrawer = onOpenDrawer,
+        onEditInfoForScore = onEditInfoForScore,
         importAction = { picker.launch(arrayOf("*/*")) },
     )
 }

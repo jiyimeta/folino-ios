@@ -312,6 +312,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
+                    onEditInfoForScore = { id -> nav.navigate("editInfo/$id") },
                 )
             }
             composable("favorites") {
@@ -319,6 +320,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,
+                    onEditInfoForScore = { id -> nav.navigate("editInfo/$id") },
                 )
             }
             composable("debug") {
@@ -384,6 +386,19 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 )
             }
             composable(
+                "editInfo/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id") ?: ""
+                com.keynumber.folino.ui.scoreinfo.EditScoreInfoScreen(
+                    load = { vm.scoreInfoForEditing(id) },
+                    onSave = { f ->
+                        vm.saveScoreInfo(id, f.title, f.subtitle, f.composer, f.arranger, f.lyricist, f.copyright)
+                    },
+                    onClose = { nav.popBackStackIfResumed() },
+                )
+            }
+            composable(
                 "reader/{id}/{title}",
                 arguments = listOf(
                     navArgument("id") { type = NavType.StringType },
@@ -412,6 +427,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                 ReaderScreen(
                     scoreId = id,
                     title = title,
+                    onEditInfo = { nav.navigate("editInfo/$id") },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
