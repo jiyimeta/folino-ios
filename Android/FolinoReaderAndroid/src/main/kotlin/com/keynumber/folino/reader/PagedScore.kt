@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.IntSize
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
+import io.github.jiyimeta.sheetmusic.compose.cursor.LoopHighlightOverlay
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.draw.model.EncodablePage
 import io.github.jiyimeta.sheetmusic.compose.render.FontProvider
@@ -251,6 +252,14 @@ fun PagedScore(
                     PlaybackCursorOverlay(
                         scoreHandle = h,
                         cursorFlow = audioVm.currentCursor,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    LoopHighlightOverlay(
+                        scoreHandle = h,
+                        loopRangeFlow = audioVm.loopRange,
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
