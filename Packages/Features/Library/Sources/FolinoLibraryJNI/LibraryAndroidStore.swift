@@ -133,7 +133,7 @@ public final class LibraryAndroidStore {
         setFavoriteMany(ids, true)
     }
 
-    /// Bulk unfavorite (All Scores CAB).
+    /// Bulk unfavorite (All Scores CAB). No-op for ids already not favorited.
     @WireletExpose
     public func unfavoriteMany(_ ids: [String]) {
         setFavoriteMany(ids, false)
@@ -145,8 +145,6 @@ public final class LibraryAndroidStore {
         all[idx].isFavorite = value
         store.upsert(all[idx])
         reload(using: all)
-        reloadPlaylists()
-        reloadTags()
     }
 
     private func setFavoriteMany(_ ids: [String], _ value: Bool) {
@@ -160,8 +158,6 @@ public final class LibraryAndroidStore {
         }
         guard changed else { return }
         reload(using: all)
-        reloadPlaylists()
-        reloadTags()
     }
 
     /// Set the search query and recompute the three displayed score lists from

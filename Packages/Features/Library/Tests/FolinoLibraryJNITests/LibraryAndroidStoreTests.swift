@@ -703,6 +703,20 @@ struct LibraryAndroidStoreTests {
         #expect(store.favorites.isEmpty)
     }
 
+    @Test func `favoriteMany favorites only the not-yet-favorited, leaving existing ones`() {
+        let backend = FakeLibraryStore()
+        backend.records = [
+            ScoreRecordWire(
+                id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz",
+                deletedAt: 0, isFavorite: true,
+            ),
+            ScoreRecordWire(id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz", deletedAt: 0),
+        ]
+        let store = LibraryAndroidStore(store: backend)
+        store.favoriteMany(["a", "b"]) // "a" already favorited, "b" newly favorited
+        #expect(Set(store.favorites.map(\.id)) == ["a", "b"])
+    }
+
     @Test func `favorite unknown id is a no-op`() {
         let backend = FakeLibraryStore()
         let store = LibraryAndroidStore(store: backend)
