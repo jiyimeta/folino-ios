@@ -93,12 +93,16 @@ class MainActivity : ComponentActivity(), PipHost {
     companion object {
         /** Extra key used by ShareTargetActivity to request opening a score after import. */
         const val EXTRA_OPEN_SCORE_ID = "open_score_id"
+        /** Extra key used by ShareTargetActivity to pass the imported score's display title. */
+        const val EXTRA_OPEN_SCORE_TITLE = "open_score_title"
     }
 
     // Holds a score id delivered via EXTRA_OPEN_SCORE_ID (from ShareTargetActivity). Set on cold
     // start (read from intent in setContent) and on re-delivery (onNewIntent). Consumed once by
     // LibraryNavGraph's LaunchedEffect, then cleared to null so repeat taps don't re-navigate.
     var pendingOpenScoreId: String? by mutableStateOf(null)
+    // Companion title for pendingOpenScoreId; may be null/empty if the import result had no title.
+    var pendingOpenScoreTitle: String? by mutableStateOf(null)
 
     private val pipReceiver = PipActionReceiver()
 
@@ -138,6 +142,8 @@ class MainActivity : ComponentActivity(), PipHost {
         intent?.getStringExtra(EXTRA_OPEN_SCORE_ID)?.let { id ->
             intent.removeExtra(EXTRA_OPEN_SCORE_ID)
             pendingOpenScoreId = id
+            pendingOpenScoreTitle = intent.getStringExtra(EXTRA_OPEN_SCORE_TITLE)
+            intent.removeExtra(EXTRA_OPEN_SCORE_TITLE)
         }
 
         setContent {
@@ -165,7 +171,11 @@ class MainActivity : ComponentActivity(), PipHost {
                                 prefs = prefs,
                                 onOpenSettings = { rootNav.navigate("settings") },
                                 pendingOpenScoreId = activity?.pendingOpenScoreId,
-                                onPendingOpenConsumed = { activity?.pendingOpenScoreId = null },
+                                pendingOpenScoreTitle = activity?.pendingOpenScoreTitle,
+                                onPendingOpenConsumed = {
+                                    activity?.pendingOpenScoreId = null
+                                    activity?.pendingOpenScoreTitle = null
+                                },
                             )
                         }
                         composable("settings") {
@@ -228,6 +238,8 @@ class MainActivity : ComponentActivity(), PipHost {
         intent.getStringExtra(EXTRA_OPEN_SCORE_ID)?.let { id ->
             intent.removeExtra(EXTRA_OPEN_SCORE_ID)
             pendingOpenScoreId = id
+            pendingOpenScoreTitle = intent.getStringExtra(EXTRA_OPEN_SCORE_TITLE)
+            intent.removeExtra(EXTRA_OPEN_SCORE_TITLE)
         }
     }
 }
@@ -237,6 +249,7 @@ private fun LibraryNavGraph(
     prefs: SettingsPrefs,
     onOpenSettings: () -> Unit,
     pendingOpenScoreId: String? = null,
+    pendingOpenScoreTitle: String? = null,
     onPendingOpenConsumed: () -> Unit = {},
 ) {
     val nav = rememberNavController()
@@ -476,7 +489,8 @@ private fun LibraryNavGraph(
         LaunchedEffect(pendingOpenScoreId) {
             pendingOpenScoreId?.let { id ->
                 onPendingOpenConsumed()
-                nav.navigate("reader/$id/0")
+                val t = URLEncoder.encode(pendingOpenScoreTitle.orEmpty(), "UTF-8")
+                nav.navigate("reader/$id/$t")
             }
         }
     }

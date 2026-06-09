@@ -114,9 +114,11 @@ class ShareTargetActivity : ComponentActivity() {
             cleanupStaged(files)
             val openId = result.openAfterId
             if (openAfter && openId.isNotEmpty()) {
+                val openTitle = vm.scores.value.firstOrNull { it.id == openId }?.title.orEmpty()
                 startActivity(
                     Intent(this@ShareTargetActivity, MainActivity::class.java).apply {
                         putExtra(MainActivity.EXTRA_OPEN_SCORE_ID, openId)
+                        putExtra(MainActivity.EXTRA_OPEN_SCORE_TITLE, openTitle)
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     },
                 )
