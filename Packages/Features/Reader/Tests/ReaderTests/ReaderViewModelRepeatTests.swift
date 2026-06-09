@@ -5,7 +5,13 @@ import SheetMusicCore
 import Testing
 
 @MainActor
+@Suite(.serialized)
 struct ReaderViewModelRepeatTests {
+    /// The repeat mode is global / sticky (shared `UserDefaults`), so reset it before each test for isolation.
+    init() {
+        UserDefaults.standard.removeObject(forKey: ReaderGlobalSettingsKey.repeatMode)
+    }
+
     private static func makeItem() -> ScoreItem {
         ScoreItem(
             title: "Test", composer: nil, instrumentationSummary: nil,
@@ -38,21 +44,21 @@ struct ReaderViewModelRepeatTests {
         #expect(vm.repeatModel.mode == .off)
     }
 
-    @Test func `set repeat mode persists`() async {
-        let (vm, _, repo) = Self.makeVM()
+    @Test func `set repeat mode persists to the global key`() async {
+        let (vm, _, _) = Self.makeVM()
         await vm.load()
 
         await vm.repeatModel.setMode(.loopAll)
         #expect(vm.repeatModel.mode == .loopAll)
-        #expect(repo.savedReaderPreferences.last?.repeatMode == .loopAll)
+        #expect(RepeatModeStorage.current() == .loopAll)
 
         await vm.repeatModel.setMode(.abLoop)
         #expect(vm.repeatModel.mode == .abLoop)
-        #expect(repo.savedReaderPreferences.last?.repeatMode == .abLoop)
+        #expect(RepeatModeStorage.current() == .abLoop)
 
         await vm.repeatModel.setMode(.off)
         #expect(vm.repeatModel.mode == .off)
-        #expect(repo.savedReaderPreferences.last?.repeatMode == .off)
+        #expect(RepeatModeStorage.current() == .off)
     }
 
     @Test func `set repeat A snaps to cursor measure head`() async {
@@ -216,6 +222,8 @@ struct ReaderViewModelRepeatTests {
             repeatMode: .abLoop,
             abRepeat: ABRepeatRange(start: chord, end: endChord),
         )
+        // Repeat mode is now global; the per-score `repeatMode` above is ignored on load, so set the global mode too.
+        RepeatModeStorage.set(.abLoop)
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item,
@@ -244,6 +252,8 @@ struct ReaderViewModelRepeatTests {
             repeatMode: .loopAll,
             abRepeat: nil,
         )
+        // Repeat mode is now global; the per-score `repeatMode` above is ignored on load, so set the global mode too.
+        RepeatModeStorage.set(.loopAll)
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item,
@@ -277,6 +287,8 @@ struct ReaderViewModelRepeatTests {
             repeatMode: .abLoop,
             abRepeat: ABRepeatRange(start: chord, end: endChord),
         )
+        // Repeat mode is now global; the per-score `repeatMode` above is ignored on load, so set the global mode too.
+        RepeatModeStorage.set(.abLoop)
         let controller = FakePlaybackController()
         let vm = ReaderViewModel(
             scoreItem: item,
