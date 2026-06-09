@@ -41,4 +41,7 @@
     <string name="reader_repeat_ab">A–B 循环</string>
     <string name="reader_repeat_set_a">设为 A</string>
     <string name="reader_repeat_set_b">设为 B</string>
+    <string name="reader_playback_play">播放</string>
+    <string name="reader_playback_pause">暂停</string>
+    <string name="reader_playback_stop">停止</string>
 </resources>

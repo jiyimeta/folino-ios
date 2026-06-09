@@ -41,4 +41,7 @@
     <string name="reader_repeat_ab">A–B 区間リピート</string>
     <string name="reader_repeat_set_a">A点</string>
     <string name="reader_repeat_set_b">B点</string>
+    <string name="reader_playback_play">再生</string>
+    <string name="reader_playback_pause">一時停止</string>
+    <string name="reader_playback_stop">停止</string>
 </resources>

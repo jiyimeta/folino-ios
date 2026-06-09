@@ -43,6 +43,8 @@ import io.github.jiyimeta.sheetmusic.compose.render.FontProvider
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
 /** A4 page width (mm) — the wrap width page mode lays out to, scaled to fit the viewport width. */
@@ -103,22 +105,38 @@ fun PagedScore(
     // Reset zoom + pan on page turn (iOS parity: each page enters at fit-width).
     LaunchedEffect(pagerState.currentPage) { scale = 1f; panOffset = Offset.Zero }
 
-    // Auto page-turn: cursor's document-Y (mm) → its page band → animate there, unless dragging.
+    // Auto page-turn: cursor's document-Y (mm) → its page band → animate there.
+    //
+    // The target page is derived from the cursor and de-duplicated BEFORE it drives the animation.
+    // `currentCursor` emits many times per second during playback (and in a burst right after a seek),
+    // so collecting it directly with `collectLatest` cancelled the in-flight `animateScrollToPage` on
+    // every emission. A cancellation that landed after the pager crossed the snap midpoint left
+    // `currentPage` already equal to the target, so the `target != currentPage` guard then suppressed
+    // any restart — stranding the pager at a fractional offset between two pages (the "page turn stops
+    // half-way" bug, most visible after a seek). Mapping to the target page index and applying
+    // `distinctUntilChanged` drops same-page emissions, so a page-turn animation runs to completion and
+    // always settles on an integer page. A genuine page change still cancels-and-restarts via
+    // `collectLatest`, which is correct: the new target's animation settles cleanly on its own page.
     LaunchedEffect(scoreHandle, breaksMm.size, breaksMm.firstOrNull(), breaksMm.lastOrNull()) {
         val h = scoreHandle ?: return@LaunchedEffect
         if (breaksMm.size < 2) return@LaunchedEffect
-        audioVm.currentCursor.collectLatest { cursor ->
-            if (cursor == null || pagerState.isScrollInProgress) return@collectLatest
-            val bytes = SheetMusicJNI.nativeCursorFrame(h, ScoreCursorCodec.encode(cursor))
-            if (bytes.isEmpty()) return@collectLatest
-            val yMm = DecodedFrameCodec.decode(bytes).y.toDouble()
-            var target = 0
-            for (i in 0 until breaksMm.size - 1) {
-                if (yMm >= breaksMm[i] && yMm < breaksMm[i + 1]) { target = i; break }
-                if (i == breaksMm.size - 2) target = i
+        audioVm.currentCursor
+            .mapNotNull { cursor ->
+                if (cursor == null) return@mapNotNull null
+                val bytes = SheetMusicJNI.nativeCursorFrame(h, ScoreCursorCodec.encode(cursor))
+                if (bytes.isEmpty()) return@mapNotNull null
+                val yMm = DecodedFrameCodec.decode(bytes).y.toDouble()
+                var target = 0
+                for (i in 0 until breaksMm.size - 1) {
+                    if (yMm >= breaksMm[i] && yMm < breaksMm[i + 1]) { target = i; break }
+                    if (i == breaksMm.size - 2) target = i
+                }
+                target
             }
-            if (target != pagerState.currentPage) pagerState.animateScrollToPage(target)
-        }
+            .distinctUntilChanged()
+            .collectLatest { target ->
+                if (target != pagerState.currentPage) pagerState.animateScrollToPage(target)
+            }
     }
 
     Box(

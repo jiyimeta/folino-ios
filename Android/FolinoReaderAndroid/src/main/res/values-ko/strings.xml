@@ -41,4 +41,7 @@
     <string name="reader_repeat_ab">A–B 구간 반복</string>
     <string name="reader_repeat_set_a">A 지점</string>
     <string name="reader_repeat_set_b">B 지점</string>
+    <string name="reader_playback_play">재생</string>
+    <string name="reader_playback_pause">일시정지</string>
+    <string name="reader_playback_stop">정지</string>
 </resources>

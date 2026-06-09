@@ -42,4 +42,7 @@
     <string name="reader_repeat_ab">A–B Loop</string>
     <string name="reader_repeat_set_a">Set A</string>
     <string name="reader_repeat_set_b">Set B</string>
+    <string name="reader_playback_play">Play</string>
+    <string name="reader_playback_pause">Pause</string>
+    <string name="reader_playback_stop">Stop</string>
 </resources>
