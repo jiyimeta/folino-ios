@@ -169,7 +169,9 @@ fun ScoreListScaffold(
                         ) {
                             Icon(
                                 if (selectedAllFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                contentDescription = stringResource(R.string.favorite_add),
+                                contentDescription = stringResource(
+                                    if (selectedAllFavorited) R.string.favorite_remove else R.string.favorite_add,
+                                ),
                             )
                         }
                         IconButton(
