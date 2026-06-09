@@ -36,9 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -103,7 +105,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("settings") {
-                            SettingsNavGraph(prefs, versionItems, onBack = { rootNav.popBackStack() })
+                            SettingsNavGraph(prefs, versionItems, onBack = { rootNav.popBackStackIfResumed() })
                         }
                     }
                 }
@@ -237,7 +239,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     playlistId = id,
                     playlistName = name,
                     onOpenScore = openReader,
-                    onBack = { nav.popBackStack() },
+                    onBack = { nav.popBackStackIfResumed() },
                 )
             }
             composable("tags") {
@@ -263,7 +265,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     tagId = id,
                     tagName = name,
                     onOpenScore = openReader,
-                    onBack = { nav.popBackStack() },
+                    onBack = { nav.popBackStackIfResumed() },
                 )
             }
             composable(
@@ -310,7 +312,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
                     globalA4ReferenceHz = globalA4Hz,
-                    onBack = { nav.popBackStack() },
+                    onBack = { nav.popBackStackIfResumed() },
                 )
             }
         }
@@ -334,7 +336,7 @@ private fun SettingsNavGraph(
             )
         }
         composable("licenses") {
-            LicensesRoute(onBack = { nav.popBackStack() })
+            LicensesRoute(onBack = { nav.popBackStackIfResumed() })
         }
     }
 }
@@ -395,5 +397,15 @@ private fun LicensesRoute(onBack: () -> Unit) {
         },
     ) { padding ->
         Box(Modifier.padding(padding)) { LicensesScreen() }
+    }
+}
+
+// Pops the back stack only while the current destination is still RESUMED. A rapid double-tap on a
+// back button would otherwise call popBackStack() twice: the first pop returns to the start
+// destination and the second pops past it, leaving an empty NavHost (a blank screen). The leaving
+// destination drops out of RESUMED the instant the first pop begins, so the second tap is a no-op.
+private fun NavController.popBackStackIfResumed() {
+    if (currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true) {
+        popBackStack()
     }
 }
