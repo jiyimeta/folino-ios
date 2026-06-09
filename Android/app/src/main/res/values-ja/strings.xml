@@ -1,7 +1,0 @@
-<resources>
-    <string name="nav_recent">最近開いた</string>
-    <string name="recent_empty">まだ楽譜を開いていません</string>
-    <string name="recent_today">今日</string>
-    <string name="recent_this_week">今週</string>
-    <string name="recent_earlier">それ以前</string>
-</resources>
