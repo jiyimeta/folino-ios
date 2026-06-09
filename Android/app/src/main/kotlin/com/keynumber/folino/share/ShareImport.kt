@@ -9,7 +9,7 @@ import java.util.UUID
 /** A file copied out of a content:// share into our cache, ready for the importer. */
 data class StagedShareFile(val path: String, val originalName: String)
 
-/** Accepted score extensions — mirror of Domain ShareImportPolicy.acceptedExtensions. */
+// WARNING: must be kept in sync with Domain ShareImportPolicy.acceptedExtensions (JNI-opaque, can't be read from Kotlin).
 private val ACCEPTED = setOf("mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid")
 
 private fun isAccepted(name: String): Boolean =
