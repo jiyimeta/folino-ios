@@ -66,6 +66,7 @@ import com.keynumber.folino.reader.layoutOptionsFromPrefs
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
+import com.keynumber.folino.ui.theme.FolinoTheme
 import com.keynumber.folino.ui.library.FavoritesListScreen
 import com.keynumber.folino.ui.library.RecentScreen
 import com.keynumber.folino.ui.library.LibraryScreen
@@ -125,7 +126,7 @@ class MainActivity : ComponentActivity(), PipHost {
             }
 
         setContent {
-            MaterialTheme {
+            FolinoTheme {
                 Surface {
                     // Keep PiP params current: auto-enter flag (API 31+) and play/pause glyph.
                     val pipEligible by ReaderPipController.eligible.collectAsState()
