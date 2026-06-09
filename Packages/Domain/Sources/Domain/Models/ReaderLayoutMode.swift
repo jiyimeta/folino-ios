@@ -47,6 +47,11 @@ public enum ReaderGlobalSettingsKey {
     /// Defaults to `true` at the `@AppStorage` site. When false, only the compact transport pill shows.
     public static let showSeekBarEnabled = "readerShowSeekBarEnabled"
 
+    /// `PlaylistContinuationMode.rawValue` (String). Global, sticky. Governs whether finishing a score that was opened
+    /// from a playlist advances to the next score. Defaults to `PlaylistContinuationMode.playThrough` at each
+    /// `@AppStorage` site. Has no effect when the Reader was opened standalone or when a per-score repeat is active.
+    public static let playlistContinuationMode = "readerPlaylistContinuationMode"
+
     /// Double. Global A4 reference frequency in Hz, applied to all scores unless a per-score override is set in
     /// `ReaderPreferences.a4ReferenceHz`. Clamped to `[A4Reference.minHz, A4Reference.maxHz]`. Defaults to
     /// `A4Reference.standardHz` (440 Hz) when absent. Key used by both `@AppStorage` (Settings UI, future) and
