@@ -378,15 +378,14 @@ extension ReaderViewModel: ScoreInfoEditing {
     }
 
     func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async {
-        let trimmedTitle = fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else { return }
+        guard let n = fields.normalized() else { return }
         var updated = item
-        updated.title = trimmedTitle
-        updated.subtitle = fields.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.composer = fields.composer.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.arranger = fields.arranger.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.lyricist = fields.lyricist.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.copyright = fields.copyright.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.title = n.title
+        updated.subtitle = n.subtitle
+        updated.composer = n.composer
+        updated.arranger = n.arranger
+        updated.lyricist = n.lyricist
+        updated.copyright = n.copyright
         do {
             try await repository.saveScoreItem(updated)
             scoreItem = updated
