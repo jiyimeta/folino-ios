@@ -10,19 +10,22 @@ struct RepeatModePicker: View {
                 icon(for: mode)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 24, height: 24)
+                    .frame(width: 18, height: 18)
                     .accessibilityLabel(String(localized: "reader.repeat.title", bundle: .module))
                     .tag(mode)
             }
         }
         .pickerStyle(.segmented)
+        // Pin to the same compact height as the other inspector rows so the segmented control doesn't stand taller.
+        .frame(height: 24)
         .accessibilityValue(value)
     }
 
     private func icon(for mode: RepeatMode) -> Image {
         switch mode {
         case .off: Image(systemName: "arrow.forward.to.line.compact")
-        case .loopAll: Image(systemName: "repeat")
+        // Loops the single open score, so "repeat one" reads more accurately than the generic `repeat` (repeat-all).
+        case .loopAll: Image(systemName: "repeat.1")
         case .abLoop: Image(
                 uiImage: UIImage(resource: .repeatAB)
                     .resized(to: CGSize(width: 18, height: 18)),
