@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -390,55 +389,45 @@ private fun ScoreRow(
             },
             trailingContent = {
                 if (!selectionMode) {
-                    Row {
-                        IconButton(onClick = onToggleFavorite) {
-                            Icon(
-                                if (row.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                contentDescription = stringResource(
-                                    if (row.isFavorite) R.string.favorite_remove else R.string.favorite_add,
-                                ),
-                            )
+                    Box {
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more))
                         }
-                        Box {
-                            IconButton(onClick = { menu = true }) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more))
-                            }
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            stringResource(
-                                                if (row.isFavorite) R.string.favorite_remove else R.string.favorite_add,
-                                            ),
-                                        )
-                                    },
-                                    onClick = {
-                                        menu = false
-                                        onToggleFavorite()
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.export)) },
-                                    onClick = {
-                                        menu = false
-                                        onExport()
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.add_to_playlist)) },
-                                    onClick = {
-                                        menu = false
-                                        onAddToPlaylist()
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.edit_tags)) },
-                                    onClick = {
-                                        menu = false
-                                        onEditTags()
-                                    },
-                                )
-                            }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            if (row.isFavorite) R.string.favorite_remove else R.string.favorite_add,
+                                        ),
+                                    )
+                                },
+                                onClick = {
+                                    menu = false
+                                    onToggleFavorite()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.export)) },
+                                onClick = {
+                                    menu = false
+                                    onExport()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.add_to_playlist)) },
+                                onClick = {
+                                    menu = false
+                                    onAddToPlaylist()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.edit_tags)) },
+                                onClick = {
+                                    menu = false
+                                    onEditTags()
+                                },
+                            )
                         }
                     }
                 }

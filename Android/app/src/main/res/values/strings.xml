@@ -64,9 +64,9 @@
     <string name="reader_settings_a4_description">The reference pitch applied to all scores. Each score can override it.</string>
     <string name="search_hint">Search</string>
     <string name="search_no_results">No results</string>
-    <string name="nav_favorites">Favorites</string>
-    <string name="favorites_empty_title">No favorites yet</string>
-    <string name="favorites_empty_hint">Tap the star on a score to add it here.</string>
-    <string name="favorite_add">Add to favorites</string>
-    <string name="favorite_remove">Remove from favorites</string>
+    <string name="nav_favorites">Starred</string>
+    <string name="favorites_empty_title">No starred scores yet</string>
+    <string name="favorites_empty_hint">Scores you star will appear here.</string>
+    <string name="favorite_add">Add to Starred</string>
+    <string name="favorite_remove">Remove from Starred</string>
 </resources>
