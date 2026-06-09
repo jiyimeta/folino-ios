@@ -16,7 +16,10 @@ struct PlaylistContinuationPicker: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .fixedSize()
+        // No `.fixedSize()`: it pins the segmented control's tall intrinsic height, which the enclosing `List` reserves
+        // as the row's cell height (a large vertical gap around the control on device). Matching `RepeatModePicker`, we
+        // let the control fill the row width and clamp its height so the row stays as compact as the slider rows.
+        .frame(height: 24)
     }
 }
 

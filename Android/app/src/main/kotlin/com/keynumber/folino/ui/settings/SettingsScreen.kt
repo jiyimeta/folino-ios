@@ -1,11 +1,18 @@
 package com.keynumber.folino.ui.settings
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PictureInPicture
@@ -17,8 +24,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.keynumber.folino.BuildConfig
 import com.keynumber.folino.R
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -30,6 +39,7 @@ fun SettingsScreen(
     onOpenLicenses: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val metronome by prefs.metronome.collectAsState(initial = false)
     val pip by prefs.pip.collectAsState(initial = false)
     val collapse by prefs.collapseRests.collectAsState(initial = false)
@@ -159,7 +169,49 @@ fun SettingsScreen(
                     )
                 }
             }
+            item {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { sendFeedback(context) }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Email,
+                        contentDescription = "Send Feedback",
+                        modifier = Modifier.padding(end = 12.dp),
+                    )
+                    Text("Send Feedback", Modifier.weight(1f))
+                }
+            }
         }
+    }
+}
+
+/**
+ * Opens the user's email app pre-filled with a feedback message. Mirrors iOS FeedbackMailView:
+ * same recipient, "folino Feedback" subject, and an App Version / OS / Device header followed by a
+ * blank "Feedback:" prompt. Shows a Toast if no email app can handle the intent (the Android
+ * analogue of iOS canSendMail() being false).
+ */
+private fun sendFeedback(context: Context) {
+    val body = buildString {
+        append("App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n")
+        append("OS: Android ${Build.VERSION.RELEASE}\n")
+        append("Device: ${Build.MANUFACTURER} ${Build.MODEL}\n\n")
+        append("Feedback:\n")
+    }
+    val intent = Intent(Intent.ACTION_SENDTO).apply {
+        data = Uri.parse("mailto:")
+        putExtra(Intent.EXTRA_EMAIL, arrayOf("jiyi.meta@gmail.com"))
+        putExtra(Intent.EXTRA_SUBJECT, "folino Feedback")
+        putExtra(Intent.EXTRA_TEXT, body)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
     }
 }
 
