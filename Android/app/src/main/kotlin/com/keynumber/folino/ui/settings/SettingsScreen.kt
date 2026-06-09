@@ -28,9 +28,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Repeat
 import com.keynumber.folino.BuildConfig
 import com.keynumber.folino.R
 import com.keynumber.folino.diagnostics.CrashReporting
+import com.keynumber.folino.reader.RepeatMode
+import com.keynumber.folino.reader.RepeatModePicker
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -49,6 +52,7 @@ fun SettingsScreen(
     val layout by prefs.layoutMode.collectAsState(initial = "page")
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
+    val repeatModeWire by prefs.repeatMode.collectAsState(initial = "off")
 
     LazyColumn(
         Modifier
@@ -109,6 +113,24 @@ fun SettingsScreen(
                         ) { Text(mode.take(1).uppercase()) }
                     }
                 }
+            }
+        }
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Repeat,
+                    contentDescription = "Repeat",
+                    modifier = Modifier.padding(end = 12.dp),
+                )
+                Text("Repeat", Modifier.weight(1f))
+                RepeatModePicker(
+                    selected = RepeatMode.fromWire(repeatModeWire),
+                    enabled = true,
+                    onSelect = { scope.launch { prefs.setRepeatMode(it.wire) } },
+                )
             }
         }
         item {
