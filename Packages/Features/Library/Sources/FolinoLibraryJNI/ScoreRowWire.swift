@@ -1,9 +1,9 @@
 import Wirelet
 
 /// Display projection of a score row, marshaled across the JNI boundary
-/// as a Kotlin `data class ScoreRowWire(id, title, subtitle, composer)`.
+/// as a Kotlin `data class ScoreRowWire(id, title, subtitle, composer, isFavorite)`.
 /// Fields mirror the iOS Library row (title + subtitle on the primary line,
-/// composer on the secondary line).
+/// composer on the secondary line; `isFavorite` drives the row's star).
 @WireFormat
 public struct ScoreRowWire: Equatable, Sendable {
     public var id: String
