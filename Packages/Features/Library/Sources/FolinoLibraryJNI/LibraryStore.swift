@@ -21,6 +21,10 @@ public protocol LibraryStore {
     /// under `localFileName` (`"<id>.mscz"`). Overwrites if present.
     func copyImportedFile(fromPath sourcePath: String, localFileName: String)
 
+    /// SHA-256 hex digest of the file at `path` (Kotlin: java.security.MessageDigest). `""` if the file is unreadable.
+    /// Used for iOS-parity duplicate detection on import.
+    func sha256(path: String) -> String
+
     /// Remove a managed score file. Used by permanent purge (a future Trash
     /// screen); soft-delete does **not** call this.
     func removeFile(localFileName: String)

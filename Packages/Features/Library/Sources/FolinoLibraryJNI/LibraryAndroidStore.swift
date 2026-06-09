@@ -94,6 +94,7 @@ public final class LibraryAndroidStore {
         let id = UUID().uuidString
         // Shared iOS naming convention: "<id>.<canonicalExtension>".
         let localFileName = "\(id).\(ScoreFormat.mscz.canonicalExtension)"
+        let hash = store.sha256(path: path)
         store.copyImportedFile(fromPath: path, localFileName: localFileName)
         store.upsert(ScoreRecordWire(
             id: id,
@@ -101,10 +102,60 @@ public final class LibraryAndroidStore {
             subtitle: fields.subtitle ?? "",
             composer: fields.composer ?? "",
             localFileName: localFileName,
+            contentHash: hash,
             deletedAt: 0,
             lastOpenedAt: 0,
         ))
         reload()
+    }
+
+    /// Share import (iOS Share Extension parity). `paths`/`originalNames` are parallel arrays of staged files the
+    /// Kotlin transport copied into the app cache dir. `playlistMode`: 0 library-only, 1 existing (`playlistId`),
+    /// 2 new (`newPlaylistName`). Runs the shared `SharedImportCoordinator`; returns counts + the id to open (if
+    /// `openAfter`).
+    @WireletExpose
+    public func importShared(
+        _ paths: [String],
+        _ originalNames: [String],
+        _ playlistMode: Int32,
+        _ playlistId: String,
+        _ newPlaylistName: String,
+        _ openAfter: Bool,
+    ) -> ImportSharedResultWire {
+        let files = zip(paths, originalNames).map { SharedImportFile(path: $0, originalName: $1) }
+        let choice: PlaylistChoice = switch playlistMode {
+        case 1: UUID(uuidString: playlistId).map { .existing(PlaylistID(rawValue: $0)) } ?? .libraryOnly
+        case 2: .createNew(name: newPlaylistName)
+        default: .libraryOnly
+        }
+        let importer = AndroidShareImporter(store: store)
+        let target = AndroidSharePlaylistTarget(owner: self)
+        let coordinator = SharedImportCoordinator(importer: importer, target: target)
+
+        // Bridge the async coordinator to this synchronous JNI method. PRECONDITION: importShared must be called from
+        // a Kotlin background thread (never the main thread) — `sem.wait()` blocks the calling thread until the Task
+        // completes. The Android adapter methods contain no real suspension points (all I/O is synchronous JNI calls
+        // into the Room-backed LibraryStore), so the cooperative thread pool that runs the Task cannot starve waiting
+        // on the blocked caller, and no deadlock is possible.
+        let box = ResultBox()
+        let sem = DispatchSemaphore(value: 0)
+        Task {
+            box.value = await coordinator.run(files: files, choice: choice, openAfter: openAfter)
+            sem.signal()
+        }
+        sem.wait()
+        let shared = box.value
+
+        reload()
+        reloadPlaylists()
+        return ImportSharedResultWire(
+            importedCount: Int32(shared.importedIDs.count),
+            skippedCount: Int32(shared.skipped.count),
+            openAfterId: shared.openAfterID ?? "",
+            createdPlaylistId: shared.createdPlaylistID ?? "",
+            targetPlaylistId: shared.targetPlaylistID ?? "",
+            playlistCreateFailureName: shared.playlistCreateFailureName ?? "",
+        )
     }
 
     /// Soft-delete (iOS parity): stamp `deletedAt`, keep the file. The row
@@ -815,3 +866,90 @@ public final class LibraryAndroidStore {
 }
 
 // swiftlint:enable type_body_length
+
+// MARK: - Owner helpers (called by AndroidSharePlaylistTarget; non-@WireletExpose so an extension is fine)
+
+extension LibraryAndroidStore {
+    func sharePlaylistExists(_ id: String) -> Bool {
+        domainPlaylist(id) != nil
+    }
+
+    func shareCreatePlaylist(_ name: String) -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let playlist = Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date())
+        persist(playlist)
+        return playlist.id.rawValue.uuidString
+    }
+
+    func shareAppend(_ scoreIDs: [String], _ playlistID: String) {
+        guard var playlist = domainPlaylist(playlistID) else { return }
+        let ids = scoreIDs.compactMap { raw -> ScoreItemID? in
+            guard let uuid = UUID(uuidString: raw) else { return nil }
+            return ScoreItemID(rawValue: uuid)
+        }
+        playlist.appendUnique(ids)
+        persist(playlist)
+    }
+}
+
+// MARK: - Async-bridge helpers (file-scope, used only within one synchronous importShared call)
+
+/// Mutable result holder so the bridging `Task` can publish the coordinator result back to the synchronous caller.
+private final class ResultBox: @unchecked Sendable {
+    var value = SharedImportResult()
+}
+
+/// Android importer adapter: hash → dedup against live records → parse + copy + upsert. Mirrors `importScore` plus
+/// duplicate detection. No resolver (MVP) — duplicates are skipped silently, returned as `.duplicate`.
+private struct AndroidShareImporter: SharedImportFileImporting, @unchecked Sendable {
+    let store: LibraryStore
+
+    // swiftlint:disable:next async_without_await
+    func importFile(_ file: SharedImportFile, isMultiFile: Bool) async -> SharedImportFileResult {
+        guard FileManager.default.fileExists(atPath: file.path) else { return .skipped(.missingFile) }
+        let hash = store.sha256(path: file.path)
+        if !hash.isEmpty,
+           let dup = store.loadAll().first(where: { $0.deletedAt <= 0 && $0.contentHash == hash })
+        {
+            return .duplicate(existingID: dup.id, existingTitle: dup.title)
+        }
+        let url = URL(fileURLWithPath: file.path)
+        guard let score = try? MSCZReader.parse(contentsOf: url) else { return .skipped(.parseFailed) }
+        let fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, score: score)
+        let id = UUID().uuidString
+        let localFileName = "\(id).\(ScoreFormat.mscz.canonicalExtension)"
+        store.copyImportedFile(fromPath: file.path, localFileName: localFileName)
+        store.upsert(ScoreRecordWire(
+            id: id,
+            title: fields.title,
+            subtitle: fields.subtitle ?? "",
+            composer: fields.composer ?? "",
+            localFileName: localFileName,
+            contentHash: hash,
+            deletedAt: 0,
+            lastOpenedAt: 0,
+        ))
+        return .imported(id: id)
+    }
+}
+
+/// Android playlist adapter: reuses `LibraryAndroidStore`'s domain-playlist helpers via the owner reference.
+private struct AndroidSharePlaylistTarget: SharedImportPlaylistTargeting, @unchecked Sendable {
+    unowned let owner: LibraryAndroidStore
+
+    // swiftlint:disable:next async_without_await
+    func playlistExists(id: String) async -> Bool {
+        owner.sharePlaylistExists(id)
+    }
+
+    // swiftlint:disable:next async_without_await
+    func createPlaylist(name: String) async -> String? {
+        owner.shareCreatePlaylist(name)
+    }
+
+    // swiftlint:disable:next async_without_await
+    func append(scoreIDs: [String], toPlaylistID id: String) async {
+        owner.shareAppend(scoreIDs, id)
+    }
+}
