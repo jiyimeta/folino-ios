@@ -67,8 +67,10 @@ import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.library.FavoritesListScreen
+import com.keynumber.folino.ui.library.RecentScreen
 import com.keynumber.folino.ui.library.LibraryScreen
 import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.outlined.History
 import com.keynumber.folino.ui.library.PlaylistDetailScreen
 import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
@@ -212,7 +214,8 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
     // Reader is a detail pushed on top; only the top-level list destinations
     // expose the drawer (hamburger + edge swipe).
     val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted" ||
-        currentRoute == "playlists" || currentRoute == "tags" || currentRoute == "favorites"
+        currentRoute == "playlists" || currentRoute == "tags" || currentRoute == "favorites" ||
+        currentRoute == "recent"
 
     fun switchTo(route: String) {
         scope.launch { drawerState.close() }
@@ -228,6 +231,7 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
     // Library row tap → push the Reader, addressed by score id (Reader resolves
     // filesDir/Scores/<id>.mscz); title rides along for the app bar.
     val openReader: (com.keynumber.folino.library.ScoreRowWire) -> Unit = { row ->
+        vm.markOpened(row.id)
         val t = URLEncoder.encode(row.title, "UTF-8")
         nav.navigate("reader/${row.id}/$t")
     }
@@ -248,6 +252,13 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
                     label = { Text(stringResource(R.string.nav_all_scores)) },
                     selected = currentRoute == "list",
                     onClick = { switchTo("list") },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Outlined.History, contentDescription = null) },
+                    label = { Text(stringResource(R.string.nav_recent)) },
+                    selected = currentRoute == "recent",
+                    onClick = { switchTo("recent") },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 NavigationDrawerItem(
@@ -309,6 +320,13 @@ private fun LibraryNavGraph(prefs: SettingsPrefs, onOpenSettings: () -> Unit) {
         NavHost(nav, startDestination = "list") {
             composable("list") {
                 LibraryScreen(
+                    viewModel = vm,
+                    onOpenScore = openReader,
+                    onOpenDrawer = openDrawer,
+                )
+            }
+            composable("recent") {
+                RecentScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
                     onOpenDrawer = openDrawer,

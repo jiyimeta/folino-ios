@@ -22,6 +22,7 @@ data class ScoreRecordEntity(
     val composer: String,
     @ColumnInfo(name = "local_file_name") val localFileName: String,
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
+    @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Double = 0.0, // 0 == never opened
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
 )
 
@@ -184,7 +185,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {
-            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt, it.isFavorite)
+            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt, it.lastOpenedAt, it.isFavorite)
         }
 
     override fun upsert(record: ScoreRecordWire) {
@@ -196,6 +197,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 composer = record.composer,
                 localFileName = record.localFileName,
                 deletedAt = record.deletedAt,
+                lastOpenedAt = record.lastOpenedAt,
                 isFavorite = record.isFavorite,
             ),
         )

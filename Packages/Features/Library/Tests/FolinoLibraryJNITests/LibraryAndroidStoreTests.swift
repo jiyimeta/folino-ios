@@ -128,8 +128,24 @@ struct LibraryAndroidStoreTests {
     @Test func `init hydrates live rows from the backend`() {
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz", deletedAt: 0),
-            ScoreRecordWire(id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz", deletedAt: 123),
+            ScoreRecordWire(
+                id: "a",
+                title: "A",
+                subtitle: "",
+                composer: "",
+                localFileName: "a.mscz",
+                deletedAt: 0,
+                lastOpenedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: "b",
+                title: "B",
+                subtitle: "",
+                composer: "",
+                localFileName: "b.mscz",
+                deletedAt: 123,
+                lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         // Only the live row (deletedAt == 0) is displayed.
@@ -212,6 +228,7 @@ struct LibraryAndroidStoreTests {
                 composer: "",
                 localFileName: "old.mscz",
                 deletedAt: 100,
+                lastOpenedAt: 0,
             ),
             ScoreRecordWire(
                 id: "live",
@@ -220,6 +237,7 @@ struct LibraryAndroidStoreTests {
                 composer: "",
                 localFileName: "live.mscz",
                 deletedAt: 0,
+                lastOpenedAt: 0,
             ),
             ScoreRecordWire(
                 id: "new",
@@ -228,6 +246,7 @@ struct LibraryAndroidStoreTests {
                 composer: "",
                 localFileName: "new.mscz",
                 deletedAt: 200,
+                lastOpenedAt: 0,
             ),
         ]
         let store = LibraryAndroidStore(store: backend)
@@ -239,7 +258,10 @@ struct LibraryAndroidStoreTests {
     @Test func `permanentlyDelete removes the record and its file, dropping it from both lists`() {
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: "x", title: "X", subtitle: "", composer: "", localFileName: "x.mscz", deletedAt: 50),
+            ScoreRecordWire(
+                id: "x", title: "X", subtitle: "", composer: "",
+                localFileName: "x.mscz", deletedAt: 50, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         #expect(store.deletedScores.map(\.id) == ["x"])
@@ -255,7 +277,10 @@ struct LibraryAndroidStoreTests {
     @Test func `permanentlyDelete unknown id is a no-op`() {
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: "x", title: "X", subtitle: "", composer: "", localFileName: "x.mscz", deletedAt: 50),
+            ScoreRecordWire(
+                id: "x", title: "X", subtitle: "", composer: "",
+                localFileName: "x.mscz", deletedAt: 50, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         store.permanentlyDelete("nope")
@@ -266,8 +291,14 @@ struct LibraryAndroidStoreTests {
     @Test func `restoreMany clears deletedAt for all given ids in one pass`() {
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz", deletedAt: 10),
-            ScoreRecordWire(id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz", deletedAt: 20),
+            ScoreRecordWire(
+                id: "a", title: "A", subtitle: "", composer: "",
+                localFileName: "a.mscz", deletedAt: 10, lastOpenedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: "b", title: "B", subtitle: "", composer: "",
+                localFileName: "b.mscz", deletedAt: 20, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         #expect(store.deletedScores.count == 2)
@@ -282,9 +313,18 @@ struct LibraryAndroidStoreTests {
     @Test func `permanentlyDeleteMany purges all given ids and their files`() {
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz", deletedAt: 10),
-            ScoreRecordWire(id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz", deletedAt: 20),
-            ScoreRecordWire(id: "c", title: "C", subtitle: "", composer: "", localFileName: "c.mscz", deletedAt: 0),
+            ScoreRecordWire(
+                id: "a", title: "A", subtitle: "", composer: "",
+                localFileName: "a.mscz", deletedAt: 10, lastOpenedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: "b", title: "B", subtitle: "", composer: "",
+                localFileName: "b.mscz", deletedAt: 20, lastOpenedAt: 0,
+            ),
+            ScoreRecordWire(
+                id: "c", title: "C", subtitle: "", composer: "",
+                localFileName: "c.mscz", deletedAt: 0, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
 
@@ -339,7 +379,10 @@ struct LibraryAndroidStoreTests {
         let idC = "00000000-0000-0000-0000-000000000003"
         let backend = FakeLibraryStore()
         backend.records = [(idA, "a"), (idB, "b"), (idC, "c")].map { id, title in
-            ScoreRecordWire(id: id, title: title, subtitle: "", composer: "", localFileName: "\(id).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: id, title: title, subtitle: "", composer: "",
+                localFileName: "\(id).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createPlaylist("P")
@@ -364,7 +407,10 @@ struct LibraryAndroidStoreTests {
         let c = "00000000-0000-0000-0000-0000000000c3"
         let backend = FakeLibraryStore()
         backend.records = [a, b, c].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createPlaylist("P")
@@ -381,7 +427,10 @@ struct LibraryAndroidStoreTests {
         let c = "00000000-0000-0000-0000-0000000000c3"
         let backend = FakeLibraryStore()
         backend.records = [a, b, c].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createPlaylist("P")
@@ -398,7 +447,10 @@ struct LibraryAndroidStoreTests {
         let b = "00000000-0000-0000-0000-0000000000b2"
         let backend = FakeLibraryStore()
         backend.records = [a, b].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createPlaylist("P")
@@ -420,7 +472,10 @@ struct LibraryAndroidStoreTests {
         let c = "00000000-0000-0000-0000-0000000000c3"
         let backend = FakeLibraryStore()
         backend.records = [a, b, c].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createPlaylist("P")
@@ -440,7 +495,10 @@ struct LibraryAndroidStoreTests {
         let c = "00000000-0000-0000-0000-0000000000c3"
         let backend = FakeLibraryStore()
         backend.records = [a, b, c].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createPlaylist("P")
@@ -485,7 +543,10 @@ struct LibraryAndroidStoreTests {
         let a = "00000000-0000-0000-0000-0000000000a1"
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: a, title: "A", subtitle: "", composer: "", localFileName: "\(a).mscz", deletedAt: 0),
+            ScoreRecordWire(
+                id: a, title: "A", subtitle: "", composer: "",
+                localFileName: "\(a).mscz", deletedAt: 0, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         store.createTag("P")
@@ -505,7 +566,10 @@ struct LibraryAndroidStoreTests {
         let c = "00000000-0000-0000-0000-0000000000c3"
         let backend = FakeLibraryStore()
         backend.records = [a, b, c].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createTag("T")
@@ -533,7 +597,10 @@ struct LibraryAndroidStoreTests {
         let b = "00000000-0000-0000-0000-0000000000b2"
         let backend = FakeLibraryStore()
         backend.records = [a, b].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createTag("T")
@@ -557,6 +624,7 @@ struct LibraryAndroidStoreTests {
                 composer: "",
                 localFileName: "\(a).mscz",
                 deletedAt: 0,
+                lastOpenedAt: 0,
             ),
             ScoreRecordWire(
                 id: b,
@@ -565,6 +633,7 @@ struct LibraryAndroidStoreTests {
                 composer: "",
                 localFileName: "\(b).mscz",
                 deletedAt: 0,
+                lastOpenedAt: 0,
             ),
         ]
         let store = LibraryAndroidStore(store: backend)
@@ -582,7 +651,10 @@ struct LibraryAndroidStoreTests {
         let b = "00000000-0000-0000-0000-0000000000b2"
         let backend = FakeLibraryStore()
         backend.records = [a, b].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createTag("T")
@@ -604,7 +676,10 @@ struct LibraryAndroidStoreTests {
         let c = "00000000-0000-0000-0000-0000000000c3"
         let backend = FakeLibraryStore()
         backend.records = [a, b, c].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
         store.createTag("T")
@@ -623,7 +698,10 @@ struct LibraryAndroidStoreTests {
         let a = "00000000-0000-0000-0000-0000000000a1"
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: a, title: "A", subtitle: "", composer: "", localFileName: "\(a).mscz", deletedAt: 0),
+            ScoreRecordWire(
+                id: a, title: "A", subtitle: "", composer: "",
+                localFileName: "\(a).mscz", deletedAt: 0, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         store.createTag("T")
@@ -641,7 +719,10 @@ struct LibraryAndroidStoreTests {
     @Test func `favorite sets the flag, surfaces it on the row, and lists it under favorites`() {
         let backend = FakeLibraryStore()
         backend.records = [
-            ScoreRecordWire(id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz", deletedAt: 0),
+            ScoreRecordWire(
+                id: "a", title: "A", subtitle: "", composer: "",
+                localFileName: "a.mscz", deletedAt: 0, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         #expect(store.favorites.isEmpty)
@@ -659,7 +740,7 @@ struct LibraryAndroidStoreTests {
         backend.records = [
             ScoreRecordWire(
                 id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz",
-                deletedAt: 0, isFavorite: true,
+                deletedAt: 0, lastOpenedAt: 0, isFavorite: true,
             ),
         ]
         let store = LibraryAndroidStore(store: backend)
@@ -677,11 +758,11 @@ struct LibraryAndroidStoreTests {
         backend.records = [
             ScoreRecordWire(
                 id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz",
-                deletedAt: 0, isFavorite: true,
+                deletedAt: 0, lastOpenedAt: 0, isFavorite: true,
             ),
             ScoreRecordWire(
                 id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz",
-                deletedAt: 999, isFavorite: true,
+                deletedAt: 999, lastOpenedAt: 0, isFavorite: true,
             ),
         ]
         let store = LibraryAndroidStore(store: backend)
@@ -692,7 +773,10 @@ struct LibraryAndroidStoreTests {
     @Test func `favoriteMany favorites all; unfavoriteMany clears all`() {
         let backend = FakeLibraryStore()
         backend.records = ["a", "b", "c"].map {
-            ScoreRecordWire(id: $0, title: $0, subtitle: "", composer: "", localFileName: "\($0).mscz", deletedAt: 0)
+            ScoreRecordWire(
+                id: $0, title: $0, subtitle: "", composer: "",
+                localFileName: "\($0).mscz", deletedAt: 0, lastOpenedAt: 0,
+            )
         }
         let store = LibraryAndroidStore(store: backend)
 
@@ -708,9 +792,12 @@ struct LibraryAndroidStoreTests {
         backend.records = [
             ScoreRecordWire(
                 id: "a", title: "A", subtitle: "", composer: "", localFileName: "a.mscz",
-                deletedAt: 0, isFavorite: true,
+                deletedAt: 0, lastOpenedAt: 0, isFavorite: true,
             ),
-            ScoreRecordWire(id: "b", title: "B", subtitle: "", composer: "", localFileName: "b.mscz", deletedAt: 0),
+            ScoreRecordWire(
+                id: "b", title: "B", subtitle: "", composer: "",
+                localFileName: "b.mscz", deletedAt: 0, lastOpenedAt: 0,
+            ),
         ]
         let store = LibraryAndroidStore(store: backend)
         store.favoriteMany(["a", "b"]) // "a" already favorited, "b" newly favorited

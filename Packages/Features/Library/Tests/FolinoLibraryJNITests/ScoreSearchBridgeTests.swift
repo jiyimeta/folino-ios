@@ -86,6 +86,7 @@ struct ScoreSearchBridgeTests {
                 composer: "Beethoven",
                 localFileName: "sonata.mscz",
                 deletedAt: 0,
+                lastOpenedAt: 0,
             ),
             ScoreRecordWire(
                 id: "prelude",
@@ -94,6 +95,7 @@ struct ScoreSearchBridgeTests {
                 composer: "Chopin",
                 localFileName: "prelude.mscz",
                 deletedAt: 0,
+                lastOpenedAt: 0,
             ),
         ]
         let store = LibraryAndroidStore(store: backend)
@@ -118,6 +120,7 @@ struct ScoreSearchBridgeTests {
                 composer: "Beethoven",
                 localFileName: "sonata.mscz",
                 deletedAt: 0,
+                lastOpenedAt: 0,
             ),
             ScoreRecordWire(
                 id: "prelude",
@@ -126,6 +129,7 @@ struct ScoreSearchBridgeTests {
                 composer: "Chopin",
                 localFileName: "prelude.mscz",
                 deletedAt: 0,
+                lastOpenedAt: 0,
             ),
         ]
         let store = LibraryAndroidStore(store: backend)
