@@ -18,6 +18,7 @@ public struct ScoreRecordWire: Equatable, Sendable {
     public var composer: String
     public var localFileName: String // "<id>.mscz" — built in Swift, iOS naming convention
     public var deletedAt: Double // 0 == live; >0 == soft-deleted at that Unix time
+    public var isFavorite: Bool // mirrors iOS ScoreItem.isFavorite
 
     public init(
         id: String,
@@ -26,6 +27,7 @@ public struct ScoreRecordWire: Equatable, Sendable {
         composer: String,
         localFileName: String,
         deletedAt: Double,
+        isFavorite: Bool = false,
     ) {
         self.id = id
         self.title = title
@@ -33,5 +35,6 @@ public struct ScoreRecordWire: Equatable, Sendable {
         self.composer = composer
         self.localFileName = localFileName
         self.deletedAt = deletedAt
+        self.isFavorite = isFavorite
     }
 }
