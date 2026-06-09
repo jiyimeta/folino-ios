@@ -1,4 +1,5 @@
-@testable import Domain
+import Domain
+import Foundation
 import Testing
 
 struct EditableScoreInfoTests {
@@ -66,6 +67,39 @@ struct EditableScoreInfoTests {
         #expect(info.normalized() == nil)
     }
 
+    @Test func `init from item falls back to file metadata for nil credits`() {
+        let meta = ScoreFileMetadata(
+            source: .unknown,
+            composer: "FileComposer",
+            arranger: nil,
+            lyricist: nil,
+            copyright: nil,
+        )
+        let item = ScoreItem(
+            title: "Song",
+            subtitle: nil,
+            composer: nil,
+            arranger: nil,
+            lyricist: nil,
+            copyright: nil,
+            instrumentationSummary: nil,
+            localFileName: "test.mxl",
+            contentHash: "abc123",
+            sizeBytes: 0,
+            lengthBeats: 0,
+            defaultTempoBpm: 120,
+            primaryKey: nil,
+            addedAt: Date(timeIntervalSince1970: 0),
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+        )
+        let info = EditableScoreInfo(item: item, fileMetadata: meta)
+        #expect(info.title == "Song")
+        #expect(info.composer == "FileComposer") // nil stored → file fallback
+        #expect(info.subtitle.isEmpty) // subtitle never falls back
+    }
+
     @Test func `normalized keeps cleared fields as empty string`() {
         let info = EditableScoreInfo(
             title: "T",
@@ -76,6 +110,11 @@ struct EditableScoreInfoTests {
             copyright: "",
         )
         let n = info.normalized()
-        #expect(n.map(\.composer.isEmpty) == true)
+        #expect(n?.title == "T")
+        #expect(n?.subtitle.isEmpty == true)
+        #expect(n?.composer.isEmpty == true)
+        #expect(n?.arranger.isEmpty == true)
+        #expect(n?.lyricist.isEmpty == true)
+        #expect(n?.copyright.isEmpty == true)
     }
 }
