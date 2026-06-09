@@ -45,4 +45,5 @@
     <string name="reader_playback_play">Play</string>
     <string name="reader_playback_pause">Pause</string>
     <string name="reader_playback_stop">Stop</string>
+    <string name="reader_edit_info">Edit info</string>
 </resources>
