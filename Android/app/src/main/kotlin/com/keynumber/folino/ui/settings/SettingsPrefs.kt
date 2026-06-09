@@ -39,6 +39,12 @@ object SettingsKeys {
      * the same persisted value when reading a cross-platform DataStore export.
      */
     val a4ReferenceHz = doublePreferencesKey("reader.a4ReferenceHz")
+    /**
+     * Whether Crashlytics crash-data collection is enabled. Opt-out semantics:
+     * absent (first launch) is treated as `true`, mirroring iOS
+     * `privacyCrashReportingEnabled`. The toggle is an opt-*out*.
+     */
+    val crashReportingEnabled = booleanPreferencesKey("privacy.crashReporting.enabled")
 }
 
 class SettingsPrefs(private val context: Context) {
@@ -54,6 +60,8 @@ class SettingsPrefs(private val context: Context) {
     val clefOverrides: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.clefOverrides] ?: emptySet() }
     val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
     val a4ReferenceHz: Flow<Double> = context.dataStore.data.map { it[SettingsKeys.a4ReferenceHz] ?: 440.0 }
+    val crashReporting: Flow<Boolean> =
+        context.dataStore.data.map { it[SettingsKeys.crashReportingEnabled] ?: true }
 
     suspend fun setMetronome(v: Boolean) = context.dataStore.edit { it[SettingsKeys.metronomeEnabled] = v }
     suspend fun setPip(v: Boolean) = context.dataStore.edit { it[SettingsKeys.pipEnabled] = v }
@@ -67,4 +75,7 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setClefOverrides(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.clefOverrides] = v }
     suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
     suspend fun setA4ReferenceHz(v: Double) = context.dataStore.edit { it[SettingsKeys.a4ReferenceHz] = v }
+
+    suspend fun setCrashReporting(v: Boolean) =
+        context.dataStore.edit { it[SettingsKeys.crashReportingEnabled] = v }
 }
