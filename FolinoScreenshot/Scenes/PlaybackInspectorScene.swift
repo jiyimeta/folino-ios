@@ -22,6 +22,10 @@ struct PlaybackInspectorScene: View {
     init() {
         // Font provider + hint suppression — also here (not only in ScreenshotApp.init) so #Preview renders the panel.
         ScreenshotSetup.ensure()
+        // The repeat mode is a global, sticky UserDefault shared with the ABRepeat scene. Pin it to `.off` here so this
+        // panel shows a neutral repeat state (and doesn't inherit `.abLoop` left persisted by a prior ABRepeat launch),
+        // differentiating it from the ABRepeat scene regardless of capture order.
+        RepeatModeStorage.set(.off)
     }
 
     var body: some View {
