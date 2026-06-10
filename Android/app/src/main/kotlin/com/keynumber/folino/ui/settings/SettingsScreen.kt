@@ -20,13 +20,16 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PictureInPicture
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.ViewArray
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,13 +37,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.filled.Repeat
 import com.keynumber.folino.BuildConfig
 import com.keynumber.folino.R
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.RepeatModePicker
+import com.keynumber.folino.reader.ui.InspectorRow
+import com.keynumber.folino.reader.ui.InspectorSectionHeader
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -49,6 +54,7 @@ fun SettingsScreen(
     prefs: SettingsPrefs,
     versionHistory: List<VersionHistoryItem>,
     onOpenLicenses: (() -> Unit)? = null,
+    onOpenVersionHistory: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -61,6 +67,8 @@ fun SettingsScreen(
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
     val repeatModeWire by prefs.repeatMode.collectAsState(initial = "off")
     val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
+    val showInvisible by prefs.showInvisible.collectAsState(initial = false)
+    val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
     val soundfontVM = remember { com.keynumber.folino.soundfont.SoundfontController.viewModel(context) }
     val sfState by soundfontVM.stateWire.collectAsState()
 
@@ -82,7 +90,8 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item { Text("Reader", style = MaterialTheme.typography.titleSmall) }
+        // ── Reader ────────────────────────────────────────────────────────────
+        item { InspectorSectionHeader("Reader") }
         item {
             ToggleRow(
                 icon = Icons.Filled.MusicNote,
@@ -96,6 +105,7 @@ fun SettingsScreen(
                 icon = Icons.Filled.PictureInPicture,
                 title = "Picture in Picture",
                 checked = pip,
+                subtitle = "Keeps playing in a small floating window when you leave the app.",
                 onChange = { v -> scope.launch { prefs.setPip(v) } },
             )
         }
@@ -109,76 +119,32 @@ fun SettingsScreen(
         }
         item {
             ToggleRow(
+                icon = Icons.Filled.Visibility,
+                title = "Show hidden elements",
+                checked = showInvisible,
+                onChange = { v -> scope.launch { prefs.setShowInvisible(v) } },
+            )
+        }
+        item {
+            ToggleRow(
                 icon = Icons.Filled.ScreenLockPortrait,
-                title = "Keep screen awake",
+                title = "Prevent auto-lock",
                 checked = keepAwake,
+                subtitle = "Keeps the screen on while a score is open.",
                 onChange = { v -> scope.launch { prefs.setKeepAwake(v) } },
             )
         }
         item {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.ViewArray,
-                    contentDescription = "Layout",
-                    modifier = Modifier.padding(end = 12.dp),
-                )
-                Text("Layout", Modifier.weight(1f))
-                val layoutModes = listOf(
-                    Triple("vertical", "Vertical", Icons.Filled.SwapVert),
-                    Triple("horizontal", "Horizontal", Icons.Filled.SwapHoriz),
-                    Triple("page", "Page", Icons.Filled.AutoStories),
-                )
-                var expanded by remember { mutableStateOf(false) }
-                val current = layoutModes.firstOrNull { it.first == layout } ?: layoutModes.last()
-                Box {
-                    // Trigger row (icon + label + chevron) opens an anchored DropdownMenu — same
-                    // menu-picker pattern as the Reader display inspector's layout-mode control.
-                    Row(
-                        Modifier.clickable { expanded = true }
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Text(current.second)
-                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
-                    }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        layoutModes.forEach { (raw, label, icon) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                leadingIcon = {
-                                    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-                                },
-                                trailingIcon = if (raw == layout) {
-                                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                } else {
-                                    null
-                                },
-                                onClick = {
-                                    scope.launch { prefs.setLayoutMode(raw) }
-                                    expanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-            }
+            ToggleRow(
+                icon = Icons.Filled.Timeline,
+                title = "Show seek bar",
+                checked = showSeekBar,
+                onChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
+            )
         }
         item {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Repeat,
-                    contentDescription = "Repeat",
-                    modifier = Modifier.padding(end = 12.dp),
-                )
-                Text("Repeat", Modifier.weight(1f))
+            // Repeat mode picker row
+            InspectorRow(label = "Repeat", leadingIcon = Icons.Filled.Repeat) {
                 RepeatModePicker(
                     selected = RepeatMode.fromWire(repeatModeWire),
                     enabled = true,
@@ -252,6 +218,60 @@ fun SettingsScreen(
             )
         }
         item {
+            // Display mode dropdown (formerly labelled "Layout") — placed after A4 to match iOS Reader-section order.
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ViewArray,
+                    contentDescription = "Display mode",
+                    modifier = Modifier.padding(end = 12.dp),
+                )
+                Text("Display mode", Modifier.weight(1f))
+                val layoutModes = listOf(
+                    Triple("vertical", "Vertical", Icons.Filled.SwapVert),
+                    Triple("horizontal", "Horizontal", Icons.Filled.SwapHoriz),
+                    Triple("page", "Page", Icons.Filled.AutoStories),
+                )
+                var expanded by remember { mutableStateOf(false) }
+                val current = layoutModes.firstOrNull { it.first == layout } ?: layoutModes.last()
+                Box {
+                    // Trigger row (icon + label + chevron) opens an anchored DropdownMenu — same
+                    // menu-picker pattern as the Reader display inspector's layout-mode control.
+                    Row(
+                        Modifier.clickable { expanded = true }
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text(current.second)
+                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        layoutModes.forEach { (raw, label, icon) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                leadingIcon = {
+                                    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                                },
+                                trailingIcon = if (raw == layout) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else {
+                                    null
+                                },
+                                onClick = {
+                                    scope.launch { prefs.setLayoutMode(raw) }
+                                    expanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        item {
             SoundfontRow(
                 state = sfState,
                 isWiFi = { soundfontVM.isWiFiNow() },
@@ -261,8 +281,17 @@ fun SettingsScreen(
             )
         }
         item {
+            Text(
+                "When Repeat (single or A–B) is on, it takes priority and playback won't advance to the next score.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // ── Privacy ───────────────────────────────────────────────────────────
+        item {
             Spacer(Modifier.height(16.dp))
-            Text(stringResource(R.string.settings_privacy_title), style = MaterialTheme.typography.titleSmall)
+            InspectorSectionHeader(stringResource(R.string.settings_privacy_title))
         }
         item {
             ToggleRow(
@@ -276,68 +305,29 @@ fun SettingsScreen(
                 },
             )
         }
-        // Empty when suppressed (e.g. the 1.0.0 first-release guard in MainActivity); hide the whole section,
-        // header included, so we never render a bare "Version History" heading with no entries.
-        if (versionHistory.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.History,
-                        contentDescription = "Version History",
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                    Text("Version History", style = MaterialTheme.typography.titleSmall)
-                }
-            }
-            items(versionHistory.size) { idx ->
-                val v = versionHistory[idx]
-                Column {
-                    Text(v.version, style = MaterialTheme.typography.titleMedium)
-                    v.descriptions.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
-                }
-            }
-        }
+
+        // ── About ─────────────────────────────────────────────────────────────
+        // The standalone inline version-history section has been removed; Version History is now a
+        // navigation row inside the About section (wired when onOpenVersionHistory != null).
         if (onOpenLicenses != null) {
             item {
                 Spacer(Modifier.height(16.dp))
-                Text("About", style = MaterialTheme.typography.titleSmall)
+                InspectorSectionHeader("About")
             }
-            item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenLicenses() }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Description,
-                        contentDescription = "Licenses",
-                        modifier = Modifier.padding(end = 12.dp),
-                    )
-                    Text("Licenses", Modifier.weight(1f))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                        contentDescription = null,
-                    )
+            if (onOpenVersionHistory != null) {
+                item {
+                    InspectorRow(label = "Version History", leadingIcon = Icons.Filled.History, onClick = onOpenVersionHistory) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null)
+                    }
                 }
             }
             item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { sendFeedback(context) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Email,
-                        contentDescription = "Send Feedback",
-                        modifier = Modifier.padding(end = 12.dp),
-                    )
-                    Text("Send Feedback", Modifier.weight(1f))
+                InspectorRow(label = "Licenses", leadingIcon = Icons.Filled.Description, onClick = onOpenLicenses) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null)
                 }
+            }
+            item {
+                InspectorRow(label = "Send Feedback", leadingIcon = Icons.Filled.Email, onClick = { sendFeedback(context) }) {}
             }
         }
     }
@@ -377,25 +367,7 @@ private fun ToggleRow(
     onChange: (Boolean) -> Unit,
     subtitle: String? = null,
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = title,
-            modifier = Modifier.padding(end = 12.dp),
-        )
-        Column(Modifier.weight(1f)) {
-            Text(title)
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+    InspectorRow(label = title, leadingIcon = icon, subtitle = subtitle) {
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }
@@ -431,11 +403,11 @@ private fun SoundfontRow(
     ) {
         Icon(
             imageVector = Icons.Filled.MusicNote,
-            contentDescription = "High-Quality SoundFont",
+            contentDescription = "High quality audio",
             modifier = Modifier.padding(end = 12.dp),
         )
         Column(Modifier.weight(1f)) {
-            Text("High-Quality SoundFont")
+            Text("High quality audio")
             if (subtitle.isNotEmpty()) {
                 Text(
                     subtitle,
@@ -535,10 +507,9 @@ private fun SoundfontRow(
 data class VersionHistoryItem(val version: String, val descriptions: List<String>)
 
 /**
- * Global A4 reference pitch slider row (415–466 Hz).
- * Title shows "A4 = NNNHz" (mirroring iOS; no space before "Hz"). A description line below
- * tells the user the value applies to all scores but can be overridden per-score.
- * Snaps to 432 or 440 Hz on release when within 1 Hz of either value.
+ * Global A4 reference pitch row, now labelled "Default Calibration" (iOS parity). Shows:
+ * tuning-fork icon + title on the left, "A4 = NNNHz" monospace readout on the right, a description
+ * caption, and the 415–466 Hz slider. Snaps to 432 or 440 Hz on release when within 1 Hz.
  */
 @Composable
 private fun A4SliderRow(
@@ -546,25 +517,22 @@ private fun A4SliderRow(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(
-                imageVector = Icons.Filled.MusicNote,
-                contentDescription = stringResource(R.string.settings_a4_reference),
-                modifier = Modifier.padding(end = 12.dp),
-            )
+            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text("Default Calibration", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Text(
                 "A4 = ${hz.roundToInt()}Hz",
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
             )
         }
         Text(
             stringResource(R.string.reader_settings_a4_description),
-            modifier = Modifier.padding(start = 36.dp),
+            Modifier.padding(start = 32.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
