@@ -68,9 +68,9 @@ struct VisualInspectorScreen: View {
             Text("reader.preferences.layoutDirection", bundle: .module)
             Spacer()
             Picker(selection: $layoutModeRaw) {
-                Image(systemName: "arrow.up.and.down")
+                Image(systemName: "arrow.up.and.down.text.horizontal")
                     .tag(ReaderLayoutMode.vertical.rawValue)
-                Image(systemName: "arrow.left.and.right")
+                Image("arrow.left.and.right.text.horizontal", bundle: .module)
                     .tag(ReaderLayoutMode.horizontal.rawValue)
                 Image(systemName: "book.pages")
                     .tag(ReaderLayoutMode.page.rawValue)

@@ -13,7 +13,7 @@ struct TransposeRow: View {
         )
         HStack(spacing: 8) {
             if showsIcon {
-                Image(systemName: "arrow.up.arrow.down")
+                Image("sharp.flat", bundle: .module)
                     .foregroundStyle(Color.accentColor)
             }
             Text("reader.inspector.transpose", bundle: .module)
