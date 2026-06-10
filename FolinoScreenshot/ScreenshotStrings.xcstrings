@@ -1,0 +1,26 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "scene.library.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every score in one place"
+          }
+        }
+      }
+    },
+    "scene.library.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your whole library"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
