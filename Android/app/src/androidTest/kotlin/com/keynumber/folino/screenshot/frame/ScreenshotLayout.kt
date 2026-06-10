@@ -45,23 +45,31 @@ data class ScreenshotLayout(
     val background: Brush,
 ) {
     companion object {
-        private val darkGradient = Brush.verticalGradient(
-            listOf(Color(0xFF0D0D0D), Color(0xFF333333)),
+        // Marketing background = the folino app-icon fill (App/Resources/folino.icon/icon.json):
+        // a vertical gradient from white at the top to a light blue (srgb 0.807, 0.884, 1.0 ≈
+        // #CEE1FF) at 70% height. Matches the brand icon so the store listing reads as folino.
+        private val iconGradient = Brush.verticalGradient(
+            0.0f to Color.White,
+            0.7f to Color(0xFFCEE1FF),
         )
+
+        // Dark navy ink for caption text — readable on the light icon gradient (white captions
+        // would vanish). Derived from the icon's light-appearance title gradient (~#2E3043).
+        private val captionInk = Color(0xFF1E2438)
 
         fun phone(
             statusBarColor: Color = Color.Black,
             innerBackground: Color = Color.Black,
-            background: Brush = darkGradient,
+            background: Brush = iconGradient,
         ) = ScreenshotLayout(
             titleTopFraction = 0.025f,
-            subtitleTopFraction = 0.085f,
-            frameTopFraction = 0.155f,
+            subtitleTopFraction = 0.095f,
+            frameTopFraction = 0.165f,
             frameHeightFraction = 0.96f,
-            titleFontSize = 24.sp,
-            subtitleFontSize = 18.sp,
-            titleColor = Color.White,
-            subtitleColor = Color.White.copy(alpha = 0.85f),
+            titleFontSize = 54.sp,
+            subtitleFontSize = 32.sp,
+            titleColor = captionInk,
+            subtitleColor = captionInk.copy(alpha = 0.72f),
             horizontalPadding = 20.dp,
             frameAspectRatio = 0.46f,
             frameCornerRadius = 28.dp,
@@ -76,16 +84,16 @@ data class ScreenshotLayout(
         fun tablet(
             statusBarColor: Color = Color.Black,
             innerBackground: Color = Color.Black,
-            background: Brush = darkGradient,
+            background: Brush = iconGradient,
         ) = ScreenshotLayout(
             titleTopFraction = 0.03f,
-            subtitleTopFraction = 0.085f,
-            frameTopFraction = 0.17f,
+            subtitleTopFraction = 0.09f,
+            frameTopFraction = 0.18f,
             frameHeightFraction = 0.83f,
-            titleFontSize = 44.sp,
-            subtitleFontSize = 28.sp,
-            titleColor = Color.White,
-            subtitleColor = Color.White.copy(alpha = 0.85f),
+            titleFontSize = 72.sp,
+            subtitleFontSize = 44.sp,
+            titleColor = captionInk,
+            subtitleColor = captionInk.copy(alpha = 0.72f),
             horizontalPadding = 56.dp,
             frameAspectRatio = 0.75f,
             frameCornerRadius = 24.dp,
