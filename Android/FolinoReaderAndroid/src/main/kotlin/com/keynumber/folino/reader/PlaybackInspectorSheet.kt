@@ -115,7 +115,55 @@ fun PlaybackInspectorSheet(
     continuationModeWire: String = "playThrough",
     /** Called when the user selects a new continuation mode. */
     onContinuationModeChange: (String) -> Unit = {},
-    /** Ordered part display names (declared for the upcoming mixer-grouping task; unused here). */
+    /** Ordered part display names, for grouping the mixer by part. */
+    partNames: List<String> = emptyList(),
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        PlaybackInspectorContent(
+            audioVm = audioVm,
+            openingQuarterBpm = openingQuarterBpm,
+            metronomeEnabled = metronomeEnabled,
+            onMetronomeChange = onMetronomeChange,
+            onPersistMasterVolume = onPersistMasterVolume,
+            onPersistTempoMultiplier = onPersistTempoMultiplier,
+            onPersistA4ReferenceHz = onPersistA4ReferenceHz,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = onTransposeChange,
+            staffAddressByIndex = staffAddressByIndex,
+            onPersistStaffProgram = onPersistStaffProgram,
+            onPersistStaffVolume = onPersistStaffVolume,
+            isInPlaylist = isInPlaylist,
+            continuationModeWire = continuationModeWire,
+            onContinuationModeChange = onContinuationModeChange,
+            partNames = partNames,
+        )
+    }
+}
+
+/**
+ * The scrollable body of the playback inspector, factored out of [PlaybackInspectorSheet] so the same
+ * General + Parts control list can be hosted either inside the production `ModalBottomSheet` or — for
+ * static capture harnesses, which can't render a separate sheet window into a node bitmap — directly in
+ * a plain surface. The sheet wrapper owns the modal chrome; this composable owns only the control rows.
+ */
+@Composable
+fun PlaybackInspectorContent(
+    audioVm: ReaderAudioViewModel,
+    openingQuarterBpm: Double,
+    modifier: Modifier = Modifier,
+    metronomeEnabled: Boolean = false,
+    onMetronomeChange: (Boolean) -> Unit = {},
+    onPersistMasterVolume: (Double) -> Unit = {},
+    onPersistTempoMultiplier: (Double) -> Unit = {},
+    onPersistA4ReferenceHz: (Double) -> Unit = {},
+    transposeSemitones: Int = 0,
+    onTransposeChange: (Int) -> Unit = {},
+    staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
+    onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
+    isInPlaylist: Boolean = false,
+    continuationModeWire: String = "playThrough",
+    onContinuationModeChange: (String) -> Unit = {},
     partNames: List<String> = emptyList(),
 ) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
@@ -133,13 +181,12 @@ fun PlaybackInspectorSheet(
     var generalExpanded by rememberSaveable { mutableStateOf(true) }
     var mixerExpanded by rememberSaveable { mutableStateOf(true) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
+    LazyColumn(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
             // ── General (master / tempo / metronome) ────────────────
             item {
                 CollapsibleHeader(stringResource(R.string.reader_inspector_general), generalExpanded) { generalExpanded = !generalExpanded }
@@ -272,7 +319,6 @@ fun PlaybackInspectorSheet(
                 }
             }
         }
-    }
 }
 
 /**

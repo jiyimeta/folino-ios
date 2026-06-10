@@ -1,70 +1,104 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "scene.horizontal.subtitle" : {
+    "fixture.tag.practicing" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Follow along left to right"
+            "value" : "Practicing"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "左から右へ追いやすい"
+            "value" : "練習中"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Follow along left to right"
+            "state" : "translated",
+            "value" : "연습 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Follow along left to right"
+            "state" : "translated",
+            "value" : "练习中"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Follow along left to right"
+            "state" : "translated",
+            "value" : "練習中"
           }
         }
       }
     },
-    "scene.horizontal.title" : {
+    "scene.abRepeat.subtitle" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Horizontal scrolling"
+            "value" : "Loop just the section you choose\nFocus practice on the tricky parts"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "横スクロール表示"
+            "value" : "指定した区間だけループし、\n苦手な部分を重点的に練習"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Horizontal scrolling"
+            "state" : "translated",
+            "value" : "지정한 구간만 반복하여\n어려운 부분을 집중 연습"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Horizontal scrolling"
+            "state" : "translated",
+            "value" : "只循环指定的乐段\n集中练习不擅长的部分"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Horizontal scrolling"
+            "state" : "translated",
+            "value" : "只循環指定的樂段\n集中練習不擅長的部分"
+          }
+        }
+      }
+    },
+    "scene.abRepeat.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B Repeat"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B リピート機能"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B 반복 재생"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B 重复播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B 重複播放"
           }
         }
       }
@@ -74,31 +108,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Every score in one place"
+            "value" : "All your scores in one place\nOrganize with playlists and tags"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべての楽譜を一か所に"
+            "value" : "すべての楽譜を一か所に\nプレイリストとタグで整理"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Every score in one place"
+            "state" : "translated",
+            "value" : "모든 악보를 한곳에\n재생목록과 태그로 정리"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Every score in one place"
+            "state" : "translated",
+            "value" : "所有乐谱集于一处\n用播放列表和标签整理"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Every score in one place"
+            "state" : "translated",
+            "value" : "所有樂譜集於一處\n用播放列表和標籤整理"
           }
         }
       }
@@ -108,31 +142,167 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your whole library"
+            "value" : "Collect & organize scores"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ライブラリのすべて"
+            "value" : "楽譜を集約・整理"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Your whole library"
+            "state" : "translated",
+            "value" : "악보를 한곳에 정리"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Your whole library"
+            "state" : "translated",
+            "value" : "汇集与整理乐谱"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Your whole library"
+            "state" : "translated",
+            "value" : "彙整與整理樂譜"
+          }
+        }
+      }
+    },
+    "scene.pip.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read scores while using other apps\n*Enable the feature in Settings"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "他のアプリを使いながら譜読み\n※設定画面から機能を有効にしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다른 앱을 쓰면서 악보 보기\n*설정 화면에서 기능을 켜 주세요"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用其他应用时也能看谱\n*请在设置中开启此功能"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用其他 App 時也能看譜\n*請在設定中開啟此功能"
+          }
+        }
+      }
+    },
+    "scene.pip.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Picture in Picture"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ピクチャ・イン・ピクチャ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "픽처 인 픽처"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画中画"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "子母畫面"
+          }
+        }
+      }
+    },
+    "scene.playbackInspector.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change tempo and key\nSwitch repeat modes\nAdjust volume per part"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テンポやキーの変更\nリピートモードの切り替え\nパートごとの音量調整"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "템포와 조 변경\n반복 모드 전환\n파트별 음량 조절"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整速度与调号\n切换重复模式\n分声部调节音量"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "調整速度與調號\n切換重複模式\n分聲部調節音量"
+          }
+        }
+      }
+    },
+    "scene.playbackInspector.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flexible playback"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "柔軟な再生設定"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유연한 재생 설정"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灵活的播放设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "彈性的播放設定"
           }
         }
       }
@@ -142,31 +312,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clean, focused notation"
+            "value" : "Clear, focused notation\nImport MIDI and mscz files"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "見やすく集中できる楽譜表示"
+            "value" : "見やすく集中できる楽譜表示\nMIDIやmsczを取り込める"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Clean, focused notation"
+            "state" : "translated",
+            "value" : "보기 편하고 집중되는 악보 표시\nMIDI와 mscz 가져오기"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Clean, focused notation"
+            "state" : "translated",
+            "value" : "清晰易读、专注的乐谱显示\n可导入 MIDI 和 mscz"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Clean, focused notation"
+            "state" : "translated",
+            "value" : "清晰易讀、專注的樂譜顯示\n可匯入 MIDI 和 mscz"
           }
         }
       }
@@ -176,31 +346,99 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Read any score"
+            "value" : "View & play scores"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "どんな楽譜も読める"
+            "value" : "楽譜を表示・再生"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Read any score"
+            "state" : "translated",
+            "value" : "악보 보기와 재생"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Read any score"
+            "state" : "translated",
+            "value" : "显示与播放乐谱"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Read any score"
+            "state" : "translated",
+            "value" : "顯示與播放樂譜"
+          }
+        }
+      }
+    },
+    "scene.visualInspector.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change the layout\nShow only the parts you need\nChange clefs"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レイアウトの変更\n必要なパートだけ表示\n音部記号の変更"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "레이아웃 변경\n필요한 파트만 표시\n음자리표 변경"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改排版\n仅显示需要的声部\n更改谱号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "變更排版\n僅顯示需要的聲部\n變更譜號"
+          }
+        }
+      }
+    },
+    "scene.visualInspector.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flexible display"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "柔軟な表示設定"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유연한 표시 설정"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灵活的显示设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "彈性的顯示設定"
           }
         }
       }

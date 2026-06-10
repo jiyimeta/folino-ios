@@ -11,12 +11,19 @@ struct ReaderScene: View {
     @Environment(\.screenshotIdiom) private var idiom
 
     init() {
-        // Runs before `body`, so the Reader observes page mode on first layout. Only one scene runs per app launch
+        // Font provider + hint suppression — also here (not only in ScreenshotApp.init) so #Preview renders notation.
+        ScreenshotSetup.ensure()
+        // Runs before `body`, so the Reader observes vertical mode on first layout. Only one scene runs per app launch
         // (the dispatcher picks one by launch arg), so this never conflicts with HorizontalScene's `.horizontal` set.
+        // Vertical (not page) so the notation also renders in SwiftUI `#Preview`; page-mode pagination only completes
+        // in the live capture run, leaving the preview's score area empty.
         UserDefaults.standard.set(
-            ReaderLayoutMode.page.rawValue,
+            ReaderLayoutMode.vertical.rawValue,
             forKey: ReaderGlobalSettingsKey.layoutMode,
         )
+        // "Seek bar off" — collapses the full seek card to the compact transport pill (small play button,
+        // bottom-right) rather than removing playback chrome entirely.
+        UserDefaults.standard.set(false, forKey: ReaderGlobalSettingsKey.showSeekBarEnabled)
     }
 
     var body: some View {
@@ -31,7 +38,10 @@ struct ReaderScene: View {
                 table: "ScreenshotStrings",
                 bundle: .forClass(ScreenshotStringsAnchor.self),
             ),
-            layout: FolinoScreenshotLayout.layout(for: idiom),
+            layout: FolinoScreenshotLayout.layout(
+                for: idiom,
+                subtitleBullet: true,
+            ),
         ) {
             // ReaderRootScreen uses `.navigationTitle` / `.toolbar(.hidden,...)`, so it needs an ancestor nav container
             // but renders no visible bar of its own — the outer NavigationStack adds no doubled chrome.

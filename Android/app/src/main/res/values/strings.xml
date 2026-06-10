@@ -150,4 +150,6 @@
     <string name="settings_about_licenses">Licenses</string>
     <string name="settings_about_send_feedback">Send Feedback</string>
     <string name="settings_feedback_no_email_app">No email app found</string>
+
+    <string name="import_failed">Couldn\'t import this file.</string>
 </resources>

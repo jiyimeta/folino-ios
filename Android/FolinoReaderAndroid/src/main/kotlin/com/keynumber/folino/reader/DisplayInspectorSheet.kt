@@ -113,17 +113,48 @@ fun DisplayInspectorSheet(
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
 ) {
-    var generalExpanded by rememberSaveable { mutableStateOf(true) }
-    var partsExpanded by rememberSaveable { mutableStateOf(true) }
-    val typeface = rememberBravuraTypeface()
-
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
+        DisplayInspectorContent(
+            options = options,
+            parts = parts,
+            onChange = onChange,
+            showSeekBar = showSeekBar,
+            onShowSeekBarChange = onShowSeekBarChange,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = onTransposeChange,
+        )
+    }
+}
+
+/**
+ * The scrollable body of the display inspector, factored out of [DisplayInspectorSheet] so the same
+ * control list can be hosted either inside the production `ModalBottomSheet` or — for static capture
+ * harnesses, which can't render a separate sheet window into a node bitmap — directly in a plain
+ * surface. The sheet wrapper owns the modal chrome; this composable owns only the control rows.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DisplayInspectorContent(
+    options: LayoutOptions,
+    parts: List<PartDescriptor>,
+    onChange: (LayoutOptions) -> Unit,
+    modifier: Modifier = Modifier,
+    showSeekBar: Boolean = true,
+    onShowSeekBarChange: (Boolean) -> Unit = {},
+    initialGeneralExpanded: Boolean = true,
+    initialPartsExpanded: Boolean = true,
+    transposeSemitones: Int = 0,
+    onTransposeChange: (Int) -> Unit = {},
+) {
+    var generalExpanded by rememberSaveable { mutableStateOf(initialGeneralExpanded) }
+    var partsExpanded by rememberSaveable { mutableStateOf(initialPartsExpanded) }
+    val typeface = rememberBravuraTypeface()
+    LazyColumn(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
             // ── General (layout mode / staff size / display flags) ───
             item {
                 CollapsibleHeader(
@@ -190,7 +221,6 @@ fun DisplayInspectorSheet(
                 }
             }
         }
-    }
 }
 
 @Composable

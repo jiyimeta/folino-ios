@@ -29,7 +29,7 @@ struct VisualInspectorScreen: View {
             CollapsibleSection(isExpanded: $generalExpanded) {
                 layoutRow
                 staffSizeRow
-                TransposeRow(transposeModel: transposeModel)
+                TransposeRow(transposeModel: transposeModel, showsIcon: false)
                 breakPolicyRow
                 collapseRow
                 showInvisibleRow

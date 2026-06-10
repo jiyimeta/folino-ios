@@ -1,0 +1,3 @@
+# Generated Play Store screenshots — produced by `./gradlew :app:collectScreenshots`.
+# These are build output (regenerated from the screenshot harness), not source.
+metadata/android/*/images/
