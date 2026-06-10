@@ -22,6 +22,10 @@ Apply these substitutions throughout the tasks below:
 - Task 6 (`RoomReaderPreferencesStore`) implements the generated `ReaderPreferencesStore` interface; place it in `FolinoLibraryAndroid` next to `RoomLibraryStore` (direct DB access), or let `RoomLibraryStore` implement it directly.
 - Task 8 controller wraps the **generated** observable view model (mirror `SoundfontController.kt`); place it where the app module can reach it.
 
+### AB-repeat stays in its existing measure-based Room table (do NOT fold into the blob)
+
+Domain `ABRepeatRange` is **ChordPath-based** (systemIndex/measureIndex/…), but Android's A-B loop is **measure-index-based** and is **already persisted per-score** via the existing `reader_ab_repeat` Room table + `installRepeatController(loadRange, persistRange, persistMode)`. Folding it into the shared blob would require a lossy measure↔ChordPath conversion for no behavior gain (the persisted value is equivalent either way — parity is about behavior, not storage shape). Decision: **keep `reader_ab_repeat` as-is**; the blob's Domain `abRepeat`/`repeatMode` fields stay unused on Android (same as `repeatMode`). Therefore **Task 5 does NOT drop `reader_ab_repeat`** — it only ADDS `reader_preferences`. The bridge correctly omits AB-repeat getters/setters.
+
 ---
 
 ## Reference Material (read before starting)
