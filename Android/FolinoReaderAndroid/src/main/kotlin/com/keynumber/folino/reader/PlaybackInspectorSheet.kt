@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
@@ -96,6 +97,7 @@ fun PlaybackInspectorSheet(
     val metronomeEnabled by audioVm.metronomeEnabled.collectAsStateWithLifecycle()
     val a4ReferenceHz by audioVm.a4ReferenceHz.collectAsStateWithLifecycle()
     val globalA4ReferenceHz by audioVm.globalA4ReferenceHz.collectAsStateWithLifecycle()
+    val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
 
     val controlsEnabled = engine != null
     // GM catalog is shared Swift (loaded once via JNI, cached). Used by the program picker.
@@ -166,6 +168,25 @@ fun PlaybackInspectorSheet(
                             audioVm.setA4ReferenceHz(next)
                         },
                     )
+                }
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(Icons.Default.Repeat, contentDescription = null)
+                        Text(
+                            stringResource(R.string.reader_repeat_label),
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        RepeatModePicker(
+                            selected = repeatMode,
+                            enabled = controlsEnabled,
+                            onSelect = { audioVm.setRepeatMode(it) },
+                        )
+                    }
                 }
             }
 

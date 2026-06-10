@@ -45,15 +45,22 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // Soundfont download bridge: the reader playback service prefers the downloaded high-quality SF2
+    // and hot-swaps the engine onto it via SoundfontController + the generated store view model.
+    implementation(project(":FolinoSoundfontAndroid"))
+
     // Runtime support for the swift-java-generated bindings under java-generated/
     // (FolinoReaderJNI → shared Domain scroll-follow logic). Locally published to
     // mavenLocal from Packages/Features/Settings/.build/checkouts/swift-java.
     implementation("org.swift.swiftkit:swiftkit-core:1.0-SNAPSHOT")
 
-    // swift-sheet-music Android libraries (mavenLocal, published in Phase A).
-    implementation("io.github.jiyimeta:sheet-music-compose-android:0.0.0-SNAPSHOT")
-    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
-    implementation("io.github.jiyimeta:sheet-music-android:0.0.0-SNAPSHOT")
+    // swift-sheet-music Android libraries (mavenLocal). Version is property-driven
+    // (see gradle.properties `ssmVersion`); pass -PssmVersion=0.0.0-<branch>-SNAPSHOT
+    // to consume a parallel ssm worktree's branch publish. Keep all on one version.
+    val ssmVersion = (findProperty("ssmVersion") as String?) ?: "0.0.0-SNAPSHOT"
+    implementation("io.github.jiyimeta:sheet-music-compose-android:$ssmVersion")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:$ssmVersion")
+    implementation("io.github.jiyimeta:sheet-music-android:$ssmVersion")
 
     testImplementation("junit:junit:4.13.2")
 }

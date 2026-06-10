@@ -35,6 +35,12 @@
     <string name="reader_playback_a4_relative">%1$dHz %2$s센트</string>
     <string name="reader_settings_a4_description">모든 악보 재생에 적용되는 기준음입니다. 악보별로 덮어쓸 수 있습니다.</string>
     <string name="settings_a4_reference">A4 기준음</string>
+    <string name="reader_repeat_label">반복</string>
+    <string name="reader_repeat_off">오프</string>
+    <string name="reader_repeat_loop_all">한 곡 반복</string>
+    <string name="reader_repeat_ab">A–B 구간 반복</string>
+    <string name="reader_repeat_set_a">A 지점</string>
+    <string name="reader_repeat_set_b">B 지점</string>
     <string name="reader_playback_play">재생</string>
     <string name="reader_playback_pause">일시정지</string>
     <string name="reader_playback_stop">정지</string>

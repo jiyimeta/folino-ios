@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jiyimeta.sheetmusic.ScoreMetadata
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
+import io.github.jiyimeta.sheetmusic.audio.model.ClefAnchor
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -42,8 +43,15 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             val local = binder as ReaderPlaybackService.LocalBinder
             serviceBinder = local
             _engine.value = local.engine
+            // A soundfont hot-swap re-prepares the engine and resets these session-only prefs (the engine
+            // can't report them back), so re-push them after the swap rebuilds the synth.
+            local.setOnSoundfontReloaded {
+                local.engine.setMasterVolume(_masterVolume.value)
+                local.engine.setMetronomeEnabled(_metronomeEnabled.value)
+            }
         }
         override fun onServiceDisconnected(name: ComponentName) {
+            serviceBinder?.setOnSoundfontReloaded(null)
             serviceBinder = null
             _engine.value = null
         }
@@ -82,6 +90,69 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     val loopRange: StateFlow<LoopRange?> = _engine
         .flatMapLatest { it?.loopRange ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // ── Repeat / AB-loop ─────────────────────────────────────────────
+    // The repeat controller mirrors iOS RepeatModel. It is installed once per score by the screen,
+    // which supplies the persistence callbacks the app module owns (global mode → DataStore,
+    // per-score A–B range → Room). Mode + range are surfaced as flows for the inspector/transport UI.
+    private val _repeatController = MutableStateFlow<ReaderRepeatController?>(null)
+
+    val repeatMode: StateFlow<RepeatMode> = _repeatController
+        .flatMapLatest { it?.mode ?: emptyFlow() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RepeatMode.OFF)
+
+    val abRange: StateFlow<AbRepeatRange?> = _repeatController
+        .flatMapLatest { it?.abRange ?: emptyFlow() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Staged A endpoint measure index (or null). Drives the A button state + the A boundary marker. */
+    val repeatPendingA: StateFlow<Int?> = _repeatController
+        .flatMapLatest { it?.pendingA ?: emptyFlow() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Staged B endpoint measure index (or null). Drives the B button state + the B boundary marker. */
+    val repeatPendingB: StateFlow<Int?> = _repeatController
+        .flatMapLatest { it?.pendingB ?: emptyFlow() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Installs the repeat controller once the host has wired per-score persistence. [persistMode]
+     * writes the global DataStore pref; [loadRange]/[persistRange] read/write the per-score Room row.
+     * Re-applies the active loop immediately (e.g. restoring an A–B range when reopening a score).
+     */
+    fun installRepeatController(
+        initialMode: RepeatMode,
+        loadRange: () -> AbRepeatRange?,
+        persistRange: (AbRepeatRange?) -> Unit,
+        persistMode: (RepeatMode) -> Unit,
+    ) {
+        _repeatController.value = ReaderRepeatController(
+            // Fall back to measure 0 when no playback cursor exists yet (freshly prepared / stopped —
+            // the playhead is logically at the start), so A/B can be marked before playback starts.
+            currentMeasureProvider = { currentCursor.value?.measureIndexOrNull() ?: 0 },
+            persistedRangeLoader = loadRange,
+            persistRange = persistRange,
+            persistMode = persistMode,
+            applyLoop = ::applyLoop,
+            initialMode = initialMode,
+        )
+    }
+
+    fun setRepeatMode(mode: RepeatMode) { _repeatController.value?.setMode(mode) }
+    fun setRepeatA() { _repeatController.value?.setA() }
+    fun setRepeatB() { _repeatController.value?.setB() }
+
+    /** Translates the controller's active loop into engine calls. */
+    private fun applyLoop(range: AbRepeatRange?, mode: RepeatMode) {
+        val e = engine.value ?: return
+        when (mode) {
+            RepeatMode.OFF -> e.clearLoop()
+            RepeatMode.LOOP_ALL -> e.setLoopFullScore()
+            RepeatMode.AB_LOOP ->
+                if (range != null) e.setLoopMeasures(range.startMeasure, range.endMeasure)
+                else e.clearLoop()
+        }
+    }
 
     // ── UI-facing controls without an engine-side observable ─────────
     // The engine exposes setMasterVolume / setMetronomeEnabled but no StateFlow for
@@ -169,6 +240,12 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             e.setMasterTuning(cents)
             try {
                 e.prepare(scoreHandle)
+                // Re-apply the active loop now that a player is prepared (engine loop calls are
+                // no-ops before prepare). Restores a persisted A–B range or full-score loop.
+                _repeatController.value?.reapply()
+                // Record the handle so the service can re-prepare (hot-swap) the engine when a
+                // high-quality soundfont download completes.
+                serviceBinder?.notePreparedScore(scoreHandle)
             } catch (ex: Exception) {
                 android.util.Log.e("ReaderAudioVM", "prepare failed: ${ex.message}", ex)
             }
@@ -178,5 +255,22 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     override fun onCleared() {
         getApplication<Application>().unbindService(connection)
         super.onCleared()
+    }
+}
+
+/**
+ * Current measure index of a playback cursor, or null. Every audio cursor variant carries a measure
+ * index except a staff-default clef anchor (which is not a playback position).
+ */
+internal fun ScoreCursor.measureIndexOrNull(): Int? = when (this) {
+    is ScoreCursor.Beat -> measureIndex
+    is ScoreCursor.Item -> when (val id = arg0) {
+        is ScoreItemID.Note -> id.arg0.measureIndex
+        is ScoreItemID.Rest -> id.arg0.measureIndex
+        is ScoreItemID.Tuplet -> id.arg0.measureIndex
+        is ScoreItemID.Clef -> when (val anchor = id.arg0) {
+            is ClefAnchor.Explicit -> anchor.arg0.measureIndex
+            is ClefAnchor.StaffDefault -> null
+        }
     }
 }

@@ -142,6 +142,25 @@ interface TagDao {
     }
 }
 
+@Entity(tableName = "reader_ab_repeat")
+data class ReaderAbRepeatEntity(
+    @PrimaryKey @ColumnInfo(name = "score_id") val scoreId: String,
+    @ColumnInfo(name = "start_measure") val startMeasure: Int,
+    @ColumnInfo(name = "end_measure") val endMeasure: Int,
+)
+
+@Dao
+interface ReaderAbRepeatDao {
+    @Query("SELECT * FROM reader_ab_repeat WHERE score_id = :scoreId")
+    fun load(scoreId: String): ReaderAbRepeatEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(entity: ReaderAbRepeatEntity)
+
+    @Query("DELETE FROM reader_ab_repeat WHERE score_id = :scoreId")
+    fun delete(scoreId: String)
+}
+
 @Database(
     entities = [
         ScoreRecordEntity::class,
@@ -149,6 +168,7 @@ interface TagDao {
         PlaylistItemEntity::class,
         TagEntity::class,
         TagItemEntity::class,
+        ReaderAbRepeatEntity::class,
     ],
     // Pre-release: schema is collapsed to a single canonical v1 (no migration
     // history). Schema changes destructively reset via fallbackToDestructiveMigration
@@ -160,6 +180,7 @@ abstract class LibraryDatabase : RoomDatabase() {
     abstract fun dao(): ScoreRecordDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun tagDao(): TagDao
+    abstract fun readerAbRepeatDao(): ReaderAbRepeatDao
 }
 
 /**
@@ -175,14 +196,31 @@ abstract class LibraryDatabase : RoomDatabase() {
  * Kotlin in-memory cache with background write-through (see spec §Risks).
  */
 class RoomLibraryStore(context: Context) : LibraryStore {
-    private val db = Room.databaseBuilder(
-        context.applicationContext,
-        LibraryDatabase::class.java,
-        "folino-library.db",
-    ).allowMainThreadQueries()
-        .fallbackToDestructiveMigration()
-        .fallbackToDestructiveMigrationOnDowngrade()
-        .build()
+    private val db = sharedDatabase(context)
+
+    private companion object {
+        @Volatile
+        private var sharedDb: LibraryDatabase? = null
+
+        /**
+         * Process-wide singleton DB so multiple [RoomLibraryStore] instances (the JNI-injected store
+         * and the per-score AB-repeat accessor constructed from composition) share one connection
+         * pool + invalidation tracker — Room's recommended pattern, and avoids leaking a connection
+         * per Reader entry. Pre-release: destructive reset on any schema change (no migrations).
+         */
+        fun sharedDatabase(context: Context): LibraryDatabase =
+            sharedDb ?: synchronized(this) {
+                sharedDb ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    LibraryDatabase::class.java,
+                    "folino-library.db",
+                ).allowMainThreadQueries()
+                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
+                    .also { sharedDb = it }
+            }
+    }
 
     private val dao = db.dao()
     private val playlistDao = db.playlistDao()
@@ -295,5 +333,14 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun replaceTagItems(tagId: String, items: List<TagItemWire>) {
         tagDao.replaceItems(tagId, items.map { TagItemEntity(it.tagId, it.scoreItemId) })
+    }
+
+    fun loadAbRepeat(scoreId: String): Pair<Int, Int>? =
+        db.readerAbRepeatDao().load(scoreId)?.let { it.startMeasure to it.endMeasure }
+
+    fun saveAbRepeat(scoreId: String, range: Pair<Int, Int>?) {
+        val dao = db.readerAbRepeatDao()
+        if (range == null) dao.delete(scoreId)
+        else dao.upsert(ReaderAbRepeatEntity(scoreId, range.first, range.second))
     }
 }

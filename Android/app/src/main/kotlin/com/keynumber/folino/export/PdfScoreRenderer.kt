@@ -105,6 +105,12 @@ class PdfScoreRenderer(context: Context) : ScorePdfRenderer {
         val path = Path()
         var strokeStarted = false
         var currentArgb: Int = Color.BLACK
+        // State commands (mm; canvas pre-scaled mm -> pt). `dash*` gates the stroke
+        // path effect; `rotationSaveCount` tracks the save depth of an active
+        // SetRotation so the paired `SetRotation(0)` can restore it.
+        var dashOnMM = 0.0
+        var dashOffMM = 0.0
+        var rotationSaveCount = -1
         val glyphPaint = Paint().apply {
             isAntiAlias = true
             color = currentArgb
@@ -141,6 +147,13 @@ class PdfScoreRenderer(context: Context) : ScorePdfRenderer {
                     // independent.
                     strokePaint.color = currentArgb
                     strokePaint.strokeWidth = cmd.width.toFloat()
+                    strokePaint.pathEffect = if (dashOnMM > 0.0 && dashOffMM > 0.0) {
+                        android.graphics.DashPathEffect(
+                            floatArrayOf(dashOnMM.toFloat(), dashOffMM.toFloat()), 0f,
+                        )
+                    } else {
+                        null
+                    }
                     canvas.drawPath(path, strokePaint)
                     path.reset()
                     strokeStarted = false
@@ -194,6 +207,35 @@ class PdfScoreRenderer(context: Context) : ScorePdfRenderer {
                 }
                 is DrawCommand.SetColor -> {
                     currentArgb = cmd.argb.toInt()
+                }
+                is DrawCommand.SetRotation -> {
+                    // Rotate subsequent content about the pivot (mm); radians == 0 restores.
+                    // Mirrors ScoreCanvas: arpeggio wiggles + glissando labels.
+                    if (cmd.radians != 0.0) {
+                        rotationSaveCount = canvas.save()
+                        canvas.rotate(
+                            Math.toDegrees(cmd.radians).toFloat(),
+                            cmd.pivotX.toFloat(),
+                            cmd.pivotY.toFloat(),
+                        )
+                    } else if (rotationSaveCount >= 0) {
+                        canvas.restoreToCount(rotationSaveCount)
+                        rotationSaveCount = -1
+                    }
+                }
+                is DrawCommand.SetDash -> {
+                    // Dash pattern (mm) for subsequent strokes; (0,0) clears it. Ottava line.
+                    dashOnMM = cmd.onMM
+                    dashOffMM = cmd.offMM
+                }
+                is DrawCommand.ItalicText -> {
+                    // Same as Text, slanted. Tuplet digits + rehearsal marks.
+                    glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) bravura else edwin
+                    glyphPaint.textSize = cmd.size.toFloat()
+                    glyphPaint.color = currentArgb
+                    glyphPaint.textSkewX = -0.25f
+                    canvas.drawText(cmd.text, cmd.x.toFloat(), cmd.y.toFloat(), glyphPaint)
+                    glyphPaint.textSkewX = 0f
                 }
             }
         }
