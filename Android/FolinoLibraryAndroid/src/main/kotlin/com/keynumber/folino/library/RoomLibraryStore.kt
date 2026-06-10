@@ -24,6 +24,7 @@ data class ScoreRecordEntity(
     val lyricist: String? = null,
     val copyright: String? = null,
     @ColumnInfo(name = "local_file_name") val localFileName: String,
+    @ColumnInfo(name = "content_hash") val contentHash: String = "",
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
     @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Double = 0.0, // 0 == never opened
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
@@ -160,16 +161,6 @@ interface ReaderAbRepeatDao {
     fun delete(scoreId: String)
 }
 
-val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
-    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS `reader_ab_repeat` (" +
-                "`score_id` TEXT NOT NULL, `start_measure` INTEGER NOT NULL, " +
-                "`end_measure` INTEGER NOT NULL, PRIMARY KEY(`score_id`))",
-        )
-    }
-}
-
 @Database(
     entities = [
         ScoreRecordEntity::class,
@@ -179,7 +170,10 @@ val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
         TagItemEntity::class,
         ReaderAbRepeatEntity::class,
     ],
-    version = 2,
+    // Pre-release: schema is collapsed to a single canonical v1 (no migration
+    // history). Schema changes destructively reset via fallbackToDestructiveMigration
+    // (+ ...OnDowngrade for dev devices that ran a throwaway higher version).
+    version = 1,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -212,7 +206,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
          * Process-wide singleton DB so multiple [RoomLibraryStore] instances (the JNI-injected store
          * and the per-score AB-repeat accessor constructed from composition) share one connection
          * pool + invalidation tracker — Room's recommended pattern, and avoids leaking a connection
-         * per Reader entry.
+         * per Reader entry. Pre-release: destructive reset on any schema change (no migrations).
          */
         fun sharedDatabase(context: Context): LibraryDatabase =
             sharedDb ?: synchronized(this) {
@@ -220,7 +214,10 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                     context.applicationContext,
                     LibraryDatabase::class.java,
                     "folino-library.db",
-                ).allowMainThreadQueries().addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration().build()
+                ).allowMainThreadQueries()
+                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
                     .also { sharedDb = it }
             }
     }
@@ -245,6 +242,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 lyricist = it.lyricist,
                 copyright = it.copyright,
                 localFileName = it.localFileName,
+                contentHash = it.contentHash,
                 deletedAt = it.deletedAt,
                 lastOpenedAt = it.lastOpenedAt,
                 isFavorite = it.isFavorite,
@@ -262,6 +260,7 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 lyricist = record.lyricist,
                 copyright = record.copyright,
                 localFileName = record.localFileName,
+                contentHash = record.contentHash,
                 deletedAt = record.deletedAt,
                 lastOpenedAt = record.lastOpenedAt,
                 isFavorite = record.isFavorite,
@@ -280,6 +279,22 @@ class RoomLibraryStore(context: Context) : LibraryStore {
     override fun removeFile(localFileName: String) {
         File(scoresDir, localFileName).delete()
     }
+
+    override fun sha256(path: String): String =
+        try {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            File(path).inputStream().use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    md.update(buf, 0, n)
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        } catch (e: Exception) {
+            ""
+        }
 
     override fun loadPlaylists(): List<PlaylistRecordWire> =
         playlistDao.loadPlaylists().map { PlaylistRecordWire(it.id, it.name, it.createdAt) }

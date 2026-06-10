@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
 import com.keynumber.folino.library.ScoreRowWire
+import com.keynumber.folino.share.isAcceptedScoreFilename
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
 @Composable
@@ -24,11 +25,21 @@ fun LibraryScreen(
     ) { uri ->
         if (uri != null) {
             val displayName = originalDisplayName(context, uri)
-            val cacheFile = java.io.File(context.cacheDir, displayName)
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                cacheFile.outputStream().use { output -> input.copyTo(output) }
+            // iOS parity (ShareImportPolicy): the picker is broad (Android MIME for .mscz is
+            // unreliable), so gate the chosen file by its extension and reject non-scores.
+            if (!isAcceptedScoreFilename(displayName)) {
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.share_no_supported_files),
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            } else {
+                val cacheFile = java.io.File(context.cacheDir, displayName)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    cacheFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                viewModel.importScore(cacheFile.absolutePath)
             }
-            viewModel.importScore(cacheFile.absolutePath)
         }
     }
 
