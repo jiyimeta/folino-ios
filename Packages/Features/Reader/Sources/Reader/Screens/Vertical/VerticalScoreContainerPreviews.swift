@@ -25,6 +25,7 @@ import SwiftUI
         showInvisibleElements: false,
         playbackCursor: nil,
         transposeSemitones: 0,
+        bottomControlClearance: ReaderTransportControl.expandedContentHeight,
         viewModel: vm,
     )
     .frame(width: 600, height: 500)
@@ -53,6 +54,7 @@ private func abLoopPreview(prefs: ReaderPreferences) -> some View {
         showInvisibleElements: false,
         playbackCursor: nil,
         transposeSemitones: 0,
+        bottomControlClearance: ReaderTransportControl.expandedContentHeight,
         viewModel: vm,
     )
     .frame(width: 600, height: 500)

@@ -244,10 +244,9 @@ final class ReaderPlaybackSession {
     /// state.
     func stepMeasureForward() {
         guard let score = scoreProvider() else { return }
-        let count = score.effectiveMeasureDurations().count
-        guard count > 0 else { return }
-        let current = (rawPlaybackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)).measureIndex
-        seek(toMeasureStart: min(current + 1, count - 1))
+        let from = rawPlaybackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)
+        let target = score.cursorSteppingMeasure(from: from, direction: .forward)
+        seek(toMeasureStart: target.measureIndex)
     }
 
     /// Step the cursor back by a measure, preserving play / pause state. If the cursor is still within the first beat
@@ -255,14 +254,9 @@ final class ReaderPlaybackSession {
     /// measure — the familiar media-player "previous" behaviour.
     func stepMeasureBackward() {
         guard let score = scoreProvider() else { return }
-        let count = score.effectiveMeasureDurations().count
-        guard count > 0 else { return }
-        let cursor = rawPlaybackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)
-        let measure = cursor.measureIndex
-        let beatTicks = score.beatTicks(atMeasure: measure) ?? score.division
-        let tick = score.tickInMeasure(of: cursor)
-        let target = tick < beatTicks ? measure - 1 : measure
-        seek(toMeasureStart: max(target, 0))
+        let from = rawPlaybackCursor ?? .beat(measureIndex: 0, tickInMeasure: 0)
+        let target = score.cursorSteppingMeasure(from: from, direction: .backward)
+        seek(toMeasureStart: target.measureIndex)
     }
 
     /// Seek the cursor to the first tick of `measureIndex` without changing play / pause state. A `.beat` cursor is

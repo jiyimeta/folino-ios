@@ -47,7 +47,7 @@ packages:
     from: 7.0.0
   swift-sheet-music:
     url: https://github.com/jiyimeta/swift-sheet-music.git
-    revision: 6d29cddafe6e7af99e9413c450ff6ede34c3d130
+    revision: 3dc991e2d887d2d7b8a18aa2a1d266dbcfeca6cf
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
     from: 0.63.2
@@ -60,6 +60,9 @@ packages:
   firebase-ios-sdk:
     url: https://github.com/firebase/firebase-ios-sdk
     from: 11.0.0
+  ScreenshotKit:
+    url: git@github.com:jiyimeta/swift-screenshot-kit.git
+    revision: c583b524966dfb754c7f60b68ebe2dee9728c1b5
 targets:
   Folino:
     type: application
@@ -164,3 +167,89 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/folino.app/folino
+  FolinoScreenshot:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes:
+          - FolinoApp.swift
+          - Info.plist
+          - Folino.entitlements
+          - Resources/Soundfonts
+          - Resources/Clicks
+          - Resources/Fonts
+          - Resources/folino.icon
+          - ShareExtension
+      - path: App/Resources/folino.icon
+        type: file
+        buildPhase: resources
+      - path: App/Resources/Fonts
+        type: folder
+        buildPhase: resources
+      - path: FolinoScreenshot
+        excludes:
+          - Resources
+      - path: FolinoScreenshot/Resources/Now_is_the_time.mscz
+        type: file
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.screenshot
+        PRODUCT_NAME: folino
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Folino.entitlements
+        TARGETED_DEVICE_FAMILY: 1,2
+        ASSETCATALOG_COMPILER_APPICON_NAME: folino
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        OTHER_SWIFT_FLAGS:
+          - $(inherited)
+          - -D SCREENSHOT_ENABLED
+    dependencies:
+      - package: Utility
+        products: [UtilityCore, UtilityUI, Navigation]
+      - package: Domain
+      - package: Infrastructure
+        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting]
+      - package: Library
+      - package: Reader
+      - package: Editor
+      - package: ImportExport
+        products: [ImportExport, ImportExportAppGroup]
+      - package: Settings
+      - package: swift-sheet-music
+        product: SheetMusicLayoutApple
+      - package: swift-sheet-music
+        product: SheetMusicMSCX
+      - package: LicenseList
+        product: LicenseList
+      - package: ScreenshotKit
+        products: [ScreenshotKit]
+  FolinoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tests/FolinoUITests
+    dependencies:
+      - target: FolinoScreenshot
+      - package: ScreenshotKit
+        products: [ScreenshotKitUITest]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.uiTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: FolinoScreenshot
+schemes:
+  FolinoScreenshot:
+    build:
+      targets:
+        FolinoScreenshot: [run, test]
+        FolinoUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FolinoUITests

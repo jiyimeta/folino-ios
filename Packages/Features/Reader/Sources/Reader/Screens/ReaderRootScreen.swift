@@ -47,10 +47,18 @@ public struct ReaderRootScreen: View {
         case .vertical:
             0
         case .horizontal, .page:
-            showSeekBar
-                ? ReaderTransportControl.expandedContentHeight
-                : ReaderTransportControl.collapsedContentHeight
+            bottomControlContentHeight
         }
+    }
+
+    /// Height the bottom transport control reserves above the bottom safe area — the expanded seek card or the compact
+    /// pill, depending on `showSeekBar`. Vertical mode passes this into the score container so the scroll content can
+    /// pad its bottom by the control's full screen-edge clearance (this height plus the safe area), letting the last
+    /// system clear the control once scrolled all the way down.
+    private var bottomControlContentHeight: CGFloat {
+        showSeekBar
+            ? ReaderTransportControl.expandedContentHeight
+            : ReaderTransportControl.collapsedContentHeight
     }
 
     public init(
@@ -179,6 +187,7 @@ public struct ReaderRootScreen: View {
                     showInvisibleElements: showInvisibleElements,
                     playbackCursor: viewModel.playbackSession.displayCursor,
                     transposeSemitones: viewModel.transposeModel.semitones,
+                    bottomControlClearance: bottomControlContentHeight,
                     viewModel: viewModel,
                 )
             case .horizontal:

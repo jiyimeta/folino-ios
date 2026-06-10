@@ -31,6 +31,11 @@ struct VerticalScoreContainer: View {
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
     let transposeSemitones: Int
+    /// Content height the bottom transport control reserves above the bottom safe area (collapsed pill or expanded seek
+    /// card). The scroll content pads its bottom by this plus the bottom safe-area inset — i.e. the full distance from
+    /// the control's top edge to the screen's bottom edge — so the last system clears the control when scrolled fully
+    /// down. The control floats over this padding in a sibling overlay; vertical mode reserves no `safeAreaPadding`.
+    let bottomControlClearance: CGFloat
     @Bindable var viewModel: ReaderViewModel
 
     @State private var document: LayoutDocument?
@@ -42,6 +47,9 @@ struct VerticalScoreContainer: View {
     @State private var contentInsetTop: CGFloat = 0
     /// System top safe-area inset only — parent's overlay augmentation is subtracted back out below.
     @State private var safeAreaTop: CGFloat = 0
+    /// System bottom safe-area inset (home-indicator region). Added to `bottomControlClearance` so the scroll content's
+    /// bottom padding spans from the transport control's top edge all the way to the physical screen bottom.
+    @State private var safeAreaBottom: CGFloat = 0
     /// Live pinch state held as `@Observable` so mutations propagate into the hosted score subtree via observation —
     /// not through `rootView` reassignment, which drops the `withAnimation { … }` transaction. See `PinchState`.
     @State private var pinch = PinchState()
@@ -52,7 +60,12 @@ struct VerticalScoreContainer: View {
     /// Vertical padding inside the scaled content. Top is larger so the first system clears the nav chrome / safe
     /// area when `ignoresSafeArea()` lets the score slide underneath.
     private let scoreTopPadding: CGFloat = 44
-    private let scoreBottomPadding: CGFloat = 16
+    /// Bottom padding inside the scaled content: the full clearance from the transport control's top edge to the
+    /// physical screen bottom (control content height + bottom safe area). Lets the last system scroll out from under
+    /// the floating control so the whole score is visible at the bottom of the scroll.
+    private var scoreBottomPadding: CGFloat {
+        bottomControlClearance + safeAreaBottom
+    }
 
     private struct PinchSession {
         var baseZoom: CGFloat
@@ -83,6 +96,11 @@ struct VerticalScoreContainer: View {
                     max(0, proxy.safeAreaInsets.top - ReaderTopOverlay.height)
                 } action: { newValue in
                     safeAreaTop = newValue
+                }
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    max(0, proxy.safeAreaInsets.bottom)
+                } action: { newValue in
+                    safeAreaBottom = newValue
                 }
         }
     }
