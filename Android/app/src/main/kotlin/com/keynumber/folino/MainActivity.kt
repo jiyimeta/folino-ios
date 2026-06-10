@@ -496,6 +496,7 @@ private fun LibraryNavGraph(
                 val showInvisible by prefs.showInvisible.collectAsState(initial = false)
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
+                val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val scope = rememberCoroutineScope()
@@ -578,6 +579,19 @@ private fun LibraryNavGraph(
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
                     globalA4ReferenceHz = globalA4Hz,
+                    // Per-score playback scalars seeded from the bridge. tempoMultiplier == 0.0 ("none")
+                    // and a4ReferenceHz == 0.0 ("inherit") are sentinels resolved to the engine default
+                    // rate (1.0) and the global SettingsPrefs A4 respectively.
+                    initialMasterVolume = prefsState.masterVolume.toFloat(),
+                    initialTempoMultiplier =
+                        (if (prefsState.tempoMultiplier == 0.0) 1.0 else prefsState.tempoMultiplier).toFloat(),
+                    initialA4ReferenceHz =
+                        if (prefsState.a4ReferenceHz == 0.0) globalA4Hz else prefsState.a4ReferenceHz,
+                    persistMasterVolume = { v -> prefsVm.setMasterVolume(v) },
+                    persistTempoMultiplier = { v -> prefsVm.setTempoMultiplier(v) },
+                    persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
+                    metronomeEnabled = metronomeEnabled,
+                    onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
                     pipEnabled = pipEnabled,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },

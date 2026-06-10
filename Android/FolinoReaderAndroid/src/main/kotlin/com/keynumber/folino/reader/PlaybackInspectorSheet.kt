@@ -89,12 +89,21 @@ fun PlaybackInspectorSheet(
     openingQuarterBpm: Double,
     sheetState: SheetState,
     onDismiss: () -> Unit,
+    /** Global metronome-enabled flag (SettingsPrefs); metronome is global on both platforms. */
+    metronomeEnabled: Boolean = false,
+    /** Writes the global metronome flag on toggle. */
+    onMetronomeChange: (Boolean) -> Unit = {},
+    /** Persists the per-score master volume after the live engine/VM update. */
+    onPersistMasterVolume: (Double) -> Unit = {},
+    /** Persists the per-score tempo multiplier after the live engine update. */
+    onPersistTempoMultiplier: (Double) -> Unit = {},
+    /** Persists the per-score A4 reference pitch after the live engine/VM update. */
+    onPersistA4ReferenceHz: (Double) -> Unit = {},
 ) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val mixerChannels by audioVm.mixerChannels.collectAsStateWithLifecycle()
     val rate by audioVm.currentRate.collectAsStateWithLifecycle()
     val masterVolume by audioVm.masterVolume.collectAsStateWithLifecycle()
-    val metronomeEnabled by audioVm.metronomeEnabled.collectAsStateWithLifecycle()
     val a4ReferenceHz by audioVm.a4ReferenceHz.collectAsStateWithLifecycle()
     val globalA4ReferenceHz by audioVm.globalA4ReferenceHz.collectAsStateWithLifecycle()
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
@@ -126,7 +135,10 @@ fun PlaybackInspectorSheet(
                         valueRange = 0f..1f,
                         readout = "${(masterVolume * 100).toInt()}%",
                         enabled = controlsEnabled,
-                        onValueChange = { audioVm.setMasterVolume(it) },
+                        onValueChange = {
+                            audioVm.setMasterVolume(it)
+                            onPersistMasterVolume(it.toDouble())
+                        },
                     )
                 }
                 item {
@@ -138,7 +150,10 @@ fun PlaybackInspectorSheet(
                         // Engraved-style readout (quarter-note glyph + BPM), matching iOS.
                         readout = "♩ = ${(openingQuarterBpm * rate).roundToInt()}",
                         enabled = controlsEnabled,
-                        onValueChange = { engine?.setRate(it) },
+                        onValueChange = {
+                            engine?.setRate(it)
+                            onPersistTempoMultiplier(it.toDouble())
+                        },
                     )
                 }
                 item {
@@ -150,8 +165,12 @@ fun PlaybackInspectorSheet(
                         Icon(Icons.Default.Timer, contentDescription = null)
                         Text("Metronome", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         Switch(
+                            // Metronome is a GLOBAL setting (SettingsPrefs), not per-score. The toggle
+                            // writes the global flag; the Reader screen pushes that value into the engine
+                            // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
+                            // soundfont hot-swap re-push).
                             checked = metronomeEnabled,
-                            onCheckedChange = { audioVm.setMetronomeEnabled(it) },
+                            onCheckedChange = { onMetronomeChange(it) },
                             enabled = controlsEnabled,
                         )
                     }
@@ -161,11 +180,19 @@ fun PlaybackInspectorSheet(
                         hz = a4ReferenceHz,
                         globalHz = globalA4ReferenceHz,
                         enabled = controlsEnabled,
+                        // Live-update the engine/VM while dragging, but only persist on release
+                        // (onValueChangeFinished) + on each ± step, so a drag doesn't write the store
+                        // on every frame.
                         onValueChange = { audioVm.setA4ReferenceHz(it.toDouble()) },
-                        onValueChangeFinished = { audioVm.setA4ReferenceHz(snapA4Hz(a4ReferenceHz)) },
+                        onValueChangeFinished = {
+                            val snapped = snapA4Hz(a4ReferenceHz)
+                            audioVm.setA4ReferenceHz(snapped)
+                            onPersistA4ReferenceHz(snapped)
+                        },
                         onStep = { delta ->
                             val next = (a4ReferenceHz + delta).coerceIn(415.0, 466.0)
                             audioVm.setA4ReferenceHz(next)
+                            onPersistA4ReferenceHz(next)
                         },
                     )
                 }

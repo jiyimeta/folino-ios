@@ -198,6 +198,26 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         setA4ReferenceHz(hz)
     }
 
+    // Tempo multiplier (engine rate) the score opened with. Held so [preparePlayback] can re-apply it
+    // after prepare (a freshly prepared FluidSynth player resets to rate 1.0, same as it resets master
+    // volume / metronome — see the soundfont-reload re-push). The inspector reads the live rate from
+    // [currentRate]; this is only the seed-and-reapply source.
+    private val _tempoSeed = MutableStateFlow(1.0f)
+
+    /**
+     * Seeds the per-score playback scalars when a score opens, restoring whatever the user last saved
+     * for it (the app resolves any "inherit" sentinels first). Master volume / A4 reflect into the
+     * inspector immediately via their MutableStateFlows; the engine is (re)synced from these seeds in
+     * [preparePlayback] after the player is prepared, since prepare resets the synth's volume / rate /
+     * tuning. Persistence is *not* re-triggered here — these values came from storage.
+     */
+    fun seedPlaybackScalars(masterVolume: Float, tempoMultiplier: Float, a4ReferenceHz: Double, globalA4ReferenceHz: Double) {
+        _globalA4ReferenceHz.value = globalA4ReferenceHz
+        _tempoSeed.value = tempoMultiplier
+        setMasterVolume(masterVolume)
+        setA4ReferenceHz(a4ReferenceHz)
+    }
+
     /**
      * Sets the A4 reference pitch (Hz) and applies it to the engine as master-tuning cents
      * relative to standard A4 = 440 Hz. Also reflects the new value for the inspector slider.
@@ -240,6 +260,12 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             e.setMasterTuning(cents)
             try {
                 e.prepare(scoreHandle)
+                // Re-apply the seeded per-score playback scalars: a freshly prepared player resets the
+                // synth's master volume and tempo (and metronome — re-pushed by the caller via the
+                // soundfont-reload hook). Master tuning was already applied above; rate + volume are
+                // restored here so a reopened score starts at the user's saved values.
+                e.setMasterVolume(_masterVolume.value)
+                e.setRate(_tempoSeed.value)
                 // Re-apply the active loop now that a player is prepared (engine loop calls are
                 // no-ops before prepare). Restores a persisted A–B range or full-score loop.
                 _repeatController.value?.reapply()

@@ -104,9 +104,27 @@ fun ReaderScreen(
     onEditInfo: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
-    /** Global A4 reference pitch default (Hz) from SettingsPrefs, seeded into the audio VM at
-     * prepare time so the per-score live value starts at the user's preferred tuning. */
+    /** Global A4 reference pitch default (Hz) from SettingsPrefs. Used for the inspector's cents-offset
+     * readout (the per-score live value relative to the user's global tuning) and as the inherit value
+     * when this score has no per-score A4 override. */
     globalA4ReferenceHz: Double = 440.0,
+    /** Per-score master volume (0..1) restored when the score opens. */
+    initialMasterVolume: Float = 1.0f,
+    /** Per-score tempo multiplier (engine rate) restored when the score opens. */
+    initialTempoMultiplier: Float = 1.0f,
+    /** Per-score A4 reference pitch (Hz) restored when the score opens (already resolved against the
+     * global default when this score had no override). */
+    initialA4ReferenceHz: Double = 440.0,
+    /** Persists the per-score master volume on user change. */
+    persistMasterVolume: (Double) -> Unit = {},
+    /** Persists the per-score tempo multiplier on user change. */
+    persistTempoMultiplier: (Double) -> Unit = {},
+    /** Persists the per-score A4 reference pitch on user change. */
+    persistA4ReferenceHz: (Double) -> Unit = {},
+    /** Global metronome-enabled flag (SettingsPrefs) — metronome is global on both platforms. */
+    metronomeEnabled: Boolean = false,
+    /** Writes the global metronome flag on user change. */
+    onMetronomeChange: (Boolean) -> Unit = {},
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
@@ -147,12 +165,22 @@ fun ReaderScreen(
     }
     LaunchedEffect(scoreHandle) {
         scoreHandle?.let {
-            // Seed the per-score live A4 from the global default before prepare, so
-            // the first prepare call picks up the user's preferred tuning. Also stores
-            // the global default in the VM so the inspector can show the cents offset.
-            audioVm.seedGlobalA4ReferenceHz(globalA4ReferenceHz)
+            // Seed the per-score playback scalars (master volume / tempo / A4) before prepare, so the
+            // engine re-syncs to the user's saved values once the player is prepared. The global A4 is
+            // also stored so the inspector can show the per-score value's cents offset.
+            audioVm.seedPlaybackScalars(
+                masterVolume = initialMasterVolume,
+                tempoMultiplier = initialTempoMultiplier,
+                a4ReferenceHz = initialA4ReferenceHz,
+                globalA4ReferenceHz = globalA4ReferenceHz,
+            )
             audioVm.preparePlayback(it)
         }
+    }
+    // Metronome is global (SettingsPrefs). Push the current global value into the engine + VM so the
+    // soundfont-reload re-push keeps it, and re-push whenever the global flag changes.
+    LaunchedEffect(metronomeEnabled, scoreHandle) {
+        audioVm.setMetronomeEnabled(metronomeEnabled)
     }
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
     LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
@@ -293,6 +321,11 @@ fun ReaderScreen(
             openingQuarterBpm = openingQuarterBpm,
             sheetState = inspectorSheetState,
             onDismiss = { showInspector = false },
+            metronomeEnabled = metronomeEnabled,
+            onMetronomeChange = onMetronomeChange,
+            onPersistMasterVolume = persistMasterVolume,
+            onPersistTempoMultiplier = persistTempoMultiplier,
+            onPersistA4ReferenceHz = persistA4ReferenceHz,
         )
     }
     if (showDisplayInspector) {
