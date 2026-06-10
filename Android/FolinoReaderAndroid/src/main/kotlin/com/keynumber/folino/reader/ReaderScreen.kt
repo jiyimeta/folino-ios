@@ -403,6 +403,8 @@ fun ReaderScreen(
             onChange = onDisplayOptionsChange,
             showSeekBar = showSeekBar,
             onShowSeekBarChange = onShowSeekBarChange,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = persistTranspose,
         )
     }
 }

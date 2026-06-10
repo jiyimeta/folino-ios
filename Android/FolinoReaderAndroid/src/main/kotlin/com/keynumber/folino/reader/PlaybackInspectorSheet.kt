@@ -1,6 +1,5 @@
 package com.keynumber.folino.reader
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +18,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
@@ -59,6 +55,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.keynumber.folino.reader.ui.CollapsibleHeader
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import kotlin.math.ln
@@ -281,23 +278,6 @@ fun PlaybackInspectorSheet(
 }
 
 @Composable
-private fun CollapsibleHeader(title: String, expanded: Boolean, onToggle: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-        Icon(
-            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
-        )
-    }
-}
-
-@Composable
 private fun IconSliderRow(
     icon: ImageVector,
     label: String,
@@ -463,73 +443,6 @@ private fun A4ReferenceRow(
                     modifier = Modifier.weight(1f).height(sliderHeight),
                 )
             }
-        }
-    }
-}
-
-/**
- * Per-score transpose row. Mirrors the iOS TransposeRow inspector design:
- * - Leading vertical-arrows icon (≈ iOS `arrow.up.arrow.down`).
- * - "Transpose" label.
- * - Signed monospaced readout ("+3" / "0" / "-2") that is a tap-to-reset button (tapping it
- *   resets the value to 0, matching iOS).
- * - A compact ± stepper clamped to −7..7 semitones.
- *
- * Persist-only: nothing transposes audio or notation on Android yet — [onChange] only writes the
- * value through the ReaderPreferences bridge for a future transpose feature.
- */
-@Composable
-private fun TransposeRow(
-    semitones: Int,
-    enabled: Boolean,
-    onChange: (Int) -> Unit,
-) {
-    val signedReadout = if (semitones > 0) "+$semitones" else "$semitones"
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            Icons.Default.SwapVert,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            stringResource(R.string.reader_inspector_transpose),
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        // Tap-to-reset readout: tapping the signed value resets transpose to 0 (iOS parity).
-        Text(
-            text = signedReadout,
-            modifier = Modifier
-                .clickable(enabled = enabled) { onChange(0) }
-                .padding(horizontal = 4.dp),
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-        )
-        // ± stepper: two compact IconButtons mirroring iOS's Stepper(value, in: -7...7).
-        IconButton(
-            onClick = { onChange((semitones - 1).coerceAtLeast(-7)) },
-            enabled = enabled && semitones > -7,
-            modifier = Modifier.size(32.dp),
-        ) {
-            Icon(
-                Icons.Default.Remove,
-                contentDescription = "Transpose down",
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        IconButton(
-            onClick = { onChange((semitones + 1).coerceAtMost(7)) },
-            enabled = enabled && semitones < 7,
-            modifier = Modifier.size(32.dp),
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = "Transpose up",
-                modifier = Modifier.size(16.dp),
-            )
         }
     }
 }
