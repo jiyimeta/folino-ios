@@ -736,7 +736,7 @@ private fun ReaderSeekBar(
  * not ported. Actions are guarded on the prepared state, matching [TransportBar].
  */
 @Composable
-private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
+fun PlaybackFab(audioVm: ReaderAudioViewModel) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()

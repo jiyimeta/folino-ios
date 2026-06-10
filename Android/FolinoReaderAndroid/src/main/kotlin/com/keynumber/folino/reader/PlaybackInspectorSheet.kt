@@ -90,6 +90,24 @@ fun PlaybackInspectorSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit,
 ) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        PlaybackInspectorContent(audioVm = audioVm, openingQuarterBpm = openingQuarterBpm)
+    }
+}
+
+/**
+ * The scrollable body of the playback inspector, factored out of [PlaybackInspectorSheet] so the same
+ * General + Mixer control list can be hosted either inside the production `ModalBottomSheet` or — for
+ * static capture harnesses, which can't render a separate sheet window into a node bitmap — directly in
+ * a plain bottom-aligned surface. The sheet wrapper owns the modal chrome (scrim, drag handle, dismiss);
+ * this composable owns only the General/Mixer control rows.
+ */
+@Composable
+fun PlaybackInspectorContent(
+    audioVm: ReaderAudioViewModel,
+    openingQuarterBpm: Double,
+    modifier: Modifier = Modifier,
+) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val mixerChannels by audioVm.mixerChannels.collectAsStateWithLifecycle()
     val rate by audioVm.currentRate.collectAsStateWithLifecycle()
@@ -106,117 +124,115 @@ fun PlaybackInspectorSheet(
     var generalExpanded by rememberSaveable { mutableStateOf(true) }
     var mixerExpanded by rememberSaveable { mutableStateOf(true) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
-            // ── General (master / tempo / metronome) ────────────────
+    LazyColumn(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
+        // ── General (master / tempo / metronome) ────────────────
+        item {
+            CollapsibleHeader("General", generalExpanded) { generalExpanded = !generalExpanded }
+        }
+        if (generalExpanded) {
             item {
-                CollapsibleHeader("General", generalExpanded) { generalExpanded = !generalExpanded }
+                IconSliderRow(
+                    icon = Icons.Default.VolumeUp,
+                    label = "Volume",
+                    value = masterVolume,
+                    valueRange = 0f..1f,
+                    readout = "${(masterVolume * 100).toInt()}%",
+                    enabled = controlsEnabled,
+                    onValueChange = { audioVm.setMasterVolume(it) },
+                )
             }
-            if (generalExpanded) {
-                item {
-                    IconSliderRow(
-                        icon = Icons.Default.VolumeUp,
-                        label = "Volume",
-                        value = masterVolume,
-                        valueRange = 0f..1f,
-                        readout = "${(masterVolume * 100).toInt()}%",
-                        enabled = controlsEnabled,
-                        onValueChange = { audioVm.setMasterVolume(it) },
-                    )
-                }
-                item {
-                    IconSliderRow(
-                        icon = Icons.Default.Speed,
-                        label = "Tempo",
-                        value = rate,
-                        valueRange = 0.5f..2.0f,
-                        // Engraved-style readout (quarter-note glyph + BPM), matching iOS.
-                        readout = "♩ = ${(openingQuarterBpm * rate).roundToInt()}",
-                        enabled = controlsEnabled,
-                        onValueChange = { engine?.setRate(it) },
-                    )
-                }
-                item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Default.Timer, contentDescription = null)
-                        Text("Metronome", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            checked = metronomeEnabled,
-                            onCheckedChange = { audioVm.setMetronomeEnabled(it) },
-                            enabled = controlsEnabled,
-                        )
-                    }
-                }
-                item {
-                    A4ReferenceRow(
-                        hz = a4ReferenceHz,
-                        globalHz = globalA4ReferenceHz,
-                        enabled = controlsEnabled,
-                        onValueChange = { audioVm.setA4ReferenceHz(it.toDouble()) },
-                        onValueChangeFinished = { audioVm.setA4ReferenceHz(snapA4Hz(a4ReferenceHz)) },
-                        onStep = { delta ->
-                            val next = (a4ReferenceHz + delta).coerceIn(415.0, 466.0)
-                            audioVm.setA4ReferenceHz(next)
-                        },
-                    )
-                }
-                item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Default.Repeat, contentDescription = null)
-                        Text(
-                            stringResource(R.string.reader_repeat_label),
-                            Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        RepeatModePicker(
-                            selected = repeatMode,
-                            enabled = controlsEnabled,
-                            onSelect = { audioVm.setRepeatMode(it) },
-                        )
-                    }
-                }
-            }
-
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-
-            // ── Mixer (per staff) ───────────────────────────────────
             item {
-                CollapsibleHeader("Mixer", mixerExpanded) { mixerExpanded = !mixerExpanded }
+                IconSliderRow(
+                    icon = Icons.Default.Speed,
+                    label = "Tempo",
+                    value = rate,
+                    valueRange = 0.5f..2.0f,
+                    // Engraved-style readout (quarter-note glyph + BPM), matching iOS.
+                    readout = "♩ = ${(openingQuarterBpm * rate).roundToInt()}",
+                    enabled = controlsEnabled,
+                    onValueChange = { engine?.setRate(it) },
+                )
             }
-            if (mixerExpanded) {
-                if (mixerChannels.isEmpty()) {
-                    item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
-                } else {
-                    items(mixerChannels, key = { it.staffIndex }) { channel ->
-                        MixerRow(
-                            channel = channel,
-                            enabled = controlsEnabled,
-                            gmInstruments = gmInstruments,
-                            onVolume = { engine?.setStaffVolume(channel.staffIndex, it) },
-                            onMute = { engine?.setStaffMuted(channel.staffIndex, it) },
-                            onSolo = { engine?.setStaffSoloed(channel.staffIndex, it) },
-                            onProgram = { engine?.setStaffProgram(channel.staffIndex, it) },
-                        )
-                        // Per-row separator — Material has no Form-style automatic divider,
-                        // so we add a light one between staves for visual grouping.
-                        HorizontalDivider(
-                            Modifier.padding(top = 2.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        )
-                    }
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Default.Timer, contentDescription = null)
+                    Text("Metronome", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        checked = metronomeEnabled,
+                        onCheckedChange = { audioVm.setMetronomeEnabled(it) },
+                        enabled = controlsEnabled,
+                    )
+                }
+            }
+            item {
+                A4ReferenceRow(
+                    hz = a4ReferenceHz,
+                    globalHz = globalA4ReferenceHz,
+                    enabled = controlsEnabled,
+                    onValueChange = { audioVm.setA4ReferenceHz(it.toDouble()) },
+                    onValueChangeFinished = { audioVm.setA4ReferenceHz(snapA4Hz(a4ReferenceHz)) },
+                    onStep = { delta ->
+                        val next = (a4ReferenceHz + delta).coerceIn(415.0, 466.0)
+                        audioVm.setA4ReferenceHz(next)
+                    },
+                )
+            }
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Default.Repeat, contentDescription = null)
+                    Text(
+                        stringResource(R.string.reader_repeat_label),
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    RepeatModePicker(
+                        selected = repeatMode,
+                        enabled = controlsEnabled,
+                        onSelect = { audioVm.setRepeatMode(it) },
+                    )
+                }
+            }
+        }
+
+        item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
+
+        // ── Mixer (per staff) ───────────────────────────────────
+        item {
+            CollapsibleHeader("Mixer", mixerExpanded) { mixerExpanded = !mixerExpanded }
+        }
+        if (mixerExpanded) {
+            if (mixerChannels.isEmpty()) {
+                item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
+            } else {
+                items(mixerChannels, key = { it.staffIndex }) { channel ->
+                    MixerRow(
+                        channel = channel,
+                        enabled = controlsEnabled,
+                        gmInstruments = gmInstruments,
+                        onVolume = { engine?.setStaffVolume(channel.staffIndex, it) },
+                        onMute = { engine?.setStaffMuted(channel.staffIndex, it) },
+                        onSolo = { engine?.setStaffSoloed(channel.staffIndex, it) },
+                        onProgram = { engine?.setStaffProgram(channel.staffIndex, it) },
+                    )
+                    // Per-row separator — Material has no Form-style automatic divider,
+                    // so we add a light one between staves for visual grouping.
+                    HorizontalDivider(
+                        Modifier.padding(top = 2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    )
                 }
             }
         }

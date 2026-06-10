@@ -23,9 +23,12 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.PartDescriptor
+import com.keynumber.folino.reader.ReaderAudioViewModel
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderViewModel
 import com.keynumber.folino.reader.nearestCursorForTap
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
@@ -102,6 +105,43 @@ fun rememberReaderSceneState(optionsFor: (List<PartDescriptor>?) -> LayoutOption
     )
 }
 
+// A live, PREPARED ReaderAudioViewModel for the screenshot scenes that show real engine-backed
+// playback controls (the seek-bar-OFF PlaybackFab cluster and the PlaybackInspector's Mixer section).
+//
+// This drives the real production audio path: constructing the VM binds ReaderPlaybackService (which
+// owns the AndroidPlaybackEngine) in its `init`; once the service connects, `engine` publishes; then
+// `preparePlayback(scoreHandle)` calls `engine.prepare(...)`, which decodes the score into the per-staff
+// `mixerChannels`. No audio plays — the playback state stays STOPPED — so this is safe for a static
+// capture. The real components gate their `enabled` state on `engine != null` and derive the mixer rows
+// from `mixerChannels`, so both must be live for the controls to render non-grayed with Parts rows.
+//
+// Returns null until the engine has bound AND the mixer is populated (the prepared signal). Callers
+// render device chrome meanwhile; readiness for the capture is the caller's responsibility (gate the
+// `SceneReady` signal on a non-null return here in addition to the page render).
+@Composable
+fun rememberPreparedAudioVm(scoreHandle: Long?): ReaderAudioViewModel? {
+    val context = LocalContext.current
+    val appContext = context.applicationContext as Application
+
+    val audioVm = remember { ReaderAudioViewModel(appContext) }
+
+    val mixerChannels by audioVm.mixerChannels.collectAsStateCompat(emptyList())
+
+    // Wait for the service to bind (engine non-null), then prepare playback over the staged score.
+    // Re-runs when the handle resolves. `preparePlayback` itself suspends on `engine.filterNotNull()`,
+    // but we also `first()` the engine here so the prepare only fires once a handle exists.
+    LaunchedEffect(scoreHandle) {
+        val handle = scoreHandle ?: return@LaunchedEffect
+        // Block until the bound service publishes the engine, then kick the real prepare flow.
+        audioVm.engine.filter { it != null }.first()
+        audioVm.preparePlayback(handle)
+    }
+
+    // Surface the VM only once the engine has populated the mixer — the "prepared" signal the real
+    // controls need (engine bound + score decoded into per-staff channels).
+    return if (mixerChannels.isNotEmpty()) audioVm else null
+}
+
 // Stages the bundled score, drives a real ReaderViewModel to Ready, then renders the laid-out page
 // (and optionally a static playback cursor) in a static, scroll-pinned-to-top adaptation of the
 // production `ReadyScore`. No audio engine, no gesture handlers — just the score + an injected cursor.
@@ -134,6 +174,9 @@ fun ReaderSceneContent(
     scoreHandle: Long,
     layoutOptions: LayoutOptions,
     withCursor: Boolean,
+    // When false, the page still renders but does NOT release the capture gate — the scene owns the
+    // SceneReady signal (e.g. it must also wait on a prepared audio engine before capturing).
+    signalReadyWhenRendered: Boolean = true,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -171,9 +214,10 @@ fun ReaderSceneContent(
             if (cursor != null) cursorFlow.value = cursor
         }
         // Page is measured + (optionally) the cursor has been placed. Let the overlay/page draw a
-        // couple of frames, then release the capture gate.
+        // couple of frames, then release the capture gate (unless the scene defers it to also wait
+        // on a prepared audio engine).
         kotlinx.coroutines.delay(300)
-        SceneReady.signalReady()
+        if (signalReadyWhenRendered) SceneReady.signalReady()
     }
 
     Box(
