@@ -20,6 +20,6 @@ object Scenes {
         Scene("ReaderCursor", 10) { l, t -> ReaderCursorScene(l, t) },
         Scene("DisplayHidden", 20) { l, t -> DisplayHiddenScene(l, t) },
         Scene("Library", 30) { l, t -> LibraryScene(l, t) },
-        // Scene("Pip", 60) registered in the next commit.
+        Scene("Pip", 60) { l, t -> PipScene(l, t) },
     )
 }
