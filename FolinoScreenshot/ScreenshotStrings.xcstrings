@@ -1,6 +1,40 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "fixture.tag.practicing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Practicing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "練習中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Practicing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Practicing"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Practicing"
+          }
+        }
+      }
+    },
     "scene.abRepeat.subtitle" : {
       "localizations" : {
         "en" : {
@@ -74,31 +108,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Every score in one place"
+            "value" : "Every score in one place\nOrganize with playlists & tags"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべての楽譜を一か所に"
+            "value" : "すべての楽譜を一か所に\nプレイリストとタグで整理"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Every score in one place"
+            "value" : "Every score in one place\nOrganize with playlists & tags"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Every score in one place"
+            "value" : "Every score in one place\nOrganize with playlists & tags"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Every score in one place"
+            "value" : "Every score in one place\nOrganize with playlists & tags"
           }
         }
       }
@@ -216,7 +250,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "テンポやキー・チューニングの変更\nパートごとに音量を変更"
+            "value" : "テンポやキーの変更\nリピートモードの切り替え\nパートごとの音量調整"
           }
         },
         "ko" : {
@@ -250,7 +284,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "再生を自在に調整"
+            "value" : "柔軟な再生設定"
           }
         },
         "ko" : {

@@ -48,12 +48,14 @@ enum Fixture {
     }()
 
     /// Build a library row with realistic-looking metadata. Only the fields the list/Reader read need to be meaningful;
-    /// the rest are plausible placeholders.
+    /// the rest are plausible placeholders. `composer` is optional — pass `nil` for "no composer" (the `ScoreItem`
+    /// model stores `composer` as `String?`, and `ScoreRow` shows nothing when it's nil).
     static func scoreItem(
         title: String,
-        composer: String,
+        composer: String? = nil,
         favorite: Bool = false,
         lastOpenedAt: Date? = nil,
+        tagIDs: Set<TagID> = [],
     ) -> ScoreItem {
         let id = ScoreItemID()
         return ScoreItem(
@@ -73,13 +75,29 @@ enum Fixture {
             primaryKey: "C",
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
             lastOpenedAt: lastOpenedAt,
-            tagIDs: [],
+            tagIDs: tagIDs,
             isFavorite: favorite,
             deletedAt: nil,
         )
     }
 
-    /// Three realistic library items for a populated list shot.
+    /// A single localized tag ("練習中" / "Practicing") applied to the second fixture item. The `name` is resolved at
+    /// access time via `String(localized:)` against `ScreenshotStrings`, so it reflects the per-launch locale (each
+    /// screenshot capture launches in its target locale). Declared `static let` but the `name` computation runs once
+    /// per process after launch, which is when the active locale is already set.
+    static let practicingTag = Tag(
+        name: String(
+            localized: LocalizedStringResource(
+                "fixture.tag.practicing",
+                table: "ScreenshotStrings",
+                bundle: .forClass(FixtureStringsAnchor.self),
+            ),
+        ),
+        colorHex: "#FF9500",
+    )
+
+    /// Three realistic library items for a populated list shot. The middle item ("アタタメマスカ") carries the
+    /// `practicingTag` and has no composer; the others have no tags.
     static let items: [ScoreItem] = [
         scoreItem(
             title: "Now is the time!",
@@ -88,17 +106,32 @@ enum Fixture {
             lastOpenedAt: Date(timeIntervalSince1970: 1_717_900_000),
         ),
         scoreItem(
-            title: "Prelude in C",
-            composer: "Bach",
+            title: "アタタメマスカ",
+            composer: nil,
             lastOpenedAt: Date(timeIntervalSince1970: 1_717_800_000),
+            tagIDs: [practicingTag.id],
         ),
         scoreItem(
-            title: "Gymnopédie No.1",
-            composer: "Satie",
+            title: "Looks Good To Me",
+            composer: "Kiichi",
             lastOpenedAt: Date(timeIntervalSince1970: 1_717_700_000),
         ),
     ]
+
+    /// Two user-created playlists, each containing all three fixture items (by their generated `ScoreItemID`s). Names
+    /// are literal user strings (not localized).
+    static let playlists: [Playlist] = {
+        let allIDs = items.map(\.id)
+        return [
+            Playlist(name: "余白計画", orderedScoreItemIDs: allIDs, createdAt: Date(timeIntervalSince1970: 1_717_600_000)),
+            Playlist(name: "ぴのグリ", orderedScoreItemIDs: allIDs, createdAt: Date(timeIntervalSince1970: 1_717_500_000)),
+        ]
+    }()
 }
+
+/// Marker class to resolve the bundle hosting `ScreenshotStrings.xcstrings` from the fixture layer (mirrors the
+/// `ScreenshotStringsAnchor` in `LibraryScene`). `.forClass` anchors lookup to this app target's bundle.
+private final class FixtureStringsAnchor {}
 
 /// No-op `ScoreFileGateway`: every load returns `Fixture.score`; writes throw `unsupportedFormat` (matching production
 /// v1 behavior — there is no Score serializer yet).
