@@ -10,10 +10,6 @@ public struct ReaderRootScreen: View {
     @Environment(\.dismiss) private var dismiss
     private let onBack: (() -> Void)?
     private let hidesBackButton: Bool
-    /// When false, the bottom transport control is omitted entirely (no seek card, no compact pill) and the score
-    /// reclaims the space it would have reserved. Defaults to true (the normal Reader). Used by embedding contexts that
-    /// present the score without interactive playback chrome.
-    private let showsTransportBar: Bool
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
@@ -47,12 +43,11 @@ public struct ReaderRootScreen: View {
     /// score's bottom edge whether or not the seek bar is shown, so both states inset; the expanded
     /// card is taller than the compact pill.
     private var bottomControlInset: CGFloat {
-        guard showsTransportBar else { return 0 }
         switch layoutMode {
         case .vertical:
-            return 0
+            0
         case .horizontal, .page:
-            return showSeekBar
+            showSeekBar
                 ? ReaderTransportControl.expandedContentHeight
                 : ReaderTransportControl.collapsedContentHeight
         }
@@ -70,7 +65,6 @@ public struct ReaderRootScreen: View {
         playlistID: PlaylistID? = nil,
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
-        showsTransportBar: Bool = true,
     ) {
         // Seed the device-class default at construction time. The view model only uses this if no persisted record
         // exists.
@@ -91,7 +85,6 @@ public struct ReaderRootScreen: View {
         )
         self.onBack = onBack
         self.hidesBackButton = hidesBackButton
-        self.showsTransportBar = showsTransportBar
     }
 
     public var body: some View {
@@ -111,9 +104,7 @@ public struct ReaderRootScreen: View {
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
                 )
                 Spacer()
-                if showsTransportBar {
-                    ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
-                }
+                ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
             }
         }
         .navigationTitle("")

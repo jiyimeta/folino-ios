@@ -21,6 +21,9 @@ struct ReaderScene: View {
             ReaderLayoutMode.vertical.rawValue,
             forKey: ReaderGlobalSettingsKey.layoutMode,
         )
+        // "Seek bar off" — collapses the full seek card to the compact transport pill (small play button,
+        // bottom-right) rather than removing playback chrome entirely.
+        UserDefaults.standard.set(false, forKey: ReaderGlobalSettingsKey.showSeekBarEnabled)
     }
 
     var body: some View {
@@ -48,7 +51,6 @@ struct ReaderScene: View {
                     metadataReader: FixtureMetadataReader(),
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
-                    showsTransportBar: false,
                 )
             }
         } overlay: {
