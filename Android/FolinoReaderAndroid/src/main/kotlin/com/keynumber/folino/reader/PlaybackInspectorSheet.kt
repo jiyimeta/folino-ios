@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -64,7 +63,6 @@ import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
 import com.keynumber.folino.reader.ui.InspectorSliderRow
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
-import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import kotlin.math.ln
 import kotlin.math.roundToInt
 
@@ -239,39 +237,37 @@ fun PlaybackInspectorSheet(
 
             item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
 
-            // ── Mixer (per staff) ───────────────────────────────────
-            item {
-                CollapsibleHeader("Mixer", mixerExpanded) { mixerExpanded = !mixerExpanded }
-            }
+            // ── Parts (per-part mixer, iOS parity) ─────────────────
+            item { CollapsibleHeader(stringResource(R.string.reader_inspector_parts), mixerExpanded) { mixerExpanded = !mixerExpanded } }
             if (mixerExpanded) {
-                if (mixerChannels.isEmpty()) {
+                val groups = groupMixerByPart(mixerChannels, staffAddressByIndex, partNames)
+                if (groups.isEmpty()) {
                     item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
                 } else {
-                    items(mixerChannels, key = { it.staffIndex }) { channel ->
-                        // The flat mixer staffIndex maps to a positional StaffAddress for persistence;
-                        // mute / solo stay session-only (not persisted), matching iOS.
-                        val address = staffAddressByIndex[channel.staffIndex]
-                        MixerRow(
-                            channel = channel,
-                            enabled = controlsEnabled,
-                            gmInstruments = gmInstruments,
-                            onVolume = {
-                                engine?.setStaffVolume(channel.staffIndex, it)
-                                address?.let { a -> onPersistStaffVolume(a, it) }
-                            },
-                            onMute = { engine?.setStaffMuted(channel.staffIndex, it) },
-                            onSolo = { engine?.setStaffSoloed(channel.staffIndex, it) },
-                            onProgram = {
-                                engine?.setStaffProgram(channel.staffIndex, it)
-                                address?.let { a -> onPersistStaffProgram(a, it) }
-                            },
-                        )
-                        // Per-row separator — Material has no Form-style automatic divider,
-                        // so we add a light one between staves for visual grouping.
-                        HorizontalDivider(
-                            Modifier.padding(top = 2.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        )
+                    groups.forEach { group ->
+                        item(key = "part-${group.partIndex}") {
+                            PartMixerSection(
+                                group = group,
+                                enabled = controlsEnabled,
+                                gmInstruments = gmInstruments,
+                                onVolume = { idx, v ->
+                                    engine?.setStaffVolume(idx, v)
+                                    staffAddressByIndex[idx]?.let { onPersistStaffVolume(it, v) }
+                                },
+                                onMute = { idx, m -> engine?.setStaffMuted(idx, m) },
+                                onSolo = { idx, s -> engine?.setStaffSoloed(idx, s) },
+                                onProgram = { program ->
+                                    group.channels.forEach { ch ->
+                                        engine?.setStaffProgram(ch.staffIndex, program)
+                                        staffAddressByIndex[ch.staffIndex]?.let { onPersistStaffProgram(it, program) }
+                                    }
+                                },
+                            )
+                            HorizontalDivider(
+                                Modifier.padding(top = 2.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                            )
+                        }
                     }
                 }
             }
@@ -545,65 +541,39 @@ private fun A4ReferenceRow(
 }
 
 @Composable
-private fun MixerRow(
-    channel: MixerChannel,
+private fun PartMixerSection(
+    group: PartMixerGroup,
     enabled: Boolean,
     gmInstruments: List<GMInstrument>,
-    onVolume: (Float) -> Unit,
-    onMute: (Boolean) -> Unit,
-    onSolo: (Boolean) -> Unit,
+    onVolume: (Int, Float) -> Unit,
+    onMute: (Int, Boolean) -> Unit,
+    onSolo: (Int, Boolean) -> Unit,
     onProgram: (Int) -> Unit,
 ) {
-    // Dense two-line strip mirroring iOS: identity row (name + wide program picker), then
-    // the volume slider with Solo / Mute beside it. Keeping S/M off the name row lets the
-    // program name use most of the width (it was clamping before). Placement is
-    // Android-idiomatic; the content stays at iOS parity (shared displayName, GM names).
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = channel.displayName,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            val program = channel.program
+        // Part header: instrument name + ONE program picker for the whole part (iOS parity).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(group.partName, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+            val program = group.partProgram
             if (program != null) {
-                ProgramPickerButton(
-                    program = program,
-                    enabled = enabled,
-                    gmInstruments = gmInstruments,
-                    modifier = Modifier.weight(1.6f),
-                    onProgram = onProgram,
-                )
+                ProgramPickerButton(program = program, enabled = enabled, gmInstruments = gmInstruments, modifier = Modifier.weight(1.6f), onProgram = onProgram)
             } else {
-                Text(
-                    "Drums",
-                    modifier = Modifier.weight(1.6f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text("Drums", Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
             }
         }
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Slider(
-                value = channel.volume,
-                onValueChange = onVolume,
-                valueRange = 0f..1f,
-                // A soloed-elsewhere staff is effectively muted; reflect that the slider
-                // won't be audible by disabling it, mirroring iOS's disabled state.
-                enabled = enabled && !channel.effectiveMute,
-                modifier = Modifier.weight(1f).height(InspectorSliderHeight),
-            )
-            SmallToggle("S", channel.isSoloed, enabled, "Solo") { onSolo(!channel.isSoloed) }
-            SmallToggle("M", channel.isMuted, enabled, "Mute") { onMute(!channel.isMuted) }
+        // Per-staff volume + Solo/Mute.
+        group.channels.forEach { channel ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Slider(
+                    value = channel.volume,
+                    onValueChange = { onVolume(channel.staffIndex, it) },
+                    valueRange = 0f..1f,
+                    enabled = enabled && !channel.effectiveMute,
+                    modifier = Modifier.weight(1f).height(InspectorSliderHeight),
+                )
+                SmallToggle("S", channel.isSoloed, enabled, "Solo") { onSolo(channel.staffIndex, !channel.isSoloed) }
+                SmallToggle("M", channel.isMuted, enabled, "Mute") { onMute(channel.staffIndex, !channel.isMuted) }
+            }
         }
     }
 }
