@@ -73,7 +73,10 @@ data class ScreenshotLayout(
             horizontalPadding = 20.dp,
             frameAspectRatio = 0.46f,
             frameCornerRadius = 28.dp,
-            statusBarHeight = 24.dp,
+            // No fake status-bar strip: a solid bar reads as an out-of-place black band over the
+            // (light) app content. The app fills the rounded frame to the top instead. (The PiP
+            // scene draws its own status bar inside its dark home, so it's unaffected.)
+            statusBarHeight = 0.dp,
             statusBarColor = statusBarColor,
             innerBackground = innerBackground,
             isTablet = false,
@@ -97,7 +100,7 @@ data class ScreenshotLayout(
             horizontalPadding = 56.dp,
             frameAspectRatio = 0.75f,
             frameCornerRadius = 24.dp,
-            statusBarHeight = 20.dp,
+            statusBarHeight = 0.dp,
             statusBarColor = statusBarColor,
             innerBackground = innerBackground,
             isTablet = true,
