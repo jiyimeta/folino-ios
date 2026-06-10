@@ -15,13 +15,14 @@ class Scene(
 }
 
 object Scenes {
-    // Populated as scenes are added (Tasks 5-8). Orders reserve 40/50 for deferred repeat scenes.
+    // `order` drives the output filename (NN.png) AND the Play Store display order:
+    // Reader+cursor, display-hidden, whole-piece-repeat, AB-repeat, Library, PiP.
     val all: List<Scene> = listOf(
         Scene("ReaderCursor", 10) { l, t -> ReaderCursorScene(l, t) },
         Scene("DisplayHidden", 20) { l, t -> DisplayHiddenScene(l, t) },
-        Scene("Library", 30) { l, t -> LibraryScene(l, t) },
-        Scene("LoopAll", 40) { l, t -> LoopAllScene(l, t) },
-        Scene("AbRepeat", 50) { l, t -> AbRepeatScene(l, t) },
+        Scene("LoopAll", 30) { l, t -> LoopAllScene(l, t) },
+        Scene("AbRepeat", 40) { l, t -> AbRepeatScene(l, t) },
+        Scene("Library", 50) { l, t -> LibraryScene(l, t) },
         Scene("Pip", 60) { l, t -> PipScene(l, t) },
     )
 }

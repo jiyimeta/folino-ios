@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
+import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
 import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
@@ -144,7 +145,7 @@ private fun PipCard(modifier: Modifier = Modifier) {
                 val keep = HIDDEN_FLAT_INDICES
                 val all = parts?.let { p -> p.flatMap { it.staves }.indices.toSet() } ?: emptySet()
                 val hidden = parts?.addressesForFlatIndices(all - keep) ?: emptySet()
-                LayoutOptions.DEFAULT.copy(hiddenStaves = hidden)
+                LayoutOptions.DEFAULT.copy(staffSize = SCREENSHOT_STAFF_SIZE, hiddenStaves = hidden)
             }
             if (scene != null) {
                 // Give ReaderSceneContent room to lay out the full page (it fills this box and fits to

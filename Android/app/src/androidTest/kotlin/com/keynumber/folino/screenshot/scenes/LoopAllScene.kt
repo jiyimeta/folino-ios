@@ -34,6 +34,7 @@ import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.RepeatModePicker
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
+import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
 import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
@@ -54,7 +55,9 @@ fun LoopAllScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("LoopAll", tag)
     ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
         FolinoTheme {
-            val scene = rememberReaderSceneState { LayoutOptions.DEFAULT }
+            val scene = rememberReaderSceneState {
+                LayoutOptions.DEFAULT.copy(staffSize = SCREENSHOT_STAFF_SIZE)
+            }
             Box(Modifier.fillMaxSize()) {
                 if (scene != null) {
                     ReaderSceneContent(

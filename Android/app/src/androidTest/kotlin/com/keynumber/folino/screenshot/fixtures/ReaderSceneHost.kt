@@ -37,6 +37,13 @@ import kotlinx.coroutines.flow.StateFlow
 // into filesDir/Scores/<this>.mscz, then ReaderViewModel.load reads it back exactly as production does.
 private const val READER_SCORE_ID = "00000000-0000-0000-0000-0000000000b0"
 
+// Shared staff size for every score-rendering screenshot scene. The production default
+// (`LayoutOptions.DEFAULT.staffSize = 28.0`) renders the staves too large for a marketing frame, so
+// the screenshot scenes lay out at this smaller size: the notes/staves still read clearly but show
+// more of the music per frame. Used by ReaderCursor (10), DisplayHidden (20), LoopAll (30),
+// AbRepeat (40), and Pip (60); Library (50) has no score.
+internal const val SCREENSHOT_STAFF_SIZE = 18.0
+
 // A loaded, laid-out Reader scene: the real ReaderViewModel driven to Ready over the bundled score.
 // Holds whatever a screenshot scene needs to render the page (state + scoreHandle + the effective
 // layoutOptions) AND to compose UI that depends on the score's structure (the decoded `parts`, used

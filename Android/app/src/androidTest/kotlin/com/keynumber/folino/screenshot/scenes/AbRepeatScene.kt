@@ -28,6 +28,7 @@ import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
+import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
 import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
 import com.keynumber.folino.screenshot.frame.ScreenshotFrame
@@ -81,7 +82,10 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
             // single coordinate space, so `nativeMeasureFrame` / `nativeLoopHighlightRects` x/y align with
             // `ScorePage`. We scroll horizontally (offset x) to bring m5–7 into the frame.
             val scene = rememberReaderSceneState {
-                LayoutOptions.DEFAULT.copy(mode = ReaderLayoutMode.HORIZONTAL)
+                LayoutOptions.DEFAULT.copy(
+                    mode = ReaderLayoutMode.HORIZONTAL,
+                    staffSize = SCREENSHOT_STAFF_SIZE,
+                )
             }
             Box(Modifier.fillMaxSize().background(Color.White).clipToBounds()) {
                 if (scene != null) {
@@ -142,6 +146,15 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
     val scrollLeftMM = spanLeftMM.coerceAtLeast(0.0)
     val scrollLeft: Dp = with(density) { (scrollLeftMM.toFloat() * fitPxPerMM).toDp() }
 
+    // Vertically center the looped SYSTEM (not the whole page) in the viewport. `nativeMeasureFrame`
+    // returns the measure's full system column, so a.y..a.y+a.height is the band's vertical extent;
+    // park its midpoint at the viewport's vertical center. (At the smaller screenshot staff size the
+    // page is shorter than the viewport, so plain CenterStart would float the system off-center.)
+    val systemMidMM = (a?.y ?: 0.0) + (a?.height ?: 0.0) / 2.0
+    val scrollTop: Dp = with(density) {
+        ((systemMidMM.toFloat() * fitPxPerMM) - viewportSize.height / 2f).toDp()
+    }
+
     LaunchedEffect(scoreHandle, fitPxPerMM, viewportSize, aFrame, bFrame, loopRange) {
         if (fitPxPerMM <= 0f || viewportSize.width <= 0 || a == null || b == null || loopRange == null) {
             return@LaunchedEffect
@@ -157,8 +170,9 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
             .background(Color.White)
             .clipToBounds()
             .onSizeChanged { viewportSize = it },
-        // Center the single row vertically (HorizontalScore centers a short row in the viewport).
-        contentAlignment = Alignment.CenterStart,
+        // Top-anchor: the looped system is centered via an explicit y-offset (below), not box alignment,
+        // so it stays centered even when the (smaller-staff) page is shorter than the viewport.
+        contentAlignment = Alignment.TopStart,
     ) {
         val contentWidthPx = page.widthMM.toFloat() * fitPxPerMM
         val contentHeightPx = page.heightMM.toFloat() * fitPxPerMM
@@ -168,8 +182,8 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
                     width = with(density) { contentWidthPx.toDp() },
                     height = with(density) { contentHeightPx.toDp() },
                 )
-                // Shift the whole row left so m5 lands near the left edge of the viewport.
-                .offset(x = -scrollLeft),
+                // Shift left so m5 lands near the left edge; shift up so the looped system centers.
+                .offset(x = -scrollLeft, y = -scrollTop),
         ) {
             ScorePage(
                 page = page,

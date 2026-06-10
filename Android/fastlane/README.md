@@ -6,19 +6,18 @@ emulator because the Reader renders sheet music via native JNI (cannot run on th
 
 ## What it produces
 
-4 scenes × 2 locales (`en-US`, `ja-JP`) × 2 devices (phone, 10" tablet) = **16 PNGs**, each wrapped
+6 scenes × 2 locales (`en-US`, `ja-JP`) × 2 devices (phone, 10" tablet) = **24 PNGs**, each wrapped
 in a device frame with a localized title/subtitle (placeholder marketing copy — see
 `app/src/androidTest/.../fixtures/MarketingStrings.kt`, marked `TODO(copy)`).
 
 | order | scene | shows |
 | --- | --- | --- |
-| 10 | Reader + cursor | score open, playback cursor in measure 1 |
+| 10 | Reader + cursor | score open, playback cursor in measure 1, floating play FAB (seek bar hidden) |
 | 20 | Display inspector + hidden staves | inspector open, staves 2/3/4 hidden |
-| 30 | Library | library top with three mock scores |
+| 30 | Whole-piece repeat | playback inspector General section, repeat set to "Repeat one" |
+| 40 | AB-section repeat | horizontal layout, accent band + A/B flags over measures 5–7 |
+| 50 | Library | library top with three mock scores |
 | 60 | PiP-style | faux home screen + floating PiP card (only staves 2/3/4) |
-
-Orders **40** and **50** are reserved for the deferred whole-piece-repeat and AB-repeat scenes
-(Android has no repeat feature yet — see `docs/superpowers/specs/2026-06-10-android-playstore-screenshots-design.md`).
 
 ## Generate
 
