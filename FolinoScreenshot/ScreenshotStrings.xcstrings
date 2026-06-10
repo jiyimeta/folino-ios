@@ -17,20 +17,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Practicing"
+            "state" : "translated",
+            "value" : "연습 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Practicing"
+            "state" : "translated",
+            "value" : "练习中"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Practicing"
+            "state" : "translated",
+            "value" : "練習中"
           }
         }
       }
@@ -40,7 +40,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A–B repeat practice"
+            "value" : "Loop just the section you choose\nFocus practice on the tricky parts"
           }
         },
         "ja" : {
@@ -51,20 +51,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "A–B repeat practice"
+            "state" : "translated",
+            "value" : "지정한 구간만 반복하여\n어려운 부분을 집중 연습"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "A–B repeat practice"
+            "state" : "translated",
+            "value" : "只循环指定的乐段\n集中练习不擅长的部分"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "A–B repeat practice"
+            "state" : "translated",
+            "value" : "只循環指定的樂段\n集中練習不擅長的部分"
           }
         }
       }
@@ -74,7 +74,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Loop any section"
+            "value" : "A–B Repeat"
           }
         },
         "ja" : {
@@ -85,20 +85,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Loop any section"
+            "state" : "translated",
+            "value" : "A–B 반복 재생"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Loop any section"
+            "state" : "translated",
+            "value" : "A–B 重复播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Loop any section"
+            "state" : "translated",
+            "value" : "A–B 重複播放"
           }
         }
       }
@@ -108,7 +108,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Every score in one place\nOrganize with playlists & tags"
+            "value" : "All your scores in one place\nOrganize with playlists and tags"
           }
         },
         "ja" : {
@@ -119,20 +119,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Every score in one place\nOrganize with playlists & tags"
+            "state" : "translated",
+            "value" : "모든 악보를 한곳에\n재생목록과 태그로 정리"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Every score in one place\nOrganize with playlists & tags"
+            "state" : "translated",
+            "value" : "所有乐谱集于一处\n用播放列表和标签整理"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Every score in one place\nOrganize with playlists & tags"
+            "state" : "translated",
+            "value" : "所有樂譜集於一處\n用播放列表和標籤整理"
           }
         }
       }
@@ -142,31 +142,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your whole library"
+            "value" : "Collect & organize scores"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ライブラリのすべて"
+            "value" : "楽譜を集約・整理"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Your whole library"
+            "state" : "translated",
+            "value" : "악보를 한곳에 정리"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Your whole library"
+            "state" : "translated",
+            "value" : "汇集与整理乐谱"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Your whole library"
+            "state" : "translated",
+            "value" : "彙整與整理樂譜"
           }
         }
       }
@@ -176,7 +176,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Picture-in-Picture playback"
+            "value" : "Read scores while using other apps\n*Enable the feature in Settings"
           }
         },
         "ja" : {
@@ -187,20 +187,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Picture-in-Picture playback"
+            "state" : "translated",
+            "value" : "다른 앱을 쓰면서 악보 보기\n*설정 화면에서 기능을 켜 주세요"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Picture-in-Picture playback"
+            "state" : "translated",
+            "value" : "使用其他应用时也能看谱\n*请在设置中开启此功能"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Picture-in-Picture playback"
+            "state" : "translated",
+            "value" : "使用其他 App 時也能看譜\n*請在設定中開啟此功能"
           }
         }
       }
@@ -210,7 +210,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Practice anywhere"
+            "value" : "Picture in Picture"
           }
         },
         "ja" : {
@@ -221,20 +221,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Practice anywhere"
+            "state" : "translated",
+            "value" : "픽처 인 픽처"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Practice anywhere"
+            "state" : "translated",
+            "value" : "画中画"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Practice anywhere"
+            "state" : "translated",
+            "value" : "子母畫面"
           }
         }
       }
@@ -244,7 +244,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mixer, tempo, tuning"
+            "value" : "Change tempo and key\nSwitch repeat modes\nAdjust volume per part"
           }
         },
         "ja" : {
@@ -255,20 +255,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mixer, tempo, tuning"
+            "state" : "translated",
+            "value" : "템포와 조 변경\n반복 모드 전환\n파트별 음량 조절"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mixer, tempo, tuning"
+            "state" : "translated",
+            "value" : "调整速度与调号\n切换重复模式\n分声部调节音量"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mixer, tempo, tuning"
+            "state" : "translated",
+            "value" : "調整速度與調號\n切換重複模式\n分聲部調節音量"
           }
         }
       }
@@ -278,7 +278,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tune your playback"
+            "value" : "Flexible playback"
           }
         },
         "ja" : {
@@ -289,20 +289,20 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tune your playback"
+            "state" : "translated",
+            "value" : "유연한 재생 설정"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tune your playback"
+            "state" : "translated",
+            "value" : "灵活的播放设置"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tune your playback"
+            "state" : "translated",
+            "value" : "彈性的播放設定"
           }
         }
       }
@@ -312,31 +312,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clean, focused notation"
+            "value" : "Clear, focused notation\nImport MIDI and mscz files"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "見やすく集中できる楽譜表示"
+            "value" : "見やすく集中できる楽譜表示\nMIDIやmsczを取り込める"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Clean, focused notation"
+            "state" : "translated",
+            "value" : "보기 편하고 집중되는 악보 표시\nMIDI와 mscz 가져오기"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Clean, focused notation"
+            "state" : "translated",
+            "value" : "清晰易读、专注的乐谱显示\n可导入 MIDI 和 mscz"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Clean, focused notation"
+            "state" : "translated",
+            "value" : "清晰易讀、專注的樂譜顯示\n可匯入 MIDI 和 mscz"
           }
         }
       }
@@ -346,31 +346,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Read any score"
+            "value" : "View & play scores"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "どんな楽譜も読める"
+            "value" : "楽譜を表示・再生"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Read any score"
+            "state" : "translated",
+            "value" : "악보 보기와 재생"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Read any score"
+            "state" : "translated",
+            "value" : "显示与播放乐谱"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Read any score"
+            "state" : "translated",
+            "value" : "顯示與播放樂譜"
           }
         }
       }
@@ -380,31 +380,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Layout and transpose"
+            "value" : "Change the layout\nShow only the parts you need\nChange clefs"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "レイアウトと移調"
+            "value" : "レイアウトの変更\n必要なパートだけ表示\n音部記号の変更"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Layout and transpose"
+            "state" : "translated",
+            "value" : "레이아웃 변경\n필요한 파트만 표시\n음자리표 변경"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Layout and transpose"
+            "state" : "translated",
+            "value" : "更改排版\n仅显示需要的声部\n更改谱号"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Layout and transpose"
+            "state" : "translated",
+            "value" : "變更排版\n僅顯示需要的聲部\n變更譜號"
           }
         }
       }
@@ -414,31 +414,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Make it yours"
+            "value" : "Flexible display"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "見た目を自分好みに"
+            "value" : "柔軟な表示設定"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Make it yours"
+            "state" : "translated",
+            "value" : "유연한 표시 설정"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Make it yours"
+            "state" : "translated",
+            "value" : "灵活的显示设置"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Make it yours"
+            "state" : "translated",
+            "value" : "彈性的顯示設定"
           }
         }
       }

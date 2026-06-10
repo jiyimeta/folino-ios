@@ -38,7 +38,10 @@ struct ReaderScene: View {
                 table: "ScreenshotStrings",
                 bundle: .forClass(ScreenshotStringsAnchor.self),
             ),
-            layout: FolinoScreenshotLayout.layout(for: idiom),
+            layout: FolinoScreenshotLayout.layout(
+                for: idiom,
+                subtitleBullet: true,
+            ),
         ) {
             // ReaderRootScreen uses `.navigationTitle` / `.toolbar(.hidden,...)`, so it needs an ancestor nav container
             // but renders no visible bar of its own — the outer NavigationStack adds no doubled chrome.
