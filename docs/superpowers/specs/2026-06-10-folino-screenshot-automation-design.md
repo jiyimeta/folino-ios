@@ -118,6 +118,24 @@ The inspector scenes render the inspector views directly with their models
 (reproducing the presented state) rather than driving navigation to present
 them.
 
+**Frame styling (Folino-specific).** `ScreenshotLayout` already exposes
+`background: LinearGradient`, `titleColor`, and `subtitleColor` as public
+configurable properties (defaults are a dark gradient + white text), so no
+`ScreenshotKit` change is needed. Folino supplies a small app-side helper
+that builds the iPhone/iPad layout with:
+- **Background** = the `folino.icon` canvas gradient: top `white`
+  (display-p3 1,1,1) → bottom light blue `Color(.sRGB, red: 0.807,
+  green: 0.884, blue: 1.0)`, vertical from `UnitPoint(x: 0.5, y: 0)` to
+  `UnitPoint(x: 0.5, y: 0.7)` (matching `App/Resources/folino.icon/icon.json`'s
+  `fill.linear-gradient`).
+- **`titleColor` = `.black`**, **`subtitleColor` = `.black`** (the light
+  background needs dark text; a slight subtitle opacity like
+  `.black.opacity(0.85)` is acceptable for hierarchy but stays black-based).
+
+The helper passes these into `ScreenshotLayout.standard(...)` / `.iPad(...)`
+(which accept `background`/`titleColor`/`subtitleColor` args) so the inner
+device thumbnail, sizing, and status-bar chrome keep the package defaults.
+
 ### 4. Fixture layer
 Reuse and extend `PreviewSupport`'s fakes. Provide: a populated repository
 for Library, a synthetic `Score` for Reader/inspectors, and the playback/
