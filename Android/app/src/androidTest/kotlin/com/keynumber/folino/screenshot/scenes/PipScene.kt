@@ -214,22 +214,44 @@ private fun PipCard(modifier: Modifier = Modifier) {
     // coordinate space (origin = page top-left, document mm * fitPxPerMM). That means the overlay needs no
     // panOffset and the hit-test no contentOffsetPx — the tap is already expressed in page-content px.
     //
+    // DETERMINISM: the capture gate (`SceneReady.signalReady()`) is released ONLY after a non-null cursor
+    // has been placed. The cursor itself is locale-independent (the music + layout are identical per
+    // locale), but `signalReady()` used to fire on a fixed delay regardless of whether the hit-test had
+    // produced a cursor — so any capture where `nearestCursorForTap` returned null (a tap landing on a
+    // rest / between glyphs) photographed an empty overlay. We instead sweep a few tap x positions across
+    // the visible window until one reliably hits a note, set `cursorFlow.value`, and only THEN signal
+    // ready. If every candidate misses we throw, surfacing the real bug rather than shipping a blank frame.
+    //
     // Pick a tap on a VISIBLE note: x is past the left-scroll (so it lands inside the window the card
     // shows, on notes rather than the clef/key header), y at the vertical center of the three-staff strip.
     val cursorFlow = remember { MutableStateFlow<ScoreCursor?>(null) }
     LaunchedEffect(scene.scoreHandle, fitPxPerMM, cardWidthPx) {
         if (fitPxPerMM <= 0f || cardWidthPx <= 0) return@LaunchedEffect
-        val tapX = scrollLeftPx + cardWidthPx.toFloat() * 0.18f
         val tapY = contentHeightPx * 0.5f
-        val cursor = nearestCursorForTap(
-            tap = Offset(tapX, tapY),
-            contentOffsetPx = Offset.Zero,
-            pxPerMM = fitPxPerMM,
-            scale = 1f,
-            scoreHandle = scene.scoreHandle,
-            layoutOptionsBytes = scene.layoutOptions.encode(),
-        )
-        if (cursor != null) cursorFlow.value = cursor
+        // Sweep candidate x positions (as a fraction of the card width, past the left-scroll header) and
+        // take the first that the hit-test resolves to a playable cursor. The fractions march rightward
+        // through the visible window so the chosen note sits clearly inside the card, on the music.
+        val candidateFractions = listOf(0.18f, 0.24f, 0.30f, 0.36f, 0.42f, 0.12f, 0.48f, 0.54f)
+        var cursor: ScoreCursor? = null
+        for (fraction in candidateFractions) {
+            val tapX = scrollLeftPx + cardWidthPx.toFloat() * fraction
+            cursor = nearestCursorForTap(
+                tap = Offset(tapX, tapY),
+                contentOffsetPx = Offset.Zero,
+                pxPerMM = fitPxPerMM,
+                scale = 1f,
+                scoreHandle = scene.scoreHandle,
+                layoutOptionsBytes = scene.layoutOptions.encode(),
+            )
+            if (cursor != null) break
+        }
+        checkNotNull(cursor) {
+            "PipScene: nearestCursorForTap returned null for every candidate tap — no note in the " +
+                "visible horizontal window to anchor the playback cursor."
+        }
+        // Place the cursor BEFORE releasing the capture gate so every locale photographs the same line.
+        cursorFlow.value = cursor
+        // Let the overlay draw a couple of frames over the rendered strip, then release the gate.
         kotlinx.coroutines.delay(400)
         SceneReady.signalReady()
     }
