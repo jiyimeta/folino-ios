@@ -156,16 +156,10 @@ fun SettingsScreen(
             // Global sticky playlist-continuation mode. Persist-only: the playlist continuous-playback
             // feature that consumes this value is not yet built on Android, so selecting only saves the
             // choice (no playback behavior is wired). Mirrors the iOS Settings continuation row wording.
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            InspectorRow(
+                label = stringResource(R.string.settings_playlist_continuation),
+                leadingIcon = Icons.AutoMirrored.Filled.PlaylistPlay,
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
-                    contentDescription = stringResource(R.string.settings_playlist_continuation),
-                    modifier = Modifier.padding(end = 12.dp),
-                )
-                Text(stringResource(R.string.settings_playlist_continuation), Modifier.weight(1f))
                 val continuationModes = listOf(
                     "off" to stringResource(R.string.playlist_continuation_off),
                     "playThrough" to stringResource(R.string.playlist_continuation_play_through),
@@ -219,20 +213,14 @@ fun SettingsScreen(
         }
         item {
             // Display mode dropdown (formerly labelled "Layout") — placed after A4 to match iOS Reader-section order.
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            InspectorRow(
+                label = stringResource(R.string.settings_reader_display_mode),
+                leadingIcon = Icons.Filled.ViewArray,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.ViewArray,
-                    contentDescription = stringResource(R.string.settings_reader_display_mode),
-                    modifier = Modifier.padding(end = 12.dp),
-                )
-                Text(stringResource(R.string.settings_reader_display_mode), Modifier.weight(1f))
                 val layoutModes = listOf(
-                    Triple("vertical", "Vertical", Icons.Filled.SwapVert),
-                    Triple("horizontal", "Horizontal", Icons.Filled.SwapHoriz),
-                    Triple("page", "Page", Icons.Filled.AutoStories),
+                    Triple("vertical", stringResource(R.string.settings_layout_vertical), Icons.Filled.SwapVert),
+                    Triple("horizontal", stringResource(R.string.settings_layout_horizontal), Icons.Filled.SwapHoriz),
+                    Triple("page", stringResource(R.string.settings_layout_page), Icons.Filled.AutoStories),
                 )
                 var expanded by remember { mutableStateOf(false) }
                 val current = layoutModes.firstOrNull { it.first == layout } ?: layoutModes.last()

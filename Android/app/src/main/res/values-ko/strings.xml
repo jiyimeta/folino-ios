@@ -15,6 +15,9 @@
     <string name="settings_reader_show_seek_bar">탐색 막대 표시</string>
     <string name="settings_reader_repeat">Repeat</string>
     <string name="settings_reader_display_mode">표시 모드</string>
+    <string name="settings_layout_vertical">세로 스크롤</string>
+    <string name="settings_layout_horizontal">가로 스크롤</string>
+    <string name="settings_layout_page">페이지</string>
     <string name="settings_reader_high_quality_audio">고품질 음원</string>
     <string name="settings_reader_continuation_footer">Repeat(단일 또는 A–B)가 켜져 있으면 우선 적용되며 다음 악보로 넘어가지 않습니다.</string>
     <string name="settings_playlist_continuation">Playlist</string>

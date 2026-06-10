@@ -15,6 +15,9 @@
     <string name="settings_reader_show_seek_bar">顯示進度列</string>
     <string name="settings_reader_repeat">Repeat</string>
     <string name="settings_reader_display_mode">顯示模式</string>
+    <string name="settings_layout_vertical">垂直捲動</string>
+    <string name="settings_layout_horizontal">水平捲動</string>
+    <string name="settings_layout_page">翻頁</string>
     <string name="settings_reader_high_quality_audio">高品質音源</string>
     <string name="settings_reader_continuation_footer">開啟 Repeat（單曲或 A–B）時，將優先執行，不會自動播放下一首樂譜。</string>
     <string name="settings_playlist_continuation">Playlist</string>
