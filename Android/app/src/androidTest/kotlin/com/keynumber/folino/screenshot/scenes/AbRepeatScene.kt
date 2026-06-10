@@ -3,12 +3,11 @@ package com.keynumber.folino.screenshot.scenes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,41 +34,54 @@ import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
 import com.keynumber.folino.ui.theme.FolinoTheme
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
 import io.github.jiyimeta.sheetmusic.audio.model.DecodedFrame
+import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.FrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
+import io.github.jiyimeta.sheetmusic.compose.cursor.LoopHighlightOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
+import kotlinx.coroutines.flow.MutableStateFlow
 
-// AB-section repeat scene: the score scrolled so a mid-piece line is at the top, with accent-colored A
-// and B boundary markers (the same `AbBoundaryMarkersOverlay` the production Reader uses) bracketing that
-// line's two measures. Engine-independent: the markers are resolved purely from the laid-out score via
-// JNI (`nativeMeasureFrame`), so no audio engine / loop controller is needed for the still.
+// AB-section repeat scene: the score in the Reader's HORIZONTAL (single continuous-row) layout, scrolled
+// horizontally so measures 5–7 sit side-by-side in one strip, with a translucent accent BAND filling the
+// looped measures (the production `LoopHighlightOverlay`) and bold accent A/B boundary flags
+// (`AbBoundaryMarkersOverlay`) bracketing the span. Horizontal beats VERTICAL here because this score has
+// six staves per system — three vertically-stacked measures never fit one phone frame, whereas one
+// natural-width row lets all three looped measures + both flags read at once as a single highlighted run.
 //
-// `AbBoundaryMarkersOverlay` takes 0-indexed measure indices. This score (Now_is_the_time) lays out two
-// measures per system after the intro: indices {1,2}, {3}, {4,5}, {6,7}, {8,9} each share a line. To keep
-// the looped region on ONE line (so the A and B flags clearly bracket a contiguous span rather than
-// straddling a system break), we frame the {4,5} system — measures 5 & 6 as a user counts them 1-indexed
-// (index 0 is the intro/pickup measure). A sits at the leading edge of index 4, B at the trailing edge of
-// index 5, bracketing that full two-measure line.
-private const val A_MEASURE_INDEX = 4
-private const val B_MEASURE_INDEX = 5
+// Both overlays are engine-INDEPENDENT: the band's tick range is resolved straight from the laid-out score
+// via the audio JNI's measure→tick conversion (the SAME `frameForCursor` + `FrameCodec` path
+// `AndroidPlaybackEngine.setLoopMeasures` uses), reached through the public
+// `AndroidPlaybackEngine.defaultBridge` seam — so no audio engine / loop controller has to be running.
+//
+// The overlays take 0-indexed measure indices. Index 0 is the intro/pickup measure, so 1-indexed measure
+// N maps to index (N-1): m5=index 4, m6=index 5, m7=index 6. We loop MEASURES 5–7 = indices 4 THROUGH 6
+// inclusive — A sits at the leading edge of m5 (index 4), B at the trailing edge of m7 (index 6).
+private const val A_MEASURE_INDEX = 4 // m5: loop start (left edge)
+private const val B_MEASURE_INDEX = 6 // m7: loop end (right edge)
 
-// Leave a little breathing room (document mm) above the looped system once scrolled into view.
-private const val TOP_AIR_MM = 14.0
+// Horizontal air (document mm) on EACH side of the m5–7 span, so the A/B flags aren't flush against the
+// frame edges. The looped span + this air on both sides is scaled to exactly fill the viewport width, so
+// all three measures and both flags are always in frame regardless of the score's natural measure widths.
+private const val SIDE_AIR_MM = 12.0
+
+// Translucent accent band over the looped measures. Matches the production HorizontalScore band tint.
+private fun loopBand(accent: Color): Color = accent.copy(alpha = 0.18f)
 
 @Composable
 fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("AbRepeat", tag)
     ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
         FolinoTheme {
-            // VERTICAL (continuous) layout: the whole score lays out as ONE tall page in a single
-            // coordinate space, so `nativeMeasureFrame` y-values align with `ScorePage` — the space
-            // `AbBoundaryMarkersOverlay` and the auto-scroll math were designed for. (PAGE mode, the
-            // DEFAULT, paginates so `pages.first()` would only hold measure 1.)
+            // HORIZONTAL (single natural-width row) layout: the whole score lays out as ONE wide page in a
+            // single coordinate space, so `nativeMeasureFrame` / `nativeLoopHighlightRects` x/y align with
+            // `ScorePage`. We scroll horizontally (offset x) to bring m5–7 into the frame.
             val scene = rememberReaderSceneState {
-                LayoutOptions.DEFAULT.copy(mode = ReaderLayoutMode.VERTICAL)
+                LayoutOptions.DEFAULT.copy(mode = ReaderLayoutMode.HORIZONTAL)
             }
             Box(Modifier.fillMaxSize().background(Color.White).clipToBounds()) {
                 if (scene != null) {
@@ -80,11 +92,10 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
     }
 }
 
-// Scene-local adaptation of `ReaderSceneContent` that ALSO draws the A–B boundary markers in the same
-// transformed Box as the page (so the bars align with the score columns) and scrolls vertically to frame
-// the looped line. The scroll amount is DERIVED from the A measure's resolved frame (via
-// `nativeMeasureFrame`) rather than tuned by hand: we shift the content up by (A.y − air) document-mm.
-// Readiness is gated on the A frame resolving, so the capture never fires before the markers can paint.
+// Scene-local horizontal adaptation: renders the natural-width row, scrolls horizontally so m5's leading
+// edge parks near the left (derived from the A measure's resolved frame, not hand-tuned), centers the row
+// vertically, and draws the loop band + A/B markers in the SAME transformed Box as the page so they align
+// with the score columns. Readiness is gated on the A frame AND the loop range resolving.
 @Composable
 private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
     val context = LocalContext.current
@@ -95,25 +106,47 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
     val page = state.program.pages.first()
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val fitPxPerMM = if (page.widthMM > 0 && viewportSize.width > 0) {
-        (viewportSize.width / page.widthMM).toFloat()
+    // Resolve the A (m5) and B (m7) measure frames (mm) once laid out. Their x-span (plus side air) is what
+    // we fit to the viewport width — so all three looped measures + both flags always land in frame.
+    var aFrame by remember { mutableStateOf<DecodedFrame?>(null) }
+    var bFrame by remember { mutableStateOf<DecodedFrame?>(null) }
+    LaunchedEffect(scoreHandle) {
+        aFrame = measureFrame(scoreHandle, A_MEASURE_INDEX)
+        bFrame = measureFrame(scoreHandle, B_MEASURE_INDEX)
+    }
+
+    // Resolve the loop tick range for measures 5–7 (indices A..B inclusive) the SAME way
+    // `AndroidPlaybackEngine.setLoopMeasures` does: start = onset tick of index A; end = onset tick of the
+    // measure AFTER B (index B+1), or the timeline's total ticks when that beat doesn't resolve. Drives a
+    // MutableStateFlow into the production `LoopHighlightOverlay` so the three measures get an accent band.
+    val loopFlow = remember { MutableStateFlow<LoopRange?>(null) }
+    LaunchedEffect(scoreHandle) {
+        loopFlow.value = resolveLoopRange(scoreHandle, A_MEASURE_INDEX, B_MEASURE_INDEX)
+    }
+    val loopRange by loopFlow.collectAsStateValue()
+
+    // Fit the m5→m7 span (+ side air on both sides) to the viewport width, so the looped run dominates and
+    // both flags stay in frame independent of the score's natural measure widths.
+    val a = aFrame
+    val b = bFrame
+    val spanLeftMM = (a?.x ?: 0.0) - SIDE_AIR_MM
+    val spanRightMM = ((b?.x ?: 0.0) + (b?.width ?: 0.0)) + SIDE_AIR_MM
+    val spanWidthMM = (spanRightMM - spanLeftMM).coerceAtLeast(1.0)
+    val fitPxPerMM = if (a != null && b != null && viewportSize.width > 0) {
+        (viewportSize.width / spanWidthMM).toFloat()
     } else {
         0f
     }
-    val vPadPx = with(density) { 16.dp.toPx() }
 
-    // Resolve the A measure's frame (mm) once the score is laid out, derive the scroll-up from its y.
-    var aFrame by remember { mutableStateOf<DecodedFrame?>(null) }
-    LaunchedEffect(scoreHandle) {
-        aFrame = measureFrame(scoreHandle, A_MEASURE_INDEX)
-    }
-    // mm above the page origin to drop so the looped line sits near the top with a little air.
-    val scrollUpMM = ((aFrame?.y ?: 0.0) - TOP_AIR_MM).coerceAtLeast(0.0)
-    val scrollUp: Dp = with(density) { (scrollUpMM.toFloat() * fitPxPerMM).toDp() }
+    // mm left of the page origin to drop so the span's left edge (m5 − air) parks at the viewport's left.
+    val scrollLeftMM = spanLeftMM.coerceAtLeast(0.0)
+    val scrollLeft: Dp = with(density) { (scrollLeftMM.toFloat() * fitPxPerMM).toDp() }
 
-    LaunchedEffect(scoreHandle, fitPxPerMM, viewportSize, aFrame) {
-        if (fitPxPerMM <= 0f || viewportSize.width <= 0 || aFrame == null) return@LaunchedEffect
-        // Markers + scroll are settled. Let a few frames paint, then release the capture gate.
+    LaunchedEffect(scoreHandle, fitPxPerMM, viewportSize, aFrame, bFrame, loopRange) {
+        if (fitPxPerMM <= 0f || viewportSize.width <= 0 || a == null || b == null || loopRange == null) {
+            return@LaunchedEffect
+        }
+        // Band + markers + scroll are settled. Let a few frames paint, then release the capture gate.
         kotlinx.coroutines.delay(500)
         SceneReady.signalReady()
     }
@@ -124,7 +157,8 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
             .background(Color.White)
             .clipToBounds()
             .onSizeChanged { viewportSize = it },
-        contentAlignment = Alignment.TopStart,
+        // Center the single row vertically (HorizontalScore centers a short row in the viewport).
+        contentAlignment = Alignment.CenterStart,
     ) {
         val contentWidthPx = page.widthMM.toFloat() * fitPxPerMM
         val contentHeightPx = page.heightMM.toFloat() * fitPxPerMM
@@ -132,22 +166,29 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
             Modifier
                 .size(
                     width = with(density) { contentWidthPx.toDp() },
-                    height = with(density) { (contentHeightPx + vPadPx * 2).toDp() },
+                    height = with(density) { contentHeightPx.toDp() },
                 )
-                // Shift the whole stack up so the looped line lands near the top of the viewport.
-                .offset(y = -scrollUp),
+                // Shift the whole row left so m5 lands near the left edge of the viewport.
+                .offset(x = -scrollLeft),
         ) {
             ScorePage(
                 page = page,
                 fontProvider = fontProvider,
                 pxPerMM = fitPxPerMM,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = with(density) { vPadPx.toDp() }),
+                modifier = Modifier.fillMaxSize(),
             )
-            // Markers live in the SAME padded Box as ScorePage and share its `.padding(vertical)`, so the
-            // bars share the page's coordinate origin (document mm scaled by pxPerMM); panOffset stays
-            // zero, mirroring how ReaderSceneContent positions PlaybackCursorOverlay.
+            // Band UNDER the markers, in the SAME Box as ScorePage so it shares the page coordinate origin
+            // (document mm scaled by pxPerMM); panOffset zero, scale 1 — mirroring HorizontalScore.
+            LoopHighlightOverlay(
+                scoreHandle = scoreHandle,
+                loopRangeFlow = loopFlow,
+                pxPerMM = fitPxPerMM,
+                scale = 1f,
+                panOffset = Offset.Zero,
+                color = loopBand(accent),
+                modifier = Modifier.fillMaxSize(),
+            )
+            // A/B flags on top of the band, full-opacity accent so they bracket the band boldly.
             AbBoundaryMarkersOverlay(
                 scoreHandle = scoreHandle,
                 aMeasure = A_MEASURE_INDEX,
@@ -156,9 +197,7 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
                 scale = 1f,
                 panOffset = Offset.Zero,
                 color = accent,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = with(density) { vPadPx.toDp() }),
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -171,4 +210,38 @@ private fun measureFrame(scoreHandle: Long, measureIndex: Int): DecodedFrame? {
         ScoreCursorCodec.encode(ScoreCursor.Beat(measureIndex, 0)),
     )
     return if (bytes.isEmpty()) null else DecodedFrameCodec.decode(bytes)
+}
+
+/**
+ * Tick onset of [measureIndex] (beat 0), via the audio JNI's measure→tick conversion reached through the
+ * public [AndroidPlaybackEngine.defaultBridge] — the exact path `setLoopMeasures` uses. Null when the beat
+ * doesn't resolve (e.g. an index past the last measure).
+ */
+private fun measureOnsetTick(scoreHandle: Long, measureIndex: Int): Long? {
+    val bytes = AndroidPlaybackEngine.defaultBridge.frameForCursor(
+        scoreHandle,
+        ScoreCursorCodec.encode(ScoreCursor.Beat(measureIndex, 0)),
+    )
+    return if (bytes.isEmpty()) null else FrameCodec.decode(bytes).tick
+}
+
+/**
+ * Half-open loop range `[startTick, endTick)` covering measures `[fromIndex, toIndex]` inclusive, matching
+ * `AndroidPlaybackEngine.setLoopMeasures`: start = onset of [fromIndex]; end = onset of [toIndex]+1, or the
+ * timeline's total ticks (`timelineSummary[0]`) when that beat is past the score end. Null on no resolve.
+ */
+private fun resolveLoopRange(scoreHandle: Long, fromIndex: Int, toIndex: Int): LoopRange? {
+    val start = measureOnsetTick(scoreHandle, fromIndex) ?: return null
+    val totalTicks = AndroidPlaybackEngine.defaultBridge.timelineSummary(scoreHandle).firstOrNull() ?: 0L
+    val end = measureOnsetTick(scoreHandle, toIndex + 1) ?: totalTicks
+    return if (start >= end) null else LoopRange(startTick = start, endTick = end)
+}
+
+// Tiny local collector so the StateFlow's current value drives recomposition without pulling in the
+// runtime-compose `collectAsState` import set here.
+@Composable
+private fun <T> MutableStateFlow<T>.collectAsStateValue(): State<T> {
+    val state = remember { mutableStateOf(value) }
+    LaunchedEffect(this) { collect { state.value = it } }
+    return state
 }
