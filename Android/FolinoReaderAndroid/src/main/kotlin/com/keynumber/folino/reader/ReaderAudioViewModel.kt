@@ -9,13 +9,17 @@ import android.os.IBinder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jiyimeta.sheetmusic.ScoreMetadata
+import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
 import io.github.jiyimeta.sheetmusic.audio.model.ClefAnchor
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.model.RehearsalMarkEntry
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.serialization.RehearsalMarkCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -90,6 +94,18 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     val loopRange: StateFlow<LoopRange?> = _engine
         .flatMapLatest { it?.loopRange ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // The laid-out score handle, stored at [preparePlayback] time. It is the same Long the Reader
+    // already feeds nativeNearestCursor / e.prepare, and the source the rehearsal-mark and
+    // measure-step JNI calls below need. Null until a score has been prepared.
+    @Volatile
+    private var scoreHandle: Long? = null
+
+    // Rehearsal marks for the prepared score, loaded once the handle is known (see
+    // [loadRehearsalMarks]). The transport bar renders one pill per entry, positioned by its
+    // notated-time fraction; tapping a pill seeks the engine to that entry's cursor.
+    private val _rehearsalMarks = MutableStateFlow<List<RehearsalMarkEntry>>(emptyList())
+    val rehearsalMarks: StateFlow<List<RehearsalMarkEntry>> = _rehearsalMarks.asStateFlow()
 
     // ── Repeat / AB-loop ─────────────────────────────────────────────
     // The repeat controller mirrors iOS RepeatModel. It is installed once per score by the screen,
@@ -227,6 +243,10 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun preparePlayback(scoreHandle: Long) {
+        // Stash the handle for the rehearsal-mark / measure-step JNI calls, and load the marks now
+        // that we know it. Both happen synchronously off the same handle the Reader supplies.
+        this.scoreHandle = scoreHandle
+        loadRehearsalMarks(scoreHandle)
         viewModelScope.launch {
             val e = engine.filterNotNull().first()
             ScoreMetadata.fetch(scoreHandle)?.let { meta ->
@@ -250,6 +270,36 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
                 android.util.Log.e("ReaderAudioVM", "prepare failed: ${ex.message}", ex)
             }
         }
+    }
+
+    /**
+     * Decodes the prepared score's rehearsal marks from the shared JNI bridge and publishes them
+     * for the transport bar. The math (where each mark sits on the notated timeline, which cursor it
+     * seeks to) lives entirely on the Swift side — this only decodes the wire payload.
+     */
+    fun loadRehearsalMarks(scoreHandle: Long) {
+        _rehearsalMarks.value = RehearsalMarkCodec.decode(SheetMusicJNI.nativeRehearsalMarks(scoreHandle))
+    }
+
+    /** Steps the playback cursor back one measure (shared `Score.cursorSteppingMeasure` semantics). */
+    fun stepMeasureBackward() = stepMeasure(direction = 0)
+
+    /** Steps the playback cursor forward one measure (shared `Score.cursorSteppingMeasure` semantics). */
+    fun stepMeasureForward() = stepMeasure(direction = 1)
+
+    /**
+     * Steps the current engine cursor by one measure in [direction] (0 = backward, 1 = forward) via
+     * the shared JNI bridge, then seeks the engine to the result. Falls back to the first downbeat
+     * (`Beat(0, 0)`) when there is no live cursor yet. No-op until a score handle is stored.
+     */
+    private fun stepMeasure(direction: Int) {
+        val handle = scoreHandle ?: return
+        val e = engine.value ?: return
+        val from = e.currentCursor.value ?: ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
+        val fromBytes = ScoreCursorCodec.encode(from)
+        val targetBytes = SheetMusicJNI.nativeStepMeasureCursor(handle, fromBytes, direction)
+        val target = ScoreCursorCodec.decode(targetBytes)
+        e.seek(to = target)
     }
 
     override fun onCleared() {
