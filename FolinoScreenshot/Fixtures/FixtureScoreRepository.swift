@@ -12,8 +12,17 @@ import Observation
 final class FixtureScoreRepository: ScoreLibraryRepository {
     var scoreItems: [ScoreItem] = Fixture.items
     var deletedScoreItems: [ScoreItem] = []
-    var tags: [Tag] = []
-    var playlists: [Playlist] = []
+    var tags: [Tag] = [Fixture.practicingTag]
+    var playlists: [Playlist] = Fixture.playlists
+
+    /// Optional per-score Reader preferences to vend from `loadReaderPreferences`. Scenes that want the Reader to load
+    /// with a specific state (e.g. an active A–B loop region) seed this; the default empty map makes every lookup
+    /// return `nil`, so unconfigured scenes (ReaderScene, etc.) keep the seed-defaults path.
+    var readerPreferences: [ScoreItemID: ReaderPreferences]
+
+    init(readerPreferences: [ScoreItemID: ReaderPreferences] = [:]) {
+        self.readerPreferences = readerPreferences
+    }
 
     func refresh() throws {}
 
@@ -40,7 +49,7 @@ final class FixtureScoreRepository: ScoreLibraryRepository {
     }
 
     func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
-        nil
+        readerPreferences[scoreItemID]
     }
 
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}

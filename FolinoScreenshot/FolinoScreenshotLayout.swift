@@ -12,10 +12,14 @@ enum FolinoScreenshotLayout {
         endPoint: .bottom,
     )
 
+    /// - Parameter innerStatusBarHeight: override for the height of the thumbnail's inner status-bar band. Pass `nil`
+    ///   (the default) to keep ScreenshotKit's per-idiom defaults (50pt iPhone / 28pt iPad) so existing scenes are
+    ///   unchanged. PiPScene passes `0` so its own faux 9:41 row owns the full thumbnail from the very top.
     static func layout(
         for idiom: ScreenshotIdiom,
         subtitleBullet: Bool = false,
         innerStatusBarColor: Color = .white,
+        innerStatusBarHeight: CGFloat? = nil,
     ) -> ScreenshotLayout {
         // titleCenterYFraction is left at the ScreenshotKit defaults (0.05 iPhone /
         // 0.06 iPad) to match VocalTuner. The earlier clipping was an artifact of
@@ -26,6 +30,8 @@ enum FolinoScreenshotLayout {
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
+                thumbnailCornerRadius: 36,
+                innerStatusBarHeight: innerStatusBarHeight ?? 50,
                 innerStatusBarColor: innerStatusBarColor,
                 background: background,
             )
@@ -34,6 +40,8 @@ enum FolinoScreenshotLayout {
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
+                thumbnailCornerRadius: 28,
+                innerStatusBarHeight: innerStatusBarHeight ?? 28,
                 innerStatusBarColor: innerStatusBarColor,
                 background: background,
             )

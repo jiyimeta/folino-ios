@@ -45,4 +45,19 @@
     <string name="reader_playback_play">播放</string>
     <string name="reader_playback_pause">暫停</string>
     <string name="reader_playback_stop">停止</string>
+    <string name="reader_playback_metronome">節拍器</string>
+    <string name="reader_playback_volume">音量</string>
+    <string name="reader_inspector_continuation">Playlist</string>
+    <string name="reader_continuation_off">Off</string>
+    <string name="reader_continuation_play_through">Continuous</string>
+    <string name="reader_continuation_loop">Repeat All</string>
+    <string name="reader_continuation_repeat_active">Looping this score — playback won\'t move to the next.</string>
+    <string name="reader_mixer_empty">沒有可混音的聲部。</string>
+    <string name="reader_mixer_drums">鼓</string>
+    <string name="reader_tempo_decrease">降低速度</string>
+    <string name="reader_tempo_increase">提高速度</string>
+    <string name="reader_transpose_down">降低移調</string>
+    <string name="reader_transpose_up">提高移調</string>
+    <string name="reader_section_collapse">收起</string>
+    <string name="reader_section_expand">展開</string>
 </resources>

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -141,6 +143,11 @@ fun ReaderScreen(
     transposeSemitones: Int = 0,
     /** Persists the per-score transpose value (semitones) on user change. */
     persistTranspose: (Int) -> Unit = {},
+    /** Wire string for the current continuation mode (e.g. "playThrough", "loopPlaylist"); shown in the
+     * playback inspector's continuation row. */
+    continuationModeWire: String = "playThrough",
+    /** Persists the continuation mode wire string on user change. */
+    onContinuationModeChange: (String) -> Unit = {},
     /** Global metronome-enabled flag (SettingsPrefs) — metronome is global on both platforms. */
     metronomeEnabled: Boolean = false,
     /** Writes the global metronome flag on user change. */
@@ -173,8 +180,6 @@ fun ReaderScreen(
     playlistQueueProvider: suspend () -> List<String> = { emptyList() },
     /** The global sticky continuation mode (re-read each end-of-score so a Settings change is picked up). */
     continuationModeProvider: suspend () -> PlaylistContinuationMode = { PlaylistContinuationMode.PLAY_THROUGH },
-    /** Persists the global sticky continuation mode. */
-    persistContinuationMode: (PlaylistContinuationMode) -> Unit = {},
     /** Asks the host to retarget the Reader to [scoreId] in place (host sets its currentScoreId). */
     onRetargetScore: (String) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
@@ -204,11 +209,6 @@ fun ReaderScreen(
 
     // Set when this screen initiates an auto-advance; consumed once the next score reaches PREPARED.
     var pendingAutoplay by remember { mutableStateOf(false) }
-
-    // Global continuation mode for the inspector control (playlist context only). Mirrors the value the
-    // auto-advance handler reads; updates write through to DataStore via persistContinuationMode.
-    var continuationMode by remember { mutableStateOf(PlaylistContinuationMode.PLAY_THROUGH) }
-    LaunchedEffect(Unit) { continuationMode = continuationModeProvider() }
 
     // Playlist auto-advance: on a real end-of-score, ask the shared Domain decision (via JNI) what to
     // do next. Only active in a playlist context. Re-derives the live queue + re-reads the global
@@ -334,41 +334,17 @@ fun ReaderScreen(
         return
     }
 
+    val pipCtx = LocalContext.current
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title.ifEmpty { "folino" }) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (pipEnabled) {
-                        val pipCtx = LocalContext.current
-                        IconButton(onClick = { (pipCtx.findActivity() as? PipHost)?.enterPipNow() }) {
-                            Icon(
-                                Icons.Filled.PictureInPicture,
-                                contentDescription = "Picture in Picture",
-                            )
-                        }
-                    }
-                    IconButton(onClick = onEditInfo) {
-                        Icon(
-                            Icons.Outlined.Info,
-                            contentDescription = stringResource(R.string.reader_edit_info),
-                        )
-                    }
-                    IconButton(onClick = { showInspector = true }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Playback controls")
-                    }
-                    IconButton(onClick = { showDisplayInspector = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ViewList,
-                            contentDescription = stringResource(R.string.reader_display_settings),
-                        )
-                    }
-                },
+            ReaderTopBar(
+                title = title,
+                pipEnabled = pipEnabled,
+                onBack = onBack,
+                onPip = { (pipCtx.findActivity() as? PipHost)?.enterPipNow() },
+                onEditInfo = onEditInfo,
+                onPlaybackControls = { showInspector = true },
+                onDisplaySettings = { showDisplayInspector = true },
             )
         },
         bottomBar = { if (showSeekBar) TransportBar(audioVm) },
@@ -439,12 +415,10 @@ fun ReaderScreen(
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = persistStaffProgram,
             onPersistStaffVolume = persistStaffVolume,
-            inPlaylist = playlistId != null,
-            continuationMode = continuationMode,
-            onContinuationModeChange = { m ->
-                continuationMode = m
-                persistContinuationMode(m)
-            },
+            partNames = mixerParts.map { it.name },
+            isInPlaylist = playlistId != null,
+            continuationModeWire = continuationModeWire,
+            onContinuationModeChange = onContinuationModeChange,
         )
     }
     if (showDisplayInspector) {
@@ -457,8 +431,67 @@ fun ReaderScreen(
             onChange = onDisplayOptionsChange,
             showSeekBar = showSeekBar,
             onShowSeekBarChange = onShowSeekBarChange,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = persistTranspose,
         )
     }
+}
+
+/**
+ * The Reader's top app bar (back arrow + title + the PiP / edit-info / playback / display action
+ * icons). Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar
+ * over its score scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams).
+ * Production behavior is unchanged: [ReaderScreen] delegates its `topBar` here, passing the same
+ * callbacks it used inline.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReaderTopBar(
+    title: String,
+    pipEnabled: Boolean,
+    onBack: () -> Unit,
+    onPip: () -> Unit,
+    onEditInfo: () -> Unit,
+    onPlaybackControls: () -> Unit,
+    onDisplaySettings: () -> Unit,
+    modifier: Modifier = Modifier,
+    windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
+) {
+    TopAppBar(
+        modifier = modifier,
+        windowInsets = windowInsets,
+        title = { Text(title.ifEmpty { "folino" }) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            if (pipEnabled) {
+                IconButton(onClick = onPip) {
+                    Icon(
+                        Icons.Filled.PictureInPicture,
+                        contentDescription = "Picture in Picture",
+                    )
+                }
+            }
+            IconButton(onClick = onEditInfo) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = stringResource(R.string.reader_edit_info),
+                )
+            }
+            IconButton(onClick = onPlaybackControls) {
+                Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+            }
+            IconButton(onClick = onDisplaySettings) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ViewList,
+                    contentDescription = stringResource(R.string.reader_display_settings),
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -1115,7 +1148,7 @@ private fun RehearsalMarkPill(
  * not ported. Actions are guarded on the prepared state, matching [TransportBar].
  */
 @Composable
-private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
+fun PlaybackFab(audioVm: ReaderAudioViewModel) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()

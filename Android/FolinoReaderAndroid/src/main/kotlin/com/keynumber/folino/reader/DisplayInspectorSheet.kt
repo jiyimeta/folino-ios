@@ -22,8 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -64,10 +62,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.keynumber.folino.reader.ui.CollapsibleHeader
+import com.keynumber.folino.reader.ui.InspectorRow
+import com.keynumber.folino.reader.ui.InspectorSliderHeight
 import kotlin.math.roundToInt
-
-/** Compact slider height so the dense General section doesn't dominate the sheet. */
-private val sliderHeight = 24.dp
 
 /**
  * Vertical inset by which the (deliberately tall) clef tile under-reports its layout height, so the
@@ -112,18 +110,51 @@ fun DisplayInspectorSheet(
     onChange: (LayoutOptions) -> Unit,
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
+    transposeSemitones: Int = 0,
+    onTransposeChange: (Int) -> Unit = {},
 ) {
-    var generalExpanded by rememberSaveable { mutableStateOf(true) }
-    var partsExpanded by rememberSaveable { mutableStateOf(true) }
-    val typeface = rememberBravuraTypeface()
-
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
+        DisplayInspectorContent(
+            options = options,
+            parts = parts,
+            onChange = onChange,
+            showSeekBar = showSeekBar,
+            onShowSeekBarChange = onShowSeekBarChange,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = onTransposeChange,
+        )
+    }
+}
+
+/**
+ * The scrollable body of the display inspector, factored out of [DisplayInspectorSheet] so the same
+ * control list can be hosted either inside the production `ModalBottomSheet` or — for static capture
+ * harnesses, which can't render a separate sheet window into a node bitmap — directly in a plain
+ * surface. The sheet wrapper owns the modal chrome; this composable owns only the control rows.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DisplayInspectorContent(
+    options: LayoutOptions,
+    parts: List<PartDescriptor>,
+    onChange: (LayoutOptions) -> Unit,
+    modifier: Modifier = Modifier,
+    showSeekBar: Boolean = true,
+    onShowSeekBarChange: (Boolean) -> Unit = {},
+    initialGeneralExpanded: Boolean = true,
+    initialPartsExpanded: Boolean = true,
+    transposeSemitones: Int = 0,
+    onTransposeChange: (Int) -> Unit = {},
+) {
+    var generalExpanded by rememberSaveable { mutableStateOf(initialGeneralExpanded) }
+    var partsExpanded by rememberSaveable { mutableStateOf(initialPartsExpanded) }
+    val typeface = rememberBravuraTypeface()
+    LazyColumn(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
             // ── General (layout mode / staff size / display flags) ───
             item {
                 CollapsibleHeader(
@@ -133,8 +164,14 @@ fun DisplayInspectorSheet(
             }
             if (generalExpanded) {
                 item { LayoutModeRow(options.mode) { onChange(options.copy(mode = it)) } }
+                item { StaffSizeRow(options.staffSize) { onChange(options.copy(staffSize = it)) } }
                 item {
-                    StaffSizeRow(options.staffSize) { onChange(options.copy(staffSize = it)) }
+                    TransposeRow(
+                        semitones = transposeSemitones,
+                        enabled = true,
+                        onChange = onTransposeChange,
+                        showLeadingIcon = false,
+                    )
                 }
                 item {
                     SwitchRow(
@@ -184,7 +221,6 @@ fun DisplayInspectorSheet(
                 }
             }
         }
-    }
 }
 
 @Composable
@@ -196,15 +232,7 @@ private fun LayoutModeRow(mode: ReaderLayoutMode, onSelect: (ReaderLayoutMode) -
     )
     var expanded by remember { mutableStateOf(false) }
     val current = modes.first { it.first == mode }
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            stringResource(R.string.reader_display_mode),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
+    InspectorRow(label = stringResource(R.string.reader_display_mode)) {
         Box {
             // Trigger mirrors the clef picker: a plain clickable row (icon + label + chevron) that
             // opens an anchored DropdownMenu — the Android equivalent of the iOS layout-mode picker.
@@ -215,7 +243,7 @@ private fun LayoutModeRow(mode: ReaderLayoutMode, onSelect: (ReaderLayoutMode) -
             ) {
                 Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
                 Text(stringResource(current.second), style = MaterialTheme.typography.bodyMedium)
-                Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 modes.forEach { (m, labelRes, icon) ->
@@ -243,7 +271,7 @@ private fun LayoutModeRow(mode: ReaderLayoutMode, onSelect: (ReaderLayoutMode) -
 @Composable
 private fun StaffSizeRow(staffSize: Double, onChange: (Double) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -258,7 +286,7 @@ private fun StaffSizeRow(staffSize: Double, onChange: (Double) -> Unit) {
             value = staffSize.toFloat(),
             onValueChange = { onChange(it.toDouble()) },
             valueRange = 8f..28f,
-            modifier = Modifier.weight(1f).height(sliderHeight),
+            modifier = Modifier.weight(1f).height(InspectorSliderHeight),
         )
         Text(
             "${staffSize.roundToInt()} pt",
@@ -272,12 +300,7 @@ private fun StaffSizeRow(staffSize: Double, onChange: (Double) -> Unit) {
 
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+    InspectorRow(label = label) {
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -567,23 +590,6 @@ private fun ClefTileRow(
                     .padding(horizontal = 4.dp, vertical = clefTileInset),
             )
         }
-    }
-}
-
-@Composable
-private fun CollapsibleHeader(title: String, expanded: Boolean, onToggle: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-        Icon(
-            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
-        )
     }
 }
 

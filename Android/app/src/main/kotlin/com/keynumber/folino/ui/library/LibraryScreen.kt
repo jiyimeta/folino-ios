@@ -38,7 +38,36 @@ fun LibraryScreen(
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     cacheFile.outputStream().use { output -> input.copyTo(output) }
                 }
-                viewModel.importScore(cacheFile.absolutePath)
+                // Surface import failures that were previously silent: a broken DB throws here
+                // (Kotlin context, catchable — unlike inside the Swift->Kotlin JNI proxy), and a
+                // no-op import (parse failure etc.) is caught by the count delta. Either way the
+                // user is told and a Crashlytics non-fatal is logged instead of the import
+                // silently doing nothing. The picker result callback runs on the main thread, so
+                // the Toast is shown directly; RoomLibraryStore.loadAll() is a synchronous Room
+                // query (allowMainThreadQueries), safe to call here.
+                val store = com.keynumber.folino.library.RoomLibraryStore(context)
+                try {
+                    val before = store.loadAll().count { it.deletedAt <= 0.0 }
+                    viewModel.importScore(cacheFile.absolutePath)
+                    val after = store.loadAll().count { it.deletedAt <= 0.0 }
+                    if (after <= before) {
+                        com.keynumber.folino.diagnostics.CrashReporting.recordNonFatal(
+                            IllegalStateException("Import produced no new score: ${cacheFile.name}"),
+                        )
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.import_failed),
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                } catch (t: Throwable) {
+                    com.keynumber.folino.diagnostics.CrashReporting.recordNonFatal(t)
+                    android.widget.Toast.makeText(
+                        context,
+                        context.getString(R.string.import_failed),
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
             }
         }
     }

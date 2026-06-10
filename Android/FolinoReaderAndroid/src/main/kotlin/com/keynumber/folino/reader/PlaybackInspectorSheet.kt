@@ -13,22 +13,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -60,13 +56,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.keynumber.folino.reader.ui.CollapsibleHeader
+import com.keynumber.folino.reader.ui.InspectorRow
+import com.keynumber.folino.reader.ui.InspectorSliderHeight
+import com.keynumber.folino.reader.ui.InspectorSliderRow
+import com.keynumber.folino.reader.ui.MetronomeIcon
+import com.keynumber.folino.reader.ui.TuningForkIcon
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
-import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import kotlin.math.ln
 import kotlin.math.roundToInt
-
-/** Compact slider height so the mixer's many rows don't dominate the sheet. */
-private val sliderHeight = 24.dp
 
 /** Small square footprint for the per-staff Solo / Mute toggles. */
 private val toggleSize = 36.dp
@@ -111,12 +109,62 @@ fun PlaybackInspectorSheet(
     onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
     /** Persists a per-score volume override (by staff address) after the live engine update. */
     onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
-    /** True when the Reader is opened from a playlist (controls visibility of the continuation row). */
-    inPlaylist: Boolean = false,
-    /** The active playlist continuation mode shown in the picker. */
-    continuationMode: PlaylistContinuationMode = PlaylistContinuationMode.PLAY_THROUGH,
-    /** Called when the user selects a new continuation mode from the picker. */
-    onContinuationModeChange: (PlaylistContinuationMode) -> Unit = {},
+    /** True when this score is part of a playlist; shows the continuation-mode row. */
+    isInPlaylist: Boolean = false,
+    /** Wire string for the playlist continuation mode ("off" / "playThrough" / "loopPlaylist"). */
+    continuationModeWire: String = "playThrough",
+    /** Called when the user selects a new continuation mode. */
+    onContinuationModeChange: (String) -> Unit = {},
+    /** Ordered part display names, for grouping the mixer by part. */
+    partNames: List<String> = emptyList(),
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        PlaybackInspectorContent(
+            audioVm = audioVm,
+            openingQuarterBpm = openingQuarterBpm,
+            metronomeEnabled = metronomeEnabled,
+            onMetronomeChange = onMetronomeChange,
+            onPersistMasterVolume = onPersistMasterVolume,
+            onPersistTempoMultiplier = onPersistTempoMultiplier,
+            onPersistA4ReferenceHz = onPersistA4ReferenceHz,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = onTransposeChange,
+            staffAddressByIndex = staffAddressByIndex,
+            onPersistStaffProgram = onPersistStaffProgram,
+            onPersistStaffVolume = onPersistStaffVolume,
+            isInPlaylist = isInPlaylist,
+            continuationModeWire = continuationModeWire,
+            onContinuationModeChange = onContinuationModeChange,
+            partNames = partNames,
+        )
+    }
+}
+
+/**
+ * The scrollable body of the playback inspector, factored out of [PlaybackInspectorSheet] so the same
+ * General + Parts control list can be hosted either inside the production `ModalBottomSheet` or — for
+ * static capture harnesses, which can't render a separate sheet window into a node bitmap — directly in
+ * a plain surface. The sheet wrapper owns the modal chrome; this composable owns only the control rows.
+ */
+@Composable
+fun PlaybackInspectorContent(
+    audioVm: ReaderAudioViewModel,
+    openingQuarterBpm: Double,
+    modifier: Modifier = Modifier,
+    metronomeEnabled: Boolean = false,
+    onMetronomeChange: (Boolean) -> Unit = {},
+    onPersistMasterVolume: (Double) -> Unit = {},
+    onPersistTempoMultiplier: (Double) -> Unit = {},
+    onPersistA4ReferenceHz: (Double) -> Unit = {},
+    transposeSemitones: Int = 0,
+    onTransposeChange: (Int) -> Unit = {},
+    staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
+    onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
+    isInPlaylist: Boolean = false,
+    continuationModeWire: String = "playThrough",
+    onContinuationModeChange: (String) -> Unit = {},
+    partNames: List<String> = emptyList(),
 ) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val mixerChannels by audioVm.mixerChannels.collectAsStateWithLifecycle()
@@ -133,66 +181,84 @@ fun PlaybackInspectorSheet(
     var generalExpanded by rememberSaveable { mutableStateOf(true) }
     var mixerExpanded by rememberSaveable { mutableStateOf(true) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
+    LazyColumn(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
             // ── General (master / tempo / metronome) ────────────────
             item {
-                CollapsibleHeader("General", generalExpanded) { generalExpanded = !generalExpanded }
+                CollapsibleHeader(stringResource(R.string.reader_inspector_general), generalExpanded) { generalExpanded = !generalExpanded }
             }
             if (generalExpanded) {
                 item {
-                    IconSliderRow(
-                        icon = Icons.Default.VolumeUp,
-                        label = "Volume",
-                        value = masterVolume,
-                        valueRange = 0f..1f,
-                        readout = "${(masterVolume * 100).toInt()}%",
+                    InspectorRow(label = stringResource(R.string.reader_playback_metronome), leadingIcon = MetronomeIcon) {
+                        // Metronome is a GLOBAL setting (SettingsPrefs), not per-score. The toggle
+                        // writes the global flag; the Reader screen pushes that value into the engine
+                        // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
+                        // soundfont hot-swap re-push).
+                        Switch(checked = metronomeEnabled, onCheckedChange = onMetronomeChange, enabled = controlsEnabled)
+                    }
+                }
+                item {
+                    TempoRow(
+                        openingQuarterBpm = openingQuarterBpm,
+                        rate = rate,
                         enabled = controlsEnabled,
-                        onValueChange = {
-                            audioVm.setMasterVolume(it)
-                            onPersistMasterVolume(it.toDouble())
-                        },
+                        onRate = { engine?.setRate(it); onPersistTempoMultiplier(it.toDouble()) },
                     )
                 }
                 item {
-                    IconSliderRow(
-                        icon = Icons.Default.Speed,
-                        label = "Tempo",
-                        value = rate,
-                        valueRange = 0.5f..2.0f,
-                        // Engraved-style readout (quarter-note glyph + BPM), matching iOS.
-                        readout = "♩ = ${(openingQuarterBpm * rate).roundToInt()}",
-                        enabled = controlsEnabled,
-                        onValueChange = {
-                            engine?.setRate(it)
-                            onPersistTempoMultiplier(it.toDouble())
-                        },
-                    )
+                    InspectorRow(label = stringResource(R.string.reader_repeat_label), leadingIcon = Icons.Default.Repeat) {
+                        RepeatModePicker(selected = repeatMode, enabled = controlsEnabled, onSelect = { audioVm.setRepeatMode(it) })
+                    }
                 }
-                item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Default.Timer, contentDescription = null)
-                        Text("Metronome", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            // Metronome is a GLOBAL setting (SettingsPrefs), not per-score. The toggle
-                            // writes the global flag; the Reader screen pushes that value into the engine
-                            // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
-                            // soundfont hot-swap re-push).
-                            checked = metronomeEnabled,
-                            onCheckedChange = { onMetronomeChange(it) },
+                if (isInPlaylist) {
+                    item {
+                        ContinuationRow(
+                            modeWire = continuationModeWire,
+                            repeatActive = repeatMode != RepeatMode.OFF,
                             enabled = controlsEnabled,
+                            onSelect = onContinuationModeChange,
                         )
                     }
                 }
+                item {
+                    InspectorSliderRow(
+                        leadingIcon = Icons.Default.VolumeUp,
+                        label = {
+                            Text(
+                                stringResource(R.string.reader_playback_volume),
+                                Modifier.width(76.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        },
+                        trailing = {
+                            Text(
+                                "${(masterVolume * 100).toInt()}%",
+                                Modifier.width(64.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        },
+                    ) {
+                        Slider(
+                            value = masterVolume,
+                            onValueChange = {
+                                audioVm.setMasterVolume(it)
+                                onPersistMasterVolume(it.toDouble())
+                            },
+                            valueRange = 0f..1f,
+                            enabled = controlsEnabled,
+                            modifier = Modifier.weight(1f).height(InspectorSliderHeight),
+                        )
+                    }
+                }
+                item { TransposeRow(semitones = transposeSemitones, enabled = controlsEnabled, onChange = onTransposeChange) }
                 item {
                     A4ReferenceRow(
                         hz = a4ReferenceHz,
@@ -214,164 +280,179 @@ fun PlaybackInspectorSheet(
                         },
                     )
                 }
-                item {
-                    // Persist-only: the audio/notation transpose effect is not yet implemented on Android
-                    // (see spec Non-Goals). This row stores transposeSemitones via the ReaderPreferences
-                    // bridge for a future transpose feature.
-                    TransposeRow(
-                        semitones = transposeSemitones,
-                        enabled = controlsEnabled,
-                        onChange = onTransposeChange,
-                    )
-                }
-                item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Default.Repeat, contentDescription = null)
-                        Text(
-                            stringResource(R.string.reader_repeat_label),
-                            Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        RepeatModePicker(
-                            selected = repeatMode,
-                            enabled = controlsEnabled,
-                            onSelect = { audioVm.setRepeatMode(it) },
-                        )
-                    }
-                }
-                if (inPlaylist) {
-                    item {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null)
-                                Text(
-                                    stringResource(R.string.reader_playlist_continuation_label),
-                                    Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                PlaylistContinuationPicker(
-                                    selected = continuationMode,
-                                    enabled = controlsEnabled && repeatMode == RepeatMode.OFF,
-                                    onSelect = onContinuationModeChange,
-                                )
-                            }
-                            if (repeatMode != RepeatMode.OFF) {
-                                Text(
-                                    stringResource(R.string.reader_continuation_repeat_active_hint),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
             item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
 
-            // ── Mixer (per staff) ───────────────────────────────────
-            item {
-                CollapsibleHeader("Mixer", mixerExpanded) { mixerExpanded = !mixerExpanded }
-            }
+            // ── Parts (per-part mixer, iOS parity) ─────────────────
+            item { CollapsibleHeader(stringResource(R.string.reader_inspector_parts), mixerExpanded) { mixerExpanded = !mixerExpanded } }
             if (mixerExpanded) {
-                if (mixerChannels.isEmpty()) {
-                    item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
+                val groups = groupMixerByPart(mixerChannels, staffAddressByIndex, partNames)
+                if (groups.isEmpty()) {
+                    item { Text(stringResource(R.string.reader_mixer_empty), Modifier.padding(vertical = 4.dp)) }
                 } else {
-                    items(mixerChannels, key = { it.staffIndex }) { channel ->
-                        // The flat mixer staffIndex maps to a positional StaffAddress for persistence;
-                        // mute / solo stay session-only (not persisted), matching iOS.
-                        val address = staffAddressByIndex[channel.staffIndex]
-                        MixerRow(
-                            channel = channel,
-                            enabled = controlsEnabled,
-                            gmInstruments = gmInstruments,
-                            onVolume = {
-                                engine?.setStaffVolume(channel.staffIndex, it)
-                                address?.let { a -> onPersistStaffVolume(a, it) }
-                            },
-                            onMute = { engine?.setStaffMuted(channel.staffIndex, it) },
-                            onSolo = { engine?.setStaffSoloed(channel.staffIndex, it) },
-                            onProgram = {
-                                engine?.setStaffProgram(channel.staffIndex, it)
-                                address?.let { a -> onPersistStaffProgram(a, it) }
-                            },
-                        )
-                        // Per-row separator — Material has no Form-style automatic divider,
-                        // so we add a light one between staves for visual grouping.
-                        HorizontalDivider(
-                            Modifier.padding(top = 2.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        )
+                    groups.forEach { group ->
+                        item(key = "part-${group.partIndex}") {
+                            PartMixerSection(
+                                group = group,
+                                enabled = controlsEnabled,
+                                gmInstruments = gmInstruments,
+                                onVolume = { idx, v ->
+                                    engine?.setStaffVolume(idx, v)
+                                    staffAddressByIndex[idx]?.let { onPersistStaffVolume(it, v) }
+                                },
+                                onMute = { idx, m -> engine?.setStaffMuted(idx, m) },
+                                onSolo = { idx, s -> engine?.setStaffSoloed(idx, s) },
+                                onProgram = { program ->
+                                    group.channels.forEach { ch ->
+                                        engine?.setStaffProgram(ch.staffIndex, program)
+                                        staffAddressByIndex[ch.staffIndex]?.let { onPersistStaffProgram(it, program) }
+                                    }
+                                },
+                            )
+                            HorizontalDivider(
+                                Modifier.padding(top = 2.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                            )
+                        }
                     }
                 }
+            }
+        }
+}
+
+/**
+ * Two-line tempo row. Top line: engraved quarter-note marking + BPM readout (tap to reset to 1×)
+ * + ± stepper. Bottom line: percentage readout + multiplier slider.
+ *
+ * Android exposes only the tempo multiplier and opening quarter BPM (no governing-tempo beat glyph
+ * like iOS), so the marking always uses the quarter-note glyph (♩).
+ */
+@Composable
+private fun TempoRow(
+    openingQuarterBpm: Double,
+    rate: Float,
+    enabled: Boolean,
+    onRate: (Float) -> Unit,
+) {
+    val minRate = 0.5f
+    val maxRate = 2.0f
+    val bpm = (openingQuarterBpm * rate).roundToInt()
+    val percent = (rate * 100).roundToInt()
+    InspectorSliderRow(leadingIcon = Icons.Default.Speed) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // Top line: engraved-style marking (quarter-note glyph + BPM, tap to reset) + ± stepper.
+            // Android exposes only the tempo multiplier + opening quarter BPM (no governing-tempo
+            // beat glyph like iOS), so the marking always uses the quarter-note glyph.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "♩ = $bpm",
+                    modifier = Modifier.weight(1f).clickable(enabled = enabled) { onRate(1.0f) },
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                )
+                IconButton(
+                    onClick = { onRate(((bpm - 1) / openingQuarterBpm).toFloat().coerceIn(minRate, maxRate)) },
+                    enabled = enabled && rate > minRate,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.reader_tempo_decrease), modifier = Modifier.size(16.dp))
+                }
+                IconButton(
+                    onClick = { onRate(((bpm + 1) / openingQuarterBpm).toFloat().coerceIn(minRate, maxRate)) },
+                    enabled = enabled && rate < maxRate,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.reader_tempo_increase), modifier = Modifier.size(16.dp))
+                }
+            }
+            // Bottom line: percent readout + multiplier slider.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "$percent%",
+                    Modifier.width(44.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+                Slider(
+                    value = rate,
+                    onValueChange = onRate,
+                    valueRange = minRate..maxRate,
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f).height(InspectorSliderHeight),
+                )
             }
         }
     }
 }
 
+/**
+ * Playlist continuation-mode row. Only shown when the score is part of a playlist
+ * ([isInPlaylist] == true in [PlaybackInspectorSheet]).
+ *
+ * When the current repeat mode is active (A-B or loop-all), the picker is disabled and a
+ * note explains why — mirroring iOS behavior where repeat takes precedence over continuation.
+ */
 @Composable
-private fun CollapsibleHeader(title: String, expanded: Boolean, onToggle: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-        Icon(
-            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
-        )
-    }
-}
-
-@Composable
-private fun IconSliderRow(
-    icon: ImageVector,
-    label: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    readout: String,
+private fun ContinuationRow(
+    modeWire: String,
+    repeatActive: Boolean,
     enabled: Boolean,
-    onValueChange: (Float) -> Unit,
+    onSelect: (String) -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(icon, contentDescription = null)
-        // Text label (not icon-only) so the control is self-explanatory, matching iOS.
-        Text(
-            label,
-            modifier = Modifier.width(76.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            enabled = enabled,
-            modifier = Modifier.weight(1f).height(sliderHeight),
-        )
-        Text(
-            readout,
-            modifier = Modifier.width(64.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodySmall,
-        )
+    val modes = listOf(
+        "off" to stringResource(R.string.reader_continuation_off),
+        "playThrough" to stringResource(R.string.reader_continuation_play_through),
+        "loopPlaylist" to stringResource(R.string.reader_continuation_loop),
+    )
+    Column(Modifier.fillMaxWidth()) {
+        InspectorRow(
+            label = stringResource(R.string.reader_inspector_continuation),
+            leadingIcon = Icons.AutoMirrored.Filled.PlaylistPlay,
+        ) {
+            var expanded by remember { mutableStateOf(false) }
+            val current = modes.firstOrNull { it.first == modeWire } ?: modes[1]
+            Box {
+                Row(
+                    Modifier
+                        .clickable(enabled = enabled && !repeatActive) { expanded = true }
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        current.second,
+                        color = if (repeatActive) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    modes.forEach { (raw, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            trailingIcon = if (raw == modeWire) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            } else {
+                                null
+                            },
+                            onClick = { onSelect(raw); expanded = false },
+                        )
+                    }
+                }
+            }
+        }
+        if (repeatActive) {
+            Text(
+                stringResource(R.string.reader_continuation_repeat_active),
+                Modifier.padding(start = 32.dp, bottom = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -419,11 +500,11 @@ private fun A4ReferenceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Tuning-fork icon, accent-tinted to match iOS.
+        // Tuning-fork icon, neutral tint.
         Icon(
-            Icons.Default.MusicNote,
+            TuningForkIcon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             // ── Top line: readout + ± stepper ───────────────────────
@@ -497,140 +578,47 @@ private fun A4ReferenceRow(
                     onValueChangeFinished = onValueChangeFinished,
                     valueRange = 415f..466f,
                     enabled = enabled,
-                    modifier = Modifier.weight(1f).height(sliderHeight),
+                    modifier = Modifier.weight(1f).height(InspectorSliderHeight),
                 )
             }
         }
     }
 }
 
-/**
- * Per-score transpose row. Mirrors the iOS TransposeRow inspector design:
- * - Leading vertical-arrows icon (≈ iOS `arrow.up.arrow.down`).
- * - "Transpose" label.
- * - Signed monospaced readout ("+3" / "0" / "-2") that is a tap-to-reset button (tapping it
- *   resets the value to 0, matching iOS).
- * - A compact ± stepper clamped to −7..7 semitones.
- *
- * Persist-only: nothing transposes audio or notation on Android yet — [onChange] only writes the
- * value through the ReaderPreferences bridge for a future transpose feature.
- */
 @Composable
-private fun TransposeRow(
-    semitones: Int,
-    enabled: Boolean,
-    onChange: (Int) -> Unit,
-) {
-    val signedReadout = if (semitones > 0) "+$semitones" else "$semitones"
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            Icons.Default.SwapVert,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            stringResource(R.string.reader_inspector_transpose),
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        // Tap-to-reset readout: tapping the signed value resets transpose to 0 (iOS parity).
-        Text(
-            text = signedReadout,
-            modifier = Modifier
-                .clickable(enabled = enabled) { onChange(0) }
-                .padding(horizontal = 4.dp),
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-        )
-        // ± stepper: two compact IconButtons mirroring iOS's Stepper(value, in: -7...7).
-        IconButton(
-            onClick = { onChange((semitones - 1).coerceAtLeast(-7)) },
-            enabled = enabled && semitones > -7,
-            modifier = Modifier.size(32.dp),
-        ) {
-            Icon(
-                Icons.Default.Remove,
-                contentDescription = "Transpose down",
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        IconButton(
-            onClick = { onChange((semitones + 1).coerceAtMost(7)) },
-            enabled = enabled && semitones < 7,
-            modifier = Modifier.size(32.dp),
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = "Transpose up",
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun MixerRow(
-    channel: MixerChannel,
+private fun PartMixerSection(
+    group: PartMixerGroup,
     enabled: Boolean,
     gmInstruments: List<GMInstrument>,
-    onVolume: (Float) -> Unit,
-    onMute: (Boolean) -> Unit,
-    onSolo: (Boolean) -> Unit,
+    onVolume: (Int, Float) -> Unit,
+    onMute: (Int, Boolean) -> Unit,
+    onSolo: (Int, Boolean) -> Unit,
     onProgram: (Int) -> Unit,
 ) {
-    // Dense two-line strip mirroring iOS: identity row (name + wide program picker), then
-    // the volume slider with Solo / Mute beside it. Keeping S/M off the name row lets the
-    // program name use most of the width (it was clamping before). Placement is
-    // Android-idiomatic; the content stays at iOS parity (shared displayName, GM names).
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = channel.displayName,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            val program = channel.program
+        // Part header: instrument name + ONE program picker for the whole part (iOS parity).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(group.partName, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+            val program = group.partProgram
             if (program != null) {
-                ProgramPickerButton(
-                    program = program,
-                    enabled = enabled,
-                    gmInstruments = gmInstruments,
-                    modifier = Modifier.weight(1.6f),
-                    onProgram = onProgram,
-                )
+                ProgramPickerButton(program = program, enabled = enabled, gmInstruments = gmInstruments, modifier = Modifier.weight(1.6f), onProgram = onProgram)
             } else {
-                Text(
-                    "Drums",
-                    modifier = Modifier.weight(1.6f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text(stringResource(R.string.reader_mixer_drums), Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
             }
         }
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Slider(
-                value = channel.volume,
-                onValueChange = onVolume,
-                valueRange = 0f..1f,
-                // A soloed-elsewhere staff is effectively muted; reflect that the slider
-                // won't be audible by disabling it, mirroring iOS's disabled state.
-                enabled = enabled && !channel.effectiveMute,
-                modifier = Modifier.weight(1f).height(sliderHeight),
-            )
-            SmallToggle("S", channel.isSoloed, enabled, "Solo") { onSolo(!channel.isSoloed) }
-            SmallToggle("M", channel.isMuted, enabled, "Mute") { onMute(!channel.isMuted) }
+        // Per-staff volume + Solo/Mute.
+        group.channels.forEach { channel ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Slider(
+                    value = channel.volume,
+                    onValueChange = { onVolume(channel.staffIndex, it) },
+                    valueRange = 0f..1f,
+                    enabled = enabled && !channel.effectiveMute,
+                    modifier = Modifier.weight(1f).height(InspectorSliderHeight),
+                )
+                SmallToggle("S", channel.isSoloed, enabled, "Solo") { onSolo(channel.staffIndex, !channel.isSoloed) }
+                SmallToggle("M", channel.isMuted, enabled, "Mute") { onMute(channel.staffIndex, !channel.isMuted) }
+            }
         }
     }
 }

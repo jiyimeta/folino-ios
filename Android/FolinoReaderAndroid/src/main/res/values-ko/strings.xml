@@ -45,4 +45,19 @@
     <string name="reader_playback_play">재생</string>
     <string name="reader_playback_pause">일시정지</string>
     <string name="reader_playback_stop">정지</string>
+    <string name="reader_playback_metronome">메트로놈</string>
+    <string name="reader_playback_volume">음량</string>
+    <string name="reader_inspector_continuation">Playlist</string>
+    <string name="reader_continuation_off">Off</string>
+    <string name="reader_continuation_play_through">Continuous</string>
+    <string name="reader_continuation_loop">Repeat All</string>
+    <string name="reader_continuation_repeat_active">Looping this score — playback won\'t move to the next.</string>
+    <string name="reader_mixer_empty">믹스할 파트가 없습니다.</string>
+    <string name="reader_mixer_drums">드럼</string>
+    <string name="reader_tempo_decrease">템포 낮추기</string>
+    <string name="reader_tempo_increase">템포 높이기</string>
+    <string name="reader_transpose_down">이조 낮추기</string>
+    <string name="reader_transpose_up">이조 높이기</string>
+    <string name="reader_section_collapse">접기</string>
+    <string name="reader_section_expand">펼치기</string>
 </resources>
