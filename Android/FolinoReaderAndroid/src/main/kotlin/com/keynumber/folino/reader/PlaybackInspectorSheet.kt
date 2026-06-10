@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
@@ -62,6 +61,7 @@ import com.keynumber.folino.reader.ui.CollapsibleHeader
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
 import com.keynumber.folino.reader.ui.InspectorSliderRow
+import com.keynumber.folino.reader.ui.MetronomeIcon
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
 import kotlin.math.ln
 import kotlin.math.roundToInt
@@ -146,7 +146,7 @@ fun PlaybackInspectorSheet(
             }
             if (generalExpanded) {
                 item {
-                    InspectorRow(label = stringResource(R.string.reader_playback_metronome), leadingIcon = Icons.Default.Timer) {
+                    InspectorRow(label = stringResource(R.string.reader_playback_metronome), leadingIcon = MetronomeIcon) {
                         // Metronome is a GLOBAL setting (SettingsPrefs), not per-score. The toggle
                         // writes the global flag; the Reader screen pushes that value into the engine
                         // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
@@ -293,7 +293,7 @@ private fun TempoRow(
     val maxRate = 2.0f
     val bpm = (openingQuarterBpm * rate).roundToInt()
     val percent = (rate * 100).roundToInt()
-    InspectorSliderRow(leadingIcon = Icons.Default.Speed, leadingIconTint = MaterialTheme.colorScheme.primary) {
+    InspectorSliderRow(leadingIcon = Icons.Default.Speed) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             // Top line: engraved-style marking (quarter-note glyph + BPM, tap to reset) + ± stepper.
             // Android exposes only the tempo multiplier + opening quarter BPM (no governing-tempo
@@ -363,7 +363,6 @@ private fun ContinuationRow(
         InspectorRow(
             label = stringResource(R.string.reader_inspector_continuation),
             leadingIcon = Icons.AutoMirrored.Filled.PlaylistPlay,
-            leadingIconTint = MaterialTheme.colorScheme.primary,
         ) {
             var expanded by remember { mutableStateOf(false) }
             val current = modes.firstOrNull { it.first == modeWire } ?: modes[1]
@@ -383,7 +382,7 @@ private fun ContinuationRow(
                             MaterialTheme.colorScheme.onSurface
                         },
                     )
-                    Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     modes.forEach { (raw, label) ->
@@ -455,11 +454,11 @@ private fun A4ReferenceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Tuning-fork icon, accent-tinted to match iOS.
+        // Tuning-fork icon, neutral tint.
         Icon(
             Icons.Default.MusicNote,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             // ── Top line: readout + ± stepper ───────────────────────

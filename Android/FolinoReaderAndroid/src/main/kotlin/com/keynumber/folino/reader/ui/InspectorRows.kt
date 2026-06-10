@@ -59,7 +59,7 @@ fun InspectorRow(
             Icon(
                 leadingIcon,
                 contentDescription = null,
-                tint = leadingIconTint ?: androidx.compose.material3.LocalContentColor.current,
+                tint = leadingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (subtitle != null) {
@@ -68,7 +68,7 @@ fun InspectorRow(
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
             }
         } else {
@@ -101,7 +101,7 @@ fun InspectorSliderRow(
             Icon(
                 leadingIcon,
                 contentDescription = null,
-                tint = leadingIconTint ?: androidx.compose.material3.LocalContentColor.current,
+                tint = leadingIconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         label?.invoke(this)

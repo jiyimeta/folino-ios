@@ -213,7 +213,7 @@ private fun LayoutModeRow(mode: ReaderLayoutMode, onSelect: (ReaderLayoutMode) -
             ) {
                 Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
                 Text(stringResource(current.second), style = MaterialTheme.typography.bodyMedium)
-                Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 modes.forEach { (m, labelRes, icon) ->

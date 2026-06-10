@@ -46,6 +46,7 @@ import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.RepeatModePicker
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSectionHeader
+import com.keynumber.folino.reader.ui.MetronomeIcon
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -94,7 +95,7 @@ fun SettingsScreen(
         item { InspectorSectionHeader(stringResource(R.string.settings_section_reader)) }
         item {
             ToggleRow(
-                icon = Icons.Filled.MusicNote,
+                icon = MetronomeIcon,
                 title = stringResource(R.string.settings_reader_metronome),
                 checked = metronome,
                 onChange = { v -> scope.launch { prefs.setMetronome(v) } },
@@ -176,7 +177,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(current.second)
-                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         continuationModes.forEach { (raw, label) ->
@@ -235,7 +236,7 @@ fun SettingsScreen(
                     ) {
                         Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
                         Text(current.second)
-                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         layoutModes.forEach { (raw, label, icon) ->
@@ -396,6 +397,7 @@ private fun SoundfontRow(
             imageVector = Icons.Filled.MusicNote,
             contentDescription = stringResource(R.string.settings_reader_high_quality_audio),
             modifier = Modifier.padding(end = 12.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
             Text(stringResource(R.string.settings_reader_high_quality_audio))
@@ -406,7 +408,7 @@ private fun SoundfontRow(
                     color = if (state.statusRaw == "failed") {
                         MaterialTheme.colorScheme.error
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     },
                 )
             }
@@ -514,7 +516,7 @@ private fun A4SliderRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.settings_a4_reference), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Text(
                 "A4 = ${hz.roundToInt()}Hz",

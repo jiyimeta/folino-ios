@@ -42,7 +42,6 @@ internal fun TransposeRow(
     InspectorRow(
         label = stringResource(R.string.reader_inspector_transpose),
         leadingIcon = if (showLeadingIcon) Icons.Default.SwapVert else null,
-        leadingIconTint = if (showLeadingIcon) MaterialTheme.colorScheme.primary else null,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

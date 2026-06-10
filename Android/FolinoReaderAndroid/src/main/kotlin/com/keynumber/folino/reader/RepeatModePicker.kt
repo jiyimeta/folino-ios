@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material3.DropdownMenu
@@ -24,7 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 private fun RepeatMode.iconVector(): ImageVector = when (this) {
-    RepeatMode.OFF -> Icons.Filled.Repeat
+    RepeatMode.OFF -> Icons.Filled.Close
     RepeatMode.LOOP_ALL -> Icons.Filled.RepeatOne
     RepeatMode.AB_LOOP -> Icons.Filled.Repeat // distinguished by the "A–B Loop" label
 }
@@ -43,8 +44,8 @@ private fun RepeatMode.label(): String = stringResource(
 fun RepeatModePicker(selected: RepeatMode, enabled: Boolean, onSelect: (RepeatMode) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val tint =
-        if (enabled) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = { expanded = true }, enabled = enabled) {
             Icon(selected.iconVector(), contentDescription = null, modifier = Modifier.size(20.dp), tint = tint)
