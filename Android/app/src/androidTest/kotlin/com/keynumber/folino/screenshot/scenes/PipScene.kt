@@ -66,10 +66,9 @@ private fun FauxHomeScreen() {
                 Color(0xFF5C8DEF), Color(0xFFE7574A), Color(0xFF34A853), Color(0xFFFF5252),
                 Color(0xFF4285F4), Color(0xFF42A5F5), Color(0xFF26A69A), Color(0xFFFFB300),
             )
-            val labels = listOf("Play", "Gmail", "Photos", "YouTube", "Phone", "Chat", "Chrome", "Camera")
-            AppIconRow(0..3, tints, labels)
-            Spacer(Modifier.height(22.dp))
-            AppIconRow(4..7, tints, labels)
+            AppIconRow(0..3, tints)
+            Spacer(Modifier.height(24.dp))
+            AppIconRow(4..7, tints)
             Spacer(Modifier.height(30.dp))
             SearchPill()
             Spacer(Modifier.height(18.dp))
@@ -78,14 +77,10 @@ private fun FauxHomeScreen() {
 }
 
 @Composable
-private fun AppIconRow(range: IntRange, tints: List<Color>, labels: List<String>) {
+private fun AppIconRow(range: IntRange, tints: List<Color>) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         for (i in range) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(54.dp).clip(CircleShape).background(tints[i]))
-                Spacer(Modifier.height(6.dp))
-                Text(labels[i], color = Color.White.copy(alpha = 0.92f), fontSize = 11.sp, maxLines = 1)
-            }
+            Box(Modifier.size(56.dp).clip(CircleShape).background(tints[i]))
         }
     }
 }
@@ -135,8 +130,8 @@ private fun SearchPill() {
 // only `systemHeight` tall, clipping everything outside the three visible staves.
 @Composable
 private fun PipCard(modifier: Modifier = Modifier) {
-    val cropTop = 78.dp        // drop the top margin + measure-1/tempo header above the first staff
-    val systemHeight = 146.dp  // card height = just the three visible staves (cuts the next system)
+    val cropTop = 62.dp        // drop most of the top margin / measure-1 header, leaving a little air
+    val systemHeight = 162.dp  // card height = the three visible staves plus that top breathing room
     Surface(
         modifier = modifier.fillMaxWidth().height(systemHeight),
         shape = RoundedCornerShape(18.dp),

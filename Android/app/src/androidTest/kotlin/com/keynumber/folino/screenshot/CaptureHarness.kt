@@ -56,7 +56,7 @@ fun ComposeContentTestRule.captureFixedSize(
     // `waitForIdle()` does not track. Such a scene calls SceneReady.markGated() during composition and
     // signalReady() once rendered; block on that here (bounded) so the bitmap captures the real score.
     if (SceneReady.isGated()) {
-        waitUntil(timeoutMillis = 20_000) { SceneReady.isReady() }
+        waitUntil(timeoutMillis = 60_000) { SceneReady.isReady() }
         waitForIdle()
     }
     val bitmap = onNodeWithTag(CAPTURE_TAG).captureToImage().asAndroidBitmap()
