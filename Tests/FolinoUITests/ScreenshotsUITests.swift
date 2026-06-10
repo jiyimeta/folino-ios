@@ -9,15 +9,27 @@ final class ScreenshotsUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func testCaptureLibrary() {
-        captureScene(id: "01_Library", languages: languages, in: self)
-    }
-
     func testCaptureReader() {
-        captureScene(id: "02_Reader", languages: languages, in: self)
+        captureScene(id: "01_Reader", languages: languages, in: self)
     }
 
-    func testCaptureHorizontal() {
-        captureScene(id: "06_Horizontal", languages: languages, in: self)
+    func testCapturePlaybackInspector() {
+        captureScene(id: "02_PlaybackInspector", languages: languages, in: self)
+    }
+
+    func testCaptureVisualInspector() {
+        captureScene(id: "03_VisualInspector", languages: languages, in: self)
+    }
+
+    func testCaptureABRepeat() {
+        captureScene(id: "04_ABRepeat", languages: languages, in: self)
+    }
+
+    func testCaptureLibrary() {
+        captureScene(id: "05_Library", languages: languages, in: self)
+    }
+
+    func testCapturePiP() {
+        captureScene(id: "06_PiP", languages: languages, in: self)
     }
 }
