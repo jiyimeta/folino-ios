@@ -337,6 +337,7 @@ fun ReaderScreen(
                         // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
                         // is off) so the last system can scroll out from under the floating play FAB.
                         bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
+                        onLayoutWidthMm = readerVm::setLayoutWidthMm,
                     )
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
                     ReaderLayoutMode.PAGE -> PagedScore(
@@ -450,6 +451,7 @@ private fun ReadyScore(
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
+    onLayoutWidthMm: (Double) -> Unit = {},
 ) {
     val page = state.program.pages.first()
 
@@ -461,12 +463,14 @@ private fun ReadyScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // fit-width: at scale 1 the page width exactly fills the viewport, so the
-    // horizontal extent is zero (no horizontal scroll) — matching iOS zoom 1.0.
-    val fitPxPerMM = if (page.widthMM > 0 && viewportSize.width > 0) {
-        (viewportSize.width / page.widthMM).toFloat()
-    } else {
-        0f
+    // Fixed-density render: pxPerMM is the same on every device, so the staff is the same on-screen
+    // size on phone and tablet. The engine reflows to the viewport width (reported below) so a wider
+    // screen shows MORE music, not bigger notes. Pinch `scale` multiplies on top. (iOS parity.)
+    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
+
+    // Report the viewport-derived layout width up to the VM, which reflows the score to it.
+    LaunchedEffect(viewportSize.width, density.density) {
+        if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))
     }
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
