@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.ui.InspectorRow
+import com.keynumber.folino.reader.ui.TransposeIcon
 
 /**
  * Per-score transpose row. Shared between the playback and display inspectors.
@@ -41,7 +41,7 @@ internal fun TransposeRow(
     val signedReadout = if (semitones > 0) "+$semitones" else "$semitones"
     InspectorRow(
         label = stringResource(R.string.reader_inspector_transpose),
-        leadingIcon = if (showLeadingIcon) Icons.Default.SwapVert else null,
+        leadingIcon = if (showLeadingIcon) TransposeIcon else null,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
