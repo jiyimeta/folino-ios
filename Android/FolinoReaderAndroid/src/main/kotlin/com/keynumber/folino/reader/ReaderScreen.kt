@@ -67,6 +67,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -85,11 +86,12 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
 
-/** Bottom inset reserved for the floating playback FAB cluster, so fixed-position score content
- * (horizontal / page modes) is not hidden under it. Sized to exactly the FAB's occupied height —
- * the FAB (56) plus the Scaffold's default 16 edge margin — so the score region's bottom edge just
- * meets the FAB's top with no whitespace gap above it. Vertical mode does not use this — its
- * scrolling content passes under the FAB, matching iOS (vertical inset 0). */
+/** Bottom inset reserved for the floating playback FAB cluster, so the score content is not hidden
+ * under it. Sized to exactly the FAB's occupied height — the FAB (56) plus the Scaffold's default 16
+ * edge margin — so the score region's bottom edge just meets the FAB's top with no whitespace gap
+ * above it. Horizontal / page modes reserve it as a fixed-content bottom inset; vertical mode adds it
+ * as bottom padding *inside* the scroll content, so the last system scrolls clear of the FAB rather
+ * than passing under it. Only applied while the seek bar is off (the FAB is shown). */
 private val fabClusterReservedHeight = 72.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -271,7 +273,16 @@ fun ReaderScreen(
                 is ReaderState.Loading -> Text("Loading…")
                 is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
                 is ReaderState.Ready -> when (layoutMode) {
-                    ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
+                    ReaderLayoutMode.VERTICAL -> ReadyScore(
+                        state = s,
+                        scoreHandle = scoreHandle,
+                        fontProvider = fontProvider,
+                        audioVm = audioVm,
+                        layoutOptions = layoutOptions,
+                        // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
+                        // is off) so the last system can scroll out from under the floating play FAB.
+                        bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
+                    )
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
                     ReaderLayoutMode.PAGE -> PagedScore(
                         state = s,
@@ -316,6 +327,7 @@ private fun ReadyScore(
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
+    bottomContentPad: Dp = 0.dp,
 ) {
     val page = state.program.pages.first()
 
@@ -341,6 +353,9 @@ private fun ReadyScore(
     // Vertical breathing room so the first/last system isn't flush. Tunable.
     val vPadPx = with(density) { 16.dp.toPx() }
     val padPx = with(density) { 24.dp.toPx() }
+    // Extra bottom padding (added below `vPadPx`) so the last system can scroll out from under the
+    // floating play FAB when the seek bar is off. Top stays `vPadPx`, so cursor / tap math is unchanged.
+    val bottomPadPx = with(density) { bottomContentPad.toPx() }
 
     // Auto-scroll: keep the playback cursor in view via the shared Domain
     // keep-in-view math (JNI). Vertical always; horizontal only when zoomed.
@@ -453,7 +468,9 @@ private fun ReadyScore(
             Box(
                 Modifier.size(
                     width = with(density) { contentWidthPx.toDp() },
-                    height = with(density) { (contentHeightPx + vPadPx * 2).toDp() },
+                    // `bottomPadPx` extends the scrollable extent below the page (top-anchored content),
+                    // so scrolling to the end reveals empty space tall enough to clear the floating FAB.
+                    height = with(density) { (contentHeightPx + vPadPx * 2 + bottomPadPx).toDp() },
                 ),
             ) {
                 ScorePage(
