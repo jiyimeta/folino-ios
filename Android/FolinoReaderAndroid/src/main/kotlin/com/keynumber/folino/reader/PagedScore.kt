@@ -277,6 +277,7 @@ fun PagedScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
+                        color = abAccent,
                         modifier = Modifier.fillMaxSize(),
                     )
                     LoopHighlightOverlay(

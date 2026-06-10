@@ -487,6 +487,7 @@ private fun ReadyScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,
+                        color = abAccent,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
@@ -1230,6 +1231,7 @@ internal fun HorizontalScore(
                             pxPerMM = fitPxPerMM,
                             scale = scale,
                             panOffset = Offset.Zero,
+                            color = abAccent,
                             modifier = Modifier.fillMaxSize(),
                         )
                         LoopHighlightOverlay(
