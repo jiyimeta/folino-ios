@@ -17,6 +17,18 @@ final class ScreenshotsUITests: XCTestCase {
         captureScene(id: "02_Reader", languages: languages, in: self)
     }
 
+    func testCapturePlaybackInspector() {
+        captureScene(id: "03_PlaybackInspector", languages: languages, in: self)
+    }
+
+    func testCaptureVisualInspector() {
+        captureScene(id: "04_VisualInspector", languages: languages, in: self)
+    }
+
+    func testCaptureABRepeat() {
+        captureScene(id: "05_ABRepeat", languages: languages, in: self)
+    }
+
     func testCaptureHorizontal() {
         captureScene(id: "06_Horizontal", languages: languages, in: self)
     }
