@@ -22,10 +22,16 @@ public final class ReaderPreferencesBridge {
         didSet { republish() }
     }
 
-    public var state = ReaderPreferencesStateWire(
+    // The explicit type annotation is load-bearing: the wirelet observable schema parser only picks up stored
+    // properties that carry an explicit `: Type`, so the generated Kotlin view model emits the `state` StateFlow.
+    // Both SwiftFormat and SwiftLint would otherwise strip it as redundant.
+    // swiftformat:disable redundantType
+    // swiftlint:disable:next redundant_type_annotation
+    public var state: ReaderPreferencesStateWire = ReaderPreferencesStateWire(
         staffSize: 14, honorLayoutBreaks: true, masterVolume: 1,
         tempoMultiplier: 0, a4ReferenceHz: 0, transposeSemitones: 0,
     )
+    // swiftformat:enable redundantType
 
     public init(store: ReaderPreferencesStore) {
         self.store = store
