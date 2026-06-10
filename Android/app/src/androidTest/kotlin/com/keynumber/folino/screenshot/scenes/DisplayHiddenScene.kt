@@ -1,6 +1,7 @@
 package com.keynumber.folino.screenshot.scenes
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -15,8 +16,10 @@ import com.keynumber.folino.reader.DisplayInspectorContent
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.PartDescriptor
 import com.keynumber.folino.reader.ReaderLayoutMode
+import com.keynumber.folino.reader.ReaderTopBar
 import com.keynumber.folino.reader.StaffAddress
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
+import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
@@ -54,36 +57,48 @@ fun DisplayHiddenScene(layout: ScreenshotLayout, tag: String) {
                     hiddenStaves = hidden,
                 )
             }
-            Box(Modifier.fillMaxSize()) {
-                if (scene != null) {
-                    ReaderSceneContent(
-                        state = scene.state,
-                        scoreHandle = scene.scoreHandle,
-                        layoutOptions = scene.layoutOptions,
-                        withCursor = false,
-                    )
-                    // Bottom sheet stand-in: a rounded top surface, bottom-aligned, holding the real
-                    // inspector content. `heightIn(max = …)` keeps it as a partial overlay so the
-                    // (staff-reduced) score behind it stays visible above the sheet.
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .heightIn(max = 360.dp),
-                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                        tonalElevation = 4.dp,
-                        shadowElevation = 12.dp,
-                        color = MaterialTheme.colorScheme.surface,
-                    ) {
-                        DisplayInspectorContent(
-                            options = scene.layoutOptions,
-                            parts = scene.parts,
-                            onChange = {},
-                            // Collapse General so the Parts rows (with the staff visibility toggles —
-                            // the point of this scene) sit at the top of the sheet instead of being
-                            // pushed off the bottom by the dense General controls.
-                            initialGeneralExpanded = false,
+            Column(Modifier.fillMaxSize()) {
+                // Real Reader top app bar; static screenshot, callbacks are no-ops.
+                ReaderTopBar(
+                    title = READER_SCENE_TITLE,
+                    pipEnabled = true,
+                    onBack = {},
+                    onPip = {},
+                    onEditInfo = {},
+                    onPlaybackControls = {},
+                    onDisplaySettings = {},
+                )
+                Box(Modifier.fillMaxSize().weight(1f)) {
+                    if (scene != null) {
+                        ReaderSceneContent(
+                            state = scene.state,
+                            scoreHandle = scene.scoreHandle,
+                            layoutOptions = scene.layoutOptions,
+                            withCursor = false,
                         )
+                        // Bottom sheet stand-in: a rounded top surface, bottom-aligned, holding the
+                        // real inspector content. `heightIn(max = …)` keeps it as a partial overlay so
+                        // the (staff-reduced) score behind it stays visible above the sheet.
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .heightIn(max = 360.dp),
+                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                            tonalElevation = 4.dp,
+                            shadowElevation = 12.dp,
+                            color = MaterialTheme.colorScheme.surface,
+                        ) {
+                            DisplayInspectorContent(
+                                options = scene.layoutOptions,
+                                parts = scene.parts,
+                                onChange = {},
+                                // Collapse General so the Parts rows (with the staff visibility
+                                // toggles — the point of this scene) sit at the top of the sheet
+                                // instead of being pushed off the bottom by the dense General controls.
+                                initialGeneralExpanded = false,
+                            )
+                        }
                     }
                 }
             }

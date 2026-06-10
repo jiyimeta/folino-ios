@@ -207,41 +207,17 @@ fun ReaderScreen(
         return
     }
 
+    val pipCtx = LocalContext.current
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title.ifEmpty { "folino" }) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (pipEnabled) {
-                        val pipCtx = LocalContext.current
-                        IconButton(onClick = { (pipCtx.findActivity() as? PipHost)?.enterPipNow() }) {
-                            Icon(
-                                Icons.Filled.PictureInPicture,
-                                contentDescription = "Picture in Picture",
-                            )
-                        }
-                    }
-                    IconButton(onClick = onEditInfo) {
-                        Icon(
-                            Icons.Outlined.Info,
-                            contentDescription = stringResource(R.string.reader_edit_info),
-                        )
-                    }
-                    IconButton(onClick = { showInspector = true }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Playback controls")
-                    }
-                    IconButton(onClick = { showDisplayInspector = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ViewList,
-                            contentDescription = stringResource(R.string.reader_display_settings),
-                        )
-                    }
-                },
+            ReaderTopBar(
+                title = title,
+                pipEnabled = pipEnabled,
+                onBack = onBack,
+                onPip = { (pipCtx.findActivity() as? PipHost)?.enterPipNow() },
+                onEditInfo = onEditInfo,
+                onPlaybackControls = { showInspector = true },
+                onDisplaySettings = { showDisplayInspector = true },
             )
         },
         bottomBar = { if (showSeekBar) TransportBar(audioVm) },
@@ -307,6 +283,61 @@ fun ReaderScreen(
             onShowSeekBarChange = onShowSeekBarChange,
         )
     }
+}
+
+/**
+ * The Reader's top app bar (back arrow + title + the PiP / edit-info / playback / display action
+ * icons). Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar
+ * over its score scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams).
+ * Production behavior is unchanged: [ReaderScreen] delegates its `topBar` here, passing the same
+ * callbacks it used inline.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReaderTopBar(
+    title: String,
+    pipEnabled: Boolean,
+    onBack: () -> Unit,
+    onPip: () -> Unit,
+    onEditInfo: () -> Unit,
+    onPlaybackControls: () -> Unit,
+    onDisplaySettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TopAppBar(
+        modifier = modifier,
+        title = { Text(title.ifEmpty { "folino" }) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            if (pipEnabled) {
+                IconButton(onClick = onPip) {
+                    Icon(
+                        Icons.Filled.PictureInPicture,
+                        contentDescription = "Picture in Picture",
+                    )
+                }
+            }
+            IconButton(onClick = onEditInfo) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = stringResource(R.string.reader_edit_info),
+                )
+            }
+            IconButton(onClick = onPlaybackControls) {
+                Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+            }
+            IconButton(onClick = onDisplaySettings) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ViewList,
+                    contentDescription = stringResource(R.string.reader_display_settings),
+                )
+            }
+        },
+    )
 }
 
 @Composable

@@ -1,6 +1,7 @@
 package com.keynumber.folino.screenshot.scenes
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -11,7 +12,9 @@ import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.PlaybackFab
 import com.keynumber.folino.reader.ReaderLayoutMode
+import com.keynumber.folino.reader.ReaderTopBar
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
+import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
@@ -40,29 +43,42 @@ fun ReaderCursorScene(layout: ScreenshotLayout, tag: String) {
             // Live, prepared engine VM so the real PlaybackFab renders enabled (bound engine +
             // populated mixer). Null until the service binds and the score is prepared.
             val audioVm = rememberPreparedAudioVm(scene?.scoreHandle)
-            Box(Modifier.fillMaxSize()) {
-                if (scene != null) {
-                    ReaderSceneContent(
-                        state = scene.state,
-                        scoreHandle = scene.scoreHandle,
-                        layoutOptions = scene.layoutOptions,
-                        withCursor = true,
-                        // Defer the capture gate to also wait on the prepared engine below.
-                        signalReadyWhenRendered = false,
-                    )
-                    if (audioVm != null) {
-                        // Page rendered AND engine prepared: release the capture gate, then render the
-                        // real transport cluster at the bottom-end (ReaderScreen's FAB slot position).
-                        LaunchedEffect(Unit) {
-                            kotlinx.coroutines.delay(300)
-                            SceneReady.signalReady()
-                        }
-                        Box(
-                            Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp),
-                        ) {
-                            PlaybackFab(audioVm)
+            Column(Modifier.fillMaxSize()) {
+                // Real Reader top app bar (back + title + PiP/edit/playback/display actions). Static
+                // screenshot: every callback is a no-op.
+                ReaderTopBar(
+                    title = READER_SCENE_TITLE,
+                    pipEnabled = true,
+                    onBack = {},
+                    onPip = {},
+                    onEditInfo = {},
+                    onPlaybackControls = {},
+                    onDisplaySettings = {},
+                )
+                Box(Modifier.fillMaxSize().weight(1f)) {
+                    if (scene != null) {
+                        ReaderSceneContent(
+                            state = scene.state,
+                            scoreHandle = scene.scoreHandle,
+                            layoutOptions = scene.layoutOptions,
+                            withCursor = true,
+                            // Defer the capture gate to also wait on the prepared engine below.
+                            signalReadyWhenRendered = false,
+                        )
+                        if (audioVm != null) {
+                            // Page rendered AND engine prepared: release the capture gate, then render
+                            // the real transport cluster at the bottom-end (ReaderScreen's FAB slot).
+                            LaunchedEffect(Unit) {
+                                kotlinx.coroutines.delay(300)
+                                SceneReady.signalReady()
+                            }
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(16.dp),
+                            ) {
+                                PlaybackFab(audioVm)
+                            }
                         }
                     }
                 }

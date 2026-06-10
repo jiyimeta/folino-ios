@@ -2,6 +2,7 @@ package com.keynumber.folino.screenshot.scenes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -27,7 +28,9 @@ import com.keynumber.folino.reader.AbBoundaryMarkersOverlay
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderState
+import com.keynumber.folino.reader.ReaderTopBar
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
+import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
 import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
@@ -87,9 +90,21 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
                     staffSize = SCREENSHOT_STAFF_SIZE,
                 )
             }
-            Box(Modifier.fillMaxSize().background(Color.White).clipToBounds()) {
-                if (scene != null) {
-                    AbScoreWithMarkers(state = scene.state, scoreHandle = scene.scoreHandle)
+            Column(Modifier.fillMaxSize().background(Color.White)) {
+                // Real Reader top app bar; static screenshot, callbacks are no-ops.
+                ReaderTopBar(
+                    title = READER_SCENE_TITLE,
+                    pipEnabled = true,
+                    onBack = {},
+                    onPip = {},
+                    onEditInfo = {},
+                    onPlaybackControls = {},
+                    onDisplaySettings = {},
+                )
+                Box(Modifier.fillMaxSize().weight(1f).background(Color.White).clipToBounds()) {
+                    if (scene != null) {
+                        AbScoreWithMarkers(state = scene.state, scoreHandle = scene.scoreHandle)
+                    }
                 }
             }
         }
