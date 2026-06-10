@@ -44,6 +44,11 @@ object SettingsKeys {
      */
     val a4ReferenceHz = doublePreferencesKey("reader.a4ReferenceHz")
     /**
+     * Global sticky repeat mode: "off" | "loopAll" | "abLoop". Shared key intent with iOS
+     * `ReaderGlobalSettingsKey.repeatMode`. Default "off".
+     */
+    val repeatMode = stringPreferencesKey("reader.repeatMode")
+    /**
      * Whether Crashlytics crash-data collection is enabled. Opt-out semantics:
      * absent (first launch) is treated as `true`, mirroring iOS
      * `privacyCrashReportingEnabled`. The toggle is an opt-*out*.
@@ -65,6 +70,7 @@ class SettingsPrefs(private val context: Context) {
     val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
     val showSeekBar: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showSeekBar] ?: true }
     val a4ReferenceHz: Flow<Double> = context.dataStore.data.map { it[SettingsKeys.a4ReferenceHz] ?: 440.0 }
+    val repeatMode: Flow<String> = context.dataStore.data.map { it[SettingsKeys.repeatMode] ?: "off" }
     val crashReporting: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.crashReportingEnabled] ?: true }
 
@@ -81,6 +87,7 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
     suspend fun setShowSeekBar(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showSeekBar] = v }
     suspend fun setA4ReferenceHz(v: Double) = context.dataStore.edit { it[SettingsKeys.a4ReferenceHz] = v }
+    suspend fun setRepeatMode(v: String) = context.dataStore.edit { it[SettingsKeys.repeatMode] = v }
 
     suspend fun setCrashReporting(v: Boolean) =
         context.dataStore.edit { it[SettingsKeys.crashReportingEnabled] = v }

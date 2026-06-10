@@ -96,7 +96,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     }
 
     public var currentPreset: SoundfontPreset {
-        (isOptedIn && isDownloaded) ? .highQuality : .lightweight
+        SoundfontDownloadReducer.preset(isOptedIn: isOptedIn, isDownloaded: isDownloaded)
     }
 
     public func setOptedIn(_ value: Bool) {
@@ -111,13 +111,17 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     }
 
     public func startDownloadIfNeeded() {
-        guard isOptedIn else { return }
-        if FileManager.default.fileExists(atPath: targetFileURL.path) {
-            downloadState = .downloaded
+        let fileExists = FileManager.default.fileExists(atPath: targetFileURL.path)
+        if fileExists {
+            downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .syncedFromDisk(fileExists: true))
             return
         }
-        guard activeTask == nil else { return }
-        guard pathMonitor.isCurrentlyWiFi else { return }
+        guard SoundfontDownloadReducer.shouldAutoStart(
+            isOptedIn: isOptedIn,
+            fileExists: fileExists,
+            isDownloading: activeTask != nil,
+            isWiFi: pathMonitor.isCurrentlyWiFi,
+        ) else { return }
         startDownload(session: wifiSession)
     }
 
@@ -139,7 +143,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         task.delegate = delegate
         activeDelegate = delegate // keep strong ref alive for the lifetime of the task
         activeTask = task
-        downloadState = .downloading(progress: 0)
+        downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .started)
         let url = downloadURL.absoluteString
         logger.notice("MuseScore_General download starting from \(url, privacy: .public)")
         task.resume()
@@ -151,19 +155,21 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         activeDelegate = nil
         // Keep the state machine honest: if a file landed before cancel propagated, surface that.
         let exists = FileManager.default.fileExists(atPath: targetFileURL.path)
-        downloadState = exists ? .downloaded : .idle
+        downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .cancelled(fileExists: exists))
     }
 
     public func deleteDownloaded() {
         try? FileManager.default.removeItem(at: targetFileURL)
-        downloadState = .idle
+        downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .syncedFromDisk(fileExists: false))
     }
 
     // MARK: - Internal — called by URLSessionDownloadDelegate
 
     fileprivate func updateProgress(bytesWritten: Int64, expected: Int64) {
         guard expected > 0 else { return }
-        downloadState = .downloading(progress: Double(bytesWritten) / Double(expected))
+        downloadState = SoundfontDownloadReducer.nextState(
+            downloadState, on: .progress(fraction: Double(bytesWritten) / Double(expected)),
+        )
     }
 
     fileprivate func handleDownloadFinished(temporaryURL: URL) {
@@ -178,7 +184,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
             try moved.setResourceValues(values)
             activeTask = nil
             activeDelegate = nil
-            downloadState = .downloaded
+            downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .finished)
             let path = targetFileURL.path
             logger.notice("MuseScore_General download finished, installed at \(path, privacy: .public)")
         } catch {
@@ -203,7 +209,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
 
     private func handlePathChange(isWiFi: Bool) {
         guard isWiFi else { return }
-        if case .failed = downloadState {
+        if SoundfontDownloadReducer.shouldRetryOnWiFi(downloadState) {
             startDownloadIfNeeded()
         }
     }

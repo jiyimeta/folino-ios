@@ -33,7 +33,16 @@ class AudioScoreExporter(
     private val engineFactory: () -> AndroidPlaybackEngine = {
         AndroidPlaybackEngine(
             context = context.applicationContext,
-            soundfontResolver = FolinoSoundfontResolver(context.applicationContext),
+            // Prefer the downloaded high-quality SF2 so exported audio matches in-app playback; falls
+            // back to the bundled GM SoundFont when absent or opted-out.
+            soundfontResolver = FolinoSoundfontResolver(
+                context.applicationContext,
+                highQualityPath = {
+                    com.keynumber.folino.soundfont.SoundfontController
+                        .viewModel(context.applicationContext)
+                        .highQualityFilePath()
+                },
+            ),
         )
     },
 ) : ScoreAudioFileExporter {
