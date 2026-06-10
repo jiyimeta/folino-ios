@@ -223,6 +223,12 @@ targets:
         product: SheetMusicLayoutApple
       - package: swift-sheet-music
         product: SheetMusicMSCX
+      - package: swift-sheet-music
+        product: SheetMusicCore
+      - package: swift-sheet-music
+        product: SheetMusicLayout
+      - package: swift-sheet-music
+        product: SheetMusicUI
       - package: LicenseList
         product: LicenseList
       - package: ScreenshotKit

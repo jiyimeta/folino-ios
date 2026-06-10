@@ -1,33 +1,33 @@
 import SwiftUI
 
 enum ScreenshotScene: CaseIterable {
-    case library
     case reader
     case playbackInspector
     case visualInspector
     case abRepeat
-    case horizontal
+    case library
+    case pip
 
     var id: String {
         switch self {
-        case .library: "01_Library"
-        case .reader: "02_Reader"
-        case .playbackInspector: "03_PlaybackInspector"
-        case .visualInspector: "04_VisualInspector"
-        case .abRepeat: "05_ABRepeat"
-        case .horizontal: "06_Horizontal"
+        case .reader: "01_Reader"
+        case .playbackInspector: "02_PlaybackInspector"
+        case .visualInspector: "03_VisualInspector"
+        case .abRepeat: "04_ABRepeat"
+        case .library: "05_Library"
+        case .pip: "06_PiP"
         }
     }
 
     @MainActor @ViewBuilder
     var view: some View {
         switch self {
-        case .library: LibraryScene()
         case .reader: ReaderScene()
         case .playbackInspector: PlaybackInspectorScene()
         case .visualInspector: VisualInspectorScene()
         case .abRepeat: ABRepeatScene()
-        case .horizontal: HorizontalScene()
+        case .library: LibraryScene()
+        case .pip: PiPScene()
         }
     }
 }
