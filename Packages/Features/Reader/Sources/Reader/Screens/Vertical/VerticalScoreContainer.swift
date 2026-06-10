@@ -64,6 +64,7 @@ struct VerticalScoreContainer: View {
             // `effectiveZoom`'s fit-to-width factor so the user always sees the entire system at user-zoom 1.0.
             let layoutWidth = max(proxy.size.width, staffSize * 4)
             scrollContent(viewport: proxy.size)
+                .onAppear { eagerLayoutIfNeeded(width: layoutWidth) }
                 .task(id: TaskKey(
                     score: score, size: staffSize, width: layoutWidth,
                     honorLayoutBreaks: honorLayoutBreaks,
@@ -251,6 +252,17 @@ struct VerticalScoreContainer: View {
                 : .disabled,
             showsInvisibleElements: showInvisibleElements,
         )
+    }
+
+    /// SwiftUI `#Preview` snapshots the view tree before the async `.task` (which hops to a detached background
+    /// `LayoutEngine.layout`) completes, so `document` is still nil and the score area renders blank. When running
+    /// under Xcode Previews, lay the score out synchronously on first appearance so the snapshot has a populated
+    /// `document`. No-op in the real app / live capture (those let the async path run and never enter this branch).
+    private func eagerLayoutIfNeeded(width: CGFloat) {
+        guard document == nil else { return }
+        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" else { return }
+        document = LayoutEngine.layout(score: score, options: scoreOptions, availableWidth: width)
+        lastWidth = width
     }
 
     private func rebuildLayout(width: CGFloat) async {
