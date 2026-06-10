@@ -91,11 +91,11 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // ── Reader ────────────────────────────────────────────────────────────
-        item { InspectorSectionHeader("Reader") }
+        item { InspectorSectionHeader(stringResource(R.string.settings_section_reader)) }
         item {
             ToggleRow(
                 icon = Icons.Filled.MusicNote,
-                title = "Metronome",
+                title = stringResource(R.string.settings_reader_metronome),
                 checked = metronome,
                 onChange = { v -> scope.launch { prefs.setMetronome(v) } },
             )
@@ -103,16 +103,16 @@ fun SettingsScreen(
         item {
             ToggleRow(
                 icon = Icons.Filled.PictureInPicture,
-                title = "Picture in Picture",
+                title = stringResource(R.string.settings_reader_pip),
                 checked = pip,
-                subtitle = "Keeps playing in a small floating window when you leave the app.",
+                subtitle = stringResource(R.string.settings_reader_pip_footer),
                 onChange = { v -> scope.launch { prefs.setPip(v) } },
             )
         }
         item {
             ToggleRow(
                 icon = Icons.Filled.UnfoldLess,
-                title = "Collapse multi-measure rests",
+                title = stringResource(R.string.settings_reader_collapse_rests),
                 checked = collapse,
                 onChange = { v -> scope.launch { prefs.setCollapseRests(v) } },
             )
@@ -120,7 +120,7 @@ fun SettingsScreen(
         item {
             ToggleRow(
                 icon = Icons.Filled.Visibility,
-                title = "Show hidden elements",
+                title = stringResource(R.string.settings_reader_show_invisible),
                 checked = showInvisible,
                 onChange = { v -> scope.launch { prefs.setShowInvisible(v) } },
             )
@@ -128,23 +128,23 @@ fun SettingsScreen(
         item {
             ToggleRow(
                 icon = Icons.Filled.ScreenLockPortrait,
-                title = "Prevent auto-lock",
+                title = stringResource(R.string.settings_reader_keep_awake),
                 checked = keepAwake,
-                subtitle = "Keeps the screen on while a score is open.",
+                subtitle = stringResource(R.string.settings_reader_keep_awake_footer),
                 onChange = { v -> scope.launch { prefs.setKeepAwake(v) } },
             )
         }
         item {
             ToggleRow(
                 icon = Icons.Filled.Timeline,
-                title = "Show seek bar",
+                title = stringResource(R.string.settings_reader_show_seek_bar),
                 checked = showSeekBar,
                 onChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
             )
         }
         item {
             // Repeat mode picker row
-            InspectorRow(label = "Repeat", leadingIcon = Icons.Filled.Repeat) {
+            InspectorRow(label = stringResource(R.string.settings_reader_repeat), leadingIcon = Icons.Filled.Repeat) {
                 RepeatModePicker(
                     selected = RepeatMode.fromWire(repeatModeWire),
                     enabled = true,
@@ -225,10 +225,10 @@ fun SettingsScreen(
             ) {
                 Icon(
                     imageVector = Icons.Filled.ViewArray,
-                    contentDescription = "Display mode",
+                    contentDescription = stringResource(R.string.settings_reader_display_mode),
                     modifier = Modifier.padding(end = 12.dp),
                 )
-                Text("Display mode", Modifier.weight(1f))
+                Text(stringResource(R.string.settings_reader_display_mode), Modifier.weight(1f))
                 val layoutModes = listOf(
                     Triple("vertical", "Vertical", Icons.Filled.SwapVert),
                     Triple("horizontal", "Horizontal", Icons.Filled.SwapHoriz),
@@ -282,7 +282,7 @@ fun SettingsScreen(
         }
         item {
             Text(
-                "When Repeat (single or A–B) is on, it takes priority and playback won't advance to the next score.",
+                stringResource(R.string.settings_reader_continuation_footer),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -312,22 +312,22 @@ fun SettingsScreen(
         if (onOpenLicenses != null) {
             item {
                 Spacer(Modifier.height(16.dp))
-                InspectorSectionHeader("About")
+                InspectorSectionHeader(stringResource(R.string.settings_about_title))
             }
             if (onOpenVersionHistory != null) {
                 item {
-                    InspectorRow(label = "Version History", leadingIcon = Icons.Filled.History, onClick = onOpenVersionHistory) {
+                    InspectorRow(label = stringResource(R.string.settings_version_history), leadingIcon = Icons.Filled.History, onClick = onOpenVersionHistory) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null)
                     }
                 }
             }
             item {
-                InspectorRow(label = "Licenses", leadingIcon = Icons.Filled.Description, onClick = onOpenLicenses) {
+                InspectorRow(label = stringResource(R.string.settings_about_licenses), leadingIcon = Icons.Filled.Description, onClick = onOpenLicenses) {
                     Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null)
                 }
             }
             item {
-                InspectorRow(label = "Send Feedback", leadingIcon = Icons.Filled.Email, onClick = { sendFeedback(context) }) {}
+                InspectorRow(label = stringResource(R.string.settings_about_send_feedback), leadingIcon = Icons.Filled.Email, onClick = { sendFeedback(context) }) {}
             }
         }
     }
@@ -355,7 +355,7 @@ private fun sendFeedback(context: Context) {
     try {
         context.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.settings_feedback_no_email_app), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -390,10 +390,13 @@ private fun SoundfontRow(
     var showDeleteDialog by remember { mutableStateOf(false) }
     val optedIn = state.isOptedIn
 
+    val downloadingTemplate = stringResource(R.string.settings_soundfont_downloading)
+    val waitingWifi = stringResource(R.string.settings_soundfont_waiting_wifi)
+    val sfSubtitle = stringResource(R.string.settings_soundfont_subtitle)
     val subtitle = when (state.statusRaw) {
-        "downloading" -> "Downloading… ${(state.progress * 100).toInt()}%"
+        "downloading" -> String.format(downloadingTemplate, (state.progress * 100).toInt())
         "failed" -> state.failureReason
-        "idle" -> if (optedIn) "Waiting for Wi-Fi" else "High-fidelity instruments (≈206 MB)"
+        "idle" -> if (optedIn) waitingWifi else sfSubtitle
         else -> "" // downloaded
     }
 
@@ -403,11 +406,11 @@ private fun SoundfontRow(
     ) {
         Icon(
             imageVector = Icons.Filled.MusicNote,
-            contentDescription = "High quality audio",
+            contentDescription = stringResource(R.string.settings_reader_high_quality_audio),
             modifier = Modifier.padding(end = 12.dp),
         )
         Column(Modifier.weight(1f)) {
-            Text("High quality audio")
+            Text(stringResource(R.string.settings_reader_high_quality_audio))
             if (subtitle.isNotEmpty()) {
                 Text(
                     subtitle,
@@ -421,7 +424,7 @@ private fun SoundfontRow(
             }
             if (state.statusRaw == "idle" && optedIn) {
                 TextButton(onClick = onDownloadNow, contentPadding = PaddingValues(0.dp)) {
-                    Text("Download now")
+                    Text(stringResource(R.string.settings_soundfont_download_now))
                 }
             }
         }
@@ -432,13 +435,13 @@ private fun SoundfontRow(
                     modifier = Modifier.size(24.dp),
                 )
                 IconButton(onClick = onStop) {
-                    Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                    Icon(Icons.Filled.Stop, contentDescription = null)
                 }
             }
             state.statusRaw == "idle" && optedIn -> {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 IconButton(onClick = onStop) {
-                    Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                    Icon(Icons.Filled.Stop, contentDescription = null)
                 }
             }
             state.statusRaw == "idle" && !optedIn -> {
@@ -469,19 +472,19 @@ private fun SoundfontRow(
     if (showCellularDialog) {
         AlertDialog(
             onDismissRequest = { showCellularDialog = false },
-            title = { Text("No Wi-Fi") },
-            text = { Text("You're not on Wi-Fi. The high-quality SoundFont is about 206 MB.") },
+            title = { Text(stringResource(R.string.settings_soundfont_no_wifi_title)) },
+            text = { Text(stringResource(R.string.settings_soundfont_no_wifi_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     showCellularDialog = false
                     onDownloadNow()
-                }) { Text("Download over cellular") }
+                }) { Text(stringResource(R.string.settings_soundfont_download_cellular)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showCellularDialog = false
                     onSetOptedIn(true)
-                }) { Text("Wait for Wi-Fi") }
+                }) { Text(stringResource(R.string.settings_soundfont_wait_wifi)) }
             },
         )
     }
@@ -489,16 +492,16 @@ private fun SoundfontRow(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete download") },
-            text = { Text("Remove the high-quality SoundFont and use the bundled one?") },
+            title = { Text(stringResource(R.string.settings_soundfont_delete_title)) },
+            text = { Text(stringResource(R.string.settings_soundfont_delete_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
                     onSetOptedIn(false)
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.settings_soundfont_delete_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteDialog = false }) { Text(stringResource(R.string.settings_common_cancel)) }
             },
         )
     }
@@ -524,7 +527,7 @@ private fun A4SliderRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text("Default Calibration", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_a4_reference), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Text(
                 "A4 = ${hz.roundToInt()}Hz",
                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),

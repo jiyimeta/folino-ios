@@ -715,7 +715,7 @@ private fun VersionHistoryRoute(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Version History") },
+                title = { Text(stringResource(R.string.settings_version_history)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(

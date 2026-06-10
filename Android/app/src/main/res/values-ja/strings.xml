@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Repurposed: now mirrors iOS settings.playback.a4Reference.title -->
+    <string name="settings_a4_reference">既定キャリブレーション</string>
+
+    <!-- Settings – Reader section -->
+    <string name="settings_section_reader">Reader</string>
+    <string name="settings_reader_metronome">メトロノーム</string>
+    <string name="settings_reader_pip">ピクチャインピクチャ</string>
+    <string name="settings_reader_pip_footer">他のアプリを使っている間、ミニプレーヤーで楽譜の表示を継続します。デバイスの設定で「ピクチャインピクチャを自動的に開始」もオンにする必要があります。</string>
+    <string name="settings_reader_collapse_rests">複数小節休符をまとめる</string>
+    <string name="settings_reader_show_invisible">非表示要素を表示</string>
+    <string name="settings_reader_keep_awake">自動ロックを抑止</string>
+    <string name="settings_reader_keep_awake_footer">楽譜を開いている間、デバイスの自動ロックを一時的に止めます。</string>
+    <string name="settings_reader_show_seek_bar">シークバー表示</string>
+    <string name="settings_reader_repeat">リピート</string>
+    <string name="settings_reader_display_mode">表示モード</string>
+    <string name="settings_reader_high_quality_audio">高品質音源 (206MB)</string>
+    <string name="settings_reader_continuation_footer">リピート（1曲 または A–B）がオンのときは、そちらが優先され、次の楽譜へは進みません。</string>
+
+    <!-- Settings – SoundFont row -->
+    <string name="settings_soundfont_subtitle">高品質音源（≈206 MB）</string>
+    <string name="settings_soundfont_waiting_wifi">Wi-Fi 接続待機中</string>
+    <string name="settings_soundfont_downloading">ダウンロード中… %1$d%%</string>
+    <string name="settings_soundfont_download_now">今すぐダウンロード</string>
+    <string name="settings_soundfont_no_wifi_title">モバイル通信でダウンロード</string>
+    <string name="settings_soundfont_no_wifi_message">高品質音源 (206 MB) をモバイル通信で今すぐダウンロードしますか?</string>
+    <string name="settings_soundfont_download_cellular">今すぐダウンロード</string>
+    <string name="settings_soundfont_wait_wifi">Wi-Fi 接続時に自動で開始</string>
+    <string name="settings_soundfont_delete_title">高品質音源を削除しますか?</string>
+    <string name="settings_soundfont_delete_message">ダウンロード済みの 206 MB を削除し、デフォルトの軽量音源での再生に戻ります。</string>
+    <string name="settings_soundfont_delete_confirm">削除</string>
+    <string name="settings_common_cancel">キャンセル</string>
+
+    <!-- Settings – Version History / About / feedback -->
+    <string name="settings_version_history">アップデート履歴</string>
+    <string name="settings_about_title">情報</string>
+    <string name="settings_about_licenses">ライセンス</string>
+    <string name="settings_about_send_feedback">フィードバックを送る</string>
+    <string name="settings_feedback_no_email_app">メールアプリが見つかりません</string>
+</resources>

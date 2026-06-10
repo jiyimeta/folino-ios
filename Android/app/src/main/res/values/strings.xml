@@ -65,7 +65,7 @@
     <string name="export_format_audio">Audio (M4A)</string>
     <string name="export_original_badge">Original</string>
     <string name="export_failed">Export failed</string>
-    <string name="settings_a4_reference">A4 reference</string>
+    <string name="settings_a4_reference">Default Calibration</string>
     <string name="reader_settings_a4_description">The reference pitch applied to all scores. Each score can override it.</string>
     <string name="search_hint">Search</string>
     <string name="search_no_results">No results</string>
@@ -111,4 +111,40 @@
     <string name="edit_info_discard_title">Discard changes?</string>
     <string name="edit_info_discard_keep">Keep editing</string>
     <string name="edit_info_discard_confirm">Discard</string>
+
+    <!-- Settings – Reader section -->
+    <string name="settings_section_reader">Reader</string>
+    <string name="settings_reader_metronome">Metronome</string>
+    <string name="settings_reader_pip">Picture in Picture</string>
+    <string name="settings_reader_pip_footer">Keeps the score visible in a mini-player while another app is in use. Requires \"Start Picture in Picture Automatically\" to be enabled in device Settings.</string>
+    <string name="settings_reader_collapse_rests">Collapse multi-measure rests</string>
+    <string name="settings_reader_show_invisible">Show hidden elements</string>
+    <string name="settings_reader_keep_awake">Prevent auto-lock</string>
+    <string name="settings_reader_keep_awake_footer">Pauses the device\'s auto-lock while a score is open.</string>
+    <string name="settings_reader_show_seek_bar">Show seek bar</string>
+    <string name="settings_reader_repeat">Repeat</string>
+    <string name="settings_reader_display_mode">Display mode</string>
+    <string name="settings_reader_high_quality_audio">High quality audio</string>
+    <string name="settings_reader_continuation_footer">When Repeat (single or A–B) is on, it takes priority and playback won\'t advance to the next score.</string>
+
+    <!-- Settings – SoundFont row -->
+    <string name="settings_soundfont_subtitle">High-fidelity instruments (≈206 MB)</string>
+    <string name="settings_soundfont_waiting_wifi">Waiting for Wi-Fi</string>
+    <string name="settings_soundfont_downloading">Downloading… %1$d%%</string>
+    <string name="settings_soundfont_download_now">Download now</string>
+    <string name="settings_soundfont_no_wifi_title">No Wi-Fi</string>
+    <string name="settings_soundfont_no_wifi_message">You\'re not on Wi-Fi. The high-quality SoundFont is about 206 MB.</string>
+    <string name="settings_soundfont_download_cellular">Download over cellular</string>
+    <string name="settings_soundfont_wait_wifi">Wait for Wi-Fi</string>
+    <string name="settings_soundfont_delete_title">Delete download</string>
+    <string name="settings_soundfont_delete_message">Remove the high-quality SoundFont and use the bundled one?</string>
+    <string name="settings_soundfont_delete_confirm">Delete</string>
+    <string name="settings_common_cancel">Cancel</string>
+
+    <!-- Settings – Version History / About / feedback -->
+    <string name="settings_version_history">Version History</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_about_licenses">Licenses</string>
+    <string name="settings_about_send_feedback">Send Feedback</string>
+    <string name="settings_feedback_no_email_app">No email app found</string>
 </resources>

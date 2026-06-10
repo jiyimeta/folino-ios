@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Repurposed: now mirrors iOS settings.playback.a4Reference.title -->
+    <string name="settings_a4_reference">默认校准</string>
+
+    <!-- Settings – Reader section -->
+    <string name="settings_section_reader">Reader</string>
+    <string name="settings_reader_metronome">节拍器</string>
+    <string name="settings_reader_pip">画中画</string>
+    <string name="settings_reader_pip_footer">在使用其他 App 时，迷你播放器会继续显示乐谱。还需要在设备设置中开启「自动启动画中画」。</string>
+    <string name="settings_reader_collapse_rests">合并多小节休止符</string>
+    <string name="settings_reader_show_invisible">显示隐藏元素</string>
+    <string name="settings_reader_keep_awake">阻止自动锁屏</string>
+    <string name="settings_reader_keep_awake_footer">在打开乐谱时，暂时阻止设备自动锁屏。</string>
+    <string name="settings_reader_show_seek_bar">显示进度条</string>
+    <string name="settings_reader_repeat">Repeat</string>
+    <string name="settings_reader_display_mode">显示模式</string>
+    <string name="settings_reader_high_quality_audio">高品质音源</string>
+    <string name="settings_reader_continuation_footer">开启 Repeat（单曲或 A–B）时，将优先执行，不会自动播放下一首乐谱。</string>
+
+    <!-- Settings – SoundFont row -->
+    <string name="settings_soundfont_subtitle">高保真乐器（≈206 MB）</string>
+    <string name="settings_soundfont_waiting_wifi">等待 Wi-Fi 连接</string>
+    <string name="settings_soundfont_downloading">正在下载… %1$d%%</string>
+    <string name="settings_soundfont_download_now">立即下载</string>
+    <string name="settings_soundfont_no_wifi_title">未连接 Wi-Fi</string>
+    <string name="settings_soundfont_no_wifi_message">现在通过蜂窝网络下载高品质音源 (206 MB)，还是等待 Wi-Fi？</string>
+    <string name="settings_soundfont_download_cellular">使用蜂窝网络下载</string>
+    <string name="settings_soundfont_wait_wifi">Wi-Fi 连接时自动开始</string>
+    <string name="settings_soundfont_delete_title">删除已下载的音源？</string>
+    <string name="settings_soundfont_delete_message">删除已下载的 206 MB，播放将切换回内置轻量音源。</string>
+    <string name="settings_soundfont_delete_confirm">删除</string>
+    <string name="settings_common_cancel">取消</string>
+
+    <!-- Settings – Version History / About / feedback -->
+    <string name="settings_version_history">更新历史</string>
+    <string name="settings_about_title">关于</string>
+    <string name="settings_about_licenses">许可证</string>
+    <string name="settings_about_send_feedback">发送反馈</string>
+    <string name="settings_feedback_no_email_app">未找到电子邮件应用</string>
+</resources>
