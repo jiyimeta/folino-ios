@@ -1,5 +1,5 @@
 # Reads secrets from the environment so nothing sensitive is committed.
 #   PLAY_PACKAGE_NAME      published applicationId (see app/build.gradle.kts)
 #   PLAY_JSON_KEY_PATH     path to the Play service-account JSON key
-package_name(ENV.fetch("PLAY_PACKAGE_NAME", "com.keynumber.folino"))
+package_name(ENV.fetch("PLAY_PACKAGE_NAME", "com.harmolo.folino"))
 json_key_file(ENV.fetch("PLAY_JSON_KEY_PATH", ""))

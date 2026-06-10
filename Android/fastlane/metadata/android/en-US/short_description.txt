@@ -1,0 +1,1 @@
+Score viewer & player for performers — MIDI playback, A-B repeat, metronome.
