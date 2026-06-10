@@ -161,6 +161,21 @@ interface ReaderAbRepeatDao {
     fun delete(scoreId: String)
 }
 
+@Entity(tableName = "reader_preferences")
+data class ReaderPreferencesEntity(
+    @PrimaryKey @ColumnInfo(name = "score_id") val scoreId: String,
+    val json: String,
+)
+
+@Dao
+interface ReaderPreferencesDao {
+    @Query("SELECT json FROM reader_preferences WHERE score_id = :scoreId")
+    fun load(scoreId: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(entity: ReaderPreferencesEntity)
+}
+
 @Database(
     entities = [
         ScoreRecordEntity::class,
@@ -169,6 +184,7 @@ interface ReaderAbRepeatDao {
         TagEntity::class,
         TagItemEntity::class,
         ReaderAbRepeatEntity::class,
+        ReaderPreferencesEntity::class,
     ],
     // Pre-release: schema is collapsed to a single canonical v1 (no migration
     // history). Schema changes destructively reset via fallbackToDestructiveMigration
@@ -181,6 +197,7 @@ abstract class LibraryDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun tagDao(): TagDao
     abstract fun readerAbRepeatDao(): ReaderAbRepeatDao
+    abstract fun readerPreferencesDao(): ReaderPreferencesDao
 }
 
 /**
@@ -195,7 +212,7 @@ abstract class LibraryDatabase : RoomDatabase() {
  * is tiny, so `allowMainThreadQueries()` is acceptable here; the follow-up is a
  * Kotlin in-memory cache with background write-through (see spec §Risks).
  */
-class RoomLibraryStore(context: Context) : LibraryStore {
+class RoomLibraryStore(context: Context) : LibraryStore, ReaderPreferencesStore {
     private val db = sharedDatabase(context)
 
     private companion object {
@@ -342,5 +359,12 @@ class RoomLibraryStore(context: Context) : LibraryStore {
         val dao = db.readerAbRepeatDao()
         if (range == null) dao.delete(scoreId)
         else dao.upsert(ReaderAbRepeatEntity(scoreId, range.first, range.second))
+    }
+
+    override fun loadJSON(scoreId: String): String =
+        db.readerPreferencesDao().load(scoreId) ?: ""
+
+    override fun saveJSON(scoreId: String, json: String) {
+        db.readerPreferencesDao().upsert(ReaderPreferencesEntity(scoreId, json))
     }
 }
