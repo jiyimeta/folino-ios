@@ -20,7 +20,6 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
@@ -62,6 +61,7 @@ import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
 import com.keynumber.folino.reader.ui.InspectorSliderRow
 import com.keynumber.folino.reader.ui.MetronomeIcon
+import com.keynumber.folino.reader.ui.TuningForkIcon
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
 import kotlin.math.ln
 import kotlin.math.roundToInt
@@ -456,7 +456,7 @@ private fun A4ReferenceRow(
     ) {
         // Tuning-fork icon, neutral tint.
         Icon(
-            Icons.Default.MusicNote,
+            TuningForkIcon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )

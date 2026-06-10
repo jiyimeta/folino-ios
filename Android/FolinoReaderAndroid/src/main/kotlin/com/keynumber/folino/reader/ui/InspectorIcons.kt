@@ -47,12 +47,13 @@ val TransposeIcon: ImageVector = ImageVector.Builder(
     viewportWidth = 24f,
     viewportHeight = 24f,
 ).apply {
-    // Sharp (♯): two near-vertical bars + two up-slanting horizontal bars.
+    // Sharp (♯): two vertical bars + two up-slanting horizontal bars. The right bar sits higher
+    // than the left so the pair follows the upward slant of the horizontals (a real sharp leans up).
     path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
-        moveTo(5f, 7f); lineTo(5f, 16.5f)
+        moveTo(5f, 7.2f); lineTo(5f, 16.8f)
     }
     path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
-        moveTo(8.5f, 7.5f); lineTo(8.5f, 17f)
+        moveTo(8.5f, 5.9f); lineTo(8.5f, 15.5f)
     }
     path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
         moveTo(3f, 11f); lineTo(10.5f, 9.7f)
@@ -72,5 +73,43 @@ val TransposeIcon: ImageVector = ImageVector.Builder(
     ) {
         moveTo(14.5f, 11f)
         curveTo(19f, 10f, 18.5f, 15.5f, 14.5f, 17.2f)
+    }
+}.build()
+
+/**
+ * A tuning-fork icon for the A4 calibration row (iOS uses the "tuningfork" SF Symbol). No bundled
+ * Material glyph exists, so it is hand-authored: two prongs merging into a stem (white stroke so
+ * [Icon] tint applies).
+ */
+val TuningForkIcon: ImageVector = ImageVector.Builder(
+    name = "TuningFork",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    // Left prong, curving into the centre.
+    path(
+        stroke = SolidColor(Color.White),
+        strokeLineWidth = 1.8f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(9f, 3.5f); lineTo(9f, 12f)
+        curveTo(9f, 15.5f, 12f, 15.5f, 12f, 15.5f)
+    }
+    // Right prong, curving into the centre.
+    path(
+        stroke = SolidColor(Color.White),
+        strokeLineWidth = 1.8f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(15f, 3.5f); lineTo(15f, 12f)
+        curveTo(15f, 15.5f, 12f, 15.5f, 12f, 15.5f)
+    }
+    // Stem with a rounded foot.
+    path(stroke = SolidColor(Color.White), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
+        moveTo(12f, 15.5f); lineTo(12f, 20.5f)
     }
 }.build()

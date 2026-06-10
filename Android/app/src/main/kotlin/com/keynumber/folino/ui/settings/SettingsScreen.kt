@@ -47,6 +47,7 @@ import com.keynumber.folino.reader.RepeatModePicker
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSectionHeader
 import com.keynumber.folino.reader.ui.MetronomeIcon
+import com.keynumber.folino.reader.ui.TuningForkIcon
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -516,7 +517,7 @@ private fun A4SliderRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(TuningForkIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.settings_a4_reference), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Text(
                 "A4 = ${hz.roundToInt()}Hz",
