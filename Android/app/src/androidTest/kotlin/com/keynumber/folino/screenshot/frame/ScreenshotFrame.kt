@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,17 +71,26 @@ fun ScreenshotFrame(
             } else {
                 subtitle
             }
+            // Bulleted copy: the text stays left-aligned INTERNALLY, but the block itself is
+            // centered as a unit — so we size the Text to its content (widthIn cap, no fillMaxWidth)
+            // under a TopCenter alignment. Non-bullet copy fills the width and centers each line.
+            val subtitleModifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = h * layout.subtitleTopFraction)
+                .then(
+                    if (subtitleBullet) {
+                        Modifier.widthIn(max = maxWidth - layout.horizontalPadding * 2)
+                    } else {
+                        Modifier.fillMaxWidth().padding(horizontal = layout.horizontalPadding)
+                    },
+                )
             Text(
                 text = subtitleText,
                 color = layout.subtitleColor,
                 fontSize = layout.subtitleFontSize,
                 textAlign = if (subtitleBullet) TextAlign.Start else TextAlign.Center,
                 maxLines = 3,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = h * layout.subtitleTopFraction)
-                    .fillMaxWidth()
-                    .padding(horizontal = layout.horizontalPadding),
+                modifier = subtitleModifier,
             )
         }
 
