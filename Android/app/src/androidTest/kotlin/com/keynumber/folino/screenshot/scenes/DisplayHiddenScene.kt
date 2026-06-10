@@ -80,12 +80,13 @@ fun DisplayHiddenScene(layout: ScreenshotLayout, tag: String) {
                         )
                         // Bottom sheet stand-in: a rounded top surface, bottom-aligned, holding the
                         // real inspector content. `heightIn(max = …)` keeps it as a partial overlay so
-                        // the (staff-reduced) score behind it stays visible above the sheet.
+                        // the (staff-reduced) score behind it stays visible above the sheet. The max is
+                        // sized so the expanded General section AND at least two Parts rows both fit.
                         Surface(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .heightIn(max = 360.dp),
+                                .heightIn(max = 560.dp),
                             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                             tonalElevation = 4.dp,
                             shadowElevation = 12.dp,
@@ -95,10 +96,10 @@ fun DisplayHiddenScene(layout: ScreenshotLayout, tag: String) {
                                 options = scene.layoutOptions,
                                 parts = scene.parts,
                                 onChange = {},
-                                // Collapse General so the Parts rows (with the staff visibility
-                                // toggles — the point of this scene) sit at the top of the sheet
-                                // instead of being pushed off the bottom by the dense General controls.
-                                initialGeneralExpanded = false,
+                                // Show BOTH sections expanded: the General controls at the top and the
+                                // Parts rows (with the staff visibility toggles — the point of this
+                                // scene) below. The enlarged Surface above gives the Parts rows room.
+                                initialGeneralExpanded = true,
                             )
                         }
                     }
