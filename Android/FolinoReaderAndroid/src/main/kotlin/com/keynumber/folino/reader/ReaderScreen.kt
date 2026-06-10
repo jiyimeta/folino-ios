@@ -121,6 +121,11 @@ fun ReaderScreen(
     persistTempoMultiplier: (Double) -> Unit = {},
     /** Persists the per-score A4 reference pitch on user change. */
     persistA4ReferenceHz: (Double) -> Unit = {},
+    /** Per-score transpose value (semitones) restored when the score opens. Persist-only: nothing
+     * transposes audio or notation on Android yet — the inspector stepper only writes this value. */
+    transposeSemitones: Int = 0,
+    /** Persists the per-score transpose value (semitones) on user change. */
+    persistTranspose: (Int) -> Unit = {},
     /** Global metronome-enabled flag (SettingsPrefs) — metronome is global on both platforms. */
     metronomeEnabled: Boolean = false,
     /** Writes the global metronome flag on user change. */
@@ -357,6 +362,8 @@ fun ReaderScreen(
             onPersistMasterVolume = persistMasterVolume,
             onPersistTempoMultiplier = persistTempoMultiplier,
             onPersistA4ReferenceHz = persistA4ReferenceHz,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = persistTranspose,
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = persistStaffProgram,
             onPersistStaffVolume = persistStaffVolume,

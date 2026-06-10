@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
@@ -99,6 +100,10 @@ fun PlaybackInspectorSheet(
     onPersistTempoMultiplier: (Double) -> Unit = {},
     /** Persists the per-score A4 reference pitch after the live engine/VM update. */
     onPersistA4ReferenceHz: (Double) -> Unit = {},
+    /** Current per-score transpose value in semitones (−7..7), restored from the ReaderPreferences bridge. */
+    transposeSemitones: Int = 0,
+    /** Persists the per-score transpose value (semitones) via the ReaderPreferences bridge. */
+    onTransposeChange: (Int) -> Unit = {},
     /** Flat mixer staffIndex -> positional StaffAddress, for persisting per-staff overrides. */
     staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
     /** Persists a per-score program override (by staff address) after the live engine update. */
@@ -200,6 +205,16 @@ fun PlaybackInspectorSheet(
                             audioVm.setA4ReferenceHz(next)
                             onPersistA4ReferenceHz(next)
                         },
+                    )
+                }
+                item {
+                    // Persist-only: the audio/notation transpose effect is not yet implemented on Android
+                    // (see spec Non-Goals). This row stores transposeSemitones via the ReaderPreferences
+                    // bridge for a future transpose feature.
+                    TransposeRow(
+                        semitones = transposeSemitones,
+                        enabled = controlsEnabled,
+                        onChange = onTransposeChange,
                     )
                 }
                 item {
@@ -448,6 +463,73 @@ private fun A4ReferenceRow(
                     modifier = Modifier.weight(1f).height(sliderHeight),
                 )
             }
+        }
+    }
+}
+
+/**
+ * Per-score transpose row. Mirrors the iOS TransposeRow inspector design:
+ * - Leading vertical-arrows icon (≈ iOS `arrow.up.arrow.down`).
+ * - "Transpose" label.
+ * - Signed monospaced readout ("+3" / "0" / "-2") that is a tap-to-reset button (tapping it
+ *   resets the value to 0, matching iOS).
+ * - A compact ± stepper clamped to −7..7 semitones.
+ *
+ * Persist-only: nothing transposes audio or notation on Android yet — [onChange] only writes the
+ * value through the ReaderPreferences bridge for a future transpose feature.
+ */
+@Composable
+private fun TransposeRow(
+    semitones: Int,
+    enabled: Boolean,
+    onChange: (Int) -> Unit,
+) {
+    val signedReadout = if (semitones > 0) "+$semitones" else "$semitones"
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            Icons.Default.SwapVert,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            stringResource(R.string.reader_inspector_transpose),
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        // Tap-to-reset readout: tapping the signed value resets transpose to 0 (iOS parity).
+        Text(
+            text = signedReadout,
+            modifier = Modifier
+                .clickable(enabled = enabled) { onChange(0) }
+                .padding(horizontal = 4.dp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+        )
+        // ± stepper: two compact IconButtons mirroring iOS's Stepper(value, in: -7...7).
+        IconButton(
+            onClick = { onChange((semitones - 1).coerceAtLeast(-7)) },
+            enabled = enabled && semitones > -7,
+            modifier = Modifier.size(32.dp),
+        ) {
+            Icon(
+                Icons.Default.Remove,
+                contentDescription = "Transpose down",
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        IconButton(
+            onClick = { onChange((semitones + 1).coerceAtMost(7)) },
+            enabled = enabled && semitones < 7,
+            modifier = Modifier.size(32.dp),
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Transpose up",
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

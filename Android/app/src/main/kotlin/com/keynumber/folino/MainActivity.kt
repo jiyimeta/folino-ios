@@ -590,6 +590,10 @@ private fun LibraryNavGraph(
                     persistMasterVolume = { v -> prefsVm.setMasterVolume(v) },
                     persistTempoMultiplier = { v -> prefsVm.setTempoMultiplier(v) },
                     persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
+                    // Persist-only: the transpose audio/notation effect is not implemented on Android yet;
+                    // the inspector stepper only stores this value through the ReaderPreferences bridge.
+                    transposeSemitones = prefsState.transposeSemitones,
+                    persistTranspose = { v -> prefsVm.setTranspose(v) },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
                     // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
