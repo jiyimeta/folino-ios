@@ -39,3 +39,21 @@ public func nativeHorizontalMeasureScrollOffset(
         pad: pad,
     )
 }
+
+/// swift-java (jextract) entry point for the Android Reader's playlist auto-advance. Pure delegation
+/// to the shared `Domain.PlaylistPlaybackProgression.nextActionWire` so iOS and Android traverse
+/// playlists identically from one implementation (parity — no divergent Kotlin port). Returns -1 for
+/// `.stop`; a value >= 0 is the `.advance(toIndex:)` target in the live ordered playlist.
+public func nativePlaylistNextAction(
+    currentIndex: Int,
+    count: Int,
+    repeatModeRawValue: String,
+    continuationRawValue: String,
+) -> Int {
+    PlaylistPlaybackProgression.nextActionWire(
+        currentIndex: currentIndex,
+        count: count,
+        repeatModeRawValue: repeatModeRawValue,
+        continuationRawValue: continuationRawValue,
+    )
+}
