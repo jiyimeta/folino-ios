@@ -58,7 +58,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.keynumber.folino.library.ReaderPreferencesController
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
+import com.keynumber.folino.library.generated.ReaderPreferencesBridgeViewModel
 import androidx.core.content.ContextCompat
 import com.keynumber.folino.reader.PipHost
 import com.keynumber.folino.reader.AbRepeatRange
@@ -499,6 +501,18 @@ private fun LibraryNavGraph(
                 val context = LocalContext.current
                 // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
                 val abRepeatStore = remember(context) { com.keynumber.folino.library.RoomLibraryStore(context) }
+                // Per-score Reader preferences (display + playback + mixer). The generated bridge view
+                // model wraps the Swift ReaderPreferencesBridge over the same Room store; it is scoped
+                // to this Reader route and opened once per score id. The app module owns this wiring so
+                // the Reader Compose module never depends on :FolinoLibraryAndroid (mirrors how the
+                // AB-repeat + display-options lambdas are injected from here).
+                val prefsVm: ReaderPreferencesBridgeViewModel =
+                    viewModel(
+                        key = "readerPrefs/$id",
+                        factory = ReaderPreferencesController.factory(context.applicationContext),
+                    )
+                LaunchedEffect(id) { prefsVm.open(id, defaultStaffSize = staffSize) }
+                val prefsState by prefsVm.state.collectAsState()
                 val displayOptions = layoutOptionsFromPrefs(
                     layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
                 )
