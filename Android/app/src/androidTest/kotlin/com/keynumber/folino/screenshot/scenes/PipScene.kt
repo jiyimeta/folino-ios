@@ -4,33 +4,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,10 +32,11 @@ import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
 import com.keynumber.folino.ui.theme.FolinoTheme
 
-// PiP scene: a faux Android home screen with a floating picture-in-picture card that plays the score
-// showing ONLY staves 2/3/4 (Top/2nd/3rd). The card hides every staff EXCEPT flattened indices 1,2,3,
-// the complement of the display-inspector scene's hidden set — so the same three staves the inspector
-// scene toggles off are the only ones the PiP card keeps on.
+// PiP scene: mirrors Folino's real picture-in-picture window — a WIDE card pinned near the TOP of the
+// home screen showing the score (only staves 2/3/4 = Top/2nd/3rd) with the playback cursor. The card
+// hides every staff EXCEPT flattened indices 1,2,3 (the complement of the display-inspector scene's
+// hidden set). The home backdrop is intentionally plain (no wallpaper art / widgets) — just a dark
+// launcher with app icons and a shape-only search bar, enough to read as "playing over the home screen".
 @Composable
 fun PipScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("Pip", tag)
@@ -54,125 +44,113 @@ fun PipScene(layout: ScreenshotLayout, tag: String) {
         FolinoTheme {
             Box(Modifier.fillMaxSize()) {
                 FauxHomeScreen()
-                PipCard(Modifier.align(Alignment.BottomEnd).padding(16.dp))
+                // Real Folino PiP sits as a wide, short window just below the status bar.
+                PipCard(Modifier.align(Alignment.TopCenter).padding(top = 40.dp, start = 10.dp, end = 10.dp))
             }
         }
     }
 }
 
-// Generic launcher backdrop: a wallpaper gradient, a faux status bar, and a 4×4 grid of rounded
-// app-icon placeholders with tiny labels. No real branding — just enough to read as a home screen.
+// Plain dark launcher backdrop: a status bar, two rows of circular app icons in the lower half, and a
+// shape-only search pill at the bottom. No wallpaper image and no widgets (kept deliberately simple).
 @Composable
 private fun FauxHomeScreen() {
-    val wallpaper = Brush.verticalGradient(
-        listOf(Color(0xFF1B2A4A), Color(0xFF2E4374), Color(0xFF5A6FA8)),
-    )
-    Box(Modifier.fillMaxSize().background(wallpaper)) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
+    Box(Modifier.fillMaxSize().background(Color(0xFF101013))) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 22.dp)) {
             FauxStatusBar()
-            Spacer(Modifier.height(8.dp))
+            // Empty upper half — the PiP card floats here.
+            Spacer(Modifier.weight(1f))
             val tints = listOf(
-                Color(0xFFE57373), Color(0xFF64B5F6), Color(0xFF81C784), Color(0xFFFFB74D),
-                Color(0xFFBA68C8), Color(0xFF4DD0E1), Color(0xFFFFD54F), Color(0xFF7986CB),
-                Color(0xFFA1887F), Color(0xFF4DB6AC), Color(0xFFF06292), Color(0xFF9575CD),
-                Color(0xFF90A4AE), Color(0xFFAED581), Color(0xFFFF8A65), Color(0xFF4FC3F7),
+                Color(0xFF5C8DEF), Color(0xFFE7574A), Color(0xFF34A853), Color(0xFFFF5252),
+                Color(0xFF4285F4), Color(0xFF42A5F5), Color(0xFF26A69A), Color(0xFFFFB300),
             )
-            val labels = listOf(
-                "Phone", "Mail", "Maps", "Clock",
-                "Notes", "Photos", "Music", "Files",
-                "Cal", "Weather", "Camera", "Store",
-                "Chat", "Health", "Wallet", "Settings",
-            )
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                userScrollEnabled = false,
-            ) {
-                items(16) { i ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(tints[i]),
-                        )
-                        Spacer(Modifier.height(5.dp))
-                        Text(labels[i], color = Color.White.copy(alpha = 0.92f), fontSize = 10.sp, maxLines = 1)
-                    }
-                }
+            val labels = listOf("Play", "Gmail", "Photos", "YouTube", "Phone", "Chat", "Chrome", "Camera")
+            AppIconRow(0..3, tints, labels)
+            Spacer(Modifier.height(22.dp))
+            AppIconRow(4..7, tints, labels)
+            Spacer(Modifier.height(30.dp))
+            SearchPill()
+            Spacer(Modifier.height(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun AppIconRow(range: IntRange, tints: List<Color>, labels: List<String>) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        for (i in range) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(54.dp).clip(CircleShape).background(tints[i]))
+                Spacer(Modifier.height(6.dp))
+                Text(labels[i], color = Color.White.copy(alpha = 0.92f), fontSize = 11.sp, maxLines = 1)
             }
         }
     }
 }
 
-// Faux status bar: a clock on the left and a couple of indicator dots on the right.
+// Faux status bar: clock on the left, a couple of indicator shapes on the right.
 @Composable
 private fun FauxStatusBar() {
     Row(
-        Modifier.fillMaxWidth().padding(top = 6.dp),
+        Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("9:41", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
-        repeat(3) {
-            Box(
-                Modifier
-                    .padding(start = 5.dp)
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.85f)),
-            )
-        }
+        // Wi-Fi + battery placeholders (shapes only).
+        Box(Modifier.size(13.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.85f)))
+        Spacer(Modifier.width(6.dp))
+        Box(Modifier.width(22.dp).height(12.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.85f)))
     }
 }
 
-// Floating PiP card: a rounded, shadowed surface holding the score (only staves 2/3/4) with a small
-// translucent transport row (skip / pause / skip) over the bottom edge so it reads as PiP playback.
+// Shape-only Google-style search pill at the bottom of the launcher.
+@Composable
+private fun SearchPill() {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .clip(RoundedCornerShape(25.dp))
+            .background(Color.White.copy(alpha = 0.12f))
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(20.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.55f)))
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.size(16.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.35f)))
+        Spacer(Modifier.width(14.dp))
+        Box(Modifier.size(16.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.35f)))
+    }
+}
+
+// The floating PiP window: a wide, short, rounded white surface holding the score (only staves 2/3/4)
+// with the playback cursor — matching Folino's real PiP, which is full-width and a few staves tall.
 @Composable
 private fun PipCard(modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier
-            .width(220.dp)
-            .aspectRatio(4f / 3f),
-        shape = RoundedCornerShape(14.dp),
-        shadowElevation = 16.dp,
+        modifier = modifier.fillMaxWidth().height(262.dp),
+        shape = RoundedCornerShape(18.dp),
+        shadowElevation = 14.dp,
         color = Color.White,
     ) {
         Box(Modifier.fillMaxSize()) {
             val scene = rememberReaderSceneState { parts ->
                 // Keep ONLY flattened indices 1,2,3 visible: hide every other staff in the score.
                 val keep = HIDDEN_FLAT_INDICES
-                val all = parts?.let { p ->
-                    p.flatMap { it.staves }.indices.toSet()
-                } ?: emptySet()
+                val all = parts?.let { p -> p.flatMap { it.staves }.indices.toSet() } ?: emptySet()
                 val hidden = parts?.addressesForFlatIndices(all - keep) ?: emptySet()
                 LayoutOptions.DEFAULT.copy(hiddenStaves = hidden)
             }
             if (scene != null) {
-                ReaderSceneContent(
-                    state = scene.state,
-                    scoreHandle = scene.scoreHandle,
-                    layoutOptions = scene.layoutOptions,
-                    withCursor = false,
-                )
-            }
-            // Translucent transport row pinned to the bottom of the card.
-            Row(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.32f))
-                    .padding(vertical = 6.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(20.dp))
-                Icon(Icons.Default.Pause, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
-                Spacer(Modifier.width(20.dp))
-                Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                Box(Modifier.fillMaxSize().background(Color.White)) {
+                    ReaderSceneContent(
+                        state = scene.state,
+                        scoreHandle = scene.scoreHandle,
+                        layoutOptions = scene.layoutOptions,
+                        withCursor = true,
+                    )
+                }
             }
         }
     }
