@@ -8,27 +8,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,10 +62,9 @@ import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.theme.FolinoTheme
 import com.keynumber.folino.ui.library.FavoritesListScreen
+import com.keynumber.folino.ui.library.LibraryDrawerContent
 import com.keynumber.folino.ui.library.RecentScreen
 import com.keynumber.folino.ui.library.LibraryScreen
-import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.outlined.History
 import com.keynumber.folino.ui.library.PlaylistDetailScreen
 import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
@@ -297,80 +283,18 @@ private fun LibraryNavGraph(
         drawerState = drawerState,
         gesturesEnabled = drawerCapable,
         drawerContent = {
-            ModalDrawerSheet {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    stringResource(R.string.library_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.LibraryMusic, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_all_scores)) },
-                    selected = currentRoute == "list",
-                    onClick = { switchTo("list") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Outlined.History, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_recent)) },
-                    selected = currentRoute == "recent",
-                    onClick = { switchTo("recent") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Star, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_favorites)) },
-                    selected = currentRoute == "favorites",
-                    onClick = { switchTo("favorites") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_playlists)) },
-                    selected = currentRoute == "playlists",
-                    onClick = { switchTo("playlists") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.AutoMirrored.Outlined.Label, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_tags)) },
-                    selected = currentRoute == "tags",
-                    onClick = { switchTo("tags") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                    label = { Text(stringResource(R.string.library_recently_deleted)) },
-                    selected = currentRoute == "recentlyDeleted",
-                    onClick = { switchTo("recentlyDeleted") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_settings)) },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onOpenSettings()
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                // Debug-only entry to the Crashlytics test menu. Compiled out of release builds.
-                if (BuildConfig.DEBUG) {
-                    NavigationDrawerItem(
-                        icon = { Icon(Icons.Filled.BugReport, contentDescription = null) },
-                        label = { Text("Debug menu") },
-                        selected = currentRoute == "debug",
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("debug")
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                }
-            }
+            LibraryDrawerContent(
+                currentRoute = currentRoute,
+                onNavigate = { switchTo(it) },
+                onOpenSettings = {
+                    scope.launch { drawerState.close() }
+                    onOpenSettings()
+                },
+                onOpenDebug = {
+                    scope.launch { drawerState.close() }
+                    nav.navigate("debug")
+                },
+            )
         },
     ) {
         val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
