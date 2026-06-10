@@ -18,10 +18,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.StarBorder
@@ -180,7 +181,7 @@ fun ScoreListScaffold(
                             enabled = selectedIds.isNotEmpty(),
                             onClick = { beginExport(selectedIds.toList()) },
                         ) {
-                            Icon(Icons.Filled.IosShare, contentDescription = stringResource(R.string.export))
+                            Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.export))
                         }
                         IconButton(
                             enabled = selectedIds.isNotEmpty(),
@@ -427,6 +428,12 @@ private fun ScoreRow(
                                         ),
                                     )
                                 },
+                                leadingIcon = {
+                                    Icon(
+                                        if (row.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                        contentDescription = null,
+                                    )
+                                },
                                 onClick = {
                                     menu = false
                                     onToggleFavorite()
@@ -434,6 +441,7 @@ private fun ScoreRow(
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.export)) },
+                                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
                                 onClick = {
                                     menu = false
                                     onExport()
@@ -441,6 +449,9 @@ private fun ScoreRow(
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.add_to_playlist)) },
+                                leadingIcon = {
+                                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null)
+                                },
                                 onClick = {
                                     menu = false
                                     onAddToPlaylist()
@@ -448,6 +459,9 @@ private fun ScoreRow(
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.edit_tags)) },
+                                leadingIcon = {
+                                    Icon(Icons.AutoMirrored.Outlined.Label, contentDescription = null)
+                                },
                                 onClick = {
                                     menu = false
                                     onEditTags()
@@ -455,6 +469,7 @@ private fun ScoreRow(
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.edit_info)) },
+                                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
                                 onClick = {
                                     menu = false
                                     onEditInfo()
