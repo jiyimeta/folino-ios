@@ -114,7 +114,7 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.0")
     androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.0")
-    androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-android:1.32.0")
+    androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.32.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     implementation(project(":FolinoSettingsAndroid"))
