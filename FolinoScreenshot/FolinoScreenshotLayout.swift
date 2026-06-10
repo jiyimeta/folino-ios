@@ -17,10 +17,12 @@ enum FolinoScreenshotLayout {
         subtitleBullet: Bool = false,
         innerStatusBarColor: Color = .white,
     ) -> ScreenshotLayout {
+        // titleCenterYFraction is left at the ScreenshotKit defaults (0.05 iPhone /
+        // 0.06 iPad) to match VocalTuner. The earlier clipping was an artifact of
+        // the device-framed preview (notch); the actual capture is a plain rectangle.
         switch idiom {
         case .iPhone:
             .standard(
-                titleCenterYFraction: 0.12,
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
@@ -29,7 +31,6 @@ enum FolinoScreenshotLayout {
             )
         case .iPad:
             .iPad(
-                titleCenterYFraction: 0.12,
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
