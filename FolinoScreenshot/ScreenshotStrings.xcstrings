@@ -1,6 +1,74 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "scene.abRepeat.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B repeat practice"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指定した区間だけループし、\n苦手な部分を重点的に練習"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A–B repeat practice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A–B repeat practice"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A–B repeat practice"
+          }
+        }
+      }
+    },
+    "scene.abRepeat.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loop any section"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A–B リピート機能"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Loop any section"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Loop any section"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Loop any section"
+          }
+        }
+      }
+    },
     "scene.library.subtitle" : {
       "localizations" : {
         "en" : {
@@ -69,74 +137,6 @@
         }
       }
     },
-    "scene.abRepeat.subtitle" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A–B repeat practice"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A–B リピートで練習"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "A–B repeat practice"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "A–B repeat practice"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "A–B repeat practice"
-          }
-        }
-      }
-    },
-    "scene.abRepeat.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loop any section"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "好きな区間をループ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Loop any section"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Loop any section"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Loop any section"
-          }
-        }
-      }
-    },
     "scene.pip.subtitle" : {
       "localizations" : {
         "en" : {
@@ -148,7 +148,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ピクチャ・イン・ピクチャ再生"
+            "value" : "他のアプリを使いながら譜読み\n※設定画面から機能を有効にしてください。"
           }
         },
         "ko" : {
@@ -182,7 +182,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ながら練習"
+            "value" : "ピクチャ・イン・ピクチャ"
           }
         },
         "ko" : {
@@ -216,7 +216,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ミキサー・テンポ・チューニング"
+            "value" : "テンポやキー・チューニングの変更\nパートごとに音量を変更"
           }
         },
         "ko" : {
