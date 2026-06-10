@@ -23,6 +23,14 @@ object MarketingStrings {
             "en" to SceneCopy("Keep playing anywhere", "Picture-in-picture playback"),
             "ja" to SceneCopy("ながら再生", "ピクチャinピクチャで再生"),
         ),
+        "LoopAll" to mapOf(
+            "en" to SceneCopy("Repeat the whole piece", "Loop the full score"),
+            "ja" to SceneCopy("全曲リピート", "曲全体を繰り返し再生"),
+        ),
+        "AbRepeat" to mapOf(
+            "en" to SceneCopy("Loop any section", "Repeat a range A–B"),
+            "ja" to SceneCopy("区間をリピート", "A–B区間を繰り返し再生"),
+        ),
     )
 
     fun forScene(sceneId: String, tag: String): SceneCopy =
