@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.AbBoundaryMarkersOverlay
 import com.keynumber.folino.reader.LayoutOptions
+import com.keynumber.folino.reader.PlaybackFab
+import com.keynumber.folino.reader.ReaderAudioViewModel
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderTopBar
@@ -34,6 +37,7 @@ import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
+import com.keynumber.folino.screenshot.fixtures.rememberPreparedAudioVm
 import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
 import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
@@ -91,6 +95,11 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
                     staffSize = SCREENSHOT_STAFF_SIZE,
                 )
             }
+            // Live, prepared engine VM so the real PlaybackFab renders enabled (bound engine +
+            // populated mixer). Null until the service binds and the score is prepared. This drives
+            // the production audio path; the AB band/markers below are engine-INDEPENDENT (they reach
+            // the JNI via `AndroidPlaybackEngine.defaultBridge`), so the two don't conflict.
+            val audioVm = rememberPreparedAudioVm(scene?.scoreHandle)
             Column(Modifier.fillMaxSize().background(Color.White)) {
                 // Real Reader top app bar; static screenshot, callbacks are no-ops.
                 ReaderTopBar(
@@ -105,7 +114,22 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
                 )
                 Box(Modifier.fillMaxSize().weight(1f).background(Color.White).clipToBounds()) {
                     if (scene != null) {
-                        AbScoreWithMarkers(state = scene.state, scoreHandle = scene.scoreHandle)
+                        AbScoreWithMarkers(
+                            state = scene.state,
+                            scoreHandle = scene.scoreHandle,
+                            audioVm = audioVm,
+                        )
+                        if (audioVm != null) {
+                            // Engine prepared: render the real seek-bar-OFF transport cluster at the
+                            // bottom-end (ReaderScreen's FAB slot) over the score, same as scene 10.
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(16.dp),
+                            ) {
+                                PlaybackFab(audioVm)
+                            }
+                        }
                     }
                 }
             }
@@ -118,7 +142,11 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
 // hand-tuned) sits centered in the viewport, and draws the loop band + A/B markers in the SAME transformed
 // Box as the page so they align with the score systems. Readiness is gated on the frames AND the loop range.
 @Composable
-private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
+private fun AbScoreWithMarkers(
+    state: ReaderState.Ready,
+    scoreHandle: Long,
+    audioVm: ReaderAudioViewModel?,
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val fontProvider = remember(context) { bundledFontProvider(context) }
@@ -170,11 +198,13 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
         ((runMidMM.toFloat() * fitPxPerMM) - viewportSize.height / 2f).toDp()
     }
 
-    LaunchedEffect(scoreHandle, fitPxPerMM, viewportSize, aFrame, bFrame, loopRange) {
+    LaunchedEffect(scoreHandle, fitPxPerMM, viewportSize, aFrame, bFrame, loopRange, audioVm) {
         if (fitPxPerMM <= 0f || viewportSize.width <= 0 || a == null || b == null || loopRange == null) {
             return@LaunchedEffect
         }
-        // Band + markers + scroll are settled. Let a few frames paint, then release the capture gate.
+        // Also wait on the prepared engine so the real PlaybackFab cluster renders enabled before capture.
+        if (audioVm == null) return@LaunchedEffect
+        // Band + markers + scroll + transport are settled. Let a few frames paint, then release the gate.
         kotlinx.coroutines.delay(500)
         SceneReady.signalReady()
     }
