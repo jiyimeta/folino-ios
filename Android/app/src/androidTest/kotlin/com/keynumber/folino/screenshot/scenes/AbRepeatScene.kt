@@ -47,12 +47,12 @@ import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 
-// AB-section repeat scene: the score in the Reader's HORIZONTAL (single continuous-row) layout, scrolled
-// horizontally so measures 5–7 sit side-by-side in one strip, with a translucent accent BAND filling the
-// looped measures (the production `LoopHighlightOverlay`) and bold accent A/B boundary flags
-// (`AbBoundaryMarkersOverlay`) bracketing the span. Horizontal beats VERTICAL here because this score has
-// six staves per system — three vertically-stacked measures never fit one phone frame, whereas one
-// natural-width row lets all three looped measures + both flags read at once as a single highlighted run.
+// AB-section repeat scene: the score in the Reader's VERTICAL (one continuous stacked page) layout, scrolled
+// vertically so measures 5–7 sit in frame, with a translucent accent BAND filling the looped measures (the
+// production `LoopHighlightOverlay`) and bold accent A/B boundary flags (`AbBoundaryMarkersOverlay`)
+// bracketing the span. This score lays out ~2 measures per system after a 1-measure intro, so m5–7 span ~2
+// adjacent stacked systems; we fit the page to the viewport WIDTH and scroll vertically so those systems
+// (and their band/flags) land centered in the frame — the band reading across the two systems is expected.
 //
 // Both overlays are engine-INDEPENDENT: the band's tick range is resolved straight from the laid-out score
 // via the audio JNI's measure→tick conversion (the SAME `frameForCursor` + `FrameCodec` path
@@ -65,10 +65,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 private const val A_MEASURE_INDEX = 4 // m5: loop start (left edge)
 private const val B_MEASURE_INDEX = 6 // m7: loop end (right edge)
 
-// Horizontal air (document mm) on EACH side of the m5–7 span, so the A/B flags aren't flush against the
-// frame edges. The looped span + this air on both sides is scaled to exactly fill the viewport width, so
-// all three measures and both flags are always in frame regardless of the score's natural measure widths.
-private const val SIDE_AIR_MM = 12.0
+// Vertical air (document mm) above the A system and below the B system, so the looped systems aren't flush
+// against the frame edges when their combined height is scaled to fill the viewport. (In VERTICAL the page
+// is already laid out at the viewport's natural width; this only governs the vertical fit of the m5–7 run.)
+private const val SIDE_AIR_MM = 8.0
 
 // Translucent accent band over the looped measures. Matches the production HorizontalScore band tint.
 private fun loopBand(accent: Color): Color = accent.copy(alpha = 0.18f)
@@ -78,12 +78,12 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("AbRepeat", tag)
     ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
         FolinoTheme {
-            // HORIZONTAL (single natural-width row) layout: the whole score lays out as ONE wide page in a
+            // VERTICAL (one continuous stacked page) layout: the whole score lays out as ONE tall page in a
             // single coordinate space, so `nativeMeasureFrame` / `nativeLoopHighlightRects` x/y align with
-            // `ScorePage`. We scroll horizontally (offset x) to bring m5–7 into the frame.
+            // `ScorePage`. We fit to viewport WIDTH and scroll vertically (offset y) to bring m5–7 into frame.
             val scene = rememberReaderSceneState {
                 LayoutOptions.DEFAULT.copy(
-                    mode = ReaderLayoutMode.HORIZONTAL,
+                    mode = ReaderLayoutMode.VERTICAL,
                     staffSize = SCREENSHOT_STAFF_SIZE,
                 )
             }
@@ -96,10 +96,10 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
     }
 }
 
-// Scene-local horizontal adaptation: renders the natural-width row, scrolls horizontally so m5's leading
-// edge parks near the left (derived from the A measure's resolved frame, not hand-tuned), centers the row
-// vertically, and draws the loop band + A/B markers in the SAME transformed Box as the page so they align
-// with the score columns. Readiness is gated on the A frame AND the loop range resolving.
+// Scene-local vertical adaptation: renders the continuous page fit-to-width, scrolls vertically so the m5–7
+// run (the A system's top through the B system's bottom, derived from the resolved measure frames, not
+// hand-tuned) sits centered in the viewport, and draws the loop band + A/B markers in the SAME transformed
+// Box as the page so they align with the score systems. Readiness is gated on the frames AND the loop range.
 @Composable
 private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
     val context = LocalContext.current
@@ -129,30 +129,28 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
     }
     val loopRange by loopFlow.collectAsStateValue()
 
-    // Fit the m5→m7 span (+ side air on both sides) to the viewport width, so the looped run dominates and
-    // both flags stay in frame independent of the score's natural measure widths.
+    // VERTICAL: fit the continuous page to the viewport WIDTH (the natural Reader vertical-scroll fit), then
+    // scroll vertically so the m5–7 run lands centered. In VERTICAL the A (m5) and B (m7) systems are stacked,
+    // so the looped run's vertical extent is A's top through B's bottom; X spans the full page width.
     val a = aFrame
     val b = bFrame
-    val spanLeftMM = (a?.x ?: 0.0) - SIDE_AIR_MM
-    val spanRightMM = ((b?.x ?: 0.0) + (b?.width ?: 0.0)) + SIDE_AIR_MM
-    val spanWidthMM = (spanRightMM - spanLeftMM).coerceAtLeast(1.0)
-    val fitPxPerMM = if (a != null && b != null && viewportSize.width > 0) {
-        (viewportSize.width / spanWidthMM).toFloat()
+    val fitPxPerMM = if (a != null && b != null && viewportSize.width > 0 && page.widthMM > 0) {
+        (viewportSize.width / page.widthMM).toFloat()
     } else {
         0f
     }
 
-    // mm left of the page origin to drop so the span's left edge (m5 − air) parks at the viewport's left.
-    val scrollLeftMM = spanLeftMM.coerceAtLeast(0.0)
-    val scrollLeft: Dp = with(density) { (scrollLeftMM.toFloat() * fitPxPerMM).toDp() }
+    // No horizontal scroll: the page is fit to width, so the row of every system already fills the frame.
+    val scrollLeft: Dp = 0.dp
 
-    // Vertically center the looped SYSTEM (not the whole page) in the viewport. `nativeMeasureFrame`
-    // returns the measure's full system column, so a.y..a.y+a.height is the band's vertical extent;
-    // park its midpoint at the viewport's vertical center. (At the smaller screenshot staff size the
-    // page is shorter than the viewport, so plain CenterStart would float the system off-center.)
-    val systemMidMM = (a?.y ?: 0.0) + (a?.height ?: 0.0) / 2.0
+    // Vertically center the looped RUN (A system top − air … B system bottom + air) in the viewport. Each
+    // `nativeMeasureFrame` returns that measure's full system column, so a.y is the top of m5's system and
+    // b.y+b.height is the bottom of m7's system; park the run's midpoint at the viewport's vertical center.
+    val runTopMM = (a?.y ?: 0.0) - SIDE_AIR_MM
+    val runBottomMM = ((b?.y ?: 0.0) + (b?.height ?: 0.0)) + SIDE_AIR_MM
+    val runMidMM = (runTopMM + runBottomMM) / 2.0
     val scrollTop: Dp = with(density) {
-        ((systemMidMM.toFloat() * fitPxPerMM) - viewportSize.height / 2f).toDp()
+        ((runMidMM.toFloat() * fitPxPerMM) - viewportSize.height / 2f).toDp()
     }
 
     LaunchedEffect(scoreHandle, fitPxPerMM, viewportSize, aFrame, bFrame, loopRange) {

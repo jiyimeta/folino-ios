@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.PlaybackInspectorContent
+import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
@@ -44,7 +45,10 @@ fun LoopAllScene(layout: ScreenshotLayout, tag: String) {
     ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
         FolinoTheme {
             val scene = rememberReaderSceneState {
-                LayoutOptions.DEFAULT.copy(staffSize = SCREENSHOT_STAFF_SIZE)
+                LayoutOptions.DEFAULT.copy(
+                    mode = ReaderLayoutMode.VERTICAL,
+                    staffSize = SCREENSHOT_STAFF_SIZE,
+                )
             }
             val audioVm = rememberPreparedAudioVm(scene?.scoreHandle)
             // Whole-piece repeat for the repeat row. Install once the VM is prepared; the screenshot

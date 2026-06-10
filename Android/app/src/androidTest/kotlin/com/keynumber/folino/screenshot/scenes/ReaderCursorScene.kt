@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.PlaybackFab
+import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
@@ -31,7 +32,10 @@ fun ReaderCursorScene(layout: ScreenshotLayout, tag: String) {
     ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
         FolinoTheme {
             val scene = rememberReaderSceneState {
-                LayoutOptions.DEFAULT.copy(staffSize = SCREENSHOT_STAFF_SIZE)
+                LayoutOptions.DEFAULT.copy(
+                    mode = ReaderLayoutMode.VERTICAL,
+                    staffSize = SCREENSHOT_STAFF_SIZE,
+                )
             }
             // Live, prepared engine VM so the real PlaybackFab renders enabled (bound engine +
             // populated mixer). Null until the service binds and the score is prepared.

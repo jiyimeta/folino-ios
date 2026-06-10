@@ -18,28 +18,41 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keynumber.folino.reader.LayoutOptions
+import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
-import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
+import com.keynumber.folino.screenshot.fixtures.SceneReady
 import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
 import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
 import com.keynumber.folino.ui.theme.FolinoTheme
+import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
+import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
 
 // PiP scene: mirrors Folino's real picture-in-picture window — a WIDE card pinned near the TOP of the
-// home screen showing the score (only staves 2/3/4 = Top/2nd/3rd) with the playback cursor. The card
-// hides every staff EXCEPT flattened indices 1,2,3 (the complement of the display-inspector scene's
-// hidden set). The home backdrop is intentionally plain (no wallpaper art / widgets) — just a dark
-// launcher with app icons and a shape-only search bar, enough to read as "playing over the home screen".
+// home screen showing the score in HORIZONTAL layout (one continuous single-system row) with only staves
+// 2/3/4 = Top/2nd/3rd visible. The card hides every staff EXCEPT flattened indices 1,2,3 (the complement
+// of the display-inspector scene's hidden set), so the three kept staves form a short wide strip. The home
+// backdrop is intentionally plain (no wallpaper art / widgets) — just a dark launcher with app icons and a
+// shape-only search bar, enough to read as "playing over the home screen".
 @Composable
 fun PipScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("Pip", tag)
@@ -122,40 +135,105 @@ private fun SearchPill() {
     }
 }
 
-// The floating PiP window: a wide, short, rounded white surface holding the score (only staves 2/3/4)
-// with the playback cursor — matching Folino's real PiP, which is full-width and a few staves tall.
+// A4-width basis for the horizontal pxPerMM, mirroring HorizontalScore (which fits the card/viewport width
+// to A4 width, NOT to the page's natural — very wide — single-row width, then scrolls horizontally).
+private const val A4_WIDTH_MM = 210.0
+
+// Horizontal distance (document mm) to scroll past the intro/clef/key signature at the row's left so the
+// visible window lands on a stretch with notes rather than the staff header.
+private const val PIP_SCROLL_LEFT_MM = 26.0
+
+// Vertical air (document mm) above and below the three-staff strip inside the card, so the staves aren't
+// flush against the rounded card edges.
+private const val PIP_VPAD_MM = 3.0
+
+// The floating PiP window: a wide, short, rounded white surface holding the score's three kept staves
+// (flattened indices 1,2,3) as ONE continuous HORIZONTAL row — matching Folino's real PiP, which forces
+// horizontal single-system layout and is full-width and a few staves tall.
 //
-// ReaderSceneContent draws the whole page top-aligned, so the raw window would include the page's top
-// margin / measure-1 header above the staves and the next system's measure number below. To frame just
-// the first system tightly (as the real PiP does), the page is shifted up by `cropTop` and the card is
-// only `systemHeight` tall, clipping everything outside the three visible staves.
+// In HORIZONTAL the program is one wide single-system row. Like the production HorizontalScore, we fit the
+// card WIDTH to A4 width (not the row's natural width) for the px-per-mm, render the wide page, scroll it
+// horizontally past the staff header, and size the card height to exactly the three-staff strip (so the
+// staves fill the card tightly with a little vertical air, the way the real wide PiP frames them).
 @Composable
 private fun PipCard(modifier: Modifier = Modifier) {
-    val cropTop = 62.dp        // drop most of the top margin / measure-1 header, leaving a little air
-    val systemHeight = 162.dp  // card height = the three visible staves plus that top breathing room
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val fontProvider = remember(context) { bundledFontProvider(context) }
+
+    val scene = rememberReaderSceneState { parts ->
+        // Keep ONLY flattened indices 1,2,3 visible: hide every other staff in the score. Force HORIZONTAL
+        // so the kept staves lay out as one continuous wide single-system row (the real PiP geometry).
+        val keep = HIDDEN_FLAT_INDICES
+        val all = parts?.let { p -> p.flatMap { it.staves }.indices.toSet() } ?: emptySet()
+        val hidden = parts?.addressesForFlatIndices(all - keep) ?: emptySet()
+        LayoutOptions.DEFAULT.copy(
+            mode = ReaderLayoutMode.HORIZONTAL,
+            staffSize = SCREENSHOT_STAFF_SIZE,
+            hiddenStaves = hidden,
+        )
+    }
+
+    var cardWidthPx by remember { mutableStateOf(0) }
+
+    if (scene == null) {
+        // Reserve the card footprint while the score loads (placeholder height); the harness gate holds
+        // the capture until the strip has rendered.
+        Surface(
+            modifier = modifier.fillMaxWidth().height(150.dp).onSizeChanged { cardWidthPx = it.width },
+            shape = RoundedCornerShape(18.dp),
+            shadowElevation = 14.dp,
+            color = Color.White,
+        ) {}
+        return
+    }
+
+    val page = scene.state.program.pages.first()
+    // HorizontalScore basis: fit the card width to A4 width (not the natural row width), then scroll.
+    val fitPxPerMM = if (cardWidthPx > 0) (cardWidthPx / A4_WIDTH_MM).toFloat() else 0f
+
+    // The kept three-staff row's height (document mm scaled to px), plus a little vertical air top+bottom.
+    val stripHeightDp: Dp = with(density) {
+        ((page.heightMM.toFloat() + PIP_VPAD_MM.toFloat() * 2f) * fitPxPerMM).toDp()
+    }
+    val contentWidthPx = page.widthMM.toFloat() * fitPxPerMM
+    val contentHeightPx = page.heightMM.toFloat() * fitPxPerMM
+    val scrollLeft: Dp = with(density) { (PIP_SCROLL_LEFT_MM.toFloat() * fitPxPerMM).toDp() }
+    val topPad: Dp = with(density) { (PIP_VPAD_MM.toFloat() * fitPxPerMM).toDp() }
+
+    LaunchedEffect(scene.scoreHandle, fitPxPerMM, cardWidthPx) {
+        if (fitPxPerMM <= 0f) return@LaunchedEffect
+        kotlinx.coroutines.delay(400)
+        SceneReady.signalReady()
+    }
+
     Surface(
-        modifier = modifier.fillMaxWidth().height(systemHeight),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(if (fitPxPerMM > 0f) stripHeightDp else 150.dp)
+            .onSizeChanged { cardWidthPx = it.width },
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 14.dp,
         color = Color.White,
     ) {
         Box(Modifier.fillMaxSize().clipToBounds().background(Color.White)) {
-            val scene = rememberReaderSceneState { parts ->
-                // Keep ONLY flattened indices 1,2,3 visible: hide every other staff in the score.
-                val keep = HIDDEN_FLAT_INDICES
-                val all = parts?.let { p -> p.flatMap { it.staves }.indices.toSet() } ?: emptySet()
-                val hidden = parts?.addressesForFlatIndices(all - keep) ?: emptySet()
-                LayoutOptions.DEFAULT.copy(staffSize = SCREENSHOT_STAFF_SIZE, hiddenStaves = hidden)
-            }
-            if (scene != null) {
-                // Give ReaderSceneContent room to lay out the full page (it fills this box and fits to
-                // width), then offset it up so only the first system lands in the clipped card.
-                Box(Modifier.fillMaxWidth().height(560.dp).offset(y = -cropTop)) {
-                    ReaderSceneContent(
-                        state = scene.state,
-                        scoreHandle = scene.scoreHandle,
-                        layoutOptions = scene.layoutOptions,
-                        withCursor = true,
+            if (fitPxPerMM > 0f) {
+                // The wide single-system row, scrolled left past the header (offset x) and dropped by the
+                // top air (offset y), clipped to the card. Only the three kept staves are present, so the
+                // row height IS the strip height.
+                Box(
+                    Modifier
+                        .size(
+                            width = with(density) { contentWidthPx.toDp() },
+                            height = with(density) { contentHeightPx.toDp() },
+                        )
+                        .offset(x = -scrollLeft, y = topPad),
+                ) {
+                    ScorePage(
+                        page = page,
+                        fontProvider = fontProvider,
+                        pxPerMM = fitPxPerMM,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }

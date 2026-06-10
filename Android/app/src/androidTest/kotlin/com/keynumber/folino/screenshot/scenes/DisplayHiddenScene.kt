@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.DisplayInspectorContent
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.PartDescriptor
+import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
@@ -47,7 +48,11 @@ fun DisplayHiddenScene(layout: ScreenshotLayout, tag: String) {
         FolinoTheme {
             val scene = rememberReaderSceneState { parts ->
                 val hidden = parts?.addressesForFlatIndices(HIDDEN_FLAT_INDICES) ?: emptySet()
-                LayoutOptions.DEFAULT.copy(staffSize = SCREENSHOT_STAFF_SIZE, hiddenStaves = hidden)
+                LayoutOptions.DEFAULT.copy(
+                    mode = ReaderLayoutMode.VERTICAL,
+                    staffSize = SCREENSHOT_STAFF_SIZE,
+                    hiddenStaves = hidden,
+                )
             }
             Box(Modifier.fillMaxSize()) {
                 if (scene != null) {
