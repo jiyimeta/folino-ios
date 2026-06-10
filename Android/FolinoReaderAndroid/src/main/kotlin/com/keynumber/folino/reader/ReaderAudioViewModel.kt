@@ -371,7 +371,17 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     override fun onCleared() {
+        // Stop playback when the Reader is closed (mirrors iOS releaseEngine on teardown). The engine is
+        // a singleton owned by the started ReaderPlaybackService and outlives this view model, so without
+        // this it keeps playing after the Reader is dismissed, and — because it stays non-STOPPED — the
+        // next Reader's preparePlayback early-returns (its `state != STOPPED` guard), leaving the new score
+        // unprepared (stale cursor, dead tap-to-seek, controls driving the previous score). stop() silences
+        // audio and resets the engine to STOPPED so the next open prepares cleanly. Clear the loaded flag
+        // first so the stop()-induced cursor nil does not fire the end-of-score auto-advance.
+        // (Not reached during PiP or in-place playlist advance: the view model is only cleared when the
+        // Reader's nav entry is popped, not while the activity/composable stays alive.)
         hasLoadedIntoPlayback = false
+        engine.value?.stop()
         getApplication<Application>().unbindService(connection)
         super.onCleared()
     }
