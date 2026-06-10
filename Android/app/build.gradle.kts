@@ -93,10 +93,13 @@ dependencies {
     // Score export primitives (PdfScoreRenderer / AudioScoreExporter) draw via
     // the shared sheet-music layout + render the score to audio. Reader uses
     // these as `implementation` (not exposed transitively), so :app declares
-    // them directly. mavenLocal, published in Phase A.
-    implementation("io.github.jiyimeta:sheet-music-android:0.0.0-SNAPSHOT")
-    implementation("io.github.jiyimeta:sheet-music-compose-android:0.0.0-SNAPSHOT")
-    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
+    // them directly. mavenLocal; version is property-driven (see gradle.properties
+    // `ssmVersion`). Keep all sheet-music-* AARs on ONE version — engine/compose
+    // skew breaks DrawCommand exhaustiveness etc.
+    val ssmVersion = (findProperty("ssmVersion") as String?) ?: "0.0.0-SNAPSHOT"
+    implementation("io.github.jiyimeta:sheet-music-android:$ssmVersion")
+    implementation("io.github.jiyimeta:sheet-music-compose-android:$ssmVersion")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:$ssmVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-crashlytics")
