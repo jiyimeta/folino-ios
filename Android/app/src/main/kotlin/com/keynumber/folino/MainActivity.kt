@@ -64,13 +64,12 @@ import com.keynumber.folino.library.generated.ReaderPreferencesBridgeViewModel
 import androidx.core.content.ContextCompat
 import com.keynumber.folino.reader.PipHost
 import com.keynumber.folino.reader.AbRepeatRange
+import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
+import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ReaderScreen
-import com.keynumber.folino.reader.clefOverridesPref
-import com.keynumber.folino.reader.hiddenStavesPref
-import com.keynumber.folino.reader.layoutOptionsFromPrefs
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
@@ -486,13 +485,15 @@ private fun LibraryNavGraph(
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
+                //
+                // Display settings split across two stores: mode / collapse-rests / show-invisible stay
+                // GLOBAL (DataStore, shared across scores); staff size / honor-breaks / hidden-staves /
+                // clef-overrides are PER-SCORE (the ReaderPreferences bridge below). The score-specific
+                // half is read from the bridge, not from these global flows.
                 val layoutPref by prefs.layoutMode.collectAsState(initial = "page")
                 val staffSize by prefs.staffSize.collectAsState(initial = 28.0)
-                val honorBreaks by prefs.honorBreaks.collectAsState(initial = true)
                 val collapseRests by prefs.collapseRests.collectAsState(initial = false)
                 val showInvisible by prefs.showInvisible.collectAsState(initial = false)
-                val hiddenStaves by prefs.hiddenStaves.collectAsState(initial = emptySet())
-                val clefOverrides by prefs.clefOverrides.collectAsState(initial = emptySet())
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
@@ -513,8 +514,28 @@ private fun LibraryNavGraph(
                     )
                 LaunchedEffect(id) { prefsVm.open(id, defaultStaffSize = staffSize) }
                 val prefsState by prefsVm.state.collectAsState()
-                val displayOptions = layoutOptionsFromPrefs(
-                    layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
+                // Per-score staff visibility + clef overrides come from the bridge's imperative getters.
+                // Re-read them whenever the bridge state ticks (every per-staff mutation publishes a new
+                // state), so the inspector list refreshes after a hide/show or clef change.
+                val perScoreHidden = remember(prefsState) {
+                    prefsVm.hiddenStaves()
+                        .map { ReaderStaffAddress(it.partIndex, it.staffIndexInPart) }
+                        .toSet()
+                }
+                val perScoreClefs = remember(prefsState) {
+                    prefsVm.clefOverrides()
+                        .associate { ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.rawType }
+                }
+                // Compose the display snapshot from both stores: global mode / collapse / show-invisible,
+                // per-score staff size / honor-breaks / hidden / clef.
+                val displayOptions = LayoutOptions(
+                    mode = ReaderLayoutMode.fromPref(layoutPref),
+                    staffSize = prefsState.staffSize,
+                    honorLayoutBreaks = prefsState.honorLayoutBreaks,
+                    collapseMultiMeasureRests = collapseRests,
+                    showInvisibleElements = showInvisible,
+                    hiddenStaves = perScoreHidden,
+                    clefOverrides = perScoreClefs,
                 )
                 ReaderScreen(
                     scoreId = id,
@@ -523,14 +544,35 @@ private fun LibraryNavGraph(
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
+                        // Global half → DataStore.
                         scope.launch {
                             prefs.setLayoutMode(o.mode.toPref())
-                            prefs.setStaffSize(o.staffSize)
-                            prefs.setHonorBreaks(o.honorLayoutBreaks)
                             prefs.setCollapseRests(o.collapseMultiMeasureRests)
                             prefs.setShowInvisible(o.showInvisibleElements)
-                            prefs.setHiddenStaves(o.hiddenStavesPref())
-                            prefs.setClefOverrides(o.clefOverridesPref())
+                        }
+                        // Per-score half → ReaderPreferences bridge. Diff against the current snapshot so
+                        // the whole-options `onChange` contract maps onto the bridge's scalar / per-staff
+                        // mutators. Staff size / honor are scalars; hidden / clef are per-staff deltas.
+                        if (o.staffSize != displayOptions.staffSize) prefsVm.setStaffSize(o.staffSize)
+                        if (o.honorLayoutBreaks != displayOptions.honorLayoutBreaks) {
+                            prefsVm.setHonorLayoutBreaks(o.honorLayoutBreaks)
+                        }
+                        (o.hiddenStaves - displayOptions.hiddenStaves).forEach {
+                            prefsVm.setStaffHidden(it.partIndex, it.staffIndexInPart, hidden = true)
+                        }
+                        (displayOptions.hiddenStaves - o.hiddenStaves).forEach {
+                            prefsVm.setStaffHidden(it.partIndex, it.staffIndexInPart, hidden = false)
+                        }
+                        o.clefOverrides.forEach { (addr, raw) ->
+                            if (displayOptions.clefOverrides[addr] != raw) {
+                                prefsVm.setClef(addr.partIndex, addr.staffIndexInPart, raw)
+                            }
+                        }
+                        (displayOptions.clefOverrides.keys - o.clefOverrides.keys).forEach { addr ->
+                            // A removed clef override = reset to the staff's authored/default clef. The
+                            // bridge has no "clear" verb; an empty rawType is the reset sentinel (matches
+                            // the reducer's treatment of "" as no override).
+                            prefsVm.setClef(addr.partIndex, addr.staffIndexInPart, "")
                         }
                     },
                     pageTapHintDismissed = hintDismissed,
