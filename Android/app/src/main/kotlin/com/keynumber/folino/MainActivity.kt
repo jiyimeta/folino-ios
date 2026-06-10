@@ -90,6 +90,7 @@ import com.keynumber.folino.ui.scoreinfo.EditScoreInfoScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
+import com.keynumber.folino.ui.settings.VersionHistoryScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -662,10 +663,17 @@ private fun SettingsNavGraph(
                 versionItems = versionItems,
                 onBack = onBack,
                 onOpenLicenses = { nav.navigate("licenses") },
+                onOpenVersionHistory = { nav.navigate("versionHistory") },
             )
         }
         composable("licenses") {
             LicensesRoute(onBack = { nav.popBackStackIfResumed() })
+        }
+        composable("versionHistory") {
+            VersionHistoryRoute(
+                versionItems = versionItems,
+                onBack = { nav.popBackStackIfResumed() },
+            )
         }
     }
 }
@@ -678,6 +686,7 @@ private fun SettingsRoute(
     versionItems: List<VersionHistoryItem>,
     onBack: () -> Unit,
     onOpenLicenses: () -> Unit,
+    onOpenVersionHistory: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -692,8 +701,33 @@ private fun SettingsRoute(
         },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            SettingsScreen(prefs, versionItems, onOpenLicenses = onOpenLicenses)
+            SettingsScreen(prefs, versionItems, onOpenLicenses = onOpenLicenses, onOpenVersionHistory = onOpenVersionHistory)
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VersionHistoryRoute(
+    versionItems: List<VersionHistoryItem>,
+    onBack: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Version History") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) { VersionHistoryScreen(versionItems) }
     }
 }
 
