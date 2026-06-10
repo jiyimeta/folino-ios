@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -85,9 +86,9 @@ fun InspectorSliderRow(
     modifier: Modifier = Modifier,
     leadingIcon: ImageVector? = null,
     leadingIconTint: Color? = null,
-    label: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-    slider: @Composable () -> Unit,
+    label: (@Composable RowScope.() -> Unit)? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+    slider: @Composable RowScope.() -> Unit,
 ) {
     Row(
         modifier.fillMaxWidth().heightIn(min = InspectorRowMinHeight),
@@ -101,9 +102,9 @@ fun InspectorSliderRow(
                 tint = leadingIconTint ?: androidx.compose.material3.LocalContentColor.current,
             )
         }
-        label?.invoke()
-        slider()
-        trailing?.invoke()
+        label?.invoke(this)
+        slider(this)
+        trailing?.invoke(this)
     }
 }
 
