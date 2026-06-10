@@ -205,6 +205,11 @@ fun ReaderScreen(
     // Set when this screen initiates an auto-advance; consumed once the next score reaches PREPARED.
     var pendingAutoplay by remember { mutableStateOf(false) }
 
+    // Global continuation mode for the inspector control (playlist context only). Mirrors the value the
+    // auto-advance handler reads; updates write through to DataStore via persistContinuationMode.
+    var continuationMode by remember { mutableStateOf(PlaylistContinuationMode.PLAY_THROUGH) }
+    LaunchedEffect(Unit) { continuationMode = continuationModeProvider() }
+
     // Playlist auto-advance: on a real end-of-score, ask the shared Domain decision (via JNI) what to
     // do next. Only active in a playlist context. Re-derives the live queue + re-reads the global
     // continuation mode each time (parity with iOS).
@@ -434,6 +439,12 @@ fun ReaderScreen(
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = persistStaffProgram,
             onPersistStaffVolume = persistStaffVolume,
+            inPlaylist = playlistId != null,
+            continuationMode = continuationMode,
+            onContinuationModeChange = { m ->
+                continuationMode = m
+                persistContinuationMode(m)
+            },
         )
     }
     if (showDisplayInspector) {

@@ -36,6 +36,11 @@
     <string name="reader_settings_a4_description">すべての楽譜の再生に適用される基準です。楽譜ごとに上書きできます。</string>
     <string name="settings_a4_reference">A4 基準音</string>
     <string name="reader_inspector_transpose">移調</string>
+    <string name="reader_playlist_continuation_label">プレイリスト</string>
+    <string name="reader_continuation_off">オフ</string>
+    <string name="reader_continuation_play_through">連続再生</string>
+    <string name="reader_continuation_loop_playlist">全曲リピート</string>
+    <string name="reader_continuation_repeat_active_hint">リピート中は次の楽譜へ進みません</string>
     <string name="reader_repeat_label">リピート</string>
     <string name="reader_repeat_off">オフ</string>
     <string name="reader_repeat_loop_all">1曲リピート</string>

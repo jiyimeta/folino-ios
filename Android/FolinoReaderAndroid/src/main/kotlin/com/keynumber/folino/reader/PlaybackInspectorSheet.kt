@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -110,6 +111,12 @@ fun PlaybackInspectorSheet(
     onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
     /** Persists a per-score volume override (by staff address) after the live engine update. */
     onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
+    /** True when the Reader is opened from a playlist (controls visibility of the continuation row). */
+    inPlaylist: Boolean = false,
+    /** The active playlist continuation mode shown in the picker. */
+    continuationMode: PlaylistContinuationMode = PlaylistContinuationMode.PLAY_THROUGH,
+    /** Called when the user selects a new continuation mode from the picker. */
+    onContinuationModeChange: (PlaylistContinuationMode) -> Unit = {},
 ) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val mixerChannels by audioVm.mixerChannels.collectAsStateWithLifecycle()
@@ -234,6 +241,36 @@ fun PlaybackInspectorSheet(
                             enabled = controlsEnabled,
                             onSelect = { audioVm.setRepeatMode(it) },
                         )
+                    }
+                }
+                if (inPlaylist) {
+                    item {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null)
+                                Text(
+                                    stringResource(R.string.reader_playlist_continuation_label),
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                PlaylistContinuationPicker(
+                                    selected = continuationMode,
+                                    enabled = controlsEnabled && repeatMode == RepeatMode.OFF,
+                                    onSelect = onContinuationModeChange,
+                                )
+                            }
+                            if (repeatMode != RepeatMode.OFF) {
+                                Text(
+                                    stringResource(R.string.reader_continuation_repeat_active_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                 }
             }
