@@ -27,7 +27,12 @@ enum Fixture {
 
     /// Build a library row with realistic-looking metadata. Only the fields the list/Reader read need to be meaningful;
     /// the rest are plausible placeholders.
-    static func scoreItem(title: String, composer: String, favorite: Bool = false) -> ScoreItem {
+    static func scoreItem(
+        title: String,
+        composer: String,
+        favorite: Bool = false,
+        lastOpenedAt: Date? = nil,
+    ) -> ScoreItem {
         let id = ScoreItemID()
         return ScoreItem(
             id: id,
@@ -45,7 +50,7 @@ enum Fixture {
             defaultTempoBpm: 120,
             primaryKey: "C",
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lastOpenedAt: nil,
+            lastOpenedAt: lastOpenedAt,
             tagIDs: [],
             isFavorite: favorite,
             deletedAt: nil,
@@ -54,9 +59,22 @@ enum Fixture {
 
     /// Three realistic library items for a populated list shot.
     static let items: [ScoreItem] = [
-        scoreItem(title: "Now is the time!", composer: "Kiichi", favorite: true),
-        scoreItem(title: "Prelude in C", composer: "Bach"),
-        scoreItem(title: "Gymnopédie No.1", composer: "Satie"),
+        scoreItem(
+            title: "Now is the time!",
+            composer: "Kiichi",
+            favorite: true,
+            lastOpenedAt: Date(timeIntervalSince1970: 1_717_900_000),
+        ),
+        scoreItem(
+            title: "Prelude in C",
+            composer: "Bach",
+            lastOpenedAt: Date(timeIntervalSince1970: 1_717_800_000),
+        ),
+        scoreItem(
+            title: "Gymnopédie No.1",
+            composer: "Satie",
+            lastOpenedAt: Date(timeIntervalSince1970: 1_717_700_000),
+        ),
     ]
 }
 

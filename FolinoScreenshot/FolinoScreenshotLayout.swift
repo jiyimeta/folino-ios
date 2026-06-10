@@ -16,6 +16,7 @@ enum FolinoScreenshotLayout {
         switch idiom {
         case .iPhone:
             .standard(
+                titleCenterYFraction: 0.12,
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
@@ -23,6 +24,7 @@ enum FolinoScreenshotLayout {
             )
         case .iPad:
             .iPad(
+                titleCenterYFraction: 0.12,
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
