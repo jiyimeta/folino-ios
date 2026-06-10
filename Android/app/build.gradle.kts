@@ -20,6 +20,12 @@ android {
         versionName = "0.1"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Route screenshot capture output through the AndroidX Test Storage service so AGP pulls the
+        // captured PNGs off the device into
+        //   app/build/outputs/connected_android_test_additional_output/debugAndroidTest/connected/<Device>/
+        // The capture harness writes each PNG via TestStorage.openOutputFile(relativeName) (see
+        // CaptureHarness.kt); without this flag the bitmaps stay on-device and never reach the host.
+        testInstrumentationRunnerArguments["useTestStorageService"] = "true"
     }
 
     compileOptions {
@@ -68,28 +74,43 @@ aboutLibraries {
 }
 
 // Copy captured PNGs into the fastlane supply tree.
-//   <buildDir>/outputs/roborazzi/<deviceAlias>/<playLocale>/<NN>.png
-//   -> Android/fastlane/metadata/android/<playLocale>/images/<phoneScreenshots|tenInchScreenshots>/<NN>.png
+//
+// The capture harness writes each PNG via AndroidX TestStorage as the relative name
+// "<deviceAlias>/<playLocale>/<NN>.png" (see CaptureHarness.kt). With useTestStorageService=true,
+// AGP pulls the whole TestStorage output tree to the host under
+//   <buildDir>/outputs/connected_android_test_additional_output/debugAndroidTest/connected/<Device Name (AVD)>/
+// i.e. one extra per-device directory level above our "<deviceAlias>/<playLocale>/<NN>.png" layout.
+// We walk every connected-device dir (there is normally one) and fan the PNGs out into:
+//   Android/fastlane/metadata/android/<playLocale>/images/<phoneScreenshots|tenInchScreenshots>/<NN>.png
 tasks.register("collectScreenshots") {
     description = "Pull device screenshots and copy into fastlane/metadata/android/<locale>/images/*"
     group = "screenshot"
     dependsOn("connectedDebugAndroidTest")
     doLast {
-        val src = layout.buildDirectory.dir("outputs/roborazzi").get().asFile
-        val deviceToImageDir = mapOf("phone" to "phoneScreenshots", "tablet" to "tenInchScreenshots")
+        val additionalOutput = layout.buildDirectory
+            .dir("outputs/connected_android_test_additional_output/debugAndroidTest/connected")
+            .get().asFile
+        val deviceAliasToImageDir = mapOf("phone" to "phoneScreenshots", "tablet" to "tenInchScreenshots")
         val fastlaneRoot = rootProject.file("fastlane/metadata/android")
-        deviceToImageDir.forEach { (deviceAlias, imageDir) ->
-            val deviceDir = src.resolve(deviceAlias)
-            if (!deviceDir.exists()) return@forEach
-            deviceDir.listFiles()?.filter { it.isDirectory }?.forEach { localeDir ->
-                val target = fastlaneRoot.resolve("${localeDir.name}/images/$imageDir")
-                target.mkdirs()
-                localeDir.listFiles()?.filter { it.extension == "png" }?.forEach { png ->
-                    png.copyTo(target.resolve(png.name), overwrite = true)
+        var copied = 0
+        // Level 1: the per-AVD device directory (e.g. "Pixel_6_Pro_API_36(AVD) - 16").
+        additionalOutput.listFiles()?.filter { it.isDirectory }?.forEach { avdDir ->
+            // Level 2: our deviceAlias directory ("phone" / "tablet").
+            deviceAliasToImageDir.forEach { (deviceAlias, imageDir) ->
+                val aliasDir = avdDir.resolve(deviceAlias)
+                if (!aliasDir.exists()) return@forEach
+                // Level 3: the playLocale directory ("en-US" / "ja-JP"), holding "<NN>.png".
+                aliasDir.listFiles()?.filter { it.isDirectory }?.forEach { localeDir ->
+                    val target = fastlaneRoot.resolve("${localeDir.name}/images/$imageDir")
+                    target.mkdirs()
+                    localeDir.listFiles()?.filter { it.extension == "png" }?.forEach { png ->
+                        png.copyTo(target.resolve(png.name), overwrite = true)
+                        copied++
+                    }
                 }
             }
         }
-        println("Screenshots collected into $fastlaneRoot")
+        println("Screenshots collected into $fastlaneRoot ($copied files)")
     }
 }
 
@@ -120,6 +141,10 @@ dependencies {
     androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.0")
     androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.32.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    // AndroidX Test Storage service: Roborazzi connected mode writes captures via TestStorage; AGP's
+    // additional-test-output pull then copies them to the host (see useTestStorageService above).
+    androidTestImplementation("androidx.test.services:storage:1.5.0")
+    androidTestUtil("androidx.test.services:test-services:1.5.0")
 
     implementation(project(":FolinoSettingsAndroid"))
     implementation(project(":FolinoLibraryAndroid"))
