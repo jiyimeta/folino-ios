@@ -111,6 +111,57 @@ fun PlaybackInspectorSheet(
     /** Persists a per-score volume override (by staff address) after the live engine update. */
     onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
 ) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        PlaybackInspectorContent(
+            audioVm = audioVm,
+            openingQuarterBpm = openingQuarterBpm,
+            metronomeEnabled = metronomeEnabled,
+            onMetronomeChange = onMetronomeChange,
+            onPersistMasterVolume = onPersistMasterVolume,
+            onPersistTempoMultiplier = onPersistTempoMultiplier,
+            onPersistA4ReferenceHz = onPersistA4ReferenceHz,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = onTransposeChange,
+            staffAddressByIndex = staffAddressByIndex,
+            onPersistStaffProgram = onPersistStaffProgram,
+            onPersistStaffVolume = onPersistStaffVolume,
+        )
+    }
+}
+
+/**
+ * The scrollable body of the playback inspector, factored out of [PlaybackInspectorSheet] so the same
+ * General + Mixer control list can be hosted either inside the production `ModalBottomSheet` or — for
+ * static capture harnesses, which can't render a separate sheet window into a node bitmap — directly in
+ * a plain bottom-aligned surface. The sheet wrapper owns the modal chrome (scrim, drag handle, dismiss);
+ * this composable owns only the General/Mixer control rows.
+ */
+@Composable
+fun PlaybackInspectorContent(
+    audioVm: ReaderAudioViewModel,
+    openingQuarterBpm: Double,
+    modifier: Modifier = Modifier,
+    /** Global metronome-enabled flag (SettingsPrefs); metronome is global on both platforms. */
+    metronomeEnabled: Boolean = false,
+    /** Writes the global metronome flag on toggle. */
+    onMetronomeChange: (Boolean) -> Unit = {},
+    /** Persists the per-score master volume after the live engine/VM update. */
+    onPersistMasterVolume: (Double) -> Unit = {},
+    /** Persists the per-score tempo multiplier after the live engine update. */
+    onPersistTempoMultiplier: (Double) -> Unit = {},
+    /** Persists the per-score A4 reference pitch after the live engine/VM update. */
+    onPersistA4ReferenceHz: (Double) -> Unit = {},
+    /** Current per-score transpose value in semitones (−7..7), restored from the ReaderPreferences bridge. */
+    transposeSemitones: Int = 0,
+    /** Persists the per-score transpose value (semitones) via the ReaderPreferences bridge. */
+    onTransposeChange: (Int) -> Unit = {},
+    /** Flat mixer staffIndex -> positional StaffAddress, for persisting per-staff overrides. */
+    staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
+    /** Persists a per-score program override (by staff address) after the live engine update. */
+    onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Persists a per-score volume override (by staff address) after the live engine update. */
+    onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
+) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val mixerChannels by audioVm.mixerChannels.collectAsStateWithLifecycle()
     val rate by audioVm.currentRate.collectAsStateWithLifecycle()
@@ -126,154 +177,152 @@ fun PlaybackInspectorSheet(
     var generalExpanded by rememberSaveable { mutableStateOf(true) }
     var mixerExpanded by rememberSaveable { mutableStateOf(true) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
-            // ── General (master / tempo / metronome) ────────────────
+    LazyColumn(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
+        // ── General (master / tempo / metronome) ────────────────
+        item {
+            CollapsibleHeader("General", generalExpanded) { generalExpanded = !generalExpanded }
+        }
+        if (generalExpanded) {
             item {
-                CollapsibleHeader("General", generalExpanded) { generalExpanded = !generalExpanded }
+                IconSliderRow(
+                    icon = Icons.Default.VolumeUp,
+                    label = "Volume",
+                    value = masterVolume,
+                    valueRange = 0f..1f,
+                    readout = "${(masterVolume * 100).toInt()}%",
+                    enabled = controlsEnabled,
+                    onValueChange = {
+                        audioVm.setMasterVolume(it)
+                        onPersistMasterVolume(it.toDouble())
+                    },
+                )
             }
-            if (generalExpanded) {
-                item {
-                    IconSliderRow(
-                        icon = Icons.Default.VolumeUp,
-                        label = "Volume",
-                        value = masterVolume,
-                        valueRange = 0f..1f,
-                        readout = "${(masterVolume * 100).toInt()}%",
-                        enabled = controlsEnabled,
-                        onValueChange = {
-                            audioVm.setMasterVolume(it)
-                            onPersistMasterVolume(it.toDouble())
-                        },
-                    )
-                }
-                item {
-                    IconSliderRow(
-                        icon = Icons.Default.Speed,
-                        label = "Tempo",
-                        value = rate,
-                        valueRange = 0.5f..2.0f,
-                        // Engraved-style readout (quarter-note glyph + BPM), matching iOS.
-                        readout = "♩ = ${(openingQuarterBpm * rate).roundToInt()}",
-                        enabled = controlsEnabled,
-                        onValueChange = {
-                            engine?.setRate(it)
-                            onPersistTempoMultiplier(it.toDouble())
-                        },
-                    )
-                }
-                item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Default.Timer, contentDescription = null)
-                        Text("Metronome", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            // Metronome is a GLOBAL setting (SettingsPrefs), not per-score. The toggle
-                            // writes the global flag; the Reader screen pushes that value into the engine
-                            // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
-                            // soundfont hot-swap re-push).
-                            checked = metronomeEnabled,
-                            onCheckedChange = { onMetronomeChange(it) },
-                            enabled = controlsEnabled,
-                        )
-                    }
-                }
-                item {
-                    A4ReferenceRow(
-                        hz = a4ReferenceHz,
-                        globalHz = globalA4ReferenceHz,
-                        enabled = controlsEnabled,
-                        // Live-update the engine/VM while dragging, but only persist on release
-                        // (onValueChangeFinished) + on each ± step, so a drag doesn't write the store
-                        // on every frame.
-                        onValueChange = { audioVm.setA4ReferenceHz(it.toDouble()) },
-                        onValueChangeFinished = {
-                            val snapped = snapA4Hz(a4ReferenceHz)
-                            audioVm.setA4ReferenceHz(snapped)
-                            onPersistA4ReferenceHz(snapped)
-                        },
-                        onStep = { delta ->
-                            val next = (a4ReferenceHz + delta).coerceIn(415.0, 466.0)
-                            audioVm.setA4ReferenceHz(next)
-                            onPersistA4ReferenceHz(next)
-                        },
-                    )
-                }
-                item {
-                    // Persist-only: the audio/notation transpose effect is not yet implemented on Android
-                    // (see spec Non-Goals). This row stores transposeSemitones via the ReaderPreferences
-                    // bridge for a future transpose feature.
-                    TransposeRow(
-                        semitones = transposeSemitones,
-                        enabled = controlsEnabled,
-                        onChange = onTransposeChange,
-                    )
-                }
-                item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Default.Repeat, contentDescription = null)
-                        Text(
-                            stringResource(R.string.reader_repeat_label),
-                            Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        RepeatModePicker(
-                            selected = repeatMode,
-                            enabled = controlsEnabled,
-                            onSelect = { audioVm.setRepeatMode(it) },
-                        )
-                    }
-                }
-            }
-
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-
-            // ── Mixer (per staff) ───────────────────────────────────
             item {
-                CollapsibleHeader("Mixer", mixerExpanded) { mixerExpanded = !mixerExpanded }
+                IconSliderRow(
+                    icon = Icons.Default.Speed,
+                    label = "Tempo",
+                    value = rate,
+                    valueRange = 0.5f..2.0f,
+                    // Engraved-style readout (quarter-note glyph + BPM), matching iOS.
+                    readout = "♩ = ${(openingQuarterBpm * rate).roundToInt()}",
+                    enabled = controlsEnabled,
+                    onValueChange = {
+                        engine?.setRate(it)
+                        onPersistTempoMultiplier(it.toDouble())
+                    },
+                )
             }
-            if (mixerExpanded) {
-                if (mixerChannels.isEmpty()) {
-                    item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
-                } else {
-                    items(mixerChannels, key = { it.staffIndex }) { channel ->
-                        // The flat mixer staffIndex maps to a positional StaffAddress for persistence;
-                        // mute / solo stay session-only (not persisted), matching iOS.
-                        val address = staffAddressByIndex[channel.staffIndex]
-                        MixerRow(
-                            channel = channel,
-                            enabled = controlsEnabled,
-                            gmInstruments = gmInstruments,
-                            onVolume = {
-                                engine?.setStaffVolume(channel.staffIndex, it)
-                                address?.let { a -> onPersistStaffVolume(a, it) }
-                            },
-                            onMute = { engine?.setStaffMuted(channel.staffIndex, it) },
-                            onSolo = { engine?.setStaffSoloed(channel.staffIndex, it) },
-                            onProgram = {
-                                engine?.setStaffProgram(channel.staffIndex, it)
-                                address?.let { a -> onPersistStaffProgram(a, it) }
-                            },
-                        )
-                        // Per-row separator — Material has no Form-style automatic divider,
-                        // so we add a light one between staves for visual grouping.
-                        HorizontalDivider(
-                            Modifier.padding(top = 2.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        )
-                    }
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Default.Timer, contentDescription = null)
+                    Text("Metronome", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        // Metronome is a GLOBAL setting (SettingsPrefs), not per-score. The toggle
+                        // writes the global flag; the Reader screen pushes that value into the engine
+                        // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
+                        // soundfont hot-swap re-push).
+                        checked = metronomeEnabled,
+                        onCheckedChange = { onMetronomeChange(it) },
+                        enabled = controlsEnabled,
+                    )
+                }
+            }
+            item {
+                A4ReferenceRow(
+                    hz = a4ReferenceHz,
+                    globalHz = globalA4ReferenceHz,
+                    enabled = controlsEnabled,
+                    // Live-update the engine/VM while dragging, but only persist on release
+                    // (onValueChangeFinished) + on each ± step, so a drag doesn't write the store
+                    // on every frame.
+                    onValueChange = { audioVm.setA4ReferenceHz(it.toDouble()) },
+                    onValueChangeFinished = {
+                        val snapped = snapA4Hz(a4ReferenceHz)
+                        audioVm.setA4ReferenceHz(snapped)
+                        onPersistA4ReferenceHz(snapped)
+                    },
+                    onStep = { delta ->
+                        val next = (a4ReferenceHz + delta).coerceIn(415.0, 466.0)
+                        audioVm.setA4ReferenceHz(next)
+                        onPersistA4ReferenceHz(next)
+                    },
+                )
+            }
+            item {
+                // Persist-only: the audio/notation transpose effect is not yet implemented on Android
+                // (see spec Non-Goals). This row stores transposeSemitones via the ReaderPreferences
+                // bridge for a future transpose feature.
+                TransposeRow(
+                    semitones = transposeSemitones,
+                    enabled = controlsEnabled,
+                    onChange = onTransposeChange,
+                )
+            }
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Default.Repeat, contentDescription = null)
+                    Text(
+                        stringResource(R.string.reader_repeat_label),
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    RepeatModePicker(
+                        selected = repeatMode,
+                        enabled = controlsEnabled,
+                        onSelect = { audioVm.setRepeatMode(it) },
+                    )
+                }
+            }
+        }
+
+        item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
+
+        // ── Mixer (per staff) ───────────────────────────────────
+        item {
+            CollapsibleHeader("Mixer", mixerExpanded) { mixerExpanded = !mixerExpanded }
+        }
+        if (mixerExpanded) {
+            if (mixerChannels.isEmpty()) {
+                item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
+            } else {
+                items(mixerChannels, key = { it.staffIndex }) { channel ->
+                    // The flat mixer staffIndex maps to a positional StaffAddress for persistence;
+                    // mute / solo stay session-only (not persisted), matching iOS.
+                    val address = staffAddressByIndex[channel.staffIndex]
+                    MixerRow(
+                        channel = channel,
+                        enabled = controlsEnabled,
+                        gmInstruments = gmInstruments,
+                        onVolume = {
+                            engine?.setStaffVolume(channel.staffIndex, it)
+                            address?.let { a -> onPersistStaffVolume(a, it) }
+                        },
+                        onMute = { engine?.setStaffMuted(channel.staffIndex, it) },
+                        onSolo = { engine?.setStaffSoloed(channel.staffIndex, it) },
+                        onProgram = {
+                            engine?.setStaffProgram(channel.staffIndex, it)
+                            address?.let { a -> onPersistStaffProgram(a, it) }
+                        },
+                    )
+                    // Per-row separator — Material has no Form-style automatic divider,
+                    // so we add a light one between staves for visual grouping.
+                    HorizontalDivider(
+                        Modifier.padding(top = 2.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    )
                 }
             }
         }

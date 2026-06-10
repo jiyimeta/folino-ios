@@ -113,74 +113,102 @@ fun DisplayInspectorSheet(
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
 ) {
-    var generalExpanded by rememberSaveable { mutableStateOf(true) }
-    var partsExpanded by rememberSaveable { mutableStateOf(true) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        DisplayInspectorContent(
+            options = options,
+            parts = parts,
+            onChange = onChange,
+            showSeekBar = showSeekBar,
+            onShowSeekBarChange = onShowSeekBarChange,
+        )
+    }
+}
+
+/**
+ * The scrollable body of the display inspector, factored out of [DisplayInspectorSheet] so the same
+ * control list can be hosted either inside the production `ModalBottomSheet` or — for static capture
+ * harnesses, which can't render a separate sheet window into a node bitmap — directly in a plain
+ * bottom-aligned surface. The sheet wrapper owns the modal chrome (scrim, drag handle, dismiss); this
+ * composable owns only the General/Parts control rows.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DisplayInspectorContent(
+    options: LayoutOptions,
+    parts: List<PartDescriptor>,
+    onChange: (LayoutOptions) -> Unit,
+    modifier: Modifier = Modifier,
+    showSeekBar: Boolean = true,
+    onShowSeekBarChange: (Boolean) -> Unit = {},
+    initialGeneralExpanded: Boolean = true,
+    initialPartsExpanded: Boolean = true,
+) {
+    var generalExpanded by rememberSaveable { mutableStateOf(initialGeneralExpanded) }
+    var partsExpanded by rememberSaveable { mutableStateOf(initialPartsExpanded) }
     val typeface = rememberBravuraTypeface()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
-            // ── General (layout mode / staff size / display flags) ───
+    LazyColumn(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+    ) {
+        // ── General (layout mode / staff size / display flags) ───
+        item {
+            CollapsibleHeader(
+                stringResource(R.string.reader_inspector_general),
+                generalExpanded,
+            ) { generalExpanded = !generalExpanded }
+        }
+        if (generalExpanded) {
+            item { LayoutModeRow(options.mode) { onChange(options.copy(mode = it)) } }
             item {
-                CollapsibleHeader(
-                    stringResource(R.string.reader_inspector_general),
-                    generalExpanded,
-                ) { generalExpanded = !generalExpanded }
+                StaffSizeRow(options.staffSize) { onChange(options.copy(staffSize = it)) }
             }
-            if (generalExpanded) {
-                item { LayoutModeRow(options.mode) { onChange(options.copy(mode = it)) } }
-                item {
-                    StaffSizeRow(options.staffSize) { onChange(options.copy(staffSize = it)) }
-                }
-                item {
-                    SwitchRow(
-                        label = stringResource(R.string.reader_pref_honor_breaks),
-                        checked = options.honorLayoutBreaks,
-                    ) { onChange(options.copy(honorLayoutBreaks = it)) }
-                }
-                item {
-                    SwitchRow(
-                        label = stringResource(R.string.reader_pref_collapse_rests),
-                        checked = options.collapseMultiMeasureRests,
-                    ) { onChange(options.copy(collapseMultiMeasureRests = it)) }
-                }
-                item {
-                    SwitchRow(
-                        label = stringResource(R.string.reader_pref_show_invisible),
-                        checked = options.showInvisibleElements,
-                    ) { onChange(options.copy(showInvisibleElements = it)) }
-                }
-                item {
-                    SwitchRow(
-                        label = stringResource(R.string.reader_pref_show_seek_bar),
-                        checked = showSeekBar,
-                    ) { onShowSeekBarChange(it) }
-                }
-            }
-
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-
-            // ── Parts (per-staff clef + visibility) ──────────────────
             item {
-                CollapsibleHeader(
-                    stringResource(R.string.reader_inspector_parts),
-                    partsExpanded,
-                ) { partsExpanded = !partsExpanded }
+                SwitchRow(
+                    label = stringResource(R.string.reader_pref_honor_breaks),
+                    checked = options.honorLayoutBreaks,
+                ) { onChange(options.copy(honorLayoutBreaks = it)) }
             }
-            if (partsExpanded) {
-                parts.forEachIndexed { index, part ->
-                    item(key = "part-$index") {
-                        PartRow(
-                            part = part,
-                            options = options,
-                            typeface = typeface,
-                            onChange = onChange,
-                        )
-                    }
+            item {
+                SwitchRow(
+                    label = stringResource(R.string.reader_pref_collapse_rests),
+                    checked = options.collapseMultiMeasureRests,
+                ) { onChange(options.copy(collapseMultiMeasureRests = it)) }
+            }
+            item {
+                SwitchRow(
+                    label = stringResource(R.string.reader_pref_show_invisible),
+                    checked = options.showInvisibleElements,
+                ) { onChange(options.copy(showInvisibleElements = it)) }
+            }
+            item {
+                SwitchRow(
+                    label = stringResource(R.string.reader_pref_show_seek_bar),
+                    checked = showSeekBar,
+                ) { onShowSeekBarChange(it) }
+            }
+        }
+
+        item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
+
+        // ── Parts (per-staff clef + visibility) ──────────────────
+        item {
+            CollapsibleHeader(
+                stringResource(R.string.reader_inspector_parts),
+                partsExpanded,
+            ) { partsExpanded = !partsExpanded }
+        }
+        if (partsExpanded) {
+            parts.forEachIndexed { index, part ->
+                item(key = "part-$index") {
+                    PartRow(
+                        part = part,
+                        options = options,
+                        typeface = typeface,
+                        onChange = onChange,
+                    )
                 }
             }
         }
