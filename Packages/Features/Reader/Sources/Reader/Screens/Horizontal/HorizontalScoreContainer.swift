@@ -41,6 +41,7 @@ struct HorizontalScoreContainer: View {
     var body: some View {
         GeometryReader { proxy in
             scrollContent(viewport: proxy.size)
+                .onAppear { eagerLayoutIfNeeded() }
                 .task(id: TaskKey(
                     score: score, size: staffSize,
                     honorLayoutBreaks: honorLayoutBreaks,
@@ -190,6 +191,17 @@ struct HorizontalScoreContainer: View {
                 : .disabled,
             showsInvisibleElements: showInvisibleElements,
         )
+    }
+
+    /// SwiftUI `#Preview` snapshots the view tree before the async `.task` (which hops to a detached background
+    /// `LayoutEngine.layout`) completes, so `document` is still nil and the score area renders blank. When running
+    /// under Xcode Previews, lay the score out synchronously on first appearance so the snapshot has a populated
+    /// `document`. No-op in the real app / live capture (those let the async path run and never enter this branch).
+    private func eagerLayoutIfNeeded() {
+        guard document == nil else { return }
+        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" else { return }
+        let natural = LayoutEngine.naturalContentWidth(score: score, options: scoreOptions)
+        document = LayoutEngine.layout(score: score, options: scoreOptions, availableWidth: natural)
     }
 
     private func rebuildLayout() async {

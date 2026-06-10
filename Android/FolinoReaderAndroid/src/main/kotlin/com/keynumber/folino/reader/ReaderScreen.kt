@@ -143,6 +143,13 @@ fun ReaderScreen(
     transposeSemitones: Int = 0,
     /** Persists the per-score transpose value (semitones) on user change. */
     persistTranspose: (Int) -> Unit = {},
+    /** True when this score is part of a playlist — passed to the playback inspector to show the
+     * continuation-mode row. */
+    isInPlaylist: Boolean = false,
+    /** Wire string for the current continuation mode (e.g. "playThrough", "repeatOne"). */
+    continuationModeWire: String = "playThrough",
+    /** Persists the continuation mode wire string on user change. */
+    onContinuationModeChange: (String) -> Unit = {},
     /** Global metronome-enabled flag (SettingsPrefs) — metronome is global on both platforms. */
     metronomeEnabled: Boolean = false,
     /** Writes the global metronome flag on user change. */
@@ -369,6 +376,10 @@ fun ReaderScreen(
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = persistStaffProgram,
             onPersistStaffVolume = persistStaffVolume,
+            partNames = mixerParts.map { it.name },
+            isInPlaylist = isInPlaylist,
+            continuationModeWire = continuationModeWire,
+            onContinuationModeChange = onContinuationModeChange,
         )
     }
     if (showDisplayInspector) {
@@ -381,6 +392,8 @@ fun ReaderScreen(
             onChange = onDisplayOptionsChange,
             showSeekBar = showSeekBar,
             onShowSeekBarChange = onShowSeekBarChange,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = persistTranspose,
         )
     }
 }

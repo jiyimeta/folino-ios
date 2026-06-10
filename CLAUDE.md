@@ -43,12 +43,12 @@ If you have unrelated edits in the same file, use `git stash`, edit again, and c
 | Action | Command |
 | --- | --- |
 | Regenerate Xcode project after editing `project.yml` | `xcodegen generate` |
-| Build app (project, simulator) | `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 16' -skipPackagePluginValidation build` |
-| Run app + UI tests | `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 16' -skipPackagePluginValidation test` |
-| Test one Swift package in isolation | `cd Packages/<Layer>/<Name> && swift test` |
-| Run a single Swift Testing suite/test | `swift test --filter <SuiteName>` |
+| Build app (project, simulator) | `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation build` |
+| Run app + UI tests | `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation test` |
+| Test one Swift package in isolation | `xcodebuild test -scheme <Pkg\|Pkg-Package> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'` (run from the package dir) |
+| Run a single Swift Testing suite/test | append `-only-testing:<Scheme>/<SuiteName>` to the command above |
 
-For feature-isolated iteration (SwiftUI previews, fast unit-test loop), open the relevant `Packages/.../Package.swift` directly in Xcode rather than the app project.
+`swift test` does **not** work in this repo: the SwiftLint build-tool plugin (applied to every package target) requires a macOS host context that the SwiftPM CLI can't satisfy, so package tests must go through `xcodebuild test` on an iOS Simulator destination. Use **iPhone 17 Pro Max** as the destination — it is the 6.9" device App Store Connect requires for screenshots, so standardizing on it keeps build/test and screenshot runs on one booted simulator (iPhone 16 is not installed). For feature-isolated iteration (SwiftUI previews, fast unit-test loop), open the relevant `Packages/.../Package.swift` directly in Xcode rather than the app project.
 
 ## Architecture (must respect)
 

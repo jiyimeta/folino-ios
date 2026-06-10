@@ -1,3 +1,16 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+// Shared upload-key signing secrets live outside any repo at ~/.android-keystores/keystore.properties
+// (storeFile is an absolute path; storePassword / keyAlias / keyPassword). Reused across all the
+// Harmolo Android apps and never committed. Loaded here so `release` produces a Play-uploadable AAB.
+val keystorePropertiesFile = File(System.getProperty("user.home"), ".android-keystores/keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,11 +26,15 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.keynumber.folino"
+        // Play package identity (Harmolo developer account). Kept distinct from `namespace`
+        // (com.keynumber.folino), which stays the code/JNI package and must not change — the
+        // eager-loaded JNI class names and generated wirelet bridges are keyed to it.
+        applicationId = "com.harmolo.folino"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Route screenshot capture output through the AndroidX Test Storage service so AGP pulls the
@@ -49,9 +66,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -125,6 +154,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
 
     // Instrumented screenshot harness (androidTest, runs on a connected device — the Reader renders
     // sheet music via native JNI that cannot run on the host JVM, so this is NOT a Robolectric test).

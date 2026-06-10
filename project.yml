@@ -62,7 +62,7 @@ packages:
     from: 11.0.0
   ScreenshotKit:
     url: git@github.com:jiyimeta/swift-screenshot-kit.git
-    revision: c583b524966dfb754c7f60b68ebe2dee9728c1b5
+    revision: bb620a8d26eb1f7d86221cde277309ed12896f73
 targets:
   Folino:
     type: application
@@ -223,6 +223,12 @@ targets:
         product: SheetMusicLayoutApple
       - package: swift-sheet-music
         product: SheetMusicMSCX
+      - package: swift-sheet-music
+        product: SheetMusicCore
+      - package: swift-sheet-music
+        product: SheetMusicLayout
+      - package: swift-sheet-music
+        product: SheetMusicUI
       - package: LicenseList
         product: LicenseList
       - package: ScreenshotKit

@@ -29,6 +29,7 @@ struct LibraryScene: View {
             ),
             layout: FolinoScreenshotLayout.layout(
                 for: idiom,
+                subtitleBullet: true,
                 innerStatusBarColor: Color(.systemGroupedBackground),
             ),
         ) {
