@@ -27,7 +27,10 @@ struct LibraryScene: View {
                 table: "ScreenshotStrings",
                 bundle: .forClass(ScreenshotStringsAnchor.self),
             ),
-            layout: FolinoScreenshotLayout.layout(for: idiom),
+            layout: FolinoScreenshotLayout.layout(
+                for: idiom,
+                innerStatusBarColor: Color(.systemGroupedBackground),
+            ),
         ) {
             LibraryRootScreen(
                 viewModel: LibraryViewModel(
@@ -50,6 +53,6 @@ struct LibraryScene: View {
     }
 }
 
-#Preview {
+#Preview(traits: .appStoreIPhone) {
     LibraryScene().environment(\.screenshotIdiom, .iPhone)
 }

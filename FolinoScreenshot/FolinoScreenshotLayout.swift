@@ -12,7 +12,11 @@ enum FolinoScreenshotLayout {
         endPoint: .bottom,
     )
 
-    static func layout(for idiom: ScreenshotIdiom, subtitleBullet: Bool = false) -> ScreenshotLayout {
+    static func layout(
+        for idiom: ScreenshotIdiom,
+        subtitleBullet: Bool = false,
+        innerStatusBarColor: Color = .white,
+    ) -> ScreenshotLayout {
         switch idiom {
         case .iPhone:
             .standard(
@@ -20,6 +24,7 @@ enum FolinoScreenshotLayout {
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
+                innerStatusBarColor: innerStatusBarColor,
                 background: background,
             )
         case .iPad:
@@ -28,6 +33,7 @@ enum FolinoScreenshotLayout {
                 titleColor: .black,
                 subtitleColor: .black.opacity(0.85),
                 subtitleBullet: subtitleBullet,
+                innerStatusBarColor: innerStatusBarColor,
                 background: background,
             )
         }
