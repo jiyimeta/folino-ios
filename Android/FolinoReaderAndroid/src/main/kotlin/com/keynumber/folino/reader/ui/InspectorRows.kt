@@ -19,7 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.keynumber.folino.reader.R
 
 /** Minimum height of a single-line inspector/settings row (Material one-line touch target). */
 val InspectorRowMinHeight = 48.dp
@@ -128,7 +130,7 @@ fun CollapsibleHeader(title: String, expanded: Boolean, onToggle: () -> Unit) {
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
         Icon(
             if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
+            contentDescription = if (expanded) stringResource(R.string.reader_section_collapse) else stringResource(R.string.reader_section_expand),
         )
     }
 }

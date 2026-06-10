@@ -142,11 +142,11 @@ fun PlaybackInspectorSheet(
         ) {
             // ── General (master / tempo / metronome) ────────────────
             item {
-                CollapsibleHeader("General", generalExpanded) { generalExpanded = !generalExpanded }
+                CollapsibleHeader(stringResource(R.string.reader_inspector_general), generalExpanded) { generalExpanded = !generalExpanded }
             }
             if (generalExpanded) {
                 item {
-                    InspectorRow(label = "Metronome", leadingIcon = Icons.Default.Timer) {
+                    InspectorRow(label = stringResource(R.string.reader_playback_metronome), leadingIcon = Icons.Default.Timer) {
                         // Metronome is a GLOBAL setting (SettingsPrefs), not per-score. The toggle
                         // writes the global flag; the Reader screen pushes that value into the engine
                         // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
@@ -182,7 +182,7 @@ fun PlaybackInspectorSheet(
                         leadingIcon = Icons.Default.VolumeUp,
                         label = {
                             Text(
-                                "Volume",
+                                stringResource(R.string.reader_playback_volume),
                                 Modifier.width(76.dp),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -242,7 +242,7 @@ fun PlaybackInspectorSheet(
             if (mixerExpanded) {
                 val groups = groupMixerByPart(mixerChannels, staffAddressByIndex, partNames)
                 if (groups.isEmpty()) {
-                    item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
+                    item { Text(stringResource(R.string.reader_mixer_empty), Modifier.padding(vertical = 4.dp)) }
                 } else {
                     groups.forEach { group ->
                         item(key = "part-${group.partIndex}") {
@@ -309,14 +309,14 @@ private fun TempoRow(
                     enabled = enabled && rate > minRate,
                     modifier = Modifier.size(32.dp),
                 ) {
-                    Icon(Icons.Default.Remove, contentDescription = "Decrease tempo", modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.reader_tempo_decrease), modifier = Modifier.size(16.dp))
                 }
                 IconButton(
                     onClick = { onRate(((bpm + 1) / openingQuarterBpm).toFloat().coerceIn(minRate, maxRate)) },
                     enabled = enabled && rate < maxRate,
                     modifier = Modifier.size(32.dp),
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Increase tempo", modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.reader_tempo_increase), modifier = Modifier.size(16.dp))
                 }
             }
             // Bottom line: percent readout + multiplier slider.
@@ -355,13 +355,13 @@ private fun ContinuationRow(
     onSelect: (String) -> Unit,
 ) {
     val modes = listOf(
-        "off" to "Off",
-        "playThrough" to "Continuous",
-        "loopPlaylist" to "Repeat All",
+        "off" to stringResource(R.string.reader_continuation_off),
+        "playThrough" to stringResource(R.string.reader_continuation_play_through),
+        "loopPlaylist" to stringResource(R.string.reader_continuation_loop),
     )
     Column(Modifier.fillMaxWidth()) {
         InspectorRow(
-            label = "Playlist",
+            label = stringResource(R.string.reader_inspector_continuation),
             leadingIcon = Icons.AutoMirrored.Filled.PlaylistPlay,
             leadingIconTint = MaterialTheme.colorScheme.primary,
         ) {
@@ -402,7 +402,7 @@ private fun ContinuationRow(
         }
         if (repeatActive) {
             Text(
-                "Looping this score — playback won't move to the next.",
+                stringResource(R.string.reader_continuation_repeat_active),
                 Modifier.padding(start = 32.dp, bottom = 4.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -558,7 +558,7 @@ private fun PartMixerSection(
             if (program != null) {
                 ProgramPickerButton(program = program, enabled = enabled, gmInstruments = gmInstruments, modifier = Modifier.weight(1.6f), onProgram = onProgram)
             } else {
-                Text("Drums", Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.reader_mixer_drums), Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
             }
         }
         // Per-staff volume + Solo/Mute.

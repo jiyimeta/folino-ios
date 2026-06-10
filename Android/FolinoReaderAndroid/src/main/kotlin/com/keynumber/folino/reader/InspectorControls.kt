@@ -62,14 +62,14 @@ internal fun TransposeRow(
                 enabled = enabled && semitones > -7,
                 modifier = Modifier.size(32.dp),
             ) {
-                Icon(Icons.Default.Remove, contentDescription = "Transpose down", modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.reader_transpose_down), modifier = Modifier.size(16.dp))
             }
             IconButton(
                 onClick = { onChange((semitones + 1).coerceAtMost(7)) },
                 enabled = enabled && semitones < 7,
                 modifier = Modifier.size(32.dp),
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Transpose up", modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.reader_transpose_up), modifier = Modifier.size(16.dp))
             }
         }
     }

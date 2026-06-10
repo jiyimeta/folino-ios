@@ -47,4 +47,19 @@
     <string name="reader_playback_pause">Pause</string>
     <string name="reader_playback_stop">Stop</string>
     <string name="reader_edit_info">Edit info</string>
+    <string name="reader_playback_metronome">Metronome</string>
+    <string name="reader_playback_volume">Volume</string>
+    <string name="reader_inspector_continuation">Playlist</string>
+    <string name="reader_continuation_off">Off</string>
+    <string name="reader_continuation_play_through">Continuous</string>
+    <string name="reader_continuation_loop">Repeat All</string>
+    <string name="reader_continuation_repeat_active">Looping this score — playback won\'t move to the next.</string>
+    <string name="reader_mixer_empty">No parts to mix.</string>
+    <string name="reader_mixer_drums">Drums</string>
+    <string name="reader_tempo_decrease">Decrease tempo</string>
+    <string name="reader_tempo_increase">Increase tempo</string>
+    <string name="reader_transpose_down">Transpose down</string>
+    <string name="reader_transpose_up">Transpose up</string>
+    <string name="reader_section_collapse">Collapse</string>
+    <string name="reader_section_expand">Expand</string>
 </resources>
