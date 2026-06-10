@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -69,6 +70,7 @@ import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.ReaderPipController
+import com.keynumber.folino.reader.PlaylistContinuationMode
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.CrashReporting
@@ -90,9 +92,11 @@ import com.keynumber.folino.ui.scoreinfo.EditScoreInfoScreen
 import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -430,7 +434,11 @@ private fun LibraryNavGraph(
                     viewModel = vm,
                     playlistId = id,
                     playlistName = name,
-                    onOpenScore = openReader,
+                    onOpenScore = { row ->
+                        vm.markOpened(row.id)
+                        val t = URLEncoder.encode(row.title, "UTF-8")
+                        nav.navigate("reader/${row.id}/$t?playlistId=$id")
+                    },
                     onBack = { nav.popBackStackIfResumed() },
                 )
             }
@@ -474,14 +482,23 @@ private fun LibraryNavGraph(
                 )
             }
             composable(
-                "reader/{id}/{title}",
+                "reader/{id}/{title}?playlistId={playlistId}",
                 arguments = listOf(
                     navArgument("id") { type = NavType.StringType },
                     navArgument("title") { type = NavType.StringType },
+                    navArgument("playlistId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
                 ),
             ) { entry ->
-                val id = entry.arguments?.getString("id") ?: ""
+                val navId = entry.arguments?.getString("id") ?: ""
                 val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+                val playlistId = entry.arguments?.getString("playlistId")
+                // In-place retarget anchor: seeded from the nav arg, advanced by the Reader's auto-advance.
+                // Keyed on navId so opening a different score from the library resets it.
+                var currentScoreId by rememberSaveable(navId) { mutableStateOf(navId) }
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
@@ -510,10 +527,10 @@ private fun LibraryNavGraph(
                 // AB-repeat + display-options lambdas are injected from here).
                 val prefsVm: ReaderPreferencesBridgeViewModel =
                     viewModel(
-                        key = "readerPrefs/$id",
+                        key = "readerPrefs/$currentScoreId",
                         factory = ReaderPreferencesController.factory(context.applicationContext),
                     )
-                LaunchedEffect(id) { prefsVm.open(id, defaultStaffSize = staffSize) }
+                LaunchedEffect(currentScoreId) { prefsVm.open(currentScoreId, defaultStaffSize = staffSize) }
                 val prefsState by prefsVm.state.collectAsState()
                 // Per-score staff visibility + clef overrides come from the bridge's imperative getters.
                 // Re-read them whenever the bridge state ticks (every per-staff mutation publishes a new
@@ -539,9 +556,9 @@ private fun LibraryNavGraph(
                     clefOverrides = perScoreClefs,
                 )
                 ReaderScreen(
-                    scoreId = id,
+                    scoreId = currentScoreId,
                     title = title,
-                    onEditInfo = { nav.navigate("editInfo/$id") },
+                    onEditInfo = { nav.navigate("editInfo/$currentScoreId") },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
@@ -619,12 +636,25 @@ private fun LibraryNavGraph(
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
                     initialRepeatModeLoader = { RepeatMode.fromWire(prefs.repeatMode.first()) },
                     loadAbRange = {
-                        abRepeatStore.loadAbRepeat(id)?.let { AbRepeatRange(it.first, it.second) }
+                        abRepeatStore.loadAbRepeat(currentScoreId)?.let { AbRepeatRange(it.first, it.second) }
                     },
                     persistAbRange = { r ->
-                        abRepeatStore.saveAbRepeat(id, r?.let { it.startMeasure to it.endMeasure })
+                        abRepeatStore.saveAbRepeat(currentScoreId, r?.let { it.startMeasure to it.endMeasure })
                     },
                     persistRepeatMode = { m -> scope.launch { prefs.setRepeatMode(m.wire) } },
+                    playlistId = playlistId,
+                    playlistQueueProvider = {
+                        playlistId?.let {
+                            withContext(Dispatchers.IO) { abRepeatStore.orderedLivePlaylistScoreIds(it) }
+                        } ?: emptyList()
+                    },
+                    continuationModeProvider = {
+                        PlaylistContinuationMode.fromWire(prefs.playlistContinuationMode.first())
+                    },
+                    persistContinuationMode = { m ->
+                        scope.launch { prefs.setPlaylistContinuationMode(m.wire) }
+                    },
+                    onRetargetScore = { next -> currentScoreId = next },
                     onBack = { nav.popBackStackIfResumed() },
                 )
             }
