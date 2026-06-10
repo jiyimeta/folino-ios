@@ -65,6 +65,7 @@ struct VerticalScoreContainer: View {
             let layoutWidth = max(proxy.size.width, staffSize * 4)
             scrollContent(viewport: proxy.size)
                 .onAppear { eagerLayoutIfNeeded(width: layoutWidth) }
+                .onChange(of: layoutWidth) { _, newWidth in eagerLayoutIfNeeded(width: newWidth) }
                 .task(id: TaskKey(
                     score: score, size: staffSize, width: layoutWidth,
                     honorLayoutBreaks: honorLayoutBreaks,
@@ -259,8 +260,11 @@ struct VerticalScoreContainer: View {
     /// under Xcode Previews, lay the score out synchronously on first appearance so the snapshot has a populated
     /// `document`. No-op in the real app / live capture (those let the async path run and never enter this branch).
     private func eagerLayoutIfNeeded(width: CGFloat) {
-        guard document == nil else { return }
         guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" else { return }
+        // Re-lay out whenever the width changes (not only when nil): `onAppear` can fire before the GeometryReader
+        // settles to its final width, so the first synchronous layout may be narrower than the viewport (leaving a
+        // right-side gap). Re-running on width change ensures the snapshot uses the settled width and fills the view.
+        guard document == nil || width != lastWidth else { return }
         document = LayoutEngine.layout(score: score, options: scoreOptions, availableWidth: width)
         lastWidth = width
     }
