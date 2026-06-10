@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -126,15 +128,22 @@ private fun SearchPill() {
 
 // The floating PiP window: a wide, short, rounded white surface holding the score (only staves 2/3/4)
 // with the playback cursor — matching Folino's real PiP, which is full-width and a few staves tall.
+//
+// ReaderSceneContent draws the whole page top-aligned, so the raw window would include the page's top
+// margin / measure-1 header above the staves and the next system's measure number below. To frame just
+// the first system tightly (as the real PiP does), the page is shifted up by `cropTop` and the card is
+// only `systemHeight` tall, clipping everything outside the three visible staves.
 @Composable
 private fun PipCard(modifier: Modifier = Modifier) {
+    val cropTop = 78.dp        // drop the top margin + measure-1/tempo header above the first staff
+    val systemHeight = 146.dp  // card height = just the three visible staves (cuts the next system)
     Surface(
-        modifier = modifier.fillMaxWidth().height(262.dp),
+        modifier = modifier.fillMaxWidth().height(systemHeight),
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 14.dp,
         color = Color.White,
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().clipToBounds().background(Color.White)) {
             val scene = rememberReaderSceneState { parts ->
                 // Keep ONLY flattened indices 1,2,3 visible: hide every other staff in the score.
                 val keep = HIDDEN_FLAT_INDICES
@@ -143,7 +152,9 @@ private fun PipCard(modifier: Modifier = Modifier) {
                 LayoutOptions.DEFAULT.copy(hiddenStaves = hidden)
             }
             if (scene != null) {
-                Box(Modifier.fillMaxSize().background(Color.White)) {
+                // Give ReaderSceneContent room to lay out the full page (it fills this box and fits to
+                // width), then offset it up so only the first system lands in the clipped card.
+                Box(Modifier.fillMaxWidth().height(560.dp).offset(y = -cropTop)) {
                     ReaderSceneContent(
                         state = scene.state,
                         scoreHandle = scene.scoreHandle,
