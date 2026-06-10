@@ -111,4 +111,5 @@
     <string name="edit_info_discard_title">Discard changes?</string>
     <string name="edit_info_discard_keep">Keep editing</string>
     <string name="edit_info_discard_confirm">Discard</string>
+    <string name="import_failed">Couldn\'t import this file.</string>
 </resources>
