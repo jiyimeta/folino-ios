@@ -110,6 +110,10 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
+    // Compose ui-test-junit4 (BOM 2024.09.02) pulls espresso-core 3.5.1, whose Espresso.onIdle
+    // reflects a private InputManager.getInstance() that was removed on Android 15/16 (API 35/36) —
+    // crashing every instrumented test on the API-36 Pixel. 3.6.1+ drops that reflection; pin 3.7.0.
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.0")
