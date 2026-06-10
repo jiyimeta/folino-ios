@@ -85,11 +85,10 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material3.Surface
@@ -560,18 +559,25 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         val marks by audioVm.rehearsalMarks.collectAsStateWithLifecycle()
-        val markFraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f
-        // Rehearsal-mark pills above the seek bar; tap to jump to that section. The row collapses to
-        // nothing when the score carries no marks. Positions/cursors come from the shared Swift side.
+        val liveFraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f
+        // While the user scrubs the rehearsal-mark row, the snapped mark is previewed on the seek bar
+        // (仮 seek); the real engine seek fires only on release. Null when not scrubbing the row.
+        var rehearsalPreview by remember { mutableStateOf<Float?>(null) }
+        // Rehearsal-mark pills above the seek bar; tap or drag (snapping to the nearest mark) to jump to
+        // a section. The row collapses to nothing when the score carries no marks. Positions/cursors
+        // come from the shared Swift side.
         RehearsalMarkBubbleRow(
             marks = marks,
-            currentFraction = markFraction,
+            currentFraction = liveFraction,
+            enabled = isPrepared,
             onSeek = { cursor -> if (isPrepared) engine?.seek(to = cursor) },
+            onPreview = { rehearsalPreview = it },
             modifier = Modifier.fillMaxWidth(),
         )
-        // Thumbless YouTube-Music-style seek bar; thickens while scrubbing.
+        // Thumbless YouTube-Music-style seek bar; thickens while scrubbing. Shows the rehearsal-row
+        // drag preview when scrubbing the marks, otherwise the live playback position.
         ReaderSeekBar(
-            fraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f,
+            fraction = rehearsalPreview ?: liveFraction,
             enabled = isPrepared,
             onSeek = { fraction -> if (totalSecs > 0) engine?.seek(fraction * totalSecs) },
             modifier = Modifier.fillMaxWidth(),
@@ -796,55 +802,150 @@ private fun ReaderSeekBar(
 
 /**
  * Row of rehearsal-mark pills laid out above the seek bar, each horizontally centered on its mark's
- * notated-time [RehearsalMarkEntry.fraction]. The mark at or before the current playback fraction is
- * filled (primary container) and drawn frontmost; the rest are outlined. Tapping a pill seeks to that
- * mark's cursor. Renders nothing when [marks] is empty — the positions/cursors are computed on the
- * Swift side (shared `Score.rehearsalMarks()`); this only lays out and styles.
+ * notated-time [RehearsalMarkEntry.fraction]. The highlighted pill (filled primary container, drawn
+ * frontmost) is the drag target while scrubbing, otherwise the mark at or before the live playback
+ * position.
+ *
+ * Interaction (whole-row, like the seek bar): a tap seeks to the nearest mark. A horizontal drag is a
+ * DISCRETE scrub — it snaps to the nearest mark as the finger moves and previews that position on the
+ * seek bar via [onPreview] (仮 seek), committing the real engine seek through [onSeek] only on release.
+ *
+ * Renders nothing when [marks] is empty — positions/cursors are computed on the Swift side (shared
+ * `Score.rehearsalMarks()`); this only lays out, styles, and routes the gesture.
  */
 @Composable
 private fun RehearsalMarkBubbleRow(
     marks: List<RehearsalMarkEntry>,
     currentFraction: Float,
+    enabled: Boolean,
     onSeek: (ScoreCursor) -> Unit,
+    onPreview: (Float?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (marks.isEmpty()) return
-    val currentIndex = marks.indexOfLast { it.fraction.toFloat() <= currentFraction }
     val density = LocalDensity.current
-    BoxWithConstraints(modifier.height(rehearsalBubbleRowHeight)) {
+    // The mark index currently snapped under the finger while dragging; null when not scrubbing.
+    var dragIndex by remember { mutableStateOf<Int?>(null) }
+    val playbackIndex = marks.indexOfLast { it.fraction.toFloat() <= currentFraction }
+    val highlightIndex = dragIndex ?: playbackIndex
+
+    fun nearestIndex(fraction: Float): Int =
+        marks.indices.minByOrNull { abs(marks[it].fraction.toFloat() - fraction) } ?: 0
+
+    BoxWithConstraints(
+        modifier
+            .height(rehearsalBubbleRowHeight)
+            .pointerInput(enabled, marks) {
+                if (!enabled) return@pointerInput
+                detectTapGestures { offset ->
+                    onSeek(marks[nearestIndex((offset.x / size.width).coerceIn(0f, 1f))].cursor)
+                }
+            }
+            .pointerInput(enabled, marks) {
+                if (!enabled) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        val idx = nearestIndex((offset.x / size.width).coerceIn(0f, 1f))
+                        dragIndex = idx
+                        onPreview(marks[idx].fraction.toFloat())
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        val idx = nearestIndex((change.position.x / size.width).coerceIn(0f, 1f))
+                        dragIndex = idx
+                        onPreview(marks[idx].fraction.toFloat())
+                    },
+                    onDragEnd = {
+                        dragIndex?.let { onSeek(marks[it].cursor) }
+                        dragIndex = null
+                        onPreview(null)
+                    },
+                    onDragCancel = {
+                        dragIndex = null
+                        onPreview(null)
+                    },
+                )
+            },
+    ) {
         val fullWidth = maxWidth
         marks.forEachIndexed { index, mark ->
-            // Center the pill on its fraction, clamped so it never spills past either edge. Width is
-            // unknown until first layout, so it start-anchors for one frame then settles centered.
+            // Center the pill BODY on its fraction, clamped so it never spills past either edge. The
+            // tail tip still points at the true fraction, so its horizontal position inside the body
+            // compensates for the clamp (matching iOS). Width is unknown until first layout, so the
+            // body start-anchors and the tail centers for one frame, then both settle.
             var pillWidth by remember(mark) { mutableStateOf(0.dp) }
             val anchor = fullWidth * mark.fraction.toFloat()
             val maxX = (fullWidth - pillWidth).coerceAtLeast(0.dp)
             val x = (anchor - pillWidth / 2).coerceIn(0.dp, maxX)
+            val tailFraction =
+                if (pillWidth.value > 0f) ((anchor.value - x.value) / pillWidth.value).coerceIn(0f, 1f) else 0.5f
             RehearsalMarkPill(
                 text = mark.text,
-                isCurrent = index == currentIndex,
+                isCurrent = index == highlightIndex,
+                tailCenterFraction = tailFraction,
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .zIndex(if (index == currentIndex) 1f else 0f)
+                    .align(Alignment.TopStart)
+                    .zIndex(if (index == highlightIndex) 1f else 0f)
                     .offset(x = x)
-                    .onGloballyPositioned { pillWidth = with(density) { it.size.width.toDp() } }
-                    .clickable { onSeek(mark.cursor) },
+                    .onGloballyPositioned { pillWidth = with(density) { it.size.width.toDp() } },
             )
         }
     }
 }
 
-/** A single rehearsal-mark pill: filled when it is the current section, outlined otherwise. */
+/** Width / height of the downward speech-bubble tail under each rehearsal-mark pill. */
+private val rehearsalTailWidth = 9.dp
+private val rehearsalTailHeight = 5.dp
+
+/**
+ * A single rehearsal-mark pill with a downward speech-bubble tail (iOS parity). The tail tip points at
+ * [tailCenterFraction] (0..1 across the body width) so it marks the true timeline position even when the
+ * body is clamped to stay on-screen. Filled when current, outlined otherwise.
+ */
 @Composable
-private fun RehearsalMarkPill(text: String, isCurrent: Boolean, modifier: Modifier = Modifier) {
+private fun RehearsalMarkPill(
+    text: String,
+    isCurrent: Boolean,
+    tailCenterFraction: Float,
+    modifier: Modifier = Modifier,
+) {
     val container =
         if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
     val content =
         if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val density = LocalDensity.current
+    val tailW = with(density) { rehearsalTailWidth.toPx() }
+    val tailH = with(density) { rehearsalTailHeight.toPx() }
+    val cornerPx = with(density) { 8.dp.toPx() }
+    val shape = remember(tailCenterFraction, tailW, tailH, cornerPx) {
+        GenericShape { size, _ ->
+            // ONE continuous outline: a rounded-rect body whose bottom edge detours straight down into
+            // the triangle tail and back up, so the body + tail read as a single bubble with no inner
+            // seam (mirrors iOS, which strokes a single path). The tip points at [tailCenterFraction].
+            val bodyBottom = size.height - tailH
+            val r = minOf(cornerPx, bodyBottom / 2f)
+            val half = tailW / 2f
+            // Keep the tail base on the straight part of the bottom edge (clear of the rounded corners).
+            val tip = (tailCenterFraction * size.width)
+                .coerceIn(r + half, (size.width - r - half).coerceAtLeast(r + half))
+            moveTo(r, 0f)
+            lineTo(size.width - r, 0f)
+            quadraticBezierTo(size.width, 0f, size.width, r)
+            lineTo(size.width, bodyBottom - r)
+            quadraticBezierTo(size.width, bodyBottom, size.width - r, bodyBottom)
+            lineTo(tip + half, bodyBottom)
+            lineTo(tip, size.height)
+            lineTo(tip - half, bodyBottom)
+            lineTo(r, bodyBottom)
+            quadraticBezierTo(0f, bodyBottom, 0f, bodyBottom - r)
+            lineTo(0f, r)
+            quadraticBezierTo(0f, 0f, r, 0f)
+            close()
+        }
+    }
     Surface(
         color = container,
         contentColor = content,
-        shape = RoundedCornerShape(percent = 50),
+        shape = shape,
         border = if (isCurrent) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier,
     ) {
@@ -853,7 +954,10 @@ private fun RehearsalMarkPill(text: String, isCurrent: Boolean, modifier: Modifi
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.widthIn(max = 96.dp).padding(horizontal = 8.dp, vertical = 2.dp),
+            // Reserve the tail strip below the text so the glyphs stay in the body.
+            modifier = Modifier
+                .widthIn(max = 96.dp)
+                .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 2.dp + rehearsalTailHeight),
         )
     }
 }
