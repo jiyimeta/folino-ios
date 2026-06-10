@@ -1,6 +1,7 @@
 package com.keynumber.folino.screenshot
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import com.keynumber.folino.screenshot.fixtures.WithAppLocale
 import com.keynumber.folino.screenshot.scenes.Scene
 import com.keynumber.folino.screenshot.scenes.Scenes
 import org.junit.Rule
@@ -31,7 +32,9 @@ class ScreenshotTest(
         val order = scene.order.toString().padStart(2, '0')
         val path = "${device.alias}/${locale.playLocale}/$order.png"
         composeRule.captureFixedSize(device.widthPx, device.heightPx, path) {
-            scene.content(device.layout(), locale.tag)
+            WithAppLocale(locale.tag) {
+                scene.content(device.layout(), locale.tag)
+            }
         }
     }
 
