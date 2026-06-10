@@ -125,6 +125,14 @@ fun ReaderScreen(
     metronomeEnabled: Boolean = false,
     /** Writes the global metronome flag on user change. */
     onMetronomeChange: (Boolean) -> Unit = {},
+    /** Persisted per-score program overrides to replay on open, keyed by positional staff address. */
+    mixerProgramOverrides: () -> List<Pair<StaffAddress, Int>> = { emptyList() },
+    /** Persisted per-score volume overrides to replay on open, keyed by positional staff address. */
+    mixerVolumeOverrides: () -> List<Pair<StaffAddress, Float>> = { emptyList() },
+    /** Persists a per-score program override after the live engine update. */
+    persistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Persists a per-score volume override after the live engine update. */
+    persistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
@@ -181,6 +189,29 @@ fun ReaderScreen(
     // soundfont-reload re-push keeps it, and re-push whenever the global flag changes.
     LaunchedEffect(metronomeEnabled, scoreHandle) {
         audioVm.setMetronomeEnabled(metronomeEnabled)
+    }
+    // Parts descriptor → flat staffIndex map: the mixer addresses channels by a flat staffIndex, the
+    // ReaderPreferences bridge persists overrides by positional StaffAddress. This map (built from the
+    // same parts→staves enumeration the engine uses) bridges the two for both replay and persistence.
+    val mixerParts by readerVm.parts.collectAsStateWithLifecycle()
+    val staffAddressByIndex = remember(mixerParts) { mixerParts.staffAddressByIndex() }
+    val addressToIndex = remember(staffAddressByIndex) {
+        staffAddressByIndex.entries.associate { (index, addr) -> addr to index }
+    }
+    // Replay persisted per-staff mixer overrides after each prepare. Resolve each saved StaffAddress to
+    // its current flat staffIndex via the parts map; skip any address that doesn't resolve (guards the
+    // channel-order assumption against a score whose part/staff layout changed since the override was
+    // saved). Solo / mute are session-only and intentionally not replayed.
+    LaunchedEffect(scoreHandle, addressToIndex) {
+        audioVm.installOnPrepared {
+            val engine = audioVm.engine.value ?: return@installOnPrepared
+            mixerProgramOverrides().forEach { (addr, program) ->
+                addressToIndex[addr]?.let { engine.setStaffProgram(it, program) }
+            }
+            mixerVolumeOverrides().forEach { (addr, volume) ->
+                addressToIndex[addr]?.let { engine.setStaffVolume(it, volume) }
+            }
+        }
     }
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
     LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
@@ -326,6 +357,9 @@ fun ReaderScreen(
             onPersistMasterVolume = persistMasterVolume,
             onPersistTempoMultiplier = persistTempoMultiplier,
             onPersistA4ReferenceHz = persistA4ReferenceHz,
+            staffAddressByIndex = staffAddressByIndex,
+            onPersistStaffProgram = persistStaffProgram,
+            onPersistStaffVolume = persistStaffVolume,
         )
     }
     if (showDisplayInspector) {

@@ -592,6 +592,24 @@ private fun LibraryNavGraph(
                     persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
+                    // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
+                    // Reader resolves address↔flat-staffIndex via its parts map for replay + persistence.
+                    mixerProgramOverrides = {
+                        prefsVm.programOverrides().map {
+                            ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.program
+                        }
+                    },
+                    mixerVolumeOverrides = {
+                        prefsVm.volumeOverrides().map {
+                            ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.volume.toFloat()
+                        }
+                    },
+                    persistStaffProgram = { addr, program ->
+                        prefsVm.setStaffProgram(addr.partIndex, addr.staffIndexInPart, program)
+                    },
+                    persistStaffVolume = { addr, volume ->
+                        prefsVm.setStaffVolume(addr.partIndex, addr.staffIndexInPart, volume.toDouble())
+                    },
                     pipEnabled = pipEnabled,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },

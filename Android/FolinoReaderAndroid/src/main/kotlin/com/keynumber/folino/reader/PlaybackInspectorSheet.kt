@@ -99,6 +99,12 @@ fun PlaybackInspectorSheet(
     onPersistTempoMultiplier: (Double) -> Unit = {},
     /** Persists the per-score A4 reference pitch after the live engine/VM update. */
     onPersistA4ReferenceHz: (Double) -> Unit = {},
+    /** Flat mixer staffIndex -> positional StaffAddress, for persisting per-staff overrides. */
+    staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
+    /** Persists a per-score program override (by staff address) after the live engine update. */
+    onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Persists a per-score volume override (by staff address) after the live engine update. */
+    onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
 ) {
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val mixerChannels by audioVm.mixerChannels.collectAsStateWithLifecycle()
@@ -228,14 +234,23 @@ fun PlaybackInspectorSheet(
                     item { Text("No parts to mix.", Modifier.padding(vertical = 4.dp)) }
                 } else {
                     items(mixerChannels, key = { it.staffIndex }) { channel ->
+                        // The flat mixer staffIndex maps to a positional StaffAddress for persistence;
+                        // mute / solo stay session-only (not persisted), matching iOS.
+                        val address = staffAddressByIndex[channel.staffIndex]
                         MixerRow(
                             channel = channel,
                             enabled = controlsEnabled,
                             gmInstruments = gmInstruments,
-                            onVolume = { engine?.setStaffVolume(channel.staffIndex, it) },
+                            onVolume = {
+                                engine?.setStaffVolume(channel.staffIndex, it)
+                                address?.let { a -> onPersistStaffVolume(a, it) }
+                            },
                             onMute = { engine?.setStaffMuted(channel.staffIndex, it) },
                             onSolo = { engine?.setStaffSoloed(channel.staffIndex, it) },
-                            onProgram = { engine?.setStaffProgram(channel.staffIndex, it) },
+                            onProgram = {
+                                engine?.setStaffProgram(channel.staffIndex, it)
+                                address?.let { a -> onPersistStaffProgram(a, it) }
+                            },
                         )
                         // Per-row separator — Material has no Form-style automatic divider,
                         // so we add a light one between staves for visual grouping.

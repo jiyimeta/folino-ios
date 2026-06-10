@@ -198,6 +198,16 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         setA4ReferenceHz(hz)
     }
 
+    // Hook run once each time a player finishes preparing (inside [preparePlayback], after the seeds +
+    // loop are reapplied). The Reader screen installs this to replay persisted per-staff mixer overrides
+    // onto the engine — it needs to run after prepare because the engine's mixer channels only exist
+    // once a score is prepared, and a fresh player resets program / volume to score defaults.
+    private var onPrepared: (() -> Unit)? = null
+
+    fun installOnPrepared(callback: () -> Unit) {
+        onPrepared = callback
+    }
+
     // Tempo multiplier (engine rate) the score opened with. Held so [preparePlayback] can re-apply it
     // after prepare (a freshly prepared FluidSynth player resets to rate 1.0, same as it resets master
     // volume / metronome — see the soundfont-reload re-push). The inspector reads the live rate from
@@ -269,6 +279,9 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
                 // Re-apply the active loop now that a player is prepared (engine loop calls are
                 // no-ops before prepare). Restores a persisted A–B range or full-score loop.
                 _repeatController.value?.reapply()
+                // Replay persisted per-staff mixer overrides (program / volume). Runs after prepare so
+                // the engine has its mixer channels and the fresh player's defaults are overwritten.
+                onPrepared?.invoke()
                 // Record the handle so the service can re-prepare (hot-swap) the engine when a
                 // high-quality soundfont download completes.
                 serviceBinder?.notePreparedScore(scoreHandle)

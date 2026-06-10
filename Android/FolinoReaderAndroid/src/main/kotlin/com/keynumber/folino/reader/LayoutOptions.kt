@@ -104,3 +104,14 @@ data class StaffDescriptor(val address: StaffAddress, val defaultClefRawType: St
 
 /** One part (instrument) with its staves, for the inspector's Parts section. */
 data class PartDescriptor(val name: String, val staves: List<StaffDescriptor>)
+
+/**
+ * Flat `staffIndex -> StaffAddress` map for the mixer. The engine addresses mixer channels by a flat
+ * `staffIndex` that enumerates every part's staves in part-then-staff order; the descriptor list is
+ * built in that same order ([ReaderViewModel.loadParts]), so the Nth flattened staff's address is the
+ * channel at `staffIndex == N`. Used to translate a mixer row's flat index into the per-staff
+ * [StaffAddress] the ReaderPreferences bridge persists program / volume overrides against, and to
+ * replay persisted overrides (address -> index) onto the engine on open.
+ */
+fun List<PartDescriptor>.staffAddressByIndex(): Map<Int, StaffAddress> =
+    flatMap { it.staves }.mapIndexed { index, staff -> index to staff.address }.toMap()
