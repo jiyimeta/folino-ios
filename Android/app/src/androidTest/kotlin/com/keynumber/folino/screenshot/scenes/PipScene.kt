@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.ReaderLayoutMode
+import com.keynumber.folino.reader.nearestCursorForTap
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
@@ -44,8 +46,11 @@ import com.keynumber.folino.screenshot.fixtures.rememberReaderSceneState
 import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
 import com.keynumber.folino.ui.theme.FolinoTheme
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
+import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
+import kotlinx.coroutines.flow.MutableStateFlow
 
 // PiP scene: mirrors Folino's real picture-in-picture window — a WIDE card pinned near the TOP of the
 // home screen showing the score in HORIZONTAL layout (one continuous single-system row) with only staves
@@ -198,11 +203,33 @@ private fun PipCard(modifier: Modifier = Modifier) {
     }
     val contentWidthPx = page.widthMM.toFloat() * fitPxPerMM
     val contentHeightPx = page.heightMM.toFloat() * fitPxPerMM
-    val scrollLeft: Dp = with(density) { (PIP_SCROLL_LEFT_MM.toFloat() * fitPxPerMM).toDp() }
-    val topPad: Dp = with(density) { (PIP_VPAD_MM.toFloat() * fitPxPerMM).toDp() }
+    // Horizontal scroll (px) past the staff header, and the top air (px), as applied to the score row.
+    val scrollLeftPx = PIP_SCROLL_LEFT_MM.toFloat() * fitPxPerMM
+    val topPadPx = PIP_VPAD_MM.toFloat() * fitPxPerMM
+    val scrollLeft: Dp = with(density) { scrollLeftPx.toDp() }
+    val topPad: Dp = with(density) { topPadPx.toDp() }
 
+    // Static playback cursor, recomputed once the strip is laid out. The overlay is layered as a sibling
+    // of the score INSIDE the same content-sized, scroll/pad-offset Box, so both share the page's local
+    // coordinate space (origin = page top-left, document mm * fitPxPerMM). That means the overlay needs no
+    // panOffset and the hit-test no contentOffsetPx — the tap is already expressed in page-content px.
+    //
+    // Pick a tap on a VISIBLE note: x is past the left-scroll (so it lands inside the window the card
+    // shows, on notes rather than the clef/key header), y at the vertical center of the three-staff strip.
+    val cursorFlow = remember { MutableStateFlow<ScoreCursor?>(null) }
     LaunchedEffect(scene.scoreHandle, fitPxPerMM, cardWidthPx) {
-        if (fitPxPerMM <= 0f) return@LaunchedEffect
+        if (fitPxPerMM <= 0f || cardWidthPx <= 0) return@LaunchedEffect
+        val tapX = scrollLeftPx + cardWidthPx.toFloat() * 0.18f
+        val tapY = contentHeightPx * 0.5f
+        val cursor = nearestCursorForTap(
+            tap = Offset(tapX, tapY),
+            contentOffsetPx = Offset.Zero,
+            pxPerMM = fitPxPerMM,
+            scale = 1f,
+            scoreHandle = scene.scoreHandle,
+            layoutOptionsBytes = scene.layoutOptions.encode(),
+        )
+        if (cursor != null) cursorFlow.value = cursor
         kotlinx.coroutines.delay(400)
         SceneReady.signalReady()
     }
@@ -233,6 +260,17 @@ private fun PipCard(modifier: Modifier = Modifier) {
                         page = page,
                         fontProvider = fontProvider,
                         pxPerMM = fitPxPerMM,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    // Layered over the score in the SAME content space (page top-left origin), so the
+                    // cursor line maps document mm → px identically to ScorePage; no pan needed because
+                    // the enclosing offset Box already applies the strip's left-scroll + top air.
+                    PlaybackCursorOverlay(
+                        scoreHandle = scene.scoreHandle,
+                        cursorFlow = cursorFlow,
+                        pxPerMM = fitPxPerMM,
+                        scale = 1f,
+                        panOffset = Offset.Zero,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
