@@ -32,6 +32,7 @@ fun ScreenshotFrame(
     title: String,
     subtitle: String?,
     layout: ScreenshotLayout,
+    subtitleBullet: Boolean = false,
     overlay: @Composable () -> Unit = {},
     inner: @Composable () -> Unit,
 ) {
@@ -56,14 +57,25 @@ fun ScreenshotFrame(
                 .padding(horizontal = layout.horizontalPadding),
         )
 
-        // Subtitle (top-anchored just below the title so 1- or 2-line copy grows downward into the
-        // gap above the device frame instead of overlapping it).
+        // Subtitle (top-anchored just below the title so 1- to 3-line copy grows downward into the
+        // gap above the device frame instead of overlapping it). When `subtitleBullet` is true the
+        // copy renders as a left-aligned bulleted list, matching iOS ScreenshotKit: each non-empty
+        // line becomes "•  <line>" (U+2022 + two spaces), empty lines stay empty, joined by "\n", and
+        // text is left-aligned (TextAlign.Start). Otherwise the raw subtitle renders centered.
         if (subtitle != null) {
+            val subtitleText = if (subtitleBullet) {
+                subtitle.split("\n").joinToString("\n") { line ->
+                    if (line.isEmpty()) "" else "•  $line"
+                }
+            } else {
+                subtitle
+            }
             Text(
-                text = subtitle,
+                text = subtitleText,
                 color = layout.subtitleColor,
                 fontSize = layout.subtitleFontSize,
-                textAlign = TextAlign.Center,
+                textAlign = if (subtitleBullet) TextAlign.Start else TextAlign.Center,
+                maxLines = 3,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = h * layout.subtitleTopFraction)

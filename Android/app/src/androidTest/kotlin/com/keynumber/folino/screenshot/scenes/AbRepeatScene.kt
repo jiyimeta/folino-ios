@@ -84,7 +84,7 @@ private fun loopBand(accent: Color): Color = accent.copy(alpha = 0.18f)
 @Composable
 fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("AbRepeat", tag)
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
             // VERTICAL (one continuous stacked page) layout: the whole score lays out as ONE tall page in a
             // single coordinate space, so `nativeMeasureFrame` / `nativeLoopHighlightRects` x/y align with

@@ -19,4 +19,7 @@ enum class Device(
 enum class ScreenshotLocale(val tag: String, val playLocale: String) {
     EN("en", "en-US"),
     JA("ja", "ja-JP"),
+    KO("ko", "ko-KR"),
+    ZH_HANS("zh-Hans", "zh-CN"),
+    ZH_HANT("zh-Hant", "zh-TW"),
 }

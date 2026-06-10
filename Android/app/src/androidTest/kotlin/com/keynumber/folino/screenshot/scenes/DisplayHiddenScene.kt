@@ -48,7 +48,7 @@ internal fun List<PartDescriptor>.addressesForFlatIndices(flatIndices: Set<Int>)
 @Composable
 fun DisplayHiddenScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("DisplayHidden", tag)
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
             val scene = rememberReaderSceneState { parts ->
                 val hidden = parts?.addressesForFlatIndices(HIDDEN_FLAT_INDICES) ?: emptySet()

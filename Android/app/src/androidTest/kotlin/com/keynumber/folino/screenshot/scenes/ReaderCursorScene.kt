@@ -33,7 +33,7 @@ import com.keynumber.folino.ui.theme.FolinoTheme
 @Composable
 fun ReaderCursorScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("ReaderCursor", tag)
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
             val scene = rememberReaderSceneState {
                 LayoutOptions.DEFAULT.copy(

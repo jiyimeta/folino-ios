@@ -68,7 +68,7 @@ fun LibraryScene(layout: ScreenshotLayout, tag: String) {
         kotlinx.coroutines.delay(500)
         android.util.Log.e("ScreenshotLib", "afterDelay vmScores=${viewModel.scores.value.size}")
     }
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
             LibraryScreen(
                 viewModel = viewModel,

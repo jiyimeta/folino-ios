@@ -46,7 +46,7 @@ import com.keynumber.folino.ui.theme.FolinoTheme
 @Composable
 fun LoopAllScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("LoopAll", tag)
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
             val scene = rememberReaderSceneState {
                 LayoutOptions.DEFAULT.copy(

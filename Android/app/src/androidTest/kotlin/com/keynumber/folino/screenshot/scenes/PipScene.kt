@@ -61,7 +61,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 @Composable
 fun PipScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("Pip", tag)
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
             Box(Modifier.fillMaxSize()) {
                 FauxHomeScreen()
