@@ -2,6 +2,9 @@ import SwiftUI
 
 struct TransposeRow: View {
     @Bindable var transposeModel: TransposeModel
+    /// The Playback inspector keeps a leading icon to match its other icon-led rows; the Visual inspector's rows have
+    /// no leading icons, so it opts out here.
+    var showsIcon = true
 
     var body: some View {
         let binding = Binding<Int>(
@@ -9,8 +12,10 @@ struct TransposeRow: View {
             set: { newValue in Task { await transposeModel.setSemitones(newValue) } },
         )
         HStack(spacing: 8) {
-            Image(systemName: "arrow.up.arrow.down")
-                .foregroundStyle(Color.accentColor)
+            if showsIcon {
+                Image(systemName: "arrow.up.arrow.down")
+                    .foregroundStyle(Color.accentColor)
+            }
             Text("reader.inspector.transpose", bundle: .module)
             Spacer()
             Button {
