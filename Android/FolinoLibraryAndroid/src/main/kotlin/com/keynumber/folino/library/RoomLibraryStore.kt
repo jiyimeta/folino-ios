@@ -367,4 +367,26 @@ class RoomLibraryStore(context: Context) : LibraryStore, ReaderPreferencesStore 
     override fun saveJSON(scoreId: String, json: String) {
         db.readerPreferencesDao().upsert(ReaderPreferencesEntity(scoreId, json))
     }
+
+    /** Live, position-ordered score ids for [playlistId] (or empty). Backs the Reader's auto-advance. */
+    fun orderedLivePlaylistScoreIds(playlistId: String): List<String> =
+        com.keynumber.folino.library.orderedLivePlaylistScoreIds(loadPlaylistItems(), loadAll(), playlistId)
+}
+
+/**
+ * A playlist's score ids in `position` order, filtered to the requested playlist and to live scores.
+ * "Live" = `deletedAt == 0.0` (the soft-delete sentinel; a non-zero `deletedAt` is a tombstone).
+ * Pure so it is unit-tested without Room. Mirrors iOS `orderedLiveIDs()` — used by the Reader's
+ * playlist auto-advance to skip scores deleted mid-session.
+ */
+internal fun orderedLivePlaylistScoreIds(
+    items: List<PlaylistItemWire>,
+    scores: List<ScoreRecordWire>,
+    playlistId: String,
+): List<String> {
+    val live = scores.filter { it.deletedAt == 0.0 }.map { it.id }.toSet()
+    return items.filter { it.playlistId == playlistId }
+        .sortedBy { it.position }
+        .map { it.scoreItemId }
+        .filter { it in live }
 }
