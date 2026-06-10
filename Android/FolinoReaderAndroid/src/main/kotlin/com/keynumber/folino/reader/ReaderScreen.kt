@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -75,6 +76,7 @@ import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
+import io.github.jiyimeta.sheetmusic.compose.cursor.LoopHighlightOverlay
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
@@ -113,6 +115,7 @@ fun ReaderScreen(
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
     onBack: () -> Unit,
+    onEditInfo: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
     /** Global A4 reference pitch default (Hz) from SettingsPrefs, seeded into the audio VM at
@@ -123,6 +126,15 @@ fun ReaderScreen(
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
+    /** Loads the persisted global repeat mode (suspending so the DataStore value is resolved before
+     * the controller is installed). */
+    initialRepeatModeLoader: suspend () -> RepeatMode = { RepeatMode.OFF },
+    /** Loads this score's persisted A–B range (per-score Room row), or null. */
+    loadAbRange: () -> AbRepeatRange? = { null },
+    /** Persists this score's A–B range (null clears it). */
+    persistAbRange: (AbRepeatRange?) -> Unit = {},
+    /** Persists the global sticky repeat mode. */
+    persistRepeatMode: (RepeatMode) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -136,6 +148,17 @@ fun ReaderScreen(
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
     LaunchedEffect(scoreId) { readerVm.load(scoreId) }
+    // Install the repeat controller once per score: resolve the persisted global mode (suspending)
+    // and wire per-score A–B persistence. The controller loads any saved A–B range here; the active
+    // loop is (re)applied after the engine finishes preparing.
+    LaunchedEffect(scoreId) {
+        audioVm.installRepeatController(
+            initialMode = initialRepeatModeLoader(),
+            loadRange = loadAbRange,
+            persistRange = persistAbRange,
+            persistMode = persistRepeatMode,
+        )
+    }
     LaunchedEffect(scoreHandle) {
         scoreHandle?.let {
             // Seed the per-score live A4 from the global default before prepare, so
@@ -216,6 +239,12 @@ fun ReaderScreen(
                                 contentDescription = "Picture in Picture",
                             )
                         }
+                    }
+                    IconButton(onClick = onEditInfo) {
+                        Icon(
+                            Icons.Outlined.Info,
+                            contentDescription = stringResource(R.string.reader_edit_info),
+                        )
                     }
                     IconButton(onClick = { showInspector = true }) {
                         Icon(Icons.Default.Tune, contentDescription = "Playback controls")
@@ -449,6 +478,9 @@ private fun ReadyScore(
                         .fillMaxWidth()
                         .padding(vertical = with(density) { vPadPx.toDp() }),
                 )
+                val abAccent = MaterialTheme.colorScheme.primary
+                val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+                val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                 scoreHandle?.let { handle ->
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
@@ -456,6 +488,29 @@ private fun ReadyScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = with(density) { vPadPx.toDp() }),
+                    )
+                    LoopHighlightOverlay(
+                        scoreHandle = handle,
+                        loopRangeFlow = audioVm.loopRange,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset.Zero,
+                        color = abAccent.copy(alpha = 0.15f),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = with(density) { vPadPx.toDp() }),
+                    )
+                    AbBoundaryMarkersOverlay(
+                        scoreHandle = handle,
+                        aMeasure = aPending,
+                        bMeasure = bPending,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset.Zero,
+                        color = abAccent,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
@@ -491,6 +546,9 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
     val currentSecs by audioVm.currentTimeSeconds.collectAsStateWithLifecycle()
     val totalSecs by audioVm.totalTimeSeconds.collectAsStateWithLifecycle()
     val engine by audioVm.engine.collectAsStateWithLifecycle()
+    val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
+    val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+    val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
 
     val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
@@ -611,6 +669,17 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                         modifier = Modifier.size(measureStepIconSize),
                     )
                 }
+            }
+            // A/B endpoint pill: trailing edge, only in A–B loop mode (mirroring iOS placement).
+            if (repeatMode == RepeatMode.AB_LOOP) {
+                AbEndpointButtons(
+                    aSet = aMarked != null,
+                    bSet = bMarked != null,
+                    enabled = isPrepared,
+                    onSetA = { audioVm.setRepeatA() },
+                    onSetB = { audioVm.setRepeatB() },
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
             }
         }
     }
@@ -799,6 +868,9 @@ private fun RehearsalMarkPill(text: String, isCurrent: Boolean, modifier: Modifi
 private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val engine by audioVm.engine.collectAsStateWithLifecycle()
+    val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
+    val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+    val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
     val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
     // FABs have no `enabled` param, so we dim their colors when not prepared to mirror
@@ -814,6 +886,16 @@ private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // A/B endpoint pill leads the FAB cluster, only in A–B loop mode.
+        if (repeatMode == RepeatMode.AB_LOOP) {
+            AbEndpointButtons(
+                aSet = aMarked != null,
+                bSet = bMarked != null,
+                enabled = isPrepared,
+                onSetA = { audioVm.setRepeatA() },
+                onSetB = { audioVm.setRepeatB() },
+            )
+        }
         SmallFloatingActionButton(
             onClick = { if (isPrepared) engine?.seek(0.0) },
             containerColor = fabContainerColor,
@@ -1034,6 +1116,9 @@ internal fun HorizontalScore(
                         pxPerMM = fitPxPerMM * scale,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    val abAccent = MaterialTheme.colorScheme.primary
+                    val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+                    val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                     scoreHandle?.let { handle ->
                         PlaybackCursorOverlay(
                             scoreHandle = handle,
@@ -1041,6 +1126,25 @@ internal fun HorizontalScore(
                             pxPerMM = fitPxPerMM,
                             scale = scale,
                             panOffset = Offset.Zero,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        LoopHighlightOverlay(
+                            scoreHandle = handle,
+                            loopRangeFlow = audioVm.loopRange,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            panOffset = Offset.Zero,
+                            color = abAccent.copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        AbBoundaryMarkersOverlay(
+                            scoreHandle = handle,
+                            aMeasure = aPending,
+                            bMeasure = bPending,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            panOffset = Offset.Zero,
+                            color = abAccent,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

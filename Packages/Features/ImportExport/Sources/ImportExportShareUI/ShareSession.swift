@@ -54,7 +54,7 @@ public final class ShareSession {
                 let name = url.lastPathComponent
                 logger.notice("provider[\(index, privacy: .public)] loaded name=\(name, privacy: .public)")
                 logger.notice("provider[\(index, privacy: .public)] ext=\(ext, privacy: .public)")
-                guard Self.acceptedExtensions.contains(ext) else {
+                guard ShareImportPolicy.acceptedExtensions.contains(ext) else {
                     logger.notice("provider[\(index, privacy: .public)] rejected by extension allow-list")
                     unsupported += 1
                     continue
@@ -134,10 +134,6 @@ public final class ShareSession {
 
     private static let urlOnlyIdentifiers: Set = [
         "public.url", "public.file-url", "public.data", "public.item",
-    ]
-
-    private static let acceptedExtensions: Set = [
-        "mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid",
     ]
 
     public func finalize(

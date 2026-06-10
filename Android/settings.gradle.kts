@@ -54,5 +54,6 @@ dependencyResolutionManagement {
 rootProject.name = "FolinoAndroid"
 include(":FolinoSettingsAndroid")
 include(":FolinoLibraryAndroid")
+include(":FolinoSoundfontAndroid")
 include(":FolinoReaderAndroid")
 include(":app")

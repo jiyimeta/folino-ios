@@ -11,14 +11,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.ScreenLockPortrait
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.ViewArray
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,9 +34,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Repeat
 import com.keynumber.folino.BuildConfig
 import com.keynumber.folino.R
 import com.keynumber.folino.diagnostics.CrashReporting
+import com.keynumber.folino.reader.RepeatMode
+import com.keynumber.folino.reader.RepeatModePicker
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -49,6 +58,21 @@ fun SettingsScreen(
     val layout by prefs.layoutMode.collectAsState(initial = "page")
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
+    val repeatModeWire by prefs.repeatMode.collectAsState(initial = "off")
+    val soundfontVM = remember { com.keynumber.folino.soundfont.SoundfontController.viewModel(context) }
+    val sfState by soundfontVM.stateWire.collectAsState()
+
+    // Self-heal: while the bridge reports an in-flight download, periodically re-evaluate from disk. The moment the
+    // file is fully written, `startDownloadIfNeeded()` flips the state to `downloaded`, so the UI always converges
+    // even if a terminal observable update is ever missed. A no-op while the file is genuinely still downloading.
+    LaunchedEffect(sfState.statusRaw) {
+        if (sfState.statusRaw == "downloading") {
+            while (true) {
+                kotlinx.coroutines.delay(1500)
+                soundfontVM.startDownloadIfNeeded()
+            }
+        }
+    }
 
     LazyColumn(
         Modifier
@@ -100,15 +124,64 @@ fun SettingsScreen(
                     modifier = Modifier.padding(end = 12.dp),
                 )
                 Text("Layout", Modifier.weight(1f))
-                SingleChoiceSegmentedButtonRow {
-                    listOf("vertical", "horizontal", "page").forEachIndexed { i, mode ->
-                        SegmentedButton(
-                            selected = layout == mode,
-                            onClick = { scope.launch { prefs.setLayoutMode(mode) } },
-                            shape = SegmentedButtonDefaults.itemShape(i, 3),
-                        ) { Text(mode.take(1).uppercase()) }
+                val layoutModes = listOf(
+                    Triple("vertical", "Vertical", Icons.Filled.SwapVert),
+                    Triple("horizontal", "Horizontal", Icons.Filled.SwapHoriz),
+                    Triple("page", "Page", Icons.Filled.AutoStories),
+                )
+                var expanded by remember { mutableStateOf(false) }
+                val current = layoutModes.firstOrNull { it.first == layout } ?: layoutModes.last()
+                Box {
+                    // Trigger row (icon + label + chevron) opens an anchored DropdownMenu — same
+                    // menu-picker pattern as the Reader display inspector's layout-mode control.
+                    Row(
+                        Modifier.clickable { expanded = true }
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(current.third, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text(current.second)
+                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        layoutModes.forEach { (raw, label, icon) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                leadingIcon = {
+                                    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                                },
+                                trailingIcon = if (raw == layout) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else {
+                                    null
+                                },
+                                onClick = {
+                                    scope.launch { prefs.setLayoutMode(raw) }
+                                    expanded = false
+                                },
+                            )
+                        }
                     }
                 }
+            }
+        }
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Repeat,
+                    contentDescription = "Repeat",
+                    modifier = Modifier.padding(end = 12.dp),
+                )
+                Text("Repeat", Modifier.weight(1f))
+                RepeatModePicker(
+                    selected = RepeatMode.fromWire(repeatModeWire),
+                    enabled = true,
+                    onSelect = { scope.launch { prefs.setRepeatMode(it.wire) } },
+                )
             }
         }
         item {
@@ -123,6 +196,15 @@ fun SettingsScreen(
                     }
                     if (snapped != a4Hz) scope.launch { prefs.setA4ReferenceHz(snapped) }
                 },
+            )
+        }
+        item {
+            SoundfontRow(
+                state = sfState,
+                isWiFi = { soundfontVM.isWiFiNow() },
+                onSetOptedIn = { soundfontVM.setOptedIn(it) },
+                onDownloadNow = { soundfontVM.startDownloadAllowingCellular() },
+                onStop = { soundfontVM.cancelDownload() },
             )
         }
         item {
@@ -262,6 +344,138 @@ private fun ToggleRow(
             }
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/**
+ * High-quality SoundFont download row. Mirrors the iOS Reader settings entry: lets the user opt in to
+ * downloading the ≈206 MB high-fidelity SoundFont, shows download progress with a Stop affordance, and
+ * confirms before downloading over cellular or deleting the downloaded file (falling back to the bundled
+ * SoundFont). Opt-in / status is read from the shared SoundfontStateWire so iOS and Android stay in parity.
+ */
+@Composable
+private fun SoundfontRow(
+    state: com.keynumber.folino.soundfont.SoundfontStateWire,
+    isWiFi: () -> Boolean,
+    onSetOptedIn: (Boolean) -> Unit,
+    onDownloadNow: () -> Unit,
+    onStop: () -> Unit,
+) {
+    var showCellularDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val optedIn = state.isOptedIn
+
+    val subtitle = when (state.statusRaw) {
+        "downloading" -> "Downloading… ${(state.progress * 100).toInt()}%"
+        "failed" -> state.failureReason
+        "idle" -> if (optedIn) "Waiting for Wi-Fi" else "High-fidelity instruments (≈206 MB)"
+        else -> "" // downloaded
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.MusicNote,
+            contentDescription = "High-Quality SoundFont",
+            modifier = Modifier.padding(end = 12.dp),
+        )
+        Column(Modifier.weight(1f)) {
+            Text("High-Quality SoundFont")
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.statusRaw == "failed") {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            if (state.statusRaw == "idle" && optedIn) {
+                TextButton(onClick = onDownloadNow, contentPadding = PaddingValues(0.dp)) {
+                    Text("Download now")
+                }
+            }
+        }
+        when {
+            state.statusRaw == "downloading" -> {
+                CircularProgressIndicator(
+                    progress = { state.progress.toFloat() },
+                    modifier = Modifier.size(24.dp),
+                )
+                IconButton(onClick = onStop) {
+                    Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                }
+            }
+            state.statusRaw == "idle" && optedIn -> {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                IconButton(onClick = onStop) {
+                    Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                }
+            }
+            state.statusRaw == "idle" && !optedIn -> {
+                Switch(
+                    checked = false,
+                    onCheckedChange = {
+                        if (it) {
+                            if (isWiFi()) onSetOptedIn(true) else showCellularDialog = true
+                        }
+                    },
+                )
+            }
+            state.statusRaw == "downloaded" -> {
+                Switch(
+                    checked = true,
+                    onCheckedChange = { if (!it) showDeleteDialog = true },
+                )
+            }
+            state.statusRaw == "failed" -> {
+                Switch(
+                    checked = false,
+                    onCheckedChange = { if (it) onSetOptedIn(true) },
+                )
+            }
+        }
+    }
+
+    if (showCellularDialog) {
+        AlertDialog(
+            onDismissRequest = { showCellularDialog = false },
+            title = { Text("No Wi-Fi") },
+            text = { Text("You're not on Wi-Fi. The high-quality SoundFont is about 206 MB.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCellularDialog = false
+                    onDownloadNow()
+                }) { Text("Download over cellular") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCellularDialog = false
+                    onSetOptedIn(true)
+                }) { Text("Wait for Wi-Fi") }
+            },
+        )
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete download") },
+            text = { Text("Remove the high-quality SoundFont and use the bundled one?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    onSetOptedIn(false)
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 

@@ -20,7 +20,11 @@ data class ScoreRecordEntity(
     val title: String,
     val subtitle: String,
     val composer: String,
+    val arranger: String? = null,
+    val lyricist: String? = null,
+    val copyright: String? = null,
     @ColumnInfo(name = "local_file_name") val localFileName: String,
+    @ColumnInfo(name = "content_hash") val contentHash: String = "",
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
     @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Double = 0.0, // 0 == never opened
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
@@ -138,6 +142,25 @@ interface TagDao {
     }
 }
 
+@Entity(tableName = "reader_ab_repeat")
+data class ReaderAbRepeatEntity(
+    @PrimaryKey @ColumnInfo(name = "score_id") val scoreId: String,
+    @ColumnInfo(name = "start_measure") val startMeasure: Int,
+    @ColumnInfo(name = "end_measure") val endMeasure: Int,
+)
+
+@Dao
+interface ReaderAbRepeatDao {
+    @Query("SELECT * FROM reader_ab_repeat WHERE score_id = :scoreId")
+    fun load(scoreId: String): ReaderAbRepeatEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(entity: ReaderAbRepeatEntity)
+
+    @Query("DELETE FROM reader_ab_repeat WHERE score_id = :scoreId")
+    fun delete(scoreId: String)
+}
+
 @Database(
     entities = [
         ScoreRecordEntity::class,
@@ -145,7 +168,11 @@ interface TagDao {
         PlaylistItemEntity::class,
         TagEntity::class,
         TagItemEntity::class,
+        ReaderAbRepeatEntity::class,
     ],
+    // Pre-release: schema is collapsed to a single canonical v1 (no migration
+    // history). Schema changes destructively reset via fallbackToDestructiveMigration
+    // (+ ...OnDowngrade for dev devices that ran a throwaway higher version).
     version = 1,
     exportSchema = false,
 )
@@ -153,6 +180,7 @@ abstract class LibraryDatabase : RoomDatabase() {
     abstract fun dao(): ScoreRecordDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun tagDao(): TagDao
+    abstract fun readerAbRepeatDao(): ReaderAbRepeatDao
 }
 
 /**
@@ -168,11 +196,31 @@ abstract class LibraryDatabase : RoomDatabase() {
  * Kotlin in-memory cache with background write-through (see spec §Risks).
  */
 class RoomLibraryStore(context: Context) : LibraryStore {
-    private val db = Room.databaseBuilder(
-        context.applicationContext,
-        LibraryDatabase::class.java,
-        "folino-library.db",
-    ).allowMainThreadQueries().fallbackToDestructiveMigration().build()
+    private val db = sharedDatabase(context)
+
+    private companion object {
+        @Volatile
+        private var sharedDb: LibraryDatabase? = null
+
+        /**
+         * Process-wide singleton DB so multiple [RoomLibraryStore] instances (the JNI-injected store
+         * and the per-score AB-repeat accessor constructed from composition) share one connection
+         * pool + invalidation tracker — Room's recommended pattern, and avoids leaking a connection
+         * per Reader entry. Pre-release: destructive reset on any schema change (no migrations).
+         */
+        fun sharedDatabase(context: Context): LibraryDatabase =
+            sharedDb ?: synchronized(this) {
+                sharedDb ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    LibraryDatabase::class.java,
+                    "folino-library.db",
+                ).allowMainThreadQueries()
+                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
+                    .also { sharedDb = it }
+            }
+    }
 
     private val dao = db.dao()
     private val playlistDao = db.playlistDao()
@@ -185,7 +233,20 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {
-            ScoreRecordWire(it.id, it.title, it.subtitle, it.composer, it.localFileName, it.deletedAt, it.lastOpenedAt, it.isFavorite)
+            ScoreRecordWire(
+                id = it.id,
+                title = it.title,
+                subtitle = it.subtitle,
+                composer = it.composer,
+                arranger = it.arranger,
+                lyricist = it.lyricist,
+                copyright = it.copyright,
+                localFileName = it.localFileName,
+                contentHash = it.contentHash,
+                deletedAt = it.deletedAt,
+                lastOpenedAt = it.lastOpenedAt,
+                isFavorite = it.isFavorite,
+            )
         }
 
     override fun upsert(record: ScoreRecordWire) {
@@ -195,7 +256,11 @@ class RoomLibraryStore(context: Context) : LibraryStore {
                 title = record.title,
                 subtitle = record.subtitle,
                 composer = record.composer,
+                arranger = record.arranger,
+                lyricist = record.lyricist,
+                copyright = record.copyright,
                 localFileName = record.localFileName,
+                contentHash = record.contentHash,
                 deletedAt = record.deletedAt,
                 lastOpenedAt = record.lastOpenedAt,
                 isFavorite = record.isFavorite,
@@ -214,6 +279,22 @@ class RoomLibraryStore(context: Context) : LibraryStore {
     override fun removeFile(localFileName: String) {
         File(scoresDir, localFileName).delete()
     }
+
+    override fun sha256(path: String): String =
+        try {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            File(path).inputStream().use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    md.update(buf, 0, n)
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        } catch (e: Exception) {
+            ""
+        }
 
     override fun loadPlaylists(): List<PlaylistRecordWire> =
         playlistDao.loadPlaylists().map { PlaylistRecordWire(it.id, it.name, it.createdAt) }
@@ -252,5 +333,14 @@ class RoomLibraryStore(context: Context) : LibraryStore {
 
     override fun replaceTagItems(tagId: String, items: List<TagItemWire>) {
         tagDao.replaceItems(tagId, items.map { TagItemEntity(it.tagId, it.scoreItemId) })
+    }
+
+    fun loadAbRepeat(scoreId: String): Pair<Int, Int>? =
+        db.readerAbRepeatDao().load(scoreId)?.let { it.startMeasure to it.endMeasure }
+
+    fun saveAbRepeat(scoreId: String, range: Pair<Int, Int>?) {
+        val dao = db.readerAbRepeatDao()
+        if (range == null) dao.delete(scoreId)
+        else dao.upsert(ReaderAbRepeatEntity(scoreId, range.first, range.second))
     }
 }
