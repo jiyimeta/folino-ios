@@ -31,4 +31,14 @@ object MockScores {
             }
         }
     }
+
+    // Stages the bundled mscz into filesDir/Scores/<scoreId>.mscz for a single Reader scene. The
+    // Reader VM reads it back via the same filesDir/Scores/<id>.mscz convention the app uses.
+    fun stageReaderScore(context: Context, scoreId: String) {
+        val scoresDir = File(context.filesDir, "Scores").apply { mkdirs() }
+        val testAssets = InstrumentationRegistry.getInstrumentation().context.assets
+        testAssets.open("Now_is_the_time.mscz").use { input ->
+            File(scoresDir, "$scoreId.mscz").writeBytes(input.readBytes())
+        }
+    }
 }

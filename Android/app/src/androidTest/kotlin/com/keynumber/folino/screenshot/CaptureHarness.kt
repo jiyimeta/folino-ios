@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.services.storage.TestStorage
+import com.keynumber.folino.screenshot.fixtures.SceneReady
 import java.io.BufferedOutputStream
 
 // Tag on the fixed-size capture Box so we can target exactly that node (not the whole window, which
@@ -42,6 +43,7 @@ fun ComposeContentTestRule.captureFixedSize(
     filePath: String,
     content: @Composable () -> Unit,
 ) {
+    SceneReady.reset()
     setContent {
         CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1f)) {
             Box(modifier = Modifier.size(widthPx.dp, heightPx.dp).testTag(CAPTURE_TAG)) {
@@ -50,6 +52,13 @@ fun ComposeContentTestRule.captureFixedSize(
         }
     }
     waitForIdle()
+    // Async-content scenes (e.g. the Reader) parse + lay out a score on background dispatchers that
+    // `waitForIdle()` does not track. Such a scene calls SceneReady.markGated() during composition and
+    // signalReady() once rendered; block on that here (bounded) so the bitmap captures the real score.
+    if (SceneReady.isGated()) {
+        waitUntil(timeoutMillis = 20_000) { SceneReady.isReady() }
+        waitForIdle()
+    }
     val bitmap = onNodeWithTag(CAPTURE_TAG).captureToImage().asAndroidBitmap()
     TestStorage().openOutputFile(filePath).use { raw ->
         BufferedOutputStream(raw).use { out ->
