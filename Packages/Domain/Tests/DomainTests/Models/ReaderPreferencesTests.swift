@@ -304,4 +304,30 @@ struct ReaderPreferencesTests {
         #expect(decoded.tempoMultiplier == nil)
         #expect(decoded.staffSize == 14)
     }
+
+    @Test func `full field JSON round trip preserves everything`() throws {
+        // The Android persistence blob relies on this exact `Codable` encoding. All values are chosen in-range so the
+        // initializer's clamping/filtering is a no-op and the round-trip is exact equality.
+        let original = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 17,
+            hiddenStaves: [StaffAddress(partIndex: 0, staffIndexInPart: 1)],
+            staffProgramOverrides: [StaffAddress(partIndex: 0, staffIndexInPart: 0): 40],
+            staffVolumeOverrides: [StaffAddress(partIndex: 1, staffIndexInPart: 0): 0.5],
+            staffClefOverrides: [StaffAddress(partIndex: 0, staffIndexInPart: 0): "F"],
+            tempoMultiplier: 1.5,
+            honorLayoutBreaks: false,
+            repeatMode: .off,
+            abRepeat: ABRepeatRange(
+                start: ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0),
+                end: ChordPath(systemIndex: 1, measureIndex: 5, voiceIndex: 0, chordIndex: 0),
+            ),
+            masterVolume: 1.2,
+            transposeSemitones: 3,
+            a4ReferenceHz: 432,
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
+        #expect(decoded == original)
+    }
 }
