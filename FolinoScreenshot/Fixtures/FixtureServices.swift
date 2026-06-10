@@ -8,19 +8,27 @@ import Foundation
 /// `Score`, `Part`, `Staff`, `Measure`, `Voice`, `Chord`, `Instrument` are re-exported from `SheetMusicCore` through
 /// `Domain`'s `@_exported import`, so `import Domain` is enough.
 enum Fixture {
-    /// A small non-empty score: one piano part, one staff, four measures of two quarter-note chords each. Built from
-    /// public `SheetMusicCore` initializers (the same shape the Reader test fakes use). Enough to render a valid staff
-    /// in the Reader chrome for a framed marketing shot.
+    /// A small non-empty score: one piano part, one staff, four measures of two quarter-note chords each, carrying a
+    /// simple ascending C-major melody (C D E F | G A B C) so the staff renders real noteheads in the framed marketing
+    /// shot. Built from public `SheetMusicCore` initializers (the same shape the Reader test fakes use).
     static let score: Score = {
-        func measure() -> Measure {
+        /// A quarter-note chord with a single natural note in octave 4 (middle-C octave). Falls back to middle C
+        /// (pitch 60, tpc 14) if a letter is somehow unmapped — all call sites below pass valid `c d e f g a b`.
+        func note(_ letter: Character) -> Chord {
+            let spelling = NoteInputKeyMap.pitch(forLetter: letter, octave: 4) ?? (pitch: 60, tpc: 14)
+            return Chord(duration: .quarter, notes: [Note(pitch: spelling.pitch, tpc: spelling.tpc)])
+        }
+        func measure(_ first: Character, _ second: Character) -> Measure {
             Measure(voices: [
-                Voice(elements: [
-                    .chord(Chord(duration: .quarter, notes: [])),
-                    .chord(Chord(duration: .quarter, notes: [])),
-                ]),
+                Voice(elements: [.chord(note(first)), .chord(note(second))]),
             ])
         }
-        let staff = Staff(measures: (0 ..< 4).map { _ in measure() })
+        let staff = Staff(measures: [
+            measure("c", "d"),
+            measure("e", "f"),
+            measure("g", "a"),
+            measure("b", "c"),
+        ])
         let part = Part(id: "P1", instrument: Instrument(id: "piano"), staves: [staff])
         return Score(division: 480, parts: [part], metaTags: ["workTitle": "Now is the time!"])
     }()
