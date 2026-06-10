@@ -37,3 +37,27 @@ public enum PlaylistPlaybackProgression {
         }
     }
 }
+
+extension PlaylistPlaybackProgression {
+    /// Wire-friendly form of `nextAction` for the Android JNI bridge: the enums cross as their
+    /// `rawValue` strings and the `Advance` result collapses to an `Int` — `-1` for `.stop`, or a
+    /// value `>= 0` for `.advance(toIndex:)`. Keeping the rawValue parsing and the result encoding in
+    /// shared Domain means both the decision and its wire mapping are unit-tested here on iOS, and the
+    /// Android jextract wrapper is a pure delegation (parity — no divergent Kotlin port).
+    public static func nextActionWire(
+        currentIndex: Int,
+        count: Int,
+        repeatModeRawValue: String,
+        continuationRawValue: String,
+    ) -> Int {
+        let repeatMode = RepeatMode(rawValue: repeatModeRawValue) ?? .off
+        let continuation = PlaylistContinuationMode(rawValue: continuationRawValue) ?? .off
+        switch nextAction(
+            currentIndex: currentIndex, count: count,
+            repeatMode: repeatMode, continuation: continuation,
+        ) {
+        case .stop: return -1
+        case let .advance(toIndex): return toIndex
+        }
+    }
+}

@@ -52,4 +52,27 @@ struct PlaylistPlaybackProgressionTests {
         #expect(act(-1, of: 3, .playThrough) == .stop)
         #expect(act(5, of: 3, .loopPlaylist) == .stop)
     }
+
+    @Test
+    func `wire form: stop maps to -1, advance maps to the index`() {
+        // playThrough: middle advances, last stops
+        #expect(P.nextActionWire(
+            currentIndex: 0, count: 3, repeatModeRawValue: "off", continuationRawValue: "playThrough",
+        ) == 1)
+        #expect(P.nextActionWire(
+            currentIndex: 2, count: 3, repeatModeRawValue: "off", continuationRawValue: "playThrough",
+        ) == -1)
+        // loopPlaylist: last wraps to 0
+        #expect(P.nextActionWire(
+            currentIndex: 2, count: 3, repeatModeRawValue: "off", continuationRawValue: "loopPlaylist",
+        ) == 0)
+        // repeat active always stops
+        #expect(P.nextActionWire(
+            currentIndex: 0, count: 3, repeatModeRawValue: "loopAll", continuationRawValue: "loopPlaylist",
+        ) == -1)
+        // unknown raw values fall back to .off → stop
+        #expect(P.nextActionWire(
+            currentIndex: 0, count: 3, repeatModeRawValue: "??", continuationRawValue: "??",
+        ) == -1)
+    }
 }
