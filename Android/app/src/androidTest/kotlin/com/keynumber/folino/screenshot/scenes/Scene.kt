@@ -18,8 +18,8 @@ object Scenes {
     // Populated as scenes are added (Tasks 5-8). Orders reserve 40/50 for deferred repeat scenes.
     val all: List<Scene> = listOf(
         Scene("ReaderCursor", 10) { l, t -> ReaderCursorScene(l, t) },
-        // Scene("DisplayHidden", 20) { l, t -> DisplayHiddenScene(l, t) }, // Task 7
+        Scene("DisplayHidden", 20) { l, t -> DisplayHiddenScene(l, t) },
         Scene("Library", 30) { l, t -> LibraryScene(l, t) },
-        // Scene("Pip", 60) { l, t -> PipScene(l, t) },                    // Task 8
+        // Scene("Pip", 60) registered in the next commit.
     )
 }

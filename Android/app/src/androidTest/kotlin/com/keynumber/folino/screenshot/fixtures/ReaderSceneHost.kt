@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.LayoutOptions
+import com.keynumber.folino.reader.PartDescriptor
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderViewModel
 import com.keynumber.folino.reader.nearestCursorForTap
@@ -36,6 +37,64 @@ import kotlinx.coroutines.flow.StateFlow
 // into filesDir/Scores/<this>.mscz, then ReaderViewModel.load reads it back exactly as production does.
 private const val READER_SCORE_ID = "00000000-0000-0000-0000-0000000000b0"
 
+// A loaded, laid-out Reader scene: the real ReaderViewModel driven to Ready over the bundled score.
+// Holds whatever a screenshot scene needs to render the page (state + scoreHandle + the effective
+// layoutOptions) AND to compose UI that depends on the score's structure (the decoded `parts`, used
+// by the display-inspector scene to address staves and by callers that hide a subset of staves).
+class ReaderSceneState internal constructor(
+    val viewModel: ReaderViewModel,
+    val state: ReaderState.Ready,
+    val scoreHandle: Long,
+    val parts: List<PartDescriptor>,
+    val layoutOptions: LayoutOptions,
+)
+
+// Stages the bundled score once, builds a real ReaderViewModel, and drives it to Ready. Because some
+// scenes need the score's `parts` to *decide* which staves to hide, the layout options are produced
+// by a lambda that receives the decoded parts (null until they're known): the VM is first loaded with
+// `optionsFor(null)`, and once parts publish, `optionsFor(parts)` is applied (the VM re-lays-out when
+// layout options change). This is the shared load path; both the simple host and the inspector/PiP
+// scenes go through it so the staging + readiness-gate logic lives in exactly one place.
+//
+// Returns null until the page is laid out and parts are known; callers render device chrome meanwhile.
+@Composable
+fun rememberReaderSceneState(optionsFor: (List<PartDescriptor>?) -> LayoutOptions): ReaderSceneState? {
+    val context = LocalContext.current
+    val appContext = context.applicationContext as Application
+
+    // The load is async (parse + native layout on background dispatchers), so opt into the harness
+    // readiness gate: the bitmap must wait until the page has actually rendered.
+    remember { SceneReady.markGated() }
+
+    val viewModel = remember {
+        MockScores.stageReaderScore(appContext, READER_SCORE_ID)
+        ReaderViewModel(appContext).also {
+            it.setLayoutOptions(optionsFor(null))
+            it.load(READER_SCORE_ID)
+        }
+    }
+
+    val state by viewModel.state.collectAsStateCompat(ReaderState.Loading)
+    val handle by viewModel.scoreHandle.collectAsStateCompat(null)
+    val parts by viewModel.parts.collectAsStateCompat(emptyList())
+
+    // Once the parts decode, re-apply the parts-aware options so the VM re-lays-out with (e.g.) the
+    // hidden staves the scene wants. Re-runs only when the parts identity changes.
+    LaunchedEffect(parts) {
+        if (parts.isNotEmpty()) viewModel.setLayoutOptions(optionsFor(parts))
+    }
+
+    val ready = state as? ReaderState.Ready
+    if (ready == null || handle == null || parts.isEmpty()) return null
+    return ReaderSceneState(
+        viewModel = viewModel,
+        state = ready,
+        scoreHandle = handle!!,
+        parts = parts,
+        layoutOptions = optionsFor(parts),
+    )
+}
+
 // Stages the bundled score, drives a real ReaderViewModel to Ready, then renders the laid-out page
 // (and optionally a static playback cursor) in a static, scroll-pinned-to-top adaptation of the
 // production `ReadyScore`. No audio engine, no gesture handlers — just the score + an injected cursor.
@@ -47,44 +106,23 @@ fun ReaderSceneHost(
     layoutOptions: LayoutOptions = LayoutOptions.DEFAULT,
     withCursor: Boolean = false,
 ) {
-    val context = LocalContext.current
-    val appContext = context.applicationContext as Application
-
-    // This scene's score load is async (parse + native layout on background dispatchers), so opt into
-    // the harness readiness gate: the bitmap must wait until the page has actually rendered.
-    remember { SceneReady.markGated() }
-
-    // Stage the asset + build the VM once. The VM's recompute loop drives `state` to Ready after the
-    // handle publishes; we collect it below.
-    val viewModel = remember {
-        MockScores.stageReaderScore(appContext, READER_SCORE_ID)
-        ReaderViewModel(appContext).also {
-            it.setLayoutOptions(layoutOptions)
-            it.load(READER_SCORE_ID)
-        }
-    }
-
-    val state by viewModel.state.collectAsStateCompat(ReaderState.Loading)
-    val handle by viewModel.scoreHandle.collectAsStateCompat(null)
-
-    val ready = state as? ReaderState.Ready
-    if (ready == null || handle == null) {
+    val scene = rememberReaderSceneState { layoutOptions }
+    if (scene == null) {
         // While loading, render nothing — the frame still shows the device chrome + opaque fill.
         Box(Modifier.fillMaxSize())
         return
     }
-
     ReaderSceneContent(
-        state = ready,
-        scoreHandle = handle!!,
-        layoutOptions = layoutOptions,
+        state = scene.state,
+        scoreHandle = scene.scoreHandle,
+        layoutOptions = scene.layoutOptions,
         withCursor = withCursor,
     )
 }
 
 // Static adaptation of ReaderScreen.ReadyScore: fit-width page pinned to top, no scroll/gesture/pinch.
 @Composable
-private fun ReaderSceneContent(
+fun ReaderSceneContent(
     state: ReaderState.Ready,
     scoreHandle: Long,
     layoutOptions: LayoutOptions,
@@ -173,7 +211,7 @@ private fun ReaderSceneContent(
 // Local collectAsState replacement that doesn't require lifecycle (instrumented test composition has
 // no LifecycleOwner-backed collector requirement); mirrors collectAsState semantics for a StateFlow.
 @Composable
-private fun <T> StateFlow<T>.collectAsStateCompat(initial: T): androidx.compose.runtime.State<T> {
+internal fun <T> StateFlow<T>.collectAsStateCompat(initial: T): androidx.compose.runtime.State<T> {
     val flow = this
     val result = remember { mutableStateOf(initial) }
     LaunchedEffect(flow) {
