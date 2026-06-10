@@ -1,4 +1,4 @@
-project: /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/screenshot-tooling/Folino.xcodeproj
+project: Folino.xcodeproj
 scheme: FolinoScreenshot
 test_plan: FolinoUITests/ScreenshotsUITests
 destinations:
@@ -10,7 +10,7 @@ locales: # in-app language code -> App Store Connect locale folder
   ko: ko
   zh-Hans: zh-Hans
   zh-Hant: zh-Hant
-output: /tmp/folino-shots
+output: fastlane/screenshots
 filename: "{order}_{alias}_{scene}"
 options:
   skip_package_plugin_validation: true
