@@ -167,6 +167,16 @@ fun ReaderScreen(
     persistAbRange: (AbRepeatRange?) -> Unit = {},
     /** Persists the global sticky repeat mode. */
     persistRepeatMode: (RepeatMode) -> Unit = {},
+    /** Non-null only when the Reader was opened from a playlist; enables the continuation control + auto-advance. */
+    playlistId: String? = null,
+    /** Live, position-ordered score ids of the current playlist (re-derived each call; never a frozen snapshot). */
+    playlistQueueProvider: suspend () -> List<String> = { emptyList() },
+    /** The global sticky continuation mode (re-read each end-of-score so a Settings change is picked up). */
+    continuationModeProvider: suspend () -> PlaylistContinuationMode = { PlaylistContinuationMode.PLAY_THROUGH },
+    /** Persists the global sticky continuation mode. */
+    persistContinuationMode: (PlaylistContinuationMode) -> Unit = {},
+    /** Asks the host to retarget the Reader to [scoreId] in place (host sets its currentScoreId). */
+    onRetargetScore: (String) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
 ) {
@@ -190,6 +200,31 @@ fun ReaderScreen(
             persistRange = persistAbRange,
             persistMode = persistRepeatMode,
         )
+    }
+
+    // Set when this screen initiates an auto-advance; consumed once the next score reaches PREPARED.
+    var pendingAutoplay by remember { mutableStateOf(false) }
+
+    // Playlist auto-advance: on a real end-of-score, ask the shared Domain decision (via JNI) what to
+    // do next. Only active in a playlist context. Re-derives the live queue + re-reads the global
+    // continuation mode each time (parity with iOS).
+    LaunchedEffect(playlistId, scoreId) {
+        if (playlistId == null) return@LaunchedEffect
+        audioVm.onReachedEnd.collect {
+            val queue = playlistQueueProvider()
+            val index = queue.indexOf(scoreId)
+            if (index < 0) return@collect
+            val next = com.keynumber.folino.reader.swiftjava.FolinoReaderJNI.nativePlaylistNextAction(
+                index.toLong(),
+                queue.size.toLong(),
+                audioVm.repeatMode.value.wire,
+                continuationModeProvider().wire,
+            ).toInt()
+            if (next in queue.indices) {
+                pendingAutoplay = true
+                onRetargetScore(queue[next])
+            }
+        }
     }
     LaunchedEffect(scoreHandle) {
         scoreHandle?.let {
@@ -238,6 +273,14 @@ fun ReaderScreen(
 
     val pipActive by ReaderPipController.isInPipMode.collectAsStateWithLifecycle()
     val playbackState by audioVm.state.collectAsStateWithLifecycle()
+
+    // Continuous playback implies auto-play: once the retargeted score finishes preparing, start it.
+    LaunchedEffect(playbackState) {
+        if (playbackState == PlaybackState.PREPARED && pendingAutoplay) {
+            audioVm.engine.value?.play()
+            pendingAutoplay = false
+        }
+    }
 
     // Publish PiP eligibility while the Reader is on screen.
     LaunchedEffect(state, pipEnabled, playbackState) {
