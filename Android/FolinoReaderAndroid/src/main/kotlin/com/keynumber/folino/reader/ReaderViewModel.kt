@@ -56,6 +56,11 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
     private var handle: ScoreHandle? = null
 
+    // The score id currently loaded into [handle]. Lets [load] stay idempotent across recompositions
+    // (LaunchedEffect(scoreId) re-invokes it) while still RELOADING when the Reader is retargeted to a
+    // different score in place — playlist auto-advance swaps the rendered scoreId on this same view model.
+    private var loadedScoreId: String? = null
+
     init {
         startRecomputeLoop()
     }
@@ -112,7 +117,16 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * and parse-failure error handling here.
      */
     fun load(scoreId: String) {
-        if (_state.value !is ReaderState.Loading && handle != null) return
+        // Skip only a redundant reload of the SAME score (recomposition); a different scoreId means the
+        // Reader was retargeted in place (playlist auto-advance) and must load the new score so its handle
+        // is published — which re-drives the layout recompute and the playback prepare.
+        if (scoreId == loadedScoreId) return
+        loadedScoreId = scoreId
+        // Suspend the layout recompute until the new score's handle is published. The recompute loop
+        // skips while the handle is null, so the last Ready(program) keeps rendering unchanged — without
+        // this, the incoming score's per-score display options (e.g. staff size) would briefly re-lay-out
+        // the OLD handle (a visible "shrink" flash during the playlist auto-advance swap).
+        _scoreHandle.value = null
         viewModelScope.launch {
             val app = getApplication<Application>()
 
