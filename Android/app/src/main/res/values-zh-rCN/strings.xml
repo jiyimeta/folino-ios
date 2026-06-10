@@ -17,6 +17,18 @@
     <string name="settings_reader_display_mode">显示模式</string>
     <string name="settings_reader_high_quality_audio">高品质音源</string>
     <string name="settings_reader_continuation_footer">开启 Repeat（单曲或 A–B）时，将优先执行，不会自动播放下一首乐谱。</string>
+    <string name="settings_playlist_continuation">Playlist</string>
+    <string name="playlist_continuation_off">Off</string>
+    <string name="playlist_continuation_play_through">Continuous</string>
+    <string name="playlist_continuation_loop">Repeat All</string>
+
+    <!-- Settings – Privacy section -->
+    <string name="settings_privacy_title">隐私</string>
+    <string name="settings_privacy_crash_title">发送崩溃报告</string>
+    <string name="settings_privacy_crash_description">共享匿名崩溃诊断信息以帮助修复缺陷。绝不与您关联。</string>
+
+    <!-- Settings – A4 description -->
+    <string name="reader_settings_a4_description">应用于所有乐谱的基准音。可按乐谱单独覆盖。</string>
 
     <!-- Settings – SoundFont row -->
     <string name="settings_soundfont_subtitle">高保真乐器（≈206 MB）</string>

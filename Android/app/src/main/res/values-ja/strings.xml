@@ -17,6 +17,18 @@
     <string name="settings_reader_display_mode">表示モード</string>
     <string name="settings_reader_high_quality_audio">高品質音源 (206MB)</string>
     <string name="settings_reader_continuation_footer">リピート（1曲 または A–B）がオンのときは、そちらが優先され、次の楽譜へは進みません。</string>
+    <string name="settings_playlist_continuation">プレイリスト</string>
+    <string name="playlist_continuation_off">オフ</string>
+    <string name="playlist_continuation_play_through">連続再生</string>
+    <string name="playlist_continuation_loop">全曲リピート</string>
+
+    <!-- Settings – Privacy section -->
+    <string name="settings_privacy_title">プライバシー</string>
+    <string name="settings_privacy_crash_title">クラッシュレポートを送信</string>
+    <string name="settings_privacy_crash_description">匿名のクラッシュ診断を共有して不具合の修正に役立てます。個人とは結び付けられません。</string>
+
+    <!-- Settings – A4 description -->
+    <string name="reader_settings_a4_description">すべての楽譜の再生に適用される基準です。楽譜ごとに上書きできます。</string>
 
     <!-- Settings – SoundFont row -->
     <string name="settings_soundfont_subtitle">高品質音源（≈206 MB）</string>
