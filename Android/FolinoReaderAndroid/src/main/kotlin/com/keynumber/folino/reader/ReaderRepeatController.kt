@@ -37,18 +37,23 @@ class ReaderRepeatController(
     private val _abRange = MutableStateFlow(persistedRangeLoader())
     val abRange: StateFlow<AbRepeatRange?> = _abRange.asStateFlow()
 
-    private var pendingA: Int? = _abRange.value?.startMeasure
-    private var pendingB: Int? = _abRange.value?.endMeasure
+    private val _pendingA = MutableStateFlow(_abRange.value?.startMeasure)
+    /** Staged A endpoint measure (or null). Drives the A button's set/unset state. */
+    val pendingA: StateFlow<Int?> = _pendingA.asStateFlow()
+
+    private val _pendingB = MutableStateFlow(_abRange.value?.endMeasure)
+    /** Staged B endpoint measure (or null). Drives the B button's set/unset state. */
+    val pendingB: StateFlow<Int?> = _pendingB.asStateFlow()
 
     fun setA() {
         val m = currentMeasureProvider() ?: return
-        pendingA = if (pendingA == m) null else m // re-tap same measure clears
+        _pendingA.value = if (_pendingA.value == m) null else m // re-tap same measure clears
         commit()
     }
 
     fun setB() {
         val m = currentMeasureProvider() ?: return
-        pendingB = if (pendingB == m) null else m
+        _pendingB.value = if (_pendingB.value == m) null else m
         commit()
     }
 
@@ -63,12 +68,12 @@ class ReaderRepeatController(
     fun reapply() = applyActiveLoop()
 
     private fun commit() {
-        val a = pendingA
-        val b = pendingB
+        val a = _pendingA.value
+        val b = _pendingB.value
         val range = if (a != null && b != null) AbRepeatRange(a, b).normalized() else null
         if (range != null) {
-            pendingA = range.startMeasure
-            pendingB = range.endMeasure
+            _pendingA.value = range.startMeasure
+            _pendingB.value = range.endMeasure
         }
         _abRange.value = range
         persistRange(range)

@@ -98,6 +98,16 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         .flatMapLatest { it?.abRange ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** Staged A endpoint measure index (or null). Drives the A button state + the A boundary marker. */
+    val repeatPendingA: StateFlow<Int?> = _repeatController
+        .flatMapLatest { it?.pendingA ?: emptyFlow() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Staged B endpoint measure index (or null). Drives the B button state + the B boundary marker. */
+    val repeatPendingB: StateFlow<Int?> = _repeatController
+        .flatMapLatest { it?.pendingB ?: emptyFlow() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     /**
      * Installs the repeat controller once the host has wired per-score persistence. [persistMode]
      * writes the global DataStore pref; [loadRange]/[persistRange] read/write the per-score Room row.
@@ -110,7 +120,9 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         persistMode: (RepeatMode) -> Unit,
     ) {
         _repeatController.value = ReaderRepeatController(
-            currentMeasureProvider = { currentCursor.value?.measureIndexOrNull() },
+            // Fall back to measure 0 when no playback cursor exists yet (freshly prepared / stopped —
+            // the playhead is logically at the start), so A/B can be marked before playback starts.
+            currentMeasureProvider = { currentCursor.value?.measureIndexOrNull() ?: 0 },
             persistedRangeLoader = loadRange,
             persistRange = persistRange,
             persistMode = persistMode,

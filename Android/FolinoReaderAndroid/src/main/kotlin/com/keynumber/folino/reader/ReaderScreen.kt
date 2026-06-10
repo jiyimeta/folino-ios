@@ -464,6 +464,9 @@ private fun ReadyScore(
                         .fillMaxWidth()
                         .padding(vertical = with(density) { vPadPx.toDp() }),
                 )
+                val abAccent = MaterialTheme.colorScheme.primary
+                val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+                val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                 scoreHandle?.let { handle ->
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
@@ -481,6 +484,19 @@ private fun ReadyScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,
+                        color = abAccent.copy(alpha = 0.15f),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = with(density) { vPadPx.toDp() }),
+                    )
+                    AbBoundaryMarkersOverlay(
+                        scoreHandle = handle,
+                        aMeasure = aPending,
+                        bMeasure = bPending,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset.Zero,
+                        color = abAccent,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
@@ -517,7 +533,8 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
     val totalSecs by audioVm.totalTimeSeconds.collectAsStateWithLifecycle()
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
-    val abRange by audioVm.abRange.collectAsStateWithLifecycle()
+    val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+    val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
 
     val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
@@ -601,8 +618,8 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
             // A/B endpoint pill: trailing edge, only in A–B loop mode (mirroring iOS placement).
             if (repeatMode == RepeatMode.AB_LOOP) {
                 AbEndpointButtons(
-                    aSet = abRange != null,
-                    bSet = abRange != null,
+                    aSet = aMarked != null,
+                    bSet = bMarked != null,
                     enabled = isPrepared,
                     onSetA = { audioVm.setRepeatA() },
                     onSetB = { audioVm.setRepeatB() },
@@ -723,7 +740,8 @@ private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
-    val abRange by audioVm.abRange.collectAsStateWithLifecycle()
+    val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+    val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
     val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
     // FABs have no `enabled` param, so we dim their colors when not prepared to mirror
@@ -742,8 +760,8 @@ private fun PlaybackFab(audioVm: ReaderAudioViewModel) {
         // A/B endpoint pill leads the FAB cluster, only in A–B loop mode.
         if (repeatMode == RepeatMode.AB_LOOP) {
             AbEndpointButtons(
-                aSet = abRange != null,
-                bSet = abRange != null,
+                aSet = aMarked != null,
+                bSet = bMarked != null,
                 enabled = isPrepared,
                 onSetA = { audioVm.setRepeatA() },
                 onSetB = { audioVm.setRepeatB() },
@@ -969,6 +987,9 @@ internal fun HorizontalScore(
                         pxPerMM = fitPxPerMM * scale,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    val abAccent = MaterialTheme.colorScheme.primary
+                    val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+                    val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                     scoreHandle?.let { handle ->
                         PlaybackCursorOverlay(
                             scoreHandle = handle,
@@ -984,6 +1005,17 @@ internal fun HorizontalScore(
                             pxPerMM = fitPxPerMM,
                             scale = scale,
                             panOffset = Offset.Zero,
+                            color = abAccent.copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        AbBoundaryMarkersOverlay(
+                            scoreHandle = handle,
+                            aMeasure = aPending,
+                            bMeasure = bPending,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            panOffset = Offset.Zero,
+                            color = abAccent,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -266,6 +267,9 @@ fun PagedScore(
                 }
                 // Cursor overlay works in ABSOLUTE document coords; shift up by this page's top so it
                 // lands in page-local space. Off-page cursors fall outside the band and are clipped.
+                val abAccent = MaterialTheme.colorScheme.primary
+                val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+                val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                 scoreHandle?.let { h ->
                     PlaybackCursorOverlay(
                         scoreHandle = h,
@@ -281,6 +285,17 @@ fun PagedScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
+                        color = abAccent.copy(alpha = 0.15f),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    AbBoundaryMarkersOverlay(
+                        scoreHandle = h,
+                        aMeasure = aPending,
+                        bMeasure = bPending,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
+                        color = abAccent,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
