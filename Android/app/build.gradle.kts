@@ -1,3 +1,16 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+// Shared upload-key signing secrets live outside any repo at ~/.android-keystores/keystore.properties
+// (storeFile is an absolute path; storePassword / keyAlias / keyPassword). Reused across all the
+// Harmolo Android apps and never committed. Loaded here so `release` produces a Play-uploadable AAB.
+val keystorePropertiesFile = File(System.getProperty("user.home"), ".android-keystores/keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,7 +26,10 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.keynumber.folino"
+        // Play package identity (Harmolo developer account). Kept distinct from `namespace`
+        // (com.keynumber.folino), which stays the code/JNI package and must not change — the
+        // eager-loaded JNI class names and generated wirelet bridges are keyed to it.
+        applicationId = "com.harmolo.folino"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
@@ -50,9 +66,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

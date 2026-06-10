@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:946123941821:android:126ff17caf34169f4854d4",
+        "android_client_info": {
+          "package_name": "com.harmolo.folino"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCokrTeqdLbRpYCiCE652RbrC7WIIGAh4g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:946123941821:android:77c9f3518ca7c70a4854d4",
         "android_client_info": {
           "package_name": "com.keynumber.folino"
