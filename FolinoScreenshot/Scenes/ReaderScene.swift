@@ -11,10 +11,14 @@ struct ReaderScene: View {
     @Environment(\.screenshotIdiom) private var idiom
 
     init() {
-        // Runs before `body`, so the Reader observes page mode on first layout. Only one scene runs per app launch
+        // Font provider + hint suppression — also here (not only in ScreenshotApp.init) so #Preview renders notation.
+        ScreenshotSetup.ensure()
+        // Runs before `body`, so the Reader observes vertical mode on first layout. Only one scene runs per app launch
         // (the dispatcher picks one by launch arg), so this never conflicts with HorizontalScene's `.horizontal` set.
+        // Vertical (not page) so the notation also renders in SwiftUI `#Preview`; page-mode pagination only completes
+        // in the live capture run, leaving the preview's score area empty.
         UserDefaults.standard.set(
-            ReaderLayoutMode.page.rawValue,
+            ReaderLayoutMode.vertical.rawValue,
             forKey: ReaderGlobalSettingsKey.layoutMode,
         )
     }
@@ -44,6 +48,7 @@ struct ReaderScene: View {
                     metadataReader: FixtureMetadataReader(),
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
+                    showsTransportBar: false,
                 )
             }
         } overlay: {

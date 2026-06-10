@@ -14,6 +14,8 @@ struct HorizontalScene: View {
     @Environment(\.screenshotIdiom) private var idiom
 
     init() {
+        // Font provider + hint suppression — also here (not only in ScreenshotApp.init) so #Preview renders notation.
+        ScreenshotSetup.ensure()
         // Runs before `body`, so the Reader observes horizontal mode on first layout.
         UserDefaults.standard.set(
             ReaderLayoutMode.horizontal.rawValue,
@@ -46,6 +48,7 @@ struct HorizontalScene: View {
                     metadataReader: FixtureMetadataReader(),
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
+                    showsTransportBar: false,
                 )
             }
         } overlay: {
