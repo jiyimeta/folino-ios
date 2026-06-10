@@ -2,6 +2,7 @@ package com.keynumber.folino.screenshot.scenes
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -74,6 +75,7 @@ fun LoopAllScene(layout: ScreenshotLayout, tag: String) {
                     onEditInfo = {},
                     onPlaybackControls = {},
                     onDisplaySettings = {},
+                    windowInsets = WindowInsets(0, 0, 0, 0),
                 )
                 Box(Modifier.fillMaxSize().weight(1f)) {
                     if (scene != null) {
