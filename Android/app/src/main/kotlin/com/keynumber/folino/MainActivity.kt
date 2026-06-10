@@ -499,6 +499,7 @@ private fun LibraryNavGraph(
                 val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
+                val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
                 // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
@@ -625,6 +626,12 @@ private fun LibraryNavGraph(
                         abRepeatStore.saveAbRepeat(id, r?.let { it.startMeasure to it.endMeasure })
                     },
                     persistRepeatMode = { m -> scope.launch { prefs.setRepeatMode(m.wire) } },
+                    // TODO: set true when the Reader is opened from a playlist; continuous playback
+                    // is not yet implemented on Android. The nav route reader/{id}/{title} carries no
+                    // playlist-origin context, so this is always false for now.
+                    isInPlaylist = false,
+                    continuationModeWire = continuationModeWire,
+                    onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
                     onBack = { nav.popBackStackIfResumed() },
                 )
             }
