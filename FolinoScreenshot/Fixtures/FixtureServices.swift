@@ -1,5 +1,6 @@
 import Domain
 import Foundation
+import SheetMusicMSCX
 
 /// Static fixture data + no-op service conformances used by the screenshot scenes so they can render real Folino
 /// screens (`LibraryViewModel`, `ReaderRootScreen`) with fake, deterministic data. None of these touch disk, the
@@ -8,10 +9,23 @@ import Foundation
 /// `Score`, `Part`, `Staff`, `Measure`, `Voice`, `Chord`, `Instrument` are re-exported from `SheetMusicCore` through
 /// `Domain`'s `@_exported import`, so `import Domain` is enough.
 enum Fixture {
+    /// The score rendered in the framed marketing shots. Parses the bundled real `Now_is_the_time.mscz` (a
+    /// multi-measure score with actual notes) so the Reader / Horizontal scenes show a realistic page. Falls back to
+    /// `syntheticScore` if the file is missing or parsing throws.
+    static let score: Score = {
+        if let url = Bundle.main.url(forResource: "Now_is_the_time", withExtension: "mscz"),
+           let parsed = try? MSCZReader.parse(contentsOf: url)
+        {
+            return parsed
+        }
+        return syntheticScore
+    }()
+
     /// A small non-empty score: one piano part, one staff, four measures of two quarter-note chords each, carrying a
     /// simple ascending C-major melody (C D E F | G A B C) so the staff renders real noteheads in the framed marketing
-    /// shot. Built from public `SheetMusicCore` initializers (the same shape the Reader test fakes use).
-    static let score: Score = {
+    /// shot. Built from public `SheetMusicCore` initializers (the same shape the Reader test fakes use). Used as the
+    /// fallback when the bundled real score can't be parsed.
+    static let syntheticScore: Score = {
         /// A quarter-note chord with a single natural note in octave 4 (middle-C octave). Falls back to middle C
         /// (pitch 60, tpc 14) if a letter is somehow unmapped — all call sites below pass valid `c d e f g a b`.
         func note(_ letter: Character) -> Chord {

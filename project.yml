@@ -188,6 +188,11 @@ targets:
         type: folder
         buildPhase: resources
       - path: FolinoScreenshot
+        excludes:
+          - Resources
+      - path: FolinoScreenshot/Resources/Now_is_the_time.mscz
+        type: file
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.screenshot
@@ -216,6 +221,8 @@ targets:
       - package: Settings
       - package: swift-sheet-music
         product: SheetMusicLayoutApple
+      - package: swift-sheet-music
+        product: SheetMusicMSCX
       - package: LicenseList
         product: LicenseList
       - package: ScreenshotKit

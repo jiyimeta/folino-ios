@@ -10,6 +10,15 @@ private final class ScreenshotStringsAnchor {}
 struct ReaderScene: View {
     @Environment(\.screenshotIdiom) private var idiom
 
+    init() {
+        // Runs before `body`, so the Reader observes page mode on first layout. Only one scene runs per app launch
+        // (the dispatcher picks one by launch arg), so this never conflicts with HorizontalScene's `.horizontal` set.
+        UserDefaults.standard.set(
+            ReaderLayoutMode.page.rawValue,
+            forKey: ReaderGlobalSettingsKey.layoutMode,
+        )
+    }
+
     var body: some View {
         ScreenshotFrameView(
             title: LocalizedStringResource(

@@ -1,0 +1,17 @@
+project: /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/screenshot-tooling/Folino.xcodeproj
+scheme: FolinoScreenshot
+test_plan: FolinoUITests/ScreenshotsUITests
+destinations:
+  - { name: "iPhone 17 Pro Max",     alias: "iPhone69" }
+  - { name: "iPad Pro 13-inch (M5)", alias: "iPad13" }
+locales: # in-app language code -> App Store Connect locale folder
+  en: en-US
+  ja: ja
+  ko: ko
+  zh-Hans: zh-Hans
+  zh-Hant: zh-Hant
+output: /tmp/folino-shots
+filename: "{order}_{alias}_{scene}"
+options:
+  skip_package_plugin_validation: true
+  parallel: true
