@@ -82,6 +82,20 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.NavigateBefore
+import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material3.Surface
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.zIndex
+import io.github.jiyimeta.sheetmusic.audio.model.RehearsalMarkEntry
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 
 /** Bottom inset reserved for the floating playback FAB cluster, so fixed-position score content
  * (horizontal / page modes) is not hidden under it. Sized to exactly the FAB's occupied height —
@@ -487,6 +501,16 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
+        val marks by audioVm.rehearsalMarks.collectAsStateWithLifecycle()
+        val markFraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f
+        // Rehearsal-mark pills above the seek bar; tap to jump to that section. The row collapses to
+        // nothing when the score carries no marks. Positions/cursors come from the shared Swift side.
+        RehearsalMarkBubbleRow(
+            marks = marks,
+            currentFraction = markFraction,
+            onSeek = { cursor -> if (isPrepared) engine?.seek(to = cursor) },
+            modifier = Modifier.fillMaxWidth(),
+        )
         // Thumbless YouTube-Music-style seek bar; thickens while scrubbing.
         ReaderSeekBar(
             fraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f,
@@ -523,7 +547,7 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                 )
             }
             // jump-to-start: no circle, but the same icon size and tap target as play/pause. Pinned
-            // to the leading edge. Step / prev-next-measure buttons intentionally not ported.
+            // to the leading edge (the prev/next-measure buttons live in the centered cluster below).
             IconButton(
                 onClick = { if (isPrepared) engine?.seek(0.0) },
                 enabled = isPrepared,
@@ -535,25 +559,56 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                     modifier = Modifier.size(transportIconSize),
                 )
             }
-            // play/pause: filled circular button, centered, primary control.
-            FilledIconButton(
-                onClick = {
-                    if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
-                },
-                enabled = isPrepared,
-                modifier = Modifier.align(Alignment.BottomCenter).size(transportButtonSize),
+            // Centered cluster: previous-measure, play/pause (primary), next-measure. Jump-to-start
+            // stays pinned to the leading edge. `‹` / `›` step exactly one measure via the shared
+            // Score.cursorSteppingMeasure logic on the Swift side (restart-vs-previous idiom included).
+            Row(
+                Modifier.align(Alignment.BottomCenter),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (playback == PlaybackState.PLAYING) {
+                IconButton(
+                    onClick = { audioVm.stepMeasureBackward() },
+                    enabled = isPrepared,
+                    modifier = Modifier.size(measureStepButtonSize),
+                ) {
                     Icon(
-                        Icons.Default.Pause,
-                        contentDescription = "Pause",
-                        modifier = Modifier.size(transportIconSize),
+                        Icons.Default.NavigateBefore,
+                        contentDescription = "Previous measure",
+                        modifier = Modifier.size(measureStepIconSize),
                     )
-                } else {
+                }
+                // play/pause: filled circular button, primary control.
+                FilledIconButton(
+                    onClick = {
+                        if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
+                    },
+                    enabled = isPrepared,
+                    modifier = Modifier.size(transportButtonSize),
+                ) {
+                    if (playback == PlaybackState.PLAYING) {
+                        Icon(
+                            Icons.Default.Pause,
+                            contentDescription = "Pause",
+                            modifier = Modifier.size(transportIconSize),
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Play",
+                            modifier = Modifier.size(transportIconSize),
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = { audioVm.stepMeasureForward() },
+                    enabled = isPrepared,
+                    modifier = Modifier.size(measureStepButtonSize),
+                ) {
                     Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Play",
-                        modifier = Modifier.size(transportIconSize),
+                        Icons.Default.NavigateNext,
+                        contentDescription = "Next measure",
+                        modifier = Modifier.size(measureStepIconSize),
                     )
                 }
             }
@@ -576,6 +631,16 @@ private val timeRowHeight = 18.dp
 /** How far the (bottom-aligned) transport buttons rise into the time-readout band above them — a
  * slight intrusion so the controls sit close to the readout without a full empty row between. */
 private val buttonTimeOverlap = 4.dp
+
+/** Tap target for the secondary measure-skip buttons (`‹` / `›`) flanking play/pause — smaller than
+ * [transportButtonSize] so play/pause stays the dominant control. */
+private val measureStepButtonSize = 44.dp
+
+/** Glyph size inside the measure-skip buttons. */
+private val measureStepIconSize = 28.dp
+
+/** Height of the rehearsal-mark pill row above the seek bar. */
+private val rehearsalBubbleRowHeight = 28.dp
 
 /**
  * Thumbless seek bar in the YouTube-Music idiom: a thin rounded track (filled active portion over a
@@ -657,6 +722,70 @@ private fun ReaderSeekBar(
                 cap = StrokeCap.Round,
             )
         }
+    }
+}
+
+/**
+ * Row of rehearsal-mark pills laid out above the seek bar, each horizontally centered on its mark's
+ * notated-time [RehearsalMarkEntry.fraction]. The mark at or before the current playback fraction is
+ * filled (primary container) and drawn frontmost; the rest are outlined. Tapping a pill seeks to that
+ * mark's cursor. Renders nothing when [marks] is empty — the positions/cursors are computed on the
+ * Swift side (shared `Score.rehearsalMarks()`); this only lays out and styles.
+ */
+@Composable
+private fun RehearsalMarkBubbleRow(
+    marks: List<RehearsalMarkEntry>,
+    currentFraction: Float,
+    onSeek: (ScoreCursor) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (marks.isEmpty()) return
+    val currentIndex = marks.indexOfLast { it.fraction.toFloat() <= currentFraction }
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier.height(rehearsalBubbleRowHeight)) {
+        val fullWidth = maxWidth
+        marks.forEachIndexed { index, mark ->
+            // Center the pill on its fraction, clamped so it never spills past either edge. Width is
+            // unknown until first layout, so it start-anchors for one frame then settles centered.
+            var pillWidth by remember(mark) { mutableStateOf(0.dp) }
+            val anchor = fullWidth * mark.fraction.toFloat()
+            val maxX = (fullWidth - pillWidth).coerceAtLeast(0.dp)
+            val x = (anchor - pillWidth / 2).coerceIn(0.dp, maxX)
+            RehearsalMarkPill(
+                text = mark.text,
+                isCurrent = index == currentIndex,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .zIndex(if (index == currentIndex) 1f else 0f)
+                    .offset(x = x)
+                    .onGloballyPositioned { pillWidth = with(density) { it.size.width.toDp() } }
+                    .clickable { onSeek(mark.cursor) },
+            )
+        }
+    }
+}
+
+/** A single rehearsal-mark pill: filled when it is the current section, outlined otherwise. */
+@Composable
+private fun RehearsalMarkPill(text: String, isCurrent: Boolean, modifier: Modifier = Modifier) {
+    val container =
+        if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+    val content =
+        if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(percent = 50),
+        border = if (isCurrent) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier,
+    ) {
+        Text(
+            text = text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.widthIn(max = 96.dp).padding(horizontal = 8.dp, vertical = 2.dp),
+        )
     }
 }
 
