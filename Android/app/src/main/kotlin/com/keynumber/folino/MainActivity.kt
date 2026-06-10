@@ -58,17 +58,18 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.keynumber.folino.library.ReaderPreferencesController
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
+import com.keynumber.folino.library.generated.ReaderPreferencesBridgeViewModel
 import androidx.core.content.ContextCompat
 import com.keynumber.folino.reader.PipHost
 import com.keynumber.folino.reader.AbRepeatRange
+import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
+import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ReaderScreen
-import com.keynumber.folino.reader.clefOverridesPref
-import com.keynumber.folino.reader.hiddenStavesPref
-import com.keynumber.folino.reader.layoutOptionsFromPrefs
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
@@ -484,23 +485,58 @@ private fun LibraryNavGraph(
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
+                //
+                // Display settings split across two stores: mode / collapse-rests / show-invisible stay
+                // GLOBAL (DataStore, shared across scores); staff size / honor-breaks / hidden-staves /
+                // clef-overrides are PER-SCORE (the ReaderPreferences bridge below). The score-specific
+                // half is read from the bridge, not from these global flows.
                 val layoutPref by prefs.layoutMode.collectAsState(initial = "page")
                 val staffSize by prefs.staffSize.collectAsState(initial = 28.0)
-                val honorBreaks by prefs.honorBreaks.collectAsState(initial = true)
                 val collapseRests by prefs.collapseRests.collectAsState(initial = false)
                 val showInvisible by prefs.showInvisible.collectAsState(initial = false)
-                val hiddenStaves by prefs.hiddenStaves.collectAsState(initial = emptySet())
-                val clefOverrides by prefs.clefOverrides.collectAsState(initial = emptySet())
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
+                val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
                 // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
                 val abRepeatStore = remember(context) { com.keynumber.folino.library.RoomLibraryStore(context) }
-                val displayOptions = layoutOptionsFromPrefs(
-                    layoutPref, staffSize, honorBreaks, collapseRests, showInvisible, hiddenStaves, clefOverrides,
+                // Per-score Reader preferences (display + playback + mixer). The generated bridge view
+                // model wraps the Swift ReaderPreferencesBridge over the same Room store; it is scoped
+                // to this Reader route and opened once per score id. The app module owns this wiring so
+                // the Reader Compose module never depends on :FolinoLibraryAndroid (mirrors how the
+                // AB-repeat + display-options lambdas are injected from here).
+                val prefsVm: ReaderPreferencesBridgeViewModel =
+                    viewModel(
+                        key = "readerPrefs/$id",
+                        factory = ReaderPreferencesController.factory(context.applicationContext),
+                    )
+                LaunchedEffect(id) { prefsVm.open(id, defaultStaffSize = staffSize) }
+                val prefsState by prefsVm.state.collectAsState()
+                // Per-score staff visibility + clef overrides come from the bridge's imperative getters.
+                // Re-read them whenever the bridge state ticks (every per-staff mutation publishes a new
+                // state), so the inspector list refreshes after a hide/show or clef change.
+                val perScoreHidden = remember(prefsState) {
+                    prefsVm.hiddenStaves()
+                        .map { ReaderStaffAddress(it.partIndex, it.staffIndexInPart) }
+                        .toSet()
+                }
+                val perScoreClefs = remember(prefsState) {
+                    prefsVm.clefOverrides()
+                        .associate { ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.rawType }
+                }
+                // Compose the display snapshot from both stores: global mode / collapse / show-invisible,
+                // per-score staff size / honor-breaks / hidden / clef.
+                val displayOptions = LayoutOptions(
+                    mode = ReaderLayoutMode.fromPref(layoutPref),
+                    staffSize = prefsState.staffSize,
+                    honorLayoutBreaks = prefsState.honorLayoutBreaks,
+                    collapseMultiMeasureRests = collapseRests,
+                    showInvisibleElements = showInvisible,
+                    hiddenStaves = perScoreHidden,
+                    clefOverrides = perScoreClefs,
                 )
                 ReaderScreen(
                     scoreId = id,
@@ -509,19 +545,75 @@ private fun LibraryNavGraph(
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
+                        // Global half → DataStore.
                         scope.launch {
                             prefs.setLayoutMode(o.mode.toPref())
-                            prefs.setStaffSize(o.staffSize)
-                            prefs.setHonorBreaks(o.honorLayoutBreaks)
                             prefs.setCollapseRests(o.collapseMultiMeasureRests)
                             prefs.setShowInvisible(o.showInvisibleElements)
-                            prefs.setHiddenStaves(o.hiddenStavesPref())
-                            prefs.setClefOverrides(o.clefOverridesPref())
+                        }
+                        // Per-score half → ReaderPreferences bridge. Diff against the current snapshot so
+                        // the whole-options `onChange` contract maps onto the bridge's scalar / per-staff
+                        // mutators. Staff size / honor are scalars; hidden / clef are per-staff deltas.
+                        if (o.staffSize != displayOptions.staffSize) prefsVm.setStaffSize(o.staffSize)
+                        if (o.honorLayoutBreaks != displayOptions.honorLayoutBreaks) {
+                            prefsVm.setHonorLayoutBreaks(o.honorLayoutBreaks)
+                        }
+                        (o.hiddenStaves - displayOptions.hiddenStaves).forEach {
+                            prefsVm.setStaffHidden(it.partIndex, it.staffIndexInPart, hidden = true)
+                        }
+                        (displayOptions.hiddenStaves - o.hiddenStaves).forEach {
+                            prefsVm.setStaffHidden(it.partIndex, it.staffIndexInPart, hidden = false)
+                        }
+                        o.clefOverrides.forEach { (addr, raw) ->
+                            if (displayOptions.clefOverrides[addr] != raw) {
+                                prefsVm.setClef(addr.partIndex, addr.staffIndexInPart, raw)
+                            }
+                        }
+                        (displayOptions.clefOverrides.keys - o.clefOverrides.keys).forEach { addr ->
+                            // A removed clef override = reset to the staff's authored/default clef. The
+                            // bridge has no "clear" verb; an empty rawType is the reset sentinel (matches
+                            // the reducer's treatment of "" as no override).
+                            prefsVm.setClef(addr.partIndex, addr.staffIndexInPart, "")
                         }
                     },
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
                     globalA4ReferenceHz = globalA4Hz,
+                    // Per-score playback scalars seeded from the bridge. tempoMultiplier == 0.0 ("none")
+                    // and a4ReferenceHz == 0.0 ("inherit") are sentinels resolved to the engine default
+                    // rate (1.0) and the global SettingsPrefs A4 respectively.
+                    initialMasterVolume = prefsState.masterVolume.toFloat(),
+                    initialTempoMultiplier =
+                        (if (prefsState.tempoMultiplier == 0.0) 1.0 else prefsState.tempoMultiplier).toFloat(),
+                    initialA4ReferenceHz =
+                        if (prefsState.a4ReferenceHz == 0.0) globalA4Hz else prefsState.a4ReferenceHz,
+                    persistMasterVolume = { v -> prefsVm.setMasterVolume(v) },
+                    persistTempoMultiplier = { v -> prefsVm.setTempoMultiplier(v) },
+                    persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
+                    // Persist-only: the transpose audio/notation effect is not implemented on Android yet;
+                    // the inspector stepper only stores this value through the ReaderPreferences bridge.
+                    transposeSemitones = prefsState.transposeSemitones,
+                    persistTranspose = { v -> prefsVm.setTranspose(v) },
+                    metronomeEnabled = metronomeEnabled,
+                    onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
+                    // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
+                    // Reader resolves address↔flat-staffIndex via its parts map for replay + persistence.
+                    mixerProgramOverrides = {
+                        prefsVm.programOverrides().map {
+                            ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.program
+                        }
+                    },
+                    mixerVolumeOverrides = {
+                        prefsVm.volumeOverrides().map {
+                            ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.volume.toFloat()
+                        }
+                    },
+                    persistStaffProgram = { addr, program ->
+                        prefsVm.setStaffProgram(addr.partIndex, addr.staffIndexInPart, program)
+                    },
+                    persistStaffVolume = { addr, volume ->
+                        prefsVm.setStaffVolume(addr.partIndex, addr.staffIndexInPart, volume.toDouble())
+                    },
                     pipEnabled = pipEnabled,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },

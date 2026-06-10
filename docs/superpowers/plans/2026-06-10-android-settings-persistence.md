@@ -6,7 +6,25 @@
 
 **Architecture:** Per-score settings are stored as a JSON blob of the shared Domain `ReaderPreferences` (clamping lives only in its `init`), kept in a new Room `reader_preferences(score_id, json)` table reached over a new `@WireletProvided ReaderPreferencesStore` (Kotlin/Room backend, Swift policy). A new `@WireletObservable ReaderPreferencesBridge` in `FolinoReaderJNI` decodes the blob, projects typed scalar fields + small wire lists to Compose, and exposes scalar `@WireletExpose` mutators that re-normalize through `ReaderPreferences.init` and persist. Global settings stay in DataStore; only `playlistContinuationMode` is added and the inspector metronome is rebound to the existing global key.
 
-**Tech Stack:** Swift 6.3 (Domain, FolinoReaderJNI, swift-wirelet codegen, swift-java/jextract), Kotlin + Jetpack Compose + Room + DataStore (Android), Android NDK cross-compile via `Scripts/android-build-*.sh`.
+**Tech Stack:** Swift 6.3 (Domain, FolinoLibraryJNI, swift-wirelet codegen), Kotlin + Jetpack Compose + Room + DataStore (Android), Android NDK cross-compile via `Scripts/android-build-*.sh`.
+
+---
+
+## COURSE CORRECTION (2026-06-10, during execution — supersedes the original module placement)
+
+The original plan placed the wirelet bridge in **`FolinoReaderJNI`**. That target has **no swift-wirelet pipeline** (it is jextract/swift-java only), and `FolinoReaderAndroid` has **no wirelet gradle plugin** — standing the pipeline up there is high-risk new infra (pin drift, plugin ordering, jextract+wirelet coexistence). `FolinoLibraryJNI` / `FolinoLibraryAndroid` already have the **complete wirelet pipeline (pinned `ba1b8e3`) AND the Room `LibraryDatabase`**. User-approved decision: **place all new wirelet pieces in `FolinoLibraryJNI` + `FolinoLibraryAndroid`**; the **app module (`MainActivity`) constructs the controller and injects per-score values/hooks into the Reader**, mirroring the existing `installRepeatController(loadRange, persistRange, persistMode)` flow (keeps Reader decoupled, no new Reader→Library dependency).
+
+Apply these substitutions throughout the tasks below:
+- `Packages/Features/Reader/Sources/FolinoReaderJNI/…` → `Packages/Features/Library/Sources/FolinoLibraryJNI/…`
+- Build/codegen script `Scripts/android-build-reader-libs.sh` → `Scripts/android-build-library-libs.sh`
+- Generated Kotlin package → `com.keynumber.folino.library` (codecs/provided) and `com.keynumber.folino.library.generated` (observable view model), per `FolinoLibraryAndroid/build.gradle.kts`.
+- The reducer tests (Task 4) now run on the **host** via the Library package's macOS platform: `FOLINO_ANDROID=1 xcrun swift test --package-path Packages/Features/Library --filter ReaderPreferencesReducerTests` (test target `FolinoLibraryJNITests`).
+- Task 6 (`RoomReaderPreferencesStore`) implements the generated `ReaderPreferencesStore` interface; place it in `FolinoLibraryAndroid` next to `RoomLibraryStore` (direct DB access), or let `RoomLibraryStore` implement it directly.
+- Task 8 controller wraps the **generated** observable view model (mirror `SoundfontController.kt`); place it where the app module can reach it.
+
+### AB-repeat stays in its existing measure-based Room table (do NOT fold into the blob)
+
+Domain `ABRepeatRange` is **ChordPath-based** (systemIndex/measureIndex/…), but Android's A-B loop is **measure-index-based** and is **already persisted per-score** via the existing `reader_ab_repeat` Room table + `installRepeatController(loadRange, persistRange, persistMode)`. Folding it into the shared blob would require a lossy measure↔ChordPath conversion for no behavior gain (the persisted value is equivalent either way — parity is about behavior, not storage shape). Decision: **keep `reader_ab_repeat` as-is**; the blob's Domain `abRepeat`/`repeatMode` fields stay unused on Android (same as `repeatMode`). Therefore **Task 5 does NOT drop `reader_ab_repeat`** — it only ADDS `reader_preferences`. The bridge correctly omits AB-repeat getters/setters.
 
 ---
 

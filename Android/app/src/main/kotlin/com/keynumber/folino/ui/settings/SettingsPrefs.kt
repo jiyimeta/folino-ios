@@ -49,6 +49,13 @@ object SettingsKeys {
      */
     val repeatMode = stringPreferencesKey("reader.repeatMode")
     /**
+     * Global sticky playlist-continuation mode: "off" | "playThrough" | "loopPlaylist".
+     * Shared key intent with iOS `ReaderGlobalSettingsKey.playlistContinuationMode`.
+     * Default "playThrough". Persist-only on Android for now — the playlist continuous-playback
+     * feature that consumes this value is not yet built here, so selecting only saves the choice.
+     */
+    val playlistContinuationMode = stringPreferencesKey("playlistContinuationMode")
+    /**
      * Whether Crashlytics crash-data collection is enabled. Opt-out semantics:
      * absent (first launch) is treated as `true`, mirroring iOS
      * `privacyCrashReportingEnabled`. The toggle is an opt-*out*.
@@ -71,6 +78,8 @@ class SettingsPrefs(private val context: Context) {
     val showSeekBar: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showSeekBar] ?: true }
     val a4ReferenceHz: Flow<Double> = context.dataStore.data.map { it[SettingsKeys.a4ReferenceHz] ?: 440.0 }
     val repeatMode: Flow<String> = context.dataStore.data.map { it[SettingsKeys.repeatMode] ?: "off" }
+    val playlistContinuationMode: Flow<String> =
+        context.dataStore.data.map { it[SettingsKeys.playlistContinuationMode] ?: "playThrough" }
     val crashReporting: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.crashReportingEnabled] ?: true }
 
@@ -88,6 +97,8 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setShowSeekBar(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showSeekBar] = v }
     suspend fun setA4ReferenceHz(v: Double) = context.dataStore.edit { it[SettingsKeys.a4ReferenceHz] = v }
     suspend fun setRepeatMode(v: String) = context.dataStore.edit { it[SettingsKeys.repeatMode] = v }
+    suspend fun setPlaylistContinuationMode(v: String) =
+        context.dataStore.edit { it[SettingsKeys.playlistContinuationMode] = v }
 
     suspend fun setCrashReporting(v: Boolean) =
         context.dataStore.edit { it[SettingsKeys.crashReportingEnabled] = v }

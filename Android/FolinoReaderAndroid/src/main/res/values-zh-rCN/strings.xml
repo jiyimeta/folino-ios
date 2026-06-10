@@ -35,6 +35,7 @@
     <string name="reader_playback_a4_relative">%1$dHz %2$s音分</string>
     <string name="reader_settings_a4_description">适用于所有乐谱播放的基准音高。每首乐谱可单独覆盖。</string>
     <string name="settings_a4_reference">A4 基准音</string>
+    <string name="reader_inspector_transpose">移调</string>
     <string name="reader_repeat_label">重复</string>
     <string name="reader_repeat_off">关闭</string>
     <string name="reader_repeat_loop_all">单曲重复</string>

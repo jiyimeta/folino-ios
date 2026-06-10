@@ -51,6 +51,10 @@ private final class FakeExportStore: LibraryStore {
     }
 
     func copyImportedFile(fromPath _: String, localFileName _: String) {}
+    func sha256(path _: String) -> String {
+        ""
+    }
+
     func removeFile(localFileName _: String) {}
     func deleteRecord(id: String) {
         records.removeAll { $0.id == id }

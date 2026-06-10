@@ -75,6 +75,10 @@
     <string name="favorite_add">Add to Starred</string>
     <string name="favorite_remove">Remove from Starred</string>
     <string name="favorite_indicator">Starred</string>
+    <string name="settings_playlist_continuation">Playlist</string>
+    <string name="playlist_continuation_off">Off</string>
+    <string name="playlist_continuation_play_through">Continuous</string>
+    <string name="playlist_continuation_loop">Repeat All</string>
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_privacy_crash_title">Send crash reports</string>
     <string name="settings_privacy_crash_description">Helps fix bugs by sharing anonymous crash diagnostics. Never linked to you.</string>

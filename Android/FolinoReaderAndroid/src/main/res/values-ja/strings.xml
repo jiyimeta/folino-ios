@@ -35,6 +35,7 @@
     <string name="reader_playback_a4_relative">%1$dHz %2$sセント</string>
     <string name="reader_settings_a4_description">すべての楽譜の再生に適用される基準です。楽譜ごとに上書きできます。</string>
     <string name="settings_a4_reference">A4 基準音</string>
+    <string name="reader_inspector_transpose">移調</string>
     <string name="reader_repeat_label">リピート</string>
     <string name="reader_repeat_off">オフ</string>
     <string name="reader_repeat_loop_all">1曲リピート</string>

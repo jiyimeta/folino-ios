@@ -46,6 +46,10 @@ private final class FakeLibraryStore: LibraryStore {
         copiedFiles.append((sourcePath, localFileName))
     }
 
+    func sha256(path _: String) -> String {
+        ""
+    }
+
     func removeFile(localFileName: String) {
         removedFiles.append(localFileName)
     }

@@ -88,7 +88,7 @@ struct ReaderTransportControl: View {
     }
 
     private func seekCard(score: Score) -> some View {
-        let marks = score.rehearsalMarks()
+        let marks = score.readerRehearsalMarks()
         return VStack(spacing: 0) {
             if !marks.isEmpty {
                 RehearsalMarkBar(marks: marks, currentFraction: displayFraction) { cursor in

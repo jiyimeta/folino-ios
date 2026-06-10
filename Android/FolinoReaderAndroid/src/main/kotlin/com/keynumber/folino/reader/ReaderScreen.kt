@@ -69,6 +69,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -86,12 +87,26 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.NavigateBefore
+import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material3.Surface
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.zIndex
+import io.github.jiyimeta.sheetmusic.audio.model.RehearsalMarkEntry
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 
-/** Bottom inset reserved for the floating playback FAB cluster, so fixed-position score content
- * (horizontal / page modes) is not hidden under it. Sized to exactly the FAB's occupied height —
- * the FAB (56) plus the Scaffold's default 16 edge margin — so the score region's bottom edge just
- * meets the FAB's top with no whitespace gap above it. Vertical mode does not use this — its
- * scrolling content passes under the FAB, matching iOS (vertical inset 0). */
+/** Bottom inset reserved for the floating playback FAB cluster, so the score content is not hidden
+ * under it. Sized to exactly the FAB's occupied height — the FAB (56) plus the Scaffold's default 16
+ * edge margin — so the score region's bottom edge just meets the FAB's top with no whitespace gap
+ * above it. Horizontal / page modes reserve it as a fixed-content bottom inset; vertical mode adds it
+ * as bottom padding *inside* the scroll content, so the last system scrolls clear of the FAB rather
+ * than passing under it. Only applied while the seek bar is off (the FAB is shown). */
 private val fabClusterReservedHeight = 72.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,9 +121,40 @@ fun ReaderScreen(
     onEditInfo: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
-    /** Global A4 reference pitch default (Hz) from SettingsPrefs, seeded into the audio VM at
-     * prepare time so the per-score live value starts at the user's preferred tuning. */
+    /** Global A4 reference pitch default (Hz) from SettingsPrefs. Used for the inspector's cents-offset
+     * readout (the per-score live value relative to the user's global tuning) and as the inherit value
+     * when this score has no per-score A4 override. */
     globalA4ReferenceHz: Double = 440.0,
+    /** Per-score master volume (0..1) restored when the score opens. */
+    initialMasterVolume: Float = 1.0f,
+    /** Per-score tempo multiplier (engine rate) restored when the score opens. */
+    initialTempoMultiplier: Float = 1.0f,
+    /** Per-score A4 reference pitch (Hz) restored when the score opens (already resolved against the
+     * global default when this score had no override). */
+    initialA4ReferenceHz: Double = 440.0,
+    /** Persists the per-score master volume on user change. */
+    persistMasterVolume: (Double) -> Unit = {},
+    /** Persists the per-score tempo multiplier on user change. */
+    persistTempoMultiplier: (Double) -> Unit = {},
+    /** Persists the per-score A4 reference pitch on user change. */
+    persistA4ReferenceHz: (Double) -> Unit = {},
+    /** Per-score transpose value (semitones) restored when the score opens. Persist-only: nothing
+     * transposes audio or notation on Android yet — the inspector stepper only writes this value. */
+    transposeSemitones: Int = 0,
+    /** Persists the per-score transpose value (semitones) on user change. */
+    persistTranspose: (Int) -> Unit = {},
+    /** Global metronome-enabled flag (SettingsPrefs) — metronome is global on both platforms. */
+    metronomeEnabled: Boolean = false,
+    /** Writes the global metronome flag on user change. */
+    onMetronomeChange: (Boolean) -> Unit = {},
+    /** Persisted per-score program overrides to replay on open, keyed by positional staff address. */
+    mixerProgramOverrides: () -> List<Pair<StaffAddress, Int>> = { emptyList() },
+    /** Persisted per-score volume overrides to replay on open, keyed by positional staff address. */
+    mixerVolumeOverrides: () -> List<Pair<StaffAddress, Float>> = { emptyList() },
+    /** Persists a per-score program override after the live engine update. */
+    persistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Persists a per-score volume override after the live engine update. */
+    persistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
@@ -149,11 +195,44 @@ fun ReaderScreen(
     }
     LaunchedEffect(scoreHandle) {
         scoreHandle?.let {
-            // Seed the per-score live A4 from the global default before prepare, so
-            // the first prepare call picks up the user's preferred tuning. Also stores
-            // the global default in the VM so the inspector can show the cents offset.
-            audioVm.seedGlobalA4ReferenceHz(globalA4ReferenceHz)
+            // Seed the per-score playback scalars (master volume / tempo / A4) before prepare, so the
+            // engine re-syncs to the user's saved values once the player is prepared. The global A4 is
+            // also stored so the inspector can show the per-score value's cents offset.
+            audioVm.seedPlaybackScalars(
+                masterVolume = initialMasterVolume,
+                tempoMultiplier = initialTempoMultiplier,
+                a4ReferenceHz = initialA4ReferenceHz,
+                globalA4ReferenceHz = globalA4ReferenceHz,
+            )
             audioVm.preparePlayback(it)
+        }
+    }
+    // Metronome is global (SettingsPrefs). Push the current global value into the engine + VM so the
+    // soundfont-reload re-push keeps it, and re-push whenever the global flag changes.
+    LaunchedEffect(metronomeEnabled, scoreHandle) {
+        audioVm.setMetronomeEnabled(metronomeEnabled)
+    }
+    // Parts descriptor → flat staffIndex map: the mixer addresses channels by a flat staffIndex, the
+    // ReaderPreferences bridge persists overrides by positional StaffAddress. This map (built from the
+    // same parts→staves enumeration the engine uses) bridges the two for both replay and persistence.
+    val mixerParts by readerVm.parts.collectAsStateWithLifecycle()
+    val staffAddressByIndex = remember(mixerParts) { mixerParts.staffAddressByIndex() }
+    val addressToIndex = remember(staffAddressByIndex) {
+        staffAddressByIndex.entries.associate { (index, addr) -> addr to index }
+    }
+    // Replay persisted per-staff mixer overrides after each prepare. Resolve each saved StaffAddress to
+    // its current flat staffIndex via the parts map; skip any address that doesn't resolve (guards the
+    // channel-order assumption against a score whose part/staff layout changed since the override was
+    // saved). Solo / mute are session-only and intentionally not replayed.
+    LaunchedEffect(scoreHandle, addressToIndex) {
+        audioVm.installOnPrepared {
+            val engine = audioVm.engine.value ?: return@installOnPrepared
+            mixerProgramOverrides().forEach { (addr, program) ->
+                addressToIndex[addr]?.let { engine.setStaffProgram(it, program) }
+            }
+            mixerVolumeOverrides().forEach { (addr, volume) ->
+                addressToIndex[addr]?.let { engine.setStaffVolume(it, volume) }
+            }
         }
     }
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
@@ -249,7 +328,16 @@ fun ReaderScreen(
                 is ReaderState.Loading -> Text("Loading…")
                 is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
                 is ReaderState.Ready -> when (layoutMode) {
-                    ReaderLayoutMode.VERTICAL -> ReadyScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
+                    ReaderLayoutMode.VERTICAL -> ReadyScore(
+                        state = s,
+                        scoreHandle = scoreHandle,
+                        fontProvider = fontProvider,
+                        audioVm = audioVm,
+                        layoutOptions = layoutOptions,
+                        // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
+                        // is off) so the last system can scroll out from under the floating play FAB.
+                        bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
+                    )
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
                     ReaderLayoutMode.PAGE -> PagedScore(
                         state = s,
@@ -271,6 +359,16 @@ fun ReaderScreen(
             openingQuarterBpm = openingQuarterBpm,
             sheetState = inspectorSheetState,
             onDismiss = { showInspector = false },
+            metronomeEnabled = metronomeEnabled,
+            onMetronomeChange = onMetronomeChange,
+            onPersistMasterVolume = persistMasterVolume,
+            onPersistTempoMultiplier = persistTempoMultiplier,
+            onPersistA4ReferenceHz = persistA4ReferenceHz,
+            transposeSemitones = transposeSemitones,
+            onTransposeChange = persistTranspose,
+            staffAddressByIndex = staffAddressByIndex,
+            onPersistStaffProgram = persistStaffProgram,
+            onPersistStaffVolume = persistStaffVolume,
         )
     }
     if (showDisplayInspector) {
@@ -351,6 +449,7 @@ private fun ReadyScore(
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
+    bottomContentPad: Dp = 0.dp,
 ) {
     val page = state.program.pages.first()
 
@@ -376,6 +475,9 @@ private fun ReadyScore(
     // Vertical breathing room so the first/last system isn't flush. Tunable.
     val vPadPx = with(density) { 16.dp.toPx() }
     val padPx = with(density) { 24.dp.toPx() }
+    // Extra bottom padding (added below `vPadPx`) so the last system can scroll out from under the
+    // floating play FAB when the seek bar is off. Top stays `vPadPx`, so cursor / tap math is unchanged.
+    val bottomPadPx = with(density) { bottomContentPad.toPx() }
 
     // Auto-scroll: keep the playback cursor in view via the shared Domain
     // keep-in-view math (JNI). Vertical always; horizontal only when zoomed.
@@ -488,7 +590,9 @@ private fun ReadyScore(
             Box(
                 Modifier.size(
                     width = with(density) { contentWidthPx.toDp() },
-                    height = with(density) { (contentHeightPx + vPadPx * 2).toDp() },
+                    // `bottomPadPx` extends the scrollable extent below the page (top-anchored content),
+                    // so scrolling to the end reveals empty space tall enough to clear the floating FAB.
+                    height = with(density) { (contentHeightPx + vPadPx * 2 + bottomPadPx).toDp() },
                 ),
             ) {
                 ScorePage(
@@ -509,6 +613,7 @@ private fun ReadyScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,
+                        color = abAccent,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
@@ -580,9 +685,26 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        // Thumbless YouTube-Music-style seek bar; thickens while scrubbing.
+        val marks by audioVm.rehearsalMarks.collectAsStateWithLifecycle()
+        val liveFraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f
+        // While the user scrubs the rehearsal-mark row, the snapped mark is previewed on the seek bar
+        // (仮 seek); the real engine seek fires only on release. Null when not scrubbing the row.
+        var rehearsalPreview by remember { mutableStateOf<Float?>(null) }
+        // Rehearsal-mark pills above the seek bar; tap or drag (snapping to the nearest mark) to jump to
+        // a section. The row collapses to nothing when the score carries no marks. Positions/cursors
+        // come from the shared Swift side.
+        RehearsalMarkBubbleRow(
+            marks = marks,
+            currentFraction = liveFraction,
+            enabled = isPrepared,
+            onSeek = { cursor -> if (isPrepared) engine?.seek(to = cursor) },
+            onPreview = { rehearsalPreview = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        // Thumbless YouTube-Music-style seek bar; thickens while scrubbing. Shows the rehearsal-row
+        // drag preview when scrubbing the marks, otherwise the live playback position.
         ReaderSeekBar(
-            fraction = if (totalSecs > 0) (currentSecs / totalSecs).toFloat().coerceIn(0f, 1f) else 0f,
+            fraction = rehearsalPreview ?: liveFraction,
             enabled = isPrepared,
             onSeek = { fraction -> if (totalSecs > 0) engine?.seek(fraction * totalSecs) },
             modifier = Modifier.fillMaxWidth(),
@@ -616,7 +738,7 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                 )
             }
             // jump-to-start: no circle, but the same icon size and tap target as play/pause. Pinned
-            // to the leading edge. Step / prev-next-measure buttons intentionally not ported.
+            // to the leading edge (the prev/next-measure buttons live in the centered cluster below).
             IconButton(
                 onClick = { if (isPrepared) engine?.seek(0.0) },
                 enabled = isPrepared,
@@ -628,25 +750,56 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                     modifier = Modifier.size(transportIconSize),
                 )
             }
-            // play/pause: filled circular button, centered, primary control.
-            FilledIconButton(
-                onClick = {
-                    if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
-                },
-                enabled = isPrepared,
-                modifier = Modifier.align(Alignment.BottomCenter).size(transportButtonSize),
+            // Centered cluster: previous-measure, play/pause (primary), next-measure. Jump-to-start
+            // stays pinned to the leading edge. `‹` / `›` step exactly one measure via the shared
+            // Score.cursorSteppingMeasure logic on the Swift side (restart-vs-previous idiom included).
+            Row(
+                Modifier.align(Alignment.BottomCenter),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (playback == PlaybackState.PLAYING) {
+                IconButton(
+                    onClick = { audioVm.stepMeasureBackward() },
+                    enabled = isPrepared,
+                    modifier = Modifier.size(measureStepButtonSize),
+                ) {
                     Icon(
-                        Icons.Default.Pause,
-                        contentDescription = "Pause",
-                        modifier = Modifier.size(transportIconSize),
+                        Icons.Default.NavigateBefore,
+                        contentDescription = "Previous measure",
+                        modifier = Modifier.size(measureStepIconSize),
                     )
-                } else {
+                }
+                // play/pause: filled circular button, primary control.
+                FilledIconButton(
+                    onClick = {
+                        if (playback == PlaybackState.PLAYING) engine?.pause() else engine?.play()
+                    },
+                    enabled = isPrepared,
+                    modifier = Modifier.size(transportButtonSize),
+                ) {
+                    if (playback == PlaybackState.PLAYING) {
+                        Icon(
+                            Icons.Default.Pause,
+                            contentDescription = "Pause",
+                            modifier = Modifier.size(transportIconSize),
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Play",
+                            modifier = Modifier.size(transportIconSize),
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = { audioVm.stepMeasureForward() },
+                    enabled = isPrepared,
+                    modifier = Modifier.size(measureStepButtonSize),
+                ) {
                     Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Play",
-                        modifier = Modifier.size(transportIconSize),
+                        Icons.Default.NavigateNext,
+                        contentDescription = "Next measure",
+                        modifier = Modifier.size(measureStepIconSize),
                     )
                 }
             }
@@ -680,6 +833,16 @@ private val timeRowHeight = 18.dp
 /** How far the (bottom-aligned) transport buttons rise into the time-readout band above them — a
  * slight intrusion so the controls sit close to the readout without a full empty row between. */
 private val buttonTimeOverlap = 4.dp
+
+/** Tap target for the secondary measure-skip buttons (`‹` / `›`) flanking play/pause — smaller than
+ * [transportButtonSize] so play/pause stays the dominant control. */
+private val measureStepButtonSize = 44.dp
+
+/** Glyph size inside the measure-skip buttons. */
+private val measureStepIconSize = 28.dp
+
+/** Height of the rehearsal-mark pill row above the seek bar. */
+private val rehearsalBubbleRowHeight = 28.dp
 
 /**
  * Thumbless seek bar in the YouTube-Music idiom: a thin rounded track (filled active portion over a
@@ -761,6 +924,168 @@ private fun ReaderSeekBar(
                 cap = StrokeCap.Round,
             )
         }
+    }
+}
+
+/**
+ * Row of rehearsal-mark pills laid out above the seek bar, each horizontally centered on its mark's
+ * notated-time [RehearsalMarkEntry.fraction]. The highlighted pill (filled primary container, drawn
+ * frontmost) is the drag target while scrubbing, otherwise the mark at or before the live playback
+ * position.
+ *
+ * Interaction (whole-row, like the seek bar): a tap seeks to the nearest mark. A horizontal drag is a
+ * DISCRETE scrub — it snaps to the nearest mark as the finger moves and previews that position on the
+ * seek bar via [onPreview] (仮 seek), committing the real engine seek through [onSeek] only on release.
+ *
+ * Renders nothing when [marks] is empty — positions/cursors are computed on the Swift side (shared
+ * `Score.rehearsalMarks()`); this only lays out, styles, and routes the gesture.
+ */
+@Composable
+private fun RehearsalMarkBubbleRow(
+    marks: List<RehearsalMarkEntry>,
+    currentFraction: Float,
+    enabled: Boolean,
+    onSeek: (ScoreCursor) -> Unit,
+    onPreview: (Float?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (marks.isEmpty()) return
+    val density = LocalDensity.current
+    // The mark index currently snapped under the finger while dragging; null when not scrubbing.
+    var dragIndex by remember { mutableStateOf<Int?>(null) }
+    val playbackIndex = marks.indexOfLast { it.fraction.toFloat() <= currentFraction }
+    val highlightIndex = dragIndex ?: playbackIndex
+
+    fun nearestIndex(fraction: Float): Int =
+        marks.indices.minByOrNull { abs(marks[it].fraction.toFloat() - fraction) } ?: 0
+
+    BoxWithConstraints(
+        modifier
+            .height(rehearsalBubbleRowHeight)
+            .pointerInput(enabled, marks) {
+                if (!enabled) return@pointerInput
+                detectTapGestures { offset ->
+                    onSeek(marks[nearestIndex((offset.x / size.width).coerceIn(0f, 1f))].cursor)
+                }
+            }
+            .pointerInput(enabled, marks) {
+                if (!enabled) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        val idx = nearestIndex((offset.x / size.width).coerceIn(0f, 1f))
+                        dragIndex = idx
+                        onPreview(marks[idx].fraction.toFloat())
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        val idx = nearestIndex((change.position.x / size.width).coerceIn(0f, 1f))
+                        dragIndex = idx
+                        onPreview(marks[idx].fraction.toFloat())
+                    },
+                    onDragEnd = {
+                        dragIndex?.let { onSeek(marks[it].cursor) }
+                        dragIndex = null
+                        onPreview(null)
+                    },
+                    onDragCancel = {
+                        dragIndex = null
+                        onPreview(null)
+                    },
+                )
+            },
+    ) {
+        val fullWidth = maxWidth
+        marks.forEachIndexed { index, mark ->
+            // Center the pill BODY on its fraction, clamped so it never spills past either edge. The
+            // tail tip still points at the true fraction, so its horizontal position inside the body
+            // compensates for the clamp (matching iOS). Width is unknown until first layout, so the
+            // body start-anchors and the tail centers for one frame, then both settle.
+            var pillWidth by remember(mark) { mutableStateOf(0.dp) }
+            val anchor = fullWidth * mark.fraction.toFloat()
+            val maxX = (fullWidth - pillWidth).coerceAtLeast(0.dp)
+            val x = (anchor - pillWidth / 2).coerceIn(0.dp, maxX)
+            val tailFraction =
+                if (pillWidth.value > 0f) ((anchor.value - x.value) / pillWidth.value).coerceIn(0f, 1f) else 0.5f
+            RehearsalMarkPill(
+                text = mark.text,
+                isCurrent = index == highlightIndex,
+                tailCenterFraction = tailFraction,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .zIndex(if (index == highlightIndex) 1f else 0f)
+                    .offset(x = x)
+                    .onGloballyPositioned { pillWidth = with(density) { it.size.width.toDp() } },
+            )
+        }
+    }
+}
+
+/** Width / height of the downward speech-bubble tail under each rehearsal-mark pill. */
+private val rehearsalTailWidth = 9.dp
+private val rehearsalTailHeight = 5.dp
+
+/**
+ * A single rehearsal-mark pill with a downward speech-bubble tail (iOS parity). The tail tip points at
+ * [tailCenterFraction] (0..1 across the body width) so it marks the true timeline position even when the
+ * body is clamped to stay on-screen. Filled when current, outlined otherwise.
+ */
+@Composable
+private fun RehearsalMarkPill(
+    text: String,
+    isCurrent: Boolean,
+    tailCenterFraction: Float,
+    modifier: Modifier = Modifier,
+) {
+    val container =
+        if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+    val content =
+        if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val density = LocalDensity.current
+    val tailW = with(density) { rehearsalTailWidth.toPx() }
+    val tailH = with(density) { rehearsalTailHeight.toPx() }
+    val cornerPx = with(density) { 8.dp.toPx() }
+    val shape = remember(tailCenterFraction, tailW, tailH, cornerPx) {
+        GenericShape { size, _ ->
+            // ONE continuous outline: a rounded-rect body whose bottom edge detours straight down into
+            // the triangle tail and back up, so the body + tail read as a single bubble with no inner
+            // seam (mirrors iOS, which strokes a single path). The tip points at [tailCenterFraction].
+            val bodyBottom = size.height - tailH
+            val r = minOf(cornerPx, bodyBottom / 2f)
+            val half = tailW / 2f
+            // Keep the tail base on the straight part of the bottom edge (clear of the rounded corners).
+            val tip = (tailCenterFraction * size.width)
+                .coerceIn(r + half, (size.width - r - half).coerceAtLeast(r + half))
+            moveTo(r, 0f)
+            lineTo(size.width - r, 0f)
+            quadraticBezierTo(size.width, 0f, size.width, r)
+            lineTo(size.width, bodyBottom - r)
+            quadraticBezierTo(size.width, bodyBottom, size.width - r, bodyBottom)
+            lineTo(tip + half, bodyBottom)
+            lineTo(tip, size.height)
+            lineTo(tip - half, bodyBottom)
+            lineTo(r, bodyBottom)
+            quadraticBezierTo(0f, bodyBottom, 0f, bodyBottom - r)
+            lineTo(0f, r)
+            quadraticBezierTo(0f, 0f, r, 0f)
+            close()
+        }
+    }
+    Surface(
+        color = container,
+        contentColor = content,
+        shape = shape,
+        border = if (isCurrent) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier,
+    ) {
+        Text(
+            text = text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall,
+            // Reserve the tail strip below the text so the glyphs stay in the body.
+            modifier = Modifier
+                .widthIn(max = 96.dp)
+                .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 2.dp + rehearsalTailHeight),
+        )
     }
 }
 
@@ -1032,6 +1357,7 @@ internal fun HorizontalScore(
                             pxPerMM = fitPxPerMM,
                             scale = scale,
                             panOffset = Offset.Zero,
+                            color = abAccent,
                             modifier = Modifier.fillMaxSize(),
                         )
                         LoopHighlightOverlay(

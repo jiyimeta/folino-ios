@@ -41,6 +41,10 @@ private final class FakeLibraryStore: LibraryStore {
     }
 
     func copyImportedFile(fromPath _: String, localFileName _: String) {}
+    func sha256(path _: String) -> String {
+        ""
+    }
+
     func removeFile(localFileName _: String) {}
     func scoresDirectoryPath() -> String {
         "/tmp"
