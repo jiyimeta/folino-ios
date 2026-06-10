@@ -8,8 +8,8 @@ import WireletProvided
 /// lockstep with iOS.
 @WireletProvided
 public protocol ReaderPreferencesStore {
-    /// The stored JSON for `scoreId`, or `nil` if none has been saved yet.
-    func loadJSON(scoreId: String) -> String?
+    /// The stored JSON for `scoreId`, or `""` (empty) if none has been saved yet.
+    func loadJSON(scoreId: String) -> String
     /// Insert or replace the stored JSON for `scoreId`.
     func saveJSON(scoreId: String, json: String)
 }
