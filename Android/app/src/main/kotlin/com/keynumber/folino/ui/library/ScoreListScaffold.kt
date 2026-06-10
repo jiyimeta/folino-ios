@@ -383,18 +383,22 @@ private fun ScoreRow(
             headlineContent = { Text(headline) },
             supportingContent = {
                 if (row.isFavorite || row.composer.isNotEmpty()) {
+                    // Match Google Drive: star + composer share one neutral "secondary"
+                    // gray (SwiftUI `.secondary` equivalent = label color at 60% alpha),
+                    // not the near-black title color.
+                    val secondary = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (row.isFavorite) {
                             Icon(
                                 Icons.Filled.Star,
                                 contentDescription = stringResource(R.string.favorite_indicator),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = secondary,
                                 modifier = Modifier
                                     .size(16.dp)
                                     .padding(end = 4.dp),
                             )
                         }
-                        if (row.composer.isNotEmpty()) Text(row.composer)
+                        if (row.composer.isNotEmpty()) Text(row.composer, color = secondary)
                     }
                 }
             },
