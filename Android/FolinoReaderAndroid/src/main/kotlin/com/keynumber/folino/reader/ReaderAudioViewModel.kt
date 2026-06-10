@@ -24,6 +24,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -74,6 +75,33 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     val currentCursor: StateFlow<ScoreCursor?> = _engine
         .flatMapLatest { it?.currentCursor ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // Mirrors iOS `ReaderPlaybackSession.hasLoadedIntoPlayback`: true once a score is prepared into the
+    // engine, cleared at natural end (below) and on teardown. Distinguishes the engine's natural
+    // end-of-score cursor nil from a teardown nil, so auto-advance fires only at a true end.
+    @Volatile
+    private var hasLoadedIntoPlayback = false
+
+    // One-shot end-of-score signal. The Reader collects this to run the playlist auto-advance decision.
+    // No replay; buffered by 1 so an emit without an active collector is not dropped.
+    private val _onReachedEnd = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val onReachedEnd: kotlinx.coroutines.flow.SharedFlow<Unit> =
+        _onReachedEnd.asSharedFlow()
+
+    init {
+        // End-of-score = the engine nils the cursor while a score is loaded (iOS parity). The flag is
+        // cleared here before emitting so a subsequent teardown/re-prepare nil cannot re-fire advance.
+        // Placed after the properties it reads (currentCursor / hasLoadedIntoPlayback / _onReachedEnd)
+        // so they are initialized before this init block runs.
+        viewModelScope.launch {
+            currentCursor.collect { cursor ->
+                if (cursor == null && hasLoadedIntoPlayback) {
+                    hasLoadedIntoPlayback = false
+                    _onReachedEnd.tryEmit(Unit)
+                }
+            }
+        }
+    }
 
     val currentTimeSeconds: StateFlow<Double> = _engine
         .flatMapLatest { it?.currentTimeSeconds ?: emptyFlow() }
@@ -290,6 +318,7 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             e.setMasterTuning(cents)
             try {
                 e.prepare(scoreHandle)
+                hasLoadedIntoPlayback = true
                 // Re-apply the seeded per-score playback scalars: a freshly prepared player resets the
                 // synth's master volume and tempo (and metronome — re-pushed by the caller via the
                 // soundfont-reload hook). Master tuning was already applied above; rate + volume are
@@ -342,6 +371,7 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     override fun onCleared() {
+        hasLoadedIntoPlayback = false
         getApplication<Application>().unbindService(connection)
         super.onCleared()
     }
