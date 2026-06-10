@@ -1,5 +1,34 @@
 import Wirelet
 
+/// Scalar projection of `ReaderPreferences` for Compose, mirroring `SoundfontStateWire`. `honorLayoutBreaks` is
+/// folded in here because the observable emitter does not project a bare `Bool` stored property on the bridge.
+/// Sentinels (Wirelet has no `nil`): `tempoMultiplier == 0` ⇒ no override; `a4ReferenceHz == 0` ⇒ inherit global.
+@WireFormat
+public struct ReaderPreferencesStateWire: Equatable, Sendable {
+    public var staffSize: Double
+    public var honorLayoutBreaks: Bool
+    public var masterVolume: Double
+    public var tempoMultiplier: Double // 0 => no override
+    public var a4ReferenceHz: Double // 0 => inherit global
+    public var transposeSemitones: Int32
+
+    public init(
+        staffSize: Double,
+        honorLayoutBreaks: Bool,
+        masterVolume: Double,
+        tempoMultiplier: Double,
+        a4ReferenceHz: Double,
+        transposeSemitones: Int32,
+    ) {
+        self.staffSize = staffSize
+        self.honorLayoutBreaks = honorLayoutBreaks
+        self.masterVolume = masterVolume
+        self.tempoMultiplier = tempoMultiplier
+        self.a4ReferenceHz = a4ReferenceHz
+        self.transposeSemitones = transposeSemitones
+    }
+}
+
 /// A per-staff GM program override projected to Compose. `partIndex`/`staffIndexInPart`
 /// mirror Domain `StaffAddress`; `program` is the 0…127 GM program.
 @WireFormat
