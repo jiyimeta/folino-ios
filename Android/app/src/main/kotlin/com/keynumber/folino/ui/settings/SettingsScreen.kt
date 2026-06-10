@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
@@ -59,6 +60,7 @@ fun SettingsScreen(
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
     val repeatModeWire by prefs.repeatMode.collectAsState(initial = "off")
+    val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
     val soundfontVM = remember { com.keynumber.folino.soundfont.SoundfontController.viewModel(context) }
     val sfState by soundfontVM.stateWire.collectAsState()
 
@@ -182,6 +184,57 @@ fun SettingsScreen(
                     enabled = true,
                     onSelect = { scope.launch { prefs.setRepeatMode(it.wire) } },
                 )
+            }
+        }
+        item {
+            // Global sticky playlist-continuation mode. Persist-only: the playlist continuous-playback
+            // feature that consumes this value is not yet built on Android, so selecting only saves the
+            // choice (no playback behavior is wired). Mirrors the iOS Settings continuation row wording.
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                    contentDescription = stringResource(R.string.settings_playlist_continuation),
+                    modifier = Modifier.padding(end = 12.dp),
+                )
+                Text(stringResource(R.string.settings_playlist_continuation), Modifier.weight(1f))
+                val continuationModes = listOf(
+                    "off" to stringResource(R.string.playlist_continuation_off),
+                    "playThrough" to stringResource(R.string.playlist_continuation_play_through),
+                    "loopPlaylist" to stringResource(R.string.playlist_continuation_loop),
+                )
+                var expanded by remember { mutableStateOf(false) }
+                val current = continuationModes.firstOrNull { it.first == continuationModeWire }
+                    ?: continuationModes[1]
+                Box {
+                    Row(
+                        Modifier.clickable { expanded = true }
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(current.second)
+                        Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        continuationModes.forEach { (raw, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                trailingIcon = if (raw == continuationModeWire) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else {
+                                    null
+                                },
+                                onClick = {
+                                    scope.launch { prefs.setPlaylistContinuationMode(raw) }
+                                    expanded = false
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
         item {
