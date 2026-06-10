@@ -317,7 +317,7 @@ struct ReaderPreferencesTests {
             staffClefOverrides: [StaffAddress(partIndex: 0, staffIndexInPart: 0): "F"],
             tempoMultiplier: 1.5,
             honorLayoutBreaks: false,
-            repeatMode: .off,
+            repeatMode: .abLoop,
             abRepeat: ABRepeatRange(
                 start: ChordPath(systemIndex: 0, measureIndex: 2, voiceIndex: 0, chordIndex: 0),
                 end: ChordPath(systemIndex: 1, measureIndex: 5, voiceIndex: 0, chordIndex: 0),
