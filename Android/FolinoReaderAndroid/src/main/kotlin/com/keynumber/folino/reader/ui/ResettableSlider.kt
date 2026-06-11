@@ -70,17 +70,22 @@ private fun defaultFraction(value: Float, range: ClosedFloatingPointRange<Float>
     return ((value - range.start) / span).coerceIn(0f, 1f)
 }
 
-/** Half the Material3 Slider thumb width — the track is inset by this on each side. */
-private val ThumbRadius: Dp = 10.dp
+/**
+ * Half the Material3 Slider thumb width — the thumb centre (which marks the value) travels from this
+ * inset on the left to `width - inset` on the right. Material3 1.3's slider thumb is 4dp wide, so the
+ * inset is 2dp. Using the wrong value skews the tick toward the centre, worst at the extremes (the
+ * error is `(usedInset - realInset)·(1 - 2·fraction)`, which is zero at fraction 0.5).
+ */
+private val ThumbHalfWidth: Dp = 2.dp
 
 /**
- * Draws a small vertical tick at [fraction] of the usable track width (the track is inset by the
- * thumb radius on each side, so the tick lines up with where the thumb sits at that value).
+ * Draws a small vertical tick at [fraction] of the thumb's travel range, so it lines up with where
+ * the thumb centre sits at that value.
  */
 private fun Modifier.defaultTick(fraction: Float, color: androidx.compose.ui.graphics.Color, enabled: Boolean): Modifier =
     drawWithContent {
         drawContent()
-        val inset = ThumbRadius.toPx()
+        val inset = ThumbHalfWidth.toPx()
         val usable = (size.width - inset * 2).coerceAtLeast(0f)
         val x = inset + usable * fraction
         val tickHeight = 8.dp.toPx()
