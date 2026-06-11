@@ -253,6 +253,20 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: FolinoScreenshot
 schemes:
+  Folino:
+    build:
+      targets:
+        Folino: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
   FolinoScreenshot:
     build:
       targets:
