@@ -16,6 +16,13 @@ struct VisualInspectorScene: View {
 
     init() {
         ScreenshotSetup.ensure()
+        // iPad presents this inspector as a popover over the Reader; pin the background Reader to vertical layout /
+        // compact transport so its notation renders in `#Preview` (same rationale as ReaderScene). No-op on iPhone.
+        UserDefaults.standard.set(
+            ReaderLayoutMode.vertical.rawValue,
+            forKey: ReaderGlobalSettingsKey.layoutMode,
+        )
+        UserDefaults.standard.set(false, forKey: ReaderGlobalSettingsKey.showSeekBarEnabled)
     }
 
     var body: some View {
@@ -36,20 +43,60 @@ struct VisualInspectorScene: View {
                 innerStatusBarColor: Color(.systemGroupedBackground),
             ),
         ) {
-            NavigationStack {
-                VisualInspectorScreen(
-                    layoutModel: viewModel.layoutModel,
-                    transposeModel: viewModel.transposeModel,
-                    score: Fixture.score,
-                )
-                .task { await viewModel.load() }
+            switch idiom {
+            case .iPhone:
+                // iPhone: the inspector adapts to a full sheet, so render the panel full-bleed.
+                NavigationStack {
+                    inspector
+                }
+            case .iPad:
+                // iPad: the inspector is a popover over the Reader — show the Reader behind, with the panel as a
+                // floating popover card anchored under the display-settings toolbar button (the right icon of the
+                // inspector pill in `ReaderTopOverlay`).
+                ZStack(alignment: .topTrailing) {
+                    readerBackground
+                    IPadPopoverCard(arrowTrailingPadding: 10) {
+                        NavigationStack {
+                            inspector
+                        }
+                    }
+                    .padding(.top, 56)
+                    .padding(.trailing, 14)
+                }
             }
         } overlay: {
             EmptyView()
         }
     }
+
+    private var inspector: some View {
+        VisualInspectorScreen(
+            layoutModel: viewModel.layoutModel,
+            transposeModel: viewModel.transposeModel,
+            score: Fixture.score,
+        )
+        .task { await viewModel.load() }
+    }
+
+    private var readerBackground: some View {
+        NavigationStack {
+            ReaderRootScreen(
+                scoreItem: Fixture.items[0],
+                repository: FixtureScoreRepository(),
+                gateway: FixtureGateway(),
+                shareService: FixtureShareService(),
+                metadataReader: FixtureMetadataReader(),
+                scoresDirectory: URL(filePath: NSTemporaryDirectory()),
+                hidesBackButton: true,
+            )
+        }
+    }
 }
 
-#Preview(traits: .appStoreIPhone) {
+#Preview("iPhone", traits: .appStoreIPhone) {
     VisualInspectorScene().environment(\.screenshotIdiom, .iPhone)
+}
+
+#Preview("iPad", traits: .appStoreIPad) {
+    VisualInspectorScene().environment(\.screenshotIdiom, .iPad)
 }

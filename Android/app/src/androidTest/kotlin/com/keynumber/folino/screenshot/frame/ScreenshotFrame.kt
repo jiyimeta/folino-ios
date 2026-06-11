@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +23,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
+import com.keynumber.folino.reader.LAYOUT_DP_PER_MM
+import com.keynumber.folino.screenshot.fixtures.LocalReaderSeedLayoutWidthMm
 
 // Port of iOS Screenshot/ScreenshotFrameView.swift. Lays out, top to bottom:
 // background gradient -> bold title -> subtitle -> a rounded-corner device frame (fake status bar
@@ -32,6 +35,7 @@ fun ScreenshotFrame(
     title: String,
     subtitle: String?,
     layout: ScreenshotLayout,
+    subtitleBullet: Boolean = false,
     overlay: @Composable () -> Unit = {},
     inner: @Composable () -> Unit,
 ) {
@@ -56,19 +60,39 @@ fun ScreenshotFrame(
                 .padding(horizontal = layout.horizontalPadding),
         )
 
-        // Subtitle (top-anchored just below the title so 1- or 2-line copy grows downward into the
-        // gap above the device frame instead of overlapping it).
+        // Subtitle (top-anchored just below the title so 1- to 3-line copy grows downward into the
+        // gap above the device frame instead of overlapping it). When `subtitleBullet` is true the
+        // copy renders as a left-aligned bulleted list, matching iOS ScreenshotKit: each non-empty
+        // line becomes "•  <line>" (U+2022 + two spaces), empty lines stay empty, joined by "\n", and
+        // text is left-aligned (TextAlign.Start). Otherwise the raw subtitle renders centered.
         if (subtitle != null) {
+            val subtitleText = if (subtitleBullet) {
+                subtitle.split("\n").joinToString("\n") { line ->
+                    if (line.isEmpty()) "" else "•  $line"
+                }
+            } else {
+                subtitle
+            }
+            // Bulleted copy: the text stays left-aligned INTERNALLY, but the block itself is
+            // centered as a unit — so we size the Text to its content (widthIn cap, no fillMaxWidth)
+            // under a TopCenter alignment. Non-bullet copy fills the width and centers each line.
+            val subtitleModifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = h * layout.subtitleTopFraction)
+                .then(
+                    if (subtitleBullet) {
+                        Modifier.widthIn(max = maxWidth - layout.horizontalPadding * 2)
+                    } else {
+                        Modifier.fillMaxWidth().padding(horizontal = layout.horizontalPadding)
+                    },
+                )
             Text(
-                text = subtitle,
+                text = subtitleText,
                 color = layout.subtitleColor,
                 fontSize = layout.subtitleFontSize,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = h * layout.subtitleTopFraction)
-                    .fillMaxWidth()
-                    .padding(horizontal = layout.horizontalPadding),
+                textAlign = if (subtitleBullet) TextAlign.Start else TextAlign.Center,
+                maxLines = 3,
+                modifier = subtitleModifier,
             )
         }
 
@@ -105,7 +129,14 @@ fun ScreenshotFrame(
                         .background(layout.innerBackground)
                         .clipToBounds(),
                 ) {
-                    CompositionLocalProvider(LocalDensity provides innerDensity) {
+                    // Seed the Reader VM with this device's layout width up front (px-independent:
+                    // innerDesignWidth / LAYOUT_DP_PER_MM) so the score lays out at the right width on the
+                    // first frame instead of reflowing from the 210mm seed after the capture already fired.
+                    CompositionLocalProvider(
+                        LocalDensity provides innerDensity,
+                        LocalReaderSeedLayoutWidthMm provides
+                            (layout.innerDesignWidth.value / LAYOUT_DP_PER_MM),
+                    ) {
                         Box(modifier = Modifier.fillMaxSize()) { inner() }
                     }
                 }

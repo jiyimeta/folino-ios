@@ -27,8 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Info
@@ -119,6 +119,9 @@ fun ReaderScreen(
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
     onBack: () -> Unit,
     onEditInfo: () -> Unit = {},
+    /** Opens the share flow for this score (export-format picker → export → system share sheet). The
+     * app module owns the export wiring, so the Reader module only triggers it. */
+    onShare: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
     /** Global A4 reference pitch default (Hz) from SettingsPrefs. Used for the inspector's cents-offset
@@ -334,14 +337,12 @@ fun ReaderScreen(
         return
     }
 
-    val pipCtx = LocalContext.current
     Scaffold(
         topBar = {
             ReaderTopBar(
                 title = title,
-                pipEnabled = pipEnabled,
                 onBack = onBack,
-                onPip = { (pipCtx.findActivity() as? PipHost)?.enterPipNow() },
+                onShare = onShare,
                 onEditInfo = onEditInfo,
                 onPlaybackControls = { showInspector = true },
                 onDisplaySettings = { showDisplayInspector = true },
@@ -383,6 +384,7 @@ fun ReaderScreen(
                         // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
                         // is off) so the last system can scroll out from under the floating play FAB.
                         bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
+                        onLayoutWidthMm = readerVm::setLayoutWidthMm,
                     )
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
                     ReaderLayoutMode.PAGE -> PagedScore(
@@ -438,19 +440,21 @@ fun ReaderScreen(
 }
 
 /**
- * The Reader's top app bar (back arrow + title + the PiP / edit-info / playback / display action
+ * The Reader's top app bar (back arrow + title + the share / edit-info / playback / display action
  * icons). Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar
  * over its score scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams).
  * Production behavior is unchanged: [ReaderScreen] delegates its `topBar` here, passing the same
  * callbacks it used inline.
+ *
+ * PiP is not exposed here — on Android it auto-enters when the user leaves the app during playback;
+ * an explicit toolbar button is an iOS idiom we don't mirror.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderTopBar(
     title: String,
-    pipEnabled: Boolean,
     onBack: () -> Unit,
-    onPip: () -> Unit,
+    onShare: () -> Unit,
     onEditInfo: () -> Unit,
     onPlaybackControls: () -> Unit,
     onDisplaySettings: () -> Unit,
@@ -460,20 +464,26 @@ fun ReaderTopBar(
     TopAppBar(
         modifier = modifier,
         windowInsets = windowInsets,
-        title = { Text(title.ifEmpty { "folino" }) },
+        // Single-line title that ellipsizes when it doesn't fit, so a long score name never wraps the
+        // bar to two rows.
+        title = {
+            Text(
+                title.ifEmpty { "folino" },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         },
         actions = {
-            if (pipEnabled) {
-                IconButton(onClick = onPip) {
-                    Icon(
-                        Icons.Filled.PictureInPicture,
-                        contentDescription = "Picture in Picture",
-                    )
-                }
+            IconButton(onClick = onShare) {
+                Icon(
+                    Icons.Filled.Share,
+                    contentDescription = stringResource(R.string.reader_share),
+                )
             }
             IconButton(onClick = onEditInfo) {
                 Icon(
@@ -502,6 +512,7 @@ private fun ReadyScore(
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
+    onLayoutWidthMm: (Double) -> Unit = {},
 ) {
     val page = state.program.pages.first()
 
@@ -513,12 +524,14 @@ private fun ReadyScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // fit-width: at scale 1 the page width exactly fills the viewport, so the
-    // horizontal extent is zero (no horizontal scroll) — matching iOS zoom 1.0.
-    val fitPxPerMM = if (page.widthMM > 0 && viewportSize.width > 0) {
-        (viewportSize.width / page.widthMM).toFloat()
-    } else {
-        0f
+    // Fixed-density render: pxPerMM is the same on every device, so the staff is the same on-screen
+    // size on phone and tablet. The engine reflows to the viewport width (reported below) so a wider
+    // screen shows MORE music, not bigger notes. Pinch `scale` multiplies on top. (iOS parity.)
+    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
+
+    // Report the viewport-derived layout width up to the VM, which reflows the score to it.
+    LaunchedEffect(viewportSize.width, density.density) {
+        if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))
     }
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
@@ -658,6 +671,7 @@ private fun ReadyScore(
                 val abAccent = MaterialTheme.colorScheme.primary
                 val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
                 val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
+                val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                 scoreHandle?.let { handle ->
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
@@ -670,17 +684,22 @@ private fun ReadyScore(
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
                     )
-                    LoopHighlightOverlay(
-                        scoreHandle = handle,
-                        loopRangeFlow = audioVm.loopRange,
-                        pxPerMM = fitPxPerMM,
-                        scale = scale,
-                        panOffset = Offset.Zero,
-                        color = abAccent.copy(alpha = 0.15f),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = with(density) { vPadPx.toDp() }),
-                    )
+                    // Loop region highlight only in A–B loop mode. Whole-piece repeat (LOOP_ALL) loops
+                    // the entire score, so highlighting it would tint the whole page — suppress it
+                    // there (iOS parity: the loop overlay is gated on `mode == .abLoop`).
+                    if (repeatMode == RepeatMode.AB_LOOP) {
+                        LoopHighlightOverlay(
+                            scoreHandle = handle,
+                            loopRangeFlow = audioVm.loopRange,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            panOffset = Offset.Zero,
+                            color = abAccent.copy(alpha = 0.15f),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(vertical = with(density) { vPadPx.toDp() }),
+                        )
+                    }
                     AbBoundaryMarkersOverlay(
                         scoreHandle = handle,
                         aMeasure = aPending,
@@ -1211,10 +1230,9 @@ private fun formatTime(seconds: Double): String {
     return "%02d:%02d".format(minutes, secs)
 }
 
-// Horizontal mode renders at the same px-per-mm as vertical (A4-width basis), so
-// the staff is the same on-screen size in both modes. The page is wider than the
-// viewport (natural width → horizontal scroll) and shorter (single system →
-// vertical centering).
+// A4 page width (mm). Used only by the PiP aspect calc (pipAspectForSystemHeight): the small PiP
+// window is fit-to-A4-width, so its aspect is A4_WIDTH_MM / systemHeightMM. The full-screen
+// horizontal/vertical surfaces now render at fixed density (see ReaderLayoutDensity), not an A4 basis.
 private const val A4_WIDTH_MM = 210.0
 
 /**
@@ -1243,13 +1261,10 @@ internal fun HorizontalScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // Same px-per-mm as vertical mode (A4-width basis), independent of the natural
-    // page width.
-    val fitPxPerMM = if (viewportSize.width > 0) {
-        (viewportSize.width / A4_WIDTH_MM).toFloat()
-    } else {
-        0f
-    }
+    // Fixed-density render (same pxPerMM as vertical) so the single-system row is the same on-screen
+    // size on phone and tablet. The row is natural-width (no wrap) → horizontal scroll, and this
+    // surface reports no viewport width to the VM (unlike vertical), so the engine's wrap width is moot.
+    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
 
@@ -1402,6 +1417,7 @@ internal fun HorizontalScore(
                     val abAccent = MaterialTheme.colorScheme.primary
                     val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
                     val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
+                    val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                     scoreHandle?.let { handle ->
                         PlaybackCursorOverlay(
                             scoreHandle = handle,
@@ -1412,15 +1428,18 @@ internal fun HorizontalScore(
                             color = abAccent,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        LoopHighlightOverlay(
-                            scoreHandle = handle,
-                            loopRangeFlow = audioVm.loopRange,
-                            pxPerMM = fitPxPerMM,
-                            scale = scale,
-                            panOffset = Offset.Zero,
-                            color = abAccent.copy(alpha = 0.15f),
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        // Loop region highlight only in A–B loop mode (see the vertical surface note).
+                        if (repeatMode == RepeatMode.AB_LOOP) {
+                            LoopHighlightOverlay(
+                                scoreHandle = handle,
+                                loopRangeFlow = audioVm.loopRange,
+                                pxPerMM = fitPxPerMM,
+                                scale = scale,
+                                panOffset = Offset.Zero,
+                                color = abAccent.copy(alpha = 0.15f),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         AbBoundaryMarkersOverlay(
                             scoreHandle = handle,
                             aMeasure = aPending,

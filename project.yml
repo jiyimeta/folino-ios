@@ -196,7 +196,12 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.screenshot
-        PRODUCT_NAME: folino
+        # No explicit PRODUCT_NAME: defaults to the target name (FolinoScreenshot), so this
+        # target builds to FolinoScreenshot.app instead of sharing folino.app with the main
+        # Folino target. Sharing the product path made the screenshot app inherit the main
+        # app's embedded FolinoShareExtension.appex, whose bundle-ID prefix
+        # (com.KeyNumber.Folino) does not match this target's (…Folino.screenshot) — which
+        # broke SwiftUI #Preview / UI-test host installs with a "Mismatched bundle IDs" error.
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Folino.entitlements
         TARGETED_DEVICE_FAMILY: 1,2

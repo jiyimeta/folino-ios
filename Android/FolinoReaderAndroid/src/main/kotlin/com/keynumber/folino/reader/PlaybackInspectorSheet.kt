@@ -35,7 +35,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,6 +60,7 @@ import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
 import com.keynumber.folino.reader.ui.InspectorSliderRow
 import com.keynumber.folino.reader.ui.MetronomeIcon
+import com.keynumber.folino.reader.ui.ResettableSlider
 import com.keynumber.folino.reader.ui.TuningForkIcon
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
 import kotlin.math.ln
@@ -246,11 +246,17 @@ fun PlaybackInspectorContent(
                             )
                         },
                     ) {
-                        Slider(
+                        ResettableSlider(
                             value = masterVolume,
                             onValueChange = {
                                 audioVm.setMasterVolume(it)
                                 onPersistMasterVolume(it.toDouble())
+                            },
+                            // Master volume has no score-authored value; unity (100%) is the default.
+                            defaultValue = 1f,
+                            onReset = {
+                                audioVm.setMasterVolume(1f)
+                                onPersistMasterVolume(1.0)
                             },
                             valueRange = 0f..1f,
                             enabled = controlsEnabled,
@@ -277,6 +283,12 @@ fun PlaybackInspectorContent(
                             val next = (a4ReferenceHz + delta).coerceIn(415.0, 466.0)
                             audioVm.setA4ReferenceHz(next)
                             onPersistA4ReferenceHz(next)
+                        },
+                        // Double-tap resets the per-score A4 to the inherited global reference,
+                        // matching iOS where reset clears the per-score override.
+                        onReset = {
+                            audioVm.setA4ReferenceHz(globalA4ReferenceHz)
+                            onPersistA4ReferenceHz(globalA4ReferenceHz)
                         },
                     )
                 }
@@ -374,9 +386,12 @@ private fun TempoRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
-                Slider(
+                ResettableSlider(
                     value = rate,
                     onValueChange = onRate,
+                    // 1× (the score's notated tempo) is the default; double-tap snaps back to it.
+                    defaultValue = 1.0f,
+                    onReset = { onRate(1.0f) },
                     valueRange = minRate..maxRate,
                     enabled = enabled,
                     modifier = Modifier.weight(1f).height(InspectorSliderHeight),
@@ -483,6 +498,7 @@ private fun A4ReferenceRow(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
     onStep: (Double) -> Unit,
+    onReset: () -> Unit,
 ) {
     // Cents offset of [hz] from [globalHz], same formula as iOS: 1200·log2(hz/globalHz).
     val centsOffset = (1200.0 * (ln(hz) - ln(globalHz)) / ln(2.0)).roundToInt()
@@ -572,10 +588,13 @@ private fun A4ReferenceRow(
                         maxLines = 1,
                     )
                 }
-                Slider(
+                ResettableSlider(
                     value = hz.toFloat(),
                     onValueChange = onValueChange,
                     onValueChangeFinished = onValueChangeFinished,
+                    // Tick + reset target sit at the inherited global reference pitch.
+                    defaultValue = globalHz.toFloat(),
+                    onReset = onReset,
                     valueRange = 415f..466f,
                     enabled = enabled,
                     modifier = Modifier.weight(1f).height(InspectorSliderHeight),
@@ -609,9 +628,13 @@ private fun PartMixerSection(
         // Per-staff volume + Solo/Mute.
         group.channels.forEach { channel ->
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Slider(
+                ResettableSlider(
                     value = channel.volume,
                     onValueChange = { onVolume(channel.staffIndex, it) },
+                    // Default = the score's authored channel volume (CC7 → 0..1), seeded by the
+                    // engine; double-tap restores it. Matches iOS PlaybackMixerModel.defaultVolume.
+                    defaultValue = channel.defaultVolume,
+                    onReset = { onVolume(channel.staffIndex, channel.defaultVolume) },
                     valueRange = 0f..1f,
                     enabled = enabled && !channel.effectiveMute,
                     modifier = Modifier.weight(1f).height(InspectorSliderHeight),

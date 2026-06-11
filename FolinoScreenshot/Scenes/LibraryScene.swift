@@ -1,5 +1,6 @@
 import Domain
 import Library
+import Reader
 import ScreenshotKit
 import SwiftUI
 
@@ -14,6 +15,19 @@ private final class ScreenshotStringsAnchor {}
 
 struct LibraryScene: View {
     @Environment(\.screenshotIdiom) private var idiom
+
+    init() {
+        // The iPad split-view detail hosts a live Reader, so mirror ReaderScene's setup: register the notation font
+        // (also done in ScreenshotApp.init, but repeated here so the detail's notation renders in SwiftUI `#Preview`)
+        // and pin vertical layout / compact transport so the detail looks like the production Reader. No-op for the
+        // iPhone single-column branch, which renders no Reader.
+        ScreenshotSetup.ensure()
+        UserDefaults.standard.set(
+            ReaderLayoutMode.vertical.rawValue,
+            forKey: ReaderGlobalSettingsKey.layoutMode,
+        )
+        UserDefaults.standard.set(false, forKey: ReaderGlobalSettingsKey.showSeekBarEnabled)
+    }
 
     var body: some View {
         ScreenshotFrameView(
@@ -30,17 +44,46 @@ struct LibraryScene: View {
             layout: FolinoScreenshotLayout.layout(
                 for: idiom,
                 subtitleBullet: true,
-                innerStatusBarColor: Color(.systemGroupedBackground),
+                // iPhone shows the grouped library list under the status bar. iPad shows the split-view detail (the
+                // Reader), which `.prominentDetail` dims to ~80% brightness while the sidebar is up — sampled from the
+                // rendered preview as #CCCCCC (white × ~0.8). Match the faux status-bar band to whatever sits directly
+                // below it on each device so the band reads as part of the screen, not a strip.
+                innerStatusBarColor: idiom.pick(
+                    iPhone: Color(.systemGroupedBackground),
+                    iPad: Color(white: 0.8),
+                ),
             ),
         ) {
+            switch idiom {
+            case .iPhone:
+                iPhoneLibrary
+            case .iPad:
+                iPadLibrary
+            }
+        } overlay: {
+            EmptyView()
+        }
+    }
+
+    /// iPhone: the single-column library list (compact size class), matching `AppShellView`'s compact branch.
+    private var iPhoneLibrary: some View {
+        LibraryRootScreen(
+            viewModel: makeLibraryViewModel(),
+            path: .constant(NavigationPath()),
+            onOpenScore: { _ in },
+            readerDestination: { _ in EmptyView() },
+            playlistReaderDestination: { _ in EmptyView() },
+            onOpenInPlaylist: { _, _ in },
+            licenseContent: { EmptyView() },
+        )
+    }
+
+    /// iPad: the sidebar + detail split view (regular size class), mirroring `AppShellView`'s regular branch — the
+    /// library list lives in the sidebar and a score is opened in the prominent detail column.
+    private var iPadLibrary: some View {
+        NavigationSplitView(columnVisibility: .constant(.doubleColumn)) {
             LibraryRootScreen(
-                viewModel: LibraryViewModel(
-                    repository: FixtureScoreRepository(),
-                    importer: FixtureImporter(),
-                    gateway: FixtureGateway(),
-                    shareService: FixtureShareService(),
-                    metadataReader: FixtureMetadataReader(),
-                ),
+                viewModel: makeLibraryViewModel(),
                 path: .constant(NavigationPath()),
                 onOpenScore: { _ in },
                 readerDestination: { _ in EmptyView() },
@@ -48,12 +91,36 @@ struct LibraryScene: View {
                 onOpenInPlaylist: { _, _ in },
                 licenseContent: { EmptyView() },
             )
-        } overlay: {
-            EmptyView()
+            .navigationSplitViewColumnWidth(min: 350, ideal: 420)
+        } detail: {
+            ReaderRootScreen(
+                scoreItem: Fixture.items[0],
+                repository: FixtureScoreRepository(),
+                gateway: FixtureGateway(),
+                shareService: FixtureShareService(),
+                metadataReader: FixtureMetadataReader(),
+                scoresDirectory: URL(filePath: NSTemporaryDirectory()),
+                hidesBackButton: true,
+            )
         }
+        .navigationSplitViewStyle(.prominentDetail)
+    }
+
+    private func makeLibraryViewModel() -> LibraryViewModel {
+        LibraryViewModel(
+            repository: FixtureScoreRepository(),
+            importer: FixtureImporter(),
+            gateway: FixtureGateway(),
+            shareService: FixtureShareService(),
+            metadataReader: FixtureMetadataReader(),
+        )
     }
 }
 
-#Preview(traits: .appStoreIPhone) {
+#Preview("iPhone", traits: .appStoreIPhone) {
     LibraryScene().environment(\.screenshotIdiom, .iPhone)
+}
+
+#Preview("iPad", traits: .appStoreIPad) {
+    LibraryScene().environment(\.screenshotIdiom, .iPad)
 }

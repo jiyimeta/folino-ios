@@ -371,15 +371,16 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     override fun onCleared() {
-        // Stop playback when the Reader is closed (mirrors iOS releaseEngine on teardown). The engine is
-        // a singleton owned by the started ReaderPlaybackService and outlives this view model, so without
-        // this it keeps playing after the Reader is dismissed, and — because it stays non-STOPPED — the
-        // next Reader's preparePlayback early-returns (its `state != STOPPED` guard), leaving the new score
-        // unprepared (stale cursor, dead tap-to-seek, controls driving the previous score). stop() silences
-        // audio and resets the engine to STOPPED so the next open prepares cleanly. Clear the loaded flag
-        // first so the stop()-induced cursor nil does not fire the end-of-score auto-advance.
-        // (Not reached during PiP or in-place playlist advance: the view model is only cleared when the
-        // Reader's nav entry is popped, not while the activity/composable stays alive.)
+        // The Reader owns the playback session. This view model is scoped to the Reader's back-stack
+        // entry, so onCleared runs exactly when that entry is finally removed — an in-app close (system
+        // back, or any pop of the reader route back to the Library). Stop the engine there so audio never
+        // outlives the Reader: the bound playback service keeps the engine alive on its own (that powers
+        // PiP / background playback), so without this the score keeps playing after the Reader is gone,
+        // and — because the engine stays non-STOPPED — the next Reader's preparePlayback early-returns on
+        // its `state != STOPPED` guard, leaving the new score unprepared. NOT called when the Reader is
+        // merely covered by a pushed detail (Edit-Info), backgrounded (Home → PiP / background playback),
+        // or recreated on a configuration change, so those keep playing as intended. Clear the loaded
+        // flag first so the stop()-induced cursor nil does not fire the end-of-score auto-advance.
         hasLoadedIntoPlayback = false
         engine.value?.stop()
         getApplication<Application>().unbindService(connection)

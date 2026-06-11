@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.nearestCursorForTap
+import com.keynumber.folino.screenshot.fixtures.LocalReaderSeedLayoutWidthMm
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
@@ -61,33 +63,55 @@ import kotlinx.coroutines.flow.MutableStateFlow
 @Composable
 fun PipScene(layout: ScreenshotLayout, tag: String) {
     val copy = MarketingStrings.forScene("Pip", tag)
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
             Box(Modifier.fillMaxSize()) {
-                FauxHomeScreen()
-                // Real Folino PiP sits as a wide, short window just below the status bar.
-                PipCard(Modifier.align(Alignment.TopCenter).padding(top = 40.dp, start = 10.dp, end = 10.dp))
+                FauxHomeScreen(isTablet = layout.isTablet)
+                // Real Folino PiP sits as a wide, short window just below the status bar. PiP is
+                // intentionally fit-to-A4-width (a small fixed card), so seed the score layout at A4
+                // width — NOT this device's reflow width — to keep the PiP window unchanged.
+                CompositionLocalProvider(LocalReaderSeedLayoutWidthMm provides A4_WIDTH_MM) {
+                    PipCard(Modifier.align(Alignment.TopCenter).padding(top = 40.dp, start = 10.dp, end = 10.dp))
+                }
             }
         }
     }
 }
 
-// Plain dark launcher backdrop: a status bar, two rows of circular app icons in the lower half, and a
-// shape-only search pill at the bottom. No wallpaper image and no widgets (kept deliberately simple).
+// Generic (no-branding) palette of launcher app-icon tints, long enough to fill a tablet grid.
+private val FAUX_ICON_TINTS = listOf(
+    Color(0xFF5C8DEF), Color(0xFFE7574A), Color(0xFF34A853), Color(0xFFFF5252),
+    Color(0xFF4285F4), Color(0xFF42A5F5), Color(0xFF26A69A), Color(0xFFFFB300),
+    Color(0xFF7E57C2), Color(0xFFEC407A), Color(0xFF29B6F6), Color(0xFF66BB6A),
+    Color(0xFFFFA726), Color(0xFF8D6E63), Color(0xFF5C6BC0), Color(0xFFEF5350),
+    Color(0xFF26C6DA), Color(0xFF9CCC65), Color(0xFFAB47BC), Color(0xFFFFCA28),
+    Color(0xFF78909C), Color(0xFFD4E157), Color(0xFF26A69A), Color(0xFF42A5F5),
+)
+
+// Plain dark launcher backdrop behind the floating PiP card. Device-aware:
+//
+// - Phone: a narrow phone home — two rows of four circular app icons low on the screen plus a shape-only
+//   search pill at the bottom.
+// - Tablet: a tablet home — a WIDER icon grid (6 columns × several rows) centered with comfortable margins
+//   so the content spreads across the wide/squarer canvas, plus a wider bottom search pill. This reads as a
+//   tablet launcher rather than a phone home blown up.
+//
+// No wallpaper image and no widgets in either case (kept deliberately simple).
 @Composable
-private fun FauxHomeScreen() {
+private fun FauxHomeScreen(isTablet: Boolean) {
+    if (isTablet) TabletFauxHomeScreen() else PhoneFauxHomeScreen()
+}
+
+@Composable
+private fun PhoneFauxHomeScreen() {
     Box(Modifier.fillMaxSize().background(Color(0xFF101013))) {
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp)) {
             FauxStatusBar()
             // Empty upper half — the PiP card floats here.
             Spacer(Modifier.weight(1f))
-            val tints = listOf(
-                Color(0xFF5C8DEF), Color(0xFFE7574A), Color(0xFF34A853), Color(0xFFFF5252),
-                Color(0xFF4285F4), Color(0xFF42A5F5), Color(0xFF26A69A), Color(0xFFFFB300),
-            )
-            AppIconRow(0..3, tints)
+            AppIconRow(0..3, iconSize = 56.dp)
             Spacer(Modifier.height(24.dp))
-            AppIconRow(4..7, tints)
+            AppIconRow(4..7, iconSize = 56.dp)
             Spacer(Modifier.height(30.dp))
             SearchPill()
             Spacer(Modifier.height(18.dp))
@@ -95,11 +119,34 @@ private fun FauxHomeScreen() {
     }
 }
 
+// Tablet launcher: a 6-column × 4-row grid of generic app icons, centered with wide side margins, sitting in
+// the lower portion of the canvas, above a wide bottom search pill. The grid's many columns spread the icons
+// across the wide/squarer tablet canvas so it reads as a tablet home rather than a scaled-up phone column.
 @Composable
-private fun AppIconRow(range: IntRange, tints: List<Color>) {
+private fun TabletFauxHomeScreen() {
+    val columns = 6
+    val rows = 4
+    Box(Modifier.fillMaxSize().background(Color(0xFF101013))) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 96.dp)) {
+            FauxStatusBar()
+            // Empty upper portion — the PiP card floats here.
+            Spacer(Modifier.weight(1f))
+            for (r in 0 until rows) {
+                AppIconRow((r * columns) until (r * columns + columns), iconSize = 72.dp)
+                if (r < rows - 1) Spacer(Modifier.height(44.dp))
+            }
+            Spacer(Modifier.height(56.dp))
+            SearchPill()
+            Spacer(Modifier.height(40.dp))
+        }
+    }
+}
+
+@Composable
+private fun AppIconRow(range: IntRange, iconSize: Dp) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         for (i in range) {
-            Box(Modifier.size(56.dp).clip(CircleShape).background(tints[i]))
+            Box(Modifier.size(iconSize).clip(CircleShape).background(FAUX_ICON_TINTS[i % FAUX_ICON_TINTS.size]))
         }
     }
 }

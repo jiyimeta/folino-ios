@@ -5,30 +5,18 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,7 +47,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.keynumber.folino.export.ScoreShareLauncher
 import com.keynumber.folino.library.ReaderPreferencesController
+import com.keynumber.folino.library.ScoreExportFormatWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import com.keynumber.folino.library.generated.ReaderPreferencesBridgeViewModel
 import androidx.core.content.ContextCompat
@@ -76,11 +66,11 @@ import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.theme.FolinoTheme
+import com.keynumber.folino.ui.library.ExportFormatSheet
 import com.keynumber.folino.ui.library.FavoritesListScreen
+import com.keynumber.folino.ui.library.LibraryDrawerContent
 import com.keynumber.folino.ui.library.RecentScreen
 import com.keynumber.folino.ui.library.LibraryScreen
-import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.outlined.History
 import com.keynumber.folino.ui.library.PlaylistDetailScreen
 import com.keynumber.folino.ui.library.PlaylistsListScreen
 import com.keynumber.folino.ui.library.RecentlyDeletedScreen
@@ -95,9 +85,9 @@ import com.keynumber.folino.ui.settings.VersionHistoryItem
 import com.keynumber.folino.ui.settings.VersionHistoryScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -279,6 +269,16 @@ private fun LibraryNavGraph(
         currentRoute == "playlists" || currentRoute == "tags" || currentRoute == "favorites" ||
         currentRoute == "recent"
 
+    // The drawer belongs to the list-level destinations only; a non-capable route (the Reader, the
+    // detail screens) must never show it. Disabling gestures stops the *user* from opening it, but the
+    // drawer can still settle Open on its own when the window is resized: entering / leaving PiP resizes
+    // the Activity, and Material3's ModalNavigationDrawer re-anchors its internal draggable on a size
+    // change and can land on the Open anchor. Force it closed whenever it is open on a non-capable
+    // route so returning from PiP never strands the Library drawer over the Reader.
+    LaunchedEffect(drawerCapable, drawerState.isOpen) {
+        if (!drawerCapable && drawerState.isOpen) drawerState.close()
+    }
+
     fun switchTo(route: String) {
         scope.launch { drawerState.close() }
         if (currentRoute != route) {
@@ -302,80 +302,18 @@ private fun LibraryNavGraph(
         drawerState = drawerState,
         gesturesEnabled = drawerCapable,
         drawerContent = {
-            ModalDrawerSheet {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    stringResource(R.string.library_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.LibraryMusic, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_all_scores)) },
-                    selected = currentRoute == "list",
-                    onClick = { switchTo("list") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Outlined.History, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_recent)) },
-                    selected = currentRoute == "recent",
-                    onClick = { switchTo("recent") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Star, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_favorites)) },
-                    selected = currentRoute == "favorites",
-                    onClick = { switchTo("favorites") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_playlists)) },
-                    selected = currentRoute == "playlists",
-                    onClick = { switchTo("playlists") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.AutoMirrored.Outlined.Label, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_tags)) },
-                    selected = currentRoute == "tags",
-                    onClick = { switchTo("tags") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                    label = { Text(stringResource(R.string.library_recently_deleted)) },
-                    selected = currentRoute == "recentlyDeleted",
-                    onClick = { switchTo("recentlyDeleted") },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_settings)) },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onOpenSettings()
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                // Debug-only entry to the Crashlytics test menu. Compiled out of release builds.
-                if (BuildConfig.DEBUG) {
-                    NavigationDrawerItem(
-                        icon = { Icon(Icons.Filled.BugReport, contentDescription = null) },
-                        label = { Text("Debug menu") },
-                        selected = currentRoute == "debug",
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("debug")
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                }
-            }
+            LibraryDrawerContent(
+                currentRoute = currentRoute,
+                onNavigate = { switchTo(it) },
+                onOpenSettings = {
+                    scope.launch { drawerState.close() }
+                    onOpenSettings()
+                },
+                onOpenDebug = {
+                    scope.launch { drawerState.close() }
+                    nav.navigate("debug")
+                },
+            )
         },
     ) {
         val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
@@ -522,6 +460,12 @@ private fun LibraryNavGraph(
                 val context = LocalContext.current
                 // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
                 val abRepeatStore = remember(context) { com.keynumber.folino.library.RoomLibraryStore(context) }
+                // Share: the format picker → export → system share-sheet flow for this score, owned by
+                // the app module (mirrors the Library's export→share path). The Reader module only
+                // triggers it via [onShare]; the export VM and FileProvider wiring live here.
+                var shareFormats by remember { mutableStateOf<List<ScoreExportFormatWire>>(emptyList()) }
+                var showShareSheet by remember { mutableStateOf(false) }
+                val exportFailedMsg = stringResource(R.string.export_failed)
                 // Per-score Reader preferences (display + playback + mixer). The generated bridge view
                 // model wraps the Swift ReaderPreferencesBridge over the same Room store; it is scoped
                 // to this Reader route and opened once per score id. The app module owns this wiring so
@@ -561,6 +505,12 @@ private fun LibraryNavGraph(
                     scoreId = currentScoreId,
                     title = title,
                     onEditInfo = { nav.navigate("editInfo/$currentScoreId") },
+                    onShare = {
+                        scope.launch {
+                            shareFormats = withContext(Dispatchers.Default) { vm.exportFormats(currentScoreId) }
+                            showShareSheet = true
+                        }
+                    },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
@@ -662,6 +612,24 @@ private fun LibraryNavGraph(
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
                     onBack = { nav.popBackStackIfResumed() },
                 )
+                if (showShareSheet) {
+                    ExportFormatSheet(
+                        formats = shareFormats,
+                        onPick = { token ->
+                            showShareSheet = false
+                            scope.launch {
+                                val dir = ScoreShareLauncher.exportsDir(context).absolutePath
+                                val path = withContext(Dispatchers.Default) { vm.exportScore(currentScoreId, token, dir) }
+                                if (path.isEmpty()) {
+                                    Toast.makeText(context, exportFailedMsg, Toast.LENGTH_SHORT).show()
+                                } else {
+                                    ScoreShareLauncher.share(context, listOf(path))
+                                }
+                            }
+                        },
+                        onDismiss = { showShareSheet = false },
+                    )
+                }
             }
         }
         // Navigate to a just-imported score when ShareTargetActivity delivers a score id. The key

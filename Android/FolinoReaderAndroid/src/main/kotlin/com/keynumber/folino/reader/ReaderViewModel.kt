@@ -21,7 +21,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-// A4 page in millimetres (matches the example's single-page layout).
+// A4 page height in millimetres, used as the layout canvas height. The layout WIDTH is no longer
+// fixed: it comes from the viewport via [setLayoutWidthMm] so the engine reflows to the real screen
+// width (iOS parity). PAGE_WIDTH_MM is only the pre-viewport seed default.
 private const val PAGE_WIDTH_MM = 210.0
 private const val PAGE_HEIGHT_MM = 297.0
 
@@ -54,6 +56,11 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     private val _layoutOptions = MutableStateFlow(LayoutOptions.DEFAULT)
     val layoutOptions: StateFlow<LayoutOptions> = _layoutOptions.asStateFlow()
 
+    // Viewport-derived layout width (mm) for the wrapping (VERTICAL) layout. Seeded to A4 width until
+    // the render surface reports its viewport; pushed via [setLayoutWidthMm]. Drives the recompute.
+    private val _layoutWidthMm = MutableStateFlow(PAGE_WIDTH_MM)
+    val layoutWidthMm: StateFlow<Double> = _layoutWidthMm.asStateFlow()
+
     private var handle: ScoreHandle? = null
 
     // The score id currently loaded into [handle]. Lets [load] stay idempotent across recompositions
@@ -70,10 +77,15 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         _layoutOptions.value = options
     }
 
+    /** Push the viewport-derived layout width (mm) in from the render surface; drives a recompute. */
+    fun setLayoutWidthMm(mm: Double) {
+        if (mm > 0.0) _layoutWidthMm.value = mm
+    }
+
     /**
-     * Recompute the layout program whenever the score handle OR the display
-     * options change. `mapLatest` cancels any in-flight compute when a newer
-     * (handle, options) pair arrives, after a short debounce, so rapid edits
+     * Recompute the layout program whenever the score handle, the display options, or the
+     * viewport-derived layout width change. `mapLatest` cancels any in-flight compute when a newer
+     * (handle, options, widthMm) triple arrives, after a short debounce, so rapid edits
      * collapse to a single native call.
      *
      * The layout mode (VERTICAL/HORIZONTAL/PAGE) is carried in the options blob
@@ -83,12 +95,14 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun startRecomputeLoop() {
         viewModelScope.launch {
-            combine(_scoreHandle, _layoutOptions) { h, opts -> h to opts }
-                .mapLatest { (h, opts) ->
+            combine(_scoreHandle, _layoutOptions, _layoutWidthMm) { h, opts, widthMm ->
+                Triple(h, opts, widthMm)
+            }
+                .mapLatest { (h, opts, widthMm) ->
                     if (h == null) return@mapLatest
                     delay(RECOMPUTE_DEBOUNCE_MS)
                     val programBytes = withContext(Dispatchers.Default) {
-                        SheetMusicJNI.nativeComputeLayout(h, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, opts.encode())
+                        SheetMusicJNI.nativeComputeLayout(h, widthMm, PAGE_HEIGHT_MM, opts.encode())
                     }
                     if (programBytes.isEmpty()) {
                         _state.value = ReaderState.Error("Layout produced no output")
@@ -201,6 +215,8 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun horizontalProgram(): DrawProgram? {
         val h = handle?.raw ?: return null
         val opts = layoutOptions.value.copy(mode = ReaderLayoutMode.HORIZONTAL)
+        // Horizontal is a natural single-system layout (no wrapping), so the width arg is irrelevant here;
+        // PAGE_WIDTH_MM is just a non-degenerate seed. (PiP also drives this path.)
         val bytes = withContext(Dispatchers.Default) {
             SheetMusicJNI.nativeComputeLayout(h, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, opts.encode())
         }

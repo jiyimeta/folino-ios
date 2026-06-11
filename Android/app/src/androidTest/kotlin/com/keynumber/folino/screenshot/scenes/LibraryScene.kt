@@ -1,5 +1,8 @@
 package com.keynumber.folino.screenshot.scenes
 
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -12,6 +15,7 @@ import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.MockScores
 import com.keynumber.folino.screenshot.frame.ScreenshotFrame
 import com.keynumber.folino.screenshot.frame.ScreenshotLayout
+import com.keynumber.folino.ui.library.LibraryDrawerContent
 import com.keynumber.folino.ui.library.LibraryScreen
 import com.keynumber.folino.ui.theme.FolinoTheme
 
@@ -68,14 +72,30 @@ fun LibraryScene(layout: ScreenshotLayout, tag: String) {
         kotlinx.coroutines.delay(500)
         android.util.Log.e("ScreenshotLib", "afterDelay vmScores=${viewModel.scores.value.size}")
     }
-    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout) {
+    ScreenshotFrame(title = copy.title, subtitle = copy.subtitle, layout = layout, subtitleBullet = copy.bullet) {
         FolinoTheme {
-            LibraryScreen(
-                viewModel = viewModel,
-                onOpenScore = {},
-                onOpenDrawer = {},
-                onEditInfoForScore = {},
-            )
+            // Render the REAL navigation drawer open over the library list, so the marketing shot
+            // shows the production sidebar (same `LibraryDrawerContent` MainActivity uses). The
+            // `showDebug = false` hides the debug-only entry; `currentRoute = "list"` marks
+            // "All scores" selected.
+            ModalNavigationDrawer(
+                drawerState = rememberDrawerState(DrawerValue.Open),
+                drawerContent = {
+                    LibraryDrawerContent(
+                        currentRoute = "list",
+                        onNavigate = {},
+                        onOpenSettings = {},
+                        showDebug = false,
+                    )
+                },
+            ) {
+                LibraryScreen(
+                    viewModel = viewModel,
+                    onOpenScore = {},
+                    onOpenDrawer = {},
+                    onEditInfoForScore = {},
+                )
+            }
         }
     }
 }

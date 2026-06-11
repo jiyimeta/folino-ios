@@ -1,3 +1,6 @@
 # Generated Play Store screenshots — produced by `./gradlew :app:collectScreenshots`.
 # These are build output (regenerated from the screenshot harness), not source.
 metadata/android/*/images/
+
+# fastlane run artifact (supply upload report), regenerated on every lane run.
+report.xml

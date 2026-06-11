@@ -13,6 +13,7 @@
     <string name="reader_pref_show_invisible">숨겨진 요소 표시</string>
     <string name="reader_pref_show_seek_bar">탐색 막대 표시</string>
     <string name="reader_display_settings">표시 설정</string>
+    <string name="reader_share">공유</string>
     <string name="reader_staff_hide">보표 숨기기</string>
     <string name="reader_staff_show">보표 표시</string>
     <string name="reader_clef_choose">음자리표 선택</string>

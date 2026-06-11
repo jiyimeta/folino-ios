@@ -37,4 +37,21 @@ platform :android do
       validate_only: ENV["PLAY_VALIDATE_ONLY"] == "1"
     )
   end
+
+  desc "Upload the full store listing: titles, descriptions, icon, feature graphic, screenshots."
+  desc "No binary and no release-track changelog are touched — listing edits only."
+  lane :upload_listing do
+    upload_to_play_store(
+      # Store listing is global, but supply still resolves a track+release for its changelog path.
+      # Point it at the track that actually has a release (the first AAB went to internal).
+      track: ENV.fetch("PLAY_TRACK", "internal"),
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: false,
+      skip_upload_changelogs: true,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
+      validate_only: ENV["PLAY_VALIDATE_ONLY"] == "1"
+    )
+  end
 end
