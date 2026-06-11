@@ -36,7 +36,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.ui.CollapsibleHeader
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
+import com.keynumber.folino.reader.ui.ResettableSlider
 import kotlin.math.roundToInt
 
 /**
@@ -282,9 +282,12 @@ private fun StaffSizeRow(staffSize: Double, onChange: (Double) -> Unit) {
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium,
         )
-        Slider(
+        ResettableSlider(
             value = staffSize.toFloat(),
             onValueChange = { onChange(it.toDouble()) },
+            // Default staff size matches LayoutOptions.DEFAULT.staffSize (28pt); double-tap restores it.
+            defaultValue = 28f,
+            onReset = { onChange(28.0) },
             valueRange = 8f..28f,
             modifier = Modifier.weight(1f).height(InspectorSliderHeight),
         )
