@@ -22,6 +22,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
+import com.keynumber.folino.reader.LAYOUT_DP_PER_MM
+import com.keynumber.folino.screenshot.fixtures.LocalReaderSeedLayoutWidthMm
 
 // Port of iOS Screenshot/ScreenshotFrameView.swift. Lays out, top to bottom:
 // background gradient -> bold title -> subtitle -> a rounded-corner device frame (fake status bar
@@ -105,7 +107,14 @@ fun ScreenshotFrame(
                         .background(layout.innerBackground)
                         .clipToBounds(),
                 ) {
-                    CompositionLocalProvider(LocalDensity provides innerDensity) {
+                    // Seed the Reader VM with this device's layout width up front (px-independent:
+                    // innerDesignWidth / LAYOUT_DP_PER_MM) so the score lays out at the right width on the
+                    // first frame instead of reflowing from the 210mm seed after the capture already fired.
+                    CompositionLocalProvider(
+                        LocalDensity provides innerDensity,
+                        LocalReaderSeedLayoutWidthMm provides
+                            (layout.innerDesignWidth.value / LAYOUT_DP_PER_MM),
+                    ) {
                         Box(modifier = Modifier.fillMaxSize()) { inner() }
                     }
                 }

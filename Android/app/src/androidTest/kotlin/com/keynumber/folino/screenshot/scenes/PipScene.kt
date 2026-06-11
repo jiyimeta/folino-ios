@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.nearestCursorForTap
+import com.keynumber.folino.screenshot.fixtures.LocalReaderSeedLayoutWidthMm
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
@@ -65,8 +67,12 @@ fun PipScene(layout: ScreenshotLayout, tag: String) {
         FolinoTheme {
             Box(Modifier.fillMaxSize()) {
                 FauxHomeScreen()
-                // Real Folino PiP sits as a wide, short window just below the status bar.
-                PipCard(Modifier.align(Alignment.TopCenter).padding(top = 40.dp, start = 10.dp, end = 10.dp))
+                // Real Folino PiP sits as a wide, short window just below the status bar. PiP is
+                // intentionally fit-to-A4-width (a small fixed card), so seed the score layout at A4
+                // width — NOT this device's reflow width — to keep the PiP window unchanged.
+                CompositionLocalProvider(LocalReaderSeedLayoutWidthMm provides A4_WIDTH_MM) {
+                    PipCard(Modifier.align(Alignment.TopCenter).padding(top = 40.dp, start = 10.dp, end = 10.dp))
+                }
             }
         }
     }
