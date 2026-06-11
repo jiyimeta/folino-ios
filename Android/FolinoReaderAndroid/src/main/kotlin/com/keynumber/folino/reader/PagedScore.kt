@@ -274,6 +274,7 @@ fun PagedScore(
                 val abAccent = MaterialTheme.colorScheme.primary
                 val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
                 val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
+                val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                 scoreHandle?.let { h ->
                     PlaybackCursorOverlay(
                         scoreHandle = h,
@@ -284,15 +285,19 @@ fun PagedScore(
                         color = abAccent,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    LoopHighlightOverlay(
-                        scoreHandle = h,
-                        loopRangeFlow = audioVm.loopRange,
-                        pxPerMM = fitPxPerMM,
-                        scale = scale,
-                        panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
-                        color = abAccent.copy(alpha = 0.15f),
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    // Loop region highlight only in A–B loop mode (whole-piece repeat would tint the
+                    // entire page; iOS parity gates this on `mode == .abLoop`).
+                    if (repeatMode == RepeatMode.AB_LOOP) {
+                        LoopHighlightOverlay(
+                            scoreHandle = h,
+                            loopRangeFlow = audioVm.loopRange,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
+                            color = abAccent.copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     AbBoundaryMarkersOverlay(
                         scoreHandle = h,
                         aMeasure = aPending,

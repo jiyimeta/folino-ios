@@ -49,9 +49,8 @@ fun ReaderCursorScene(layout: ScreenshotLayout, tag: String) {
                 // screenshot: every callback is a no-op.
                 ReaderTopBar(
                     title = READER_SCENE_TITLE,
-                    pipEnabled = true,
                     onBack = {},
-                    onPip = {},
+                    onShare = {},
                     onEditInfo = {},
                     onPlaybackControls = {},
                     onDisplaySettings = {},

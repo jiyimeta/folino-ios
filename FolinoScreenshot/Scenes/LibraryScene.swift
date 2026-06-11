@@ -44,7 +44,14 @@ struct LibraryScene: View {
             layout: FolinoScreenshotLayout.layout(
                 for: idiom,
                 subtitleBullet: true,
-                innerStatusBarColor: Color(.systemGroupedBackground),
+                // iPhone shows the grouped library list under the status bar. iPad shows the split-view detail (the
+                // Reader), which `.prominentDetail` dims to ~80% brightness while the sidebar is up — sampled from the
+                // rendered preview as #CCCCCC (white × ~0.8). Match the faux status-bar band to whatever sits directly
+                // below it on each device so the band reads as part of the screen, not a strip.
+                innerStatusBarColor: idiom.pick(
+                    iPhone: Color(.systemGroupedBackground),
+                    iPad: Color(white: 0.8),
+                ),
             ),
         ) {
             switch idiom {
