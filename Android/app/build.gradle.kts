@@ -11,6 +11,13 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// versionCode is derived from the git commit count so it strictly increases with every commit and
+// never collides with a code already consumed on Play (manual bumps had already burned 1 and 2).
+// Falls back to 1 outside a git checkout (e.g. a source export).
+val gitCommitCount: Int = providers.exec {
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.map { it.trim().toIntOrNull() ?: 1 }.getOrElse(1)
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -32,8 +39,8 @@ android {
         applicationId = "com.harmolo.folino"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = gitCommitCount
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
