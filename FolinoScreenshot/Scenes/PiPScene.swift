@@ -54,9 +54,9 @@ struct PiPScene: View {
     }
 }
 
-/// The home-screen surface: an abstract gradient "wallpaper" (no image), a faux status-bar row, a 4-column grid of
-/// colored rounded-square icons (no labels), a search pill, a bottom dock, and a floating PiP score window overlapping
-/// the top of the grid.
+/// The home-screen surface: an abstract gradient "wallpaper" (no image), a faux status-bar row, a grid of colored
+/// rounded-square icons (no labels; 4 columns on iPhone, 5 on iPad), and a floating PiP score window overlapping the
+/// top of the grid. iPhone additionally shows a search pill and a bottom dock; iPad omits both.
 private struct HomeScreenMock: View {
     /// Top color of the abstract wallpaper gradient. Exposed so the framed status-bar band can match it.
     static let wallpaperTopColor = Color(.sRGB, red: 0.20, green: 0.24, blue: 0.40)
@@ -74,13 +74,10 @@ private struct HomeScreenMock: View {
         Color(.sRGB, red: 0.98, green: 0.84, blue: 0.36), // yellow
     ]
 
+    @Environment(\.screenshotIdiom) private var idiom
+
     var body: some View {
         GeometryReader { geo in
-            let cols = 4
-            let rows = 4
-            // Fixed icon size; the grid and dock spacing are passed explicitly below.
-            let iconSide = geo.size.width * 0.16
-
             ZStack(alignment: .top) {
                 // Abstract wallpaper — gradient only, no image.
                 LinearGradient(
@@ -91,20 +88,24 @@ private struct HomeScreenMock: View {
 
                 homeStack(
                     size: geo.size,
-                    iconSide: iconSide, rows: rows, cols: cols,
+                    iconSide: geo.size.width * (idiom == .iPad ? 0.09 : 0.16),
+                    rows: 4,
+                    cols: idiom == .iPad ? 5 : 4,
                 )
 
                 // Faux Dynamic Island — black pill centered at the top, sized/positioned to match a real iPhone
                 // (≈125/393 wide, ≈37/852 tall, ≈11/852 from the top), between the time and the status icons.
-                Capsule(style: .continuous)
-                    .fill(.black)
-                    .frame(width: geo.size.width * 0.32, height: geo.size.height * 0.043)
-                    .padding(.top, geo.size.height * 0.013)
+                if idiom == .iPhone {
+                    Capsule(style: .continuous)
+                        .fill(.black)
+                        .frame(width: geo.size.width * 0.32, height: geo.size.height * 0.043)
+                        .padding(.top, geo.size.height * 0.013)
+                }
 
                 // Floating PiP window — overlaps the top of the icon grid, leaving the status bar + first icon row
                 // visible above it so the home-screen surface reads clearly behind the floating window.
                 pipWindow(width: geo.size.width)
-                    .padding(.top, geo.size.height * 0.085)
+                    .padding(.top, geo.size.height * (idiom == .iPad ? 0.03 : 0.085))
             }
         }
     }
@@ -117,28 +118,31 @@ private struct HomeScreenMock: View {
     ) -> some View {
         VStack(spacing: 0) {
             statusBar(width: size.width)
-                // Vertically centered on the Dynamic Island (matching a real iPhone status bar). The inner status-bar
-                // band is disabled (innerStatusBarHeight: 0), so this row owns the very top of the thumbnail.
-                    .padding(.top, size.height * 0.026)
+                // iPhone: vertically centered on the Dynamic Island. iPad: no Dynamic Island, so push the row right up
+                // to the thumbnail's top edge (the inner status-bar band is disabled, innerStatusBarHeight: 0, so this
+                // row owns the very top).
+                    .padding(.top, size.height * (idiom == .iPad ? 0.006 : 0.026))
 
-            Spacer().frame(height: size.height * 0.03)
+            Spacer().frame(height: size.height * (idiom == .iPad ? 0.1 : 0.03))
 
             iconGrid(
                 rows: rows,
                 cols: cols,
                 iconSide: iconSide,
-                horizontalSpacing: size.width * 0.07,
-                verticalSpacing: size.height * 0.0465,
+                horizontalSpacing: size.width * (idiom == .iPad ? 0.058 : 0.07),
+                verticalSpacing: size.height * (idiom == .iPad ? 0.0725 : 0.0465),
             )
 
             Spacer(minLength: 0)
 
-            searchPill(width: size.width)
-                .padding(.bottom, size.height * 0.028)
+            if idiom == .iPhone {
+                searchPill(width: size.width)
+                    .padding(.bottom, size.height * 0.028)
 
-            dock(iconSide: iconSide, gap: size.width * 0.06)
-                // Only a small margin below the dock (sits near the very bottom of the home screen).
-                    .padding(.bottom, size.height * 0.019)
+                dock(iconSide: iconSide, gap: size.width * 0.06)
+                    // Only a small margin below the dock (sits near the very bottom of the home screen).
+                        .padding(.bottom, size.height * 0.019)
+            }
         }
     }
 
@@ -146,20 +150,22 @@ private struct HomeScreenMock: View {
 
     private func statusBar(width: CGFloat) -> some View {
         HStack {
-            Text("19:33")
-                .font(.system(size: width * 0.04, weight: .semibold))
+            Text("9:41")
+                .font(.system(size: width * (idiom == .iPad ? 0.021 : 0.04), weight: .semibold))
                 .foregroundStyle(.white)
             Spacer()
             HStack(spacing: width * 0.012) {
-                Image(systemName: "cellularbars")
+                if idiom == .iPhone {
+                    Image(systemName: "cellularbars")
+                }
                 Image(systemName: "wifi")
                 Image(systemName: "battery.100percent")
             }
-            .font(.system(size: width * 0.038, weight: .semibold))
+            .font(.system(size: width * (idiom == .iPad ? 0.018 : 0.038), weight: .semibold))
             .foregroundStyle(.white)
         }
-        .padding(.leading, width * 0.13)
-        .padding(.trailing, width * 0.09)
+        .padding(.leading, width * (idiom == .iPad ? 0.021 : 0.13))
+        .padding(.trailing, width * (idiom == .iPad ? 0.02 : 0.09))
     }
 
     // MARK: - Icon grid
@@ -232,22 +238,25 @@ private struct HomeScreenMock: View {
     // MARK: - PiP window
 
     private func pipWindow(width: CGFloat) -> some View {
-        // Wide PiP window with small, equal left/right margins, centered; sized to fit the 3 visible staves.
+        // Floating PiP window sized to fit the 3 visible staves. iPhone: full content width, centered. iPad: narrower
+        // (0.67×) and trailing-aligned, matching the real iPad PiP window's resting position.
         let sideMargin = width * 0.03
-        let windowWidth = width - sideMargin * 2
-        let windowHeight = windowWidth * 0.4
+        let maxWidth = width - sideMargin * 2
+        let windowWidth = maxWidth * (idiom == .iPad ? 0.67 : 1)
+        let windowHeight = windowWidth * (idiom == .iPad ? 0.5 : 0.4)
         let radius = windowWidth * 0.07 // Clearly rounded iOS PiP window.
         return RoundedRectangle(cornerRadius: radius, style: .continuous)
             .fill(Color.white)
             .frame(width: windowWidth, height: windowHeight)
             .overlay {
                 GeometryReader { geometry in
-                    PiPScoreView()
+                    PiPScoreView(idiom: idiom)
                         .frame(width: geometry.size.width, alignment: .leading)
                         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                 }
             }
             .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 10)
+            .frame(width: maxWidth, alignment: .trailing)
     }
 }
 
@@ -257,14 +266,18 @@ private struct HomeScreenMock: View {
 /// mimicking the live PiP window. The wide single system is left-clipped by the enclosing window so a few measures
 /// stay visible.
 private struct PiPScoreView: View {
-    private static let options = ScoreViewOptions(
-        staffSize: 11,
-        systemGap: 13,
-        wrapToViewWidth: false,
-        includeTitleFrame: false,
-        breakPolicy: .ignoreAll,
-        breakIndicatorVisibility: .none,
-    )
+    let idiom: ScreenshotIdiom
+
+    private var options: ScoreViewOptions {
+        ScoreViewOptions(
+            staffSize: idiom == .iPad ? 21 : 11,
+            systemGap: 13,
+            wrapToViewWidth: false,
+            includeTitleFrame: false,
+            breakPolicy: .ignoreAll,
+            breakIndicatorVisibility: .none,
+        )
+    }
 
     /// The fixture score reduced to only its 2nd/3rd/4th staves (flat indices 1, 2, 3 — Top / 2nd / 3rd), mimicking
     /// the reference PiP window. `filtered(hidingStaves:)` is keyed by `StaffAddress(partIndex, staffIndexInPart)` on
@@ -289,7 +302,7 @@ private struct PiPScoreView: View {
     var body: some View {
         ScoreView(
             score: Self.visibleScore,
-            options: Self.options,
+            options: options,
             // Park the cursor a couple of measures in so the blue line sits inside the visible window.
             playbackCursor: .beat(measureIndex: 1, tickInMeasure: 0),
             playbackCursorColor: Color(.sRGB, red: 0.16, green: 0.45, blue: 0.96),
