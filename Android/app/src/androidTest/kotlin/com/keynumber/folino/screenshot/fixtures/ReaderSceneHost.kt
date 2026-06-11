@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -58,6 +59,13 @@ internal const val READER_SCENE_TITLE = "Now is the time"
 // Holds whatever a screenshot scene needs to render the page (state + scoreHandle + the effective
 // layoutOptions) AND to compose UI that depends on the score's structure (the decoded `parts`, used
 // by the display-inspector scene to address staves and by callers that hide a subset of staves).
+// Viewport-derived layout width (mm) to seed the ReaderViewModel with BEFORE its first layout, so the
+// score lays out at the correct device width on the very first frame instead of laying out at the 210mm
+// seed and then visibly reflowing. The marketing frame knows the inner device width (innerDesignWidth dp)
+// up front, so it provides `innerDesignWidth / LAYOUT_DP_PER_MM` here; without it (default) the VM seeds to
+// A4 width. This removes the seed→reflow race that left the tablet score left-aligned (captured pre-reflow).
+val LocalReaderSeedLayoutWidthMm = staticCompositionLocalOf { 210.0 }
+
 class ReaderSceneState internal constructor(
     val viewModel: ReaderViewModel,
     val state: ReaderState.Ready,
@@ -83,9 +91,14 @@ fun rememberReaderSceneState(optionsFor: (List<PartDescriptor>?) -> LayoutOption
     // readiness gate: the bitmap must wait until the page has actually rendered.
     remember { SceneReady.markGated() }
 
+    // Seed the layout width to the device width BEFORE load so the first (and only) layout is already at
+    // the right width — no 210mm-seed→reflow race for the capture to lose. Runtime `setLayoutWidthMm` pushes
+    // the same value later (deduped by the StateFlow).
+    val seedLayoutWidthMm = LocalReaderSeedLayoutWidthMm.current
     val viewModel = remember {
         MockScores.stageReaderScore(appContext, READER_SCORE_ID)
         ReaderViewModel(appContext).also {
+            it.setLayoutWidthMm(seedLayoutWidthMm)
             it.setLayoutOptions(optionsFor(null))
             it.load(READER_SCORE_ID)
         }
