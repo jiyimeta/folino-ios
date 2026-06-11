@@ -91,14 +91,16 @@ fun PagedScore(
     // included in the key so a wider viewport (e.g. landscape or tablet) triggers a reflow.
     LaunchedEffect(scoreHandle, viewportWidthMm, viewportHeightMm, layoutOptions) {
         if (scoreHandle != null && viewportHeightMm > 0.0) {
-            val pages = readerVm.pagedProgram(viewportWidthMm, viewportHeightMm)?.pages ?: emptyList()
-            val breaks = readerVm.pageBreaks(viewportHeightMm)
-            // Publish only when consistent (one boundary per page edge); otherwise keep the prior data.
-            pagedData = if (pages.isNotEmpty() && breaks.size == pages.size + 1) {
-                PagedData(pages, breaks)
-            } else {
-                null
-            }
+            // One atomic native pass: the program + its matching page breaks are computed under a single
+            // lock so the recompute loop can't clobber the shared layout cache between them (that mismatch
+            // is what blanked the page view when staves were hidden in quick succession).
+            val result = readerVm.pagedProgramAndBreaks(viewportWidthMm, viewportHeightMm)
+            val pages = result?.first?.pages ?: emptyList()
+            val breaks = result?.second ?: DoubleArray(0)
+            val consistent = pages.isNotEmpty() && breaks.size == pages.size + 1
+            // Publish only when consistent (one boundary per page edge); on a transient inconsistency keep
+            // the prior good data rather than blanking the view.
+            if (consistent) pagedData = PagedData(pages, breaks)
         }
     }
 

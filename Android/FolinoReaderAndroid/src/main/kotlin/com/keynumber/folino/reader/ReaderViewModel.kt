@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -63,6 +65,14 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
     private var handle: ScoreHandle? = null
 
+    // Serializes every native layout call (recompute loop, paged fetch, PiP, page breaks) on this VM.
+    // `nativePageBreaks` reads the single-slot `LayoutDocumentCache` populated by the most recent
+    // `nativeComputeLayout` on the handle, so a paged fetch must compute-then-read-breaks atomically:
+    // without the lock the always-running recompute loop interleaves a compute (different width/options)
+    // between the two, clobbering the cache so the breaks no longer match the pages — which blanks the
+    // page-mode view (the consistency check drops the data). One mutex around all of them prevents that.
+    private val layoutMutex = Mutex()
+
     // The score id currently loaded into [handle]. Lets [load] stay idempotent across recompositions
     // (LaunchedEffect(scoreId) re-invokes it) while still RELOADING when the Reader is retargeted to a
     // different score in place — playlist auto-advance swaps the rendered scoreId on this same view model.
@@ -101,8 +111,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 .mapLatest { (h, opts, widthMm) ->
                     if (h == null) return@mapLatest
                     delay(RECOMPUTE_DEBOUNCE_MS)
-                    val programBytes = withContext(Dispatchers.Default) {
-                        SheetMusicJNI.nativeComputeLayout(h, widthMm, PAGE_HEIGHT_MM, opts.encode())
+                    val programBytes = layoutMutex.withLock {
+                        withContext(Dispatchers.Default) {
+                            SheetMusicJNI.nativeComputeLayout(h, widthMm, PAGE_HEIGHT_MM, opts.encode())
+                        }
                     }
                     if (programBytes.isEmpty()) {
                         _state.value = ReaderState.Error("Layout produced no output")
@@ -197,28 +209,55 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Multi-page program for page mode, paginated by the viewport height (mm). */
-    suspend fun pagedProgram(pageWidthMm: Double, pageHeightMm: Double): DrawProgram? {
+    /**
+     * Multi-page program for page mode AND its matching document-Y page-break offsets, computed
+     * atomically under [layoutMutex].
+     *
+     * `nativePageBreaks` paginates the document that the preceding `nativeComputeLayout` stored in the
+     * single-slot `LayoutDocumentCache` for this handle. Both native calls therefore run under one lock
+     * with a single options snapshot, so the always-running recompute loop (or any other layout call)
+     * cannot clobber the cache between them. Without this the breaks paginate a stale/foreign document
+     * (different width or hidden-staff set) and no longer match the page count — which blanked the
+     * page-mode view via the caller's `breaks.size == pages.size + 1` consistency gate.
+     *
+     * Returns the decoded program paired with its breaks, or null on a degenerate / failed compute.
+     */
+    suspend fun pagedProgramAndBreaks(
+        pageWidthMm: Double,
+        pageHeightMm: Double,
+    ): Pair<DrawProgram, DoubleArray>? {
         val h = handle?.raw ?: return null
-        val bytes = withContext(Dispatchers.Default) {
-            SheetMusicJNI.nativeComputeLayout(h, pageWidthMm, pageHeightMm, layoutOptions.value.encode())
+        return layoutMutex.withLock {
+            withContext(Dispatchers.Default) {
+                val optsBytes = layoutOptions.value.encode()
+                val programBytes = SheetMusicJNI.nativeComputeLayout(h, pageWidthMm, pageHeightMm, optsBytes)
+                if (programBytes.isEmpty()) return@withContext null
+                val program = try {
+                    DrawProgramReader.decode(programBytes)
+                } catch (e: Exception) {
+                    return@withContext null
+                }
+                val breaks = PageBreaksCodec.decode(SheetMusicJNI.nativePageBreaks(h, pageHeightMm, optsBytes))
+                program to breaks
+            }
         }
-        if (bytes.isEmpty()) return null
-        return try { DrawProgramReader.decode(bytes) } catch (e: Exception) { null }
     }
 
     /**
      * One-shot horizontal (single-system) layout program for the Picture-in-Picture surface,
      * independent of the user's current layout mode. Same native call as the recompute loop,
-     * with the mode forced to HORIZONTAL in the options blob.
+     * with the mode forced to HORIZONTAL in the options blob. Guarded by [layoutMutex] because it
+     * also writes the shared `LayoutDocumentCache`.
      */
     suspend fun horizontalProgram(): DrawProgram? {
         val h = handle?.raw ?: return null
         val opts = layoutOptions.value.copy(mode = ReaderLayoutMode.HORIZONTAL)
         // Horizontal is a natural single-system layout (no wrapping), so the width arg is irrelevant here;
         // PAGE_WIDTH_MM is just a non-degenerate seed. (PiP also drives this path.)
-        val bytes = withContext(Dispatchers.Default) {
-            SheetMusicJNI.nativeComputeLayout(h, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, opts.encode())
+        val bytes = layoutMutex.withLock {
+            withContext(Dispatchers.Default) {
+                SheetMusicJNI.nativeComputeLayout(h, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, opts.encode())
+            }
         }
         if (bytes.isEmpty()) return null
         return try {
@@ -226,15 +265,6 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             null
         }
-    }
-
-    /** Document-Y page-break offsets (mm) for the cached layout at the given page height. */
-    suspend fun pageBreaks(pageHeightMm: Double): DoubleArray {
-        val h = handle?.raw ?: return DoubleArray(0)
-        val bytes = withContext(Dispatchers.Default) {
-            SheetMusicJNI.nativePageBreaks(h, pageHeightMm, layoutOptions.value.encode())
-        }
-        return PageBreaksCodec.decode(bytes)
     }
 
     override fun onCleared() {

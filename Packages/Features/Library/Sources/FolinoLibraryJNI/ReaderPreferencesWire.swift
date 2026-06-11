@@ -3,6 +3,14 @@ import Wirelet
 /// Scalar projection of `ReaderPreferences` for Compose, mirroring `SoundfontStateWire`. `honorLayoutBreaks` is
 /// folded in here because the observable emitter does not project a bare `Bool` stored property on the bridge.
 /// Sentinels (Wirelet has no `nil`): `tempoMultiplier == 0` ⇒ no override; `a4ReferenceHz == 0` ⇒ inherit global.
+///
+/// `revision` is a monotonically increasing change token bumped on every `republish()`. The per-staff collections
+/// (hidden / clef / program / volume) live outside this struct, reachable only through `@WireletExpose` getters,
+/// so a mutation that touches only a collection leaves every scalar field unchanged. Without `revision` the
+/// rebuilt wire would be `Equatable`-equal to the prior value, and the Kotlin `MutableStateFlow` would dedup it —
+/// the Compose consumer's `remember(state) { vm.hiddenStaves() }` would then never re-read the getter and the
+/// change wouldn't surface until the screen is recreated. `revision` forces a distinct value so the state ticks
+/// on every mutation, honoring the "re-read getters whenever state ticks" contract on the Kotlin side.
 @WireFormat
 public struct ReaderPreferencesStateWire: Equatable, Sendable {
     public var staffSize: Double
@@ -11,6 +19,7 @@ public struct ReaderPreferencesStateWire: Equatable, Sendable {
     public var tempoMultiplier: Double // 0 => no override
     public var a4ReferenceHz: Double // 0 => inherit global
     public var transposeSemitones: Int32
+    public var revision: Int32 // change token; bumped on every republish so per-staff mutations are not deduped
 
     public init(
         staffSize: Double,
@@ -19,6 +28,7 @@ public struct ReaderPreferencesStateWire: Equatable, Sendable {
         tempoMultiplier: Double,
         a4ReferenceHz: Double,
         transposeSemitones: Int32,
+        revision: Int32 = 0,
     ) {
         self.staffSize = staffSize
         self.honorLayoutBreaks = honorLayoutBreaks
@@ -26,6 +36,7 @@ public struct ReaderPreferencesStateWire: Equatable, Sendable {
         self.tempoMultiplier = tempoMultiplier
         self.a4ReferenceHz = a4ReferenceHz
         self.transposeSemitones = transposeSemitones
+        self.revision = revision
     }
 }
 

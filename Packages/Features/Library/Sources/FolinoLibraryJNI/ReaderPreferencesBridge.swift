@@ -22,6 +22,13 @@ public final class ReaderPreferencesBridge {
         didSet { republish() }
     }
 
+    /// Monotonic change token folded into `state` on each republish. The per-staff collections (hidden / clef /
+    /// program / volume) are not part of `ReaderPreferencesStateWire`, so a collection-only mutation would
+    /// otherwise rebuild an `Equatable`-equal wire that the Kotlin `MutableStateFlow` dedups — leaving the
+    /// Compose consumer's `remember(state) { vm.hiddenStaves() }` stale until the screen is recreated. Bumping
+    /// this guarantees a distinct value so the state always ticks. See `ReaderPreferencesStateWire`.
+    @ObservationIgnored private var revision: Int32 = 0
+
     // The explicit type annotation is load-bearing: the wirelet observable schema parser only picks up stored
     // properties that carry an explicit `: Type`, so the generated Kotlin view model emits the `state` StateFlow.
     // Both SwiftFormat and SwiftLint would otherwise strip it as redundant.
@@ -160,6 +167,7 @@ public final class ReaderPreferencesBridge {
     }
 
     private func republish() {
+        revision &+= 1
         state = ReaderPreferencesStateWire(
             staffSize: prefs.staffSize,
             honorLayoutBreaks: prefs.honorLayoutBreaks,
@@ -167,6 +175,7 @@ public final class ReaderPreferencesBridge {
             tempoMultiplier: prefs.tempoMultiplier ?? 0,
             a4ReferenceHz: prefs.a4ReferenceHz ?? 0,
             transposeSemitones: Int32(prefs.transposeSemitones),
+            revision: revision,
         )
     }
 }
