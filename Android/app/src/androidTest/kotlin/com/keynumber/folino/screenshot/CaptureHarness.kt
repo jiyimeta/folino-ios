@@ -59,10 +59,33 @@ fun ComposeContentTestRule.captureFixedSize(
         waitUntil(timeoutMillis = 60_000) { SceneReady.isReady() }
         waitForIdle()
     }
-    val bitmap = onNodeWithTag(CAPTURE_TAG).captureToImage().asAndroidBitmap()
+    // `captureToImage()` drives PixelCopy, which occasionally times out under emulator load on a heavy
+    // frame (the wider tablet reflow lays out ~2x the music, so its frame is heavier to settle). The
+    // capture is deterministic content, so a timeout is purely a grab-timing artifact — let the frame
+    // settle and retry a few times rather than failing the whole suite over one flaky grab.
+    val bitmap = captureWithRetry()
     TestStorage().openOutputFile(filePath).use { raw ->
         BufferedOutputStream(raw).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
     }
+}
+
+// Grab the capture node to a Bitmap, retrying on PixelCopy timeouts. PixelCopy can intermittently fail
+// with a timeout ("Failed waiting for PixelCopy!" / "PixelCopy failed with result 2") when the emulator
+// is under load and the frame is heavy; the content is deterministic, so settle and retry before giving
+// up. Throws the last error if every attempt fails.
+private fun ComposeContentTestRule.captureWithRetry(attempts: Int = 4): Bitmap {
+    var lastError: Throwable? = null
+    repeat(attempts) { attempt ->
+        try {
+            return onNodeWithTag(CAPTURE_TAG).captureToImage().asAndroidBitmap()
+        } catch (error: Throwable) {
+            lastError = error
+            // Let the frame settle, then re-sync Compose before the next grab attempt.
+            Thread.sleep(500)
+            waitForIdle()
+        }
+    }
+    throw lastError ?: IllegalStateException("captureWithRetry exhausted with no recorded error")
 }
