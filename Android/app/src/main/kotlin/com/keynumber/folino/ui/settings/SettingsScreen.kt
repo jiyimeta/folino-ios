@@ -47,6 +47,7 @@ import com.keynumber.folino.reader.RepeatModePicker
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSectionHeader
 import com.keynumber.folino.reader.ui.MetronomeIcon
+import com.keynumber.folino.reader.ui.ResettableSlider
 import com.keynumber.folino.reader.ui.TuningForkIcon
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -211,6 +212,7 @@ fun SettingsScreen(
                     }
                     if (snapped != a4Hz) scope.launch { prefs.setA4ReferenceHz(snapped) }
                 },
+                onReset = { scope.launch { prefs.setA4ReferenceHz(440.0) } },
             )
         }
         item {
@@ -510,6 +512,7 @@ private fun A4SliderRow(
     hz: Double,
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
+    onReset: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(
@@ -530,10 +533,13 @@ private fun A4SliderRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Slider(
+        ResettableSlider(
             value = hz.toFloat(),
             onValueChange = onValueChange,
             onValueChangeFinished = onValueChangeFinished,
+            // Standard concert pitch (440 Hz) is the default; double-tap restores it.
+            defaultValue = 440f,
+            onReset = onReset,
             valueRange = 415f..466f,
             modifier = Modifier.fillMaxWidth(),
         )
