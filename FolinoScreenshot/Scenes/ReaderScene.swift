@@ -62,6 +62,10 @@ struct ReaderScene: View {
     }
 }
 
-#Preview(traits: .appStoreIPhone) {
+#Preview("iPhone", traits: .appStoreIPhone) {
     ReaderScene().environment(\.screenshotIdiom, .iPhone)
+}
+
+#Preview("iPad", traits: .appStoreIPad) {
+    ReaderScene().environment(\.screenshotIdiom, .iPad)
 }

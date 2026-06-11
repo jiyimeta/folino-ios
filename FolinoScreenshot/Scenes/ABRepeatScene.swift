@@ -89,6 +89,10 @@ struct ABRepeatScene: View {
     }
 }
 
-#Preview(traits: .appStoreIPhone) {
+#Preview("iPhone", traits: .appStoreIPhone) {
     ABRepeatScene().environment(\.screenshotIdiom, .iPhone)
+}
+
+#Preview("iPad", traits: .appStoreIPad) {
+    ABRepeatScene().environment(\.screenshotIdiom, .iPad)
 }

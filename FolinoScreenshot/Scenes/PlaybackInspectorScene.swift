@@ -26,6 +26,13 @@ struct PlaybackInspectorScene: View {
         // panel shows a neutral repeat state (and doesn't inherit `.abLoop` left persisted by a prior ABRepeat launch),
         // differentiating it from the ABRepeat scene regardless of capture order.
         RepeatModeStorage.set(.off)
+        // iPad presents this inspector as a popover over the Reader; pin the background Reader to vertical layout /
+        // compact transport so its notation renders in `#Preview` (same rationale as ReaderScene). No-op on iPhone.
+        UserDefaults.standard.set(
+            ReaderLayoutMode.vertical.rawValue,
+            forKey: ReaderGlobalSettingsKey.layoutMode,
+        )
+        UserDefaults.standard.set(false, forKey: ReaderGlobalSettingsKey.showSeekBarEnabled)
     }
 
     var body: some View {
@@ -46,26 +53,66 @@ struct PlaybackInspectorScene: View {
                 innerStatusBarColor: Color(.systemGroupedBackground),
             ),
         ) {
-            NavigationStack {
-                PlaybackInspectorScreen(
-                    mixerModel: viewModel.mixerModel,
-                    tempoModel: viewModel.tempoModel,
-                    masterVolumeModel: viewModel.masterVolumeModel,
-                    a4ReferenceModel: viewModel.a4ReferenceModel,
-                    repeatModel: viewModel.repeatModel,
-                    transposeModel: viewModel.transposeModel,
-                    score: Fixture.score,
-                    playbackCursor: nil,
-                    isInPlaylist: true,
-                )
-                .task { await viewModel.load() }
+            switch idiom {
+            case .iPhone:
+                // iPhone: the inspector adapts to a full sheet, so render the panel full-bleed.
+                NavigationStack {
+                    inspector
+                }
+            case .iPad:
+                // iPad: the inspector is a popover over the Reader — show the Reader behind, with the panel as a
+                // floating popover card anchored under the playback-settings toolbar button (the left icon of the
+                // inspector pill in `ReaderTopOverlay`).
+                ZStack(alignment: .topTrailing) {
+                    readerBackground
+                    IPadPopoverCard(arrowTrailingPadding: 54) {
+                        NavigationStack {
+                            inspector
+                        }
+                    }
+                    .padding(.top, 56)
+                    .padding(.trailing, 14)
+                }
             }
         } overlay: {
             EmptyView()
         }
     }
+
+    private var inspector: some View {
+        PlaybackInspectorScreen(
+            mixerModel: viewModel.mixerModel,
+            tempoModel: viewModel.tempoModel,
+            masterVolumeModel: viewModel.masterVolumeModel,
+            a4ReferenceModel: viewModel.a4ReferenceModel,
+            repeatModel: viewModel.repeatModel,
+            transposeModel: viewModel.transposeModel,
+            score: Fixture.score,
+            playbackCursor: nil,
+            isInPlaylist: true,
+        )
+        .task { await viewModel.load() }
+    }
+
+    private var readerBackground: some View {
+        NavigationStack {
+            ReaderRootScreen(
+                scoreItem: Fixture.items[0],
+                repository: FixtureScoreRepository(),
+                gateway: FixtureGateway(),
+                shareService: FixtureShareService(),
+                metadataReader: FixtureMetadataReader(),
+                scoresDirectory: URL(filePath: NSTemporaryDirectory()),
+                hidesBackButton: true,
+            )
+        }
+    }
 }
 
-#Preview(traits: .appStoreIPhone) {
+#Preview("iPhone", traits: .appStoreIPhone) {
     PlaybackInspectorScene().environment(\.screenshotIdiom, .iPhone)
+}
+
+#Preview("iPad", traits: .appStoreIPad) {
+    PlaybackInspectorScene().environment(\.screenshotIdiom, .iPad)
 }

@@ -299,6 +299,10 @@ private struct PiPScoreView: View {
     }
 }
 
-#Preview(traits: .appStoreIPhone) {
+#Preview("iPhone", traits: .appStoreIPhone) {
     PiPScene().environment(\.screenshotIdiom, .iPhone)
+}
+
+#Preview("iPad", traits: .appStoreIPad) {
+    PiPScene().environment(\.screenshotIdiom, .iPad)
 }
