@@ -30,6 +30,8 @@ import com.keynumber.folino.reader.LayoutOptions
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderTopBar
+import com.keynumber.folino.reader.fixedPxPerMm
+import com.keynumber.folino.reader.layoutWidthMm
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
@@ -105,7 +107,11 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
                 )
                 Box(Modifier.fillMaxSize().weight(1f).background(Color.White).clipToBounds()) {
                     if (scene != null) {
-                        AbScoreWithMarkers(state = scene.state, scoreHandle = scene.scoreHandle)
+                        AbScoreWithMarkers(
+                            state = scene.state,
+                            scoreHandle = scene.scoreHandle,
+                            onLayoutWidthMm = scene.viewModel::setLayoutWidthMm,
+                        )
                     }
                 }
             }
@@ -118,7 +124,11 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
 // hand-tuned) sits centered in the viewport, and draws the loop band + A/B markers in the SAME transformed
 // Box as the page so they align with the score systems. Readiness is gated on the frames AND the loop range.
 @Composable
-private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
+private fun AbScoreWithMarkers(
+    state: ReaderState.Ready,
+    scoreHandle: Long,
+    onLayoutWidthMm: (Double) -> Unit = {},
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val fontProvider = remember(context) { bundledFontProvider(context) }
@@ -151,10 +161,15 @@ private fun AbScoreWithMarkers(state: ReaderState.Ready, scoreHandle: Long) {
     // so the looped run's vertical extent is A's top through B's bottom; X spans the full page width.
     val a = aFrame
     val b = bFrame
-    val fitPxPerMM = if (a != null && b != null && viewportSize.width > 0 && page.widthMM > 0) {
-        (viewportSize.width / page.widthMM).toFloat()
+    // Fixed-density render (same pxPerMM on phone and tablet); the band/scroll formulae below work at any
+    // fitPxPerMM. Report the viewport-derived layout width to the VM so the page reflows like production.
+    val fitPxPerMM = if (a != null && b != null && viewportSize.width > 0) {
+        fixedPxPerMm(density.density)
     } else {
         0f
+    }
+    LaunchedEffect(viewportSize.width, density.density) {
+        if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))
     }
 
     // No horizontal scroll: the page is fit to width, so the row of every system already fills the frame.
