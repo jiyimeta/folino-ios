@@ -11,27 +11,30 @@ struct TransposeRow: View {
             get: { transposeModel.semitones },
             set: { newValue in Task { await transposeModel.setSemitones(newValue) } },
         )
-        HStack(spacing: 8) {
-            if showsIcon {
-                Image("sharp.flat", bundle: .module)
-                    .foregroundStyle(Color.accentColor)
+        // The row content lives in the Stepper's own label (rather than a sibling HStack with `.labelsHidden()`),
+        // so the List renders it as a labeled form row — giving the `−`/`+` the light `tertiarySystemFill` that
+        // matches the staff-size / tempo steppers. A bare `.labelsHidden()` Stepper renders as a standalone control
+        // with a darker fill, which read as inconsistent next to the other rows.
+        Stepper(value: binding, in: -7 ... 7) {
+            HStack(spacing: 8) {
+                if showsIcon {
+                    Image("sharp.flat", bundle: .module)
+                        .foregroundStyle(Color.accentColor)
+                }
+                Text("reader.inspector.transpose", bundle: .module)
+                Spacer()
+                Button {
+                    Task { await transposeModel.reset() }
+                } label: {
+                    Text(
+                        verbatim: transposeModel.semitones > 0
+                            ? "+\(transposeModel.semitones)" : "\(transposeModel.semitones)",
+                    )
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .frame(minWidth: 32, alignment: .trailing)
+                }
             }
-            Text("reader.inspector.transpose", bundle: .module)
-            Spacer()
-            Button {
-                Task { await transposeModel.reset() }
-            } label: {
-                Text(
-                    verbatim: transposeModel.semitones > 0
-                        ? "+\(transposeModel.semitones)" : "\(transposeModel.semitones)",
-                )
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(.primary)
-                .frame(minWidth: 32, alignment: .trailing)
-            }
-            Stepper(value: binding, in: -7 ... 7) { EmptyView() }
-                .labelsHidden()
-                .fixedSize()
         }
     }
 }

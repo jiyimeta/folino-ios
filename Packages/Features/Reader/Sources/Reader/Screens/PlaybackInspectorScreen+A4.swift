@@ -22,7 +22,9 @@ extension PlaybackInspectorScreen {
         HStack(spacing: 8) {
             Image(systemName: "tuningfork")
                 .foregroundStyle(Color.accentColor)
-            VStack(alignment: .leading, spacing: 4) {
+            // `spacing: 8` (not 4) keeps the slider's thumb on the lower line clear of the `−`/`+` stepper above it —
+            // at the tighter spacing the thumb's circle visually grazed the stepper when the value sat near the top.
+            VStack(alignment: .leading, spacing: 8) {
                 a4ReadoutLine(hz: hz)
                 a4SliderLine(globalHz: globalHz)
             }
@@ -40,17 +42,17 @@ extension PlaybackInspectorScreen {
                 Task { await a4ReferenceModel.commitValue(clamped) }
             },
         )
-        HStack(spacing: 8) {
-            Text(verbatim: "A4 = \(Int(hz.rounded()))Hz")
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(.primary)
-                .contentTransition(.numericText(value: hz))
-            Spacer()
-            Stepper(value: stepperHz, in: A4Reference.minHz ... A4Reference.maxHz, step: 1) {
-                EmptyView()
+        // The readout rides in the Stepper's own label so the List treats this as a labeled form row and gives the
+        // `−`/`+` the light `tertiarySystemFill`, matching the tempo / staff-size steppers. A bare `.labelsHidden()`
+        // Stepper renders as a standalone control with a darker fill that read as inconsistent next to the other rows.
+        Stepper(value: stepperHz, in: A4Reference.minHz ... A4Reference.maxHz, step: 1) {
+            HStack(spacing: 8) {
+                Text(verbatim: "A4 = \(Int(hz.rounded()))Hz")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .contentTransition(.numericText(value: hz))
+                Spacer()
             }
-            .labelsHidden()
-            .fixedSize()
         }
     }
 

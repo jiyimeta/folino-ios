@@ -197,7 +197,9 @@ struct PlaybackInspectorScreen: View {
             Image(systemName: "gauge.open.with.lines.needle.33percent")
                 .foregroundStyle(Color.accentColor)
 
-            VStack(alignment: .leading, spacing: 4) {
+            // `spacing: 8` (not 4) keeps the slider's thumb on the lower line clear of the `−`/`+` stepper above it —
+            // at the tighter spacing the thumb's circle visually grazed the stepper when the value sat near the top.
+            VStack(alignment: .leading, spacing: 8) {
                 tempoReadoutLine(referenceBpm: referenceBpm, minBpm: minBpm, maxBpm: maxBpm)
                 tempoSliderLine(referenceBpm: referenceBpm, minBpm: minBpm, maxBpm: maxBpm)
             }
@@ -221,25 +223,25 @@ struct PlaybackInspectorScreen: View {
         let beatGlyph = governing?.beatGlyph ?? "\u{E1D5}"
         let beatValue = Int(((governing?.beatsPerMinute ?? 120) * tempoModel.displayMultiplier).rounded())
         let cursorTempoKey = governing?.beatsPerSecond ?? 2.0
-        HStack(spacing: 8) {
-            Button {
-                Task { await tempoModel.resetMultiplier() }
-            } label: {
-                HStack(spacing: 4) {
-                    TempoBeatGlyph(glyph: beatGlyph, fontSize: 18)
-                    Text(verbatim: "= \(beatValue)")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.primary)
-                        .contentTransition(.numericText(value: Double(beatValue)))
+        // The readout/reset Button rides in the Stepper's own label so the List treats this as a labeled form row and
+        // gives the `−`/`+` the light `tertiarySystemFill`, matching the staff-size / transpose steppers. A bare
+        // `.labelsHidden()` Stepper renders as a standalone control with a darker fill that read as inconsistent.
+        Stepper(value: stepperBpm, in: minBpm ... maxBpm, step: 1) {
+            HStack(spacing: 8) {
+                Button {
+                    Task { await tempoModel.resetMultiplier() }
+                } label: {
+                    HStack(spacing: 4) {
+                        TempoBeatGlyph(glyph: beatGlyph, fontSize: 18)
+                        Text(verbatim: "= \(beatValue)")
+                            .font(.callout.monospacedDigit())
+                            .foregroundStyle(.primary)
+                            .contentTransition(.numericText(value: Double(beatValue)))
+                    }
+                    .animation(.default, value: cursorTempoKey)
                 }
-                .animation(.default, value: cursorTempoKey)
+                Spacer()
             }
-            Spacer()
-            Stepper(value: stepperBpm, in: minBpm ... maxBpm, step: 1) {
-                EmptyView()
-            }
-            .labelsHidden()
-            .fixedSize()
         }
     }
 
