@@ -342,6 +342,15 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     override fun onCleared() {
+        // The Reader owns the playback session. This view model is scoped to the Reader's back-stack
+        // entry, so onCleared runs exactly when that entry is finally removed — an in-app close (system
+        // back, or any pop of the reader route, which routes the user back to the Library). Stop the
+        // engine there so audio never outlives the Reader: the bound playback service keeps the engine
+        // alive on its own (that is what powers PiP / background playback), so without this the score
+        // keeps playing after the Reader is gone. This is NOT called when the Reader is merely covered
+        // by a pushed detail (Edit-Info), backgrounded (Home → PiP / background playback), or recreated
+        // on a configuration change, so those keep playing as intended.
+        engine.value?.stop()
         getApplication<Application>().unbindService(connection)
         super.onCleared()
     }

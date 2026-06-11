@@ -267,6 +267,16 @@ private fun LibraryNavGraph(
         currentRoute == "playlists" || currentRoute == "tags" || currentRoute == "favorites" ||
         currentRoute == "recent"
 
+    // The drawer belongs to the list-level destinations only; a non-capable route (the Reader, the
+    // detail screens) must never show it. Disabling gestures stops the *user* from opening it, but the
+    // drawer can still settle Open on its own when the window is resized: entering / leaving PiP resizes
+    // the Activity, and Material3's ModalNavigationDrawer re-anchors its internal draggable on a size
+    // change and can land on the Open anchor. Force it closed whenever it is open on a non-capable
+    // route so returning from PiP never strands the Library drawer over the Reader.
+    LaunchedEffect(drawerCapable, drawerState.isOpen) {
+        if (!drawerCapable && drawerState.isOpen) drawerState.close()
+    }
+
     fun switchTo(route: String) {
         scope.launch { drawerState.close() }
         if (currentRoute != route) {
