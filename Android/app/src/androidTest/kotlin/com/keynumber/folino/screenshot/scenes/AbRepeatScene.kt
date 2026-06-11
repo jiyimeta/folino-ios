@@ -33,6 +33,8 @@ import com.keynumber.folino.reader.ReaderAudioViewModel
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderTopBar
+import com.keynumber.folino.reader.fixedPxPerMm
+import com.keynumber.folino.reader.layoutWidthMm
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
 import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
@@ -118,6 +120,7 @@ fun AbRepeatScene(layout: ScreenshotLayout, tag: String) {
                             state = scene.state,
                             scoreHandle = scene.scoreHandle,
                             audioVm = audioVm,
+                            onLayoutWidthMm = scene.viewModel::setLayoutWidthMm,
                         )
                         if (audioVm != null) {
                             // Engine prepared: render the real seek-bar-OFF transport cluster at the
@@ -146,6 +149,7 @@ private fun AbScoreWithMarkers(
     state: ReaderState.Ready,
     scoreHandle: Long,
     audioVm: ReaderAudioViewModel?,
+    onLayoutWidthMm: (Double) -> Unit = {},
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -179,10 +183,15 @@ private fun AbScoreWithMarkers(
     // so the looped run's vertical extent is A's top through B's bottom; X spans the full page width.
     val a = aFrame
     val b = bFrame
-    val fitPxPerMM = if (a != null && b != null && viewportSize.width > 0 && page.widthMM > 0) {
-        (viewportSize.width / page.widthMM).toFloat()
+    // Fixed-density render (same pxPerMM on phone and tablet); the band/scroll formulae below work at any
+    // fitPxPerMM. Report the viewport-derived layout width to the VM so the page reflows like production.
+    val fitPxPerMM = if (a != null && b != null && viewportSize.width > 0) {
+        fixedPxPerMm(density.density)
     } else {
         0f
+    }
+    LaunchedEffect(viewportSize.width, density.density) {
+        if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))
     }
 
     // No horizontal scroll: the page is fit to width, so the row of every system already fills the frame.

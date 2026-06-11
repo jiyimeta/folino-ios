@@ -48,7 +48,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
-/** A4 page width (mm) — the wrap width page mode lays out to, scaled to fit the viewport width. */
+/** A4 page width (mm), used only as a pre-measurement fallback seed (page mode now reflows to the viewport). */
 private const val PAGE_WIDTH_MM = 210.0
 
 @Composable
@@ -72,22 +72,26 @@ fun PagedScore(
     var scale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
-    // Page width is the fixed A4 wrap width used by the .page layout. Deriving it from the live
-    // `state.program` instead briefly mismatches the (lagging) fetched pages during a mode switch —
-    // e.g. horizontal's full-score-wide page width applied to the new page's scale — which blows the
-    // content `.size` past Compose's Constraints limit and crashes.
-    val fitPxPerMM = if (viewportSize.width > 0)
-        (viewportSize.width / PAGE_WIDTH_MM).toFloat() else 0f
-    val viewportHeightMm: Double = if (fitPxPerMM > 0f) (viewportSize.height / fitPxPerMM).toDouble() else 0.0
+    // Fixed-density rendering: staff is the same physical size on phone and tablet, and the engine
+    // reflows more music into wider viewports (iOS parity). The old fit-to-A4 approach forced a
+    // fixed 210 mm wrap width regardless of device width, so staff appeared smaller on phone.
+    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
+    // Fallbacks apply only before the viewport is measured; the LaunchedEffect's `viewportHeightMm > 0`
+    // guard below suppresses any layout call until both dims are real, so these seeds never reach the engine.
+    val viewportWidthMm: Double =
+        if (fitPxPerMM > 0f) (viewportSize.width / fitPxPerMM).toDouble() else PAGE_WIDTH_MM
+    val viewportHeightMm: Double =
+        if (fitPxPerMM > 0f) (viewportSize.height / fitPxPerMM).toDouble() else 0.0
 
     // Observe layout options so a display-setting change also triggers a re-fetch.
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
-    // Build the per-page program + page breaks whenever the viewport height OR display options change
-    // (incl. device rotation and any inspector edit that affects pagination).
-    LaunchedEffect(scoreHandle, viewportHeightMm, layoutOptions) {
+    // Build the per-page program + page breaks whenever the viewport dimensions OR display options
+    // change (incl. device rotation and any inspector edit that affects pagination). Width is now
+    // included in the key so a wider viewport (e.g. landscape or tablet) triggers a reflow.
+    LaunchedEffect(scoreHandle, viewportWidthMm, viewportHeightMm, layoutOptions) {
         if (scoreHandle != null && viewportHeightMm > 0.0) {
-            val pages = readerVm.pagedProgram(PAGE_WIDTH_MM, viewportHeightMm)?.pages ?: emptyList()
+            val pages = readerVm.pagedProgram(viewportWidthMm, viewportHeightMm)?.pages ?: emptyList()
             val breaks = readerVm.pageBreaks(viewportHeightMm)
             // Publish only when consistent (one boundary per page edge); otherwise keep the prior data.
             pagedData = if (pages.isNotEmpty() && breaks.size == pages.size + 1) {

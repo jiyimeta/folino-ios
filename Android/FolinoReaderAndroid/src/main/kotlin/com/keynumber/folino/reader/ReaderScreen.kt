@@ -344,6 +344,7 @@ fun ReaderScreen(
                         // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
                         // is off) so the last system can scroll out from under the floating play FAB.
                         bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
+                        onLayoutWidthMm = readerVm::setLayoutWidthMm,
                     )
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
                     ReaderLayoutMode.PAGE -> PagedScore(
@@ -463,6 +464,7 @@ private fun ReadyScore(
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
+    onLayoutWidthMm: (Double) -> Unit = {},
 ) {
     val page = state.program.pages.first()
 
@@ -474,12 +476,14 @@ private fun ReadyScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // fit-width: at scale 1 the page width exactly fills the viewport, so the
-    // horizontal extent is zero (no horizontal scroll) — matching iOS zoom 1.0.
-    val fitPxPerMM = if (page.widthMM > 0 && viewportSize.width > 0) {
-        (viewportSize.width / page.widthMM).toFloat()
-    } else {
-        0f
+    // Fixed-density render: pxPerMM is the same on every device, so the staff is the same on-screen
+    // size on phone and tablet. The engine reflows to the viewport width (reported below) so a wider
+    // screen shows MORE music, not bigger notes. Pinch `scale` multiplies on top. (iOS parity.)
+    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
+
+    // Report the viewport-derived layout width up to the VM, which reflows the score to it.
+    LaunchedEffect(viewportSize.width, density.density) {
+        if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))
     }
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
@@ -1172,10 +1176,9 @@ private fun formatTime(seconds: Double): String {
     return "%02d:%02d".format(minutes, secs)
 }
 
-// Horizontal mode renders at the same px-per-mm as vertical (A4-width basis), so
-// the staff is the same on-screen size in both modes. The page is wider than the
-// viewport (natural width → horizontal scroll) and shorter (single system →
-// vertical centering).
+// A4 page width (mm). Used only by the PiP aspect calc (pipAspectForSystemHeight): the small PiP
+// window is fit-to-A4-width, so its aspect is A4_WIDTH_MM / systemHeightMM. The full-screen
+// horizontal/vertical surfaces now render at fixed density (see ReaderLayoutDensity), not an A4 basis.
 private const val A4_WIDTH_MM = 210.0
 
 /**
@@ -1204,13 +1207,10 @@ internal fun HorizontalScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // Same px-per-mm as vertical mode (A4-width basis), independent of the natural
-    // page width.
-    val fitPxPerMM = if (viewportSize.width > 0) {
-        (viewportSize.width / A4_WIDTH_MM).toFloat()
-    } else {
-        0f
-    }
+    // Fixed-density render (same pxPerMM as vertical) so the single-system row is the same on-screen
+    // size on phone and tablet. The row is natural-width (no wrap) → horizontal scroll, and this
+    // surface reports no viewport width to the VM (unlike vertical), so the engine's wrap width is moot.
+    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
 

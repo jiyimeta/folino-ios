@@ -26,6 +26,8 @@ import com.keynumber.folino.reader.PartDescriptor
 import com.keynumber.folino.reader.ReaderAudioViewModel
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderViewModel
+import com.keynumber.folino.reader.fixedPxPerMm
+import com.keynumber.folino.reader.layoutWidthMm
 import com.keynumber.folino.reader.nearestCursorForTap
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -169,6 +171,7 @@ fun ReaderSceneHost(
         scoreHandle = scene.scoreHandle,
         layoutOptions = scene.layoutOptions,
         withCursor = withCursor,
+        onLayoutWidthMm = scene.viewModel::setLayoutWidthMm,
     )
 }
 
@@ -179,6 +182,7 @@ fun ReaderSceneContent(
     scoreHandle: Long,
     layoutOptions: LayoutOptions,
     withCursor: Boolean,
+    onLayoutWidthMm: (Double) -> Unit = {},
     // When false, the page still renders but does NOT release the capture gate — the scene owns the
     // SceneReady signal (e.g. it must also wait on a prepared audio engine before capturing).
     signalReadyWhenRendered: Boolean = true,
@@ -191,10 +195,11 @@ fun ReaderSceneContent(
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val fitPxPerMM = if (page.widthMM > 0 && viewportSize.width > 0) {
-        (viewportSize.width / page.widthMM).toFloat()
-    } else {
-        0f
+    // Fixed-density render (same pxPerMM on phone and tablet) + report the viewport-derived layout width
+    // to the VM so the score reflows to the device width exactly like production. (Task 7 / iOS parity.)
+    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
+    LaunchedEffect(viewportSize.width, density.density) {
+        if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))
     }
     val vPadPx = with(density) { 16.dp.toPx() }
 
