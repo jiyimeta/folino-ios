@@ -1,3 +1,25 @@
+- version: 1.7.0
+  descriptions:
+    - en: Added transposition (key change)
+      ja: 移調 (キー変更) 機能を追加
+      ko: 조옮김(키 변경) 기능 추가
+      zh-Hans: 新增移调（变调）功能
+      zh-Hant: 新增移調（變調）功能
+    - en: Added pitch calibration (reference pitch tuning)
+      ja: キャリブレーション (基準ピッチ調整) 機能を追加
+      ko: 음정 보정(기준 음정 조정) 기능 추가
+      zh-Hans: 新增音准校准（基准音高调节）功能
+      zh-Hant: 新增音準校正（基準音高調整）功能
+    - en: Added continuous playback across playlists
+      ja: プレイリストの連続再生に対応
+      ko: 재생목록 연속 재생 지원
+      zh-Hans: 支持播放列表连续播放
+      zh-Hant: 支援播放清單連續播放
+    - en: Improved Picture in Picture on iPad
+      ja: iPadのピクチャ・イン・ピクチャ機能を改善
+      ko: iPad의 Picture in Picture 기능 개선
+      zh-Hans: 改进 iPad 的画中画功能
+      zh-Hant: 改善 iPad 的子母畫面功能
 - version: 1.6.1
   descriptions:
     - en: Fixed a rare crash that could occur during playback

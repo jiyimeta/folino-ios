@@ -1,1 +1,4 @@
-- Fixed a rare crash that could occur during playback
+- Added transposition (key change)
+- Added pitch calibration (reference pitch tuning)
+- Added continuous playback across playlists
+- Improved Picture in Picture on iPad
