@@ -108,6 +108,15 @@ private struct ReadyShell: View {
 
     @State private var libraryVM: LibraryViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    /// Layout-deciding size class, committed only while the scene is `.active`. iPadOS transiently reports `.compact`
+    /// while the app backgrounds and PiP resizes the scene; branching the top-level layout directly on the live
+    /// `horizontalSizeClass` would tear down the `NavigationSplitView` (and the Reader detail's `@State` view model,
+    /// and with it the PiP coordinator that AVKit is mid-presenting) on that spurious flip, then rebuild it — leaving a
+    /// frozen, uncontrollable PiP window owned by the orphaned old coordinator. Holding the committed value steady
+    /// across background-only flips keeps the detail — and the live PiP — intact. Real layout changes (rotation, Stage
+    /// Manager / Split View resize) happen while active and are picked up normally.
+    @State private var committedSizeClass: UserInterfaceSizeClass?
     @State private var compactPath: NavigationPath
     @State private var sidebarPath: NavigationPath
     @State private var detailScoreItem: ScoreItem?
@@ -183,9 +192,16 @@ private struct ReadyShell: View {
         }
     }
 
+    /// The layout folino is committed to — drives both the top-level container choice and navigation routing. Backed by
+    /// `committedSizeClass` so a background-only `horizontalSizeClass` flip can't reshuffle the layout out from under
+    /// an active PiP session. Falls back to the live environment value before the first commit (initial render).
+    private var layoutIsRegular: Bool {
+        (committedSizeClass ?? horizontalSizeClass) == .regular
+    }
+
     var body: some View {
         Group {
-            if horizontalSizeClass == .regular {
+            if layoutIsRegular {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebar
                         .navigationSplitViewColumnWidth(min: 350, ideal: 420)
@@ -232,7 +248,7 @@ private struct ReadyShell: View {
                   let item = libraryVM.pendingScoreToOpen,
                   item.id == newID else { return }
             libraryVM.pendingScoreToOpen = nil
-            if horizontalSizeClass == .regular {
+            if layoutIsRegular {
                 sidebarPath = NavigationPath()
                 detailPlaylistID = nil
                 detailScoreItem = item
@@ -277,6 +293,20 @@ private struct ReadyShell: View {
         .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
         .onChange(of: sidebarPath) { _, _ in saveNavSnapshot() }
         .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
+        .onAppear {
+            // Seed the committed layout while active, before any backgrounding can spuriously flip the live value.
+            if committedSizeClass == nil { committedSizeClass = horizontalSizeClass }
+        }
+        .onChange(of: horizontalSizeClass) { _, new in
+            // Commit only while active: ignore the transient `.compact` iPadOS reports while backgrounding + resizing
+            // the scene for PiP, which would otherwise tear down the split view and the live PiP session.
+            if scenePhase == .active { committedSizeClass = new }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Catch up on a real size-class change that landed while away (e.g. Stage Manager resize while
+            // backgrounded).
+            if phase == .active { committedSizeClass = horizontalSizeClass }
+        }
         .overlay {
             if libraryVM.isImporting {
                 ImportLoadingHUD()
@@ -305,7 +335,7 @@ private struct ReadyShell: View {
             return
         case let .openList(route):
             // Multi-file import: jump to the destination list, not Reader.
-            if horizontalSizeClass == .regular {
+            if layoutIsRegular {
                 sidebarPath = NavigationPath()
                 sidebarPath.append(route)
                 detailScoreItem = nil
@@ -317,7 +347,7 @@ private struct ReadyShell: View {
         case let .openReader(item, playlistUnderneath):
             // Single import or dedupe-to-existing: push Reader, with the target playlist underneath so the Back
             // affordance lands there.
-            if horizontalSizeClass == .regular {
+            if layoutIsRegular {
                 sidebarPath = NavigationPath()
                 if let playlistUnderneath {
                     sidebarPath.append(playlistUnderneath)

@@ -132,10 +132,18 @@ public struct ReaderRootScreen: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
+            // `onDisappear` fires both on a genuine in-app close (back to the Library) AND when the app merely
+            // backgrounds — on iPad, sending the app Home while PiP is auto-starting tears the Reader's view off the
+            // screen and fires `onDisappear` even though the user hasn't left the Reader. Releasing the engine there
+            // stops playback and demotes/deactivates the audio session, which suspends the app and kills the freshly
+            // started PiP window. Only tear down on a real close: by the time `onDisappear` runs during backgrounding
+            // the scene is already `.inactive`/`.background`, so `.active` uniquely identifies an in-app dismissal.
+            //
             // `engine.prepare(score:)` ends with `AVAudioEngine.start()` + `engine.pause()`. iOS treats a running
             // engine on a `.playback` session as active audio output and would inhibit auto-lock for the rest of the
-            // app's lifetime if we never tore it down. Release here so screen lock can resume once the user leaves the
-            // Reader.
+            // app's lifetime if we never tore it down — releasing on a real close lets screen lock resume once the
+            // user leaves the Reader; backgrounding keeps the engine alive so background audio + PiP continue.
+            guard scenePhase == .active else { return }
             let viewModel = viewModel
             Task { await viewModel.playbackSession.releaseEngine() }
         }
