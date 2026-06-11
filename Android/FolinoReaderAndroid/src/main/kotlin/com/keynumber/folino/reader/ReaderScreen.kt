@@ -27,8 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Info
@@ -119,6 +119,9 @@ fun ReaderScreen(
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
     onBack: () -> Unit,
     onEditInfo: () -> Unit = {},
+    /** Opens the share flow for this score (export-format picker → export → system share sheet). The
+     * app module owns the export wiring, so the Reader module only triggers it. */
+    onShare: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
     /** Global A4 reference pitch default (Hz) from SettingsPrefs. Used for the inspector's cents-offset
@@ -295,14 +298,12 @@ fun ReaderScreen(
         return
     }
 
-    val pipCtx = LocalContext.current
     Scaffold(
         topBar = {
             ReaderTopBar(
                 title = title,
-                pipEnabled = pipEnabled,
                 onBack = onBack,
-                onPip = { (pipCtx.findActivity() as? PipHost)?.enterPipNow() },
+                onShare = onShare,
                 onEditInfo = onEditInfo,
                 onPlaybackControls = { showInspector = true },
                 onDisplaySettings = { showDisplayInspector = true },
@@ -400,19 +401,21 @@ fun ReaderScreen(
 }
 
 /**
- * The Reader's top app bar (back arrow + title + the PiP / edit-info / playback / display action
+ * The Reader's top app bar (back arrow + title + the share / edit-info / playback / display action
  * icons). Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar
  * over its score scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams).
  * Production behavior is unchanged: [ReaderScreen] delegates its `topBar` here, passing the same
  * callbacks it used inline.
+ *
+ * PiP is not exposed here — on Android it auto-enters when the user leaves the app during playback;
+ * an explicit toolbar button is an iOS idiom we don't mirror.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderTopBar(
     title: String,
-    pipEnabled: Boolean,
     onBack: () -> Unit,
-    onPip: () -> Unit,
+    onShare: () -> Unit,
     onEditInfo: () -> Unit,
     onPlaybackControls: () -> Unit,
     onDisplaySettings: () -> Unit,
@@ -422,20 +425,26 @@ fun ReaderTopBar(
     TopAppBar(
         modifier = modifier,
         windowInsets = windowInsets,
-        title = { Text(title.ifEmpty { "folino" }) },
+        // Single-line title that ellipsizes when it doesn't fit, so a long score name never wraps the
+        // bar to two rows.
+        title = {
+            Text(
+                title.ifEmpty { "folino" },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         },
         actions = {
-            if (pipEnabled) {
-                IconButton(onClick = onPip) {
-                    Icon(
-                        Icons.Filled.PictureInPicture,
-                        contentDescription = "Picture in Picture",
-                    )
-                }
+            IconButton(onClick = onShare) {
+                Icon(
+                    Icons.Filled.Share,
+                    contentDescription = stringResource(R.string.reader_share),
+                )
             }
             IconButton(onClick = onEditInfo) {
                 Icon(
@@ -623,6 +632,7 @@ private fun ReadyScore(
                 val abAccent = MaterialTheme.colorScheme.primary
                 val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
                 val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
+                val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                 scoreHandle?.let { handle ->
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
@@ -635,17 +645,22 @@ private fun ReadyScore(
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
                     )
-                    LoopHighlightOverlay(
-                        scoreHandle = handle,
-                        loopRangeFlow = audioVm.loopRange,
-                        pxPerMM = fitPxPerMM,
-                        scale = scale,
-                        panOffset = Offset.Zero,
-                        color = abAccent.copy(alpha = 0.15f),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = with(density) { vPadPx.toDp() }),
-                    )
+                    // Loop region highlight only in A–B loop mode. Whole-piece repeat (LOOP_ALL) loops
+                    // the entire score, so highlighting it would tint the whole page — suppress it
+                    // there (iOS parity: the loop overlay is gated on `mode == .abLoop`).
+                    if (repeatMode == RepeatMode.AB_LOOP) {
+                        LoopHighlightOverlay(
+                            scoreHandle = handle,
+                            loopRangeFlow = audioVm.loopRange,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            panOffset = Offset.Zero,
+                            color = abAccent.copy(alpha = 0.15f),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(vertical = with(density) { vPadPx.toDp() }),
+                        )
+                    }
                     AbBoundaryMarkersOverlay(
                         scoreHandle = handle,
                         aMeasure = aPending,
@@ -1363,6 +1378,7 @@ internal fun HorizontalScore(
                     val abAccent = MaterialTheme.colorScheme.primary
                     val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
                     val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
+                    val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                     scoreHandle?.let { handle ->
                         PlaybackCursorOverlay(
                             scoreHandle = handle,
@@ -1373,15 +1389,18 @@ internal fun HorizontalScore(
                             color = abAccent,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        LoopHighlightOverlay(
-                            scoreHandle = handle,
-                            loopRangeFlow = audioVm.loopRange,
-                            pxPerMM = fitPxPerMM,
-                            scale = scale,
-                            panOffset = Offset.Zero,
-                            color = abAccent.copy(alpha = 0.15f),
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        // Loop region highlight only in A–B loop mode (see the vertical surface note).
+                        if (repeatMode == RepeatMode.AB_LOOP) {
+                            LoopHighlightOverlay(
+                                scoreHandle = handle,
+                                loopRangeFlow = audioVm.loopRange,
+                                pxPerMM = fitPxPerMM,
+                                scale = scale,
+                                panOffset = Offset.Zero,
+                                color = abAccent.copy(alpha = 0.15f),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         AbBoundaryMarkersOverlay(
                             scoreHandle = handle,
                             aMeasure = aPending,

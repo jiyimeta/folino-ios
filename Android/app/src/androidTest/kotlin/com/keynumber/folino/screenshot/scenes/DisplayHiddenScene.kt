@@ -62,9 +62,8 @@ fun DisplayHiddenScene(layout: ScreenshotLayout, tag: String) {
                 // Real Reader top app bar; static screenshot, callbacks are no-ops.
                 ReaderTopBar(
                     title = READER_SCENE_TITLE,
-                    pipEnabled = true,
                     onBack = {},
-                    onPip = {},
+                    onShare = {},
                     onEditInfo = {},
                     onPlaybackControls = {},
                     onDisplaySettings = {},
