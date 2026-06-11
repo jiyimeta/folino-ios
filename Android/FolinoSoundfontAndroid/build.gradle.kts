@@ -1,7 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
-    id("io.github.jiyimeta.wirelet") version "0.3.2"
+    id("io.github.jiyimeta.wirelet") version "0.3.3-SNAPSHOT"
 }
 
 android {
@@ -23,8 +23,8 @@ android {
 }
 
 dependencies {
-    api("io.github.jiyimeta:wirelet-runtime:0.3.2")
-    api("io.github.jiyimeta:wirelet-observable-runtime:0.3.2")
+    api("io.github.jiyimeta:wirelet-runtime:0.3.3-SNAPSHOT")
+    api("io.github.jiyimeta:wirelet-observable-runtime:0.3.3-SNAPSHOT")
     api("androidx.lifecycle:lifecycle-viewmodel:2.8.7")
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
