@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "fixture.tag.practicing" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -36,6 +37,7 @@
       }
     },
     "scene.abRepeat.subtitle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -70,6 +72,7 @@
       }
     },
     "scene.abRepeat.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -104,6 +107,7 @@
       }
     },
     "scene.library.subtitle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -138,6 +142,7 @@
       }
     },
     "scene.library.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -172,6 +177,7 @@
       }
     },
     "scene.pip.subtitle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -182,7 +188,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "他のアプリを使いながら譜読み\n※設定画面から機能を有効にしてください。"
+            "value" : "他のアプリを使いながら譜読み\n※設定画面から機能を有効に\nしてください。"
           }
         },
         "ko" : {
@@ -206,6 +212,7 @@
       }
     },
     "scene.pip.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -240,6 +247,7 @@
       }
     },
     "scene.playbackInspector.subtitle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -274,6 +282,7 @@
       }
     },
     "scene.playbackInspector.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -308,6 +317,7 @@
       }
     },
     "scene.reader.subtitle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -342,6 +352,7 @@
       }
     },
     "scene.reader.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -376,6 +387,7 @@
       }
     },
     "scene.visualInspector.subtitle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -410,6 +422,7 @@
       }
     },
     "scene.visualInspector.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
