@@ -82,8 +82,16 @@ struct ScoreListView<RowMenu: View>: View {
     private var list: some View {
         List(selection: $selectedIDs) {
             ForEach(items) { item in
-                row(for: item)
-                    .tag(item.id)
+                ScoreListRow(
+                    item: item,
+                    isEditing: isEditing,
+                    onTap: onTap,
+                    onToggleSelection: { toggleSelection(item.id) },
+                    onToggleFavorite: onToggleFavorite,
+                    onConfirmDelete: onConfirmDelete,
+                    rowMenu: rowMenu,
+                )
+                .tag(item.id)
             }
         }
     }
@@ -98,7 +106,15 @@ struct ScoreListView<RowMenu: View>: View {
 
     @ToolbarContentBuilder
     private var trailingToolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) { sortMenu }
+        ToolbarItem(placement: .topBarTrailing) {
+            ScoreSortMenu(
+                isManualOrderActive: isManualOrderActive,
+                sort: sort,
+                showsManualOrderOption: showsManualOrderOption,
+                onSelectSort: onSelectSort,
+                onSelectManualOrder: onSelectManualOrder,
+            )
+        }
         ToolbarSpacer(.fixed, placement: .topBarTrailing)
         ToolbarItem(placement: .topBarTrailing) {
             Button {
@@ -117,103 +133,11 @@ struct ScoreListView<RowMenu: View>: View {
         }
     }
 
-    private func row(for item: ScoreItem) -> some View {
-        HStack(spacing: 0) {
-            ScoreRow(scoreItem: item)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isEditing {
-                        toggleSelection(item.id)
-                    } else {
-                        onTap(item)
-                    }
-                }
-            if !isEditing {
-                Menu {
-                    rowMenu(item)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 34)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.Common.more)
-            }
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                onToggleFavorite(item)
-            } label: {
-                Label {
-                    let key: LocalizedStringKey = item.isFavorite
-                        ? "library.score.unfavorite.action"
-                        : "library.score.favorite.action"
-                    Text(key, bundle: .module)
-                } icon: {
-                    Image(systemName: item.isFavorite ? "star.slash.fill" : "star.fill")
-                }
-            }
-            .tint(.yellow)
-        }
-        // No `role: .destructive` — see `LibraryRootScreen.sectionRow`. Soft-delete: no confirmation, just stamp
-        // `deletedAt`. The item moves into Recently Deleted where the user can restore within 30 days.
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button {
-                onConfirmDelete(item)
-            } label: {
-                Label {
-                    L10n.Common.delete
-                } icon: {
-                    Image(systemName: "trash")
-                }
-            }
-            .tint(.red)
-        }
-        .contextMenu {
-            rowMenu(item)
-        }
-    }
-
     private func toggleSelection(_ id: ScoreItemID) {
         if selectedIDs.contains(id) {
             selectedIDs.remove(id)
         } else {
             selectedIDs.insert(id)
-        }
-    }
-
-    private var sortMenu: some View {
-        Menu {
-            if showsManualOrderOption {
-                Button {
-                    onSelectManualOrder()
-                } label: {
-                    Label {
-                        Text("library.sort.manualOrder", bundle: .module)
-                    } icon: {
-                        Image(systemName: isManualOrderActive ? "checkmark" : "")
-                    }
-                }
-                Divider()
-            }
-            ForEach(ScoreItemSort.allCases) { option in
-                Button {
-                    onSelectSort(option)
-                } label: {
-                    let isSelected = !isManualOrderActive && sort == option
-                    Label {
-                        Text(option.labelKey)
-                    } icon: {
-                        Image(systemName: isSelected ? "checkmark" : "")
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "arrow.up.arrow.down")
-                .accessibilityLabel(Text("library.sort.menu", bundle: .module))
         }
     }
 }
