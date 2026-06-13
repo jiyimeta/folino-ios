@@ -27,6 +27,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @State private var pendingDeleteTag: Tag?
     @State private var editInfoTarget: ScoreItem?
 
+    /// Derived from `repository.scoreItems`, recomputed only when that array changes (via `body`'s `onChange`) instead
+    /// of on every body evaluation — navigation pushes and tag/playlist edits re-run `rootList` but must not re-run the
+    /// recently-opened sort or the favorites count.
+    @State private var recentlyOpened: [ScoreItem] = []
+    @State private var favoriteCount = 0
+
     public init(
         viewModel: LibraryViewModel,
         path: Binding<NavigationPath>,
@@ -82,6 +88,10 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 .navigationDestination(for: PlaylistReaderRoute.self) { route in
                     playlistReaderDestination(route)
                 }
+        }
+        .onChange(of: viewModel.repository.scoreItems, initial: true) { _, items in
+            recentlyOpened = items.mostRecentlyOpened(limit: 5)
+            favoriteCount = items.reduce(0) { $0 + ($1.isFavorite ? 1 : 0) }
         }
         .editScoreInfoSheet(viewModel: viewModel, target: $editInfoTarget)
         .libraryRootDeleteAlerts(
@@ -149,7 +159,6 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     @ViewBuilder
     private var rootList: some View {
         let items = viewModel.repository.scoreItems
-        let recents = items.mostRecentlyOpened(limit: 5)
 
         if items.isEmpty
             && viewModel.repository.tags.isEmpty
@@ -169,7 +178,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             List {
                 LibraryRootBrowseSection(
                     scoreCount: items.count,
-                    favoriteCount: items.filter(\.isFavorite).count,
+                    favoriteCount: favoriteCount,
                     trashCount: viewModel.repository.deletedScoreItems.count,
                 )
                 LibraryRootPlaylistsSection(
@@ -183,7 +192,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     onRequestDelete: { pendingDeleteTag = $0 },
                 )
                 LibraryRootRecentsSection(
-                    recents: recents,
+                    recents: recentlyOpened,
                     viewModel: viewModel,
                     onOpenScore: onOpenScore,
                     editInfoTarget: $editInfoTarget,
