@@ -71,8 +71,7 @@ struct PlaybackInspectorScreen: View {
             }
 
             CollapsibleSection(isExpanded: $partsExpanded) {
-                ForEach(score.parts.indices, id: \.self) { partIndex in
-                    let part = score.parts[partIndex]
+                ForEach(Array(score.parts.enumerated()), id: \.element.id) { partIndex, part in
                     VStack {
                         HStack {
                             Text(part.instrument.longName ?? part.trackName ?? "-")
@@ -86,8 +85,8 @@ struct PlaybackInspectorScreen: View {
                         }
 
                         VStack {
-                            ForEach(part.staves.indices, id: \.self) { staffIndex in
-                                staffRow(address: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex))
+                            ForEach(staffAddresses(part, partIndex: partIndex), id: \.self) { address in
+                                staffRow(address: address)
                             }
                         }
                     }
@@ -284,6 +283,11 @@ struct PlaybackInspectorScreen: View {
                 Text("reader.inspector.metronome", bundle: .module)
             }
         }
+    }
+
+    /// Staff addresses for a part, used as the inner ForEach identity (stable per staff, unlike a position index).
+    private func staffAddresses(_ part: Part, partIndex: Int) -> [StaffAddress] {
+        part.staves.indices.map { StaffAddress(partIndex: partIndex, staffIndexInPart: $0) }
     }
 
     @ViewBuilder

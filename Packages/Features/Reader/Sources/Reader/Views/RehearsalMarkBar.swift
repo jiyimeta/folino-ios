@@ -33,12 +33,15 @@ struct RehearsalMarkBar: View {
     var body: some View {
         GeometryReader { geometry in
             let barWidth = geometry.size.width
+            // Resolve the current mark once per layout pass — `currentMarkID` is O(N), so reading it per row would be
+            // O(N^2). Hoisting it keeps the comparison and stacking order linear.
+            let currentID = currentMarkID
             ZStack {
                 // Transparent full-bar hit layer so a drag registers anywhere across the bar — including the gaps
                 // between bubbles. It sits behind the bubbles, so taps still land on the bubble buttons in front.
                 Color.clear.contentShape(Rectangle())
 
-                ForEach(Array(marks.enumerated()), id: \.element.id) { index, mark in
+                ForEach(marks.enumerated(), id: \.element.id) { index, mark in
                     let trueX = barWidth * mark.fraction
                     let width = bodyWidths[mark.id] ?? 0
                     let half = width / 2
@@ -51,13 +54,13 @@ struct RehearsalMarkBar: View {
 
                     RehearsalMarkButton(
                         text: mark.text,
-                        isCurrent: mark.id == currentMarkID,
+                        isCurrent: mark.id == currentID,
                         tailOffset: tailOffset,
                         action: { onSeek(mark.cursor) },
                         onBodyWidthChange: { bodyWidths[mark.id] = $0 },
                     )
                     .position(x: center, y: Self.height / 2)
-                    .zIndex(stackOrder(for: mark, index: index))
+                    .zIndex(stackOrder(for: mark, index: index, currentID: currentID))
                 }
             }
             // Drag-to-select: maps the finger's x to the nearest mark and seeks to it, snapping discretely between
@@ -87,8 +90,8 @@ struct RehearsalMarkBar: View {
     }
 
     /// Frontmost = the mark governing the current position; otherwise later marks sit in front of earlier ones.
-    private func stackOrder(for mark: ReaderRehearsalMark, index: Int) -> Double {
-        if mark.id == currentMarkID { return Double(marks.count + 1) }
+    private func stackOrder(for mark: ReaderRehearsalMark, index: Int, currentID: String?) -> Double {
+        if mark.id == currentID { return Double(marks.count + 1) }
         return Double(index + 1)
     }
 }

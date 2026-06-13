@@ -116,7 +116,7 @@ public struct ReaderRootScreen: View {
             }
         }
         .navigationTitle("")
-        .toolbar(.hidden, for: .navigationBar)
+        .toolbarVisibility(.hidden, for: .navigationBar)
         .task {
             viewModel.playbackSession.startObservingCursor()
             viewModel.playbackSession.startObservingSoundfontDownload()
