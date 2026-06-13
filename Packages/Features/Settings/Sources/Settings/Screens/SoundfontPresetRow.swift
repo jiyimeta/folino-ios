@@ -26,68 +26,39 @@ struct SoundfontPresetRow: View {
     @State private var deleteCacheAlertPresented = false
 
     var body: some View {
-        content
-            .alert(
-                Text("settings.soundfont.wifi.alert.title", bundle: .module),
-                isPresented: $noWiFiAlertPresented,
-            ) {
-                Button {
-                    provider.setOptedIn(true)
-                    provider.startDownloadAllowingCellular()
-                } label: { Text("settings.soundfont.wifi.alert.now", bundle: .module) }
-                Button {
-                    provider.setOptedIn(true)
-                } label: { Text("settings.soundfont.wifi.alert.wait", bundle: .module) }
-                Button(role: .cancel) {} label: { L10n.Common.cancel }
-            } message: {
-                Text("settings.soundfont.wifi.alert.message", bundle: .module)
-            }
-            .alert(
-                Text("settings.soundfont.delete.alert.title", bundle: .module),
-                isPresented: $deleteCacheAlertPresented,
-            ) {
-                Button(role: .destructive) {
-                    provider.setOptedIn(false)
-                } label: { Text("settings.soundfont.delete.alert.confirm", bundle: .module) }
-                Button(role: .cancel) {} label: { L10n.Common.cancel }
-            } message: {
-                Text("settings.soundfont.delete.alert.message", bundle: .module)
-            }
-    }
-
-    private var content: some View {
-        Label {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("settings.soundfont.highQuality.title", bundle: .module)
-                    stateSubtitle
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                accessory
-            }
-        } icon: {
-            Image(systemName: "pianokeys")
+        SoundfontPresetRowContent(
+            downloadState: provider.downloadState,
+            isOptedIn: provider.isOptedIn,
+            toggleBinding: toggleBinding,
+            onDownloadNow: { provider.startDownloadAllowingCellular() },
+            onCancelDownload: { provider.cancelDownload() },
+            onStopOptOut: { provider.setOptedIn(false) },
+        )
+        .alert(
+            Text("settings.soundfont.wifi.alert.title", bundle: .module),
+            isPresented: $noWiFiAlertPresented,
+        ) {
+            Button {
+                provider.setOptedIn(true)
+                provider.startDownloadAllowingCellular()
+            } label: { Text("settings.soundfont.wifi.alert.now", bundle: .module) }
+            Button {
+                provider.setOptedIn(true)
+            } label: { Text("settings.soundfont.wifi.alert.wait", bundle: .module) }
+            Button(role: .cancel) {} label: { L10n.Common.cancel }
+        } message: {
+            Text("settings.soundfont.wifi.alert.message", bundle: .module)
         }
-    }
-
-    @ViewBuilder
-    private var accessory: some View {
-        if case let .downloading(progress) = provider.downloadState {
-            stopSpinner(determinate: progress) {
-                provider.cancelDownload()
-            }
-        } else if provider.isOptedIn, case .idle = provider.downloadState {
-            // Opted in but waiting for the network policy / next Wi-Fi window. Show an indeterminate spinner with the
-            // same visual weight as the downloading state; tapping the stop button opts out (matches the user's
-            // expectation that the spinner means "in progress" and the stop button means "stop trying").
-            stopSpinner(determinate: nil) {
+        .alert(
+            Text("settings.soundfont.delete.alert.title", bundle: .module),
+            isPresented: $deleteCacheAlertPresented,
+        ) {
+            Button(role: .destructive) {
                 provider.setOptedIn(false)
-            }
-        } else {
-            Toggle("", isOn: toggleBinding)
-                .labelsHidden()
+            } label: { Text("settings.soundfont.delete.alert.confirm", bundle: .module) }
+            Button(role: .cancel) {} label: { L10n.Common.cancel }
+        } message: {
+            Text("settings.soundfont.delete.alert.message", bundle: .module)
         }
     }
 
@@ -104,61 +75,6 @@ struct SoundfontPresetRow: View {
         )
     }
 
-    private func stopSpinner(
-        determinate progress: Double?,
-        onTap: @escaping () -> Void,
-    ) -> some View {
-        Button(action: onTap) {
-            ZStack {
-                Circle()
-                    .stroke(.secondary.opacity(0.25), lineWidth: 3)
-                if let progress {
-                    Circle()
-                        .trim(from: 0, to: max(0.02, progress))
-                        .stroke(
-                            Color.accentColor,
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round),
-                        )
-                        .rotationEffect(.degrees(-90))
-                } else {
-                    IndeterminateArc()
-                }
-                Image(systemName: "stop.fill")
-                    .imageScale(.small)
-                    .foregroundStyle(.tint)
-            }
-            .frame(width: 28, height: 28)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.borderless)
-        .accessibilityLabel(Text("settings.soundfont.stop.label", bundle: .module))
-    }
-
-    @ViewBuilder
-    private var stateSubtitle: some View {
-        switch provider.downloadState {
-        case .idle:
-            if provider.isOptedIn {
-                // The localized value embeds a markdown link (folino-action://download-now) styled as a tinted inline
-                // link. The `openURL` handler below intercepts that custom URL and routes it to the same code path the
-                // "Download Now" alert button uses — bypassing the Wi-Fi gate.
-                Text("settings.soundfont.state.waitingForWiFi", bundle: .module)
-                    .environment(\.openURL, OpenURLAction { url in
-                        if url.scheme == "folino-action", url.host == "download-now" {
-                            provider.startDownloadAllowingCellular()
-                            return .handled
-                        }
-                        return .systemAction
-                    })
-            }
-        case .downloading, .downloaded:
-            EmptyView()
-        case let .failed(reason):
-            Text(verbatim: String(localized: "settings.soundfont.state.failed", bundle: .module) + " (\(reason))")
-                .foregroundStyle(.red)
-        }
-    }
-
     private func handleToggleChange(_ newValue: Bool) {
         if newValue {
             if provider.isCurrentlyWiFi {
@@ -173,27 +89,6 @@ struct SoundfontPresetRow: View {
                 provider.setOptedIn(false)
             }
         }
-    }
-}
-
-/// Continuously-spinning arc, matching the visual weight of the determinate progress arc. Lives in its own struct so
-/// `@State` can drive the `withAnimation` repeat without leaking the animation flag into the parent view's state.
-private struct IndeterminateArc: View {
-    @State private var angle: Double = 0
-
-    var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.25)
-            .stroke(
-                Color.accentColor,
-                style: StrokeStyle(lineWidth: 3, lineCap: .round),
-            )
-            .rotationEffect(.degrees(angle))
-            .onAppear {
-                withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
-                    angle = 360
-                }
-            }
     }
 }
 
