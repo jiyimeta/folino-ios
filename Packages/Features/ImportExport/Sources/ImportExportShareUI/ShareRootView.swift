@@ -73,22 +73,12 @@ public struct ShareRootView: View {
     @ViewBuilder
     private var content: some View {
         if let fatalMessage {
-            errorView(message: fatalMessage)
+            ShareErrorView(message: fatalMessage)
         } else if let summary {
             loadedView(summary: summary)
         } else {
-            loadingView
+            ShareLoadingView()
         }
-    }
-
-    private func errorView(message: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.largeTitle)
-                .foregroundStyle(.orange)
-            Text(message).multilineTextAlignment(.center)
-        }
-        .padding(20)
     }
 
     private func loadedView(summary: IngestSummary) -> some View {
@@ -98,15 +88,6 @@ public struct ShareRootView: View {
             playlists: playlists,
             selection: $selection,
         )
-    }
-
-    private var loadingView: some View {
-        VStack(spacing: 12) {
-            ProgressView().controlSize(.large)
-            Text("share_extension.loading", bundle: .module)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func finalize(decision: ShareDecision) {
@@ -121,6 +102,34 @@ public struct ShareRootView: View {
         } catch {
             fatalMessage = String(describing: error)
         }
+    }
+}
+
+/// The share screen's terminal error state. Pulled out of `ShareRootView.content` to mirror `ShareLoadedContent`.
+private struct ShareErrorView: View {
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.largeTitle)
+                .foregroundStyle(.orange)
+            Text(message).multilineTextAlignment(.center)
+        }
+        .padding(20)
+    }
+}
+
+/// The share screen's loading state while `NSItemProvider` ingestion is in flight. Pulled out of
+/// `ShareRootView.content` to mirror `ShareLoadedContent`.
+private struct ShareLoadingView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView().controlSize(.large)
+            Text("share_extension.loading", bundle: .module)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
