@@ -84,89 +84,20 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 }
         }
         .editScoreInfoSheet(viewModel: viewModel, target: $editInfoTarget)
-        .sheet(item: $editTagsTarget) { item in
-            EditTagsScreen(scoreItem: item, library: viewModel)
-        }
-        .sheet(item: $addToPlaylistTarget) { item in
-            AddToPlaylistScreen(scoreItem: item, library: viewModel)
-        }
-        .alert(
-            Text("library.title", bundle: .module),
-            isPresented: errorAlertBinding,
-            presenting: viewModel.currentError,
-        ) { _ in
-            Button { viewModel.currentError = nil } label: {
-                L10n.Common.ok
-            }
-        } message: { error in
-            Text(describeLibraryError(error))
-        }
-        .alert(Text("library.playlist.create.title", bundle: .module), isPresented: $isCreatingPlaylist) {
-            TextField(text: $newPlaylistName) { Text("library.playlist.namePlaceholder", bundle: .module) }
-            Button {
-                let name = newPlaylistName
-                newPlaylistName = ""
-                Task { await viewModel.createPlaylist(name: name) }
-            } label: { L10n.Common.add }
-            Button(role: .cancel) { newPlaylistName = "" } label: { L10n.Common.cancel }
-        } message: {
-            Text("library.playlist.create.message", bundle: .module)
-        }
-        .alert(Text("library.tag.create.title", bundle: .module), isPresented: $isCreatingTag) {
-            TextField(text: $newTagName) { Text("library.tag.namePlaceholder", bundle: .module) }
-            Button {
-                let name = newTagName
-                newTagName = ""
-                Task { await viewModel.createTag(name: name) }
-            } label: { L10n.Common.add }
-            Button(role: .cancel) { newTagName = "" } label: { L10n.Common.cancel }
-        } message: {
-            Text("library.tag.create.message", bundle: .module)
-        }
         .libraryRootDeleteAlerts(
             viewModel: viewModel,
             pendingDeletePlaylist: $pendingDeletePlaylist,
             pendingDeleteTag: $pendingDeleteTag,
         )
-        .alert(
-            Text("library.import.duplicate.title", bundle: .module),
-            isPresented: duplicateAlertBinding,
-            presenting: viewModel.duplicatePrompt,
-        ) { prompt in
-            Button {
-                viewModel.duplicatePrompt = nil
-                Task { await viewModel.commit(plan: prompt.plan, decision: .openExisting(prompt.existing.id)) }
-            } label: {
-                L10n.Common.open
-            }
-            Button {
-                viewModel.duplicatePrompt = nil
-                Task { await viewModel.commit(plan: prompt.plan, decision: .importAsNew) }
-            } label: {
-                Text("library.import.duplicate.importAsDuplicate", bundle: .module)
-            }
-            Button(role: .cancel) {
-                viewModel.duplicatePrompt = nil
-            } label: {
-                L10n.Common.cancel
-            }
-        } message: { prompt in
-            Text(String(
-                localized: "library.import.duplicate.message",
-                defaultValue: "\"\(prompt.existing.title)\" is already imported. What do you want to do?",
-                bundle: .module,
-            ))
-        }
-        .overlay {
-            if viewModel.isPreparingShare {
-                ProgressView { Text("library.score.preparing", bundle: .module) }
-                    .padding()
-                    .background(.regularMaterial, in: .rect(cornerRadius: 12))
-            }
-        }
-        .sheet(item: $viewModel.shareTarget) { target in
-            ActivityViewControllerRepresentable(items: target.urls)
-        }
+        .libraryRootPresentations(
+            viewModel: viewModel,
+            editTagsTarget: $editTagsTarget,
+            addToPlaylistTarget: $addToPlaylistTarget,
+            isCreatingPlaylist: $isCreatingPlaylist,
+            newPlaylistName: $newPlaylistName,
+            isCreatingTag: $isCreatingTag,
+            newTagName: $newTagName,
+        )
     }
 
     @ToolbarContentBuilder
@@ -236,7 +167,11 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
             }
         } else {
             List {
-                browseSection(items: items)
+                LibraryRootBrowseSection(
+                    scoreCount: items.count,
+                    favoriteCount: items.filter(\.isFavorite).count,
+                    trashCount: viewModel.repository.deletedScoreItems.count,
+                )
                 LibraryRootPlaylistsSection(
                     allPlaylists: viewModel.repository.playlists,
                     scoreItems: items,
@@ -247,140 +182,17 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     scoreItems: items,
                     onRequestDelete: { pendingDeleteTag = $0 },
                 )
-                recentsSection(recents)
+                LibraryRootRecentsSection(
+                    recents: recents,
+                    viewModel: viewModel,
+                    onOpenScore: onOpenScore,
+                    editInfoTarget: $editInfoTarget,
+                    editTagsTarget: $editTagsTarget,
+                    addToPlaylistTarget: $addToPlaylistTarget,
+                )
             }
             .listStyle(.sidebar)
         }
-    }
-
-    @ViewBuilder
-    private func browseSection(items: [ScoreItem]) -> some View {
-        let favoriteCount = items.filter(\.isFavorite).count
-        let trashCount = viewModel.repository.deletedScoreItems.count
-        Section {
-            NavigationLink(value: LibraryRoute.allScores) {
-                browseRow(title: "library.allScores", systemImage: "list.bullet", count: items.count)
-            }
-            if favoriteCount > 0 {
-                NavigationLink(value: LibraryRoute.favorites) {
-                    browseRow(title: "library.favorites", systemImage: "star.fill", count: favoriteCount)
-                }
-            }
-            if trashCount > 0 {
-                NavigationLink(value: LibraryRoute.recentlyDeleted) {
-                    browseRow(
-                        title: "library.recentlyDeleted.title",
-                        systemImage: "trash",
-                        count: trashCount,
-                    )
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func recentsSection(_ recents: [ScoreItem]) -> some View {
-        if !recents.isEmpty {
-            Section {
-                ForEach(recents) { item in
-                    sectionRow(for: item)
-                }
-            } header: {
-                Text("library.recentlyOpened", bundle: .module)
-            }
-        }
-    }
-
-    private func sectionRowMenu(for item: ScoreItem) -> some View {
-        scoreRowMenu(
-            item: item,
-            library: viewModel,
-            onOpen: onOpenScore,
-            onEditInfo: { item in editInfoTarget = item },
-            onEditTags: { editTagsTarget = $0 },
-            onAddToPlaylist: { addToPlaylistTarget = $0 },
-            onRequestDelete: { item in Task { await viewModel.delete(item) } },
-        )
-    }
-
-    private func sectionRow(for item: ScoreItem) -> some View {
-        HStack(spacing: 0) {
-            ScoreRow(scoreItem: item)
-                .contentShape(Rectangle())
-                .onTapGesture { onOpenScore(item) }
-            Menu {
-                sectionRowMenu(for: item)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 34)
-                    .frame(maxHeight: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.Common.more)
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                Task { await viewModel.toggleFavorite(item) }
-            } label: {
-                Label {
-                    let key: LocalizedStringKey = item.isFavorite
-                        ? "library.score.unfavorite.action"
-                        : "library.score.favorite.action"
-                    Text(key, bundle: .module)
-                } icon: {
-                    Image(systemName: item.isFavorite ? "star.slash.fill" : "star.fill")
-                }
-            }
-            .tint(.yellow)
-        }
-        // No `role: .destructive`: it would make SwiftUI hide the row immediately on tap (same contract as
-        // `.onDelete`), which can crash multi-section Lists. Soft-delete is silent (no confirm); the item moves into
-        // Recently Deleted.
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button {
-                Task { await viewModel.delete(item) }
-            } label: {
-                Label {
-                    L10n.Common.delete
-                } icon: {
-                    Image(systemName: "trash")
-                }
-            }
-            .tint(.red)
-        }
-        .contextMenu {
-            sectionRowMenu(for: item)
-        }
-    }
-
-    private func browseRow(title: LocalizedStringKey, systemImage: String, count: Int) -> some View {
-        HStack {
-            Label {
-                Text(title, bundle: .module)
-            } icon: {
-                Image(systemName: systemImage)
-                    .foregroundStyle(.tint)
-            }
-            Spacer()
-            Text(count, format: .number)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var errorAlertBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.currentError != nil },
-            set: { isPresented in if !isPresented { viewModel.currentError = nil } },
-        )
-    }
-
-    private var duplicateAlertBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.duplicatePrompt != nil },
-            set: { isPresented in if !isPresented { viewModel.duplicatePrompt = nil } },
-        )
     }
 }
 
