@@ -32,7 +32,14 @@ final class ReaderViewModel {
     var mixerModel = PlaybackMixerModel()
 
     private(set) var loadState: LoadState = .loading
-    private(set) var scoreItem: ScoreItem
+
+    /// The display-ready score: the loaded score with clef overrides applied, transposed, and hidden staves filtered.
+    /// Cached and recomputed only when its inputs change (load, clef overrides, transpose, hidden staves) via
+    /// `recomputeVisibleScore()`, so the transform chain no longer rebuilds on every Reader body evaluation.
+    private(set) var visibleScore: Score?
+
+    /// Internal (not private-set) so the ScoreInfoEditing conformance in a separate file can update it.
+    var scoreItem: ScoreItem
     /// The playlist this Reader is traversing, or `nil` when opened standalone. Drives the inspector's continuation
     /// control and end-of-score auto-advance. The live ordered queue is re-derived from the repository on demand.
     @ObservationIgnored private let playlistID: PlaylistID?
@@ -62,10 +69,12 @@ final class ReaderViewModel {
     var shareTarget: ScoreShareTarget?
     var isPreparingShare = false
 
-    @ObservationIgnored private let repository: any ScoreLibraryRepository
+    // `repository` / `metadataReader` are internal (not private) so the `ScoreInfoEditing` conformance can live in
+    // ReaderViewModel+Conformances.swift; Swift `private` would not reach a same-type extension in another file.
+    @ObservationIgnored let repository: any ScoreLibraryRepository
     @ObservationIgnored private let gateway: any ScoreFileGateway
     @ObservationIgnored private let shareService: any ScoreShareService
-    @ObservationIgnored private let metadataReader: any ScoreMetadataReading
+    @ObservationIgnored let metadataReader: any ScoreMetadataReading
     @ObservationIgnored private let scoresDirectory: URL
     @ObservationIgnored private let defaultStaffSize: Double
     @ObservationIgnored private var hasUpdatedLastOpened = false
@@ -146,6 +155,7 @@ final class ReaderViewModel {
     private func wireLayoutModel() {
         layoutModel.onChange = { [weak self] in
             guard let self else { return }
+            recomputeVisibleScore()
             await preferencesStore.mutate { prefs in
                 prefs.staffSize = self.layoutModel.staffSize
                 prefs.honorLayoutBreaks = self.layoutModel.honorLayoutBreaks
@@ -187,6 +197,7 @@ final class ReaderViewModel {
     private func wireTransposeModel() {
         transposeModel.onChange = { [weak self] in
             guard let self else { return }
+            recomputeVisibleScore()
             await preferencesStore.mutate { prefs in
                 prefs.transposeSemitones = self.transposeModel.semitones
             }
@@ -245,15 +256,18 @@ final class ReaderViewModel {
 
     func load() async {
         loadState = .loading
+        visibleScore = nil
         let url = scoresDirectory.appending(path: scoreItem.localFileName)
         do {
             let (score, _) = try await gateway.loadScore(fileURL: url)
             await loadOrSeedPreferences()
             loadState = .loaded(score)
+            recomputeVisibleScore()
             pipSession.armIfReady()
             await updateLastOpenedAtOnce()
         } catch {
             loadState = .failed(error: error)
+            visibleScore = nil
         }
     }
 
@@ -335,6 +349,20 @@ final class ReaderViewModel {
         }
     }
 
+    /// Rebuild `visibleScore` from the loaded score and the current layout / transpose inputs. Cheap no-op when nothing
+    /// is loaded. Called on load and from the layout / transpose change hooks, never from a view body.
+    private func recomputeVisibleScore() {
+        guard let score = loadState.score else {
+            visibleScore = nil
+            return
+        }
+        let withClefs = score.applying(clefOverrides: layoutModel.staffClefOverrides)
+        // Transpose sits between clef overrides and the hidden-staves filter. It preserves note IDs and ticks, so the
+        // playback cursor translation downstream is unaffected.
+        let transposed = withClefs.transposed(bySemitones: transposeModel.semitones)
+        visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
+    }
+
     private func loadOrSeedPreferences() async {
         let prefs = await preferencesStore.loadOrSeed()
         repeatModel.sync(from: prefs)
@@ -353,46 +381,5 @@ final class ReaderViewModel {
         updated.lastOpenedAt = Date()
         scoreItem = updated
         try? await repository.saveScoreItem(updated)
-    }
-}
-
-// MARK: - PlaybackMixerHost conformance
-
-extension ReaderViewModel: PlaybackMixerHost {
-    /// Required by `PlaybackMixerHost`. Reads through `playbackSession` so `PlaybackMixerModel` can check whether
-    /// playback is active (e.g. to decide whether to show a mute indicator).
-    var isPlaying: Bool {
-        playbackSession.isPlaying
-    }
-
-    /// Required by `PlaybackMixerHost`. Reads through `playbackSession` so `PlaybackMixerModel` can forward volume,
-    /// mute, and program changes to the active controller without holding a direct reference to the session.
-    var playbackController: (any PlaybackController)? {
-        playbackSession.controller
-    }
-}
-
-// MARK: - ScoreInfoEditing conformance
-
-extension ReaderViewModel: ScoreInfoEditing {
-    func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata? {
-        try? await metadataReader.readMetadata(for: item)
-    }
-
-    func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async {
-        guard let n = fields.normalized() else { return }
-        var updated = item
-        updated.title = n.title
-        updated.subtitle = n.subtitle
-        updated.composer = n.composer
-        updated.arranger = n.arranger
-        updated.lyricist = n.lyricist
-        updated.copyright = n.copyright
-        do {
-            try await repository.saveScoreItem(updated)
-            scoreItem = updated
-        } catch {
-            // Non-fatal: keep the in-memory item; no Reader error banner yet.
-        }
     }
 }

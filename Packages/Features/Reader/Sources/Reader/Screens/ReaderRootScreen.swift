@@ -179,47 +179,48 @@ public struct ReaderRootScreen: View {
         switch viewModel.loadState {
         case .loading:
             ProgressView().controlSize(.large)
-        case let .loaded(score):
-            let withClefs = score.applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
-            // Transpose sits between clef overrides and the hidden-staves filter. It preserves note IDs and ticks, so
-            // the playback cursor translation downstream is unaffected.
-            let transposed = withClefs.transposed(bySemitones: viewModel.transposeModel.semitones)
-            let visible = transposed.filtered(hidingStaves: viewModel.layoutModel.hiddenStaves)
-            switch layoutMode {
-            case .vertical:
-                VerticalScoreContainer(
-                    score: visible,
-                    staffSize: viewModel.layoutModel.staffSize,
-                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                    collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.displayCursor,
-                    transposeSemitones: viewModel.transposeModel.semitones,
-                    bottomControlClearance: bottomControlContentHeight,
-                    viewModel: viewModel,
-                )
-            case .horizontal:
-                HorizontalScoreContainer(
-                    score: visible,
-                    staffSize: viewModel.layoutModel.staffSize,
-                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                    collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.displayCursor,
-                    transposeSemitones: viewModel.transposeModel.semitones,
-                    viewModel: viewModel,
-                )
-            case .page:
-                PagedScoreContainer(
-                    score: visible,
-                    staffSize: viewModel.layoutModel.staffSize,
-                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                    collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    showInvisibleElements: showInvisibleElements,
-                    playbackCursor: viewModel.playbackSession.displayCursor,
-                    transposeSemitones: viewModel.transposeModel.semitones,
-                    viewModel: viewModel,
-                )
+        case .loaded:
+            // `visibleScore` is the clef-applied / transposed / hidden-filtered score, cached on the view model and
+            // recomputed only when its inputs change — so this body no longer rebuilds the score on every re-eval.
+            if let visible = viewModel.visibleScore {
+                switch layoutMode {
+                case .vertical:
+                    VerticalScoreContainer(
+                        score: visible,
+                        staffSize: viewModel.layoutModel.staffSize,
+                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                        collapseMultiMeasureRests: collapseMultiMeasureRests,
+                        showInvisibleElements: showInvisibleElements,
+                        playbackCursor: viewModel.playbackSession.displayCursor,
+                        transposeSemitones: viewModel.transposeModel.semitones,
+                        bottomControlClearance: bottomControlContentHeight,
+                        viewModel: viewModel,
+                    )
+                case .horizontal:
+                    HorizontalScoreContainer(
+                        score: visible,
+                        staffSize: viewModel.layoutModel.staffSize,
+                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                        collapseMultiMeasureRests: collapseMultiMeasureRests,
+                        showInvisibleElements: showInvisibleElements,
+                        playbackCursor: viewModel.playbackSession.displayCursor,
+                        transposeSemitones: viewModel.transposeModel.semitones,
+                        viewModel: viewModel,
+                    )
+                case .page:
+                    PagedScoreContainer(
+                        score: visible,
+                        staffSize: viewModel.layoutModel.staffSize,
+                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                        collapseMultiMeasureRests: collapseMultiMeasureRests,
+                        showInvisibleElements: showInvisibleElements,
+                        playbackCursor: viewModel.playbackSession.displayCursor,
+                        transposeSemitones: viewModel.transposeModel.semitones,
+                        viewModel: viewModel,
+                    )
+                }
+            } else {
+                ProgressView().controlSize(.large)
             }
         case let .failed(error):
             ContentUnavailableView {
