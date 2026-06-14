@@ -10,9 +10,6 @@ struct ReaderTransportControl: View {
     /// When true, render the full-width seek-bar card; when false, the compact transport pill.
     let showSeekBar: Bool
 
-    @State private var isScrubbing = false
-    @State private var scrubFraction: Double = 0
-
     /// Content height (above the bottom safe area) of the compact control — just the transport pill (44); no top or
     /// bottom padding, so it hugs the top of the bottom safe area. Used by `ReaderRootScreen` to inset the horizontal /
     /// page viewport so the score never renders under it.
@@ -88,18 +85,12 @@ struct ReaderTransportControl: View {
     }
 
     private func seekCard(score: Score) -> some View {
-        let marks = score.readerRehearsalMarks()
-        return VStack(spacing: 0) {
-            if !marks.isEmpty {
-                RehearsalMarkBar(marks: marks, currentFraction: displayFraction) { cursor in
-                    viewModel.playbackSession.setManualCursor(cursor)
-                }
-                .padding(.bottom, -8)
-            }
-            seekBar
-                // Time readout sits in the empty band below the thin track. An overlay reserves no layout space, so the
-                // gap to the transport row and the buttons' tap targets stay exactly as they were.
-                    .overlay(alignment: .bottom) { timeReadout(score: score) }
+        VStack(spacing: 0) {
+            SeekRegion(
+                playbackSession: viewModel.playbackSession,
+                marks: score.readerRehearsalMarks(),
+                durationSeconds: score.notatedDurationSeconds,
+            )
             transportRow
         }
         .padding(.horizontal, 20)
@@ -139,67 +130,6 @@ struct ReaderTransportControl: View {
                 endpointButtons(flat: true)
             }
         }
-    }
-
-    /// Position shown on the seek bar (and used to pick the frontmost rehearsal mark): the in-progress scrub value
-    /// while dragging, otherwise the live playback cursor's fraction. The live fraction comes from the session, which
-    /// maps the engine's full-score cursor (`playbackFraction`) — NOT the filtered display cursor, whose re-stamped
-    /// staff address would resolve `seconds(at:)` against the wrong staff under hidden staves.
-    private var displayFraction: Double {
-        if isScrubbing { return scrubFraction }
-        return viewModel.playbackSession.playbackFraction
-    }
-
-    private var seekBar: some View {
-        SeekBar(
-            fraction: displayFraction,
-            onScrubBegan: {
-                isScrubbing = true
-                viewModel.playbackSession.beginScrub()
-            },
-            onScrubChanged: { newFraction in
-                scrubFraction = newFraction
-                viewModel.playbackSession.updateScrub(toFraction: newFraction)
-            },
-            onScrubEnded: {
-                isScrubbing = false
-                viewModel.playbackSession.endScrub()
-            },
-        )
-    }
-
-    /// Small current-position (leading) and remaining-time (trailing, with a leading minus) labels shown just below the
-    /// seek track. Both follow `displayFraction`, so they track the scrub thumb while dragging and the live cursor
-    /// otherwise. Non-interactive (`allowsHitTesting(false)`) so the seek drag underneath is unaffected.
-    private func timeReadout(score: Score) -> some View {
-        let duration = score.notatedDurationSeconds
-        let elapsed = min(max(displayFraction, 0), 1) * duration
-        let remaining = max(0, duration - elapsed)
-        return HStack {
-            Text(verbatim: Self.formatTime(elapsed))
-            Spacer(minLength: 0)
-            Text(verbatim: "-" + Self.formatTime(remaining))
-        }
-        .font(.system(size: 10))
-        .monospacedDigit()
-        .foregroundStyle(.secondary)
-        // Nudge into the empty band above the transport glyphs. `offset` shifts only the rendered text, so the row's
-        // layout and the buttons' tap targets are still unaffected.
-        .offset(y: 5)
-        .allowsHitTesting(false)
-    }
-
-    /// Formats a non-negative second count as `mm:ss`, widening to `h:mm:ss` once it reaches an hour. Minutes are
-    /// zero-padded only when an hours field precedes them, matching the usual transport readout.
-    private static func formatTime(_ seconds: Double) -> String {
-        let total = Int(seconds.rounded())
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        }
-        return String(format: "%d:%02d", minutes, secs)
     }
 
     // MARK: Shared pieces
