@@ -11,7 +11,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 var products: [Product] = []
 var targets: [Target] = []
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+    .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
 ]
 
 if isAndroid {

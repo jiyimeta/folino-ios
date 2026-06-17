@@ -53,7 +53,7 @@ private func underRootScreenChrome(_ statusBarTop: CGFloat) -> CGFloat {
         .background(Color.black)
 }
 
-#Preview("Landscape · simulated side insets") {
+#Preview("Landscape · simulated side insets", traits: .landscapeRight) {
     paged()
         .background(Color.gray.opacity(0.4))
         .safeAreaPadding(.leading, 59)
@@ -61,6 +61,5 @@ private func underRootScreenChrome(_ statusBarTop: CGFloat) -> CGFloat {
         .safeAreaPadding(.top, underRootScreenChrome(0))
         .safeAreaPadding(.bottom, 21)
         .background(Color.black)
-        .previewInterfaceOrientation(.landscapeRight)
 }
 #endif

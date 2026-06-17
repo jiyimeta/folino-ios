@@ -51,7 +51,8 @@ final class ShareViewController: UIViewController {
             extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         case let .submitted(openURL):
             extensionContext?.completeRequest(returningItems: nil) { _ in
-                self.openMainApp(url: openURL)
+                // The completion handler is nonisolated; hop to the main actor to invoke the UIKit-bound open call.
+                Task { @MainActor in self.openMainApp(url: openURL) }
             }
         }
     }

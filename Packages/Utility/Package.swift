@@ -15,7 +15,7 @@ let package = Package(
         .library(name: "Navigation", targets: ["Navigation"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
         .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
     ],
     targets: [

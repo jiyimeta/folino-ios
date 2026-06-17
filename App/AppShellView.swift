@@ -69,7 +69,7 @@ struct AppShellView: View {
             // toggle is off or file already present. Safe to call on every isReady transition; the provider gates
             // re-entry internally.
             guard bootstrap.isReady else { return }
-            await bootstrap.museScoreGeneralProvider?.startDownloadIfNeeded()
+            bootstrap.museScoreGeneralProvider?.startDownloadIfNeeded()
         }
         .shareDuplicateAlert(resolver: bootstrap.shareDuplicateResolver)
         .sheet(isPresented: $versionHistoryPresenter.isSheetPresented) {

@@ -46,7 +46,7 @@ var targets: [Target] = [
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
     .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
-    .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+    .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
     // swift-wirelet v0.2.2 (pinned by revision, not semver)
     // swiftlint:disable:next line_length
     .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"),

@@ -50,7 +50,7 @@ packages:
     revision: 92d877b0ae61db41211ba2c356c5212a5ebcd3ac
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
-    from: 0.63.2
+    exactVersion: 0.63.2
   LicenseList:
     url: https://github.com/cybozu/LicenseList
     from: 2.5.0
@@ -109,7 +109,14 @@ targets:
           DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
     postBuildScripts:
       - name: "Firebase Crashlytics Upload Symbols"
-        script: '"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"'
+        # Upload dSYMs for Release builds only — Debug builds use DWARF without a dSYM (see configs.Release above), so
+        # running the script there only emits "Unable to process …dSYM" warnings and a pointless network call.
+        # basedOnDependencyAnalysis is false because the upload step has no outputs and is meant to run every build.
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "${CONFIGURATION}" = "Release" ]; then
+            "${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"
+          fi
         inputFiles:
           - "${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}"
           - "$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)"

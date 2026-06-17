@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "Domain", targets: ["Domain"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
             revision: "92d877b0ae61db41211ba2c356c5212a5ebcd3ac",

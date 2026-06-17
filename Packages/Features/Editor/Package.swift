@@ -12,7 +12,7 @@ let package = Package(
         .library(name: "Editor", targets: ["Editor"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2"),
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
     ],

@@ -135,7 +135,7 @@ final class ScorePiPCoordinator: NSObject {
         lastReportedPaused = nil
         lastReportedTotalTime = nil
         // Clear queued frames sized for the previous score; the new renderer's pool may have different dimensions.
-        displayLayer.flush()
+        displayLayer.sampleBufferRenderer.flush()
         if let tb = displayLayer.controlTimebase {
             CMTimebaseSetTime(tb, time: .zero)
         }
@@ -153,7 +153,7 @@ final class ScorePiPCoordinator: NSObject {
         lastReportedTotalTime = nil
         lastEnqueuedCursorHash = nil
         ticksSinceLastForceEnqueue = 0
-        displayLayer?.flush()
+        displayLayer?.sampleBufferRenderer.flush()
         if let tb = displayLayer?.controlTimebase {
             CMTimebaseSetTime(tb, time: .zero)
         }
@@ -192,8 +192,8 @@ final class ScorePiPCoordinator: NSObject {
         // Recover from a transient failed state by flushing the queue; continuing to enqueue on a failed layer crashes
         // AVKit. If the recovery doesn't take, fall through to the normal pump — the layer will surface another failure
         // and stop() runs cleanly.
-        if displayLayer.status == .failed {
-            displayLayer.flush()
+        if displayLayer.sampleBufferRenderer.status == .failed {
+            displayLayer.sampleBufferRenderer.flush()
         }
         // AVKit doesn't poll the delegate — push an invalidation when either the paused state OR the total-time range
         // we'd report has changed since AVKit last queried us. Covers:
@@ -231,7 +231,7 @@ final class ScorePiPCoordinator: NSObject {
         let scrolling = renderer.isAnimatingScroll
 
         guard cursorChanged || forceEnqueue || scrolling else { return }
-        guard displayLayer.isReadyForMoreMediaData else { return }
+        guard displayLayer.sampleBufferRenderer.isReadyForMoreMediaData else { return }
         guard let buffer = renderer.renderFrame(playbackCursor: currentCursor)
         else { return }
 
@@ -285,7 +285,7 @@ final class ScorePiPCoordinator: NSObject {
                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque(),
             )
         }
-        displayLayer.enqueue(sample)
+        displayLayer.sampleBufferRenderer.enqueue(sample)
     }
 }
 

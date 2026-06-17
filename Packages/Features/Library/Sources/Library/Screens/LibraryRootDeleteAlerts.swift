@@ -68,7 +68,10 @@ private struct TagAlert: ViewModifier {
 }
 
 private func presentationBinding<Value>(_ source: Binding<Value?>) -> Binding<Bool> {
-    Binding(
+    // `Binding.init(get:set:)` takes `@Sendable` closures; the captured `source` binding is only ever read/written on
+    // the main actor (SwiftUI alert presentation), so opting it out of Sendable checking is safe here.
+    nonisolated(unsafe) let source = source
+    return Binding(
         get: { source.wrappedValue != nil },
         set: { isPresented in if !isPresented { source.wrappedValue = nil } },
     )

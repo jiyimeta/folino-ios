@@ -95,9 +95,8 @@ private func shareMenuTitle(for option: ScoreShareFormatOption) -> some View {
     let formatText = shareMenuFormatText(for: option.format)
     if option.isOriginal {
         // Mark the option that matches the source's format so the user can tell it from re-encoded peers.
-        formatText
-            + Text(verbatim: " ")
-            + Text("scoreUI.format.original.suffix", bundle: .module)
+        let originalSuffix = Text("scoreUI.format.original.suffix", bundle: .module)
+        Text("\(formatText) \(originalSuffix)")
     } else {
         formatText
     }

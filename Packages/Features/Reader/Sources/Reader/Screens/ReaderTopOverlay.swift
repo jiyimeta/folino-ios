@@ -19,8 +19,9 @@ struct ReaderTopOverlay: View {
 
     /// Vertical space the overlay occupies inside the safe area (button 40 + top padding 4 + a little breathing room).
     /// Used by `ReaderRootScreen` to extend the score's safe area so the first staff is never hidden under the floating
-    /// buttons.
-    static let height: CGFloat = 52
+    /// buttons. `nonisolated` so non–main-actor contexts (preview helpers, `onGeometryChange` transform closures) can
+    /// read this layout constant without hopping actors.
+    nonisolated static let height: CGFloat = 52
 
     var body: some View {
         HStack(spacing: 12) {

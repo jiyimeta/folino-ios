@@ -54,7 +54,11 @@ struct FeedbackMailView: UIViewControllerRepresentable {
             case .failed: .failed
             @unknown default: .failed
             }
-            dismiss()
+            // `MFMailComposeViewControllerDelegate` callbacks arrive on the main thread, but the requirement is
+            // nonisolated, so assume main-actor isolation to invoke the main-actor `DismissAction`. Bind `dismiss` to a
+            // local first so the closure captures the (Sendable) action rather than `self`.
+            let dismiss = dismiss
+            MainActor.assumeIsolated { dismiss() }
         }
     }
 }

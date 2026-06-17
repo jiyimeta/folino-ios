@@ -101,7 +101,7 @@ final class AppBootstrap {
                     // Publish current playlists so the Share Extension's picker is populated on first use.
                     if let writer { writer.publish(playlists: repository.playlists) }
                     // Drain any tokens queued by the Share Extension before this launch.
-                    await self?.incomingShareCoordinator?.drain(token: nil)
+                    _ = await self?.incomingShareCoordinator?.drain(token: nil)
                     self?.isReady = true
                 } catch {
                     self?.failure = error
