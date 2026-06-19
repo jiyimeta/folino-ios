@@ -164,4 +164,17 @@ object MarketingStrings {
             ?: SceneCopy(sceneId, null)
         return base.copy(bullet = sceneId in bulletScenes)
     }
+
+    // Short marketing-banner tagline for the Play Store feature graphic, per language tag. Tighter than
+    // the per-scene subtitles / Play short_description. Falls back to English for unknown tags.
+    private val featureGraphicTaglines: Map<String, String> = mapOf(
+        "en" to "Read and play your scores",
+        "ja" to "楽譜を、読んで、鳴らす。",
+        "ko" to "악보를 읽고, 연주하세요",
+        "zh-Hans" to "读谱，奏乐，练习",
+        "zh-Hant" to "讀譜，奏樂，練習",
+    )
+
+    fun featureGraphicTagline(tag: String): String =
+        featureGraphicTaglines[tag] ?: featureGraphicTaglines.getValue("en")
 }
