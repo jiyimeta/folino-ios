@@ -6,9 +6,21 @@ emulator because the Reader renders sheet music via native JNI (cannot run on th
 
 ## What it produces
 
-6 scenes × 2 locales (`en-US`, `ja-JP`) × 2 devices (phone, 10" tablet) = **24 PNGs**, each wrapped
-in a device frame with a localized title/subtitle (placeholder marketing copy — see
-`app/src/androidTest/.../fixtures/MarketingStrings.kt`, marked `TODO(copy)`).
+6 scenes × 5 locales (`en-US`, `ja-JP`, `ko-KR`, `zh-CN`, `zh-TW`) × 2 devices (phone, 10" tablet)
+= **60 PNGs**, each wrapped in a device frame with a localized title/subtitle.
+
+In addition, `collectScreenshots` emits two supplementary assets per run:
+
+- **`images/featureGraphic.png`** — one 1024×500 feature graphic per locale (brand gradient,
+  wordmark + tagline left, Reader frame right). `upload_listing` uploads these alongside the text
+  metadata.
+- **`images/icon.png`** — one 512×512 full-bleed store icon (same file for every locale).
+  `upload_listing` uploads it as part of the store listing.
+
+> **Icon upload note:** the Play Developer API can reject icon updates with a validation error.
+> Always run `PLAY_VALIDATE_ONLY=1` first to check for rejections before committing the change.
+> If the API rejects the icon, upload `icon.png` manually via the Play Console — that path bypasses
+> the API validator.
 
 | order | scene | shows |
 | --- | --- | --- |
@@ -30,17 +42,25 @@ ANDROID_SERIAL=emulator-5554 ./gradlew :app:collectScreenshots
 ```
 
 This runs the `connectedDebugAndroidTest` capture (`ScreenshotTest.captureAll`) and copies the PNGs
-into `fastlane/metadata/android/<locale>/images/<phoneScreenshots|tenInchScreenshots>/<NN>.png`.
+into `fastlane/metadata/android/<locale>/images/<phoneScreenshots|tenInchScreenshots>/<NN>.png`,
+plus `featureGraphic.png` and `icon.png` under `fastlane/metadata/android/<locale>/images/`.
 
 The generated PNGs are git-ignored (`fastlane/.gitignore`); regenerate them rather than committing.
 
 ## Upload (manual)
 
 ```sh
-export PLAY_PACKAGE_NAME=com.keynumber.folino
+export PLAY_PACKAGE_NAME=com.harmolo.folino
 export PLAY_JSON_KEY_PATH=/path/to/play-service-account.json
+
+# Screenshots only (no metadata or changelogs)
 PLAY_VALIDATE_ONLY=1 bundle exec fastlane android upload_screenshots   # dry run
 bundle exec fastlane android upload_screenshots                        # real upload
+
+# Full listing: title/description + feature graphic + icon + screenshots (no binary)
+PLAY_VALIDATE_ONLY=1 bundle exec fastlane android upload_listing       # dry run first (catches icon rejections)
+bundle exec fastlane android upload_listing                            # real upload
 ```
 
-Images only — no binary, metadata, or changelogs are touched.
+Images only — no binary, metadata, or changelogs are touched by `upload_screenshots`. `upload_listing`
+also pushes text metadata, feature graphics, and the store icon.
