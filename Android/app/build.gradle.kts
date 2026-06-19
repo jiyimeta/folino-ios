@@ -145,6 +145,30 @@ tasks.register("collectScreenshots") {
                     }
                 }
             }
+
+            // Feature graphic: <avd>/featureGraphic/<playLocale>.png -> <playLocale>/images/featureGraphic.png
+            val featureGraphicDir = avdDir.resolve("featureGraphic")
+            if (featureGraphicDir.exists()) {
+                featureGraphicDir.listFiles()?.filter { it.extension == "png" }?.forEach { png ->
+                    val target = fastlaneRoot.resolve("${png.nameWithoutExtension}/images")
+                    target.mkdirs()
+                    png.copyTo(target.resolve("featureGraphic.png"), overwrite = true)
+                    copied++
+                }
+            }
+
+            // Store icon: the single <avd>/storeIcon/icon.png -> every real listing locale's images/icon.png.
+            val storeIcon = avdDir.resolve("storeIcon/icon.png")
+            if (storeIcon.exists()) {
+                fastlaneRoot.listFiles()
+                    ?.filter { it.isDirectory && it.resolve("title.txt").exists() }
+                    ?.forEach { localeDir ->
+                        val target = localeDir.resolve("images")
+                        target.mkdirs()
+                        storeIcon.copyTo(target.resolve("icon.png"), overwrite = true)
+                        copied++
+                    }
+            }
         }
         println("Screenshots collected into $fastlaneRoot ($copied files)")
     }
