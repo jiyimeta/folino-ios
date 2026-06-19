@@ -10,14 +10,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import com.keynumber.folino.R
@@ -66,15 +67,27 @@ fun FeatureGraphic(tag: String, layout: FeatureGraphicLayout = FeatureGraphicLay
             )
         }
 
-        // Right: the Reader screen in a device frame, centered, with optional vertical offset.
+        // Right: the Reader screen in a device frame, top-anchored so its rounded top edge stays
+        // visible (only the bottom bleeds off), lifted off the light gradient by a soft drop shadow.
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = layout.horizontalPadding)
                 .fillMaxHeight(),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.TopEnd,
         ) {
-            Box(modifier = Modifier.offset(y = layout.frameVerticalOffset)) {
+            Box(
+                modifier = Modifier
+                    .padding(top = layout.frameTopMargin)
+                    .shadow(
+                        elevation = layout.frameElevation,
+                        shape = RoundedCornerShape(
+                            topStart = layout.frameCornerRadius,
+                            topEnd = layout.frameCornerRadius,
+                        ),
+                        clip = false,
+                    ),
+            ) {
                 DeviceFrame(
                     frameWidth = frameWidth,
                     frameHeight = frameHeight,

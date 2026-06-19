@@ -27,7 +27,12 @@ data class FeatureGraphicLayout(
     val statusBarColor: Color,
     val innerBackground: Color,
     val innerDesignWidth: Dp,
-    val frameVerticalOffset: Dp,
+    // Gap from the canvas top to the frame's rounded top edge. The frame is top-anchored: its rounded
+    // top + the shadow stay visible inside the canvas and only the bottom bleeds off (clipped at the
+    // capture bounds), so it reads as a device/page card rather than a full-bleed rectangle.
+    val frameTopMargin: Dp,
+    // Drop-shadow elevation behind the frame, to lift the (white) score card off the light gradient.
+    val frameElevation: Dp,
 ) {
     companion object {
         fun default() = FeatureGraphicLayout(
@@ -39,14 +44,15 @@ data class FeatureGraphicLayout(
             taglineColor = Brand.captionInk,
             verticalSpacing = 20.dp,
             textColumnWidthFraction = 0.50f,
-            frameHeightFraction = 1.12f,
+            frameHeightFraction = 1.0f,
             frameAspectRatio = 0.46f,
-            frameCornerRadius = 28.dp,
+            frameCornerRadius = 30.dp,
             statusBarHeight = 0.dp,
             statusBarColor = Color.Black,
             innerBackground = Color.White,
             innerDesignWidth = 393.dp,
-            frameVerticalOffset = 0.dp,
+            frameTopMargin = 36.dp,
+            frameElevation = 22.dp,
         )
     }
 }
