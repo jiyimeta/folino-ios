@@ -3,28 +3,18 @@ package com.keynumber.folino.screenshot.frame
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Density
-import com.keynumber.folino.reader.LAYOUT_DP_PER_MM
-import com.keynumber.folino.screenshot.fixtures.LocalReaderSeedLayoutWidthMm
 
 // Port of iOS Screenshot/ScreenshotFrameView.swift. Lays out, top to bottom:
 // background gradient -> bold title -> subtitle -> a rounded-corner device frame (fake status bar
@@ -104,44 +94,17 @@ fun ScreenshotFrame(
                 .height(frameHeight)
                 .width(frameWidth),
         ) {
-            // The app screen occupies the frame below the fake status bar. Rather than scaling a
-            // rendered layer (Robolectric Native Graphics drops transform pivots, so graphicsLayer /
-            // canvas scale mis-place the content), we shrink the app by LOWERING the density for the
-            // subtree: at `innerDensity` the slot's pixels correspond to `innerDesignWidth` dp, so the
-            // app lays out as a realistic-width device while rendering into the smaller frame slot —
-            // controls and text then read at natural proportions instead of looking oversized.
-            val appSlotHeight = frameHeight - layout.statusBarHeight
-            val parentDensity = LocalDensity.current
-            val frameWidthPx = with(parentDensity) { frameWidth.toPx() }
-            val innerDensity = Density(
-                density = frameWidthPx / layout.innerDesignWidth.value,
-                fontScale = parentDensity.fontScale,
+            DeviceFrame(
+                frameWidth = frameWidth,
+                frameHeight = frameHeight,
+                statusBarHeight = layout.statusBarHeight,
+                statusBarColor = layout.statusBarColor,
+                cornerRadius = layout.frameCornerRadius,
+                innerBackground = layout.innerBackground,
+                innerDesignWidth = layout.innerDesignWidth,
+                overlay = overlay,
+                inner = inner,
             )
-            Column(modifier = Modifier.fillMaxSize().clip(
-                RoundedCornerShape(topStart = layout.frameCornerRadius, topEnd = layout.frameCornerRadius),
-            )) {
-                Box(modifier = Modifier.fillMaxWidth().height(layout.statusBarHeight).background(layout.statusBarColor))
-                Box(
-                    modifier = Modifier
-                        .width(frameWidth)
-                        .height(appSlotHeight)
-                        // Opaque fill behind the app so the marketing gradient never bleeds through.
-                        .background(layout.innerBackground)
-                        .clipToBounds(),
-                ) {
-                    // Seed the Reader VM with this device's layout width up front (px-independent:
-                    // innerDesignWidth / LAYOUT_DP_PER_MM) so the score lays out at the right width on the
-                    // first frame instead of reflowing from the 210mm seed after the capture already fired.
-                    CompositionLocalProvider(
-                        LocalDensity provides innerDensity,
-                        LocalReaderSeedLayoutWidthMm provides
-                            (layout.innerDesignWidth.value / LAYOUT_DP_PER_MM),
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) { inner() }
-                    }
-                }
-            }
-            overlay()
         }
     }
 }
