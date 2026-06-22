@@ -9,6 +9,8 @@ import SwiftUI
 struct AnnotationCanvasView: UIViewRepresentable {
     let documentSize: CGSize
     let drawingData: Data?
+    /// True when annotation mode is active — controls tool-picker visibility and hit-testing.
+    let isAnnotating: Bool
     /// True when an Apple Pencil is the preferred input (iPad w/ Pencil) → pencil draws, finger navigates.
     let isPencilPreferred: Bool
     /// (drawingData, isEmpty) on every change.
@@ -31,6 +33,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
             context.coordinator.lastLoadedData = drawingData
         }
         context.coordinator.canvas = canvas
+        canvas.frame = CGRect(origin: .zero, size: documentSize)
         return canvas
     }
 
@@ -46,7 +49,11 @@ struct AnnotationCanvasView: UIViewRepresentable {
                 canvas.drawing = drawing
             }
         }
-        context.coordinator.showToolPickerIfPossible()
+        if isAnnotating {
+            context.coordinator.showToolPickerIfPossible()
+        } else {
+            context.coordinator.hideToolPicker()
+        }
     }
 
     func makeCoordinator() -> Coordinator {

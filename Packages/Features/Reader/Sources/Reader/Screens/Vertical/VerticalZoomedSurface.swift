@@ -66,6 +66,7 @@ struct VerticalZoomedSurface: View {
             AnnotationCanvasView(
                 documentSize: doc.size,
                 drawingData: viewModel.annotationDrawingData,
+                isAnnotating: viewModel.isAnnotating,
                 isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
                 onChange: { data, isEmpty in viewModel.annotationDrawingDidChange(data, isEmpty: isEmpty) },
             )
