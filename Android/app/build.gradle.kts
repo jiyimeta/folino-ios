@@ -146,17 +146,6 @@ tasks.register("collectScreenshots") {
                 }
             }
 
-            // Feature graphic: <avd>/featureGraphic/<playLocale>.png -> <playLocale>/images/featureGraphic.png
-            val featureGraphicDir = avdDir.resolve("featureGraphic")
-            if (featureGraphicDir.exists()) {
-                featureGraphicDir.listFiles()?.filter { it.extension == "png" }?.forEach { png ->
-                    val target = fastlaneRoot.resolve("${png.nameWithoutExtension}/images")
-                    target.mkdirs()
-                    png.copyTo(target.resolve("featureGraphic.png"), overwrite = true)
-                    copied++
-                }
-            }
-
             // Store icon: the single <avd>/storeIcon/icon.png -> every real listing locale's images/icon.png.
             val storeIcon = avdDir.resolve("storeIcon/icon.png")
             if (storeIcon.exists()) {
@@ -173,6 +162,12 @@ tasks.register("collectScreenshots") {
         println("Screenshots collected into $fastlaneRoot ($copied files)")
     }
 }
+
+// The Play Store feature graphic has its own pipeline, separate from the device screenshots above:
+// Scripts/render-feature-graphic.sh renders it at TRUE 2x in a landscape emulator window, then
+// downsamples to the exact 1024x500 store size with a high-quality filter (supersampling -> fine staff
+// lines). It is a shell script (not a Gradle task) because it must rotate the emulator (adb) and
+// downsample (sips), which sit outside Gradle. See that script's header for usage.
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
