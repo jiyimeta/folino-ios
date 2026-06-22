@@ -55,7 +55,9 @@ struct LiveAnnotationStoreTests {
         let (db, lifetime) = try makeDatabase()
         defer { withExtendedLifetime(lifetime) {} }
         let store = LiveAnnotationStore(database: db)
-        let result = try await store.annotationLayer(forScoreItem: ScoreItemID())
+        let scoreID = ScoreItemID()
+        try await insertScore(db, id: scoreID)
+        let result = try await store.annotationLayer(forScoreItem: scoreID)
         #expect(result == nil)
     }
 
