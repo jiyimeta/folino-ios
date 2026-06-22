@@ -112,24 +112,6 @@ enum AppMigrations {
         return m
     }()
 
-    /// Migrator that registers v1 … v11 only — useful for tests that want to exercise the v12 upgrade against rows
-    /// already inserted at the previous schema.
-    static let upToV11: DatabaseMigrator = {
-        var m = DatabaseMigrator()
-        m.registerMigration("v1", migrate: migrateV1)
-        m.registerMigration("v2", migrate: migrateV2)
-        m.registerMigration("v3", migrate: migrateV3)
-        m.registerMigration("v4", migrate: migrateV4)
-        m.registerMigration("v5", migrate: migrateV5)
-        m.registerMigration("v6", migrate: migrateV6)
-        m.registerMigration("v7", migrate: migrateV7)
-        m.registerMigration("v8", migrate: migrateV8)
-        m.registerMigration("v9", migrate: migrateV9)
-        m.registerMigration("v10", migrate: migrateV10)
-        m.registerMigration("v11", migrate: migrateV11)
-        return m
-    }()
-
     // MARK: - v1
 
     private static func migrateV1(_ db: Database) throws {
