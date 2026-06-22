@@ -23,3 +23,17 @@ struct NoopScoreMetadataReading: ScoreMetadataReading {
         throw DomainError.unsupportedFormat("noop")
     }
 }
+
+/// Inert default for `ReaderViewModel.annotationStore`. Production injects `LiveAnnotationStore` from the App
+/// composition root; previews and tests that don't exercise annotations need no extra argument.
+struct NoopAnnotationStore: AnnotationStore {
+    // swiftlint:disable:next async_without_await
+    func annotationLayer(forScoreItem _: ScoreItemID) async throws -> AnnotationLayer? {
+        nil
+    }
+
+    // swiftlint:disable:next async_without_await
+    func saveAnnotationLayer(_: AnnotationLayer) async throws {}
+    // swiftlint:disable:next async_without_await
+    func deleteAnnotationLayer(forScoreItem _: ScoreItemID) async throws {}
+}

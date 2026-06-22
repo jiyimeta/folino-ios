@@ -75,6 +75,7 @@ final class ReaderViewModel {
     @ObservationIgnored private let gateway: any ScoreFileGateway
     @ObservationIgnored private let shareService: any ScoreShareService
     @ObservationIgnored let metadataReader: any ScoreMetadataReading
+    @ObservationIgnored private let annotationStore: any AnnotationStore
     @ObservationIgnored private let scoresDirectory: URL
     @ObservationIgnored private let defaultStaffSize: Double
     @ObservationIgnored private var hasUpdatedLastOpened = false
@@ -88,6 +89,7 @@ final class ReaderViewModel {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService = NoopScoreShareService(),
         metadataReader: any ScoreMetadataReading = NoopScoreMetadataReading(),
+        annotationStore: any AnnotationStore = NoopAnnotationStore(),
         scoresDirectory: URL,
         defaultStaffSize: Double = 14,
         playbackController: (any PlaybackController)? = nil,
@@ -100,6 +102,7 @@ final class ReaderViewModel {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
+        self.annotationStore = annotationStore
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
         preferencesStore = ReaderPreferencesStore(

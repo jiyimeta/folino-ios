@@ -27,6 +27,7 @@ struct AppShellView: View {
                let gateway = bootstrap.gateway,
                let shareService = bootstrap.shareService,
                let metadataReader = bootstrap.metadataReader,
+               let annotationStore = bootstrap.annotationStore,
                bootstrap.isReady
             {
                 ReadyShell(
@@ -36,6 +37,7 @@ struct AppShellView: View {
                     gateway: gateway,
                     shareService: shareService,
                     metadataReader: metadataReader,
+                    annotationStore: annotationStore,
                     scoresDirectory: AppPaths.scoresDirectory,
                     versionHistoryPresenter: versionHistoryPresenter,
                 )
@@ -103,6 +105,7 @@ private struct ReadyShell: View {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
+    let annotationStore: any AnnotationStore
     let scoresDirectory: URL
     let versionHistoryPresenter: VersionHistoryPresenter
 
@@ -133,6 +136,7 @@ private struct ReadyShell: View {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
+        annotationStore: any AnnotationStore,
         scoresDirectory: URL,
         versionHistoryPresenter: VersionHistoryPresenter,
     ) {
@@ -142,6 +146,7 @@ private struct ReadyShell: View {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
+        self.annotationStore = annotationStore
         self.scoresDirectory = scoresDirectory
         self.versionHistoryPresenter = versionHistoryPresenter
         _libraryVM = State(
@@ -377,6 +382,7 @@ private struct ReadyShell: View {
             gateway: gateway,
             shareService: shareService,
             metadataReader: metadataReader,
+            annotationStore: annotationStore,
             scoresDirectory: scoresDirectory,
             playbackController: bootstrap.playbackController,
             museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,

@@ -24,6 +24,7 @@ final class AppBootstrap {
     private var didStart = false
 
     private(set) var database: AppDatabase?
+    private(set) var annotationStore: LiveAnnotationStore?
     private(set) var repository: LiveScoreLibraryRepository?
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var importer: LiveScoreFileImporter?
@@ -59,6 +60,7 @@ final class AppBootstrap {
                 PlaylistsIndexWriter(appGroupContainer: $0)
             }
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
+            let annotationStore = LiveAnnotationStore(database: database)
             let repository = LiveScoreLibraryRepository(
                 database: database,
                 scoresDirectory: AppPaths.scoresDirectory,
@@ -81,6 +83,7 @@ final class AppBootstrap {
             }
 
             self.database = database
+            self.annotationStore = annotationStore
             self.repository = repository
             self.gateway = gateway
             self.importer = importer
