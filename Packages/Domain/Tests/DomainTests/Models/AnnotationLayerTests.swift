@@ -3,8 +3,11 @@ import Foundation
 import Testing
 
 struct AnnotationLayerTests {
-    private func anchor(system: Int = 0) -> MusicalAnchor {
-        MusicalAnchor(systemIndex: system, normalizedFrame: UnitRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2))
+    private func anchor(measure: Int = 0) -> MusicalAnchor {
+        MusicalAnchor(
+            measureIndex: measure, tickInMeasure: 0, partIndex: 0,
+            staffIndexInPart: 0, dxSp: 0, verticalOffsetSp: 0,
+        )
     }
 
     @Test func `empty layer has no entries`() {
@@ -24,11 +27,11 @@ struct AnnotationLayerTests {
             id: AnnotationLayerID(),
             scoreItemID: ScoreItemID(),
             drawings: [
-                DrawingAnchor(id: AnnotationID(), anchor: anchor(system: 0), encodedDrawing: Data([0xDE, 0xAD])),
-                DrawingAnchor(id: AnnotationID(), anchor: anchor(system: 3), encodedDrawing: Data([0xBE, 0xEF])),
+                DrawingAnchor(id: AnnotationID(), anchor: anchor(measure: 0), encodedDrawing: Data([0xDE, 0xAD])),
+                DrawingAnchor(id: AnnotationID(), anchor: anchor(measure: 3), encodedDrawing: Data([0xBE, 0xEF])),
             ],
             textBoxes: [
-                TextBoxAnchor(id: AnnotationID(), anchor: anchor(system: 1), text: "fingering"),
+                TextBoxAnchor(id: AnnotationID(), anchor: anchor(measure: 1), text: "fingering"),
             ],
             updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
         )
