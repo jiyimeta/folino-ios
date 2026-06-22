@@ -78,6 +78,12 @@ export PLAY_JSON_KEY_PATH=/path/to/play-service-account.json
 PLAY_VALIDATE_ONLY=1 bundle exec fastlane android upload_screenshots   # dry run
 bundle exec fastlane android upload_screenshots                        # real upload
 
+# Feature graphic only — no icon/text/screenshots (safest for a listing-image refresh; the icon is left
+# untouched because icon updates can be rejected). Defaults to the production track; set PLAY_VERSION_CODE
+# when the track has more than one release.
+PLAY_VALIDATE_ONLY=1 PLAY_VERSION_CODE=<code> bundle exec fastlane android upload_feature_graphic  # dry run
+PLAY_VERSION_CODE=<code> bundle exec fastlane android upload_feature_graphic                       # real upload
+
 # Full listing: title/description + feature graphic + icon + screenshots (no binary)
 PLAY_VALIDATE_ONLY=1 bundle exec fastlane android upload_listing       # dry run first (catches icon rejections)
 bundle exec fastlane android upload_listing                            # real upload
