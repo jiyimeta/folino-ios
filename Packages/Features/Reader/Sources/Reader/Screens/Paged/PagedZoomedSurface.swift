@@ -27,6 +27,10 @@ struct PagedZoomedSurface: View {
     let score: Score
     let viewport: CGSize
     let pageInsets: EdgeInsets
+    /// Horizontal gutter between the page band edge and the score content (wider on iPad so edge notes clear the tap
+    /// zones). Supplied by `PagedScoreContainer` so the layout width, the page padding, and the inner clip frame all
+    /// agree on one value.
+    let horizontalContentPadding: CGFloat
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
@@ -196,7 +200,7 @@ struct PagedZoomedSurface: View {
         )
         // Inset by the shared horizontal gutter so the page background still spans the full band but the music sits
         // inboard. The layout uses the same gutter-deducted width, so the score wraps to fit inside.
-        .padding(.horizontal, PagedScoreContainer.horizontalContentPadding)
+        .padding(.horizontal, horizontalContentPadding)
             // White fills the full viewport so any unused space beneath the last system reads as part of the page
             // (just like `SheetMusicUI.PagedScoreView`'s canvas) rather than the host scroll background.
             .frame(width: viewport.width, height: viewport.height, alignment: .top)
@@ -233,7 +237,7 @@ struct PagedZoomedSurface: View {
         // `.topLeading` (not `.top`) prevents the default `.center` horizontal alignment from drifting the doc when
         // `doc.size.width` ≠ inner width — which would clip part-labels on the leading edge.
         .frame(
-            width: viewport.width - PagedScoreContainer.horizontalContentPadding * 2,
+            width: viewport.width - horizontalContentPadding * 2,
             height: pageHeight,
             alignment: .topLeading,
         )

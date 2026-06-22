@@ -191,10 +191,12 @@ struct TapOverlay: View {
     }
 
     var body: some View {
-        let baseColumnWidth = viewport.width * 0.12
+        // iPad narrows each column to a compact fixed width so the score's edge notes (inset by a matching margin in
+        // `PagedScoreContainer`) clear the zone and stay tap-to-seek; iPhone keeps the original 12 % column.
+        let baseColumnWidth = ReaderScoreLayout.pageTapZoneWidth(viewportWidth: viewport.width)
         let leadingColumnWidth = baseColumnWidth + leadingExtra
         let trailingColumnWidth = baseColumnWidth + trailingExtra
-        let middleWidth = viewport.width * 0.76
+        let middleWidth = viewport.width - baseColumnWidth * 2
         let totalWidth = viewport.width + leadingExtra + trailingExtra
         let topHeight = viewport.height * 0.3
         let bottomHeight = viewport.height - topHeight

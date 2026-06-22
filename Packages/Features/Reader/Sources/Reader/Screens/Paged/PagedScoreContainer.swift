@@ -65,9 +65,18 @@ struct PagedScoreContainer: View {
     /// governs every page's slide.
     static let pageTransitionAnimation: Animation = .easeOut(duration: 0.18)
 
-    /// Horizontal gutter applied to the score content inside the page band. The layout uses the gutter-deducted width
-    /// so the score wraps to its visible width; the page background and tap zones still span the full band.
-    static let horizontalContentPadding: CGFloat = 12
+    /// iPhone gutter applied to the score content inside the page band. On iPad `ReaderScoreLayout` widens this so the
+    /// score's edge notes clear the narrowed page-turn tap zones — see `horizontalContentPadding(viewportWidth:)`.
+    /// The layout uses the gutter-deducted width so the score wraps to its visible width; the page background and tap
+    /// zones still span the full band.
+    static let phoneContentPadding: CGFloat = 12
+
+    /// Per-viewport horizontal gutter: `phoneContentPadding` on iPhone, a tap-zone-clearing margin on iPad.
+    static func horizontalContentPadding(viewportWidth: CGFloat) -> CGFloat {
+        ReaderScoreLayout.scoreHorizontalInset(
+            viewportWidth: viewportWidth, phoneDefault: phoneContentPadding,
+        )
+    }
 
     var body: some View {
         // Outer `GeometryReader` honors parent's `safeAreaPadding(.top, ReaderTopOverlay.height)` and system insets,
@@ -77,8 +86,9 @@ struct PagedScoreContainer: View {
             let viewportWidth = max(proxy.size.width, staffSize * 4)
             let viewportHeight = proxy.size.height
             let viewport = CGSize(width: viewportWidth, height: viewportHeight)
+            let contentPadding = Self.horizontalContentPadding(viewportWidth: viewportWidth)
             let contentWidth = max(
-                viewportWidth - Self.horizontalContentPadding * 2,
+                viewportWidth - contentPadding * 2,
                 staffSize * 4,
             )
             scrollContent(viewport: viewport)
@@ -158,6 +168,7 @@ struct PagedScoreContainer: View {
                 score: score,
                 viewport: viewport,
                 pageInsets: pageInsets,
+                horizontalContentPadding: Self.horizontalContentPadding(viewportWidth: viewport.width),
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,

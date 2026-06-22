@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// VerticalScoreContainer hosts the UIKit-backed scroll / pinch / zoom pipeline plus the layout, fit-to-width, and
+// auto-scroll plumbing for the vertical Reader; its breadth keeps it just over the file_length budget.
+
 import Domain
 import SheetMusicCore
 import SheetMusicLayout
@@ -67,6 +71,12 @@ struct VerticalScoreContainer: View {
         bottomControlClearance + safeAreaBottom
     }
 
+    /// Horizontal inset applied to the score on iPad (0 on iPhone) so Vertical mode matches Page mode's score width
+    /// and keeps comfortable margins off the bezel. See `ReaderScoreLayout`.
+    private func scoreInset(viewportWidth: CGFloat) -> CGFloat {
+        ReaderScoreLayout.scoreHorizontalInset(viewportWidth: viewportWidth, phoneDefault: 0)
+    }
+
     private struct PinchSession {
         var baseZoom: CGFloat
     }
@@ -75,7 +85,12 @@ struct VerticalScoreContainer: View {
         GeometryReader { proxy in
             // Any horizontal overflow in `doc.size.width` (engine right margin, spanners, ties) is absorbed by
             // `effectiveZoom`'s fit-to-width factor so the user always sees the entire system at user-zoom 1.0.
-            let layoutWidth = max(proxy.size.width, staffSize * 4)
+            // iPad insets the score by a horizontal margin (matching Page mode); the score lays out at the inset width
+            // and the surface re-applies the same margin so it sits centered with bezel clearance.
+            let layoutWidth = max(
+                proxy.size.width - scoreInset(viewportWidth: proxy.size.width) * 2,
+                staffSize * 4,
+            )
             scrollContent(viewport: proxy.size)
                 .onAppear { eagerLayoutIfNeeded(width: layoutWidth) }
                 .onChange(of: layoutWidth) { _, newWidth in eagerLayoutIfNeeded(width: newWidth) }
@@ -118,13 +133,16 @@ struct VerticalScoreContainer: View {
             centerHorizontally: false,
             expectedContentSize: {
                 guard let doc = document else { return .zero }
-                let fit = doc.size.width > 0
-                    ? min(1.0, viewport.width / doc.size.width)
+                // Fit the *padded* content (score + horizontal inset) into the viewport so the inset score lands
+                // centered with bezel margins, mirroring `VerticalZoomedSurface`'s framed width.
+                let framedContentWidth = doc.size.width + scoreInset(viewportWidth: viewport.width) * 2
+                let fit = framedContentWidth > 0
+                    ? min(1.0, viewport.width / framedContentWidth)
                     : 1.0
                 let zoom = committedZoom * fit
                 let topPad = scoreTopPadding + safeAreaTop
                 return CGSize(
-                    width: doc.size.width * zoom,
+                    width: framedContentWidth * zoom,
                     height: (doc.size.height + topPad + scoreBottomPadding) * zoom,
                 )
             },
@@ -155,6 +173,7 @@ struct VerticalScoreContainer: View {
                 document: document,
                 score: score,
                 viewport: viewport,
+                horizontalPadding: scoreInset(viewportWidth: viewport.width),
                 scoreTopPadding: scoreTopPadding,
                 scoreBottomPadding: scoreBottomPadding,
                 safeAreaTop: safeAreaTop,
@@ -178,8 +197,10 @@ struct VerticalScoreContainer: View {
     private func effectiveZoom(
         for doc: LayoutDocument, viewport: CGSize,
     ) -> CGFloat {
-        let fit = doc.size.width > 0
-            ? min(1.0, viewport.width / doc.size.width)
+        // Fit the padded content (score + horizontal inset) so the inset never pushes the score past the viewport.
+        let framedContentWidth = doc.size.width + scoreInset(viewportWidth: viewport.width) * 2
+        let fit = framedContentWidth > 0
+            ? min(1.0, viewport.width / framedContentWidth)
             : 1.0
         return viewModel.viewportZoom * fit
     }
@@ -311,11 +332,13 @@ struct VerticalScoreContainer: View {
         let zoom = effectiveZoom(for: doc, viewport: viewport)
         let pad = 8 * doc.metrics.sp * zoom
 
-        // Cursor frame in scroll-content coords: vertical padding only, then scaled from top-leading. Mirrors
-        // `zoomedSurface`'s composition (no horizontal padding).
+        // Cursor frame in scroll-content coords: scaled from top-leading. Mirrors `VerticalZoomedSurface`'s
+        // composition — vertical padding on top/bottom, and (on iPad) a horizontal inset that shifts the score's
+        // content-space x rightward before scaling.
         let topPad = scoreTopPadding + safeAreaTop
-        let minX = rect.minX * zoom
-        let maxX = rect.maxX * zoom
+        let hPad = scoreInset(viewportWidth: viewport.width)
+        let minX = (rect.minX + hPad) * zoom
+        let maxX = (rect.maxX + hPad) * zoom
         let minY = (rect.minY + topPad) * zoom
         let maxY = (rect.maxY + topPad) * zoom
 

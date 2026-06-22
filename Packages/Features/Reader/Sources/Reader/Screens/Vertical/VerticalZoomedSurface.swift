@@ -11,6 +11,9 @@ struct VerticalZoomedSurface: View {
     let document: LayoutDocument?
     let score: Score
     let viewport: CGSize
+    /// Horizontal inset on each side of the score (iPad only; 0 on iPhone). Lives inside the scaled content so it
+    /// scales with zoom, matching the top / bottom padding. See `VerticalScoreContainer.scoreInset`.
+    let horizontalPadding: CGFloat
     let scoreTopPadding: CGFloat
     let scoreBottomPadding: CGFloat
     let safeAreaTop: CGFloat
@@ -22,11 +25,12 @@ struct VerticalZoomedSurface: View {
         if let doc = document {
             let zoom = effectiveZoom(for: doc)
             let topPad = scoreTopPadding + safeAreaTop
-            let framedWidth = doc.size.width * zoom
+            let framedWidth = (doc.size.width + horizontalPadding * 2) * zoom
             let framedHeight = (doc.size.height + topPad + scoreBottomPadding) * zoom
             scoreSurface(document: doc)
                 .padding(.top, topPad)
                 .padding(.bottom, scoreBottomPadding)
+                .padding(.horizontal, horizontalPadding)
                 .scaleEffect(pinch.magnification, anchor: pinch.anchor)
                 .scaleEffect(zoom, anchor: .topLeading)
                 .offset(x: pinch.offsetX, y: 0)
@@ -41,8 +45,10 @@ struct VerticalZoomedSurface: View {
     }
 
     private func effectiveZoom(for doc: LayoutDocument) -> CGFloat {
-        let fit = doc.size.width > 0
-            ? min(1.0, viewport.width / doc.size.width)
+        // Fit the padded content (score + horizontal inset) into the viewport so the inset score never overflows.
+        let framedContentWidth = doc.size.width + horizontalPadding * 2
+        let fit = framedContentWidth > 0
+            ? min(1.0, viewport.width / framedContentWidth)
             : 1.0
         return viewModel.viewportZoom * fit
     }
