@@ -17,6 +17,7 @@ enum AppMigrations {
         m.registerMigration("v9", migrate: migrateV9)
         m.registerMigration("v10", migrate: migrateV10)
         m.registerMigration("v11", migrate: migrateV11)
+        m.registerMigration("v12", migrate: migrateV12)
         return m
     }()
 
@@ -108,6 +109,24 @@ enum AppMigrations {
         m.registerMigration("v6", migrate: migrateV6)
         m.registerMigration("v7", migrate: migrateV7)
         m.registerMigration("v8", migrate: migrateV8)
+        return m
+    }()
+
+    /// Migrator that registers v1 … v11 only — useful for tests that want to exercise the v12 upgrade against rows
+    /// already inserted at the previous schema.
+    static let upToV11: DatabaseMigrator = {
+        var m = DatabaseMigrator()
+        m.registerMigration("v1", migrate: migrateV1)
+        m.registerMigration("v2", migrate: migrateV2)
+        m.registerMigration("v3", migrate: migrateV3)
+        m.registerMigration("v4", migrate: migrateV4)
+        m.registerMigration("v5", migrate: migrateV5)
+        m.registerMigration("v6", migrate: migrateV6)
+        m.registerMigration("v7", migrate: migrateV7)
+        m.registerMigration("v8", migrate: migrateV8)
+        m.registerMigration("v9", migrate: migrateV9)
+        m.registerMigration("v10", migrate: migrateV10)
+        m.registerMigration("v11", migrate: migrateV11)
         return m
     }()
 
@@ -306,6 +325,23 @@ enum AppMigrations {
         try db.execute(sql: """
         ALTER TABLE reader_preferences
         ADD COLUMN a4_reference_hz REAL
+        """)
+    }
+
+    // MARK: - v12
+
+    /// Adds the `annotation_layers` table — one ink layer per score. `score_item_id` is the primary key (at most one
+    /// layer per score) and an `ON DELETE CASCADE` foreign key, so a layer is dropped only when the score row is
+    /// HARD-deleted (permanent delete / 30-day purge), never on soft-delete — restoring a trashed score keeps its ink.
+    /// `payload` is the JSON-encoded drawings + text boxes (the PKDrawing blobs ride inside it).
+    private static func migrateV12(_ db: Database) throws {
+        try db.execute(sql: """
+        CREATE TABLE annotation_layers (
+            id             TEXT NOT NULL,
+            score_item_id  TEXT NOT NULL PRIMARY KEY REFERENCES score_items(id) ON DELETE CASCADE,
+            updated_at     REAL NOT NULL,
+            payload        BLOB NOT NULL
+        )
         """)
     }
 }

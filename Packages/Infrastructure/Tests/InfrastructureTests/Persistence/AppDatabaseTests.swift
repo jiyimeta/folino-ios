@@ -272,4 +272,62 @@ struct AppDatabaseTests {
             #expect(row?["staff_volume_overrides"] == "[]")
         }
     }
+
+    @Test func `v 12 creates annotation layers table`() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+        try queue.read { db in
+            try #expect(db.tableExists("annotation_layers"))
+            let cols = try db.columns(in: "annotation_layers").map(\.name)
+            #expect(cols.contains("id"))
+            #expect(cols.contains("score_item_id"))
+            #expect(cols.contains("updated_at"))
+            #expect(cols.contains("payload"))
+        }
+    }
+
+    @Test func `v 12 cascades annotation layer on score hard delete only`() throws {
+        // FK cascade requires foreign-keys ON, which AppDatabase configures; use it over a bare DatabaseQueue.
+        let tmp = try TempDirectory()
+        defer { withExtendedLifetime(tmp) {} }
+        let db = try AppDatabase(databaseURL: tmp.url.appending(path: "f.sqlite"))
+        let scoreID = "00000000-0000-0000-0000-0000000000c1"
+        try db.pool.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO score_items (id, title, local_file_name, content_hash,
+                    size_bytes, length_beats, default_tempo_bpm, added_at)
+                VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+                """,
+                arguments: [scoreID],
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO annotation_layers (id, score_item_id, updated_at, payload)
+                VALUES ('a', ?, 0, x'00')
+                """,
+                arguments: [scoreID],
+            )
+        }
+        // Soft-delete (UPDATE deleted_at) must NOT remove the layer.
+        try db.pool.write { db in
+            try db.execute(sql: "UPDATE score_items SET deleted_at = 1 WHERE id = ?", arguments: [scoreID])
+        }
+        let afterSoft = try db.pool.read { db in
+            try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM annotation_layers WHERE score_item_id = ?", arguments: [scoreID],
+            )
+        }
+        #expect(afterSoft == 1)
+        // Hard-delete (DELETE row) cascades the layer away.
+        try db.pool.write { db in
+            try db.execute(sql: "DELETE FROM score_items WHERE id = ?", arguments: [scoreID])
+        }
+        let afterHard = try db.pool.read { db in
+            try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM annotation_layers WHERE score_item_id = ?", arguments: [scoreID],
+            )
+        }
+        #expect(afterHard == 0)
+    }
 }
