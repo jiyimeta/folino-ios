@@ -34,7 +34,7 @@ final class ReaderViewModel {
     private(set) var loadState: LoadState = .loading
 
     /// The persisted annotation drawing for the current score, in document coordinates (M1 degenerate storage — one
-    /// whole-canvas blob; M2 replaces this with per-stroke musical anchoring). The canvas seeds itself from this.
+    /// whole-canvas blob; M2 replaces this with per-stroke musical anchoring). Set only via loadAnnotations().
     var annotationDrawingData: Data?
 
     // Internal (not private) so `ReaderViewModel+AnnotationPersistence.swift` can reach them.

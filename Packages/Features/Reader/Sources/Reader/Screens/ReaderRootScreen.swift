@@ -147,7 +147,10 @@ public struct ReaderRootScreen: View {
             // user leaves the Reader; backgrounding keeps the engine alive so background audio + PiP continue.
             guard scenePhase == .active else { return }
             let viewModel = viewModel
-            Task { await viewModel.playbackSession.releaseEngine() }
+            Task {
+                await viewModel.flushPendingAnnotationSave()
+                await viewModel.playbackSession.releaseEngine()
+            }
         }
         .onChange(of: keepScreenAwake) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue

@@ -41,7 +41,7 @@ extension ReaderViewModel {
         await persistPendingAnnotation(scoreID: scoreItem.id)
     }
 
-    func persistPendingAnnotation(scoreID: Domain.ScoreItemID) async {
+    private func persistPendingAnnotation(scoreID: Domain.ScoreItemID) async {
         guard let data = pendingAnnotationData else { return }
         pendingAnnotationData = nil
         if pendingAnnotationIsEmpty {
