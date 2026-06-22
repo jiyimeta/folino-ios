@@ -9,13 +9,14 @@ emulator because the Reader renders sheet music via native JNI (cannot run on th
 6 scenes × 5 locales (`en-US`, `ja-JP`, `ko-KR`, `zh-CN`, `zh-TW`) × 2 devices (phone, 10" tablet)
 = **60 PNGs**, each wrapped in a device frame with a localized title/subtitle.
 
-In addition, `collectScreenshots` emits two supplementary assets per run:
+In addition, `collectScreenshots` emits the store icon per run:
 
-- **`images/featureGraphic.png`** — one 1024×500 feature graphic per locale (brand gradient,
-  wordmark + tagline left, Reader frame right). `upload_listing` uploads these alongside the text
-  metadata.
 - **`images/icon.png`** — one 512×512 full-bleed store icon (same file for every locale).
   `upload_listing` uploads it as part of the store listing.
+
+The **feature graphic** (`images/featureGraphic.png`, one 1024×500 per locale) has its own pipeline —
+see **Feature graphic** below — because it is rendered at 2× in a landscape window and downsampled
+(supersampling, for fine staff lines), which the portrait screenshot run cannot do.
 
 > **Icon upload note:** the Play Developer API can reject icon updates with a validation error.
 > Always run `PLAY_VALIDATE_ONLY=1` first to check for rejections before committing the change.
@@ -41,11 +42,31 @@ the tablet canvas) and the staged native libs (already present in a normal check
 ANDROID_SERIAL=emulator-5554 ./gradlew :app:collectScreenshots
 ```
 
-This runs the `connectedDebugAndroidTest` capture (`ScreenshotTest.captureAll`) and copies the PNGs
-into `fastlane/metadata/android/<locale>/images/<phoneScreenshots|tenInchScreenshots>/<NN>.png`,
-plus `featureGraphic.png` and `icon.png` under `fastlane/metadata/android/<locale>/images/`.
+This runs the `connectedDebugAndroidTest` capture and copies the PNGs into
+`fastlane/metadata/android/<locale>/images/<phoneScreenshots|tenInchScreenshots>/<NN>.png`, plus
+`icon.png` under `fastlane/metadata/android/<locale>/images/`. (The feature graphic is generated
+separately — see **Feature graphic**.)
 
 The generated PNGs are git-ignored (`fastlane/.gitignore`); regenerate them rather than committing.
+
+## Feature graphic
+
+The Play Store feature graphic (1024×500, one per locale) is generated separately from the screenshots,
+by **supersampling**: `FeatureGraphicTest` renders it at a true 2× (2048×1000) in a wide (landscape)
+emulator window, then the script downsamples to the exact 1024×500 with a high-quality filter so the
+in-frame staff lines stay fine (a direct 1024 render in the small frame leaves the lines heavy).
+
+```sh
+# from the repo root — needs a booted emulator-5554
+Scripts/render-feature-graphic.sh
+```
+
+It sets a wide display via `wm size`, runs only `FeatureGraphicTest` with `fgScale=2`, restores the
+display, downsamples each locale into `fastlane/metadata/android/<locale>/images/featureGraphic.png`,
+and also drops the ja render at full 2× on the Desktop for SNS use. The composition (the folino wordmark
+logo + localized tagline on the left, the Reader score with the Top/2nd/3rd staves hidden in a device
+card on the right) lives in `FeatureGraphic.kt`; the logo asset is (re)generated from the iOS icon's
+title layer by `Scripts/extract-wordmark.swift`.
 
 ## Upload (manual)
 
