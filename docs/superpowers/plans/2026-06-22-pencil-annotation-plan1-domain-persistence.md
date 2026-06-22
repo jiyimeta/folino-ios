@@ -91,7 +91,7 @@ Then update the call sites in that file: `anchor(system: 0)` → `anchor(measure
 
 Run (from `Packages/Domain/`):
 ```
-xcodebuild test -scheme Domain-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:DomainTests/MusicalAnchorTests
+xcodebuild test -scheme Domain -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:DomainTests/MusicalAnchorTests
 ```
 Expected: BUILD FAILURE — `MusicalAnchor` has no member `measureIndex` / no matching initializer (the old `systemIndex`/`normalizedFrame` shape is still in place).
 
@@ -235,7 +235,7 @@ public struct AnnotationLayerID: Hashable, Sendable, Codable {
 
 Run (from `Packages/Domain/`):
 ```
-xcodebuild test -scheme Domain-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:DomainTests/MusicalAnchorTests -only-testing:DomainTests/AnnotationLayerTests -only-testing:DomainTests/AnnotationStoreProtocolTests
+xcodebuild test -scheme Domain -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:DomainTests/MusicalAnchorTests -only-testing:DomainTests/AnnotationLayerTests -only-testing:DomainTests/AnnotationStoreProtocolTests
 ```
 Expected: PASS (all three suites). `AnnotationStoreProtocolTests` (in `StorageProtocolsTests.swift`) is unchanged and must still pass against the now-public protocol.
 
@@ -787,7 +787,7 @@ xcodebuild test -scheme Infrastructure-Package -destination 'platform=iOS Simula
 ```
 Then (from `Packages/Domain/`):
 ```
-xcodebuild test -scheme Domain-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation
+xcodebuild test -scheme Domain -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation
 ```
 Expected: PASS for both packages.
 
