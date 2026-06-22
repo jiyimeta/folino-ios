@@ -33,6 +33,15 @@ final class ReaderViewModel {
 
     private(set) var loadState: LoadState = .loading
 
+    /// The persisted annotation drawing for the current score, in document coordinates (M1 degenerate storage — one
+    /// whole-canvas blob; M2 replaces this with per-stroke musical anchoring). The canvas seeds itself from this.
+    var annotationDrawingData: Data?
+
+    // Internal (not private) so `ReaderViewModel+AnnotationPersistence.swift` can reach them.
+    @ObservationIgnored var annotationSaveTask: Task<Void, Never>?
+    @ObservationIgnored var pendingAnnotationData: Data?
+    @ObservationIgnored var pendingAnnotationIsEmpty = false
+
     /// The display-ready score: the loaded score with clef overrides applied, transposed, and hidden staves filtered.
     /// Cached and recomputed only when its inputs change (load, clef overrides, transpose, hidden staves) via
     /// `recomputeVisibleScore()`, so the transform chain no longer rebuilds on every Reader body evaluation.
@@ -75,7 +84,7 @@ final class ReaderViewModel {
     @ObservationIgnored private let gateway: any ScoreFileGateway
     @ObservationIgnored private let shareService: any ScoreShareService
     @ObservationIgnored let metadataReader: any ScoreMetadataReading
-    @ObservationIgnored private let annotationStore: any AnnotationStore
+    @ObservationIgnored let annotationStore: any AnnotationStore
     @ObservationIgnored private let scoresDirectory: URL
     @ObservationIgnored private let defaultStaffSize: Double
     @ObservationIgnored private var hasUpdatedLastOpened = false
@@ -267,6 +276,8 @@ final class ReaderViewModel {
             loadState = .loaded(score)
             recomputeVisibleScore()
             pipSession.armIfReady()
+            annotationDrawingData = nil
+            await loadAnnotations()
             await updateLastOpenedAtOnce()
         } catch {
             loadState = .failed(error: error)
@@ -334,6 +345,7 @@ final class ReaderViewModel {
     func advance(to newItem: ScoreItem, autoPlay: Bool) async {
         isAdvancing = true
         defer { isAdvancing = false }
+        await flushPendingAnnotationSave()
         await playbackSession.releaseEngine()
         scoreItem = newItem
         preferencesStore = ReaderPreferencesStore(
