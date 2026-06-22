@@ -36,7 +36,6 @@ final class ReaderViewModel {
     /// The persisted annotation drawing for the current score, in document coordinates (M1 degenerate storage — one
     /// whole-canvas blob; M2 replaces this with per-stroke musical anchoring). Set only via loadAnnotations().
     var annotationDrawingData: Data?
-
     // Internal (not private) so `ReaderViewModel+AnnotationPersistence.swift` can reach them.
     @ObservationIgnored var annotationSaveTask: Task<Void, Never>?
     @ObservationIgnored var pendingAnnotationData: Data?
@@ -72,6 +71,7 @@ final class ReaderViewModel {
     var pipSession: ReaderPiPSession
 
     var viewportZoom: CGFloat = 1.0
+    var isAnnotating = false // true → canvas draws; false → all touches reach navigation + tap-to-seek
     var isPlaybackInspectorPresented = false
     var isVisualInspectorPresented = false
     var isScoreInfoPresented = false

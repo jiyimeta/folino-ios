@@ -63,6 +63,15 @@ struct VerticalZoomedSurface: View {
             .gesture(tapSeekGesture(document: doc))
             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
+            AnnotationCanvasView(
+                documentSize: doc.size,
+                drawingData: viewModel.annotationDrawingData,
+                isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+                onChange: { data, isEmpty in viewModel.annotationDrawingDidChange(data, isEmpty: isEmpty) },
+            )
+            .frame(width: doc.size.width, height: doc.size.height, alignment: .topLeading)
+            .allowsHitTesting(viewModel.isAnnotating)
+
             if viewModel.repeatModel.mode == .abLoop {
                 LoopRegionOverlay(document: doc, range: viewModel.repeatModel.abRange)
                 LoopBoundaryMarkers(

@@ -44,13 +44,15 @@ struct ReaderTopOverlay: View {
         .padding(.top, 4)
     }
 
-    /// Right-side buttons that depend on a loaded score: the "this score" pill (info + share) left of the paired
-    /// inspector pill. Play/pause moved to the bottom transport control (`ReaderTransportControl`) so the primary
-    /// transport controls sit within thumb reach. Extracted from `body` to keep the outer HStack closure under
-    /// SwiftLint's body-length limit.
+    /// Right-side buttons that depend on a loaded score: the "this score" pill (info + share) left of the annotation
+    /// toggle, left of the paired inspector pill. Play/pause moved to the bottom transport control
+    /// (`ReaderTransportControl`) so the primary transport controls sit within thumb reach. Extracted from `body` to
+    /// keep the outer HStack closure under SwiftLint's body-length limit.
     private func loadedActions(score: Score) -> some View {
         HStack(spacing: 12) {
             scoreActionButtons()
+            annotationToggleButton()
+                .glassEffect(.regular.interactive())
             inspectorButtons(score: score)
                 .glassEffect(.regular.interactive())
         }
@@ -87,6 +89,22 @@ struct ReaderTopOverlay: View {
             .accessibilityLabel(Text("reader.toolbar.share", bundle: .module))
         }
         .glassEffect(.regular.interactive())
+    }
+
+    /// Single-button glass pill that toggles annotation mode. When active, the canvas accepts Pencil/finger input;
+    /// when inactive, all touches reach navigation and tap-to-seek.
+    private func annotationToggleButton() -> some View {
+        overlayButton(
+            systemImage: viewModel.isAnnotating ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle",
+            label: Text(
+                viewModel.isAnnotating
+                    ? "reader.toolbar.annotate.stop"
+                    : "reader.toolbar.annotate.start",
+                bundle: .module,
+            ),
+        ) {
+            viewModel.isAnnotating.toggle()
+        }
     }
 
     /// Paired playback / visual inspector buttons sharing a single glass-pill background. Each button owns its own
