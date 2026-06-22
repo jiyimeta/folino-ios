@@ -23,6 +23,24 @@ final class ReaderPlaybackSession {
         scrubCursor ?? playbackCursor
     }
 
+    /// Lookahead anchor for vertical-mode auto-scroll: the `.beat` cursor `scrollLookaheadBeats` beats after
+    /// the live position, so the score scrolls before the playing cursor reaches the viewport edge. Non-nil
+    /// ONLY during continuous playback (not paused / stopped / scrubbing); callers fall back to `displayCursor`
+    /// when nil, preserving the reactive scroll behavior. Never drives the on-staff highlight.
+    ///
+    /// Computed from `rawPlaybackCursor` (the engine's full-score address) so an `.item` cursor resolves its
+    /// tick against the right staff — exactly as `playbackFraction` does. The `.beat` result is staff-agnostic,
+    /// so no hidden-staves translation is needed.
+    var scrollAnchorCursor: ScoreCursor? {
+        guard isPlaying, scrubCursor == nil,
+              let raw = rawPlaybackCursor, let score = scoreProvider()
+        else { return nil }
+        return score.cursor(advancedByBeats: Self.scrollLookaheadBeats, from: raw)
+    }
+
+    /// Lead distance for `scrollAnchorCursor`, in quarter-note beats. Code-tunable single source of truth.
+    static let scrollLookaheadBeats: Double = 2
+
     /// Live playback position as a 0...1 fraction of the notated timeline, computed in FULL-SCORE coordinates.
     ///
     /// The seek bar must read this rather than mapping `playbackCursor` itself: `playbackCursor` carries *filtered*
