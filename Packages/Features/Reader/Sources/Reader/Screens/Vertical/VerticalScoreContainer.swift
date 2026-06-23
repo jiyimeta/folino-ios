@@ -3,6 +3,7 @@
 // auto-scroll plumbing for the vertical Reader; its breadth keeps it just over the file_length budget.
 
 import Domain
+import PencilKit
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -65,6 +66,9 @@ struct VerticalScoreContainer: View {
     /// Mirror of `viewModel.viewportZoom` set OUTSIDE `withAnimation` so the `expectedContentSize` closure reads the
     /// final committed value instead of SwiftUI's interpolated values during a commit transition.
     @State private var committedZoom: CGFloat = 1.0
+    /// The annotation model projected to the current layout. Recomputed only when `document` or the model changes —
+    /// NOT on scroll/pinch — so per-tick rendering stays cheap. Passed to the canvas as the seed drawing.
+    @State private var projectedAnnotations = PKDrawing()
 
     /// Vertical padding inside the scaled content. Top is larger so the first system clears the nav chrome / safe
     /// area when `ignoresSafeArea()` lets the score slide underneath.
@@ -200,6 +204,9 @@ struct VerticalScoreContainer: View {
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
+        .onChange(of: document) { _, _ in reprojectAnnotations() }
+        .onChange(of: viewModel.annotationDrawings) { _, _ in reprojectAnnotations() }
+        .onAppear { reprojectAnnotations() }
     }
 
     /// Geometry the annotation canvas mirrors onto PencilKit's own scroll machinery (read at call time by the host's
@@ -212,8 +219,13 @@ struct VerticalScoreContainer: View {
         AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
-            drawingData: viewModel.annotationDrawingData,
-            onChange: { data, isEmpty in viewModel.annotationDrawingDidChange(data, isEmpty: isEmpty) },
+            displayDrawing: projectedAnnotations,
+            onChange: { drawing in
+                guard let doc = document else { return }
+                viewModel.annotationDrawingsDidChange(
+                    AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc),
+                )
+            },
             state: { annotationCanvasState(viewport: viewport) },
         )
     }
@@ -335,6 +347,11 @@ struct VerticalScoreContainer: View {
                 }
             }
         }
+    }
+
+    private func reprojectAnnotations() {
+        guard let doc = document else { projectedAnnotations = PKDrawing(); return }
+        projectedAnnotations = AnnotationAnchoring.display(viewModel.annotationDrawings, in: doc)
     }
 
     private var scoreOptions: ScoreViewOptions {
