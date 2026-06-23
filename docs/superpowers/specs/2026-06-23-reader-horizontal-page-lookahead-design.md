@@ -48,7 +48,7 @@ Android side needs **no new JNI bridge and no `.so` rebuild for new symbols** �
 - **No change to vertical mode** (already shipped).
 - **No change to horizontal-mode Y follow** (the gentle keep-in-view when zoomed taller than
   the viewport stays; only the **X** axis gets the lookahead).
-- **No PiP change.**
+- **Android PiP** is out of scope — it is not yet implemented (design `2026-06-09-android-reader-pip-design.md`); it will inherit the lookahead via the shared `HorizontalScore` + JNI path when built. (iOS PiP IS now included — see Component 8, added per user request after the initial spec, since PiP's scroll is measure-left-align like horizontal.)
 
 ## Decisions (from brainstorming)
 
@@ -164,6 +164,22 @@ In `PagedScore.kt`'s page-turn `LaunchedEffect`, source the cursor from
 `pagerState.animateScrollToPage(target)`. During playback this turns to the virtual cursor's
 page; paused falls back to the real cursor.
 
+### 8. iOS — PiP frame renderer lookahead (added per user request)
+
+PiP's score scroll (`ScorePiPFrameRenderer.advanceScroll`) is already measure-left-align (the
+same model as horizontal), driven per-frame by a `CADisplayLink` smooth lerp toward a target
+offset, following the REAL cursor only. Graft the 2-beat lookahead the same way as horizontal —
+the **rendered cursor stays on the real position** (PiP blits the real cursor rect):
+
+- `ReaderViewModel.wirePiPSession()`: add `pipSession.scrollAnchorCursorProvider = { [weak self] in self?.playbackSession.scrollAnchorCursor }`.
+- `ReaderPiPSession`: add `var scrollAnchorCursorProvider: () -> ScoreCursor? = { nil }`; in `notifyCursorChanged()` also push `coordinatorBacking?.updateScrollAnchorCursor(scrollAnchorCursorProvider())`.
+- `ScorePiPCoordinator`: add a `scrollAnchorCursor` state + `updateScrollAnchorCursor(_:)`; in `pumpTick` call `renderFrame(playbackCursor: currentCursor, lookaheadCursor: scrollAnchorCursor)`.
+- `ScorePiPFrameRenderer`: `renderFrame(playbackCursor:lookaheadCursor:)` keeps the rendered cursor on `playbackCursor`; `advanceScroll(realCursor:lookaheadCursor:)` sets, when the lookahead is present, `targetScrollOffsetDocX = scrollOffsetPinningSystemTop(current: scrollOffsetDocX, systemMin: realMeasure.minX, systemMax: realMeasure.maxX, lookaheadMax: lookaheadMeasure.maxX, viewport: viewportWidthDoc, topInset: padDoc)` (else the existing real-measure target). The per-frame lerp then animates toward the anticipated target. `import Domain`.
+
+This is the horizontal 2-stage trigger applied to PiP: it left-aligns the playing measure ~2
+beats before that measure would overflow the small PiP viewport. **Android PiP** is unimplemented
+(see Non-goals) and will inherit the same behavior when built.
+
 ## Data flow (per mode, during playback)
 
 ```
@@ -172,6 +188,8 @@ Horizontal:  real + 2-beat anchor → measureRect/nativeMeasureFrame (both) →
              left-align playing measure (fires when real OR lookahead measure off-screen)
 Page:        1-beat anchor → cursor→page (existing followCursor / breaksMm search) →
              commitPageTurn / animateScrollToPage to the VIRTUAL cursor's page
+PiP (iOS):   real + 2-beat anchor → measureDocRect (both) → scrollOffsetPinningSystemTop →
+             per-frame lerp toward the left-aligned playing measure (rendered cursor stays real)
 ```
 
 Highlight stays on the real `displayCursor` in both modes.
@@ -191,6 +209,8 @@ Highlight stays on the real `displayCursor` in both modes.
   - **Page:** the page turns ~1 beat before the playhead reaches the next page; the highlight
     briefly trails on the prior page (expected); paused/manual seek turns on the real cursor;
     swipe-to-turn unaffected.
+  - **PiP (iOS):** the small PiP score left-aligns the playing measure ~2 beats early (the
+    rendered cursor stays on the real position); paused holds; the per-frame motion stays smooth.
   - Vertical unchanged.
 
 ## Risks / open notes

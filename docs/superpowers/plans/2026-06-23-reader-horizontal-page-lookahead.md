@@ -569,9 +569,117 @@ Ask the user to confirm on device: **horizontal** — the playing measure left-a
 
 ---
 
+## Task 9: iOS — PiP frame renderer lookahead (added per user request)
+
+**Files:**
+- Modify: `Packages/Features/Reader/Sources/Reader/PiP/ScorePiPFrameRenderer.swift` (add `import Domain`; `renderFrame` ~line 192; `advanceScroll` ~lines 252-275)
+- Modify: `Packages/Features/Reader/Sources/Reader/PiP/ScorePiPCoordinator.swift` (`updatePlaybackCursor` ~line 170; the `pumpTick` `renderFrame(...)` call ~line 235)
+- Modify: `Packages/Features/Reader/Sources/Reader/PiP/ReaderPiPSession.swift` (provider ~line 36; `notifyCursorChanged` ~line 110)
+- Modify: `Packages/Features/Reader/Sources/Reader/ReaderViewModel.swift` (`wirePiPSession` ~line 141)
+
+**Interfaces:**
+- Consumes: `ReaderPlaybackSession.scrollAnchorCursor` (existing 2-beat); `Domain.scrollOffsetPinningSystemTop`; existing PiP `measureDocRect(for:)`, `scrollOffsetDocX`, `targetScrollOffsetDocX`, `isAnchorFullyVisible(...)`, `scoreScale`, `pointSize`, `document.metrics.sp`, the lerp constants.
+
+PiP's scroll is already measure-left-align like horizontal, driven per-frame by a `CADisplayLink` lerp toward `targetScrollOffsetDocX`, following the REAL cursor. This task feeds the 2-beat lookahead so the playing measure left-aligns ~2 beats early, **keeping the rendered cursor on the real position**. Verified by Reader build (no unit test — PiP is a per-frame renderer; the scroll math is the already-tested `scrollOffsetPinningSystemTop`).
+
+- [ ] **Step 1: Renderer — accept the lookahead and use `scrollOffsetPinningSystemTop`**
+
+In `ScorePiPFrameRenderer.swift`, add `import Domain`. Change `renderFrame(playbackCursor:)` to `renderFrame(playbackCursor:lookaheadCursor:)` — keep `cursorFrame` from `playbackCursor` (rendered cursor stays real), and change the `advanceScroll(cursor: playbackCursor)` call to `advanceScroll(realCursor: playbackCursor, lookaheadCursor: lookaheadCursor)`. Replace `advanceScroll(cursor:)` with:
+
+```swift
+    private func advanceScroll(realCursor: ScoreCursor?, lookaheadCursor: ScoreCursor?) {
+        if let realCursor, let realMeasure = measureDocRect(for: realCursor) {
+            let viewportWidthDoc = pointSize.width / scoreScale
+            let padDoc = 8 * document.metrics.sp
+            if let lookaheadCursor, let lookMeasure = measureDocRect(for: lookaheadCursor) {
+                // Playback: left-align the playing measure ~2 beats early — fires when the real OR lookahead
+                // measure overflows the viewport's right. Axis-agnostic reuse of `scrollOffsetPinningSystemTop`:
+                // "system" params carry the playing measure's X-span.
+                targetScrollOffsetDocX = CGFloat(scrollOffsetPinningSystemTop(
+                    current: Double(scrollOffsetDocX),
+                    systemMin: Double(realMeasure.minX),
+                    systemMax: Double(realMeasure.maxX),
+                    lookaheadMax: Double(lookMeasure.maxX),
+                    viewport: Double(viewportWidthDoc),
+                    topInset: Double(padDoc),
+                ))
+            } else {
+                // Paused / no lookahead: reactive left-align when the real measure overflows (today's behavior).
+                let anchorMin = realMeasure.minX - scrollOffsetDocX
+                let anchorMax = realMeasure.maxX - scrollOffsetDocX
+                if !isAnchorFullyVisible(
+                    anchorMin: anchorMin, anchorMax: anchorMax,
+                    anchorSize: realMeasure.width, viewportSize: viewportWidthDoc,
+                ) {
+                    targetScrollOffsetDocX = max(0, realMeasure.minX - padDoc)
+                }
+            }
+        }
+        let delta = targetScrollOffsetDocX - scrollOffsetDocX
+        if abs(delta) < Self.scrollSnapThresholdPt {
+            scrollOffsetDocX = targetScrollOffsetDocX
+        } else {
+            scrollOffsetDocX += delta * Self.scrollSmoothingFactor
+        }
+    }
+```
+
+(Match the file's exact existing `isAnchorFullyVisible` signature + the lerp constant names from the original `advanceScroll`.)
+
+- [ ] **Step 2: Coordinator — store + forward the anchor**
+
+In `ScorePiPCoordinator.swift`, add `private var scrollAnchorCursor: ScoreCursor?` next to `currentCursor`, and an updater next to `updatePlaybackCursor`:
+
+```swift
+    func updateScrollAnchorCursor(_ cursor: ScoreCursor?) {
+        scrollAnchorCursor = cursor
+    }
+```
+
+In `pumpTick()`, change `renderer.renderFrame(playbackCursor: currentCursor)` to `renderer.renderFrame(playbackCursor: currentCursor, lookaheadCursor: scrollAnchorCursor)`. Fix any OTHER `renderFrame(` call site the compiler flags (e.g. an initial frame in `arm(...)`) — pass `lookaheadCursor: nil`.
+
+- [ ] **Step 3: Session — provider + push**
+
+In `ReaderPiPSession.swift`, add next to `playbackCursorProvider` (~line 36):
+
+```swift
+    var scrollAnchorCursorProvider: () -> ScoreCursor? = { nil }
+```
+
+In `notifyCursorChanged()` (~line 110), add after the existing `coordinatorBacking?.updatePlaybackCursor(...)` line:
+
+```swift
+        coordinatorBacking?.updateScrollAnchorCursor(scrollAnchorCursorProvider())
+```
+
+- [ ] **Step 4: ViewModel — wire the provider**
+
+In `ReaderViewModel.swift` `wirePiPSession()` (~line 141), next to `pipSession.playbackCursorProvider = ...`, add:
+
+```swift
+        pipSession.scrollAnchorCursorProvider = { [weak self] in self?.playbackSession.scrollAnchorCursor }
+```
+
+- [ ] **Step 5: Build the Reader package**
+
+From `Packages/Features/Reader`:
+```
+xcodebuild build -scheme Reader -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation
+```
+Expected: BUILD SUCCEEDED, the 4 edited files recompiled. Resolve any other `renderFrame(` call site the compiler flags (pass `lookaheadCursor: nil`).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git -C <worktree> add Packages/Features/Reader/Sources/Reader/PiP/ScorePiPFrameRenderer.swift Packages/Features/Reader/Sources/Reader/PiP/ScorePiPCoordinator.swift Packages/Features/Reader/Sources/Reader/PiP/ReaderPiPSession.swift Packages/Features/Reader/Sources/Reader/ReaderViewModel.swift
+git -C <worktree> commit -m "feat(reader): lookahead left-align the playing measure in PiP (iOS)"
+```
+
+---
+
 ## Self-Review
 
-- **Spec coverage:** iOS pageAnchorCursor 1-beat (Task 1) ✓; iOS horizontal 2-beat left-align via `scrollOffsetPinningSystemTop` (Task 2) ✓; iOS page virtual-follow (Task 3) ✓; Android pageAnchorCursor (Task 4) ✓; Android horizontal (Task 5) ✓; Android page (Task 6) ✓; root wiring (Tasks 2,3) ✓; highlight unchanged / Y unchanged / paused fallback (Tasks 2,3,5,6) ✓; no new Domain/ssm/JNI (reuse throughout) ✓; parity (same design both platforms) ✓; verification (Tasks 7,8) ✓.
+- **Spec coverage:** iOS PiP lookahead, rendered cursor stays real (Task 9) ✓; iOS pageAnchorCursor 1-beat (Task 1) ✓; iOS horizontal 2-beat left-align via `scrollOffsetPinningSystemTop` (Task 2) ✓; iOS page virtual-follow (Task 3) ✓; Android pageAnchorCursor (Task 4) ✓; Android horizontal (Task 5) ✓; Android page (Task 6) ✓; root wiring (Tasks 2,3) ✓; highlight unchanged / Y unchanged / paused fallback (Tasks 2,3,5,6) ✓; no new Domain/ssm/JNI (reuse throughout) ✓; parity (same design both platforms) ✓; verification (Tasks 7,8) ✓.
 - **Placeholder scan:** none — code/commands complete with expected output. The "match the exact existing names / preserve the existing newY+vertical block" notes are adaptation guidance for code this plan can't fully reproduce from outside the files, not deferred work; signatures and the new branches are fully specified.
 - **Type consistency:** `pageAnchorCursor: ScoreCursor?` + `pageLookaheadBeats`/`PAGE_LOOKAHEAD_BEATS = 1.0` consistent across Tasks 1,3,4,6; `scrollOffsetPinningSystemTop`/`nativeScrollOffsetPinningSystemTop` 6-arg signature matches the shipped vertical function; `HorizontalScoreContainer.scrollAnchorCursor` / `PagedScoreContainer.pageAnchorCursor` params match their `ReaderRootScreen` call sites.
 - **Note:** exact iOS `newY`/no-op-guard lines in `HorizontalScoreContainer.autoScroll`, the Android `HorizontalScore` vertical block, and the Android `PagedScore` band-search body are taken from the exploration but must be matched against the real files during implementation — each task says so where it matters.
