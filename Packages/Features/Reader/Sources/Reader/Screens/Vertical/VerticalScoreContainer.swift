@@ -362,15 +362,20 @@ struct VerticalScoreContainer: View {
         if let lookaheadCursor, let lookRect = doc.cursorFrame(for: lookaheadCursor, in: score) {
             // Playback: pin the playing cursor's system to the top, re-scrolling only when that system or the
             // lookahead (a couple beats ahead) leaves the viewport — so the cursor drifts down between scrolls.
-            // `topInset` places the pinned system top at the same clearance the first system gets at scroll offset 0.
+            // The pinned system top lands `overlayClearance` points below the screen top — clear of the floating
+            // top overlay (Back / inspector buttons), which occupies `safeAreaTop + ReaderTopOverlay.height`. This is
+            // a SCREEN-space distance (not zoom-scaled): `contentOffset` shares the scaled-content point space, so
+            // the system top appears at screen-y == `overlayClearance` regardless of zoom. The 8 pt gap keeps the
+            // staff off the overlay's glass + shadow.
             let lookMaxY = (lookRect.maxY + topPad) * zoom
+            let overlayClearance = safeAreaTop + ReaderTopOverlay.height + 8
             newY = CGFloat(scrollOffsetPinningSystemTop(
                 current: Double(curY),
                 systemMin: Double(realMinY),
                 systemMax: Double(realMaxY),
                 lookaheadMax: Double(lookMaxY),
                 viewport: Double(viewport.height),
-                topInset: Double(topPad * zoom),
+                topInset: Double(overlayClearance),
             ))
         } else {
             // Paused / scrubbing / manual seek: gentle keep-in-view so a tap-to-seek doesn't jump the system to top.
