@@ -251,25 +251,32 @@ final class ScorePiPFrameRenderer {
     }
 
     /// Update `targetScrollOffsetDocX` based on the real cursor's measure and an optional lookahead cursor, then lerp
-    /// `scrollOffsetDocX` toward the target. When `lookaheadCursor` is present (playback running), uses
-    /// `scrollOffsetPinningSystemTop` to left-align the playing measure ~2 beats early. Without it (paused / no
-    /// anchor), falls back to the reactive overflow-triggered left-align. Idiom matches `HorizontalScoreContainer`.
+    /// `scrollOffsetDocX` toward the target. When `lookaheadCursor` is present (playback running), left-aligns the
+    /// playing measure ~2 beats early via a latched 2-stage trigger (the real OR the lookahead measure overflowing
+    /// the viewport's right edge). Without it (paused / no anchor), falls back to the reactive overflow-triggered
+    /// left-align. Idiom matches `HorizontalScoreContainer`, but latched for PiP's per-frame re-evaluation.
     private func advanceScroll(realCursor: ScoreCursor?, lookaheadCursor: ScoreCursor?) {
         if let realCursor, let realMeasure = measureDocRect(for: realCursor) {
             let viewportWidthDoc = pointSize.width / scoreScale
             let padDoc = 8 * document.metrics.sp
             if let lookaheadCursor, let lookMeasure = measureDocRect(for: lookaheadCursor) {
-                // Playback: left-align the playing measure ~2 beats early — fires when the real OR lookahead
-                // measure overflows the viewport's right. Axis-agnostic reuse of `scrollOffsetPinningSystemTop`:
-                // "system" params carry the playing measure's X-span.
-                targetScrollOffsetDocX = CGFloat(scrollOffsetPinningSystemTop(
-                    current: Double(scrollOffsetDocX),
-                    systemMin: Double(realMeasure.minX),
-                    systemMax: Double(realMeasure.maxX),
-                    lookaheadMax: Double(lookMeasure.maxX),
-                    viewport: Double(viewportWidthDoc),
-                    topInset: Double(padDoc),
-                ))
+                // Playback: left-align the playing measure ~2 beats early, fired by a 2-stage trigger (the real OR
+                // the lookahead measure has overflowed the viewport's right edge). PiP re-evaluates this every
+                // frame while the lerp runs, so the target must be LATCHED: only update it when a scroll is needed,
+                // then hold it at the real measure's left edge so the lerp completes there. (Unlike the SwiftUI
+                // one-shot callers, PiP can't use `scrollOffsetPinningSystemTop`'s "return current when visible"
+                // result directly — once the lookahead measure scrolls into view mid-lerp it would collapse the
+                // target to the current offset and strand the playing measure short of the left edge.)
+                let realMin = realMeasure.minX - scrollOffsetDocX
+                let realMax = realMeasure.maxX - scrollOffsetDocX
+                let realVisible = isAnchorFullyVisible(
+                    anchorMin: realMin, anchorMax: realMax,
+                    anchorSize: realMeasure.width, viewportSize: viewportWidthDoc,
+                )
+                let lookaheadVisible = (lookMeasure.maxX - scrollOffsetDocX) <= viewportWidthDoc
+                if !realVisible || !lookaheadVisible {
+                    targetScrollOffsetDocX = max(0, realMeasure.minX - padDoc)
+                }
             } else {
                 // Paused / no lookahead: reactive left-align when the real measure overflows (today's behavior).
                 let anchorMin = realMeasure.minX - scrollOffsetDocX
