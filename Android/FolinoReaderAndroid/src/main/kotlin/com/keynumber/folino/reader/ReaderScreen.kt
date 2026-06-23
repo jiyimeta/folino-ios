@@ -84,6 +84,7 @@ import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
@@ -544,45 +545,69 @@ private fun ReadyScore(
     // floating play FAB when the seek bar is off. Top stays `vPadPx`, so cursor / tap math is unchanged.
     val bottomPadPx = with(density) { bottomContentPad.toPx() }
 
-    // Auto-scroll: keep the playback cursor in view via the shared Domain
-    // keep-in-view math (JNI). Vertical always; horizontal only when zoomed.
+    // Auto-scroll: keep the playback cursor in view via the shared Domain keep-in-view math (JNI).
+    // Vertical: pin the playing system to the top when the lookahead anchor is set (playing), falling
+    // back to gentle keep-in-view when paused / on a manual seek (anchor == null). Horizontal: always
+    // follows the real cursor when zoomed.
     LaunchedEffect(scoreHandle, fitPxPerMM, scale) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (fitPxPerMM <= 0f) return@LaunchedEffect
-        audioVm.currentCursor.collectLatest { cursor ->
-            if (cursor == null) return@collectLatest
-            val bytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(cursor))
-            if (bytes.isEmpty()) return@collectLatest
-            val frame = DecodedFrameCodec.decode(bytes)
+        combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
+            .collectLatest { (real, anchor) ->
+                if (real == null) return@collectLatest
+                val realBytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(real))
+                if (realBytes.isEmpty()) return@collectLatest
+                val realFrame = DecodedFrameCodec.decode(realBytes)
+                val realYMin = (vPadPx + realFrame.y * fitPxPerMM * scale).toDouble()
+                val realYMax = (vPadPx + (realFrame.y + realFrame.height) * fitPxPerMM * scale).toDouble()
 
-            val yMin = vPadPx + frame.y * fitPxPerMM * scale
-            val yMax = vPadPx + (frame.y + frame.height) * fitPxPerMM * scale
-            val newY = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
-                vScroll.value.toDouble(),
-                yMin,
-                yMax,
-                viewportSize.height.toDouble(),
-                padPx.toDouble(),
-            ).toFloat()
-            if (abs(newY - vScroll.value) >= 0.5f) {
-                vScroll.animateScrollTo(newY.toInt().coerceAtLeast(0))
-            }
+                val newY = if (anchor != null) {
+                    // Playing: pin the playing system to the top, triggered by the lookahead/playing
+                    // system leaving the viewport. topInset = vPadPx clears the (already-inset) top bar.
+                    val anchorBytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(anchor))
+                    val lookaheadYMax = if (anchorBytes.isNotEmpty()) {
+                        val af = DecodedFrameCodec.decode(anchorBytes)
+                        (vPadPx + (af.y + af.height) * fitPxPerMM * scale).toDouble()
+                    } else {
+                        realYMax
+                    }
+                    FolinoReaderJNI.nativeScrollOffsetPinningSystemTop(
+                        vScroll.value.toDouble(),
+                        realYMin,
+                        realYMax,
+                        lookaheadYMax,
+                        viewportSize.height.toDouble(),
+                        vPadPx.toDouble(),
+                    ).toFloat()
+                } else {
+                    // Paused / manual seek: gentle keep-in-view (existing behavior).
+                    FolinoReaderJNI.nativeScrollOffsetKeepingInView(
+                        vScroll.value.toDouble(),
+                        realYMin,
+                        realYMax,
+                        viewportSize.height.toDouble(),
+                        padPx.toDouble(),
+                    ).toFloat()
+                }
+                if (abs(newY - vScroll.value) >= 0.5f) {
+                    vScroll.animateScrollTo(newY.toInt().coerceAtLeast(0))
+                }
 
-            if (isZoomed) {
-                val xMin = (frame.x * fitPxPerMM * scale)
-                val xMax = ((frame.x + frame.width) * fitPxPerMM * scale)
-                val newX = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
-                    hScroll.value.toDouble(),
-                    xMin,
-                    xMax,
-                    viewportSize.width.toDouble(),
-                    padPx.toDouble(),
-                ).toFloat()
-                if (abs(newX - hScroll.value) >= 0.5f) {
-                    hScroll.animateScrollTo(newX.toInt().coerceAtLeast(0))
+                if (isZoomed) {
+                    val xMin = (realFrame.x * fitPxPerMM * scale)
+                    val xMax = ((realFrame.x + realFrame.width) * fitPxPerMM * scale)
+                    val newX = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
+                        hScroll.value.toDouble(),
+                        xMin,
+                        xMax,
+                        viewportSize.width.toDouble(),
+                        padPx.toDouble(),
+                    ).toFloat()
+                    if (abs(newX - hScroll.value) >= 0.5f) {
+                        hScroll.animateScrollTo(newX.toInt().coerceAtLeast(0))
+                    }
                 }
             }
-        }
     }
 
     Box(

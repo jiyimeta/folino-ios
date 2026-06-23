@@ -11,9 +11,10 @@ import SwiftUI
 /// Wraps `ScoreView(document:score:)` in a `ScoreScrollHost` (UIKit-backed) and recomputes the `LayoutDocument`
 /// whenever the score, staff size, or container width changes.
 ///
-/// Drives playback auto-scroll: when `playbackCursor` moves outside the viewport, an animated scroll command brings
-/// the cursor's frame back inside with a small padding inset. Horizontal follow only kicks in once `viewportZoom`
-/// makes the content wider than the viewport.
+/// Drives playback auto-scroll: during playback it pins the playing cursor's system to the top of the viewport,
+/// re-scrolling only when that system or the lookahead cursor (`scrollAnchorCursor`, a couple beats ahead) leaves
+/// the viewport — so the cursor drifts down between scrolls. When paused / scrubbing it falls back to a gentle
+/// keep-in-view. Horizontal follow only kicks in once `viewportZoom` makes the content wider than the viewport.
 ///
 /// Owns pinch zoom. The score content is `scaleEffect`-ed *inside* the scroll host (with an explicit scaled `.frame`)
 /// so the underlying `UIScrollView` is never zoomed — `maximumZoomScale` is pinned at 1 and it scrolls the zoomed
@@ -31,6 +32,10 @@ struct VerticalScoreContainer: View {
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
+    /// Lookahead anchor used for auto-scroll ONLY — a cursor a couple of beats ahead of `playbackCursor` during
+    /// playback, so the viewport scrolls before the playing cursor reaches the edge. `nil` when not playing /
+    /// scrubbing, in which case auto-scroll falls back to `playbackCursor`. Never passed to the highlight.
+    let scrollAnchorCursor: ScoreCursor?
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -192,8 +197,8 @@ struct VerticalScoreContainer: View {
         // `contentInsets` the way SwiftUI's own `ScrollView` does. Overlays sit on top in a ZStack, so the score
         // sliding under them is intentional.
         .ignoresSafeArea()
-        .onChange(of: playbackCursor) { _, newCursor in
-            autoScroll(cursor: newCursor, viewport: viewport)
+        .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
+            autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
     }
 
@@ -373,39 +378,64 @@ struct VerticalScoreContainer: View {
     }
 
     private func autoScroll(
-        cursor: ScoreCursor?,
+        realCursor: ScoreCursor?,
+        lookaheadCursor: ScoreCursor?,
         viewport: CGSize,
     ) {
-        guard let cursor, let doc = document,
-              let rect = doc.cursorFrame(for: cursor, in: score)
+        guard let realCursor, let doc = document,
+              let realRect = doc.cursorFrame(for: realCursor, in: score)
         else { return }
 
         let zoom = effectiveZoom(for: doc, viewport: viewport)
         let pad = 8 * doc.metrics.sp * zoom
 
-        // Cursor frame in scroll-content coords: scaled from top-leading. Mirrors `VerticalZoomedSurface`'s
-        // composition — vertical padding on top/bottom, and (on iPad) a horizontal inset that shifts the score's
-        // content-space x rightward before scaling.
+        // Frames in scroll-content coords: scaled from top-leading. Mirrors `VerticalZoomedSurface`'s composition —
+        // vertical padding on top/bottom, and (on iPad) a horizontal inset that shifts the score's content-space x
+        // rightward before scaling. `cursorFrame` spans every staff in the system, so its Y range is the system span.
         let topPad = scoreTopPadding + safeAreaTop
         let hPad = scoreInset(viewportWidth: viewport.width)
-        let minX = (rect.minX + hPad) * zoom
-        let maxX = (rect.maxX + hPad) * zoom
-        let minY = (rect.minY + topPad) * zoom
-        let maxY = (rect.maxY + topPad) * zoom
+        let realMinX = (realRect.minX + hPad) * zoom
+        let realMaxX = (realRect.maxX + hPad) * zoom
+        let realMinY = (realRect.minY + topPad) * zoom
+        let realMaxY = (realRect.maxY + topPad) * zoom
 
         let curX = liveScrollOffset.x
         let curY = liveScrollOffset.y
 
+        // Horizontal follow is unchanged — keep the playing cursor's column in view (only relevant when zoomed).
         let newX = adjustedScrollOffset(
             currentOffset: curX,
-            targetMin: minX, targetMax: maxX,
+            targetMin: realMinX, targetMax: realMaxX,
             viewportSize: viewport.width, pad: pad,
         )
-        let newY = adjustedScrollOffset(
-            currentOffset: curY,
-            targetMin: minY, targetMax: maxY,
-            viewportSize: viewport.height, pad: pad,
-        )
+
+        let newY: CGFloat
+        if let lookaheadCursor, let lookRect = doc.cursorFrame(for: lookaheadCursor, in: score) {
+            // Playback: pin the playing cursor's system to the top, re-scrolling only when that system or the
+            // lookahead (a couple beats ahead) leaves the viewport — so the cursor drifts down between scrolls.
+            // The pinned system top lands `overlayClearance` points below the screen top — clear of the floating
+            // top overlay (Back / inspector buttons), which occupies `safeAreaTop + ReaderTopOverlay.height`. This is
+            // a SCREEN-space distance (not zoom-scaled): `contentOffset` shares the scaled-content point space, so
+            // the system top appears at screen-y == `overlayClearance` regardless of zoom. The 8 pt gap keeps the
+            // staff off the overlay's glass + shadow.
+            let lookMaxY = (lookRect.maxY + topPad) * zoom
+            let overlayClearance = safeAreaTop + ReaderTopOverlay.height + 8
+            newY = CGFloat(scrollOffsetPinningSystemTop(
+                current: Double(curY),
+                systemMin: Double(realMinY),
+                systemMax: Double(realMaxY),
+                lookaheadMax: Double(lookMaxY),
+                viewport: Double(viewport.height),
+                topInset: Double(overlayClearance),
+            ))
+        } else {
+            // Paused / scrubbing / manual seek: gentle keep-in-view so a tap-to-seek doesn't jump the system to top.
+            newY = adjustedScrollOffset(
+                currentOffset: curY,
+                targetMin: realMinY, targetMax: realMaxY,
+                viewportSize: viewport.height, pad: pad,
+            )
+        }
 
         if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 { return }
 

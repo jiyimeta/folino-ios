@@ -33,6 +33,40 @@ public func scrollOffsetKeepingInView(
     return targetMax - viewport + pad
 }
 
+/// Vertical playback follow that pins the playing cursor's *system* to the top of the viewport, re-scrolling
+/// only when that system or the lookahead region has left the viewport — so between scrolls the cursor drifts
+/// downward through the visible area instead of being continuously re-centered.
+///
+/// `systemMin`/`systemMax` is the playing cursor's system span; `lookaheadMax` is the bottom of the lookahead
+/// (a few beats ahead) cursor's system. `topInset` is where the pinned system top is placed below the viewport's
+/// top (matching the first system's clearance below the nav chrome). Returns `current` unchanged when the playing
+/// system is fully visible AND the lookahead bottom is within the viewport. Otherwise pins the playing system's
+/// top to `topInset` below the viewport top: `max(0, systemMin - topInset)`.
+///
+/// Behavior this produces (one implementation, shared by iOS and Android — parity):
+/// - Short systems: the lookahead reaching the bottom snaps the playing system to the top; the cursor then drifts
+///   through several fully-visible systems with no further scroll until the lookahead reaches the bottom again.
+/// - Tall systems (only ~1 system fits below the pinned one): the lookahead snaps the playing system to the top,
+///   then the next snap waits until the playing cursor's own system leaves the viewport bottom.
+/// Clamped at `0` on the leading edge; callers clamp the trailing content extent.
+public func scrollOffsetPinningSystemTop(
+    current: Double,
+    systemMin: Double,
+    systemMax: Double,
+    lookaheadMax: Double,
+    viewport: Double,
+    topInset: Double,
+) -> Double {
+    let viewTop = current
+    let viewBottom = current + viewport
+    let systemFullyVisible = systemMin >= viewTop && systemMax <= viewBottom
+    let lookaheadVisible = lookaheadMax <= viewBottom
+    if systemFullyVisible, lookaheadVisible {
+        return current
+    }
+    return max(0, systemMin - topInset)
+}
+
 /// Horizontal auto-scroll offset for measure-anchored stepping. When the
 /// cursor's measure `[measureMin, measureMax]` is fully visible in the viewport
 /// `[current, current + viewport]`, the offset is unchanged (preserves manual

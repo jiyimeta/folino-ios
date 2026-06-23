@@ -26,10 +26,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.math.log2
@@ -75,6 +77,32 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     val currentCursor: StateFlow<ScoreCursor?> = _engine
         .flatMapLatest { it?.currentCursor ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Lookahead anchor for vertical-mode auto-scroll: the cursor [SCROLL_LOOKAHEAD_BEATS] quarter-note
+     * beats ahead of the live cursor, via the shared ssm `Score.cursor(advancedByBeats:from:)` (JNI).
+     * Non-null ONLY while playing; the Reader falls back to keep-in-view when null. Mirrors iOS
+     * `ReaderPlaybackSession.scrollAnchorCursor`.
+     *
+     * No scrub/drag-seek guard is needed on Android — this VM has no seek-bar drag state; the iOS
+     * `scrubCursor` equivalent does not exist here.
+     */
+    val scrollAnchorCursor: StateFlow<ScoreCursor?> =
+        _engine.flatMapLatest { engine ->
+            if (engine == null) flowOf(null)
+            else combine(engine.state, engine.currentCursor) { state, cursor ->
+                val handle = scoreHandle
+                if (state != PlaybackState.PLAYING || cursor == null || handle == null) {
+                    null
+                } else {
+                    ScoreCursorCodec.decode(
+                        SheetMusicJNI.nativeCursorAdvancedByBeats(
+                            handle, ScoreCursorCodec.encode(cursor), SCROLL_LOOKAHEAD_BEATS,
+                        ),
+                    )
+                }
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     // Mirrors iOS `ReaderPlaybackSession.hasLoadedIntoPlayback`: true once a score is prepared into the
     // engine, cleared at natural end (below) and on teardown. Distinguishes the engine's natural
@@ -368,6 +396,11 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         val targetBytes = SheetMusicJNI.nativeStepMeasureCursor(handle, fromBytes, direction)
         val target = ScoreCursorCodec.decode(targetBytes)
         e.seek(to = target)
+    }
+
+    companion object {
+        /** Quarter-note beats the lookahead scroll anchor leads the live cursor. Mirrors iOS `SCROLL_LOOKAHEAD_BEATS`. */
+        const val SCROLL_LOOKAHEAD_BEATS = 2.0
     }
 
     override fun onCleared() {
