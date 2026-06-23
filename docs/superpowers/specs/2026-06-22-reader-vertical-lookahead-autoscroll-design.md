@@ -1,9 +1,17 @@
 # Reader vertical-mode lookahead auto-scroll — design
 
-**Status:** Draft for review
+**Status:** Implemented
 **Date:** 2026-06-22
 **Feature package:** `Packages/Features/Reader`
-**Touches:** `swift-sheet-music` (`SheetMusicCore`), `Reader`
+**Touches:** `swift-sheet-music` (`SheetMusicCore`), `Reader`, `Domain`
+
+> **Revision (2026-06-23):** The scroll *position* was refined during implementation per user
+> feedback. The original sketch was "anchor-only minimal keep-in-view" (reuse
+> `scrollOffsetKeepingInView` on the lookahead cursor). The shipped behavior instead **pins the
+> playing cursor's system to the top of the viewport** (cleared below the top overlay), via a new
+> `Domain.scrollOffsetPinningSystemTop`, re-scrolling only when the lookahead *or* the playing
+> system leaves the viewport. The 2-beat lookahead still drives the trigger timing. The sections
+> below reflect the shipped behavior; superseded "anchor-only" wording is annotated where it remains.
 
 ## Goal
 
@@ -74,8 +82,9 @@ method. Both are unnecessary and were dropped:
 | Lead amount (default) | **2 beats.** Single constant, code-tunable. |
 | Where the lookahead lives | **`SheetMusicCore` `Score` extension** (pure notation), next to the seek map. Shared with Android, JNI-bridgeable. |
 | Highlight vs. scroll cursor | **Separated.** Highlight = live `displayCursor`; scroll anchor = lookahead cursor. |
-| Scroll-keep-in-view geometry | **Unchanged.** Reuse `cursorFrame(for:in:)` + `scrollOffsetKeepingInView(...)` verbatim — only the *input cursor* changes. |
-| Anchor vs. union(current, future) | **Anchor-only** (faithful to "fire the same scroll earlier"). Union/playhead-pinning rejected as a behavior change; kept as a test-time fallback. |
+| Scroll position | **Pin the playing cursor's system to the viewport top** (just below the top overlay), via new `Domain.scrollOffsetPinningSystemTop`. Between scrolls the cursor drifts down through the visible area. *(Supersedes the original "reuse `scrollOffsetKeepingInView` unchanged" sketch.)* |
+| Scroll trigger | Re-scroll when the **lookahead system OR the playing system** leaves the viewport. The 2-beat lookahead gives the lead in short systems; in tall systems the subsequent re-pin is driven by the playing system reaching the bottom. |
+| Paused / scrubbing / manual seek | Falls back to the gentle `scrollOffsetKeepingInView` (no pin-to-top), so a tap-to-seek doesn't jump the view to the top. |
 | When lookahead is active | **Only during continuous playback.** Paused / stopped / scrubbing → anchor is `nil` → auto-scroll falls back to `displayCursor` (today's behavior). |
 | Scope | **Vertical mode only.** |
 
@@ -162,17 +171,48 @@ static let scrollLookaheadBeats: Double = 2
 **both** the highlight (passed to `VerticalZoomedSurface` → `ScoreView(playbackCursor:)`) and
 the scroll (`.onChange(of: playbackCursor) { autoScroll(cursor: …) }`). Separate them:
 
-- Add a parameter `scrollAnchorCursor: ScoreCursor?`.
+- Add a parameter `scrollAnchorCursor: ScoreCursor?` (the lookahead).
 - **Highlight unchanged:** keep passing `playbackCursor` to `VerticalZoomedSurface`. The
   on-staff cursor still renders at the live/display position. `VerticalZoomedSurface` does not
   change.
-- **Scroll uses the anchor:** compute `let scrollTarget = scrollAnchorCursor ?? playbackCursor`
-  and change the trigger to `.onChange(of: scrollTarget) { _, newTarget in autoScroll(cursor:
-  newTarget, viewport: viewport) }`. `autoScroll(cursor:viewport:)`, `cursorFrame(for:in:)`,
-  `scrollOffsetKeepingInView(...)`, and the `ScoreScrollHost` command path are all **unchanged**.
+- **Scroll = pin the playing system to the top.** `autoScroll(realCursor:lookaheadCursor:viewport:)`
+  takes both cursors and fires on `.onChange(of: [playbackCursor, scrollAnchorCursor])`. During
+  playback (lookahead non-nil) the **Y** offset is computed by `Domain.scrollOffsetPinningSystemTop`
+  from the playing cursor's system span and the lookahead system's bottom — pinning the playing
+  system's top to a **screen-space** clearance below the floating top overlay
+  (`safeAreaTop + ReaderTopOverlay.height + 8`, not zoom-scaled, since `contentOffset` shares the
+  scaled-content point space). The **X** offset still keeps the playing column in view via
+  `scrollOffsetKeepingInView` (only relevant when zoomed). When the lookahead is `nil` (paused /
+  scrubbing / manual seek), both axes fall back to `scrollOffsetKeepingInView` so a tap-to-seek
+  doesn't jump the view to the top. `cursorFrame(for:in:)` (whose Y span is the cursor's whole
+  system) and the `ScoreScrollHost` command path are unchanged.
 
-When `scrollAnchorCursor` is `nil` (paused / stopped / scrubbing), `scrollTarget` collapses to
-`playbackCursor` and the behavior is identical to today.
+### 5. `Domain` — `scrollOffsetPinningSystemTop` (pure pin-to-top + trigger)
+
+New pure function next to `scrollOffsetKeepingInView` (`ScrollFollow.swift`), shared/testable for
+iOS-Android parity:
+
+```swift
+public func scrollOffsetPinningSystemTop(
+    current: Double,
+    systemMin: Double, systemMax: Double,   // playing cursor's system span (scaled content coords)
+    lookaheadMax: Double,                    // lookahead cursor's system bottom
+    viewport: Double,
+    topInset: Double,                        // screen-space clearance below the top overlay
+) -> Double {
+    let viewTop = current, viewBottom = current + viewport
+    let systemFullyVisible = systemMin >= viewTop && systemMax <= viewBottom
+    let lookaheadVisible = lookaheadMax <= viewBottom
+    if systemFullyVisible, lookaheadVisible { return current }   // drift: no scroll
+    return max(0, systemMin - topInset)                          // pin the system top below the overlay
+}
+```
+
+This yields both behaviors the user described: in **short** systems the lookahead reaching the
+bottom snaps the playing system to the top, then the cursor drifts through several fully-visible
+systems with no further scroll; in **tall** systems (≈1 fits below the pinned one) the next snap
+waits until the playing system itself leaves the viewport bottom. Clamped at 0; the
+`ScoreScrollHost` clamps the trailing extent.
 
 ### 4. `Reader` — wire the anchor through `ReaderRootScreen`
 
@@ -194,15 +234,17 @@ engine cursor tick → ReaderPlaybackSession.rawPlaybackCursor (full-score addr)
 ReaderRootScreen → VerticalScoreContainer(playbackCursor: displayCursor,
                                           scrollAnchorCursor: scrollAnchorCursor)
                                 │
-                       scrollTarget = scrollAnchorCursor ?? displayCursor
-                       .onChange(of: scrollTarget) → autoScroll(cursor: scrollTarget)
+                       .onChange(of: [displayCursor, scrollAnchorCursor])
+                       → autoScroll(realCursor: displayCursor, lookaheadCursor: scrollAnchorCursor)
+                                │  Y (playing): scrollOffsetPinningSystemTop(playing-system span, lookahead bottom, overlay clearance)
+                                │  X (playing): scrollOffsetKeepingInView(playing column)   ·   paused/scrub: keep-in-view both axes
                                 │
-                       cursorFrame(for:in:) → scrollOffsetKeepingInView(...) → setContentOffset(animated:)
+                       cursorFrame(for:in:) [Y span = whole system] → setContentOffset(animated:)
 ```
 
-Net effect: the scroll command targets the position **2 beats ahead** of the playhead, so it
-fires ~2 beats before the playing cursor reaches the viewport edge, while the highlight stays
-on the real position.
+Net effect: the scroll fires ~2 beats before the playing cursor reaches the viewport edge (the
+lookahead trigger) and pins the playing cursor's system to the top of the viewport (clear of the
+top overlay), while the highlight stays on the real position.
 
 ## Testing
 
@@ -221,10 +263,16 @@ on the real position.
   - while playing, equals `score.cursor(advancedByBeats: 2, from: rawPlaybackCursor)`;
   - advancing `rawPlaybackCursor` advances the anchor by the same lead;
   - highlight path (`displayCursor`) is unaffected by the anchor.
-- **Manual / preview (vertical mode, on device):** during playback the score scrolls ~2 beats
-  before the playhead reaches the bottom edge; the highlighted cursor never jumps ahead;
-  pausing freezes scrolling at the current position; seek-bar scrub follows the thumb with no
-  lookahead; Horizontal / Page / PiP behave exactly as before.
+- **`Domain` tests (Swift Testing)** for `scrollOffsetPinningSystemTop`: no-move when the system
+  and lookahead are visible; lookahead-below pins the visible system to the top; system-below and
+  system-above pin it; clamp at 0; system taller than the viewport pins its top; stays put once
+  pinned and the lookahead is back in view.
+- **Manual / preview (vertical mode, on device):** during playback the playing cursor's system
+  pins to the top of the viewport (clear of the top overlay) ~2 beats before it would reach the
+  bottom edge; in short systems the cursor then drifts through several visible systems before the
+  next pin; in tall systems the next pin waits until the playing system reaches the bottom; the
+  highlighted cursor never jumps ahead; pausing freezes scrolling; seek-bar scrub / tap-to-seek
+  use the gentle keep-in-view (no jump to top); Horizontal / Page / PiP behave exactly as before.
 
 ## Risks / open notes
 
@@ -237,16 +285,16 @@ on the real position.
   ticks), consistent with `effectiveQuarterBpm`. In compound meters (6/8 etc.) a metric beat
   is a dotted quarter, so "2 beats" is 2 quarters, not 2 dotted-quarters. Acceptable for v1;
   refining to metric beats is a later tweak inside the same function.
-- **Playhead drifting toward the top.** With anchor-only, bringing the future cursor into view
-  scrolls the playing cursor upward by the same delta. Since 2 beats is normally far less than
-  a viewport height, the playhead stays comfortably on screen. If a dense layout makes 2 beats
-  span more than a viewport, fall back to passing the **union** of the current and lookahead
-  frames to `scrollOffsetKeepingInView` (it already pins the top when the target exceeds the
-  viewport), which keeps the playhead visible while showing as much ahead as fits. Not needed
-  for v1.
-- **Manual-scroll preservation.** `scrollOffsetKeepingInView` leaves a fully-visible target
-  untouched, so manual scrolling is preserved exactly as today — just evaluated against the
-  anchor instead of the live cursor while playing.
+- **Pin clearance / overlay.** The pinned system top sits at `safeAreaTop +
+  ReaderTopOverlay.height + 8` screen points so it clears the floating Back / inspector overlay at
+  any zoom. The `+ 8` gap is tunable; raise it (~12) if the overlay's glass shadow should be
+  cleared too.
+- **Tall systems (system > viewport).** Pinning the system top still leaves its bottom off-screen
+  (unavoidable). No re-scroll loop: once the top is in place, the pin computes the same offset.
+- **Manual-scroll preservation.** While playing, the pin re-scrolls only when the playing or
+  lookahead system leaves the viewport, so a manual scroll that keeps both visible is preserved
+  until the next genuine trigger. Paused / scrubbing keeps the original `scrollOffsetKeepingInView`
+  (fully-visible target untouched).
 
 ## Parity follow-up (out of scope here)
 
