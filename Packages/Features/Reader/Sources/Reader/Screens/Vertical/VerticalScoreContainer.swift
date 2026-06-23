@@ -31,6 +31,10 @@ struct VerticalScoreContainer: View {
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
+    /// Lookahead anchor used for auto-scroll ONLY — a cursor a couple of beats ahead of `playbackCursor` during
+    /// playback, so the viewport scrolls before the playing cursor reaches the edge. `nil` when not playing /
+    /// scrubbing, in which case auto-scroll falls back to `playbackCursor`. Never passed to the highlight.
+    let scrollAnchorCursor: ScoreCursor?
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -186,8 +190,8 @@ struct VerticalScoreContainer: View {
         // `contentInsets` the way SwiftUI's own `ScrollView` does. Overlays sit on top in a ZStack, so the score
         // sliding under them is intentional.
         .ignoresSafeArea()
-        .onChange(of: playbackCursor) { _, newCursor in
-            autoScroll(cursor: newCursor, viewport: viewport)
+        .onChange(of: scrollAnchorCursor ?? playbackCursor) { _, newTarget in
+            autoScroll(cursor: newTarget, viewport: viewport)
         }
     }
 

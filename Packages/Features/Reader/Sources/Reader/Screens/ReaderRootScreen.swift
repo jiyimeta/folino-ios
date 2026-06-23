@@ -192,6 +192,7 @@ public struct ReaderRootScreen: View {
                         collapseMultiMeasureRests: collapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
+                        scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                         transposeSemitones: viewModel.transposeModel.semitones,
                         bottomControlClearance: bottomControlContentHeight,
                         viewModel: viewModel,
