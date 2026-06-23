@@ -44,6 +44,7 @@ import io.github.jiyimeta.sheetmusic.compose.render.FontProvider
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
@@ -127,7 +128,7 @@ fun PagedScore(
     LaunchedEffect(scoreHandle, breaksMm.size, breaksMm.firstOrNull(), breaksMm.lastOrNull()) {
         val h = scoreHandle ?: return@LaunchedEffect
         if (breaksMm.size < 2) return@LaunchedEffect
-        audioVm.currentCursor
+        combine(audioVm.currentCursor, audioVm.pageAnchorCursor) { real, anchor -> anchor ?: real }
             .mapNotNull { cursor ->
                 if (cursor == null) return@mapNotNull null
                 val bytes = SheetMusicJNI.nativeCursorFrame(h, ScoreCursorCodec.encode(cursor))
