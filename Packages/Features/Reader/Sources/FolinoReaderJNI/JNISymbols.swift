@@ -21,6 +21,27 @@ public func nativeScrollOffsetKeepingInView(
     )
 }
 
+/// swift-java (jextract) entry point for the Android Reader's lookahead scroll. Pure delegation to
+/// the shared `Domain.scrollOffsetPinningSystemTop` so iOS and Android pin the next system to the top
+/// of the viewport with identical behavior from a single implementation (parity — no divergent Kotlin port).
+public func nativeScrollOffsetPinningSystemTop(
+    current: Double,
+    systemMin: Double,
+    systemMax: Double,
+    lookaheadMax: Double,
+    viewport: Double,
+    topInset: Double,
+) -> Double {
+    scrollOffsetPinningSystemTop(
+        current: current,
+        systemMin: systemMin,
+        systemMax: systemMax,
+        lookaheadMax: lookaheadMax,
+        viewport: viewport,
+        topInset: topInset,
+    )
+}
+
 /// swift-java (jextract) entry point for the Android Reader's horizontal
 /// measure-anchored auto-scroll. Pure delegation to the shared
 /// `Domain.horizontalMeasureScrollOffset` (parity — no divergent Kotlin port).
