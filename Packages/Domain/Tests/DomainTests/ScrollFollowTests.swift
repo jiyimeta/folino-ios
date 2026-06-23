@@ -45,6 +45,67 @@ struct ScrollFollowTests {
     }
 }
 
+struct ScrollOffsetPinningSystemTopTests {
+    private let viewport = 100.0
+    private let topInset = 10.0
+
+    @Test func `does not move when system is visible and lookahead is within the viewport`() {
+        // View [0,100]; system [60,80] fully visible; lookahead bottom 90 within view.
+        let r = scrollOffsetPinningSystemTop(
+            current: 0, systemMin: 60, systemMax: 80, lookaheadMax: 90, viewport: viewport, topInset: topInset,
+        )
+        #expect(r == 0)
+    }
+
+    @Test func `lookahead below the viewport pins the visible system to the top`() {
+        // View [0,100]; system [60,80] still fully visible, but lookahead bottom 130 is below → snap system to top.
+        let r = scrollOffsetPinningSystemTop(
+            current: 0, systemMin: 60, systemMax: 80, lookaheadMax: 130, viewport: viewport, topInset: topInset,
+        )
+        #expect(r == 50) // systemMin - topInset
+    }
+
+    @Test func `system below the viewport pins it to the top (tall-system re-pin)`() {
+        // View [0,100]; system [140,210] is below the viewport → pin its top.
+        let r = scrollOffsetPinningSystemTop(
+            current: 0, systemMin: 140, systemMax: 210, lookaheadMax: 210, viewport: viewport, topInset: topInset,
+        )
+        #expect(r == 130) // max(0, 140 - 10)
+    }
+
+    @Test func `system above the viewport pins it to the top (backward seek)`() {
+        // View [200,300]; system [150,170] is above → scroll up and pin.
+        let r = scrollOffsetPinningSystemTop(
+            current: 200, systemMin: 150, systemMax: 170, lookaheadMax: 170, viewport: viewport, topInset: topInset,
+        )
+        #expect(r == 140) // max(0, 150 - 10)
+    }
+
+    @Test func `clamps the leading edge at zero`() {
+        // System near the very top; pinning would go negative → clamp to 0.
+        let r = scrollOffsetPinningSystemTop(
+            current: 50, systemMin: 5, systemMax: 25, lookaheadMax: 200, viewport: viewport, topInset: topInset,
+        )
+        #expect(r == 0) // max(0, 5 - 10)
+    }
+
+    @Test func `pins the top when the system is taller than the viewport`() {
+        // System [40,260] taller than the 100 viewport → pin its top regardless.
+        let r = scrollOffsetPinningSystemTop(
+            current: 0, systemMin: 40, systemMax: 260, lookaheadMax: 260, viewport: viewport, topInset: topInset,
+        )
+        #expect(r == 30) // max(0, 40 - 10)
+    }
+
+    @Test func `stays put once the system is pinned and the lookahead is back in view`() {
+        // System pinned: view [50,150]; system [60,80] visible; lookahead bottom 140 within view → no move.
+        let r = scrollOffsetPinningSystemTop(
+            current: 50, systemMin: 60, systemMax: 80, lookaheadMax: 140, viewport: viewport, topInset: topInset,
+        )
+        #expect(r == 50)
+    }
+}
+
 struct HorizontalMeasureScrollOffsetTests {
     @Test func `fully visible measure does not move`() {
         // measure [120,200] inside view [100,500] (viewport 400) → stay.
