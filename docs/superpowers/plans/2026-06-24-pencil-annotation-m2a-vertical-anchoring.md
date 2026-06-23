@@ -16,7 +16,7 @@
 - **ssm push is human-gated.** Per the ssm workflow: verify in the example app → report → get explicit approval → push → re-pin folino. Never push ssm without approval (Task A4 is a STOP).
 - **ssm pin is by `revision:` (full SHA), in FOUR files, all identical:** `project.yml`, `Packages/Domain/Package.swift`, `Packages/Infrastructure/Package.swift`, `Packages/Features/Reader/Package.swift`. Current SHA: `3f7884d7e70cb38376216a1983962716c3898c6a`.
 - **New tests use Swift Testing** (`import Testing`, `@Test`, `#expect`).
-- **ssm tests** run on macOS: `swift test --apple` (or `Scripts/preflight.sh --apple`). `SheetMusicLayout` has no dedicated filter; the new `AnchorPrimitivesTests` run under the full Apple suite. Guard tests with `#if os(macOS)` + `guard #available(macOS 15.0, *)`.
+- **ssm tests** run on macOS with plain `swift test` (there is no `--apple` flag; the `--apple` selector belongs to `Scripts/preflight.sh`). Per-task iteration: `swift test --filter AnchorPrimitivesTests`. Full Apple gate (Task A3): `Scripts/preflight.sh --apple`. Guard tests with `#if os(macOS)` + `guard #available(macOS 15.0, *)`. When executing in an ssm worktree, prefer `swift test --package-path <worktree> --filter AnchorPrimitivesTests` to avoid a `cd`.
 - **folino package tests** run via `xcodebuild test` on `platform=iOS Simulator,name=iPhone 17 Pro Max` (`swift test` is broken by the SwiftLint plugin). Verify the Reader package with its **own scheme**, not the app build (the app build increments-skips an edited package and false-SUCCEEDEDs).
 - **Layout-building tests need the Apple font-metrics provider installed**, else `FontMetrics` precondition crashes. ssm tests use `TestSupport.installApple`; folino tests must install the equivalent from `SheetMusicLayoutApple` (Task B2 step 1 gives the discovery command).
 - **No iOS simulator launch.** Stop at build-success (+ tests). Real ink/gesture/reflow behavior is verified by the user via a manual clean build (Task B5 hands off).
@@ -115,7 +115,7 @@ Create `Tests/SheetMusicTests/AnchorPrimitivesTests.swift`:
 
 - [ ] **Step 2: Run the tests to verify they fail (compile error: no `anchorReferencePoint`)**
 
-Run: `cd /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music && swift test --apple 2>&1 | tail -30`
+Run: `swift test --package-path /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music/.claude/worktrees/anchor-primitives --filter AnchorPrimitivesTests 2>&1 | tail -40`
 Expected: FAIL — `value of type 'LayoutDocument' has no member 'anchorReferencePoint'`.
 
 - [ ] **Step 3: Implement the forward primitive**
@@ -181,7 +181,7 @@ extension LayoutDocument {
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `cd /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music && swift test --apple 2>&1 | tail -30`
+Run: `swift test --package-path /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music/.claude/worktrees/anchor-primitives --filter AnchorPrimitivesTests 2>&1 | tail -40`
 Expected: PASS for the three `forward*` tests.
 
 - [ ] **Step 5: Commit**
@@ -261,7 +261,7 @@ Append inside the `AnchorPrimitivesTests` struct in `Tests/SheetMusicTests/Ancho
 
 - [ ] **Step 2: Run to verify failure (no `resolveAnchor`)**
 
-Run: `cd /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music && swift test --apple 2>&1 | tail -30`
+Run: `swift test --package-path /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music/.claude/worktrees/anchor-primitives --filter AnchorPrimitivesTests 2>&1 | tail -40`
 Expected: FAIL — `has no member 'resolveAnchor'`.
 
 - [ ] **Step 3: Implement the inverse**
@@ -385,7 +385,7 @@ extension LayoutDocument {
 
 - [ ] **Step 4: Run to verify all anchor tests pass**
 
-Run: `cd /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music && swift test --apple 2>&1 | tail -30`
+Run: `swift test --package-path /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music/.claude/worktrees/anchor-primitives --filter AnchorPrimitivesTests 2>&1 | tail -40`
 Expected: PASS for all `AnchorPrimitivesTests`.
 
 - [ ] **Step 5: Commit**
