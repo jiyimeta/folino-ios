@@ -8,19 +8,21 @@ private actor FakeAnnotationStore: AnnotationStore {
     private(set) var saveCount = 0
     private(set) var deleteCount = 0
 
-    func annotationLayer(forScoreItem id: ScoreItemID) throws -> AnnotationLayer? {
+    // swiftlint:disable async_without_await
+    func annotationLayer(forScoreItem id: ScoreItemID) async throws -> AnnotationLayer? {
         layers[id]
     }
 
-    func saveAnnotationLayer(_ layer: AnnotationLayer) throws {
+    func saveAnnotationLayer(_ layer: AnnotationLayer) async throws {
         saveCount += 1
         layers[layer.scoreItemID] = layer
     }
 
-    func deleteAnnotationLayer(forScoreItem id: ScoreItemID) throws {
+    func deleteAnnotationLayer(forScoreItem id: ScoreItemID) async throws {
         deleteCount += 1
         layers.removeValue(forKey: id)
     }
+    // swiftlint:enable async_without_await
 }
 
 @MainActor
@@ -51,51 +53,48 @@ struct AnnotationPersistenceTests {
         )
     }
 
-    @Test func `loads persisted drawing data into the observable property`() async throws {
-        let store = FakeAnnotationStore()
-        let scoreID = ScoreItemID()
-        let data = Data([0x01, 0x02, 0x03])
-        try await store.saveAnnotationLayer(
-            AnnotationLayer(
-                scoreItemID: scoreID,
-                drawings: [DrawingAnchor(anchor: ReaderViewModel.makeSentinelAnchor(), encodedDrawing: data)],
-                textBoxes: [],
-                updatedAt: Date(timeIntervalSince1970: 0),
-            ),
+    private static func anchor() -> MusicalAnchor {
+        MusicalAnchor(
+            measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0, dxSp: 0, verticalOffsetSp: 0,
         )
-        let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
-        await vm.loadAnnotations()
-        #expect(vm.annotationDrawingData == data)
     }
 
-    @Test func `debounced change persists one layer with the drawing data`() async throws {
+    @Test func `loads persisted drawings into the observable property`() async throws {
+        let store = FakeAnnotationStore()
+        let scoreID = ScoreItemID()
+        let drawings = [DrawingAnchor(anchor: Self.anchor(), encodedDrawing: Data([0x01, 0x02]))]
+        try await store.saveAnnotationLayer(AnnotationLayer(
+            scoreItemID: scoreID, drawings: drawings, textBoxes: [], updatedAt: Date(timeIntervalSince1970: 0),
+        ))
+        let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
+        await vm.loadAnnotations()
+        #expect(vm.annotationDrawings == drawings)
+    }
+
+    @Test func `debounced change persists one layer with the drawings`() async throws {
         let store = FakeAnnotationStore()
         let scoreID = ScoreItemID()
         let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
-        let data = Data([0xAA, 0xBB])
-        vm.annotationDrawingDidChange(data, isEmpty: false)
+        let drawings = [DrawingAnchor(anchor: Self.anchor(), encodedDrawing: Data([0xAA]))]
+        vm.annotationDrawingsDidChange(drawings)
         await vm.flushPendingAnnotationSave()
         let saved = try await store.annotationLayer(forScoreItem: scoreID)
-        #expect(saved?.drawings.first?.encodedDrawing == data)
+        #expect(saved?.drawings == drawings)
         #expect(await store.saveCount == 1)
     }
 
-    @Test func `empty drawing deletes the layer`() async throws {
+    @Test func `empty drawings deletes the layer`() async throws {
         let store = FakeAnnotationStore()
         let scoreID = ScoreItemID()
-        try await store.saveAnnotationLayer(
-            AnnotationLayer(
-                scoreItemID: scoreID,
-                drawings: [DrawingAnchor(anchor: ReaderViewModel.makeSentinelAnchor(), encodedDrawing: Data([0x01]))],
-                textBoxes: [],
-                updatedAt: Date(timeIntervalSince1970: 0),
-            ),
-        )
+        try await store.saveAnnotationLayer(AnnotationLayer(
+            scoreItemID: scoreID,
+            drawings: [DrawingAnchor(anchor: Self.anchor(), encodedDrawing: Data([0x01]))],
+            textBoxes: [], updatedAt: Date(timeIntervalSince1970: 0),
+        ))
         let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
-        vm.annotationDrawingDidChange(Data(), isEmpty: true)
+        vm.annotationDrawingsDidChange([])
         await vm.flushPendingAnnotationSave()
-        let after = try await store.annotationLayer(forScoreItem: scoreID)
-        #expect(after == nil)
+        #expect(try await store.annotationLayer(forScoreItem: scoreID) == nil)
         #expect(await store.deleteCount == 1)
     }
 }

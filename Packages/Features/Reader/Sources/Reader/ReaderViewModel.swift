@@ -33,13 +33,13 @@ final class ReaderViewModel {
 
     private(set) var loadState: LoadState = .loading
 
-    /// The persisted annotation drawing for the current score, in document coordinates (M1 degenerate storage — one
-    /// whole-canvas blob; M2 replaces this with per-stroke musical anchoring). Set only via loadAnnotations().
-    var annotationDrawingData: Data?
+    /// The score's annotation model: one `DrawingAnchor` per stroke, each pinned to a `MusicalAnchor`. Loaded on open,
+    /// rewritten on every canvas change. The container projects this to the current layout for display.
+    var annotationDrawings: [DrawingAnchor] = []
+
     // Internal (not private) so `ReaderViewModel+AnnotationPersistence.swift` can reach them.
     @ObservationIgnored var annotationSaveTask: Task<Void, Never>?
-    @ObservationIgnored var pendingAnnotationData: Data?
-    @ObservationIgnored var pendingAnnotationIsEmpty = false
+    @ObservationIgnored var pendingAnnotationDrawings: [DrawingAnchor]?
 
     /// The display-ready score: the loaded score with clef overrides applied, transposed, and hidden staves filtered.
     /// Cached and recomputed only when its inputs change (load, clef overrides, transpose, hidden staves) via
@@ -276,7 +276,6 @@ final class ReaderViewModel {
             loadState = .loaded(score)
             recomputeVisibleScore()
             pipSession.armIfReady()
-            annotationDrawingData = nil
             await loadAnnotations()
             await updateLastOpenedAtOnce()
         } catch {
