@@ -189,7 +189,7 @@ final class ScorePiPFrameRenderer {
         cursorFillColor = UIColor(Color.accentColor).cgColor
     }
 
-    func renderFrame(playbackCursor: ScoreCursor?) -> CVPixelBuffer? {
+    func renderFrame(playbackCursor: ScoreCursor?, lookaheadCursor: ScoreCursor?) -> CVPixelBuffer? {
         var maybe: CVPixelBuffer?
         guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &maybe) == kCVReturnSuccess,
               let buffer = maybe else { return nil }
@@ -221,10 +221,11 @@ final class ScorePiPFrameRenderer {
         ctx.translateBy(x: 0, y: pointSize.height)
         ctx.scaleBy(x: 1, y: -1)
 
+        // Rendered cursor stays on the real playback position — lookahead only drives scroll targeting.
         let cursorFrame = playbackCursor.flatMap {
             document.cursorFrame(for: $0, in: score)
         }
-        advanceScroll(cursor: playbackCursor)
+        advanceScroll(realCursor: playbackCursor, lookaheadCursor: lookaheadCursor)
         // Center the (scaled) system vertically; viewport's left edge sits at `scrollOffsetDocX` in document coords.
         let scaledSystemHeight = system.size.height * scoreScale
         let shiftY = (pointSize.height - scaledSystemHeight) / 2
@@ -249,21 +250,36 @@ final class ScorePiPFrameRenderer {
         return buffer
     }
 
-    /// Update `targetScrollOffsetDocX` if the cursor's measure has fallen outside the viewport, and lerp
-    /// `scrollOffsetDocX` toward the target. Idiom matches `HorizontalScoreContainer.autoScroll`.
-    private func advanceScroll(cursor: ScoreCursor?) {
-        if let cursor, let measureRect = measureDocRect(for: cursor) {
+    /// Update `targetScrollOffsetDocX` based on the real cursor's measure and an optional lookahead cursor, then lerp
+    /// `scrollOffsetDocX` toward the target. When `lookaheadCursor` is present (playback running), uses
+    /// `scrollOffsetPinningSystemTop` to left-align the playing measure ~2 beats early. Without it (paused / no
+    /// anchor), falls back to the reactive overflow-triggered left-align. Idiom matches `HorizontalScoreContainer`.
+    private func advanceScroll(realCursor: ScoreCursor?, lookaheadCursor: ScoreCursor?) {
+        if let realCursor, let realMeasure = measureDocRect(for: realCursor) {
             let viewportWidthDoc = pointSize.width / scoreScale
-            let anchorMin = measureRect.minX - scrollOffsetDocX
-            let anchorMax = measureRect.maxX - scrollOffsetDocX
-            if !isAnchorFullyVisible(
-                anchorMin: anchorMin,
-                anchorMax: anchorMax,
-                anchorSize: measureRect.width,
-                viewportSize: viewportWidthDoc,
-            ) {
-                let padDoc = 8 * document.metrics.sp
-                targetScrollOffsetDocX = max(0, measureRect.minX - padDoc)
+            let padDoc = 8 * document.metrics.sp
+            if let lookaheadCursor, let lookMeasure = measureDocRect(for: lookaheadCursor) {
+                // Playback: left-align the playing measure ~2 beats early — fires when the real OR lookahead
+                // measure overflows the viewport's right. Axis-agnostic reuse of `scrollOffsetPinningSystemTop`:
+                // "system" params carry the playing measure's X-span.
+                targetScrollOffsetDocX = CGFloat(scrollOffsetPinningSystemTop(
+                    current: Double(scrollOffsetDocX),
+                    systemMin: Double(realMeasure.minX),
+                    systemMax: Double(realMeasure.maxX),
+                    lookaheadMax: Double(lookMeasure.maxX),
+                    viewport: Double(viewportWidthDoc),
+                    topInset: Double(padDoc),
+                ))
+            } else {
+                // Paused / no lookahead: reactive left-align when the real measure overflows (today's behavior).
+                let anchorMin = realMeasure.minX - scrollOffsetDocX
+                let anchorMax = realMeasure.maxX - scrollOffsetDocX
+                if !isAnchorFullyVisible(
+                    anchorMin: anchorMin, anchorMax: anchorMax,
+                    anchorSize: realMeasure.width, viewportSize: viewportWidthDoc,
+                ) {
+                    targetScrollOffsetDocX = max(0, realMeasure.minX - padDoc)
+                }
             }
         }
         let delta = targetScrollOffsetDocX - scrollOffsetDocX
