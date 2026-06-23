@@ -60,6 +60,7 @@ struct ScoreLookaheadTests {
     }
 
     @Test func `empty score returns the input cursor`() {
+        // No measures → the `lengths.isEmpty` guard returns the input cursor unchanged (not a clamp to origin).
         let s = Score(division: 480, parts: [], systemMeasures: [], metaTags: [:])
         #expect(
             s.cursor(advancedByBeats: 2, from: .beat(measureIndex: 0, tickInMeasure: 0))
