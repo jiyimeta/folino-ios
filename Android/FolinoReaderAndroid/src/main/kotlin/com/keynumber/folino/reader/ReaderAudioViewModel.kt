@@ -104,6 +104,28 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /**
+     * Lookahead anchor for PAGE mode: the cursor [PAGE_LOOKAHEAD_BEATS] beats ahead of the live cursor,
+     * via the shared ssm `Score.cursor(advancedByBeats:from:)` (JNI). Non-null ONLY while playing; page
+     * mode falls back to the real cursor when null. Mirrors iOS `ReaderPlaybackSession.pageAnchorCursor`.
+     */
+    val pageAnchorCursor: StateFlow<ScoreCursor?> =
+        _engine.flatMapLatest { engine ->
+            if (engine == null) flowOf(null)
+            else combine(engine.state, engine.currentCursor) { state, cursor ->
+                val handle = scoreHandle
+                if (state != PlaybackState.PLAYING || cursor == null || handle == null) {
+                    null
+                } else {
+                    ScoreCursorCodec.decode(
+                        SheetMusicJNI.nativeCursorAdvancedByBeats(
+                            handle, ScoreCursorCodec.encode(cursor), PAGE_LOOKAHEAD_BEATS,
+                        ),
+                    )
+                }
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     // Mirrors iOS `ReaderPlaybackSession.hasLoadedIntoPlayback`: true once a score is prepared into the
     // engine, cleared at natural end (below) and on teardown. Distinguishes the engine's natural
     // end-of-score cursor nil from a teardown nil, so auto-advance fires only at a true end.
@@ -401,6 +423,9 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     companion object {
         /** Quarter-note beats the lookahead scroll anchor leads the live cursor. Mirrors iOS `SCROLL_LOOKAHEAD_BEATS`. */
         const val SCROLL_LOOKAHEAD_BEATS = 2.0
+
+        /** Quarter-note beats the lookahead page anchor leads the live cursor. Mirrors iOS `PAGE_LOOKAHEAD_BEATS`. */
+        const val PAGE_LOOKAHEAD_BEATS = 1.0
     }
 
     override fun onCleared() {
