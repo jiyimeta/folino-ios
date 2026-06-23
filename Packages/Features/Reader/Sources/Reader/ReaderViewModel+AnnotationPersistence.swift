@@ -22,6 +22,10 @@ extension ReaderViewModel {
     /// Called by the canvas coordinator on every drawing change. Debounces a save ~0.5 s; an empty drawing deletes the
     /// layer instead of storing an empty blob.
     func annotationDrawingDidChange(_ data: Data, isEmpty: Bool) {
+        // Keep the in-memory source of truth in sync with the canvas immediately. Without this, a later re-render
+        // would feed the canvas the STALE `annotationDrawingData` and the echo guard would re-seed (erase) the live
+        // ink. The DB write stays debounced below; this is just the displayed/observed value.
+        annotationDrawingData = data
         pendingAnnotationData = data
         pendingAnnotationIsEmpty = isEmpty
         annotationSaveTask?.cancel()

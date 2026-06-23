@@ -91,6 +91,7 @@ struct HorizontalScoreContainer: View {
                     viewport: viewport,
                 )
             },
+            annotationOverlay: nil, // annotation is Vertical-mode only (M1)
         ) {
             HorizontalZoomedSurface(
                 viewModel: viewModel,

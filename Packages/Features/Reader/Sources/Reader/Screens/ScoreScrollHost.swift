@@ -68,6 +68,11 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
     /// (in host coords), and the scroll view's contentOffset at the moment of release — `VerticalScoreContainer` uses
     /// these to compute the post-commit scroll target and the new `viewportZoom`.
     let onPinchEnded: (CGFloat, CGPoint, CGPoint) -> Void
+    /// Opt-in annotation overlay. When non-nil, a viewport-sized `PKCanvasView` is installed as a SUBVIEW of the
+    /// scroll view (pinned to `frameLayoutGuide`), so the scroll view's pan + custom pinch — ancestors of the canvas —
+    /// receive finger touches by the UIKit responder contract while `.pencilOnly` keeps the Pencil drawing. Default
+    /// nil leaves Horizontal mode / reading unchanged.
+    var annotationOverlay: AnnotationOverlaySpec?
     @ViewBuilder let content: () -> Content
 
     func makeUIView(context: Context) -> UIScrollView {
@@ -122,6 +127,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         context.coordinator.host = host
         context.coordinator.scrollView = scroll
         context.coordinator.pinch = pinch
+        context.coordinator.installAnnotationIfNeeded(in: scroll, spec: annotationOverlay)
         return scroll
     }
 
@@ -201,6 +207,8 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 }
             }
         }
+
+        context.coordinator.updateAnnotation(spec: annotationOverlay, in: uiView)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -224,6 +232,9 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         /// `hostView` coords).
         private var pinchStartCentroid: CGPoint = .zero
 
+        // MARK: Annotation overlay (opt-in) — all logic lives in AnnotationCanvasController.
+        private var annotationController: AnnotationCanvasController?
+
         init(parent: ScoreScrollHost) {
             self.parent = parent
         }
@@ -236,6 +247,7 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             if parent.contentOffset != offset {
                 parent.contentOffset = offset
             }
+            syncAnnotation()
         }
 
         func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
@@ -294,15 +306,37 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                     )
                 } ?? .zero
                 parent.onPinchChanged(gr.scale, translation)
+                syncAnnotation()
             case .ended, .cancelled, .failed:
                 let currentOffset = scrollView?.contentOffset ?? .zero
                 parent.onPinchEnded(gr.scale, pinchStartLocation, currentOffset)
                 gr.scale = 1.0
+                // committedZoom flips in commitPinch on the next runloop tick — re-mirror then.
+                DispatchQueue.main.async { [weak self] in self?.syncAnnotation() }
             case .possible:
                 break
             @unknown default:
                 break
             }
+        }
+
+        // MARK: Annotation overlay management (delegated to AnnotationCanvasController)
+
+        func installAnnotationIfNeeded(in scroll: UIScrollView, spec: AnnotationOverlaySpec?) {
+            guard let spec, annotationController == nil else { return }
+            let controller = AnnotationCanvasController()
+            controller.install(in: scroll, pinch: pinch, spec: spec)
+            annotationController = controller
+        }
+
+        func updateAnnotation(spec: AnnotationOverlaySpec?, in scroll: UIScrollView) {
+            guard let spec else { return }
+            annotationController?.update(spec: spec, scroll: scroll, pinch: pinch)
+        }
+
+        private func syncAnnotation() {
+            guard let scroll = scrollView else { return }
+            annotationController?.sync(scrollOffset: scroll.contentOffset)
         }
     }
 }

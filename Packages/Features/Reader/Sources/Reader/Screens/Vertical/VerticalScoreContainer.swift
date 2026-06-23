@@ -122,8 +122,12 @@ struct VerticalScoreContainer: View {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     private func scrollContent(viewport: CGSize) -> some View {
-        ScoreScrollHost(
+        // Observe the live pinch magnification here so the container re-renders each frame of a commit reset animation;
+        // that re-runs the host's annotation-canvas sync, so the ink eases in lockstep with the score.
+        _ = pinch.magnification
+        return ScoreScrollHost(
             contentOffset: $liveScrollOffset,
             contentInsetTop: $contentInsetTop,
             pendingScroll: $pendingScroll,
@@ -147,6 +151,7 @@ struct VerticalScoreContainer: View {
                 )
             },
             onPinchBegan: { anchor, _ in
+                pinch.cancelResetAnimation() // don't let a trailing commit ease fight the new gesture
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor
                 pinch.magnification = 1.0
@@ -166,6 +171,7 @@ struct VerticalScoreContainer: View {
                     viewport: viewport,
                 )
             },
+            annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             VerticalZoomedSurface(
                 viewModel: viewModel,
@@ -189,6 +195,57 @@ struct VerticalScoreContainer: View {
         .onChange(of: playbackCursor) { _, newCursor in
             autoScroll(cursor: newCursor, viewport: viewport)
         }
+    }
+
+    /// Geometry the annotation canvas mirrors onto PencilKit's own scroll machinery (read at call time by the host's
+    /// sync, so the ink tracks the score during scroll/pinch). The canvas view is viewport-sized; PencilKit holds the
+    /// tall document in its own contentSize/zoomScale/contentOffset — which keeps the live-stroke render surface under
+    /// the Metal texture limit (the fix for the draw-time enlarge).
+    /// Opt-in annotation overlay config for the host. The `state` closure recomputes the canvas mirror geometry at
+    /// call time (read by the host's scroll/pinch sync), so it tracks without a SwiftUI render round-trip.
+    private func annotationSpec(viewport: CGSize) -> AnnotationOverlaySpec {
+        AnnotationOverlaySpec(
+            isAnnotating: viewModel.isAnnotating,
+            isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            drawingData: viewModel.annotationDrawingData,
+            onChange: { data, isEmpty in viewModel.annotationDrawingDidChange(data, isEmpty: isEmpty) },
+            state: { annotationCanvasState(viewport: viewport) },
+        )
+    }
+
+    private func annotationCanvasState(viewport: CGSize) -> AnnotationCanvasState {
+        guard let doc = document else {
+            return AnnotationCanvasState(
+                documentSize: .zero, zoomScale: 1, contentOffsetBias: .zero, contentInset: .zero,
+            )
+        }
+        let zoomC = effectiveZoom(for: doc, viewport: viewport) // committed zoom (no live magnification)
+        let m = pinch.magnification
+        let z = zoomC * m
+        let topPad = scoreTopPadding + safeAreaTop
+        let hPad = scoreInset(viewportWidth: viewport.width)
+        let paddedW = doc.size.width + hPad * 2
+        let paddedH = doc.size.height + topPad + scoreBottomPadding
+        // The score applies the live pinch as `.scaleEffect(magnification, anchor: pinch.anchor)` BEFORE the committed
+        // zoom, pivoting around the finger centroid. The canvas mirrors that pivot via contentOffset: a doc point p
+        // lands at the same screen point as the score, which expands to
+        //   screen(p) = (p + pad) * m * zoomC + anchor * (1 - m) * zoomC - scrollOffset [+ pinch.offsetX]
+        // so canvas.contentOffset = scrollOffset - pad*z - anchor*(1-m)*zoomC - offsetX. The host adds the scroll
+        // view's REAL contentOffset to the bias below. At rest (m == 1) the anchor term vanishes.
+        let anchorTermX = pinch.anchor.x * paddedW * (1 - m) * zoomC
+        let anchorTermY = pinch.anchor.y * paddedH * (1 - m) * zoomC
+        // A large symmetric inset keeps the (anchor-shifted) contentOffset inside PencilKit's valid range so it is
+        // never clamped during a pinch. The canvas's own pan is disabled, so the extra scroll range is unreachable.
+        let slack: CGFloat = 100_000
+        return AnnotationCanvasState(
+            documentSize: doc.size,
+            zoomScale: z,
+            contentOffsetBias: CGPoint(
+                x: -hPad * z - anchorTermX - pinch.offsetX,
+                y: -topPad * z - anchorTermY,
+            ),
+            contentInset: UIEdgeInsets(top: slack, left: slack, bottom: slack, right: slack),
+        )
     }
 
     /// User zoom scaled by a fit-to-width factor so rendered content never exceeds the viewport horizontally at
@@ -231,11 +288,9 @@ struct VerticalScoreContainer: View {
         let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
         if isBounceBack {
             // Rubber-band release from baseline 1.0. `pinch.anchor` is intentionally left at the gesture's start
-            // anchor — animating it toward `.center` would interpolate the scale pivot and read as judder.
-            withAnimation(.smooth(duration: 0.18)) {
-                pinch.magnification = 1.0
-                pinch.offsetX = 0
-            }
+            // anchor — animating it toward `.center` would interpolate the scale pivot and read as judder. The reset
+            // eases frame-by-frame (PinchState.animateReset) so the annotation ink overlay follows it in lockstep.
+            pinch.animateReset(toMagnification: 1.0, offsetX: 0)
         } else {
             committedZoom = targetZoom
             pendingScroll = .immediate(scrollToTarget)
@@ -249,15 +304,13 @@ struct VerticalScoreContainer: View {
                 // invariant; (2) animated decay — in the next runloop tick animate magnification → 1.0, so visible
                 // scale moves monotonically `combined → 1.0`. The async hop makes SwiftUI treat the compensated
                 // value as the animation's starting point.
+                // Snap-to-unit from a non-unit base. Set the post-commit zoom and compensate magnification so the
+                // visible scale (viewportZoom × magnification) is invariant at the commit instant, then ease
+                // magnification → 1.0 frame-by-frame so visible scale moves monotonically `combined → 1.0`.
                 let compensatedMag = combined / targetZoom
                 viewModel.resetZoom()
                 pinch.magnification = compensatedMag
-                DispatchQueue.main.async {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        pinch.magnification = 1.0
-                        pinch.offsetX = 0
-                    }
-                }
+                pinch.animateReset(toMagnification: 1.0, offsetX: 0)
             } else {
                 // Real zoom-in / zoom-out. Combined visible scale is invariant across the commit
                 // (`baseZoom × gr.scale = targetZoom × 1.0`); interpolating each factor separately would bulge along
@@ -271,9 +324,7 @@ struct VerticalScoreContainer: View {
                 let postFramedWidth = min(docWidth, viewport.width) * targetZoom
                 let scrollAbsorbsOffset = postFramedWidth > viewport.width
                 if pinch.offsetX != 0, !scrollAbsorbsOffset {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        pinch.offsetX = 0
-                    }
+                    pinch.animateReset(toMagnification: pinch.magnification, offsetX: 0)
                 } else {
                     pinch.offsetX = 0
                 }

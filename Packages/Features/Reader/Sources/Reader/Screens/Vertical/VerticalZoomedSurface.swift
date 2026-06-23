@@ -63,15 +63,10 @@ struct VerticalZoomedSurface: View {
             .gesture(tapSeekGesture(document: doc))
             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
-            AnnotationCanvasView(
-                documentSize: doc.size,
-                drawingData: viewModel.annotationDrawingData,
-                isAnnotating: viewModel.isAnnotating,
-                isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
-                onChange: { data, isEmpty in viewModel.annotationDrawingDidChange(data, isEmpty: isEmpty) },
-            )
-            .frame(width: doc.size.width, height: doc.size.height, alignment: .topLeading)
-            .allowsHitTesting(viewModel.isAnnotating)
+            // NOTE: the annotation canvas is intentionally NOT here. A PKCanvasView sized to the full score height
+            // overflows PencilKit's live-stroke render surface (its bounds*screenScale exceeds the Metal texture
+            // limit), enlarging the in-progress stroke. It is mounted as a viewport-sized top-level overlay in
+            // `VerticalScoreContainer.annotationOverlay`, with PencilKit owning the document scroll/zoom.
 
             if viewModel.repeatModel.mode == .abLoop {
                 LoopRegionOverlay(document: doc, range: viewModel.repeatModel.abRange)

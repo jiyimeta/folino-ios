@@ -159,6 +159,7 @@ struct PagedScoreContainer: View {
                     viewport: viewport,
                 )
             },
+            annotationOverlay: nil, // annotation is Vertical-mode only (M1)
         ) {
             PagedZoomedSurface(
                 viewModel: viewModel,
