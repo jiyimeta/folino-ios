@@ -1275,6 +1275,7 @@ internal fun HorizontalScore(
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
+    pipFit: Boolean = false,
 ) {
     val page = state.program.pages.first()
 
@@ -1289,7 +1290,13 @@ internal fun HorizontalScore(
     // Fixed-density render (same pxPerMM as vertical) so the single-system row is the same on-screen
     // size on phone and tablet. The row is natural-width (no wrap) → horizontal scroll, and this
     // surface reports no viewport width to the VM (unlike vertical), so the engine's wrap width is moot.
-    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
+    // In PiP mode, scale instead to fit the system's full height into the window (pipFit = true).
+    val verticalPadPx = with(density) { PIP_VERTICAL_PAD.toPx() }
+    val fitPxPerMM = when {
+        viewportSize.width <= 0 -> 0f
+        pipFit -> pipFitPxPerMm(viewportSize.height, verticalPadPx, page.heightMM)
+        else -> fixedPxPerMm(density.density)
+    }
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
 
