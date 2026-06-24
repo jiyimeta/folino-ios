@@ -299,15 +299,18 @@ fun ReaderScreen(
         )
     }
 
-    // Publish the PiP window aspect from the horizontal system height so the visible system just
-    // fits the window (no vertical overflow → no broken vertical auto-scroll). The horizontal
-    // surface scales A4 width to the window width, so aspect = A4_WIDTH_MM / systemHeightMM.
-    // Recomputed when the score or display options change. Gated on pipEnabled to avoid the extra
-    // native layout when PiP is off.
-    LaunchedEffect(scoreHandle, layoutOptions, pipEnabled) {
-        if (!pipEnabled || scoreHandle == null) return@LaunchedEffect
-        val page = readerVm.horizontalProgram()?.pages?.firstOrNull() ?: return@LaunchedEffect
-        ReaderPipController.setContentAspect(pipAspectForSystemHeight(page.heightMM, A4_WIDTH_MM))
+    // Publish the PiP window aspect from the visible staff count heuristic, matching the iOS
+    // implementation: total staves across all parts minus any hidden staves (at least 1).
+    // Recomputed when PiP is toggled, parts change, or hidden-stave selection changes.
+    LaunchedEffect(pipEnabled, mixerParts, layoutOptions.hiddenStaves) {
+        if (!pipEnabled) return@LaunchedEffect
+        val totalStaves = mixerParts.sumOf { it.staves.size }
+        val visibleStaves = (totalStaves - layoutOptions.hiddenStaves.size).coerceAtLeast(1)
+        ReaderPipController.setContentAspect(
+            com.keynumber.folino.reader.swiftjava.FolinoReaderJNI.nativePipWindowAspect(
+                visibleStaves.toLong(), 6.0, 1.0, PIP_MAX_ASPECT,
+            ),
+        )
     }
 
     // Register transport hooks the in-window RemoteActions call; clear them on exit. ±10s is
@@ -1254,11 +1257,6 @@ private fun formatTime(seconds: Double): String {
     val secs = floor(s % 60).toLong()
     return "%02d:%02d".format(minutes, secs)
 }
-
-// A4 page width (mm). Used only by the PiP aspect calc (pipAspectForSystemHeight): the small PiP
-// window is fit-to-A4-width, so its aspect is A4_WIDTH_MM / systemHeightMM. The full-screen
-// horizontal/vertical surfaces now render at fixed density (see ReaderLayoutDensity), not an A4 basis.
-private const val A4_WIDTH_MM = 210.0
 
 /**
  * Horizontal scroll surface: the score is laid out as one natural-width row
