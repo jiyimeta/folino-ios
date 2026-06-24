@@ -58,10 +58,12 @@ enum AnnotationAnchoring {
         strokes.compactMap { stroke in
             let centroid = AnnotationAnchorPolicy.representativePoint(of: stroke)
             guard let (anchor, normalize) = normalizeTransform(forCentroid: centroid, in: document) else { return nil }
-            var normalized = stroke
-            normalized.transform = stroke.transform.concatenating(normalize)
-            let data = PKDrawing(strokes: [normalized]).dataRepresentation()
-            return DrawingAnchor(anchor: anchor, encodedDrawing: data)
+            // Store the stroke normalized to (origin = anchor point P, unit = sp), BAKED into the points via
+            // `PKDrawing.transform(using:)` so display can re-bake the inverse without a lingering per-stroke transform
+            // (see `display` for why a transform-only round-trip clamps under zoom).
+            var normalized = PKDrawing(strokes: [stroke])
+            normalized.transform(using: normalize)
+            return DrawingAnchor(anchor: anchor, encodedDrawing: normalized.dataRepresentation())
         }
     }
 
@@ -71,11 +73,15 @@ enum AnnotationAnchoring {
         var strokes: [PKStroke] = []
         for drawing in drawings {
             guard let denormalize = displayTransform(for: drawing.anchor, in: document) else { continue }
-            guard let stored = try? PKDrawing(data: drawing.encodedDrawing),
-                  let s0 = stored.strokes.first else { continue }
-            var s = s0
-            s.transform = s0.transform.concatenating(denormalize)
-            strokes.append(s)
+            guard var stored = try? PKDrawing(data: drawing.encodedDrawing) else { continue }
+            // BAKE the denormalize into the stroke geometry (not a per-stroke `transform`): PencilKit derives its
+            // renderable content extent from the path bounds and ignores the per-stroke transform, so a normalized
+            // (tiny, origin-centred) path carrying a large scale `transform` renders OUTSIDE the computed content and
+            // gets clamped under zoom. `PKDrawing.transform(using:)` rewrites the points so the projected ink is full
+            // size at its document position — identical in form to freshly drawn ink — which the canvas renders without
+            // clamping.
+            stored.transform(using: denormalize)
+            strokes.append(contentsOf: stored.strokes)
         }
         return PKDrawing(strokes: strokes)
     }
