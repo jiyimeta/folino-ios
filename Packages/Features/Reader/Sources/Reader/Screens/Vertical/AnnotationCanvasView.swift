@@ -26,8 +26,11 @@ struct AnnotationCanvasState {
 struct AnnotationOverlaySpec {
     var isAnnotating: Bool
     var isPencilPreferred: Bool
-    var drawingData: Data?
-    var onChange: (Data, Bool) -> Void
+    /// The model projected to the current layout (Task B2 `display(...)`). The controller seeds the canvas with this
+    /// whenever it changes — on load and on reflow — guarded against echoing the user's own in-progress ink.
+    var displayDrawing: PKDrawing
+    /// Emits the canvas's live drawing on every change; the container re-anchors its strokes and persists.
+    var onChange: (PKDrawing) -> Void
     var state: () -> AnnotationCanvasState
 }
 
@@ -43,8 +46,8 @@ struct AnnotationOverlaySpec {
 @MainActor
 final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     private weak var canvas: PKCanvasView?
-    private var onChange: (Data, Bool) -> Void = { _, _ in }
-    private var lastLoadedData: Data?
+    private var onChange: (PKDrawing) -> Void = { _ in }
+    private var lastSeededDrawing = PKDrawing()
     private var toolPicker: PKToolPicker?
     private var state: (() -> AnnotationCanvasState)?
     /// Touch types the host's pan/pinch accept by default — captured at install so we can restore them when annotation
@@ -105,7 +108,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         // Touch handling on only while annotating: then .pencilOnly draws the Pencil and fingers fall through to the
         // scroll view's recognizers. Off → the canvas is transparent to touches (committed ink still displays).
         canvas.isUserInteractionEnabled = spec.isAnnotating
-        applyDrawing(spec.drawingData)
+        applyDrawing(spec.displayDrawing)
         applyToolPicker(visible: spec.isAnnotating)
         sync(scrollOffset: scroll.contentOffset)
     }
@@ -127,18 +130,16 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     }
 
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-        let data = canvasView.drawing.dataRepresentation()
-        lastLoadedData = data // our own edit is now the source of truth; don't let applyDrawing overwrite it
-        onChange(data, canvasView.drawing.strokes.isEmpty)
+        lastSeededDrawing = canvasView.drawing // our own edit is the source of truth; don't let applyDrawing echo it
+        onChange(canvasView.drawing)
     }
 
-    /// Seed/replace the drawing only when the persisted blob actually changed (e.g. a score swap loaded new ink),
-    /// never echo our own in-progress edits back onto the canvas.
-    private func applyDrawing(_ drawingData: Data?) {
+    /// Seed/replace the canvas only when the projected model actually changed (load or reflow); never echo the user's
+    /// own in-progress edits back onto the canvas.
+    private func applyDrawing(_ drawing: PKDrawing) {
         guard let canvas else { return }
-        if drawingData != lastLoadedData {
-            lastLoadedData = drawingData
-            let drawing = drawingData.flatMap { try? PKDrawing(data: $0) } ?? PKDrawing()
+        if drawing.dataRepresentation() != lastSeededDrawing.dataRepresentation() {
+            lastSeededDrawing = drawing
             if canvas.drawing.dataRepresentation() != drawing.dataRepresentation() {
                 canvas.drawing = drawing
             }
