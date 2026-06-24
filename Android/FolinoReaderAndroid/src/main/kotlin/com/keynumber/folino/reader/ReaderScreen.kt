@@ -299,15 +299,18 @@ fun ReaderScreen(
         )
     }
 
-    // Publish the PiP window aspect from the horizontal system height so the visible system just
-    // fits the window (no vertical overflow → no broken vertical auto-scroll). The horizontal
-    // surface scales A4 width to the window width, so aspect = A4_WIDTH_MM / systemHeightMM.
-    // Recomputed when the score or display options change. Gated on pipEnabled to avoid the extra
-    // native layout when PiP is off.
-    LaunchedEffect(scoreHandle, layoutOptions, pipEnabled) {
-        if (!pipEnabled || scoreHandle == null) return@LaunchedEffect
-        val page = readerVm.horizontalProgram()?.pages?.firstOrNull() ?: return@LaunchedEffect
-        ReaderPipController.setContentAspect(pipAspectForSystemHeight(page.heightMM, A4_WIDTH_MM))
+    // Publish the PiP window aspect from the visible staff count heuristic, matching the iOS
+    // implementation: staves present in the score that are not hidden (at least 1). Uses
+    // visiblePipStaffCount to avoid undercounting when hiddenStaves contains stale addresses.
+    // Recomputed when PiP is toggled, parts change, or hidden-stave selection changes.
+    LaunchedEffect(pipEnabled, mixerParts, layoutOptions.hiddenStaves) {
+        if (!pipEnabled) return@LaunchedEffect
+        val visibleStaves = visiblePipStaffCount(mixerParts, layoutOptions.hiddenStaves)
+        ReaderPipController.setContentAspect(
+            com.keynumber.folino.reader.swiftjava.FolinoReaderJNI.nativePipWindowAspect(
+                visibleStaves.toLong(), 6.0, 1.0, PIP_MAX_ASPECT,
+            ),
+        )
     }
 
     // Register transport hooks the in-window RemoteActions call; clear them on exit. ±10s is
@@ -1255,11 +1258,6 @@ private fun formatTime(seconds: Double): String {
     return "%02d:%02d".format(minutes, secs)
 }
 
-// A4 page width (mm). Used only by the PiP aspect calc (pipAspectForSystemHeight): the small PiP
-// window is fit-to-A4-width, so its aspect is A4_WIDTH_MM / systemHeightMM. The full-screen
-// horizontal/vertical surfaces now render at fixed density (see ReaderLayoutDensity), not an A4 basis.
-private const val A4_WIDTH_MM = 210.0
-
 /**
  * Horizontal scroll surface: the score is laid out as one natural-width row
  * (`ReaderLayoutMode.HORIZONTAL` → the options-aware layout's `.horizontal`
@@ -1275,6 +1273,7 @@ internal fun HorizontalScore(
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
+    pipFit: Boolean = false,
 ) {
     val page = state.program.pages.first()
 
@@ -1289,7 +1288,13 @@ internal fun HorizontalScore(
     // Fixed-density render (same pxPerMM as vertical) so the single-system row is the same on-screen
     // size on phone and tablet. The row is natural-width (no wrap) → horizontal scroll, and this
     // surface reports no viewport width to the VM (unlike vertical), so the engine's wrap width is moot.
-    val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
+    // In PiP mode, scale instead to fit the system's full height into the window (pipFit = true).
+    val verticalPadPx = with(density) { PIP_VERTICAL_PAD.toPx() }
+    val fitPxPerMM = when {
+        viewportSize.width <= 0 -> 0f
+        pipFit -> pipFitPxPerMm(viewportSize.height, verticalPadPx, page.heightMM)
+        else -> fixedPxPerMm(density.density)
+    }
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
 

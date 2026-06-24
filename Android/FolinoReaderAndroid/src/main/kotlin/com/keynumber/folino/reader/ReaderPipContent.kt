@@ -53,6 +53,7 @@ internal fun ReaderPipContent(
                 fontProvider = fontProvider,
                 audioVm = audioVm,
                 layoutOptions = layoutOptions.copy(mode = ReaderLayoutMode.HORIZONTAL),
+                pipFit = true,
             )
         }
     }
