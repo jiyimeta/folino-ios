@@ -167,10 +167,12 @@ final class ScorePiPFrameRenderer {
             (firstSystem.size.height + Self.verticalPaddingPt * 2) * Self.pointHeightMultiplier,
         )
         let pointHeight = min(Self.maxPixelHeightPt, max(Self.minPixelDimensionPt, rawHeight))
-        let aspect = max(
-            Self.minAspect,
-            min(Self.maxAspect, Self.aspectNumerator / CGFloat(staffCount)),
-        )
+        let aspect = CGFloat(pipWindowAspect(
+            staffCount: staffCount,
+            aspectNumerator: Double(Self.aspectNumerator),
+            minAspect: Double(Self.minAspect),
+            maxAspect: Double(Self.maxAspect),
+        ))
         let pointWidth = max(Self.minPixelDimensionPt, ceil(pointHeight * aspect))
         pointSize = CGSize(width: pointWidth, height: pointHeight)
         // Buffer pixels = points × density. AVKit downscales for the PiP window; the extra resolution prevents the
