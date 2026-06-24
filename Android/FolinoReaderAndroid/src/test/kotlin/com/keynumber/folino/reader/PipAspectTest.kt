@@ -15,6 +15,4 @@ class PipAspectTest {
     @Test fun inRangeUnchanged() {
         assertEquals(1.5, pipAspectClamped(1.5), 1e-9)
     }
-
-
 }
