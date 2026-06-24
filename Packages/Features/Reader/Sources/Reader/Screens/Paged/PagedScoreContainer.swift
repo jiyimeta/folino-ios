@@ -23,6 +23,9 @@ struct PagedScoreContainer: View {
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
+    /// Lookahead anchor (1 beat ahead) used to turn the page early — the page containing this cursor is made
+    /// active. `nil` when not playing, in which case page-follow falls back to the real cursor (manual seek).
+    let pageAnchorCursor: ScoreCursor?
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -196,8 +199,8 @@ struct PagedScoreContainer: View {
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area; the hosted surface re-applies
         // `pageInsets` as padding so the band sits inside the safe area at zoom 1.
         .ignoresSafeArea()
-        .onChange(of: playbackCursor) { _, newCursor in
-            followCursor(newCursor)
+        .onChange(of: [playbackCursor, pageAnchorCursor]) { _, _ in
+            followCursor(pageAnchorCursor ?? playbackCursor)
         }
     }
 

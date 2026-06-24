@@ -27,6 +27,7 @@ private func paged(
         collapseMultiMeasureRests: false,
         showInvisibleElements: false,
         playbackCursor: nil,
+        pageAnchorCursor: nil,
         transposeSemitones: 0,
         viewModel: vm,
     )

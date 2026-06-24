@@ -41,6 +41,22 @@ final class ReaderPlaybackSession {
     /// Lead distance for `scrollAnchorCursor`, in quarter-note beats. Code-tunable single source of truth.
     static let scrollLookaheadBeats: Double = 2
 
+    /// Lookahead anchor for PAGE mode: the `.beat` cursor `pageLookaheadBeats` beats ahead of the live
+    /// position, so the page turns before the playhead reaches the next page. Non-nil ONLY during continuous
+    /// playback (not paused / stopped / scrubbing); page mode falls back to `displayCursor` when nil. Never
+    /// drives the highlight. Computed from `rawPlaybackCursor` (full-score address); the `.beat` result is
+    /// staff-agnostic.
+    var pageAnchorCursor: ScoreCursor? {
+        guard isPlaying, scrubCursor == nil,
+              let raw = rawPlaybackCursor, let score = scoreProvider()
+        else { return nil }
+        return score.cursor(advancedByBeats: Self.pageLookaheadBeats, from: raw)
+    }
+
+    /// Lead for `pageAnchorCursor`, in quarter-note beats. Shorter than `scrollLookaheadBeats` so the playhead
+    /// is only briefly on the prior page during an anticipatory page turn.
+    static let pageLookaheadBeats: Double = 1
+
     /// Live playback position as a 0...1 fraction of the notated timeline, computed in FULL-SCORE coordinates.
     ///
     /// The seek bar must read this rather than mapping `playbackCursor` itself: `playbackCursor` carries *filtered*

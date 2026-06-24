@@ -28,7 +28,7 @@ struct ScorePiPFrameRendererTests {
             score: makeScore(), staffSize: 28,
             collapseMultiMeasureRests: false, showInvisibleElements: false,
         )
-        let buffer = try #require(renderer.renderFrame(playbackCursor: nil))
+        let buffer = try #require(renderer.renderFrame(playbackCursor: nil, lookaheadCursor: nil))
         #expect(CVPixelBufferGetWidth(buffer) == Int(renderer.pixelSize.width))
         #expect(CVPixelBufferGetHeight(buffer) == Int(renderer.pixelSize.height))
     }
@@ -39,7 +39,7 @@ struct ScorePiPFrameRendererTests {
             collapseMultiMeasureRests: false, showInvisibleElements: false,
         )
         let cursor: ScoreCursor = .beat(measureIndex: 0, tickInMeasure: 0)
-        #expect(renderer.renderFrame(playbackCursor: cursor) != nil)
+        #expect(renderer.renderFrame(playbackCursor: cursor, lookaheadCursor: nil) != nil)
     }
 
     /// Minimal Score with one part / one staff / one measure containing a quarter-note chord so the layout engine

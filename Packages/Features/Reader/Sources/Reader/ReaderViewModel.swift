@@ -139,6 +139,7 @@ final class ReaderViewModel {
         pipSession.scoreProvider = { [weak self] in self?.loadState.score }
         pipSession.isPlayingProvider = { [weak self] in self?.playbackSession.isPlaying ?? false }
         pipSession.playbackCursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
+        pipSession.scrollAnchorCursorProvider = { [weak self] in self?.playbackSession.scrollAnchorCursor }
         pipSession.layoutSnapshotProvider = { [weak self] in self?.currentPiPLayoutSnapshot() }
         pipSession.playbackController = playbackSession.controller
         pipSession.onTogglePlayback = { [weak self] in await self?.playbackSession.togglePlayback() }
@@ -318,8 +319,7 @@ final class ReaderViewModel {
     }
 
     /// Called when the engine reports end-of-score. Decides via `PlaylistPlaybackProgression` whether to advance to the
-    /// next live playlist score and auto-play it. No-op when standalone, when the current score is no longer in the
-    /// live queue, or when the decision is `.stop`.
+    /// next live playlist score and auto-play it. No-op when standalone, score no longer live, or decision is `.stop`.
     func handlePlaybackReachedEnd() async {
         guard !isAdvancing else { return }
         let queue = currentPlaylistQueue()

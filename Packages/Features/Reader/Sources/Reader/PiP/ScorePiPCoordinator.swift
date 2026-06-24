@@ -53,6 +53,7 @@ final class ScorePiPCoordinator: NSObject {
     private var displayLink: CADisplayLink?
 
     private var currentCursor: ScoreCursor?
+    private var scrollAnchorCursor: ScoreCursor?
     private var lastEnqueuedCursorHash: Int?
     private var ticksSinceLastForceEnqueue = 0
     private var lastReportedPaused: Bool?
@@ -171,6 +172,10 @@ final class ScorePiPCoordinator: NSObject {
         currentCursor = cursor
     }
 
+    func updateScrollAnchorCursor(_ cursor: ScoreCursor?) {
+        scrollAnchorCursor = cursor
+    }
+
     private func startPump() {
         let link = CADisplayLink(target: self, selector: #selector(pumpTickObjC))
         link.preferredFramesPerSecond = Self.framesPerSecond
@@ -232,8 +237,9 @@ final class ScorePiPCoordinator: NSObject {
 
         guard cursorChanged || forceEnqueue || scrolling else { return }
         guard displayLayer.sampleBufferRenderer.isReadyForMoreMediaData else { return }
-        guard let buffer = renderer.renderFrame(playbackCursor: currentCursor)
-        else { return }
+        guard let buffer = renderer.renderFrame(
+            playbackCursor: currentCursor, lookaheadCursor: scrollAnchorCursor,
+        ) else { return }
 
         enqueue(buffer, displayLayer: displayLayer)
         lastEnqueuedCursorHash = hash

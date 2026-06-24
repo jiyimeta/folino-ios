@@ -14,6 +14,9 @@ struct HorizontalScoreContainer: View {
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
     let playbackCursor: ScoreCursor?
+    /// Lookahead anchor (2 beats ahead) used for the X auto-scroll trigger ONLY — never the highlight. `nil`
+    /// when not playing, in which case the scroll falls back to the reactive measure keep-in-view.
+    let scrollAnchorCursor: ScoreCursor?
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -108,8 +111,8 @@ struct HorizontalScoreContainer: View {
         // Let the score reach the screen edges and slide under the translucent overlays — the `UIViewRepresentable`'s
         // UIView frame is otherwise shrunk by the system safe area and parent overlay reserve.
         .ignoresSafeArea()
-        .onChange(of: playbackCursor) { _, newCursor in
-            autoScroll(cursor: newCursor, viewport: viewport)
+        .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
+            autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
     }
 
@@ -217,11 +220,12 @@ struct HorizontalScoreContainer: View {
     }
 
     private func autoScroll(
-        cursor: ScoreCursor?,
+        realCursor: ScoreCursor?,
+        lookaheadCursor: ScoreCursor?,
         viewport: CGSize,
     ) {
-        guard let cursor, let doc = document,
-              let rect = doc.cursorFrame(for: cursor, in: score)
+        guard let realCursor, let doc = document,
+              let rect = doc.cursorFrame(for: realCursor, in: score)
         else { return }
 
         let zoom = viewModel.viewportZoom
@@ -235,12 +239,24 @@ struct HorizontalScoreContainer: View {
         let curX = liveScrollOffset.x
         let curY = liveScrollOffset.y
 
-        // X: when the cursor's measure overflows the viewport, park its leading edge at the screen's left edge rather
-        // than nudging minimally to the right edge. Matches the PiP renderer's `advanceScroll`, so both surfaces step
-        // measure-by-measure left.
-        // Parity: the measure leading-edge anchoring now lives in
-        // Domain.horizontalMeasureScrollOffset (also called by the Android Reader).
-        let newX: CGFloat = if let measure = measureRect(for: cursor, in: doc) {
+        let newX: CGFloat = if let lookaheadCursor,
+                               let realMeasure = measureRect(for: realCursor, in: doc),
+                               let lookMeasure = measureRect(for: lookaheadCursor, in: doc)
+        {
+            // Playback: left-align the playing cursor's MEASURE, re-scrolling only when that measure or the
+            // lookahead measure leaves the viewport. Axis-agnostic reuse of `scrollOffsetPinningSystemTop`:
+            // the "system" params carry the playing measure's X-span; `lookaheadMax` is the lookahead
+            // measure's right edge; `topInset` is the leading pad.
+            CGFloat(scrollOffsetPinningSystemTop(
+                current: Double(curX),
+                systemMin: Double((realMeasure.minX + scorePadding) * zoom),
+                systemMax: Double((realMeasure.maxX + scorePadding) * zoom),
+                lookaheadMax: Double((lookMeasure.maxX + scorePadding) * zoom),
+                viewport: Double(viewport.width),
+                topInset: Double(pad),
+            ))
+        } else if let measure = measureRect(for: realCursor, in: doc) {
+            // Paused / scrubbing / manual seek: reactive measure keep-in-view (today's behavior).
             CGFloat(horizontalMeasureScrollOffset(
                 current: Double(curX),
                 measureMin: Double((measure.minX + scorePadding) * zoom),

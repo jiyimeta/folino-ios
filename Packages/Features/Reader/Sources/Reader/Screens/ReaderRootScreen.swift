@@ -210,6 +210,7 @@ public struct ReaderRootScreen: View {
                         collapseMultiMeasureRests: collapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
+                        scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                         transposeSemitones: viewModel.transposeModel.semitones,
                         viewModel: viewModel,
                     )
@@ -221,6 +222,7 @@ public struct ReaderRootScreen: View {
                         collapseMultiMeasureRests: collapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
+                        pageAnchorCursor: viewModel.playbackSession.pageAnchorCursor,
                         transposeSemitones: viewModel.transposeModel.semitones,
                         viewModel: viewModel,
                     )

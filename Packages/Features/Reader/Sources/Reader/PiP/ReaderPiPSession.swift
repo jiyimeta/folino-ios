@@ -34,6 +34,7 @@ final class ReaderPiPSession {
     var scoreProvider: () -> Score? = { nil }
     var isPlayingProvider: () -> Bool = { false }
     var playbackCursorProvider: () -> ScoreCursor? = { nil }
+    var scrollAnchorCursorProvider: () -> ScoreCursor? = { nil }
     var layoutSnapshotProvider: () -> PiPLayoutSnapshot? = { nil }
     var playbackController: (any PlaybackController)?
 
@@ -108,6 +109,7 @@ final class ReaderPiPSession {
     /// Owner calls this after `playbackSession.playbackCursor` updates.
     func notifyCursorChanged() {
         coordinatorBacking?.updatePlaybackCursor(playbackCursorProvider())
+        coordinatorBacking?.updateScrollAnchorCursor(scrollAnchorCursorProvider())
     }
 
     /// Owner calls this after `playbackSession.isPlaying` flips.
