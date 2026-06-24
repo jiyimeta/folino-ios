@@ -78,3 +78,21 @@ public func nativePlaylistNextAction(
         continuationRawValue: continuationRawValue,
     )
 }
+
+/// swift-java (jextract) entry point for the Android Reader's PiP window aspect. Pure delegation to
+/// the shared `Domain.pipWindowAspect` so iOS and Android pick the PiP window shape identically from
+/// one implementation (parity — no divergent Kotlin port). Android passes its OS-limited `maxAspect`
+/// (2.34); iOS calls `Domain.pipWindowAspect` directly with 6.0.
+public func nativePipWindowAspect(
+    staffCount: Int,
+    aspectNumerator: Double,
+    minAspect: Double,
+    maxAspect: Double,
+) -> Double {
+    pipWindowAspect(
+        staffCount: staffCount,
+        aspectNumerator: aspectNumerator,
+        minAspect: minAspect,
+        maxAspect: maxAspect,
+    )
+}
