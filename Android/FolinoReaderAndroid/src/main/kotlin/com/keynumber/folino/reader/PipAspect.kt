@@ -4,6 +4,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
+ * Visible staff count for the PiP window-aspect heuristic: staves present in [parts] that are NOT in
+ * [hidden], floored at 1. Counting present-and-not-hidden staves (rather than total − hidden.size)
+ * mirrors iOS's `Score.filtered(hidingStaves:)` — a stale hidden address that no longer maps to a
+ * real staff must not shrink the count (parity).
+ */
+fun visiblePipStaffCount(parts: List<PartDescriptor>, hidden: Set<StaffAddress>): Int =
+    parts.sumOf { part -> part.staves.count { it.address !in hidden } }.coerceAtLeast(1)
+
+/**
  * Android rejects PiP aspect ratios outside roughly `[1/2.39, 2.39]`; a rejected
  * `setAspectRatio` is swallowed and the window falls back to a square. We clamp a touch inside the
  * limit (2.34) so the exact boundary is never hit.

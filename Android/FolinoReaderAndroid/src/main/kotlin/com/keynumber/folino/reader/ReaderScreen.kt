@@ -300,12 +300,12 @@ fun ReaderScreen(
     }
 
     // Publish the PiP window aspect from the visible staff count heuristic, matching the iOS
-    // implementation: total staves across all parts minus any hidden staves (at least 1).
+    // implementation: staves present in the score that are not hidden (at least 1). Uses
+    // visiblePipStaffCount to avoid undercounting when hiddenStaves contains stale addresses.
     // Recomputed when PiP is toggled, parts change, or hidden-stave selection changes.
     LaunchedEffect(pipEnabled, mixerParts, layoutOptions.hiddenStaves) {
         if (!pipEnabled) return@LaunchedEffect
-        val totalStaves = mixerParts.sumOf { it.staves.size }
-        val visibleStaves = (totalStaves - layoutOptions.hiddenStaves.size).coerceAtLeast(1)
+        val visibleStaves = visiblePipStaffCount(mixerParts, layoutOptions.hiddenStaves)
         ReaderPipController.setContentAspect(
             com.keynumber.folino.reader.swiftjava.FolinoReaderJNI.nativePipWindowAspect(
                 visibleStaves.toLong(), 6.0, 1.0, PIP_MAX_ASPECT,
