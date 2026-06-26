@@ -11,6 +11,7 @@ struct FirebaseAnalyticsClientGatingTests {
             logEvent: { name, _ in loggedEvents.append(name) },
             setUserProperty: { _, name in setProps.append(name) },
         )
+        client.setCollectionEnabled(true)
         client.setCollectionEnabled(false)
         client.log(AnalyticsEvent(name: "score_imported"))
         client.setUserProperty("page", for: .layoutMode)
@@ -18,15 +19,18 @@ struct FirebaseAnalyticsClientGatingTests {
         #expect(setProps.items.isEmpty)
     }
 
-    @Test func `enabled client forwards events`() {
+    @Test func `enabled client forwards events and properties`() {
         let loggedEvents = EventRecorder()
+        let setProps = EventRecorder()
         let client = FirebaseAnalyticsClient(
             logEvent: { name, _ in loggedEvents.append(name) },
-            setUserProperty: { _, _ in },
+            setUserProperty: { _, name in setProps.append(name) },
         )
         client.setCollectionEnabled(true)
         client.log(AnalyticsEvent(name: "score_imported"))
+        client.setUserProperty("page", for: .layoutMode)
         #expect(loggedEvents.items == ["score_imported"])
+        #expect(setProps.items == ["layout_mode"])
     }
 }
 
