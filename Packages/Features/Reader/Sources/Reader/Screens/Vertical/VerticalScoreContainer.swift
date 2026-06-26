@@ -52,7 +52,7 @@ struct VerticalScoreContainer: View {
     @State private var lastWidth: CGFloat = 0
     @State private var lastManualCursor: ScoreCursor?
     @State private var liveScrollOffset: CGPoint = .zero
-    @State private var pinchSession: PinchSession?
+    @State private var pinchSession: VerticalPinchSession?
     @State private var pendingScroll: ScoreScrollCommand?
     @State private var contentInsetTop: CGFloat = 0
     /// System top safe-area inset only — parent's overlay augmentation is subtracted back out below.
@@ -84,10 +84,6 @@ struct VerticalScoreContainer: View {
     /// and keeps comfortable margins off the bezel. See `ReaderScoreLayout`.
     private func scoreInset(viewportWidth: CGFloat) -> CGFloat {
         ReaderScoreLayout.scoreHorizontalInset(viewportWidth: viewportWidth, phoneDefault: 0)
-    }
-
-    private struct PinchSession {
-        var baseZoom: CGFloat
     }
 
     var body: some View {
@@ -131,19 +127,16 @@ struct VerticalScoreContainer: View {
         }
     }
 
-    // swiftlint:disable:next function_body_length
     private func scrollContent(viewport: CGSize) -> some View {
-        // Observe the live pinch magnification here so the container re-renders each frame of a commit reset animation;
-        // that re-runs the host's annotation-canvas sync, so the ink eases in lockstep with the score.
-        _ = pinch.magnification
-        return ScoreScrollHost(
-            contentOffset: $liveScrollOffset,
+        VerticalReaderShell(
+            viewModel: viewModel,
+            pinch: pinch,
+            viewport: viewport,
+            liveScrollOffset: $liveScrollOffset,
             contentInsetTop: $contentInsetTop,
             pendingScroll: $pendingScroll,
-            alwaysBounceVertical: true,
-            alwaysBounceHorizontal: false,
-            centerVertically: false,
-            centerHorizontally: false,
+            committedZoom: $committedZoom,
+            pinchSession: $pinchSession,
             expectedContentSize: {
                 guard let doc = document else { return .zero }
                 // Fit the *padded* content (score + horizontal inset) into the viewport so the inset score lands
@@ -159,28 +152,8 @@ struct VerticalScoreContainer: View {
                     height: (doc.size.height + topPad + scoreBottomPadding) * zoom,
                 )
             },
-            onPinchBegan: { anchor, _ in
-                pinch.cancelResetAnimation() // don't let a trailing commit ease fight the new gesture
-                pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
-                pinch.anchor = anchor
-                pinch.magnification = 1.0
-                pinch.offsetX = 0
-            },
-            onPinchChanged: { magnification, translation in
-                // Y is fed back through `UIScrollView.contentOffset` natively; only X needs a live offset (no
-                // horizontal scrollable extent at user-zoom 1.0).
-                pinch.magnification = magnification
-                pinch.offsetX = translation.x
-            },
-            onPinchEnded: { magnification, startLocation, currentOffset in
-                commitPinch(
-                    magnification: magnification,
-                    startLocation: startLocation,
-                    currentOffset: currentOffset,
-                    viewport: viewport,
-                )
-            },
             annotationOverlay: annotationSpec(viewport: viewport),
+            onPinchCommitDocWidth: { document?.size.width ?? 0 },
         ) {
             VerticalZoomedSurface(
                 viewModel: viewModel,
@@ -197,10 +170,6 @@ struct VerticalScoreContainer: View {
                 lastManualCursor: $lastManualCursor,
             )
         }
-        // `UIViewRepresentable` resolves safe area by shrinking its UIView frame — can't surface it as
-        // `contentInsets` the way SwiftUI's own `ScrollView` does. Overlays sit on top in a ZStack, so the score
-        // sliding under them is intentional.
-        .ignoresSafeArea()
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
@@ -286,71 +255,6 @@ struct VerticalScoreContainer: View {
             ? min(1.0, viewport.width / framedContentWidth)
             : 1.0
         return viewModel.viewportZoom * fit
-    }
-
-    /// Folds a finished pinch into `viewportZoom` and queues a scroll so the content under the user's fingers at
-    /// release lands on the same screen position post-commit. Vertical pan-during-pinch rides on `currentOffset`
-    /// (UIScrollView native); horizontal rides on `pinch.offsetX`.
-    ///
-    /// `newOffset = startLocation * (ratio - 1) + currentOffset − (pinch.offsetX, 0)`
-    private func commitPinch(
-        magnification: CGFloat,
-        startLocation: CGPoint,
-        currentOffset: CGPoint,
-        viewport: CGSize,
-    ) {
-        let session = pinchSession ?? PinchSession(baseZoom: viewModel.viewportZoom)
-        pinchSession = nil
-
-        let r = ReaderPinchCommit.resolve(PinchCommitInput(
-            baseZoom: session.baseZoom, magnification: magnification,
-            startLocation: startLocation, currentOffset: currentOffset,
-            offsetX: pinch.offsetX, offsetY: 0,
-        ))
-        let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
-
-        if r.isBounceBack {
-            // Rubber-band release from baseline 1.0. `pinch.anchor` is intentionally left at the gesture's start
-            // anchor — animating it toward `.center` would interpolate the scale pivot and read as judder. The reset
-            // eases frame-by-frame (PinchState.animateReset) so the annotation ink overlay follows it in lockstep.
-            pinch.animateReset(toMagnification: 1.0, offsetX: 0)
-        } else {
-            committedZoom = r.targetZoom
-            pendingScroll = .immediate(scrollToTarget)
-            if r.snapToUnit {
-                // Snap-to-unit from a non-unit base. Naïvely animating both `viewportZoom` (`base → target`) and
-                // `pinch.magnification` (`gr.scale → 1`) together makes their product bulge mid-animation — for a
-                // 3× → 1× zoom-out the combined visible scale overshoots 1.0 by ~30% at the midpoint. Decompose
-                // into two phases: (1) synchronous snap — set post-commit `viewportZoom` and compensate
-                // magnification to `combined / targetZoom`, so visible scale (`viewportZoom × magnification`) is
-                // invariant; (2) animated decay — in the next runloop tick animate magnification → 1.0, so visible
-                // scale moves monotonically `combined → 1.0`. The async hop makes SwiftUI treat the compensated
-                // value as the animation's starting point.
-                // Snap-to-unit from a non-unit base. Set the post-commit zoom and compensate magnification so the
-                // visible scale (viewportZoom × magnification) is invariant at the commit instant, then ease
-                // magnification → 1.0 frame-by-frame so visible scale moves monotonically `combined → 1.0`.
-                viewModel.resetZoom()
-                pinch.magnification = r.compensatedMag
-                pinch.animateReset(toMagnification: 1.0, offsetX: 0)
-            } else {
-                // Real zoom-in / zoom-out. Combined visible scale is invariant across the commit
-                // (`baseZoom × gr.scale = targetZoom × 1.0`); interpolating each factor separately would bulge along
-                // the easing curve and read as an unwanted scale animation. Snap the scale state, animate only the
-                // live offset reset, and only when the scroll view can't absorb it.
-                viewModel.viewportZoom = r.targetZoom
-                pinch.magnification = 1.0
-                pinch.anchor = .center
-
-                let docWidth = document?.size.width ?? 0
-                let postFramedWidth = min(docWidth, viewport.width) * r.targetZoom
-                let scrollAbsorbsOffset = postFramedWidth > viewport.width
-                if pinch.offsetX != 0, !scrollAbsorbsOffset {
-                    pinch.animateReset(toMagnification: pinch.magnification, offsetX: 0)
-                } else {
-                    pinch.offsetX = 0
-                }
-            }
-        }
     }
 
     private func reprojectAnnotations() {
