@@ -6,7 +6,7 @@ struct PageSwipeOutcomeTests {
     private let viewport: CGFloat = 400
 
     @Test func `left drag past 30 percent commits next`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: -125, predictedEndX: -125,
             viewportWidth: viewport,
             isAtFirstPage: false, isAtLastPage: false,
@@ -15,7 +15,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `right drag past 30 percent commits previous`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: 125, predictedEndX: 125,
             viewportWidth: viewport,
             isAtFirstPage: false, isAtLastPage: false,
@@ -24,7 +24,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `under-threshold drag cancels`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: -80, predictedEndX: -80,
             viewportWidth: viewport,
             isAtFirstPage: false, isAtLastPage: false,
@@ -33,7 +33,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `fling above threshold commits even when translation below`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: -40, predictedEndX: -300,
             viewportWidth: viewport,
             isAtFirstPage: false, isAtLastPage: false,
@@ -42,7 +42,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `right fling above threshold from small drag commits previous`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: 40, predictedEndX: 300,
             viewportWidth: viewport,
             isAtFirstPage: false, isAtLastPage: false,
@@ -51,7 +51,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `right drag at first page cancels regardless of distance`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: 250, predictedEndX: 400,
             viewportWidth: viewport,
             isAtFirstPage: true, isAtLastPage: false,
@@ -60,7 +60,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `left drag at last page cancels regardless of distance`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: -250, predictedEndX: -400,
             viewportWidth: viewport,
             isAtFirstPage: false, isAtLastPage: true,
@@ -69,7 +69,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `at first page, left commit still works`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: -125, predictedEndX: -125,
             viewportWidth: viewport,
             isAtFirstPage: true, isAtLastPage: false,
@@ -78,7 +78,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `at last page, right commit still works`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: 125, predictedEndX: 125,
             viewportWidth: viewport,
             isAtFirstPage: false, isAtLastPage: true,
@@ -87,7 +87,7 @@ struct PageSwipeOutcomeTests {
     }
 
     @Test func `zero viewport width defensively cancels`() {
-        let outcome = PagedScoreContainer.outcome(
+        let outcome = PagedReaderNavigation.outcome(
             translationX: -200, predictedEndX: -400,
             viewportWidth: 0,
             isAtFirstPage: false, isAtLastPage: false,
