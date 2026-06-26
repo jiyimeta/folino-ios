@@ -1,5 +1,6 @@
 import Domain
 import PDFKit
+import PencilKit
 import SwiftUI
 
 /// Page-by-page PDF viewing. Each physical PDF page maps to one reader page. Navigation, zoom, slide/swipe/pinch, and
@@ -21,6 +22,9 @@ struct PagedPDFContainer: View {
     @State var contentInsetTop: CGFloat = 0
     @State var pinch = PinchState()
     @State var committedZoom: CGFloat = 1.0
+    /// The annotation model for the CURRENT PDF page, projected to band space. Reseeded on page/model change; kept
+    /// equal to the live ink while drawing so the canvas seed never round-trips an in-progress stroke.
+    @State var projectedAnnotations = PKDrawing()
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -104,7 +108,7 @@ struct PagedPDFContainer: View {
                     viewport: viewport,
                 )
             },
-            annotationOverlay: nil,
+            annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             PagedReaderSurface(
                 viewModel: viewModel,
@@ -136,6 +140,76 @@ struct PagedPDFContainer: View {
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area; the hosted surface re-applies
         // `pageInsets` as padding so the band sits inside the safe area at zoom 1.
         .ignoresSafeArea()
+        .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        .onChange(of: viewModel.annotationDrawings) { _, _ in
+            if !viewModel.isAnnotating { reprojectCurrentPage(viewport: viewport) }
+        }
+        .onAppear { reprojectCurrentPage(viewport: viewport) }
+    }
+
+    /// The current page's frame in band (viewport) space: the page fitted into the viewport (preserving aspect) and
+    /// centered — identical to `PDFPageView`'s composition, so ink normalizes against exactly the rendered page rect.
+    private func currentPageFrame(viewport: CGSize) -> CGRect? {
+        let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
+        guard let page = document.page(at: idx) else { return nil }
+        let b = page.bounds(for: .mediaBox).size
+        guard b.width > 0, b.height > 0, viewport.width > 0, viewport.height > 0 else { return nil }
+        let fit = min(viewport.width / b.width, viewport.height / b.height)
+        let w = b.width * fit
+        let h = b.height * fit
+        return CGRect(x: (viewport.width - w) / 2, y: (viewport.height - h) / 2, width: w, height: h)
+    }
+
+    private func annotationSpec(viewport: CGSize) -> AnnotationOverlaySpec {
+        AnnotationOverlaySpec(
+            isAnnotating: viewModel.isAnnotating,
+            isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            displayDrawing: projectedAnnotations,
+            onChange: { drawing in
+                guard let frame = currentPageFrame(viewport: viewport) else { return }
+                let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
+                projectedAnnotations = drawing // canvas is source of truth this page
+                let (_, offPage) = PDFAnnotationAnchoring.partitionByPage(viewModel.annotationDrawings, pageIndex: idx)
+                let captured = PDFAnnotationAnchoring.capturePage(
+                    strokes: drawing.strokes, pageIndex: idx, pageFrame: frame,
+                )
+                viewModel.annotationDrawingsDidChange(offPage + captured)
+            },
+            state: { annotationCanvasState(viewport: viewport) },
+        )
+    }
+
+    /// Mirror the current page band onto the viewport-pinned canvas — same composition as `PagedScoreContainer`
+    /// (band documentSize = viewport, band offset by `pageInsets`, zoom = `viewportZoom × magnification`, live pan on
+    /// both axes). PDF page mode uses `viewModel.viewportZoom` directly (the value `PDFPageView` is told to scale by).
+    private func annotationCanvasState(viewport: CGSize) -> AnnotationCanvasState {
+        let zoomC = viewModel.viewportZoom
+        let m = pinch.magnification
+        let z = zoomC * m
+        let padX = pageInsets.leading
+        let padY = pageInsets.top
+        let paddedW = viewport.width + pageInsets.leading + pageInsets.trailing
+        let paddedH = viewport.height + pageInsets.top + pageInsets.bottom
+        let anchorTermX = pinch.anchor.x * paddedW * (1 - m) * zoomC
+        let anchorTermY = pinch.anchor.y * paddedH * (1 - m) * zoomC
+        let slack: CGFloat = 100_000
+        return AnnotationCanvasState(
+            documentSize: CGSize(width: viewport.width, height: viewport.height),
+            zoomScale: z,
+            contentOffsetBias: CGPoint(
+                x: -padX * z - anchorTermX - pinch.offsetX,
+                y: -padY * z - anchorTermY - pinch.offsetY,
+            ),
+            contentInset: UIEdgeInsets(top: slack, left: slack, bottom: slack, right: slack),
+        )
+    }
+
+    private func reprojectCurrentPage(viewport: CGSize) {
+        guard let frame = currentPageFrame(viewport: viewport) else { projectedAnnotations = PKDrawing(); return }
+        let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
+        projectedAnnotations = PDFAnnotationAnchoring.displayPage(
+            viewModel.annotationDrawings, pageIndex: idx, pageFrame: frame,
+        )
     }
 
     private func commitPinch(
