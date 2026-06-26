@@ -1,5 +1,6 @@
 import Domain
 import Foundation
+import PDFKit
 import SheetMusic
 import UtilityCore
 
@@ -17,16 +18,43 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
     }
 
     public func loadFileMetadata(fileURL: URL) async throws -> ScoreFileSummary {
+        if detectFormat(fileName: fileURL.lastPathComponent) == .pdf {
+            return try Self.pdfSummary(fileURL: fileURL)
+        }
         let (_, summary) = try await loadScore(fileURL: fileURL)
         // Right now the summary is built from the parsed Score regardless; when swift-sheet-music exposes a
         // metadata-only fast path we'll bypass full parsing. Stays correct under that future change.
         return summary
     }
 
+    /// Builds a metadata-only summary for a PDF without parsing any notation. `/Title` becomes the title when present;
+    /// musical fields are zeroed because a PDF carries no notation. Page count is intentionally not stored — the reader
+    /// reads it from the document at open time.
+    static func pdfSummary(fileURL: URL) throws -> ScoreFileSummary {
+        guard let doc = PDFDocument(url: fileURL), doc.pageCount > 0 else {
+            throw DomainError.scoreParseFailed(reason: "Unreadable or empty PDF")
+        }
+        let title = (doc.documentAttributes?[PDFDocumentAttribute.titleAttribute] as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
+        return ScoreFileSummary(
+            title: title,
+            composer: nil,
+            instrumentationSummary: "",
+            lengthBeats: 0,
+            defaultTempoBpm: 0,
+            primaryKey: nil,
+        )
+    }
+
     public func loadScore(fileURL: URL) async throws -> (score: Score, summary: ScoreFileSummary) {
         guard let format = detectFormat(fileName: fileURL.lastPathComponent) else {
             let ext = fileURL.pathExtension.lowercased()
             throw DomainError.unsupportedFormat(ext)
+        }
+        // PDFs are fixed-layout documents, never parsed into a `Score`. Reject here so the detached parse switch below
+        // stays exhaustive over the reachable (parseable) formats.
+        if format == .pdf {
+            throw DomainError.unsupportedFormat("pdf")
         }
         let crashReporter = crashReporter
         return try await Task.detached(priority: .userInitiated) {
@@ -51,6 +79,10 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
                         midiData: data,
                         sourceFilename: fileURL.deletingPathExtension().lastPathComponent,
                     ), [])
+                case .pdf:
+                    // Unreachable: PDF is rejected before this closure runs. Present only to keep the switch
+                    // exhaustive over `ScoreFormat`.
+                    throw DomainError.unsupportedFormat("pdf")
                 }
                 ScoreDiagnosticReporter(crashReporter: crashReporter).report(diagnostics)
                 return (score, ScoreFileSummary(score: score))
