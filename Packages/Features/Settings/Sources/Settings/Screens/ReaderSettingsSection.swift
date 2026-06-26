@@ -99,7 +99,9 @@ struct ReaderSettingsSection: View {
 
     private var playlistContinuationRow: some View {
         PlaylistContinuationSettingRow(mode: $continuationMode)
-            .onChange(of: continuationMode) { _, value in changeLog.log(.playlistContinuation, value: value.rawValue) }
+            .onChange(of: continuationMode) { _, value in
+                changeLog.log(.playlistContinuation, value: value.analyticsValue)
+            }
     }
 
     private var pictureInPictureToggle: some View {

@@ -28,4 +28,10 @@ struct DomainEnumsAnalyticsTests {
         #expect(RepeatMode.loopAll.analyticsValue == "loop_all")
         #expect(RepeatMode.abLoop.analyticsValue == "ab_loop")
     }
+
+    @Test func `playlist continuation wire values`() {
+        #expect(PlaylistContinuationMode.off.analyticsValue == "off")
+        #expect(PlaylistContinuationMode.playThrough.analyticsValue == "play_through")
+        #expect(PlaylistContinuationMode.loopPlaylist.analyticsValue == "loop_playlist")
+    }
 }
