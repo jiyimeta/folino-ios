@@ -49,7 +49,14 @@ struct VerticalPDFContainer: View {
                     .scaleEffect(pinch.magnification, anchor: pinch.anchor)
             }
             .onChange(of: committedZoom) { reproject(provider: provider, baseWidth: baseWidth) }
-            .onChange(of: viewModel.annotationDrawings) { reproject(provider: provider, baseWidth: baseWidth) }
+            // Reproject from the model on load (annotationDrawings populates async after the PDF appears) — but ONLY
+            // when not annotating. While annotating, the canvas is the source of truth; the user's own draw mutates
+            // `annotationDrawings`, and reseeding from the round-tripped model bytes would wipe the in-progress stroke
+            // (the score container avoids this by reprojecting only on layout change — for PDFs the load completes
+            // after the page geometry is ready, so the model is the only reliable post-load trigger).
+            .onChange(of: viewModel.annotationDrawings) {
+                if !viewModel.isAnnotating { reproject(provider: provider, baseWidth: baseWidth) }
+            }
             .task(id: provider.pageCount) { reproject(provider: provider, baseWidth: baseWidth) }
         }
     }
