@@ -99,9 +99,14 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
                 }
             }
 
+            // PDFs carry a `/Title` document attribute that the gateway surfaces in `summary.title`. Prefer it so the
+            // library shows the document's own title rather than the (often opaque) filename. Parseable formats keep
+            // their existing filename-derived title — their musical metadata path is unchanged.
+            let filenameTitle = ScorePresentation.title(fromFilename: plan.sourceURL.lastPathComponent)
+            let title = plan.format == .pdf ? (plan.summary.title ?? filenameTitle) : filenameTitle
             let item = ScoreItem(
                 id: id,
-                title: ScorePresentation.title(fromFilename: plan.sourceURL.lastPathComponent),
+                title: title,
                 subtitle: plan.summary.subtitle,
                 composer: plan.summary.composer,
                 arranger: plan.summary.arranger,

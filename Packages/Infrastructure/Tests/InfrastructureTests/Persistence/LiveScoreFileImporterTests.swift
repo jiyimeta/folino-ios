@@ -86,7 +86,11 @@ struct LiveScoreFileImporterTests {
         #expect(plan.sizeBytes > 0)
     }
 
-    @Test func `prepare import throws for PDF`() async throws {
+    @Test func `prepare import throws for unreadable PDF`() async throws {
+        // `.pdf` is now a recognized format (it imports as a fixed-layout document), so detection no longer rejects it.
+        // An *unreadable* PDF — here, non-PDF bytes with a `.pdf` extension — must still be refused, this time at the
+        // gateway's PDF metadata step rather than as `unsupportedFormat`. A valid PDF importing successfully is covered
+        // by `PDFImportTests`.
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
@@ -94,8 +98,8 @@ struct LiveScoreFileImporterTests {
         do {
             _ = try await rig.importer.prepareImport(sourceURL: pdfURL)
             Issue.record("expected throw")
-        } catch DomainError.unsupportedFormat {
-            // Expected.
+        } catch DomainError.scoreParseFailed {
+            // Expected: the bytes are not a valid PDF.
         } catch {
             Issue.record("unexpected: \(error)")
         }
