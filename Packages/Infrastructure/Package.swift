@@ -15,6 +15,7 @@ var products: [Product] = [
     .library(name: "Audio", targets: ["Audio"]),
     .library(name: "ScoreFiles", targets: ["ScoreFiles"]),
     .library(name: "CrashReporting", targets: ["CrashReporting"]),
+    .library(name: "Analytics", targets: ["Analytics"]),
 ]
 
 var packageDependencies: [Package.Dependency] = [
@@ -73,10 +74,19 @@ var targets: [Target] = [
         ],
         plugins: swiftLintPlugins,
     ),
+    .target(
+        name: "Analytics",
+        dependencies: [
+            .product(name: "UtilityCore", package: "Utility"),
+            .product(name: "FirebaseAnalytics", package: "firebase-ios-sdk"),
+        ],
+        plugins: swiftLintPlugins,
+    ),
     .testTarget(
         name: "InfrastructureTests",
         dependencies: [
             "Persistence", "CloudSync", "Soundfonts", "Audio", "ScoreFiles",
+            "Analytics",
             .product(name: "UtilityCore", package: "Utility"),
         ],
         resources: [.process("Resources")],

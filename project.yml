@@ -125,7 +125,7 @@ targets:
         products: [UtilityCore, UtilityUI, Navigation]
       - package: Domain
       - package: Infrastructure
-        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting]
+        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting, Analytics]
       - package: Library
       - package: Reader
       - package: Editor
@@ -224,7 +224,7 @@ targets:
         products: [UtilityCore, UtilityUI, Navigation]
       - package: Domain
       - package: Infrastructure
-        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting]
+        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting, Analytics]
       - package: Library
       - package: Reader
       - package: Editor
