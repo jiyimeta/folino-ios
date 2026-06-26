@@ -1,3 +1,4 @@
+import Analytics
 import Audio
 import CrashReporting
 import Domain
@@ -36,6 +37,7 @@ final class AppBootstrap {
     private(set) var metadataReader: LiveScoreMetadataReader?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
     private(set) var crashReporter: (any CrashReporter)?
+    private(set) var analytics: (any Analytics)?
     let shareDuplicateResolver = ShareDuplicateResolver()
 
     /// Single-slot queue for an incoming URL received via `.onOpenURL`. Last-wins: a second URL arriving before the
@@ -52,6 +54,7 @@ final class AppBootstrap {
         let crashEnabled = UserDefaults.standard
             .object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true
         crashReporter = FirebaseCrashReporter.configure(collectionEnabled: crashEnabled)
+        configureAnalytics()
         do {
             try prepareDirectories()
             cleanupLegacySoundfontCacheIfNeeded()
@@ -113,6 +116,12 @@ final class AppBootstrap {
         } catch {
             failure = error
         }
+    }
+
+    private func configureAnalytics() {
+        let enabled = UserDefaults.standard
+            .object(forKey: PrivacySettingsKey.analyticsEnabled) as? Bool ?? true
+        analytics = FirebaseAnalyticsClient.make(collectionEnabled: enabled)
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {
