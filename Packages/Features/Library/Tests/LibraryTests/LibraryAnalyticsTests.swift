@@ -146,6 +146,30 @@ struct LibraryAnalyticsTests {
         #expect(f.analytics.event(named: "score_imported") == nil)
     }
 
+    // MARK: - share
+
+    @Test func `share from row menu logs chosen format and single source`() async {
+        let item = Self.makeItem()
+        let f = Self.makeVM(scoreItems: [item])
+        await f.vm.requestShare(item, format: .pdf)
+        let event = f.analytics.event(named: "share")
+        #expect(event?.parameters["method"] == .string("pdf"))
+        #expect(event?.parameters["source"] == .string("score_row_menu"))
+        #expect(event?.parameters["mode"] == .string("single"))
+        #expect(event?.parameters["content_type"] == .string("score"))
+    }
+
+    @Test func `bulk share logs chosen format and bulk source`() async {
+        let a = Self.makeItem(title: "A")
+        let b = Self.makeItem(title: "B")
+        let f = Self.makeVM(scoreItems: [a, b])
+        await f.vm.requestBulkShare([a, b], format: .museScoreV4)
+        let event = f.analytics.event(named: "share")
+        #expect(event?.parameters["method"] == .string("mscz_v4"))
+        #expect(event?.parameters["source"] == .string("bulk_edit"))
+        #expect(event?.parameters["mode"] == .string("bulk"))
+    }
+
     // MARK: - playlist & tag CRUD owned by the VM
 
     @Test func `create playlist logs source playlist`() async {

@@ -260,12 +260,16 @@ public final class LibraryViewModel {
         }
     }
 
-    func requestShare(_ item: ScoreItem, format: ScoreShareFormat) async {
+    /// `source` defaults to `.scoreRowMenu` because the only single-item caller is the score row's share menu; the
+    /// parameter keeps the surface explicit. `share` is logged on success (a prepared URL), not on intent — matching
+    /// the Reader's share instrumentation — with `method` = the actually-chosen export format.
+    func requestShare(_ item: ScoreItem, format: ScoreShareFormat, source: AnalyticsSource = .scoreRowMenu) async {
         isPreparingShare = true
         defer { isPreparingShare = false }
         do {
             let url = try await shareService.prepareShare(item: item, format: format)
             shareTarget = ScoreShareTarget(urls: [url])
+            analytics.log(.share(method: format.analyticsValue, source: source, mode: .single))
         } catch {
             currentError = error
         }
@@ -287,6 +291,7 @@ public final class LibraryViewModel {
             }
         }
         shareTarget = ScoreShareTarget(urls: urls)
+        analytics.log(.share(method: format.analyticsValue, source: .bulkEdit, mode: .bulk))
     }
 
     func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {

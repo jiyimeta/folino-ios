@@ -82,6 +82,8 @@ final class AppBootstrap {
                     appGroupContainer: container,
                     clock: SystemClock(),
                     duplicateResolver: shareDuplicateResolver,
+                    analytics: analytics ?? NoopAnalytics(),
+                    crashReporter: crashReporter ?? NoopCrashReporter(),
                 )
             }
 
