@@ -26,39 +26,55 @@ struct SoundfontPresetRow: View {
     @State private var deleteCacheAlertPresented = false
 
     var body: some View {
-        SoundfontPresetRowContent(
-            downloadState: provider.downloadState,
-            isOptedIn: provider.isOptedIn,
-            toggleBinding: toggleBinding,
-            onDownloadNow: { provider.startDownloadAllowingCellular() },
-            onCancelDownload: { provider.cancelDownload() },
-            onStopOptOut: { provider.setOptedIn(false) },
-        )
-        .alert(
-            Text("settings.soundfont.wifi.alert.title", bundle: .module),
-            isPresented: $noWiFiAlertPresented,
-        ) {
-            Button {
-                provider.setOptedIn(true)
-                provider.startDownloadAllowingCellular()
-            } label: { Text("settings.soundfont.wifi.alert.now", bundle: .module) }
-            Button {
-                provider.setOptedIn(true)
-            } label: { Text("settings.soundfont.wifi.alert.wait", bundle: .module) }
-            Button(role: .cancel) {} label: { L10n.Common.cancel }
-        } message: {
-            Text("settings.soundfont.wifi.alert.message", bundle: .module)
+        VStack(alignment: .leading, spacing: 4) {
+            SoundfontPresetRowContent(
+                downloadState: provider.downloadState,
+                isOptedIn: provider.isOptedIn,
+                toggleBinding: toggleBinding,
+                onDownloadNow: { provider.startDownloadAllowingCellular() },
+                onCancelDownload: { provider.cancelDownload() },
+                onStopOptOut: { provider.setOptedIn(false) },
+            )
+            .alert(
+                Text("settings.soundfont.wifi.alert.title", bundle: .module),
+                isPresented: $noWiFiAlertPresented,
+            ) {
+                Button {
+                    provider.setOptedIn(true)
+                    provider.startDownloadAllowingCellular()
+                } label: { Text("settings.soundfont.wifi.alert.now", bundle: .module) }
+                Button {
+                    provider.setOptedIn(true)
+                } label: { Text("settings.soundfont.wifi.alert.wait", bundle: .module) }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
+            } message: {
+                Text("settings.soundfont.wifi.alert.message", bundle: .module)
+            }
+            .alert(
+                Text("settings.soundfont.delete.alert.title", bundle: .module),
+                isPresented: $deleteCacheAlertPresented,
+            ) {
+                Button(role: .destructive) {
+                    provider.setOptedIn(false)
+                } label: { Text("settings.soundfont.delete.alert.confirm", bundle: .module) }
+                Button(role: .cancel) {} label: { L10n.Common.cancel }
+            } message: {
+                Text("settings.soundfont.delete.alert.message", bundle: .module)
+            }
+
+            siblingNote
         }
-        .alert(
-            Text("settings.soundfont.delete.alert.title", bundle: .module),
-            isPresented: $deleteCacheAlertPresented,
-        ) {
-            Button(role: .destructive) {
-                provider.setOptedIn(false)
-            } label: { Text("settings.soundfont.delete.alert.confirm", bundle: .module) }
-            Button(role: .cancel) {} label: { L10n.Common.cancel }
-        } message: {
-            Text("settings.soundfont.delete.alert.message", bundle: .module)
+    }
+
+    @ViewBuilder
+    private var siblingNote: some View {
+        if let siblingName = provider.soundfontKeptBySiblingDisplayName {
+            Text(verbatim: String(
+                format: String(localized: "settings.soundfont.keptBySibling", bundle: .module),
+                siblingName, siblingName,
+            ))
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
     }
 

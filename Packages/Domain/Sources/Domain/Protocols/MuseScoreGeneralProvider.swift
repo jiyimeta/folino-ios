@@ -17,6 +17,11 @@ public protocol MuseScoreGeneralProvider: AnyObject, Observable, Sendable {
     /// observers see the same transition the download state machine reports.
     var isDownloaded: Bool { get }
 
+    /// Display name of an installed sibling app that is keeping the shared high-quality SoundFont on device while this
+    /// app is opted out; `nil` otherwise. Drives the Settings "kept because <sibling> is using it" note. Defaults to
+    /// `nil` so conformers that don't participate in cross-app sharing need not implement it.
+    var soundfontKeptBySiblingDisplayName: String? { get }
+
     /// File system URL of the downloaded preset, or `nil` if absent. `GMSoundfontResolver` consults this every time the
     /// engine asks for `defaultGMSoundfontURL` via the `nonisolated` sync variant; this main-actor accessor exists for
     /// UI / debugging surfaces that already run on the main actor.
@@ -61,6 +66,10 @@ extension MuseScoreGeneralProvider {
     /// Default synchronous file-URL accessor. Returns `nil`. Override in concrete providers that can answer without an
     /// actor hop (e.g. `LiveMuseScoreGeneralProvider.museScoreGeneralFileURLSync`).
     public nonisolated var museScoreGeneralFileURLSync: URL? {
+        nil
+    }
+
+    public var soundfontKeptBySiblingDisplayName: String? {
         nil
     }
 }

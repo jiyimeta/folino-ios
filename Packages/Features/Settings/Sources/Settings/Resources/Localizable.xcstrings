@@ -1001,6 +1001,41 @@
         }
       }
     },
+    "settings.soundfont.keptBySibling" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shared with %@, so it's kept on your device. To free this storage, turn it off in %@ as well."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ と共有しているため端末に残しています。容量を解放するには %@ 側でもオフにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@에서도 사용 중이어서 기기에 남아 있습니다. 저장 공간을 확보하려면 %@에서도 꺼 주세요."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在与 %@ 共享，因此保留在您的设备上。如需释放存储空间，请同时在 %@ 中关闭。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在與 %@ 共享，因此保留在您的裝置上。如需釋放儲存空間，請同時在 %@ 中關閉。"
+          }
+        }
+      }
+    },
     "settings.soundfont.state.failed" : {
       "localizations" : {
         "en" : {
