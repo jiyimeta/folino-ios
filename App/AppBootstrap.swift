@@ -58,6 +58,7 @@ final class AppBootstrap {
         do {
             try prepareDirectories()
             cleanupLegacySoundfontCacheIfNeeded()
+            reconcileSoundfontToSharedContainerIfNeeded()
             let appGroupContainer = AppGroupPaths.container()
             let writer: PlaylistsIndexWriter? = appGroupContainer.map {
                 PlaylistsIndexWriter(appGroupContainer: $0)
@@ -207,6 +208,10 @@ final class AppBootstrap {
     }
 
     private static let legacySoundfontCacheCleanupDidRunKey = "soundfont.legacyCacheCleanupDidRun"
+    static let soundfontMinimumValidByteSize: Int64 = 150 * 1024 * 1024
+    static let soundfontSiblings: [SiblingApp] = [
+        SiblingApp(bundleId: "com.KeyNumber.VocalTuner", urlScheme: "vocaltuner"),
+    ]
 
     /// One-shot migration of the repeat mode from per-score to global. The repeat mode used to be stored per-score in
     /// `ReaderPreferences`; it is now a single sticky value in `UserDefaults`. On the first launch after that change we
@@ -226,6 +231,18 @@ final class AppBootstrap {
             mode = prefs.repeatMode
         }
         defaults.set(mode.rawValue, forKey: ReaderGlobalSettingsKey.repeatMode)
+    }
+
+    /// Move-then-dedup the high-quality SoundFont into the shared App Group container before the provider is built.
+    /// No-op when the container is unavailable (resolvers degrade to the legacy private path).
+    private func reconcileSoundfontToSharedContainerIfNeeded() {
+        guard let shared = AppPaths.sharedSoundfontsDirectory else { return }
+        SoundfontContainerMigration().reconcile(
+            fileName: SoundfontPreset.highQuality.fileName,
+            sharedDirectory: shared,
+            legacyDirectory: AppPaths.legacySoundfontsDirectory,
+            minimumValidByteSize: Self.soundfontMinimumValidByteSize,
+        )
     }
 
     private func prepareDirectories() throws {
