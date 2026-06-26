@@ -9,6 +9,8 @@ struct SeekRegion: View {
     let marks: [ReaderRehearsalMark]
     /// `notatedDurationSeconds` of the score, passed in so this view depends on a scalar rather than the whole `Score`.
     let durationSeconds: Double
+    /// Score name shown below the seek bar (same text Library lists), scrolling when it overflows.
+    let title: String
 
     @State private var isScrubbing = false
     @State private var scrubFraction: Double = 0
@@ -22,9 +24,10 @@ struct SeekRegion: View {
                 .padding(.bottom, -8)
             }
             seekBar
-                // Time readout sits in the empty band below the thin track. An overlay reserves no layout space, so the
-                // gap to the transport row and the buttons' tap targets stay exactly as they were.
-                    .overlay(alignment: .bottom) { timeReadout }
+            // Elapsed / score title / remaining, pulled up into the seek bar's bottom band — mirrors VocalTuner's
+            // transport card so the time labels flank the centered, scrolling title.
+            timeRow
+                .padding(.top, -6)
         }
     }
 
@@ -55,23 +58,31 @@ struct SeekRegion: View {
         )
     }
 
-    /// Small current-position (leading) and remaining-time (trailing, with a leading minus) labels shown just below the
-    /// seek track. Both follow `displayFraction`, so they track the scrub thumb while dragging and the live cursor
-    /// otherwise. Non-interactive (`allowsHitTesting(false)`) so the seek drag underneath is unaffected.
-    private var timeReadout: some View {
+    /// Current-position (leading) and remaining-time (trailing, with a leading minus) labels flanking the centered,
+    /// scrolling score title. The times follow `displayFraction`, tracking the scrub thumb while dragging and the live
+    /// cursor otherwise. The whole row is non-interactive so the seek drag just above it is unaffected.
+    private var timeRow: some View {
         let elapsed = min(max(displayFraction, 0), 1) * durationSeconds
         let remaining = max(0, durationSeconds - elapsed)
-        return HStack {
-            Text(verbatim: Self.formatTime(elapsed))
-            Spacer(minLength: 0)
-            Text(verbatim: "-" + Self.formatTime(remaining))
+        return HStack(spacing: 16) {
+            if durationSeconds > 0 {
+                Text(verbatim: Self.formatTime(elapsed))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+            }
+
+            RotationText(title: title, isCenterAligned: true)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(maxWidth: .infinity)
+
+            if durationSeconds > 0 {
+                Text(verbatim: "-" + Self.formatTime(remaining))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+            }
         }
-        .font(.system(size: 10))
-        .monospacedDigit()
-        .foregroundStyle(.secondary)
-        // Nudge into the empty band above the transport glyphs. `offset` shifts only the rendered text, so the row's
-        // layout and the buttons' tap targets are still unaffected.
-        .offset(y: 5)
         .allowsHitTesting(false)
     }
 
