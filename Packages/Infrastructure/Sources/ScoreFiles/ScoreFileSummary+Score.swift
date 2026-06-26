@@ -33,6 +33,14 @@ extension ScoreFileSummary {
         // Default tempo: not exposed by Score.metaTags reliably; v1 default matches MuseScore's own default of 120 bpm.
         let defaultTempoBpm = 120
 
+        // Source kind: extract the MuseScore major version when the file originated from MuseScore. All other formats
+        // (MusicXML, MIDI, PDF) yield nil, and PDF never reaches this path (pdfSummary handles it in the gateway).
+        let museScoreMajorVersion: Int? = if case let .museScore(majorVersion) = ScoreSourceKind(source: score.source) {
+            majorVersion
+        } else {
+            nil
+        }
+
         self.init(
             title: nil,
             subtitle: subtitle,
@@ -44,6 +52,7 @@ extension ScoreFileSummary {
             lengthBeats: lengthBeats,
             defaultTempoBpm: defaultTempoBpm,
             primaryKey: nil,
+            museScoreMajorVersion: museScoreMajorVersion,
         )
     }
 }

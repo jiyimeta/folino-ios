@@ -18,6 +18,7 @@ enum AppMigrations {
         m.registerMigration("v10", migrate: migrateV10)
         m.registerMigration("v11", migrate: migrateV11)
         m.registerMigration("v12", migrate: migrateV12)
+        m.registerMigration("v13", migrate: migrateV13)
         return m
     }()
 
@@ -325,5 +326,14 @@ enum AppMigrations {
             payload        BLOB NOT NULL
         )
         """)
+    }
+
+    // MARK: - v13
+
+    /// Adds the MuseScore wire-format major version detected at import time. NULL for non-MuseScore formats (MusicXML,
+    /// MIDI, PDF) and for rows imported before this migration. Analytics treats NULL as v4 (the current default), so no
+    /// backfill is required.
+    private static func migrateV13(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE score_items ADD COLUMN muse_score_major_version INTEGER")
     }
 }

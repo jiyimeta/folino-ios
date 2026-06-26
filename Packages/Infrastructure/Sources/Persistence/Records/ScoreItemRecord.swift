@@ -25,6 +25,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
     var lastOpenedAt: Double?
     var isFavorite: Bool
     var deletedAt: Double?
+    var museScoreMajorVersion: Int?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -45,6 +46,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         case lastOpenedAt = "last_opened_at"
         case isFavorite = "is_favorite"
         case deletedAt = "deleted_at"
+        case museScoreMajorVersion = "muse_score_major_version"
     }
 
     init(domain item: ScoreItem) {
@@ -66,6 +68,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         lastOpenedAt = item.lastOpenedAt?.timeIntervalSince1970
         isFavorite = item.isFavorite
         deletedAt = item.deletedAt?.timeIntervalSince1970
+        museScoreMajorVersion = item.museScoreMajorVersion
     }
 
     func toDomain(tagIDs: Set<TagID>) throws -> ScoreItem {
@@ -92,6 +95,7 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
             tagIDs: tagIDs,
             isFavorite: isFavorite,
             deletedAt: deletedAt.map(Date.init(timeIntervalSince1970:)),
+            museScoreMajorVersion: museScoreMajorVersion,
         )
     }
 }

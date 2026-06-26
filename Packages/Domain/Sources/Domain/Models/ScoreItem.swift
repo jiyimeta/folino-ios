@@ -31,6 +31,10 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     /// until it is restored or auto-purged after 30 days. The repository surfaces these rows via `deletedScoreItems`
     /// and excludes them from `scoreItems`, so non-trash callers never see them.
     public var deletedAt: Date?
+    /// Major version of the MuseScore wire format detected at import time (2, 3, or 4 for `.mscx`/`.mscz` files).
+    /// `nil` for non-MuseScore formats (MusicXML, MIDI, PDF) and for rows imported before this field was introduced.
+    /// Analytics (Task 12) treats `nil` as v4 — the current default — so no backfill is required for existing rows.
+    public var museScoreMajorVersion: Int?
 
     public init(
         id: ScoreItemID = ScoreItemID(),
@@ -52,6 +56,7 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         tagIDs: Set<TagID>,
         isFavorite: Bool,
         deletedAt: Date? = nil,
+        museScoreMajorVersion: Int? = nil,
     ) {
         self.id = id
         self.title = title
@@ -72,5 +77,6 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         self.tagIDs = tagIDs
         self.isFavorite = isFavorite
         self.deletedAt = deletedAt
+        self.museScoreMajorVersion = museScoreMajorVersion
     }
 }

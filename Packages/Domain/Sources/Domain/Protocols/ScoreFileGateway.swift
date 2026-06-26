@@ -13,6 +13,10 @@ public struct ScoreFileSummary: Hashable, Sendable {
     public var lengthBeats: Int
     public var defaultTempoBpm: Int
     public var primaryKey: String?
+    /// Major version of the MuseScore wire format (2, 3, or 4) when the file originated from MuseScore. `nil` for
+    /// non-MuseScore formats (MusicXML, MIDI, PDF). Populated by the Infrastructure extension in
+    /// `ScoreFileSummary+Score.swift`.
+    public var museScoreMajorVersion: Int?
 
     public init(
         title: String?,
@@ -25,6 +29,7 @@ public struct ScoreFileSummary: Hashable, Sendable {
         lengthBeats: Int,
         defaultTempoBpm: Int,
         primaryKey: String?,
+        museScoreMajorVersion: Int? = nil,
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -36,6 +41,7 @@ public struct ScoreFileSummary: Hashable, Sendable {
         self.lengthBeats = lengthBeats
         self.defaultTempoBpm = defaultTempoBpm
         self.primaryKey = primaryKey
+        self.museScoreMajorVersion = museScoreMajorVersion
     }
 }
 
