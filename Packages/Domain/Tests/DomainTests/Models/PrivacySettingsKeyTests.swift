@@ -7,4 +7,8 @@ struct PrivacySettingsKeyTests {
     @Test func `crash reporting key is the stable literal`() {
         #expect(PrivacySettingsKey.crashReportingEnabled == "privacyCrashReportingEnabled")
     }
+
+    @Test func `analytics key is stable raw string`() {
+        #expect(PrivacySettingsKey.analyticsEnabled == "privacyAnalyticsEnabled")
+    }
 }

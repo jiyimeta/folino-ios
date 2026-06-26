@@ -83,7 +83,7 @@ struct ReaderTopOverlay: View {
                 systemImage: "info.circle",
                 label: Text("reader.toolbar.showInfo", bundle: .module),
             ) {
-                viewModel.isScoreInfoPresented = true
+                viewModel.presentScoreInfo()
             }
 
             Menu {
@@ -114,7 +114,7 @@ struct ReaderTopOverlay: View {
                 bundle: .module,
             ),
         ) {
-            viewModel.isAnnotating.toggle()
+            viewModel.toggleAnnotation()
         }
     }
 
@@ -131,6 +131,7 @@ struct ReaderTopOverlay: View {
             .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
                 PlaybackInspectorScreen(
                     mixerModel: viewModel.mixerModel,
+                    layoutModel: viewModel.layoutModel,
                     tempoModel: viewModel.tempoModel,
                     masterVolumeModel: viewModel.masterVolumeModel,
                     a4ReferenceModel: viewModel.a4ReferenceModel,

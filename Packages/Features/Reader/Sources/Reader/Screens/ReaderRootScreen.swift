@@ -2,6 +2,7 @@ import Domain
 import SheetMusicCore
 import SwiftUI
 import UIKit
+import UtilityCore
 import UtilityUI
 
 @MainActor
@@ -78,6 +79,8 @@ public struct ReaderRootScreen: View {
         playbackController: (any PlaybackController)? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
         playlistID: PlaylistID? = nil,
+        analytics: any Analytics = NoopAnalytics(),
+        openedFrom: AnalyticsSource = .libraryAll,
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
     ) {
@@ -97,6 +100,8 @@ public struct ReaderRootScreen: View {
                 playbackController: playbackController,
                 museScoreGeneralProvider: museScoreGeneralProvider,
                 playlistID: playlistID,
+                analytics: analytics,
+                openedFrom: openedFrom,
             ),
         )
         self.onBack = onBack
@@ -126,6 +131,9 @@ public struct ReaderRootScreen: View {
         .navigationTitle("")
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task {
+            // Mirror the global layout mode onto the view model so `playback_started` carries the right layout. Kept in
+            // sync by `.onChange(of: layoutMode)` below.
+            viewModel.currentLayoutMode = layoutMode
             viewModel.playbackSession.startObservingCursor()
             viewModel.playbackSession.startObservingSoundfontDownload()
             viewModel.pipSession.setEnabled(isPiPEnabled)
@@ -157,6 +165,12 @@ public struct ReaderRootScreen: View {
                 await viewModel.flushPendingAnnotationSave()
                 await viewModel.playbackSession.releaseEngine()
             }
+        }
+        .onChange(of: layoutMode) { _, newValue in
+            // The layout picker lives in the visual inspector and writes the shared `@AppStorage` key, so logging the
+            // change here (the one place that owns the view model) captures every layout switch, score or PDF.
+            viewModel.currentLayoutMode = newValue
+            viewModel.analytics.log(.layoutModeChanged(newValue))
         }
         .onChange(of: keepScreenAwake) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue

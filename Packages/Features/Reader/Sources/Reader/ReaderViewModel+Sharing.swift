@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import ScoreUI
+import UtilityCore
 
 // MARK: - Sharing
 
@@ -11,6 +12,7 @@ extension ReaderViewModel {
         do {
             let url = try await shareService.prepareShare(item: scoreItem, format: format)
             shareTarget = ScoreShareTarget(urls: [url])
+            analytics.log(.share(method: format.analyticsValue, source: .readerOverlay, mode: .single))
         } catch {
             // Reader has no error banner yet; sharing failures are non-fatal and simply present nothing.
         }

@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityCore
 
 struct AddToPlaylistScreen: View {
     let scoreItem: ScoreItem
@@ -16,10 +17,16 @@ struct AddToPlaylistScreen: View {
     }
 
     private func toggle(_ playlist: Playlist) async {
+        let wasMember = playlist.orderedScoreItemIDs.contains(scoreItem.id)
         var updated = playlist
         updated.toggleMembership(scoreItem.id)
         do {
             try await library.repository.savePlaylist(updated)
+            if wasMember {
+                library.analytics.log(.scoreRemovedFromPlaylist(source: .scoreRowMenu, count: 1))
+            } else {
+                library.analytics.log(.scoreAddedToPlaylist(source: .scoreRowMenu, count: 1))
+            }
         } catch {
             library.currentError = error
         }
@@ -33,6 +40,8 @@ struct AddToPlaylistScreen: View {
         )
         do {
             try await library.repository.savePlaylist(playlist)
+            library.analytics.log(.playlistCreated(source: .scoreRowMenu))
+            library.analytics.log(.scoreAddedToPlaylist(source: .scoreRowMenu, count: 1))
         } catch {
             library.currentError = error
         }

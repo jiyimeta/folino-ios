@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityCore
 
 struct BulkAddToPlaylistScreen: View {
     let selectedIDs: Set<ScoreItemID>
@@ -30,6 +31,8 @@ struct BulkAddToPlaylistScreen: View {
         )
         do {
             try await library.repository.savePlaylist(playlist)
+            library.analytics.log(.playlistCreated(source: .bulkEdit))
+            library.analytics.log(.scoreAddedToPlaylist(source: .bulkEdit, count: orderedSelectedIDs.count))
         } catch {
             library.currentError = error
             return

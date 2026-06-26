@@ -501,4 +501,103 @@ struct IncomingShareCoordinatorTests {
         #expect(!FileManager.default.fileExists(atPath: laterPath))
         _ = result
     }
+
+    // MARK: - Analytics / crash split
+
+    final class SpyAnalytics: Analytics, @unchecked Sendable {
+        private(set) var events: [AnalyticsEvent] = []
+        func setCollectionEnabled(_: Bool) {}
+        func log(_ event: AnalyticsEvent) {
+            events.append(event)
+        }
+
+        func setUserProperty(_: String?, for _: AnalyticsUserProperty) {}
+        func event(named name: String) -> AnalyticsEvent? {
+            events.first { $0.name == name }
+        }
+    }
+
+    final class SpyCrashReporter: CrashReporter, @unchecked Sendable {
+        private(set) var recordedErrors: [any Error] = []
+        func setCollectionEnabled(_: Bool) {}
+        func log(_: String) {}
+        func record(error: any Error) {
+            recordedErrors.append(error)
+        }
+    }
+
+    @Test func `successful share import logs score_imported with share_ext source`() async throws {
+        let container = try makeContainer()
+        defer { try? FileManager.default.removeItem(at: container) }
+        let analytics = SpyAnalytics()
+        let coordinator = IncomingShareCoordinator(
+            importer: FakeImporter(),
+            repository: FakeRepository(),
+            appGroupContainer: container,
+            clock: FixedClock(date: .now),
+            analytics: analytics,
+            crashReporter: SpyCrashReporter(),
+        )
+        let token = UUID()
+        try stageToken(container, token: token, filenames: ["one.mscz"])
+
+        _ = await coordinator.drain(token: token)
+
+        let event = analytics.event(named: "score_imported")
+        #expect(event?.parameters["source"] == .string("share_ext"))
+        #expect(event?.parameters["format"] == .string("mscz"))
+        #expect(event?.parameters["is_duplicate"] == .bool(false))
+    }
+
+    @Test func `parse failure logs score_import_failed and records non-fatal`() async throws {
+        let container = try makeContainer()
+        defer { try? FileManager.default.removeItem(at: container) }
+        let importer = FakeImporter()
+        importer.prepareError = NSError(domain: "Test", code: 1)
+        let analytics = SpyAnalytics()
+        let crash = SpyCrashReporter()
+        let coordinator = IncomingShareCoordinator(
+            importer: importer,
+            repository: FakeRepository(),
+            appGroupContainer: container,
+            clock: FixedClock(date: .now),
+            analytics: analytics,
+            crashReporter: crash,
+        )
+        let token = UUID()
+        try stageToken(container, token: token, filenames: ["bad.mscz"])
+
+        _ = await coordinator.drain(token: token)
+
+        let event = analytics.event(named: "score_import_failed")
+        #expect(event?.parameters["reason"] == .string("parse_failed"))
+        #expect(event?.parameters["format"] == .string("mscz"))
+        #expect(crash.recordedErrors.count == 1)
+        #expect(analytics.event(named: "score_imported") == nil)
+    }
+
+    @Test func `playlist create failure records non-fatal`() async throws {
+        let container = try makeContainer()
+        defer { try? FileManager.default.removeItem(at: container) }
+        let repo = FakeRepository()
+        repo.savePlaylistError = NSError(domain: "Test", code: 42)
+        repo.savePlaylistErrorMatchingName = "fails"
+        let analytics = SpyAnalytics()
+        let crash = SpyCrashReporter()
+        let coordinator = IncomingShareCoordinator(
+            importer: FakeImporter(),
+            repository: repo,
+            appGroupContainer: container,
+            clock: FixedClock(date: .now),
+            analytics: analytics,
+            crashReporter: crash,
+        )
+        let token = UUID()
+        try stageToken(container, token: token, newPlaylistName: "fails", filenames: ["a.mscz"])
+
+        _ = await coordinator.drain(token: token)
+
+        #expect(crash.recordedErrors.count == 1)
+        #expect(analytics.event(named: "score_imported") == nil)
+    }
 }

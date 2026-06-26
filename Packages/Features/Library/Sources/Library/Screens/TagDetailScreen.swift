@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityCore
 
 struct TagDetailScreen: View {
     let tag: Tag
@@ -26,7 +27,9 @@ struct TagDetailScreen: View {
         self.onAddToPlaylist = onAddToPlaylist
         self.onTagDeleted = onTagDeleted
         _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .taggedWith(tag.id), repository: library.repository),
+            wrappedValue: ScoreListViewModel(
+                source: .taggedWith(tag.id), repository: library.repository, analytics: library.analytics,
+            ),
         )
     }
 
@@ -51,6 +54,7 @@ struct TagDetailScreen: View {
         updated.name = newName
         do {
             try await library.repository.saveTag(updated)
+            library.analytics.log(.tagRenamed(source: .tag))
         } catch {
             library.currentError = error
         }
@@ -59,6 +63,7 @@ struct TagDetailScreen: View {
     private func commitDelete() async {
         do {
             try await library.repository.deleteTag(id: tag.id)
+            library.analytics.log(.tagDeleted(source: .tag))
             onTagDeleted()
         } catch {
             library.currentError = error

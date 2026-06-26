@@ -68,4 +68,32 @@ struct ScoreItemRecordTests {
         #expect(back.lyricist == "L")
         #expect(back.copyright == "©")
     }
+
+    @Test func `round-trips museScoreMajorVersion through database`() throws {
+        let queue = try makeQueue()
+        var item = sampleItem()
+        item.museScoreMajorVersion = 3
+        try queue.write { db in
+            try ScoreItemRecord(domain: item).insert(db)
+        }
+        let fetched = try queue.read { db -> ScoreItemRecord? in
+            try ScoreItemRecord.fetchOne(db, key: item.id.rawValue.uuidString)
+        }
+        let domain = try #require(fetched).toDomain(tagIDs: [])
+        #expect(domain.museScoreMajorVersion == 3)
+    }
+
+    @Test func `museScoreMajorVersion is nil for non-MuseScore items`() throws {
+        let queue = try makeQueue()
+        let item = sampleItem()
+        // sampleItem has no museScoreMajorVersion set, so it defaults to nil.
+        try queue.write { db in
+            try ScoreItemRecord(domain: item).insert(db)
+        }
+        let fetched = try queue.read { db -> ScoreItemRecord? in
+            try ScoreItemRecord.fetchOne(db, key: item.id.rawValue.uuidString)
+        }
+        let domain = try #require(fetched).toDomain(tagIDs: [])
+        #expect(domain.museScoreMajorVersion == nil)
+    }
 }

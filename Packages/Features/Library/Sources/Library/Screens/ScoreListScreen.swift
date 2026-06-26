@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityCore
 import UtilityUI
 
 struct ScoreListScreen: View {
@@ -27,6 +28,12 @@ struct ScoreListScreen: View {
 
     var body: some View {
         listContent
+            .onChange(of: viewModel.searchQuery) { oldValue, newValue in
+                // Log one `search` per session: the empty -> non-empty edge marks the user starting a new search.
+                if oldValue.isEmpty, !newValue.isEmpty {
+                    library.analytics.log(.search())
+                }
+            }
             .editScoreInfoSheet(viewModel: library, target: $editInfoTarget)
             .sheet(item: $bulkSheet) { which in
                 switch which {
@@ -54,7 +61,7 @@ struct ScoreListScreen: View {
             sort: viewModel.sort,
             isManualOrderActive: viewModel.isManualOrderActive,
             showsManualOrderOption: isPlaylistSource,
-            onTap: onOpen,
+            onTap: openScore,
             onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
             onConfirmDelete: { item in Task { await library.delete(item) } },
             onSelectSort: { viewModel.selectSort($0) },
@@ -86,12 +93,29 @@ struct ScoreListScreen: View {
             scoreRowMenu(
                 item: item,
                 library: library,
-                onOpen: onOpen,
+                onOpen: openScore,
                 onEditInfo: { item in editInfoTarget = item },
                 onEditTags: onEditTags,
                 onAddToPlaylist: onAddToPlaylist,
                 onRequestDelete: { item in Task { await library.delete(item) } },
             )
+        }
+    }
+
+    /// Log `select_content` attributed to the originating section, then open. A non-empty search query overrides the
+    /// section so opens from search results are attributed to `.searchResult`.
+    private func openScore(_ item: ScoreItem) {
+        library.analytics.log(.scoreOpened(from: openSource))
+        onOpen(item)
+    }
+
+    private var openSource: AnalyticsSource {
+        if !viewModel.searchQuery.isEmpty { return .searchResult }
+        switch viewModel.source {
+        case .all: return .libraryAll
+        case .favorites: return .favorites
+        case .taggedWith: return .tag
+        case .playlist: return .playlist
         }
     }
 

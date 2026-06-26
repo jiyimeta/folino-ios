@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityCore
 import UtilityUI
 
 /// The Library root's "Recently Opened" section. Extracted into its own `View` so the per-row machinery (tap-to-open,
@@ -27,11 +28,17 @@ struct LibraryRootRecentsSection: View {
         }
     }
 
+    /// Log `select_content` from the recently-opened section, then open.
+    private func openScore(_ item: ScoreItem) {
+        viewModel.analytics.log(.scoreOpened(from: .recentlyOpened))
+        onOpenScore(item)
+    }
+
     private func sectionRowMenu(for item: ScoreItem) -> some View {
         scoreRowMenu(
             item: item,
             library: viewModel,
-            onOpen: onOpenScore,
+            onOpen: openScore,
             onEditInfo: { item in editInfoTarget = item },
             onEditTags: { editTagsTarget = $0 },
             onAddToPlaylist: { addToPlaylistTarget = $0 },
@@ -43,7 +50,7 @@ struct LibraryRootRecentsSection: View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
-                .onTapGesture { onOpenScore(item) }
+                .onTapGesture { openScore(item) }
             Menu {
                 sectionRowMenu(for: item)
             } label: {

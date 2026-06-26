@@ -1,11 +1,17 @@
 import Domain
 import SwiftUI
+import UtilityCore
 
 /// The Settings sheet's reader section: playback toggles, the global A4 tuning slider, and the page-layout picker. Owns
 /// the `@AppStorage`-backed reader globals it edits plus the transient `liveA4Hz` drag state, so the slider's readout
 /// can track the finger without committing on every frame.
 struct ReaderSettingsSection: View {
     let provider: (any MuseScoreGeneralProvider)?
+    var analytics: any Analytics = NoopAnalytics()
+
+    private var changeLog: SettingChangeLogger {
+        SettingChangeLogger(analytics: analytics)
+    }
 
     /// Transient Hz value written during a drag so the readout tracks the finger without committing on every frame.
     /// Committed to `globalA4Hz` (`@AppStorage`) on slider release.
@@ -34,33 +40,14 @@ struct ReaderSettingsSection: View {
 
     var body: some View {
         Section {
-            Toggle(isOn: $isMetronomeEnabled) {
-                Label {
-                    Text("settings.reader.metronome", bundle: .module)
-                } icon: {
-                    Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
-                }
-            }
+            metronomeToggle
             pictureInPictureToggle
-            Toggle(isOn: $collapseMultiMeasureRests) {
-                Label {
-                    Text("settings.reader.collapseMultiMeasureRests", bundle: .module)
-                } icon: {
-                    Image(systemName: "rectangle.compress.vertical")
-                        .rotationEffect(.degrees(90))
-                }
-            }
-            Toggle(isOn: $showInvisibleElements) {
-                Label {
-                    Text("settings.reader.showInvisibleElements", bundle: .module)
-                } icon: {
-                    Image(systemName: showInvisibleElements ? "eye" : "eye.slash")
-                }
-            }
+            collapseRestsToggle
+            showInvisibleToggle
             keepScreenAwakeToggle
             seekBarToggle
-            RepeatModeSettingRow(mode: $repeatMode)
-            PlaylistContinuationSettingRow(mode: $continuationMode)
+            repeatModeRow
+            playlistContinuationRow
             a4ReferenceRow
             readerLayoutRow
             if let provider {
@@ -69,6 +56,52 @@ struct ReaderSettingsSection: View {
         } footer: {
             Text("settings.reader.continuation.footer", bundle: .module)
         }
+    }
+
+    private var metronomeToggle: some View {
+        Toggle(isOn: $isMetronomeEnabled) {
+            Label {
+                Text("settings.reader.metronome", bundle: .module)
+            } icon: {
+                Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
+            }
+        }
+        .onChange(of: isMetronomeEnabled) { _, value in changeLog.log(.metronome, value) }
+    }
+
+    private var collapseRestsToggle: some View {
+        Toggle(isOn: $collapseMultiMeasureRests) {
+            Label {
+                Text("settings.reader.collapseMultiMeasureRests", bundle: .module)
+            } icon: {
+                Image(systemName: "rectangle.compress.vertical")
+                    .rotationEffect(.degrees(90))
+            }
+        }
+        .onChange(of: collapseMultiMeasureRests) { _, value in changeLog.log(.collapseMultiMeasureRests, value) }
+    }
+
+    private var showInvisibleToggle: some View {
+        Toggle(isOn: $showInvisibleElements) {
+            Label {
+                Text("settings.reader.showInvisibleElements", bundle: .module)
+            } icon: {
+                Image(systemName: showInvisibleElements ? "eye" : "eye.slash")
+            }
+        }
+        .onChange(of: showInvisibleElements) { _, value in changeLog.log(.showInvisibleElements, value) }
+    }
+
+    private var repeatModeRow: some View {
+        RepeatModeSettingRow(mode: $repeatMode)
+            .onChange(of: repeatMode) { _, value in changeLog.log(.repeatMode, value: value.analyticsValue) }
+    }
+
+    private var playlistContinuationRow: some View {
+        PlaylistContinuationSettingRow(mode: $continuationMode)
+            .onChange(of: continuationMode) { _, value in
+                changeLog.log(.playlistContinuation, value: value.analyticsValue)
+            }
     }
 
     private var pictureInPictureToggle: some View {
@@ -84,6 +117,7 @@ struct ReaderSettingsSection: View {
                 Image(systemName: "pip")
             }
         }
+        .onChange(of: isPiPEnabled) { _, value in changeLog.log(.pictureInPicture, value) }
     }
 
     private var keepScreenAwakeToggle: some View {
@@ -99,6 +133,7 @@ struct ReaderSettingsSection: View {
                 Image(systemName: "lock.slash")
             }
         }
+        .onChange(of: keepScreenAwake) { _, value in changeLog.log(.keepScreenAwake, value) }
     }
 
     private var seekBarToggle: some View {
@@ -109,6 +144,7 @@ struct ReaderSettingsSection: View {
                 Image(systemName: "point.bottomleft.forward.to.point.topright.scurvepath")
             }
         }
+        .onChange(of: showSeekBar) { _, value in changeLog.log(.showSeekBar, value) }
     }
 
     /// Snap detents for the global A4 slider — same values as the per-score inspector.
@@ -155,6 +191,8 @@ struct ReaderSettingsSection: View {
             )
             .tint(.accentColor)
         }
+        // `globalA4Hz` only changes on slider release, so this logs the committed integer Hz once per edit.
+        .onChange(of: globalA4Hz) { _, value in changeLog.log(.a4Reference, value: String(Int(value.rounded()))) }
     }
 
     private var readerLayoutRow: some View {
@@ -179,6 +217,9 @@ struct ReaderSettingsSection: View {
             .labelsHidden()
             .frame(width: 132)
             .fixedSize()
+        }
+        .onChange(of: layoutModeRaw) { _, raw in
+            changeLog.log(.layoutMode, value: ReaderLayoutMode(rawValue: raw)?.analyticsValue ?? raw)
         }
     }
 }

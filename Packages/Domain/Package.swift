@@ -18,15 +18,23 @@ let package = Package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
             revision: "680d48e43840eb5959e48e3428a957e418689878",
         ),
+        .package(path: "../Utility"),
     ],
     targets: [
         .target(
             name: "Domain",
             dependencies: [
                 .product(name: "SheetMusicCore", package: "swift-sheet-music"),
+                .product(name: "UtilityCore", package: "Utility"),
             ],
             plugins: swiftLintPlugins,
         ),
-        .testTarget(name: "DomainTests", dependencies: ["Domain"]),
+        .testTarget(
+            name: "DomainTests",
+            dependencies: [
+                "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
+            ],
+        ),
     ],
 )

@@ -156,6 +156,8 @@ private struct ReadyShell: View {
                 gateway: gateway,
                 shareService: shareService,
                 metadataReader: metadataReader,
+                analytics: bootstrap.analytics ?? NoopAnalytics(),
+                crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
             ),
         )
 
@@ -244,6 +246,7 @@ private struct ReadyShell: View {
                 provider: bootstrap.museScoreGeneralProvider,
                 onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
                 crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
+                analytics: bootstrap.analytics ?? NoopAnalytics(),
             ) {
                 LicenseListView()
             }
@@ -387,6 +390,10 @@ private struct ReadyShell: View {
             playbackController: bootstrap.playbackController,
             museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
             playlistID: playlistID,
+            analytics: bootstrap.analytics ?? NoopAnalytics(),
+            // Best-effort origin from what this funnel knows: a playlist context vs. the general library. Finer-grained
+            // sources (favorites/tag/recents/search) would require threading the source through the navigation values.
+            openedFrom: playlistID != nil ? .playlist : .libraryAll,
             onBack: onBack,
             hidesBackButton: hidesBackButton,
         )
@@ -437,6 +444,7 @@ private struct ReadyShell: View {
     private var settingsButton: some View {
         Button {
             isSettingsPresented = true
+            bootstrap.analytics?.log(.settingsOpened())
         } label: {
             Image(systemName: "gear").accessibilityLabel(Text("app.toolbar.settings.label"))
         }

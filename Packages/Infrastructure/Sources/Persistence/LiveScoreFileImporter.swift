@@ -123,6 +123,7 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
                 lastOpenedAt: nil,
                 tagIDs: [],
                 isFavorite: false,
+                museScoreMajorVersion: plan.summary.museScoreMajorVersion,
             )
 
             try await repository.saveScoreItem(item)

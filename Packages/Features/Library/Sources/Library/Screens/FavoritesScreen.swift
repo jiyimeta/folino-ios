@@ -20,7 +20,9 @@ struct FavoritesScreen: View {
         self.onEditTags = onEditTags
         self.onAddToPlaylist = onAddToPlaylist
         _listVM = State(
-            wrappedValue: ScoreListViewModel(source: .favorites, repository: library.repository),
+            wrappedValue: ScoreListViewModel(
+                source: .favorites, repository: library.repository, analytics: library.analytics,
+            ),
         )
     }
 
