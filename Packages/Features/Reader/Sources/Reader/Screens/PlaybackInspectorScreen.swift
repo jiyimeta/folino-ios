@@ -33,6 +33,7 @@ private func masterVolumeSliderPosition(forAmplitude amplitude: Double) -> Doubl
 
 struct PlaybackInspectorScreen: View {
     let mixerModel: PlaybackMixerModel
+    let layoutModel: LayoutSettingsModel
     let tempoModel: TempoModel
     let masterVolumeModel: MasterVolumeModel
     let a4ReferenceModel: A4ReferenceModel
@@ -321,25 +322,21 @@ struct PlaybackInspectorScreen: View {
             .tint(isDisabled ? .gray : Color.accentColor)
             .disabled(isDisabled)
 
-            Button {
+            Button(String("S")) {
                 mixerModel.toggleStaffSolo(address)
-            } label: {
-                Image(systemName: isSolo ? "s.circle.fill" : "s.circle")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 24, height: 24)
             }
+            .fontWeight(.medium)
+            .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isSolo))
+            .accessibilityLabel(Text("reader.inspector.staffSolo", bundle: .module))
 
-            Button {
+            Button(String("M")) {
                 mixerModel.toggleStaffMute(address)
-            } label: {
-                Image(systemName: isMuted ? "m.circle.fill" : "m.circle")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 24, height: 24)
             }
+            .fontWeight(.medium)
+            .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isMuted))
+            .accessibilityLabel(Text("reader.inspector.staffMute", bundle: .module))
+
+            StaffVisibilityButton(layoutModel: layoutModel, address: address)
         }
     }
 }
@@ -373,6 +370,7 @@ struct PlaybackInspectorScreen: View {
         .sheet(isPresented: .constant(true)) {
             PlaybackInspectorScreen(
                 mixerModel: vm.mixerModel,
+                layoutModel: vm.layoutModel,
                 tempoModel: vm.tempoModel,
                 masterVolumeModel: vm.masterVolumeModel,
                 a4ReferenceModel: vm.a4ReferenceModel,

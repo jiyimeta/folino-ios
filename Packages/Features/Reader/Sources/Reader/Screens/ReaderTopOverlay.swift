@@ -120,6 +120,7 @@ struct ReaderTopOverlay: View {
             .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
                 PlaybackInspectorScreen(
                     mixerModel: viewModel.mixerModel,
+                    layoutModel: viewModel.layoutModel,
                     tempoModel: viewModel.tempoModel,
                     masterVolumeModel: viewModel.masterVolumeModel,
                     a4ReferenceModel: viewModel.a4ReferenceModel,

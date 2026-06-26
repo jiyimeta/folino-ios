@@ -307,9 +307,9 @@ final class ReaderViewModel {
 
     // MARK: - Private
 
-    /// The live, ordered `ScoreItemID`s of the playlist being traversed, filtered to items that still exist.
-    /// Empty when standalone or when the playlist no longer exists.
-    private func currentPlaylistQueue() -> [Domain.ScoreItemID] {
+    /// The live, ordered `ScoreItemID`s of the playlist being traversed, filtered to items that still exist. Empty when
+    /// standalone or when the playlist no longer exists. Internal so `ReaderViewModel+PlaylistNavigation` can reach it.
+    func currentPlaylistQueue() -> [Domain.ScoreItemID] {
         guard let playlistID,
               let playlist = repository.playlists.first(where: { $0.id == playlistID })
         else { return [] }
