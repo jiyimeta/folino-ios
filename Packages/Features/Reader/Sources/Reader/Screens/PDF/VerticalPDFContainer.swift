@@ -2,108 +2,123 @@ import PDFKit
 import PencilKit
 import SwiftUI
 
-/// Vertical-continuous PDF viewing. Pages are stacked at viewport width and scrolled vertically, riding the shared
-/// `ScoreScrollHost` scroll/pinch infrastructure so zoom and gestures match the score reader. Distinct from the score
-/// vertical *reflow* (PDFs are fixed-layout): here "vertical" just means a continuous scroll of fixed pages.
+/// Vertical-continuous PDF viewing. Pages are stacked top-to-bottom at their natural sizes; the whole stack is
+/// fit-to-width and zoomed via `scaleEffect` (vector `PDFPageCanvas`, sharp at any zoom), riding the shared
+/// `VerticalReaderShell` so scroll / pinch / annotation match the score vertical reader. "Vertical" here means a
+/// continuous scroll of fixed pages — PDFs are fixed-layout, so there is no reflow.
+///
+/// Committed zoom is applied by `scaleEffect` (not baked into page widths), so the page geometry — and therefore the
+/// annotation page frames — live in one UNZOOMED content space. This mirrors `VerticalZoomedSurface`'s composition
+/// exactly, which lets the annotation canvas reuse the score vertical reader's proven pivot geometry.
 struct VerticalPDFContainer: View {
     let document: PDFDocument
     @Bindable var viewModel: ReaderViewModel
 
-    @State private var provider: PDFPageProvider?
-    @State private var contentOffset: CGPoint = .zero
+    @State private var liveScrollOffset: CGPoint = .zero
     @State private var contentInsetTop: CGFloat = 0
     @State private var pendingScroll: ScoreScrollCommand?
     @State private var pinch = PinchState()
+    @State private var pinchSession: VerticalPinchSession?
+    /// Mirror of `viewModel.viewportZoom` set OUTSIDE `withAnimation` (by the shell's commit) so `expectedContentSize`
+    /// reads the final committed value, not SwiftUI's interpolated values during a commit transition. Mirrors the score
+    /// vertical container.
     @State private var committedZoom: CGFloat = 1
-    /// The annotation model projected to the current page geometry (committed-zoom-scaled stack). Recomputed on load /
-    /// page-count / committed-zoom change — NOT on scroll/pinch — and kept equal to the live ink while the user draws,
-    /// so the canvas seed never round-trips and wipes an in-progress stroke. Passed to the canvas as the seed drawing.
+    /// The annotation model projected to the current (unzoomed) page geometry. Recomputed on load / appear — NOT on
+    /// scroll / pinch / zoom — and kept equal to the live ink while the user draws, so the canvas seed never
+    /// round-trips and wipes an in-progress stroke. Passed to the canvas as the seed drawing.
     @State private var projectedAnnotations = PKDrawing()
+
+    /// Vertical gap between stacked pages, in unzoomed content points.
+    private let pageGap: CGFloat = 8
 
     var body: some View {
         GeometryReader { geo in
-            let provider = ensureProvider()
-            let baseWidth = geo.size.width
-            ScoreScrollHost(
-                contentOffset: $contentOffset,
+            let viewport = geo.size
+            // Snapshot the page geometry once per render; the host-time closures below capture this stable value.
+            let sizes = pageSizes()
+            VerticalReaderShell(
+                viewModel: viewModel,
+                pinch: pinch,
+                viewport: viewport,
+                liveScrollOffset: $liveScrollOffset,
                 contentInsetTop: $contentInsetTop,
                 pendingScroll: $pendingScroll,
-                alwaysBounceVertical: true,
-                alwaysBounceHorizontal: false,
-                centerVertically: false,
-                centerHorizontally: true,
-                expectedContentSize: { expectedSize(provider: provider, baseWidth: baseWidth) },
-                onPinchBegan: { anchor, _ in
-                    pinch.cancelResetAnimation()
-                    pinch.anchor = anchor
-                    pinch.magnification = 1
-                },
-                onPinchChanged: { scale, _ in pinch.magnification = scale },
-                onPinchEnded: { scale, _, _ in
-                    committedZoom = clampZoom(committedZoom * scale)
-                    pinch.magnification = 1
-                },
-                annotationOverlay: annotationSpec(provider: provider, baseWidth: baseWidth),
+                committedZoom: $committedZoom,
+                pinchSession: $pinchSession,
+                expectedContentSize: { expectedSize(viewport: viewport, sizes: sizes) },
+                annotationOverlay: annotationSpec(viewport: viewport, sizes: sizes),
+                onPinchCommitDocWidth: { contentWidth(sizes: sizes) },
             ) {
-                pageStack(provider: provider, baseWidth: baseWidth)
-                    .scaleEffect(pinch.magnification, anchor: pinch.anchor)
+                VerticalPDFSurface(
+                    viewModel: viewModel,
+                    pinch: pinch,
+                    document: document,
+                    viewport: viewport,
+                    pageGap: pageGap,
+                    pageSizes: sizes,
+                )
             }
-            .onChange(of: committedZoom) { reproject(provider: provider, baseWidth: baseWidth) }
             // Reproject from the model on load (annotationDrawings populates async after the PDF appears) — but ONLY
-            // when not annotating. While annotating, the canvas is the source of truth; the user's own draw mutates
-            // `annotationDrawings`, and reseeding from the round-tripped model bytes would wipe the in-progress stroke
-            // (the score container avoids this by reprojecting only on layout change — for PDFs the load completes
-            // after the page geometry is ready, so the model is the only reliable post-load trigger).
+            // when not annotating. While annotating, the canvas is the source of truth; reseeding from the
+            // round-tripped model bytes would wipe the in-progress stroke. Page frames are unzoomed (fixed for the
+            // document), so — unlike the old raster impl — no zoom-commit reproject is needed.
             .onChange(of: viewModel.annotationDrawings) {
-                if !viewModel.isAnnotating { reproject(provider: provider, baseWidth: baseWidth) }
+                if !viewModel.isAnnotating { reproject(sizes: sizes) }
             }
-            .task(id: provider.pageCount) { reproject(provider: provider, baseWidth: baseWidth) }
+            .onAppear { reproject(sizes: sizes) }
         }
     }
 
-    private func pageStack(provider: PDFPageProvider, baseWidth: CGFloat) -> some View {
-        let width = baseWidth * committedZoom
-        return VStack(spacing: 8) {
-            ForEach(0 ..< provider.pageCount, id: \.self) { index in
-                PDFPageImage(provider: provider, index: index, width: width)
-            }
-        }
+    // MARK: Page geometry (unzoomed content space)
+
+    /// Natural mediaBox point sizes for every page, index-aligned with the document. `.zero` for an unreadable page.
+    private func pageSizes() -> [CGSize] {
+        (0 ..< document.pageCount).map { document.page(at: $0)?.bounds(for: .mediaBox).size ?? .zero }
     }
 
-    private func expectedSize(provider: PDFPageProvider, baseWidth: CGFloat) -> CGSize {
-        let width = baseWidth * committedZoom
-        var height: CGFloat = 0
-        for i in 0 ..< provider.pageCount {
-            let size = provider.pageSize(i)
-            height += size.height == 0 ? 0 : width * (size.height / size.width)
-            height += 8
-        }
+    /// The unzoomed content width — the widest page. Narrower pages are centered, preserving true relative page sizes.
+    private func contentWidth(sizes: [CGSize]) -> CGFloat {
+        sizes.map(\.width).max() ?? 0
+    }
+
+    /// The unzoomed stack size: width = widest page, height = Σ page heights + inter-page gaps.
+    private func unzoomedStackSize(sizes: [CGSize]) -> CGSize {
+        let width = sizes.map(\.width).max() ?? 0
+        let height = sizes.reduce(0) { $0 + $1.height } + pageGap * CGFloat(max(0, sizes.count - 1))
         return CGSize(width: width, height: height)
     }
 
-    /// Each page's frame in content space (committed-zoom-scaled stack coordinates) — the same frame `pageStack` lays
-    /// the pages into. Capture and display both normalize against these, so ink tracks pages across zoom commits.
-    /// Mirrors `expectedSize`'s height accumulation exactly (full width, 8pt gaps).
-    private func pageFrames(provider: PDFPageProvider, baseWidth: CGFloat) -> [CGRect] {
-        let width = baseWidth * committedZoom
+    /// Each page's frame in unzoomed content space (matching `VerticalPDFSurface`'s `VStack`: widest-page width,
+    /// centered, `pageGap` between). Capture and display normalize against these, so ink tracks pages. Unzoomed because
+    /// committed zoom is applied by `scaleEffect`, not baked into the geometry.
+    private func pageFrames(sizes: [CGSize]) -> [CGRect] {
+        let cw = sizes.map(\.width).max() ?? 0
         var frames: [CGRect] = []
         var y: CGFloat = 0
-        for i in 0 ..< provider.pageCount {
-            let size = provider.pageSize(i)
-            let height = size.width == 0 ? width : width * (size.height / size.width)
-            frames.append(CGRect(x: 0, y: y, width: width, height: height))
-            y += height + 8
+        for size in sizes {
+            frames.append(CGRect(x: (cw - size.width) / 2, y: y, width: size.width, height: size.height))
+            y += size.height + pageGap
         }
         return frames
     }
 
-    /// Opt-in annotation overlay config for the host. The `state` closure recomputes the canvas mirror geometry at call
-    /// time (read by the host's scroll/pinch sync), so it tracks without a SwiftUI render round-trip. The pages lay out
-    /// at the committed-zoom-scaled width and only the live `magnification` rides via `scaleEffect`, so the canvas's
-    /// content space IS the committed-zoom-scaled stack: `documentSize` is that stack size and `zoomScale` is the live
-    /// `magnification` only (committed zoom is already baked into the geometry).
-    private func annotationSpec(provider: PDFPageProvider, baseWidth: CGFloat) -> AnnotationOverlaySpec {
-        let frames = pageFrames(provider: provider, baseWidth: baseWidth)
+    /// Fit-to-width factor mapping the unzoomed content width to the viewport. No upper cap — a small page scales up to
+    /// fill the width, as a continuous PDF reader should.
+    private func fitFactor(viewport: CGSize, sizes: [CGSize]) -> CGFloat {
+        let cw = contentWidth(sizes: sizes)
+        return cw > 0 ? viewport.width / cw : 1
+    }
+
+    private func expectedSize(viewport: CGSize, sizes: [CGSize]) -> CGSize {
+        let stack = unzoomedStackSize(sizes: sizes)
+        let zoom = committedZoom * fitFactor(viewport: viewport, sizes: sizes)
+        return CGSize(width: stack.width * zoom, height: stack.height * zoom)
+    }
+
+    // MARK: Annotation
+
+    private func annotationSpec(viewport: CGSize, sizes: [CGSize]) -> AnnotationOverlaySpec {
+        let frames = pageFrames(sizes: sizes)
         return AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
@@ -111,67 +126,92 @@ struct VerticalPDFContainer: View {
             onChange: { drawing in
                 // The canvas is the source of truth while drawing: keep the displayed projection equal to the live ink
                 // so the next render's `applyDrawing` is a no-op (mirrors `VerticalScoreContainer`). The model is still
-                // captured for persistence; load / zoom-commit reproject from the model via `reproject`.
+                // captured for persistence; load reprojects from the model via `reproject`.
                 projectedAnnotations = drawing
                 viewModel.annotationDrawingsDidChange(
                     PDFAnnotationAnchoring.capture(strokes: drawing.strokes, pageFrames: frames),
                 )
             },
-            state: {
-                let m = pinch.magnification
-                let size = expectedSize(provider: provider, baseWidth: baseWidth) // committed-zoom-scaled stack
-                let slack: CGFloat = 100_000
-                return AnnotationCanvasState(
-                    documentSize: size,
-                    zoomScale: m,
-                    contentOffsetBias: CGPoint(
-                        x: -pinch.anchor.x * size.width * (1 - m),
-                        y: -pinch.anchor.y * size.height * (1 - m),
-                    ),
-                    contentInset: UIEdgeInsets(top: slack, left: slack, bottom: slack, right: slack),
-                )
-            },
+            state: { annotationCanvasState(viewport: viewport, sizes: sizes) },
         )
     }
 
-    private func reproject(provider: PDFPageProvider, baseWidth: CGFloat) {
+    /// Mirror geometry for the annotation canvas, matching `VerticalScoreContainer.annotationCanvasState` with no
+    /// padding (the page stack has none): `documentSize` is the unzoomed stack, `zoomScale` folds committed zoom × fit
+    /// × live magnification, and the contentOffset bias reproduces the live pinch pivot. The host adds the scroll
+    /// view's real contentOffset to the bias.
+    private func annotationCanvasState(viewport: CGSize, sizes: [CGSize]) -> AnnotationCanvasState {
+        let stack = unzoomedStackSize(sizes: sizes)
+        guard stack.width > 0, stack.height > 0 else {
+            return AnnotationCanvasState(
+                documentSize: .zero, zoomScale: 1, contentOffsetBias: .zero, contentInset: .zero,
+            )
+        }
+        let zoomC = viewModel.viewportZoom * fitFactor(viewport: viewport, sizes: sizes) // committed zoom, no live mag
+        let m = pinch.magnification
+        let z = zoomC * m
+        let anchorTermX = pinch.anchor.x * stack.width * (1 - m) * zoomC
+        let anchorTermY = pinch.anchor.y * stack.height * (1 - m) * zoomC
+        // A large symmetric inset keeps the (anchor-shifted) contentOffset inside PencilKit's valid range so it is
+        // never clamped during a pinch. The canvas's own pan is disabled, so the extra scroll range is unreachable.
+        let slack: CGFloat = 100_000
+        return AnnotationCanvasState(
+            documentSize: stack,
+            zoomScale: z,
+            contentOffsetBias: CGPoint(x: -anchorTermX - pinch.offsetX, y: -anchorTermY),
+            contentInset: UIEdgeInsets(top: slack, left: slack, bottom: slack, right: slack),
+        )
+    }
+
+    private func reproject(sizes: [CGSize]) {
         projectedAnnotations = PDFAnnotationAnchoring.display(
-            viewModel.annotationDrawings,
-            pageFrames: pageFrames(provider: provider, baseWidth: baseWidth),
+            viewModel.annotationDrawings, pageFrames: pageFrames(sizes: sizes),
         )
-    }
-
-    private func ensureProvider() -> PDFPageProvider {
-        if let provider { return provider }
-        let new = PDFPageProvider(document: document)
-        DispatchQueue.main.async { provider = new }
-        return new
-    }
-
-    private func clampZoom(_ z: CGFloat) -> CGFloat {
-        min(max(z, 1), 6)
     }
 }
 
-/// One page rendered at `width` points. Re-rasterizes via the provider whenever the on-screen width (× display scale)
-/// changes, so content is sharp at the committed zoom level.
-private struct PDFPageImage: View {
-    let provider: PDFPageProvider
-    let index: Int
-    let width: CGFloat
-    @Environment(\.displayScale) private var displayScale
+/// The hosted PDF page stack. A separate `View` (like `VerticalZoomedSurface`) so it reads `pinch.*` /
+/// `viewModel.viewportZoom` directly and SwiftUI observation delivers animated commit updates inside the
+/// `ScoreScrollHost`, rather than through `rootView` reassignment (which drops the animation transaction). Pages are
+/// laid out at their natural sizes; the committed zoom × fit-to-width scale is applied here via `scaleEffect`, matching
+/// `VerticalZoomedSurface` so the annotation overlay's pivot geometry is identical.
+private struct VerticalPDFSurface: View {
+    @Bindable var viewModel: ReaderViewModel
+    @Bindable var pinch: PinchState
+    let document: PDFDocument
+    let viewport: CGSize
+    let pageGap: CGFloat
+    let pageSizes: [CGSize]
 
     var body: some View {
-        let size = provider.pageSize(index)
-        let height = size.width == 0 ? width : width * (size.height / size.width)
-        let targetScale = max(0.1, (width / max(size.width, 1)) * displayScale)
-        return Group {
-            if let cg = provider.image(pageIndex: index, targetScale: targetScale) {
-                Image(decorative: cg, scale: displayScale).resizable()
-            } else {
-                Color(.secondarySystemBackground)
+        let cw = pageSizes.map(\.width).max() ?? 0
+        let stackHeight = pageSizes.reduce(0) { $0 + $1.height } + pageGap * CGFloat(max(0, pageSizes.count - 1))
+        let zoom = cw > 0 ? viewModel.viewportZoom * (viewport.width / cw) : viewModel.viewportZoom
+        return pageStack(contentWidth: cw)
+            .scaleEffect(pinch.magnification, anchor: pinch.anchor)
+            .scaleEffect(zoom, anchor: .topLeading)
+            .offset(x: pinch.offsetX, y: 0)
+            .frame(width: cw * zoom, height: stackHeight * zoom, alignment: .topLeading)
+    }
+
+    private func pageStack(contentWidth: CGFloat) -> some View {
+        VStack(spacing: pageGap) {
+            ForEach(0 ..< pageSizes.count, id: \.self) { index in
+                pageView(index: index)
             }
         }
-        .frame(width: width, height: height)
+        .frame(width: contentWidth, alignment: .center)
+    }
+
+    @ViewBuilder
+    private func pageView(index: Int) -> some View {
+        let size = pageSizes[index]
+        if let page = document.page(at: index), size.width > 0, size.height > 0 {
+            PDFPageCanvas(page: page)
+                .frame(width: size.width, height: size.height)
+        } else {
+            Color(.secondarySystemBackground)
+                .frame(width: max(size.width, 1), height: max(size.height, 1))
+        }
     }
 }
