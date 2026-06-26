@@ -12,6 +12,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private let versionHistoryLoader: any VersionHistoryLoader
     private let onVersionHistoryViewed: @MainActor () -> Void
     private let crashReporter: any CrashReporter
+    private let analytics: any Analytics
     @Environment(\.dismiss) private var dismiss
 
     public init(
@@ -19,12 +20,14 @@ public struct SettingsSheet<LicenseContent: View>: View {
         versionHistoryLoader: any VersionHistoryLoader = DefaultVersionHistoryLoader(),
         onVersionHistoryViewed: @escaping @MainActor () -> Void = {},
         crashReporter: any CrashReporter = NoopCrashReporter(),
+        analytics: any Analytics = NoopAnalytics(),
         @ViewBuilder licenseContent: @escaping () -> LicenseContent,
     ) {
         self.provider = provider
         self.versionHistoryLoader = versionHistoryLoader
         self.onVersionHistoryViewed = onVersionHistoryViewed
         self.crashReporter = crashReporter
+        self.analytics = analytics
         self.licenseContent = licenseContent
     }
 
@@ -32,7 +35,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
         NavigationStack {
             Form {
                 ReaderSettingsSection(provider: provider)
-                PrivacySettingsSection(crashReporter: crashReporter)
+                PrivacySettingsSection(crashReporter: crashReporter, analytics: analytics)
                 AboutSettingsSection(
                     versionHistoryLoader: versionHistoryLoader,
                     onVersionHistoryViewed: onVersionHistoryViewed,

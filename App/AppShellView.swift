@@ -244,6 +244,7 @@ private struct ReadyShell: View {
                 provider: bootstrap.museScoreGeneralProvider,
                 onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
                 crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
+                analytics: bootstrap.analytics ?? NoopAnalytics(),
             ) {
                 LicenseListView()
             }

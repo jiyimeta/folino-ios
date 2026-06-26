@@ -287,6 +287,74 @@
         }
       }
     },
+    "settings.privacy.analytics.footer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Helps improve folino by sharing anonymous usage trends. Your scores' contents are never collected."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匿名の使用傾向を共有して folino の改善に役立てます。楽譜の内容は一切収集されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "익명 사용 추세를 공유해 folino 개선에 도움을 줍니다. 악보 내용은 절대 수집되지 않습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享匿名使用趋势以帮助改进 folino。绝不收集乐谱内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享匿名使用趨勢以協助改進 folino。絕不收集樂譜內容。"
+          }
+        }
+      }
+    },
+    "settings.privacy.analytics.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share usage analytics"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用状況の分析を共有"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용 통계 공유"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享使用情况分析"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享使用情況分析"
+          }
+        }
+      }
+    },
     "settings.privacy.title" : {
       "localizations" : {
         "en" : {
