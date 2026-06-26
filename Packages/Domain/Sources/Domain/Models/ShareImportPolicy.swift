@@ -1,10 +1,10 @@
 import Foundation
 
 /// The score file extensions folino accepts on import. Single source of truth shared by the iOS Share Extension
-/// ingest gate and the Android share transport (`mscz, mscx, musicxml, mxl, xml, midi, mid`).
+/// ingest gate and the Android share transport (`mscz, mscx, musicxml, mxl, xml, midi, mid, pdf`).
 public enum ShareImportPolicy {
     public static let acceptedExtensions: Set = [
-        "mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid",
+        "mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid", "pdf",
     ]
 
     /// `true` when `filename`'s extension is in the allow-list (case-insensitive).
