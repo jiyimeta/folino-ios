@@ -42,8 +42,12 @@ struct ReaderTopOverlay: View {
             if case let .loaded(score) = viewModel.loadState {
                 loadedActions(score: score)
             } else if case .loadedPDF = viewModel.loadState {
-                pdfLayoutButton
-                    .glassEffect(.regular.interactive())
+                HStack(spacing: 12) {
+                    annotationToggleButton()
+                        .glassEffect(.regular.interactive())
+                    pdfLayoutButton
+                        .glassEffect(.regular.interactive())
+                }
             }
         }
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)

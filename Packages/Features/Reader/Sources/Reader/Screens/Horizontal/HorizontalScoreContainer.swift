@@ -129,36 +129,30 @@ struct HorizontalScoreContainer: View {
         let session = pinchSession ?? PinchSession(baseZoom: viewModel.viewportZoom)
         pinchSession = nil
 
-        let combined = session.baseZoom * magnification
-        let targetZoom: CGFloat = combined < 1.05 ? 1.0 : combined
-        let ratio = targetZoom / session.baseZoom
-
+        let r = ReaderPinchCommit.resolve(PinchCommitInput(
+            baseZoom: session.baseZoom, magnification: magnification,
+            startLocation: startLocation, currentOffset: currentOffset,
+            offsetX: 0, offsetY: pinch.offsetY,
+        ))
         // Pre-compute the post-commit contentInset.top so we can clamp `scrollToTarget.y` against the actual valid
         // contentOffset range — UIScrollView would otherwise re-clamp on the next layout pass, visible as a one-frame
         // upward jump.
         let docHeight = document?.size.height ?? 0
-        let postFramedH = (docHeight + scorePadding * 2) * targetZoom
+        let postFramedH = (docHeight + scorePadding * 2) * r.targetZoom
         let postInsetTop = max(0, (viewport.height - postFramedH) / 2)
+        let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(-postInsetTop, r.rawScrollTarget.y))
 
-        let scrollToTarget = CGPoint(
-            x: max(0, currentOffset.x + startLocation.x * (ratio - 1)),
-            y: max(-postInsetTop, currentOffset.y + startLocation.y * (ratio - 1) - pinch.offsetY),
-        )
-
-        let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
-        if isBounceBack {
+        if r.isBounceBack {
             withAnimation(.smooth(duration: 0.18)) {
                 pinch.magnification = 1.0
                 pinch.offsetY = 0
             }
         } else {
-            committedZoom = targetZoom
+            committedZoom = r.targetZoom
             pendingScroll = .immediate(scrollToTarget)
-            let snapToUnit = targetZoom <= 1.0
-            if snapToUnit {
-                let compensatedMag = combined / targetZoom
+            if r.snapToUnit {
                 viewModel.resetZoom()
-                pinch.magnification = compensatedMag
+                pinch.magnification = r.compensatedMag
                 DispatchQueue.main.async {
                     withAnimation(.smooth(duration: 0.18)) {
                         pinch.magnification = 1.0
@@ -166,7 +160,7 @@ struct HorizontalScoreContainer: View {
                     }
                 }
             } else {
-                viewModel.viewportZoom = targetZoom
+                viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
                 pinch.anchor = .center
 

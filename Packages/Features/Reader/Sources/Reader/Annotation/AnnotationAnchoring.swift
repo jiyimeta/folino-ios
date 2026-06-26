@@ -63,7 +63,7 @@ enum AnnotationAnchoring {
             // (see `display` for why a transform-only round-trip clamps under zoom).
             var normalized = PKDrawing(strokes: [stroke])
             normalized.transform(using: normalize)
-            return DrawingAnchor(anchor: anchor, encodedDrawing: normalized.dataRepresentation())
+            return DrawingAnchor(kind: .musical(anchor), encodedDrawing: normalized.dataRepresentation())
         }
     }
 
@@ -72,7 +72,8 @@ enum AnnotationAnchoring {
     static func display(_ drawings: [DrawingAnchor], in document: LayoutDocument) -> PKDrawing {
         var strokes: [PKStroke] = []
         for drawing in drawings {
-            guard let denormalize = displayTransform(for: drawing.anchor, in: document) else { continue }
+            guard case let .musical(anchor) = drawing.kind else { continue }
+            guard let denormalize = displayTransform(for: anchor, in: document) else { continue }
             guard var stored = try? PKDrawing(data: drawing.encodedDrawing) else { continue }
             // BAKE the denormalize into the stroke geometry (not a per-stroke `transform`): PencilKit derives its
             // renderable content extent from the path bounds and ignores the per-stroke transform, so a normalized

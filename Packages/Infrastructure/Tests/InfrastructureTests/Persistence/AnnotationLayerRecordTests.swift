@@ -19,7 +19,7 @@ struct AnnotationLayerRecordTests {
         return AnnotationLayer(
             scoreItemID: ScoreItemID(),
             drawings: [
-                DrawingAnchor(anchor: anchor, encodedDrawing: Data([0xDE, 0xAD, 0xBE, 0xEF])),
+                DrawingAnchor(kind: .musical(anchor), encodedDrawing: Data([0xDE, 0xAD, 0xBE, 0xEF])),
             ],
             textBoxes: [
                 TextBoxAnchor(anchor: anchor, text: "fingering"),

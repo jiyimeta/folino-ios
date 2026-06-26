@@ -213,30 +213,25 @@ struct PagedScoreContainer: View {
         let session = pinchSession ?? PinchSession(baseZoom: viewModel.viewportZoom)
         pinchSession = nil
 
-        let combined = session.baseZoom * magnification
-        let targetZoom: CGFloat = combined < 1.05 ? 1.0 : combined
-        let ratio = targetZoom / session.baseZoom
+        let r = ReaderPinchCommit.resolve(PinchCommitInput(
+            baseZoom: session.baseZoom, magnification: magnification,
+            startLocation: startLocation, currentOffset: currentOffset,
+            offsetX: pinch.offsetX, offsetY: pinch.offsetY,
+        ))
+        let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
 
-        let scrollToTarget = CGPoint(
-            x: max(0, currentOffset.x + startLocation.x * (ratio - 1) - pinch.offsetX),
-            y: max(0, currentOffset.y + startLocation.y * (ratio - 1) - pinch.offsetY),
-        )
-
-        let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
-        if isBounceBack {
+        if r.isBounceBack {
             withAnimation(.smooth(duration: 0.18)) {
                 pinch.magnification = 1.0
                 pinch.offsetX = 0
                 pinch.offsetY = 0
             }
         } else {
-            committedZoom = targetZoom
+            committedZoom = r.targetZoom
             pendingScroll = .immediate(scrollToTarget)
-            let snapToUnit = targetZoom <= 1.0
-            if snapToUnit {
-                let compensatedMag = combined / targetZoom
+            if r.snapToUnit {
                 viewModel.resetZoom()
-                pinch.magnification = compensatedMag
+                pinch.magnification = r.compensatedMag
                 DispatchQueue.main.async {
                     withAnimation(.smooth(duration: 0.18)) {
                         pinch.magnification = 1.0
@@ -245,7 +240,7 @@ struct PagedScoreContainer: View {
                     }
                 }
             } else {
-                viewModel.viewportZoom = targetZoom
+                viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
                 pinch.anchor = .center
                 pinch.offsetX = 0
