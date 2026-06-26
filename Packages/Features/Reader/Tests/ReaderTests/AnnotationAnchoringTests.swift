@@ -1,5 +1,6 @@
 import CoreGraphics
 import Domain
+import PencilKit
 @testable import Reader
 import SheetMusicCore
 import SheetMusicLayout
@@ -100,5 +101,69 @@ struct AnnotationAnchoringTests {
         let (anchor, _) = try #require(AnnotationAnchoring.normalizeTransform(forCentroid: centroid, in: wrap))
         // The same musical anchor resolves to a concrete point in the natural-width layout (non-nil display transform).
         #expect(AnnotationAnchoring.displayTransform(for: anchor, in: natural) != nil)
+    }
+
+    @Test
+    func `partitionByPage splits anchors by resolved y-band`() throws {
+        let d = doc()
+        // Two anchors: one on measure 0, one on measure 1. Resolve their points to pick a split band.
+        let p0 = try #require(
+            d.anchorReferencePoint(measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0)?.point,
+        )
+        let m0 = MusicalAnchor(
+            measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0, dxSp: 0, verticalOffsetSp: 0,
+        )
+        let m1 = MusicalAnchor(
+            measureIndex: 1, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0, dxSp: 0, verticalOffsetSp: 0,
+        )
+        let a0 = DrawingAnchor(kind: .musical(m0), encodedDrawing: Data())
+        let a1 = DrawingAnchor(kind: .musical(m1), encodedDrawing: Data())
+        // Band covering p0.y only (single-system layout => both share a y; widen band to include both,
+        // then a zero-height band to exclude).
+        let all = AnnotationAnchoring.partitionByPage([a0, a1], in: d, pageStartY: p0.y - 1, pageEndY: p0.y + 1)
+        #expect(all.onPage.count + all.offPage.count == 2)
+        // A band strictly below every anchor puts all of them off-page; none are dropped.
+        let none = AnnotationAnchoring.partitionByPage([a0, a1], in: d, pageStartY: 1_000_000, pageEndY: 2_000_000)
+        #expect(none.onPage.isEmpty)
+        #expect(none.offPage.count == 2)
+    }
+
+    @Test
+    func `capturePaged then displayPaged round-trips a band-space stroke`() throws {
+        let d = doc()
+        let pageStartY: CGFloat = 0
+        let contentPadding: CGFloat = 12
+        // A stroke sitting on the first staff, expressed in band space (doc point + padding, minus pageStartY).
+        let docPoint = try #require(
+            d.anchorReferencePoint(measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0)?.point,
+        )
+        let bandPoint = CGPoint(x: docPoint.x + contentPadding, y: docPoint.y - pageStartY)
+        let stroke = PaintTestSupport.dot(at: bandPoint)
+        let captured = AnnotationAnchoring.capturePaged(
+            strokes: [stroke], in: d, pageStartY: pageStartY, contentPadding: contentPadding,
+        )
+        #expect(captured.count == 1)
+        let pageEndY = d.size.height
+        let shown = AnnotationAnchoring.displayPaged(
+            captured, in: d, pageStartY: pageStartY, pageEndY: pageEndY, contentPadding: contentPadding,
+        )
+        let outPoint = try #require(shown.strokes.first?.renderBounds.center)
+        #expect(abs(outPoint.x - bandPoint.x) < 1.0)
+        #expect(abs(outPoint.y - bandPoint.y) < 1.0)
+    }
+
+    @Test
+    func `displayPaged skips anchors off the page band`() throws {
+        let d = doc()
+        let docPoint = try #require(
+            d.anchorReferencePoint(measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0)?.point,
+        )
+        let stroke = PaintTestSupport.dot(at: CGPoint(x: docPoint.x + 12, y: docPoint.y))
+        let captured = AnnotationAnchoring.capturePaged(strokes: [stroke], in: d, pageStartY: 0, contentPadding: 12)
+        // A band far below the stroke yields no displayed strokes.
+        let shown = AnnotationAnchoring.displayPaged(
+            captured, in: d, pageStartY: 1_000_000, pageEndY: 2_000_000, contentPadding: 12,
+        )
+        #expect(shown.strokes.isEmpty)
     }
 }
