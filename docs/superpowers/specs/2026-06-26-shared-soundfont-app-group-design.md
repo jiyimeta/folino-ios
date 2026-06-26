@@ -8,9 +8,10 @@ Status: Approved (brainstorming)
 Stop Folino and VocalTuner from each downloading and storing their own private copy of the same ~206 MB
 `MuseScore_General.sf2` high-quality SoundFont. Move the asset into a **shared App Group container** so whichever app
 fetches it first, the other reuses it — saving ~206 MB of duplicated storage and one redundant ~206 MB download per
-device.
+device. Because the file is now shared, reclaiming it on opt-out is **reference-counted** so one app's opt-out never
+strands the other.
 
-This spec covers **soundfont sharing only**. Sharing the user's score files (`Scores/` subfolder, reconciling
+This spec covers **soundfont sharing only**. Sharing the user's score files (a `Scores/` subfolder; reconciling
 GRDB vs Realm metadata) is explicitly a later, separate spec (see [Out of scope](#out-of-scope)).
 
 ## Background — current state
@@ -30,245 +31,294 @@ https://github.com/jiyimeta/musescore-general-sf2-split/releases/download/unspli
 - `AppPaths.soundfontsDirectory` resolves to the app's **private sandbox**: `Library/Application
   Support/Soundfonts/`. The file lands at `Library/Application Support/Soundfonts/MuseScore_General.sf2`
   (`SoundfontPreset.highQuality.fileName`).
-- The download is already robust: it writes to a scratch temp, validates the HTTP status (rejects non-2xx), then
-  atomically `moveItem`s into place and sets `isExcludedFromBackup = true`. `init` derives `downloadState` from a file
-  existence check, and `startDownloadIfNeeded()` short-circuits to `.downloaded` when the file already exists.
+- The download is robust: scratch temp → HTTP-status check → atomic `moveItem` into place → `isExcludedFromBackup`.
+  `init` derives `downloadState` from a file existence check; `startDownloadIfNeeded()` short-circuits to `.downloaded`
+  when the file already exists.
+- **Opt-out deletes the file**: `setOptedIn(false)` → `deleteDownloaded()` → `removeItem(targetFileURL)`.
 - `GMSoundfontResolver` reads the file via the provider's `museScoreGeneralFileURLSync` (nonisolated, audio-thread
   safe); when absent it falls back to bundled split SF2s.
 - `App/Folino.entitlements` already declares an App Group (`group.com.KeyNumber.Folino`, used by the Share Extension)
-  plus iCloud/CloudKit.
-- **Existing users already have the 206 MB file in the private sandbox location.** This is the hard constraint: the
-  change must not strand that file or trigger a re-download.
+  plus iCloud/CloudKit. `App/Info.plist` already declares a custom URL scheme **`folino`** (`CFBundleURLTypes`).
+- **Existing users already have the 206 MB file in the private sandbox location.** Hard constraint: the change must not
+  strand that file or trigger a re-download.
 
 ### VocalTuner (soundfont feature NOT yet released)
 
-- Stores the same asset at `Library/Application Support/Soundfonts/MuseScore_General_v1.sf2` via
-  `SoundfontPaths.soundfontsDirectory(_:)` + `LiveSoundfontResolver` (`Live/Sources/LiveSheetMusic/`), opt-in via the
-  `soundfont.museScoreGeneral.optedIn` UserDefault.
-- Has **no** App Group / iCloud entitlement today (push only). Because the feature is unreleased, **no real user has the
-  file yet** → VocalTuner is effectively greenfield and needs no migration for end users.
+- `Domain/Sources/Domain/Soundfont/SoundfontPaths.swift` is a single source of truth (`enum SoundfontPaths`) for the
+  filename, directory, opt-in key, and validation. The file lands at `Library/Application
+  Support/Soundfonts/MuseScore_General_v1.sf2`. The `_v1` suffix is a **deliberate** cache-invalidation token (comment:
+  "bump the suffix to invalidate old copies").
+- `LiveMuseScoreGeneralProvider` (`Features/.../Helper/`, singleton `.shared`) mirrors Folino's provider but uses a
+  **background** `URLSession` (survives app kill), already validates `minimumValidByteSize` (150 MB), atomic-moves, and
+  sets `isExcludedFromBackup`. `LiveSoundfontResolver` reads `SoundfontPaths.highQualityFileURL` / `highQualityFileExists`.
+- **Opt-out deletes the file** after a 90 s grace window (`scheduleGraceDelete()` → `deleteDownloaded()`), with a
+  launch cleanup for a marker that survived a kill.
+- Has **no** App Group / iCloud entitlement today (push only) and **no** custom URL scheme. Because the feature is
+  unreleased, **no real user has the file yet** → effectively greenfield, no end-user migration.
 - Has a macOS target. Folino is iOS-only, so cross-app sharing is **iOS-only**; VocalTuner's macOS app is out of scope.
 
 ## Design
 
 ### 1. Shared App Group & container layout
 
-A new App Group **`group.com.KeyNumber.shared`** is added to both apps' iOS targets. Both apps already share the team,
-so this is purely an entitlement + provisioning addition.
-
-Container layout (room reserved for the future score-sharing spec):
+A new App Group **`group.com.KeyNumber.shared`** is added to both apps' iOS targets (same team → entitlement +
+provisioning addition only).
 
 ```
 group.com.KeyNumber.shared container/
 └── Soundfonts/
-    └── MuseScore_General.sf2        ← the shared 206 MB asset (canonical name)
+    ├── MuseScore_General.sf2          ← the shared 206 MB asset (canonical, unversioned name)
+    └── consumers/
+        ├── com.KeyNumber.Folino       ← opt-in marker (present ⇔ Folino is opted in)
+        └── com.KeyNumber.VocalTuner    ← opt-in marker (present ⇔ VocalTuner is opted in)
 ```
 
-Rationale for a neutral, broadly-scoped group name (`shared` rather than `sheetmusic`/`music`): the group ID is the
-root of the container path, so renaming it later forces another data migration. A vague-but-stable name avoids that
-churn. Different data types live in **subfolders of one group**, not separate groups — a new App Group is warranted only
-when a *different set of apps* needs to share something (membership change), since each new group costs an App ID
-capability edit + provisioning regen + re-release of every participating app.
+`Scores/` is reserved for the future score-sharing spec. Rationale for the neutral, broadly-scoped group name
+`shared` (chosen over `sheetmusic`/`music`): the group ID roots the container path, so renaming forces another data
+migration; a vague-but-stable name avoids that churn. Different data types live in **subfolders of one group**, not
+separate groups — a new App Group is warranted only when a *different set of apps* needs to share something.
 
 ### 2. Canonical asset & naming
 
-- Canonical filename in the shared container is **`MuseScore_General.sf2`** — identical to Folino's current name, so
-  Folino's migration is a pure move with no rename. VocalTuner changes its constant from `MuseScore_General_v1.sf2` to
-  this name. (Implementation note: confirm VocalTuner's `_v1` is just a local label, not a live versioning scheme; both
-  apps fetch the same unsplit release, so the bytes are identical.)
-- The group ID string and the `Soundfonts/MuseScore_General.sf2` relative path are duplicated as small constants in each
-  repo (the two apps are different stacks — Folino SPM/GRDB, VocalTuner CocoaPods/Realm — so no shared Swift module is
-  introduced for a single path string). Each repo's constant carries a comment pointing at the other.
-- **Validity check** used throughout: a soundfont at a path is "valid" iff it exists **and** its file size is at least a
-  conservative threshold (≥ 150 MB; `SoundfontPreset.highQuality.expectedSize` is 206 MB). This rejects truncated /
-  partial / error-body files so the reconcile never moves or trusts a corrupt copy.
+- Canonical filename is **`MuseScore_General.sf2`** (unversioned) — identical to Folino's current name, so Folino's
+  migration is a pure move with no rename. VocalTuner changes its `SoundfontPaths.highQualityFileName` from
+  `MuseScore_General_v1.sf2` to this name and drops the `_v1` versioning comment. Per-app filename versioning is
+  meaningless for a shared asset; a future SF2 swap is invalidated by **both apps coordinating a rename** of the shared
+  canonical name together (the cross-app analogue of the old suffix bump). Both apps fetch the same unsplit release
+  today, so the bytes are identical.
+- The group ID string and the `Soundfonts/…` relative paths are duplicated as small constants in each repo (the two
+  apps are different stacks — Folino SPM/GRDB, VocalTuner CocoaPods/Realm — so no shared Swift module is introduced).
+  Each repo's constant carries a comment pointing at the other.
+- **Validity check** used throughout: a soundfont at a path is "valid" iff it exists **and** its file size is ≥ 150 MB
+  (`SoundfontPreset.highQuality.expectedSize` is 206 MB; VocalTuner's `SoundfontPaths.minimumValidByteSize` is 150 MB).
+  This rejects truncated / partial / error-body files so nothing trusts or moves a corrupt copy.
 
 ### 3. Folino — directory resolution (`AppPaths`)
 
-`AppPaths` gains a shared-container resolver and keeps the legacy path as a named fallback:
-
 ```swift
-// Shared App Group container's Soundfonts dir. nil when the container is unavailable
-// (e.g. an entitlement/provisioning gap) — callers must degrade, never crash.
-static var sharedSoundfontsDirectory: URL? {
+static var sharedSoundfontsDirectory: URL? {           // nil when the container is unavailable
     FileManager.default
         .containerURL(forSecurityApplicationGroupIdentifier: "group.com.KeyNumber.shared")?
         .appending(path: "Soundfonts")
 }
-
-// The pre-sharing private location (today's `soundfontsDirectory` body, renamed).
-// Migration source + degraded fallback.
-static var legacySoundfontsDirectory: URL {
+static var legacySoundfontsDirectory: URL {            // today's `soundfontsDirectory` body, renamed
     guard let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
         fatalError("Application Support directory unavailable — sandbox is broken")
     }
     return url.appending(path: "Soundfonts")
 }
-
-// Primary location used by the provider/resolver. Shared when available, else legacy.
-static var soundfontsDirectory: URL {
+static var soundfontsDirectory: URL {                  // shared when available, else legacy
     sharedSoundfontsDirectory ?? legacySoundfontsDirectory
 }
 ```
 
-The key property: **`LiveMuseScoreGeneralProvider` already takes its directory by injection**, so pointing
-`installAudioStack()` at the (now shared-aware) `AppPaths.soundfontsDirectory` is the only wiring change. The provider,
-resolver, download, and state machine are otherwise untouched. The fallback is at the *path-resolution* level, not
-inside the provider, which keeps the provider single-directory and simple.
+`LiveMuseScoreGeneralProvider` already takes its directory by injection, so pointing `installAudioStack()` at the
+(now shared-aware) `AppPaths.soundfontsDirectory` is the only wiring change for playback. The fallback is at the
+path-resolution level, keeping the provider single-directory and simple.
 
 ### 4. Folino — idempotent reconcile migration
 
-A new bootstrap step runs **after `prepareDirectories()` and before `installAudioStack()`** (so the provider is
-constructed already pointing at the reconciled directory). It is existence-driven (no "did I migrate" boolean) so it
-self-heals and is safe to run every launch:
+Runs in `AppBootstrap.start()` **after `prepareDirectories()` / `cleanupLegacySoundfontCacheIfNeeded()` and before
+`installAudioStack()`**. Existence-driven (no "did I migrate" boolean) so it self-heals and is safe every launch:
 
 ```
 reconcileSoundfontToSharedContainerIfNeeded():
     guard let shared = AppPaths.sharedSoundfontsDirectory else { return }   // nil container → keep legacy, no-op
-    create `shared` dir (withIntermediateDirectories) and set isExcludedFromBackup on it
+    create `shared`, set isExcludedFromBackup on it
     sharedFile = shared / "MuseScore_General.sf2"
     legacyFile = AppPaths.legacySoundfontsDirectory / "MuseScore_General.sf2"
 
-    // ① Populate shared (only when shared is empty/invalid and legacy is a valid copy)
+    // ① Populate shared only when shared is empty/invalid and legacy is a valid copy
     if !isValid(sharedFile) && isValid(legacyFile):
-        try? FileManager.moveItem(legacyFile → sharedFile)   // intra-volume rename: instant, atomic, no 206 MB copy
+        try? moveItem(legacyFile → sharedFile)      // intra-volume rename: instant, atomic, no 206 MB copy
         reapply isExcludedFromBackup on sharedFile
 
-    // ② Remove the redundant legacy copy (covers the "VocalTuner downloaded first" case)
-    if isValid(sharedFile) && FileManager.fileExists(legacyFile):
-        try? FileManager.removeItem(legacyFile)
+    // ② Remove the redundant legacy copy (covers "VocalTuner downloaded first")
+    if isValid(sharedFile) && fileExists(legacyFile):
+        try? removeItem(legacyFile)
 ```
 
-- The move is a rename within the same data volume (the App Group container and the app sandbox live on the same
-  volume on iOS), so it is an instant metadata operation, not a 206 MB copy, and is atomic (no half-moved state). Run it
-  off the main thread regardless to avoid any chance of UI jank.
-- Step ② is the fix for the order-dependent duplicate: if VocalTuner already populated `shared`, step ① is skipped, and
-  step ② deletes the now-redundant legacy copy. Legacy is only ever deleted **after** `shared` is confirmed valid.
-- Every filesystem call is `try?` — any failure leaves the legacy file in place, and the resolver still finds a working
-  copy (see §6 nil-container / failure degradation). The migration retries next launch.
+The move is an intra-volume rename (container and sandbox share the data volume on iOS) — instant, atomic, no
+206 MB copy; run it off the main thread regardless. Step ② is the duplicate fix: if VocalTuner already populated
+`shared`, ① is skipped and ② deletes the redundant legacy copy. Legacy is deleted only **after** `shared` is confirmed
+valid. Every call is `try?`; any failure leaves the legacy file in place and the resolver still finds a working copy.
 
-### 5. Folino — entitlements
+Implemented as a pure, testable type `SoundfontContainerMigration` in the Soundfonts Infrastructure module (takes
+`fileName`, `sharedDirectory`, `legacyDirectory`, `minimumValidByteSize`, `fileManager`); `AppBootstrap` resolves the
+real directories via `AppPaths` and calls it.
 
-Add `group.com.KeyNumber.shared` to `App/Folino.entitlements`, **keeping** the existing `group.com.KeyNumber.Folino`
-(an app may belong to multiple groups). The Share Extension does not touch soundfonts, so its entitlement is unchanged.
-Capability must be enabled on the App ID in the Developer portal / via automatic signing, and provisioning regenerated.
+### 5. Reference-counted reclaim & cross-app opt-out (the shared-file core)
 
-### 6. Folino — backup exclusion & nil-container degradation
+Opt-in stays a **per-app** UserDefaults preference; only the *file* is shared. To stop one app's opt-out from deleting a
+file the other app is using, deletion is gated by a reference count built from two signals:
 
-- After every write/move into the shared location (`reconcile` step ①, and the existing download install path), set
-  `isExcludedFromBackup = true`. App Group containers are backed up by default, so the 206 MB re-downloadable asset must
-  be excluded just as it is in the private location today.
-- If `containerURL(...)` returns `nil` (entitlement/provisioning gap in some build), `AppPaths.soundfontsDirectory`
-  resolves to the legacy private path, the reconcile no-ops, and the existing legacy file (or a fresh download into the
-  private path) keeps playback working. **A provisioning mistake degrades to today's behavior; it never crashes or
-  bricks audio.**
+- **Opt-in markers** (publishes each app's opt-in into the shared container): an app owns one file
+  `Soundfonts/consumers/<its-bundle-id>`. **Presence ⇔ that app is opted in.** Content is a small JSON
+  `{ "displayName": "<the app's user-facing brand>" }` so a reader can name the using app without hardcoding it
+  (Folino publishes the lowercase brand `folino`; VocalTuner publishes its own brand).
+- **Liveness via `canOpenURL`** (distinguishes "installed" from "deleted", since iOS has no uninstall hook to remove a
+  deleted app's marker): each app holds a static table of its sibling(s) → `(bundleId, urlScheme)` and treats a foreign
+  marker as a live "wanter" only if `UIApplication.canOpenURL("<scheme>://")` is true. Folino's sibling is
+  `(com.KeyNumber.VocalTuner, "vocaltuner")`; VocalTuner's is `(com.KeyNumber.Folino, "folino")`.
 
-### 7. VocalTuner — adoption (greenfield)
+Two operations, mirrored in both apps:
 
-- Add the App Groups capability + `group.com.KeyNumber.shared` to VocalTuner's **iOS** target entitlements (it has none
-  today). macOS target unchanged / out of scope.
+```
+syncOwnMarker():                       // on launch, and whenever this app's opt-in changes
+    if isOptedIn: write consumers/<ownBundleId> = {displayName: <ownBrand>}
+    else:         remove consumers/<ownBundleId>
+
+reclaimIfUnused():                      // on launch, and immediately after this app opts out
+    guard isValid(sharedFile) else { return }
+    foreignWanters = consumers markers (excluding own) whose app is INSTALLED per canOpenURL(siblingScheme)
+    if !isOptedIn(self) && foreignWanters.isEmpty:
+        delete sharedFile               // last interested party left → reclaim now
+    prune markers whose app is neither self nor installed   // housekeeping for deleted apps
+```
+
+This **replaces** each app's current unconditional `deleteDownloaded()` on opt-out: opt-out now calls
+`syncOwnMarker()` then `reclaimIfUnused()`. (VocalTuner's grace-delete timer is repurposed to run `reclaimIfUnused()`
+after the grace window instead of an unconditional delete.)
+
+**Deletion timing** (the storage-reclaim goal): the file is deleted the instant any app's `reclaimIfUnused()` finds
+"self opted out AND no *installed* sibling is opted in". That runs on opt-out and on launch/foreground. Outcomes:
+
+1. You opt out and no installed sibling wants it → **deleted immediately**.
+2. You opt out while a sibling is installed & opted in → kept (genuinely in use); freed the instant the *last*
+   interested app opts out.
+3. A sibling was opted in then **deleted** → `canOpenURL` is false at once, so the next opt-out / next launch deletes —
+   **no lingering window**.
+4. All sibling apps uninstalled → iOS auto-reclaims the whole container.
+
+Inherent caveat (surfaced in UI, see §6): opting out in only one of two opted-in apps does **not** free the 206 MB,
+because the other app is using it; it frees when the second app opts out.
+
+On upgrade, existing opted-in Folino users get their marker created by the first `syncOwnMarker()` on launch (idempotent,
+reconciles markers to actual opt-in state every launch).
+
+### 6. Folino Settings — "in use by sibling" message
+
+When Folino is **opted out** but the shared file still exists **and** `reclaimIfUnused()`'s `foreignWanters` is
+non-empty (a sibling is installed and opted in), Folino's Settings → Soundfonts area shows an informational note naming
+the using app via the marker's `displayName`, e.g. *"The high-quality soundfont is kept because <VocalTuner> is using
+it."* (**Exact copy TBD** — must obey the lowercase-brand rule for `folino`, use the sibling's published `displayName`,
+and avoid internal feature names.) The note explains why opt-out did not free storage. The data is already computed for
+the reference count, so this is a presentation-only addition. A symmetric note in VocalTuner ("kept because folino is
+using it") is an **optional** parallel add (see Out of scope).
+
+### 7. Entitlements & Info.plist
+
+- **Folino**: add `group.com.KeyNumber.shared` to `App/Folino.entitlements` (keep `group.com.KeyNumber.Folino`); add
+  `LSApplicationQueriesSchemes = ["vocaltuner"]` to `App/Info.plist` (the `folino` scheme already exists). The Share
+  Extension is unchanged (does not touch soundfonts).
+- **VocalTuner**: add the App Groups capability + `group.com.KeyNumber.shared` to `VocalTuner.entitlements` (iOS
+  target); add a `CFBundleURLTypes` entry declaring scheme **`vocaltuner`** (declaration only — no incoming-URL
+  handling needed for `canOpenURL` detection) and `LSApplicationQueriesSchemes = ["folino"]` to its iOS `Info.plist`.
+  macOS target unchanged / out of scope.
+- Capabilities must be enabled on each App ID in the Developer portal / via automatic signing, and provisioning
+  regenerated.
+
+### 8. VocalTuner — adoption (greenfield)
+
 - Change `SoundfontPaths.soundfontsDirectory(_:)` to resolve the shared container's `Soundfonts/` subfolder, with the
-  same `nil`-container degradation to its current private Application Support path.
-- Change the filename constant to the canonical `MuseScore_General.sf2`.
-- Before downloading, check the shared path for a *valid* file (≥ 150 MB) and skip the download if present — this is how
-  VocalTuner reuses a copy Folino already fetched. VocalTuner's existing download flow keeps its atomic temp→install +
-  backup-exclusion behavior, now targeting the shared path.
-- No end-user migration is required (feature unreleased). Optionally, for symmetry/hygiene on dev & TestFlight devices,
-  VocalTuner deletes its own legacy private `MuseScore_General_v1.sf2` once a valid shared copy exists (same condition
-  as Folino's step ②).
+  same `nil`-container degradation to its current private Application Support path. Change `highQualityFileName` to the
+  canonical `MuseScore_General.sf2`. Because `SoundfontPaths` is the single source of truth, the provider and
+  `LiveSoundfontResolver` follow automatically; the existing init/`startDownloadIfNeeded` existence checks already make
+  it **reuse** a copy Folino fetched.
+- Implement `syncOwnMarker()` / `reclaimIfUnused()` (§5) in VocalTuner's `LiveMuseScoreGeneralProvider`, replacing the
+  unconditional grace-delete with a grace-delayed `reclaimIfUnused()`.
+- No end-user migration (feature unreleased). Optionally, for dev/TestFlight hygiene, delete a leftover private
+  `MuseScore_General_v1.sf2` once a valid shared copy exists.
 
-### 8. Download coordination & atomicity
+### 9. Download coordination, atomicity, awareness, degradation
 
-Both apps can independently trigger a download; neither "owns" the file. Coordination relies on atomic writes rather
-than cross-process locks:
+- **Atomicity**: both providers already download to their own UUID scratch temp, validate size, then `removeItem` +
+  `moveItem` into the canonical path — a partial/interrupted download never appears at the canonical path. Concurrent
+  downloads resolve as "last complete writer wins" (no corruption). The tiny remove→move window is accepted; an atomic
+  `replaceItemAt` upgrade is **deferred** (the asset is write-once and re-downloadable, concurrent opt-in in two apps
+  is rare). See Open questions #3.
+- **Cross-app download-state awareness**: each app re-derives "downloaded?" from a fresh existence+size check on
+  **foreground** (App Groups give no change notification), so a file the sibling downloaded is reflected without a
+  re-fetch. Folino adds a `refreshDownloadStateFromDisk()` on the provider, called on scene-phase `.active`.
+- **Backup exclusion**: re-apply `isExcludedFromBackup` after every move/download into the shared location (App Group
+  containers are backed up by default).
+- **`nil`-container degradation**: if `containerURL(...)` is nil (entitlement/provisioning gap), the path resolvers fall
+  back to the private location, the reconcile no-ops, markers/reclaim operate on the private dir, and playback keeps
+  working. A provisioning mistake degrades to today's behavior; it never crashes.
 
-- Each app downloads to its **own** scratch temp (UUID in `temporaryDirectory`) and only then installs into the shared
-  canonical path. A partial/interrupted download never appears at the canonical path.
-- Concurrent downloads (rare — user-initiated opt-in in two apps at once) resolve as "last writer wins"; both wrote
-  complete, byte-identical files, so there is no corruption.
-- **Hardening (recommended):** change the install step from `removeItem` + `moveItem` to an atomic
-  `FileManager.replaceItemAt(...)` (or wrap the install in `NSFileCoordinator`), eliminating the tiny remove→move
-  window during which a concurrent reader in the other app could observe a missing file. Heavier cross-process file
-  coordination is deliberately *not* added — the asset is write-once and re-downloadable, so the cost isn't justified.
+## Invariants
 
-### 9. Cross-app download-state awareness
-
-App Groups provide no cross-process change notification, so each app re-derives "is it downloaded?" from a fresh
-existence+size check of the shared path:
-
-- Folino's `LiveMuseScoreGeneralProvider` already checks the file at `init` and in `startDownloadIfNeeded()`. Add a
-  re-check on app **foreground** so that if VocalTuner downloaded the file while Folino was backgrounded, Folino's
-  Settings reflects "downloaded" without re-fetching. (A file watcher / `NSFilePresenter` for live updates is YAGNI.)
-- VocalTuner performs the equivalent existence check before downloading and when its soundfont settings appear.
-
-## Invariants (the no-duplicate guarantee)
-
-After Folino's reconcile runs:
-
-- **If a valid shared copy exists → exactly one copy on device, in the shared container; the legacy private copy is
-  deleted** — regardless of which app downloaded first.
-- **If no valid shared copy can be produced** (nothing to migrate, or the container is unavailable, or a move failed)
-  → the legacy private copy (if any) remains and is used; because no shared copy exists in that state, there is no
-  duplicate. The reconcile retries on the next launch.
-
-There is no reachable state in which both a shared copy and a legacy copy persist.
+- **No duplicate**: after Folino's reconcile, if a valid shared copy exists → exactly one copy on device (shared);
+  the legacy private copy is deleted, regardless of download order. If no valid shared copy can be produced, the legacy
+  copy (if any) remains and is used; no shared copy exists in that state, so there is no duplicate.
+- **Reference-count safety**: the shared file is deleted only when the deleting app is opted out **and** no installed
+  sibling is opted in. A deleted sibling's stale marker cannot pin the file (filtered by `canOpenURL`); the OS reclaims
+  the whole container when the last member is uninstalled.
 
 ## Rollout sequencing
 
-1. **Folino update ships first.** Existing Folino users' private soundfont migrates into the shared container on first
-   launch; new/changed wiring points playback at the shared location. This pre-populates the shared file for the large
-   existing Folino install base.
-2. **VocalTuner soundfont feature ships** with the shared group + shared-path resolver. On devices that already have
-   Folino's migrated file, VocalTuner reuses it (no 206 MB download). On VocalTuner-only devices, it downloads into the
-   shared container; a later Folino install/update reuses it.
+1. **Folino update ships first** with the full machinery (migration, shared path, markers, `reclaimIfUnused`,
+   `canOpenURL`, the §6 note). Until VocalTuner ships, `canOpenURL("vocaltuner://")` is false, so Folino is the sole
+   consumer and opt-out deletes immediately — **identical to today's behavior**. Existing users' private file migrates
+   to the shared container on first launch.
+2. **VocalTuner soundfont feature ships** with the mirrored machinery. From then on the reference count spans both apps,
+   and either app reuses a copy the other fetched.
 
-Because every path is existence-driven, the order does not affect correctness — shipping Folino first only maximizes
-immediate reuse. Folino's legacy-path fallback in `AppPaths.soundfontsDirectory` and the reconcile can be retired in a
-later Folino version once telemetry/confidence says all users have migrated (optional cleanup, low priority).
+Order does not affect correctness (everything is existence/marker-driven); Folino-first maximizes immediate reuse for
+its large install base. Folino's legacy-path fallback and reconcile can be retired in a later version once all users
+have migrated (optional, low priority).
 
 ## Tests
 
-**Folino** — reconcile logic unit-tested with an injected `FileManager` / temp directories (no real container needed),
-Swift Testing (`@Suite`/`@Test`/`#expect`):
+**Folino** (Swift Testing, `InfrastructureTests/Soundfonts/`, injected `FileManager` + temp dirs from
+`TestSupport/TempDirectory.swift`):
 
-- Folino-first: shared invalid + legacy valid → file ends up in shared, legacy gone (move path).
-- VocalTuner-first: shared valid + legacy valid → legacy deleted, shared untouched (step ②).
-- Fresh install: shared invalid + no legacy → no-op, no crash.
-- Neither present: no-op; subsequent download targets shared.
-- Corrupt/partial legacy (< 150 MB) → not moved, not counted valid; left for re-download.
-- `nil` container → reconcile no-ops; `soundfontsDirectory` resolves to legacy.
-- Idempotency: running reconcile twice is a no-op the second time.
+- `SoundfontContainerMigration`: Folino-first (move), VocalTuner-first (legacy deleted), fresh install (no-op), neither
+  present (no-op), corrupt/partial legacy < 150 MB (not moved), `nil`/equal dirs (no-op), idempotency (second run
+  no-op).
+- Reference count: `syncOwnMarker` writes on opt-in / removes on opt-out; `reclaimIfUnused` deletes when self opted out
+  & no foreign wanter; keeps when a foreign wanter is "installed"; deletes when the only foreign marker's app is "not
+  installed" (stale); prunes stale markers. `canOpenURL` is injected behind a tiny `InstalledAppChecking` protocol so
+  tests control installed-ness without UIKit.
+- "In use" message logic: returns the sibling `displayName` when self opted out + file present + installed foreign
+  wanter; nil otherwise.
 
-**VocalTuner** — unit tests that the resolver targets the shared path and that a present valid shared file skips the
-download.
+**VocalTuner** (its test target): `SoundfontPaths.soundfontsDirectory` resolves the shared container and degrades on
+nil; a present valid shared file skips the download; the mirrored `reclaimIfUnused` behaves identically.
 
-**Device/simulator smoke** (real container needs the entitlement, so this can't be a pure unit test): simulate an
-existing Folino user by pre-seeding the legacy path, launch the updated build, verify the file moved to the shared
-container, playback works, and no re-download occurs; then confirm VocalTuner sees the shared file.
+**Device/simulator smoke** (real container needs the entitlement): pre-seed the legacy path (simulate an existing
+Folino user), launch the updated build, verify the file moved to the shared container, playback works, no re-download;
+then confirm VocalTuner sees the shared file, and that opt-out reference-counting frees space only when no sibling is
+opted in.
 
 ## Out of scope
 
-- **Score / sheet-music file sharing** (`Scores/` subfolder; reconciling Folino's GRDB library and annotations against
-  VocalTuner's Realm `RealmScore`/`RealmSong`; import/dedup semantics). This is the planned next spec; the container
-  layout reserves the subfolder for it.
-- Sharing the small **bundled** fallback SoundFonts (each app bundles its own; in-bundle, nothing to share).
+- **Score / sheet-music file sharing** (`Scores/`; reconciling GRDB vs Realm metadata) — the planned next spec; the
+  container layout reserves the subfolder.
+- The **symmetric** "in use by folino" note inside VocalTuner Settings — optional parallel of §6; include only if cheap.
 - VocalTuner's **macOS** target (different platform sandbox; cannot share with iOS-only Folino).
-- Cross-device sync (iCloud/CloudKit). This is on-device App Group sharing only.
-- Any change to the opt-in *preference* model — opt-in stays per-app UserDefaults; only the *file* is shared.
+- Cross-device sync (iCloud/CloudKit). On-device App Group sharing only.
+- The atomic-`replaceItemAt` install hardening (deferred; remove+move retained).
+- Changing the per-app opt-in *preference model* itself (still UserDefaults; only the file + reclaim is shared).
 
-## Open questions / implementation confirmations
+## Open questions / resolutions
 
-1. Confirm `SoundfontPreset.highQuality.fileName == "MuseScore_General.sf2"` (verified at spec time) stays the single
-   source of truth for Folino's name; VocalTuner adopts the same literal.
-2. Confirm VocalTuner's `_v1` suffix is not a live versioning token before standardizing on the unversioned name.
-3. Decide whether to adopt the §8 atomic-`replaceItemAt` hardening now or defer (recommended: adopt now, since the file
-   moves into a multi-reader shared container).
+1. Confirm `SoundfontPreset.highQuality.fileName == "MuseScore_General.sf2"` (verified) stays Folino's single source of
+   truth for the name; VocalTuner adopts the same literal.
+2. **RESOLVED**: VocalTuner's `_v1` suffix is a deliberate per-app invalidation token, but the shared file standardizes
+   on unversioned `MuseScore_General.sf2`; future invalidation is a coordinated cross-app rename.
+3. **RESOLVED**: defer the atomic-`replaceItemAt` hardening; keep the existing remove+move (benign, rare race).
+4. **RESOLVED**: reference-counted reclaim uses opt-in markers + `canOpenURL` liveness (no heartbeat window); deletion is
+   immediate when the last interested app leaves, caught on opt-out or next launch.
+5. Finalize the §6 "in use" copy (and decide whether to add the symmetric VocalTuner note) during implementation.
 
 ## Cross-repo note
 
 This work spans **two repositories**: Folino (`/Users/kiichi/Developer/Personal/ios-apps/Folino-iOS`) and VocalTuner
-(`/Users/kiichi/Developer/Personal/ios-apps/VocalTuner`). The implementation plan(s) must label each task by repo and
-respect each repo's own conventions (XcodeGen `project.yml` + entitlements on both sides; Folino's SPM/GRDB stack vs
-VocalTuner's CocoaPods/Realm stack). Entitlement/provisioning changes and adding a capability are "stop and confirm"
-items under Folino's autonomous ground rules — they are handled here at the planning stage and during implementation
-will be surfaced before any portal/signing change.
+(`/Users/kiichi/Developer/Personal/ios-apps/VocalTuner`). The implementation plan labels each task by repo and respects
+each repo's conventions (XcodeGen `project.yml`, entitlements, and `Info.plist` on both sides; Folino SPM/GRDB vs
+VocalTuner CocoaPods/Realm; VocalTuner's background `URLSession` provider vs Folino's foreground one). The
+reference-count/marker contract (file layout, marker filename = bundle id, `{displayName}` JSON, `canOpenURL` liveness,
+the reclaim algorithm) is defined once here and implemented identically in both. Entitlement/provisioning/capability
+changes are "stop and confirm" under Folino's autonomous ground rules — planned here, surfaced before any portal/signing
+change during implementation.
