@@ -64,6 +64,7 @@ struct AppShellView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 bootstrap.pruneRecentlyDeletedIfNeeded()
+                bootstrap.museScoreGeneralProvider?.handleForeground()
             }
         }
         .task(id: bootstrap.isReady) {
