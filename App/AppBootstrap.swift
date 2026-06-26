@@ -94,25 +94,29 @@ final class AppBootstrap {
             installAudioStack(gateway: gateway)
             reachability = LiveNetworkReachability()
 
-            Task { [weak self] in
-                do {
-                    try await repository.refresh()
-                    // One-shot: carry the last-opened score's (formerly per-score) repeat mode into the new global key.
-                    await self?.migrateRepeatModeFromLastOpenedScoreIfNeeded(repository)
-                    // Best-effort purge of trash items past the 30-day retention window. Failures don't block
-                    // readiness.
-                    try? await repository.pruneScoreItemsDeleted(
-                        before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
-                    )
-                    // Publish current playlists so the Share Extension's picker is populated on first use.
-                    if let writer { writer.publish(playlists: repository.playlists) }
-                    // Drain any tokens queued by the Share Extension before this launch.
-                    _ = await self?.incomingShareCoordinator?.drain(token: nil)
-                    self?.isReady = true
-                } catch {
-                    self?.failure = error
-                }
-            }
+            Task { [weak self] in await self?.finishStartup(repository: repository, writer: writer) }
+        } catch {
+            failure = error
+        }
+    }
+
+    /// Async body of the post-refresh startup sequence, extracted to keep `start()` within the SwiftLint
+    /// `function_body_length` limit. Runs on the main actor (inherited from the `Task` that calls it).
+    private func finishStartup(repository: LiveScoreLibraryRepository, writer: PlaylistsIndexWriter?) async {
+        do {
+            try await repository.refresh()
+            // One-shot: carry the last-opened score's (formerly per-score) repeat mode into the new global key.
+            await migrateRepeatModeFromLastOpenedScoreIfNeeded(repository)
+            // Best-effort purge of trash items past the 30-day retention window. Failures don't block readiness.
+            try? await repository.pruneScoreItemsDeleted(
+                before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
+            )
+            // Publish current playlists so the Share Extension's picker is populated on first use.
+            if let writer { writer.publish(playlists: repository.playlists) }
+            // Drain any tokens queued by the Share Extension before this launch.
+            _ = await incomingShareCoordinator?.drain(token: nil)
+            pushAnalyticsSnapshot(repository: repository)
+            isReady = true
         } catch {
             failure = error
         }
@@ -122,6 +126,37 @@ final class AppBootstrap {
         let enabled = UserDefaults.standard
             .object(forKey: PrivacySettingsKey.analyticsEnabled) as? Bool ?? true
         analytics = FirebaseAnalyticsClient.make(collectionEnabled: enabled)
+    }
+
+    /// Reads the current settings snapshot and posts all non-library user properties to analytics. Called once at
+    /// launch after the repository is ready (so library-count properties are also current). The library half is
+    /// delegated to `AnalyticsUserPropertySync.syncLibrary`, which derives format/version breakdowns from the live
+    /// `scoreItems` list. Sort is fixed to `.dateAddedDesc` because the Library's sort order is only held in-memory
+    /// inside `ScoreListViewModel` and is not persisted to `UserDefaults`.
+    private func pushAnalyticsSnapshot(repository: LiveScoreLibraryRepository) {
+        guard let analytics else { return }
+        let defaults = UserDefaults.standard
+        AnalyticsUserPropertySync.syncLibrary(
+            items: repository.scoreItems,
+            sort: .dateAddedDesc,
+            into: analytics,
+        )
+        analytics.setUserProperty(
+            defaults.string(forKey: ReaderGlobalSettingsKey.layoutMode) ?? ReaderLayoutMode.page.rawValue,
+            for: .layoutMode,
+        )
+        analytics.setUserProperty(
+            museScoreGeneralProvider?.currentPreset.rawValue ?? SoundfontPreset.lightweight.rawValue,
+            for: .soundfontPreset,
+        )
+        analytics.setUserProperty(
+            (defaults.object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true) ? "true" : "false",
+            for: .crashReportingEnabled,
+        )
+        analytics.setUserProperty(
+            defaults.bool(forKey: AnalyticsStateKey.hasUsedAnnotation) ? "true" : "false",
+            for: .hasUsedAnnotation,
+        )
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {
