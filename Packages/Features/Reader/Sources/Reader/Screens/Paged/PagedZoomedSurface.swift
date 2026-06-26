@@ -169,18 +169,11 @@ struct PagedZoomedSurface: View {
             }
     }
 
-    /// First page renders from doc-Y `0` (so the title frame and any pre-system decoration are visible); every
-    /// subsequent page starts at the previous page's last-system bottom (so the gap above its own first system —
-    /// rehearsal marks, etc. — lands on the right page).
     fileprivate static func pageStartY(
         forPage index: Int,
         pages: [Range<Int>],
         doc: LayoutDocument,
     ) -> CGFloat {
-        guard index > 0 else { return 0 }
-        let prevLastIndex = pages[index - 1].upperBound - 1
-        guard (0 ..< doc.systems.count).contains(prevLastIndex) else { return 0 }
-        return doc.systems[prevLastIndex].origin.y
-            + doc.systems[prevLastIndex].size.height
+        PagedPageGeometry.pageStartY(forPage: index, pages: pages, doc: doc)
     }
 }

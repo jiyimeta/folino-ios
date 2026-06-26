@@ -1,4 +1,5 @@
 import Domain
+import PencilKit
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -48,6 +49,9 @@ struct PagedScoreContainer: View {
     /// `playbackCursor` captured at swipe start so the end-of-swipe `followCursor` only fires when playback actually
     /// advanced through pages — otherwise a paused-but-visible cursor on a different page would yank the user back.
     @State var swipeStartCursor: ScoreCursor?
+    /// The annotation model for the CURRENT page, projected to band space. Reseeded on page/document/model change;
+    /// kept equal to the live ink while drawing so the canvas seed never round-trips an in-progress stroke.
+    @State var projectedAnnotations = PKDrawing()
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -162,7 +166,7 @@ struct PagedScoreContainer: View {
                     viewport: viewport,
                 )
             },
-            annotationOverlay: nil, // annotation is Vertical-mode only (M1)
+            annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             PagedZoomedSurface(
                 viewModel: viewModel,
@@ -202,6 +206,14 @@ struct PagedScoreContainer: View {
         .onChange(of: [playbackCursor, pageAnchorCursor]) { _, _ in
             followCursor(pageAnchorCursor ?? playbackCursor)
         }
+        .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        .onChange(of: document) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        .onChange(of: viewModel.annotationDrawings) { _, _ in
+            // Read-mode model changes (load, cross-mode edit) reseed the current page. While drawing, the canvas is the
+            // source of truth, so skip — reseeding the round-tripped projection would wipe the in-progress stroke.
+            if !viewModel.isAnnotating { reprojectCurrentPage(viewport: viewport) }
+        }
+        .onAppear { reprojectCurrentPage(viewport: viewport) }
     }
 
     private func commitPinch(
@@ -247,6 +259,72 @@ struct PagedScoreContainer: View {
                 pinch.offsetY = 0
             }
         }
+    }
+
+    private func currentPageBand(viewport: CGSize) -> (startY: CGFloat, endY: CGFloat, contentPadding: CGFloat)? {
+        guard let doc = document, pages.indices.contains(pageState.pageIndex) else { return nil }
+        return (
+            PagedPageGeometry.pageStartY(forPage: pageState.pageIndex, pages: pages, doc: doc),
+            PagedPageGeometry.pageEndY(forPage: pageState.pageIndex, pages: pages, doc: doc),
+            Self.horizontalContentPadding(viewportWidth: viewport.width),
+        )
+    }
+
+    private func annotationSpec(viewport: CGSize) -> AnnotationOverlaySpec {
+        AnnotationOverlaySpec(
+            isAnnotating: viewModel.isAnnotating,
+            isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            displayDrawing: projectedAnnotations,
+            onChange: { drawing in
+                guard let doc = document, let band = currentPageBand(viewport: viewport) else { return }
+                projectedAnnotations = drawing // canvas is source of truth this page
+                // Re-capture THIS page's strokes; keep every other page's anchors verbatim.
+                let (_, offPage) = AnnotationAnchoring.partitionByPage(
+                    viewModel.annotationDrawings, in: doc, pageStartY: band.startY, pageEndY: band.endY,
+                )
+                let captured = AnnotationAnchoring.capturePaged(
+                    strokes: drawing.strokes, in: doc, pageStartY: band.startY, contentPadding: band.contentPadding,
+                )
+                viewModel.annotationDrawingsDidChange(offPage + captured)
+            },
+            state: { annotationCanvasState(viewport: viewport) },
+        )
+    }
+
+    /// Mirror the current page band onto the viewport-pinned canvas. Document space = the page band (viewport-sized);
+    /// the band sits at `pageInsets.leading/top` inside the padded content, scaled by `viewportZoom × magnification`.
+    /// Paged mode carries live pan on BOTH `pinch.offsetX` and `pinch.offsetY`. (At rest the page slide offset is 0;
+    /// during an active slide the ink does not track — see device-verification notes.)
+    private func annotationCanvasState(viewport: CGSize) -> AnnotationCanvasState {
+        let zoomC = viewModel.viewportZoom
+        let m = pinch.magnification
+        let z = zoomC * m
+        let padX = pageInsets.leading
+        let padY = pageInsets.top
+        let paddedW = viewport.width + pageInsets.leading + pageInsets.trailing
+        let paddedH = viewport.height + pageInsets.top + pageInsets.bottom
+        let anchorTermX = pinch.anchor.x * paddedW * (1 - m) * zoomC
+        let anchorTermY = pinch.anchor.y * paddedH * (1 - m) * zoomC
+        let slack: CGFloat = 100_000
+        return AnnotationCanvasState(
+            documentSize: CGSize(width: viewport.width, height: viewport.height),
+            zoomScale: z,
+            contentOffsetBias: CGPoint(
+                x: -padX * z - anchorTermX - pinch.offsetX,
+                y: -padY * z - anchorTermY - pinch.offsetY,
+            ),
+            contentInset: UIEdgeInsets(top: slack, left: slack, bottom: slack, right: slack),
+        )
+    }
+
+    private func reprojectCurrentPage(viewport: CGSize) {
+        guard let doc = document, let band = currentPageBand(viewport: viewport) else {
+            projectedAnnotations = PKDrawing(); return
+        }
+        projectedAnnotations = AnnotationAnchoring.displayPaged(
+            viewModel.annotationDrawings, in: doc,
+            pageStartY: band.startY, pageEndY: band.endY, contentPadding: band.contentPadding,
+        )
     }
 
     var scoreOptions: ScoreViewOptions {
