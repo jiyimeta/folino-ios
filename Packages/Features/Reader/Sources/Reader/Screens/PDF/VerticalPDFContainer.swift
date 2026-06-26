@@ -187,28 +187,37 @@ private struct VerticalPDFSurface: View {
         let cw = pageSizes.map(\.width).max() ?? 0
         let stackHeight = pageSizes.reduce(0) { $0 + $1.height } + pageGap * CGFloat(max(0, pageSizes.count - 1))
         let zoom = cw > 0 ? viewModel.viewportZoom * (viewport.width / cw) : viewModel.viewportZoom
-        return pageStack(contentWidth: cw)
+        return pageStack(contentWidth: cw, zoom: zoom)
             .scaleEffect(pinch.magnification, anchor: pinch.anchor)
             .scaleEffect(zoom, anchor: .topLeading)
             .offset(x: pinch.offsetX, y: 0)
             .frame(width: cw * zoom, height: stackHeight * zoom, alignment: .topLeading)
     }
 
-    private func pageStack(contentWidth: CGFloat) -> some View {
+    private func pageStack(contentWidth: CGFloat, zoom: CGFloat) -> some View {
         VStack(spacing: pageGap) {
             ForEach(0 ..< pageSizes.count, id: \.self) { index in
-                pageView(index: index)
+                pageView(index: index, zoom: zoom)
             }
         }
         .frame(width: contentWidth, alignment: .center)
     }
 
     @ViewBuilder
-    private func pageView(index: Int) -> some View {
+    private func pageView(index: Int, zoom: CGFloat) -> some View {
         let size = pageSizes[index]
         if let page = document.page(at: index), size.width > 0, size.height > 0 {
+            let z = max(zoom, 0.01)
+            // Rasterize the vector page at its on-screen size (natural × committed zoom), then pre-scale 1/zoom into
+            // the natural-sized layout slot so the stack's `scaleEffect(zoom)` cancels it; the page then renders 1:1
+            // with its raster — sharp at the committed zoom. A plain `scaleEffect` on a `withCGContext` Canvas
+            // upscales the bitmap and blurs (not re-rasterized under the transform); same trick `PDFPageView` uses
+            // for page mode. The live `magnification` is still a plain scaleEffect on top — transient blur during a
+            // pinch, re-sharpened on commit when `zoom` updates.
             PDFPageCanvas(page: page)
-                .frame(width: size.width, height: size.height)
+                .frame(width: size.width * z, height: size.height * z)
+                .scaleEffect(1 / z, anchor: .topLeading)
+                .frame(width: size.width, height: size.height, alignment: .topLeading)
         } else {
             Color(.secondarySystemBackground)
                 .frame(width: max(size.width, 1), height: max(size.height, 1))
