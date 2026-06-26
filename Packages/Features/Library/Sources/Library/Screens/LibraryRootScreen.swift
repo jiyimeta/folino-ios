@@ -212,6 +212,6 @@ enum ScoreFileTypes {
     static let allowed: [UTType] = {
         let specific = ["mscx", "mscz", "musicxml", "mxl"]
             .compactMap { UTType(filenameExtension: $0) }
-        return specific + [.xml, .zip, .midi]
+        return specific + [.xml, .zip, .midi, .pdf]
     }()
 }
