@@ -28,6 +28,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     @ObservationIgnored private let pathMonitor: any NetworkPathObserving
     @ObservationIgnored private let wifiSession: URLSession
     @ObservationIgnored private let cellularSession: URLSession
+    @ObservationIgnored private let reclaimer: SharedSoundfontReclaimer?
     @ObservationIgnored private let logger = Logger(
         subsystem: "com.KeyNumber.Folino", category: "MuseScoreGeneralProvider",
     )
@@ -44,6 +45,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         pathMonitor: any NetworkPathObserving = NWPathMonitorAdapter(),
         wifiSession: URLSession? = nil,
         cellularSession: URLSession? = nil,
+        reclaimer: SharedSoundfontReclaimer? = nil,
     ) {
         self.targetDirectory = targetDirectory
         // swiftlint:disable:next force_unwrapping line_length
@@ -52,6 +54,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         self.pathMonitor = pathMonitor
         self.wifiSession = wifiSession ?? Self.makeSession(allowsCellular: false)
         self.cellularSession = cellularSession ?? Self.makeSession(allowsCellular: true)
+        self.reclaimer = reclaimer
         isOptedIn = defaults.object(forKey: Self.optInKey) as? Bool ?? true
         let fileURL = targetDirectory.appending(path: SoundfontPreset.highQuality.fileName)
         downloadState = FileManager.default.fileExists(atPath: fileURL.path) ? .downloaded : .idle
@@ -103,10 +106,16 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         defaults.set(value, forKey: Self.optInKey)
         isOptedIn = value
         if value {
+            reclaimer?.syncOwnMarker(isOptedIn: true)
             startDownloadIfNeeded()
         } else {
             cancelDownload()
-            deleteDownloaded()
+            if let reclaimer {
+                reclaimer.syncOwnMarker(isOptedIn: false)
+                reclaimer.reclaimIfUnused(isOptedIn: false)
+            } else {
+                deleteDownloaded() // legacy single-app behavior when no shared reclaimer is wired (e.g. unit tests)
+            }
         }
     }
 
@@ -185,6 +194,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
             activeTask = nil
             activeDelegate = nil
             downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .finished)
+            reclaimer?.syncOwnMarker(isOptedIn: true)
             let path = targetFileURL.path
             logger.notice("MuseScore_General download finished, installed at \(path, privacy: .public)")
         } catch {
@@ -212,6 +222,33 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         if SoundfontDownloadReducer.shouldRetryOnWiFi(downloadState) {
             startDownloadIfNeeded()
         }
+    }
+
+    /// Called once at launch (after migration). Publishes the current opt-in as a marker and reclaims the shared file
+    /// if this app is opted out and no installed sibling wants it.
+    public func reconcileSharedSoundfontMarkersAtLaunch() {
+        reclaimer?.syncOwnMarker(isOptedIn: isOptedIn)
+        reclaimer?.reclaimIfUnused(isOptedIn: isOptedIn)
+    }
+
+    /// Called on scene-phase `.active`. Reflects a copy a sibling downloaded while we were backgrounded, and reclaims
+    /// if a sibling opted out / was deleted while we were away and we are opted out.
+    public func handleForeground() {
+        refreshDownloadStateFromDisk()
+        reclaimer?.reclaimIfUnused(isOptedIn: isOptedIn)
+    }
+
+    /// Re-derive `downloadState` from disk (App Groups give no cross-process change notification).
+    public func refreshDownloadStateFromDisk() {
+        let exists = FileManager.default.fileExists(atPath: targetFileURL.path)
+        downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .syncedFromDisk(fileExists: exists))
+    }
+
+    /// Sibling display name keeping the (opted-out) shared file on device, for the Settings "in use" note; nil unless
+    /// this app is opted out, the shared file exists, and an installed sibling is opted in.
+    public var soundfontKeptBySiblingDisplayName: String? {
+        guard !isOptedIn, museScoreGeneralFileURLSync != nil else { return nil }
+        return reclaimer?.siblingInUseDisplayName()
     }
 }
 

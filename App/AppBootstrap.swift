@@ -161,7 +161,19 @@ final class AppBootstrap {
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {
-        let provider = LiveMuseScoreGeneralProvider(targetDirectory: AppPaths.soundfontsDirectory)
+        let reclaimer = SharedSoundfontReclaimer(
+            soundfontsDirectory: AppPaths.soundfontsDirectory,
+            soundfontFileName: SoundfontPreset.highQuality.fileName,
+            minimumValidByteSize: Self.soundfontMinimumValidByteSize,
+            ownBundleId: Bundle.main.bundleIdentifier ?? "com.KeyNumber.Folino",
+            ownDisplayName: (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? "folino",
+            siblings: Self.soundfontSiblings,
+            installedChecker: UIKitInstalledAppChecker(),
+        )
+        let provider = LiveMuseScoreGeneralProvider(
+            targetDirectory: AppPaths.soundfontsDirectory, reclaimer: reclaimer,
+        )
         museScoreGeneralProvider = provider
         let resolver = GMSoundfontResolver(provider: provider)
         soundfontResolver = resolver
@@ -188,6 +200,7 @@ final class AppBootstrap {
             soundfontResolver: resolver,
             metronomeClickProvider: clickProvider,
         )
+        provider.reconcileSharedSoundfontMarkersAtLaunch()
     }
 
     /// One-shot cleanup of the pre-GM per-patch SF2 cache. Old versions stored split-bank soundfonts at
