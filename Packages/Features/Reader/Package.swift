@@ -42,7 +42,11 @@ var targets: [Target] = [
         resources: [.process("Resources")],
         plugins: swiftLintPlugins,
     ),
-    .testTarget(name: "ReaderTests", dependencies: ["Reader"]),
+    .testTarget(
+        name: "ReaderTests",
+        dependencies: ["Reader"],
+        resources: [.process("Resources")],
+    ),
 ]
 
 if isAndroid {

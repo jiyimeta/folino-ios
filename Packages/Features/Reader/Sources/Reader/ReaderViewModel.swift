@@ -2,6 +2,7 @@ import CoreGraphics
 import Domain
 import Foundation
 import Observation
+import PDFKit
 import ScoreUI
 import SheetMusicCore
 
@@ -11,6 +12,7 @@ final class ReaderViewModel {
     enum LoadState {
         case loading
         case loaded(Score)
+        case loadedPDF(PDFDocument)
         case failed(error: Error)
 
         var score: Score? {
@@ -31,7 +33,12 @@ final class ReaderViewModel {
     var layoutModel = LayoutSettingsModel()
     var mixerModel = PlaybackMixerModel()
 
-    private(set) var loadState: LoadState = .loading
+    /// Settable (not `private(set)`) so the load paths in `ReaderViewModel+Load.swift` can drive the state transitions.
+    var loadState: LoadState = .loading
+
+    /// What this reader session is allowed to do, derived once per `load()` from the item's format (PDFs disable
+    /// playback and all layout-derivation settings; only page/vertical viewing remains).
+    private(set) var capabilities: ReaderCapabilities = .forScore
 
     /// The score's annotation model: one `DrawingAnchor` per stroke, each pinned to a `MusicalAnchor`. Loaded on open,
     /// rewritten on every canvas change. The container projects this to the current layout for display.
@@ -43,8 +50,9 @@ final class ReaderViewModel {
 
     /// The display-ready score: the loaded score with clef overrides applied, transposed, and hidden staves filtered.
     /// Cached and recomputed only when its inputs change (load, clef overrides, transpose, hidden staves) via
-    /// `recomputeVisibleScore()`, so the transform chain no longer rebuilds on every Reader body evaluation.
-    private(set) var visibleScore: Score?
+    /// `recomputeVisibleScore()`, so the transform chain no longer rebuilds on every Reader body evaluation. Settable
+    /// (not `private(set)`) so the load paths in `ReaderViewModel+Load.swift` can clear it on failure.
+    var visibleScore: Score?
 
     /// Internal (not private-set) so the ScoreInfoEditing conformance in a separate file can update it.
     var scoreItem: ScoreItem
@@ -78,11 +86,13 @@ final class ReaderViewModel {
     var shareTarget: ScoreShareTarget?
     var isPreparingShare = false
 
-    // `repository` / `metadataReader` are internal (not private) so the `ScoreInfoEditing` conformance can live in
-    // ReaderViewModel+Conformances.swift; Swift `private` would not reach a same-type extension in another file.
+    // `repository` / `metadataReader` / `gateway` are internal (not private) so the `ScoreInfoEditing` conformance and
+    // the `ReaderViewModel+Load.swift` load paths (same-type extensions in other files) can reach them; Swift `private`
+    // would not.
     @ObservationIgnored let repository: any ScoreLibraryRepository
-    @ObservationIgnored private let gateway: any ScoreFileGateway
-    @ObservationIgnored private let shareService: any ScoreShareService
+    @ObservationIgnored let gateway: any ScoreFileGateway
+    // Internal so the share methods in `ReaderViewModel+Sharing.swift` can reach it.
+    @ObservationIgnored let shareService: any ScoreShareService
     @ObservationIgnored let metadataReader: any ScoreMetadataReading
     @ObservationIgnored let annotationStore: any AnnotationStore
     @ObservationIgnored private let scoresDirectory: URL
@@ -270,39 +280,18 @@ final class ReaderViewModel {
     func load() async {
         loadState = .loading
         visibleScore = nil
+        let format = ScoreFormat.detect(filename: scoreItem.localFileName)
+        capabilities = ReaderCapabilities.resolve(format: format)
         let url = scoresDirectory.appending(path: scoreItem.localFileName)
-        do {
-            let (score, _) = try await gateway.loadScore(fileURL: url)
-            await loadOrSeedPreferences()
-            loadState = .loaded(score)
-            recomputeVisibleScore()
-            pipSession.armIfReady()
-            await loadAnnotations()
-            await updateLastOpenedAtOnce()
-        } catch {
-            loadState = .failed(error: error)
-            visibleScore = nil
+        if format == .pdf {
+            await loadPDF(url: url)
+        } else {
+            await loadScoreFile(url: url)
         }
     }
 
     func resetZoom() {
         viewportZoom = 1.0
-    }
-
-    func requestShare(format: ScoreShareFormat) async {
-        isPreparingShare = true
-        defer { isPreparingShare = false }
-        do {
-            let url = try await shareService.prepareShare(item: scoreItem, format: format)
-            shareTarget = ScoreShareTarget(urls: [url])
-        } catch {
-            // Reader has no error banner yet; sharing failures are non-fatal and simply present nothing.
-        }
-    }
-
-    /// Lazy format options for the share menu — same source as Library.
-    func availableShareFormats() async -> [ScoreShareFormatOption] {
-        await shareService.availableFormats(for: scoreItem)
     }
 
     // MARK: - Private
@@ -365,7 +354,7 @@ final class ReaderViewModel {
 
     /// Rebuild `visibleScore` from the loaded score and the current layout / transpose inputs. Cheap no-op when nothing
     /// is loaded. Called on load and from the layout / transpose change hooks, never from a view body.
-    private func recomputeVisibleScore() {
+    func recomputeVisibleScore() {
         guard let score = loadState.score else {
             visibleScore = nil
             return
@@ -377,7 +366,8 @@ final class ReaderViewModel {
         visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
     }
 
-    private func loadOrSeedPreferences() async {
+    /// Internal so both load paths in `ReaderViewModel+Load.swift` can reach the preference / last-opened helpers.
+    func loadOrSeedPreferences() async {
         let prefs = await preferencesStore.loadOrSeed()
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
@@ -388,7 +378,7 @@ final class ReaderViewModel {
         mixerModel.sync(from: prefs)
     }
 
-    private func updateLastOpenedAtOnce() async {
+    func updateLastOpenedAtOnce() async {
         guard !hasUpdatedLastOpened else { return }
         hasUpdatedLastOpened = true
         var updated = scoreItem

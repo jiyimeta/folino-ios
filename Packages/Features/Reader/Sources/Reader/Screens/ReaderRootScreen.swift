@@ -230,6 +230,10 @@ public struct ReaderRootScreen: View {
             } else {
                 ProgressView().controlSize(.large)
             }
+        case .loadedPDF:
+            // PDF container dispatch is wired in a later task; until then the loaded PDF state shows a placeholder so
+            // the `LoadState` switch stays exhaustive.
+            ProgressView().controlSize(.large)
         case let .failed(error):
             ContentUnavailableView {
                 Label {
