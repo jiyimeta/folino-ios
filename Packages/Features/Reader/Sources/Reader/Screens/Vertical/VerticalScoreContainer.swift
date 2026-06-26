@@ -302,26 +302,22 @@ struct VerticalScoreContainer: View {
         let session = pinchSession ?? PinchSession(baseZoom: viewModel.viewportZoom)
         pinchSession = nil
 
-        let combined = session.baseZoom * magnification
-        let targetZoom: CGFloat = combined < 1.05 ? 1.0 : combined
-        let ratio = targetZoom / session.baseZoom
+        let r = ReaderPinchCommit.resolve(PinchCommitInput(
+            baseZoom: session.baseZoom, magnification: magnification,
+            startLocation: startLocation, currentOffset: currentOffset,
+            offsetX: pinch.offsetX, offsetY: 0,
+        ))
+        let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
 
-        let scrollToTarget = CGPoint(
-            x: max(0, currentOffset.x + startLocation.x * (ratio - 1) - pinch.offsetX),
-            y: max(0, currentOffset.y + startLocation.y * (ratio - 1)),
-        )
-
-        let isBounceBack = targetZoom <= 1.0 && session.baseZoom <= 1.0
-        if isBounceBack {
+        if r.isBounceBack {
             // Rubber-band release from baseline 1.0. `pinch.anchor` is intentionally left at the gesture's start
             // anchor — animating it toward `.center` would interpolate the scale pivot and read as judder. The reset
             // eases frame-by-frame (PinchState.animateReset) so the annotation ink overlay follows it in lockstep.
             pinch.animateReset(toMagnification: 1.0, offsetX: 0)
         } else {
-            committedZoom = targetZoom
+            committedZoom = r.targetZoom
             pendingScroll = .immediate(scrollToTarget)
-            let snapToUnit = targetZoom <= 1.0
-            if snapToUnit {
+            if r.snapToUnit {
                 // Snap-to-unit from a non-unit base. Naïvely animating both `viewportZoom` (`base → target`) and
                 // `pinch.magnification` (`gr.scale → 1`) together makes their product bulge mid-animation — for a
                 // 3× → 1× zoom-out the combined visible scale overshoots 1.0 by ~30% at the midpoint. Decompose
@@ -333,21 +329,20 @@ struct VerticalScoreContainer: View {
                 // Snap-to-unit from a non-unit base. Set the post-commit zoom and compensate magnification so the
                 // visible scale (viewportZoom × magnification) is invariant at the commit instant, then ease
                 // magnification → 1.0 frame-by-frame so visible scale moves monotonically `combined → 1.0`.
-                let compensatedMag = combined / targetZoom
                 viewModel.resetZoom()
-                pinch.magnification = compensatedMag
+                pinch.magnification = r.compensatedMag
                 pinch.animateReset(toMagnification: 1.0, offsetX: 0)
             } else {
                 // Real zoom-in / zoom-out. Combined visible scale is invariant across the commit
                 // (`baseZoom × gr.scale = targetZoom × 1.0`); interpolating each factor separately would bulge along
                 // the easing curve and read as an unwanted scale animation. Snap the scale state, animate only the
                 // live offset reset, and only when the scroll view can't absorb it.
-                viewModel.viewportZoom = targetZoom
+                viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
                 pinch.anchor = .center
 
                 let docWidth = document?.size.width ?? 0
-                let postFramedWidth = min(docWidth, viewport.width) * targetZoom
+                let postFramedWidth = min(docWidth, viewport.width) * r.targetZoom
                 let scrollAbsorbsOffset = postFramedWidth > viewport.width
                 if pinch.offsetX != 0, !scrollAbsorbsOffset {
                     pinch.animateReset(toMagnification: pinch.magnification, offsetX: 0)
