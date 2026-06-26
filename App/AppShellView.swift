@@ -438,6 +438,7 @@ private struct ReadyShell: View {
     private var settingsButton: some View {
         Button {
             isSettingsPresented = true
+            bootstrap.analytics?.log(.settingsOpened())
         } label: {
             Image(systemName: "gear").accessibilityLabel(Text("app.toolbar.settings.label"))
         }
