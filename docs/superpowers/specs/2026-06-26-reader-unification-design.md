@@ -58,21 +58,29 @@ Canvas { ctx, size in
 }
 ```
 
-SwiftUI `Canvas` re-runs its draw closure at the rendered (post-`scaleEffect`)
-resolution — the same mechanism that keeps the score's `ScoreView` sharp under zoom
-(documented in `VerticalScoreContainer`: "keeps the SwiftUI Canvas re-rasterising
-under scaleEffect (sharp throughout) instead of falling back to a CALayer bitmap
-upscale"). So committed zoom and live magnification both apply via `scaleEffect`, and
-PDF stays sharp at any zoom with no cached bitmaps.
+**Committed zoom is applied by GROWING THE PAGE VIEW'S FRAME** (the page `Canvas` is laid
+out at `baseSize × committedZoom`), not by a `scaleEffect`. When the frame grows, the
+`Canvas` re-runs its draw closure at the larger size, so the vector content rasterizes at
+the higher resolution — sharp. Live pinch still rides a transient `scaleEffect`
+(magnification), the same as the score; on commit the frame grows and the page re-renders
+sharp. No cached bitmaps.
 
-**Risk + de-risking:** `pdfPage.draw` replays the content stream on the main thread
-each time the `Canvas` re-rasterizes (i.e. every frame during a live pinch). For
-typical sheet-music PDFs this should match the score's per-frame draw cost, but a
-complex PDF could jank. **The implementation plan's first task is a device spike**:
-render a PDF page in a `Canvas` under `scaleEffect`, confirm it stays sharp and pinches
-smoothly on device, before the shared-shell refactor. If a complex PDF janks, the
-fallback is a hybrid: show a pre-rasterized snapshot during the live gesture and swap
-to the vector `Canvas` on commit. The shell design is unaffected by that fallback.
+**Device-validated (Phase 0 spike).** Drawing a PDF page into a `Canvas` at a grown frame
+renders **vector** PDFs (e.g. MuseScore exports) sharp at any zoom. Earlier "blurry"
+spike results were a **test-file confound**: the PDF under test was a PiaScore export — a
+**raster (image-backed) PDF that is blurry at the source** and renders blurry even in
+Apple's Preview. That is expected and correct: a raster PDF can only be drawn at its
+embedded image's resolution; we render it faithfully, like every PDF viewer. No special
+handling — vector PDFs are sharp, raster PDFs are source-limited.
+
+**Rendering specifics (for the plan):** draw via CoreGraphics `CGPDFPage`
+(`page.pageRef` + `ctx.drawPDFPage`) rather than PDFKit's `PDFPage.draw`, and use
+`Canvas(rendersAsynchronously: true)` so the draw runs off the main thread (matching the
+score's per-system Canvases). `CGPDFPage` is a CoreGraphics type and is safe to use
+off-main; PDFKit's `PDFPage.draw` is not (it traps `EXC_BREAKPOINT` on background
+threads). At extreme zoom a single page `Canvas` may approach the layer's max backing
+size; that is far beyond sheet-music reading needs and tiling can be added later if ever
+required (YAGNI for now).
 
 ## Architecture
 
@@ -219,8 +227,10 @@ a separate Compose implementation; it is unaffected and out of scope.
 
 ## Risks
 
-1. **`Canvas` + `drawPDFPage` performance during pinch** — de-risked by the spike-first
-   plan task; hybrid fallback available.
+1. **`Canvas` + `drawPDFPage` rendering** — RESOLVED by the Phase 0 device spike: vector
+   PDFs render sharp via a frame-grown `Canvas`; raster (image-backed) PDFs are
+   source-limited (blurry even in Preview) and need no special handling. Use async
+   rendering + `CGPDFPage` for smoothness/thread-safety (see Core Decision).
 2. **Score reader regression** — the shells are extracted from the working score code;
    the score containers become providers over them. Mitigated by extracting behavior
    verbatim and a full manual regression pass on the score reader before merge.
