@@ -10,8 +10,12 @@ struct ShareImportPolicyTests {
         #expect(ShareImportPolicy.isAccepted(filename: "c.midi"))
     }
 
+    @Test func `accepts PDF`() {
+        #expect(ShareImportPolicy.isAccepted(filename: "doc.pdf"))
+        #expect(ShareImportPolicy.isAccepted(filename: "DOC.PDF"))
+    }
+
     @Test func `rejects unknown or missing extensions`() {
-        #expect(!ShareImportPolicy.isAccepted(filename: "doc.pdf"))
         #expect(!ShareImportPolicy.isAccepted(filename: "noext"))
         #expect(!ShareImportPolicy.isAccepted(filename: ""))
     }
