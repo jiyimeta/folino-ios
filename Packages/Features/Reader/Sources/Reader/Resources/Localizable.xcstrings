@@ -1519,6 +1519,40 @@
         }
       }
     },
+    "reader.pdf.settingsNote" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display adjustment and playback aren't available for PDF scores."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 楽譜では表示調整・再生は利用できません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 악보에서는 표시 조정과 재생을 사용할 수 없습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 乐谱不支持显示调整与播放。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 樂譜不支援顯示調整與播放。"
+          }
+        }
+      }
+    },
     "reader.preferences.layoutDirection" : {
       "localizations" : {
         "en" : {

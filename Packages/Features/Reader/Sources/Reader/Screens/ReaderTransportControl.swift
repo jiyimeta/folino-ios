@@ -1,3 +1,4 @@
+import Domain
 import SheetMusicCore
 import SwiftUI
 import UtilityUI
@@ -61,9 +62,14 @@ struct ReaderTransportControl: View {
         HStack(spacing: 12) {
             resetZoomButton
             Spacer()
-            endpointButtons(flat: false)
-            if case .loaded = viewModel.loadState {
-                transportPill
+            // Playback affordances (A/B endpoints + transport pill) only render when the session can play. PDFs carry
+            // no notation, so `canPlay` is false and the transport collapses to just the reset-zoom button. The zoom
+            // and page-navigation gestures are handled inside the reader containers and remain available for PDFs.
+            if viewModel.capabilities.canPlay {
+                endpointButtons(flat: false)
+                if case .loaded = viewModel.loadState {
+                    transportPill
+                }
             }
         }
         .padding(.horizontal)
