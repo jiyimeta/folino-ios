@@ -1,4 +1,5 @@
 import Domain
+import Foundation
 import UtilityCore
 
 // MARK: - Transport / inspector action facade
@@ -61,5 +62,30 @@ extension ReaderViewModel {
         guard new != lastTransposeSemitones else { return }
         analytics.log(.transposeChanged(direction: new > lastTransposeSemitones ? "up" : "down"))
         lastTransposeSemitones = new
+    }
+
+    // MARK: Annotation
+
+    /// Toggle annotation (Apple Pencil) mode. Logs `annotation_started` only on ENTER — the mode-entry signal — never
+    /// on exit. The distinct, real pencil-usage signal is `annotation_ink_committed`, logged separately from
+    /// `annotationDrawingsDidChange` when a stroke is actually committed to the canvas. Called by the overlay's toggle
+    /// button instead of poking `isAnnotating` directly, so the entry is logged once at its real action site.
+    func toggleAnnotation() {
+        isAnnotating.toggle()
+        if isAnnotating {
+            analytics.log(.annotationStarted())
+        }
+    }
+
+    /// Log one committed annotation stroke and, on the first commit the app has ever seen, persist the
+    /// `hasUsedAnnotation` flag and set the `has_used_annotation` user property to `"true"`. The event fires on every
+    /// genuine commit; the flag/property write is idempotent — guarded on the persisted flag so it happens exactly once
+    /// across the app's lifetime. Task 13 reads the flag at launch to seed the user property on cold start.
+    func logAnnotationInkCommitted() {
+        analytics.log(.annotationInkCommitted())
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: AnalyticsStateKey.hasUsedAnnotation) else { return }
+        defaults.set(true, forKey: AnalyticsStateKey.hasUsedAnnotation)
+        analytics.setUserProperty("true", for: .hasUsedAnnotation)
     }
 }

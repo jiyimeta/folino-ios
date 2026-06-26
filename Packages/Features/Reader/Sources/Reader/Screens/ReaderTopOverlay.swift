@@ -110,7 +110,7 @@ struct ReaderTopOverlay: View {
                 bundle: .module,
             ),
         ) {
-            viewModel.isAnnotating.toggle()
+            viewModel.toggleAnnotation()
         }
     }
 
