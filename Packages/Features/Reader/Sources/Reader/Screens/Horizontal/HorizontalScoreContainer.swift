@@ -1,4 +1,5 @@
 import Domain
+import PencilKit
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -34,6 +35,10 @@ struct HorizontalScoreContainer: View {
     /// value immediately — the `expectedContentSize` closure reads this to dodge SwiftUI's animated interpolation while
     /// the commit transition is in flight.
     @State private var committedZoom: CGFloat = 1.0
+    /// The annotation model projected to the current layout. Recomputed on reflow / score-swap and appear — NOT on
+    /// scroll/pinch — so per-tick rendering stays cheap. Passed to the canvas as the seed drawing. Mirrors
+    /// `VerticalScoreContainer.projectedAnnotations`.
+    @State private var projectedAnnotations = PKDrawing()
 
     private let scorePadding: CGFloat = 16
 
@@ -94,7 +99,7 @@ struct HorizontalScoreContainer: View {
                     viewport: viewport,
                 )
             },
-            annotationOverlay: nil, // annotation is Vertical-mode only (M1)
+            annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             HorizontalZoomedSurface(
                 viewModel: viewModel,
@@ -114,6 +119,11 @@ struct HorizontalScoreContainer: View {
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
+        // Reproject (and reseed the canvas) only on reflow / score-swap and initial appear — NOT on
+        // `viewModel.annotationDrawings`: while drawing, the canvas is the source of truth (kept equal to the live ink
+        // in `annotationSpec`), so reseeding would wipe the just-committed stroke. Mirrors `VerticalScoreContainer`.
+        .onChange(of: document) { _, _ in reprojectAnnotations() }
+        .onAppear { reprojectAnnotations() }
     }
 
     /// Folds a finished pinch into `viewportZoom` and queues a scroll so the content under the user's fingers at
@@ -174,6 +184,52 @@ struct HorizontalScoreContainer: View {
                 }
             }
         }
+    }
+
+    private func annotationSpec(viewport: CGSize) -> AnnotationOverlaySpec {
+        AnnotationOverlaySpec(
+            isAnnotating: viewModel.isAnnotating,
+            isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            displayDrawing: projectedAnnotations,
+            onChange: { drawing in
+                guard let doc = document else { return }
+                // Canvas is the source of truth while drawing: keep the projection equal to the live ink so the next
+                // render's `applyDrawing` is a no-op (echo guard). The model is still captured for persistence/reflow.
+                projectedAnnotations = drawing
+                viewModel.annotationDrawingsDidChange(AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc))
+            },
+            state: { annotationCanvasState(viewport: viewport) },
+        )
+    }
+
+    /// Geometry the canvas mirrors onto PencilKit's scroll machinery. Same composition as
+    /// `VerticalScoreContainer.annotationCanvasState`, adapted for Horizontal: committed zoom = `viewportZoom` (no
+    /// fit-to-width), symmetric `scorePadding`, X scrolled natively (no `pinch.offsetX`), Y carried by `pinch.offsetY`.
+    /// Vertical centering rides on the host's real `contentOffset` (added by the controller), so it cancels here.
+    private func annotationCanvasState(viewport _: CGSize) -> AnnotationCanvasState {
+        guard let doc = document else {
+            return .init(documentSize: .zero, zoomScale: 1, contentOffsetBias: .zero, contentInset: .zero)
+        }
+        let zoomC = viewModel.viewportZoom // committed zoom, no live magnification, no fit-to-width
+        let m = pinch.magnification
+        let z = zoomC * m
+        let pad = scorePadding
+        let anchorTermX = pinch.anchor.x * (doc.size.width + pad * 2) * (1 - m) * zoomC
+        let anchorTermY = pinch.anchor.y * (doc.size.height + pad * 2) * (1 - m) * zoomC
+        return AnnotationCanvasState(
+            documentSize: doc.size,
+            zoomScale: z,
+            contentOffsetBias: CGPoint(
+                x: -pad * z - anchorTermX,
+                y: -pad * z - anchorTermY - pinch.offsetY,
+            ),
+            contentInset: UIEdgeInsets(top: 100_000, left: 100_000, bottom: 100_000, right: 100_000),
+        )
+    }
+
+    private func reprojectAnnotations() {
+        guard let doc = document else { projectedAnnotations = PKDrawing(); return }
+        projectedAnnotations = AnnotationAnchoring.display(viewModel.annotationDrawings, in: doc)
     }
 
     /// Horizontal mode: lay out at natural content width so systems never wrap. Title frame is omitted — it'd push the

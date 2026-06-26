@@ -69,4 +69,36 @@ struct AnnotationAnchoringTests {
         // scale component a doubles (sp 5 -> 10)
         #expect(abs(dLarge.a - 2 * dSmall.a) < 0.001)
     }
+
+    /// A natural-width (no-wrap) layout of the same score, as Horizontal mode builds it. Proves an anchor captured in
+    /// one layout projects into a different layout — the cross-mode sharing guarantee (Vertical ink shows in
+    /// Horizontal).
+    private func naturalDoc(staffSize: CGFloat = 28) -> LayoutDocument {
+        let note = Note(pitch: 60, tpc: 14)
+        let chord = Chord(duration: .whole, notes: [note])
+        let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
+        let staff = Staff(measures: [measure, measure])
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])],
+        )
+        var options = ScoreViewOptions()
+        options.staffSize = staffSize
+        options.wrapToViewWidth = false
+        options.includeTitleFrame = false
+        let natural = LayoutEngine.naturalContentWidth(score: score, options: options)
+        return LayoutEngine.layout(score: score, options: options, availableWidth: natural)
+    }
+
+    @Test
+    func `anchor captured in a wrap layout resolves in a natural-width layout`() throws {
+        let wrap = doc()
+        let natural = naturalDoc()
+        let centroid = try #require(
+            wrap.anchorReferencePoint(measureIndex: 1, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0)?.point,
+        )
+        let (anchor, _) = try #require(AnnotationAnchoring.normalizeTransform(forCentroid: centroid, in: wrap))
+        // The same musical anchor resolves to a concrete point in the natural-width layout (non-nil display transform).
+        #expect(AnnotationAnchoring.displayTransform(for: anchor, in: natural) != nil)
+    }
 }
