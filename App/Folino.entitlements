@@ -13,6 +13,7 @@
     <key>com.apple.security.application-groups</key>
     <array>
         <string>group.com.KeyNumber.Folino</string>
+        <string>group.com.KeyNumber.shared</string>
     </array>
 </dict>
 </plist>
