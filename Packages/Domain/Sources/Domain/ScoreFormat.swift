@@ -7,6 +7,7 @@ public enum ScoreFormat: String, Hashable, Sendable, Codable, CaseIterable {
     case musicXML
     case mxl
     case midi
+    case pdf
 
     /// The default file extension folino writes when exporting this format.
     public var canonicalExtension: String {
@@ -16,11 +17,12 @@ public enum ScoreFormat: String, Hashable, Sendable, Codable, CaseIterable {
         case .musicXML: "musicxml"
         case .mxl: "mxl"
         case .midi: "mid"
+        case .pdf: "pdf"
         }
     }
 
-    /// Best-effort detection from a filename or path. Case-insensitive on the extension. Returns `nil` for `.pdf` in v1
-    /// — PDF support is deferred to a later plan that introduces OCR.
+    /// Best-effort detection from a filename or path. Case-insensitive on the extension. PDF is detected here but is
+    /// never parsed into a `Score` — it is displayed as a fixed-layout document (see the PDF reader).
     public static func detect(filename: String) -> ScoreFormat? {
         guard let dotIndex = filename.lastIndex(of: ".") else { return nil }
         let ext = filename[filename.index(after: dotIndex)...].lowercased()
@@ -30,6 +32,7 @@ public enum ScoreFormat: String, Hashable, Sendable, Codable, CaseIterable {
         case "musicxml", "xml": return .musicXML
         case "mxl": return .mxl
         case "mid", "midi", "smf": return .midi
+        case "pdf": return .pdf
         default: return nil
         }
     }
