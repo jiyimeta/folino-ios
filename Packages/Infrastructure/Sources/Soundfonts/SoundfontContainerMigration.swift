@@ -25,6 +25,7 @@ public struct SoundfontContainerMigration: Sendable {
 
         // ① Populate shared from a valid legacy copy when shared is empty/invalid (intra-volume rename: instant).
         if !isValid(sharedFile, minimumValidByteSize), isValid(legacyFile, minimumValidByteSize) {
+            try? fileManager.removeItem(at: sharedFile)
             try? fileManager.moveItem(at: legacyFile, to: sharedFile)
             excludeFromBackup(sharedFile)
         }

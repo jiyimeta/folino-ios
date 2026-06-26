@@ -49,6 +49,9 @@ struct SharedSoundfontReclaimerTests {
         let d = dir(); let r = make(d, checker: FakeChecker([]))
         r.syncOwnMarker(isOptedIn: true)
         #expect(markerExists(d, "com.KeyNumber.Folino"))
+        let markerURL = d.appendingPathComponent("consumers").appendingPathComponent("com.KeyNumber.Folino")
+        let body = try? JSONSerialization.jsonObject(with: Data(contentsOf: markerURL)) as? [String: String]
+        #expect(body?["displayName"] == "folino")
         r.syncOwnMarker(isOptedIn: false)
         #expect(!markerExists(d, "com.KeyNumber.Folino"))
     }

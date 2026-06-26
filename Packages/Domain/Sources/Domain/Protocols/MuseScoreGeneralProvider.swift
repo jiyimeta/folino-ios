@@ -10,7 +10,7 @@ import Observation
 @MainActor
 public protocol MuseScoreGeneralProvider: AnyObject, Observable, Sendable {
     /// User toggle. Defaults to `true` on first launch (auto-download by default; opt-out via Settings). Flipping it
-    /// via `setOptedIn(_:)`: cancels any in-flight download; if the file is on disk, deletes it.
+    /// via `setOptedIn(_:)`: cancels any in-flight download; file removed only when no installed sibling is opted in.
     var isOptedIn: Bool { get }
 
     /// `true` iff the high-quality preset file is currently on disk and readable. Derived from `downloadState` so

@@ -194,7 +194,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
             activeTask = nil
             activeDelegate = nil
             downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .finished)
-            reclaimer?.syncOwnMarker(isOptedIn: true)
+            reclaimer?.syncOwnMarker(isOptedIn: isOptedIn)
             let path = targetFileURL.path
             logger.notice("MuseScore_General download finished, installed at \(path, privacy: .public)")
         } catch {
@@ -234,14 +234,19 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     /// Called on scene-phase `.active`. Reflects a copy a sibling downloaded while we were backgrounded, and reclaims
     /// if a sibling opted out / was deleted while we were away and we are opted out.
     public func handleForeground() {
-        refreshDownloadStateFromDisk()
         reclaimer?.reclaimIfUnused(isOptedIn: isOptedIn)
+        refreshDownloadStateFromDisk()
     }
 
     /// Re-derive `downloadState` from disk (App Groups give no cross-process change notification).
     public func refreshDownloadStateFromDisk() {
         let exists = FileManager.default.fileExists(atPath: targetFileURL.path)
-        downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .syncedFromDisk(fileExists: exists))
+        if exists {
+            downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .syncedFromDisk(fileExists: true))
+        } else if case .downloaded = downloadState {
+            // Only demote when a file we believed present actually vanished (e.g. a sibling reclaimed it).
+            downloadState = SoundfontDownloadReducer.nextState(downloadState, on: .syncedFromDisk(fileExists: false))
+        }
     }
 
     /// Sibling display name keeping the (opted-out) shared file on device, for the Settings "in use" note; nil unless
