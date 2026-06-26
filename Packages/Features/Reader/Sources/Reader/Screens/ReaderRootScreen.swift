@@ -38,6 +38,12 @@ public struct ReaderRootScreen: View {
         ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
     }
 
+    /// The layout mode to use for PDFs: the persisted mode if it is PDF-allowed, else page. Guards against a stale
+    /// horizontal selection carried over from a score.
+    private var pdfLayoutMode: ReaderLayoutMode {
+        viewModel.capabilities.availableLayoutModes.contains(layoutMode) ? layoutMode : .page
+    }
+
     /// Space the bottom control reserves above the score, applied only in horizontal / page modes —
     /// vertical mode lets the score scroll under the floating control. The control overlays the
     /// score's bottom edge whether or not the seek bar is shown, so both states inset; the expanded
@@ -230,10 +236,13 @@ public struct ReaderRootScreen: View {
             } else {
                 ProgressView().controlSize(.large)
             }
-        case .loadedPDF:
-            // PDF container dispatch is wired in a later task; until then the loaded PDF state shows a placeholder so
-            // the `LoadState` switch stays exhaustive.
-            ProgressView().controlSize(.large)
+        case let .loadedPDF(document):
+            switch pdfLayoutMode {
+            case .vertical:
+                VerticalPDFContainer(document: document, viewModel: viewModel)
+            case .page, .horizontal:
+                PagedPDFContainer(document: document, viewModel: viewModel)
+            }
         case let .failed(error):
             ContentUnavailableView {
                 Label {
