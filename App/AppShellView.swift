@@ -156,6 +156,8 @@ private struct ReadyShell: View {
                 gateway: gateway,
                 shareService: shareService,
                 metadataReader: metadataReader,
+                analytics: bootstrap.analytics ?? NoopAnalytics(),
+                crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
             ),
         )
 

@@ -2,6 +2,7 @@ import Domain
 import Foundation
 import Observation
 import ScoreUI
+import UtilityCore
 
 @MainActor
 @Observable
@@ -11,6 +12,13 @@ public final class LibraryViewModel {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
+    /// Analytics sink. Read by the Screens that mutate the repository directly (playlist/tag rename, reorder, single
+    /// add/remove) so those view-layer bypass paths log against the same instance as the VM-owned actions.
+    let analytics: any Analytics
+    private let crashReporter: any CrashReporter
+
+    /// Logical origin label for every import that flows through the Library's in-app file picker.
+    private static let importSource = "file_picker"
 
     var shareTarget: ScoreShareTarget?
     var isPreparingShare = false
@@ -53,18 +61,29 @@ public final class LibraryViewModel {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
+        analytics: any Analytics = NoopAnalytics(),
+        crashReporter: any CrashReporter = NoopCrashReporter(),
     ) {
         self.repository = repository
         self.importer = importer
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
+        self.analytics = analytics
+        self.crashReporter = crashReporter
     }
 
-    func toggleFavorite(_ scoreItem: ScoreItem) async {
+    /// `source` is `.scoreRowMenu` for every in-Library caller (list rows, recents rows, context/swipe menus); the
+    /// parameter keeps the surface explicit and ready for a future non-row origin.
+    func toggleFavorite(_ scoreItem: ScoreItem, source: AnalyticsSource = .scoreRowMenu) async {
         var updated = scoreItem
         updated.isFavorite.toggle()
-        await save(updated)
+        do {
+            try await repository.saveScoreItem(updated)
+            analytics.log(.favoriteToggled(enabled: updated.isFavorite, source: source, mode: .single))
+        } catch {
+            currentError = error
+        }
     }
 
     func bulkSetFavorite(_ ids: Set<ScoreItemID>, favorite: Bool) async {
@@ -81,6 +100,7 @@ public final class LibraryViewModel {
                 return
             }
         }
+        analytics.log(.favoriteToggled(enabled: favorite, source: .bulkEdit, mode: .bulk))
     }
 
     /// Read the on-disk file's source + credit metaTags. Errors collapse to nil so a transient parse failure simply
@@ -103,9 +123,10 @@ public final class LibraryViewModel {
         await save(updated)
     }
 
-    func delete(_ scoreItem: ScoreItem) async {
+    func delete(_ scoreItem: ScoreItem, source: AnalyticsSource = .scoreRowMenu) async {
         do {
             try await repository.deleteScoreItem(id: scoreItem.id)
+            analytics.log(.scoreDeleted(source: source, mode: .single, count: 1))
         } catch {
             currentError = error
         }
@@ -114,6 +135,7 @@ public final class LibraryViewModel {
     func deletePlaylist(_ playlist: Playlist) async {
         do {
             try await repository.deletePlaylist(id: playlist.id)
+            analytics.log(.playlistDeleted(source: .playlist))
         } catch {
             currentError = error
         }
@@ -122,6 +144,7 @@ public final class LibraryViewModel {
     func deleteTag(_ tag: Tag) async {
         do {
             try await repository.deleteTag(id: tag.id)
+            analytics.log(.tagDeleted(source: .tag))
         } catch {
             currentError = error
         }
@@ -136,6 +159,8 @@ public final class LibraryViewModel {
                 return
             }
         }
+        guard !ids.isEmpty else { return }
+        analytics.log(.scoreDeleted(source: .bulkEdit, mode: .bulk, count: ids.count))
     }
 
     func restore(_ scoreItem: ScoreItem) async {
@@ -184,8 +209,10 @@ public final class LibraryViewModel {
         var updated = playlist
         updated.remove(ids)
         guard updated.orderedScoreItemIDs != playlist.orderedScoreItemIDs else { return }
+        let removedCount = playlist.orderedScoreItemIDs.count - updated.orderedScoreItemIDs.count
         do {
             try await repository.savePlaylist(updated)
+            analytics.log(.scoreRemovedFromPlaylist(source: .bulkEdit, count: removedCount))
         } catch {
             currentError = error
         }
@@ -199,8 +226,10 @@ public final class LibraryViewModel {
         var updated = playlist
         updated.appendUnique(orderedIDs)
         guard updated.orderedScoreItemIDs != playlist.orderedScoreItemIDs else { return }
+        let addedCount = updated.orderedScoreItemIDs.count - playlist.orderedScoreItemIDs.count
         do {
             try await repository.savePlaylist(updated)
+            analytics.log(.scoreAddedToPlaylist(source: .bulkEdit, count: addedCount))
         } catch {
             currentError = error
         }
@@ -211,6 +240,7 @@ public final class LibraryViewModel {
         tagIDs: Set<TagID>,
     ) async {
         guard !ids.isEmpty, !tagIDs.isEmpty else { return }
+        var changedCount = 0
         for id in ids {
             guard let item = repository.scoreItems.first(where: { $0.id == id }) else { continue }
             let merged = item.tagIDs.union(tagIDs)
@@ -219,10 +249,14 @@ public final class LibraryViewModel {
             updated.tagIDs = merged
             do {
                 try await repository.saveScoreItem(updated)
+                changedCount += 1
             } catch {
                 currentError = error
                 return
             }
+        }
+        if changedCount > 0 {
+            analytics.log(.tagAssigned(source: .bulkEdit, count: changedCount))
         }
     }
 
@@ -267,6 +301,7 @@ public final class LibraryViewModel {
         let playlist = Playlist(name: trimmed, orderedScoreItemIDs: [], createdAt: Date())
         do {
             try await repository.savePlaylist(playlist)
+            analytics.log(.playlistCreated(source: .playlist))
         } catch {
             currentError = error
         }
@@ -278,6 +313,7 @@ public final class LibraryViewModel {
         let tag = Tag(name: trimmed, colorHex: "#5856D6")
         do {
             try await repository.saveTag(tag)
+            analytics.log(.tagCreated(source: .tag))
         } catch {
             currentError = error
         }
@@ -305,6 +341,8 @@ public final class LibraryViewModel {
             plan = try await importer.prepareImport(sourceURL: sourceURL)
         } catch {
             currentError = error
+            let format = ScoreFormat.detect(filename: sourceURL.lastPathComponent)?.analyticsValue ?? "unknown"
+            logImportFailed(format: format, error: error)
             return
         }
         if let existing = plan.duplicates.first {
@@ -320,8 +358,35 @@ public final class LibraryViewModel {
         do {
             let item = try await importer.commitImport(plan, decision: decision)
             pendingScoreToOpen = item
+            analytics.log(.scoreImported(
+                format: plan.format,
+                source: Self.importSource,
+                isDuplicate: !plan.duplicates.isEmpty,
+                museScoreMajorVersion: item.museScoreMajorVersion,
+            ))
         } catch {
             currentError = error
+            logImportFailed(format: plan.format.analyticsValue, error: error)
+        }
+    }
+
+    /// Record an import failure as both an analytics event and a Crashlytics non-fatal. The `reason` is bucketed to a
+    /// stable low-cardinality label so analytics never carries a raw error string.
+    private func logImportFailed(format: String, error: Error) {
+        crashReporter.record(error: error)
+        analytics.log(.scoreImportFailed(format: format, reason: Self.importFailureReason(error)))
+    }
+
+    private static func importFailureReason(_ error: Error) -> String {
+        guard let domain = error as? DomainError else { return "other" }
+        switch domain {
+        case .scoreFileNotFound: return "file_not_found"
+        case .unsupportedFormat: return "unsupported_format"
+        case .scoreParseFailed: return "parse_failed"
+        case .scoreWriteFailed: return "write_failed"
+        case .persistenceFailed: return "persistence_failed"
+        case .syncFailed: return "sync_failed"
+        case .audioEngineFailed: return "audio_engine_failed"
         }
     }
 }

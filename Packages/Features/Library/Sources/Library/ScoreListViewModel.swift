@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import Observation
+import UtilityCore
 
 /// Drives any of the three leaf score list views (All / Tag-filtered / Playlist).
 @MainActor
@@ -15,6 +16,7 @@ final class ScoreListViewModel {
 
     let source: Source
     let repository: any ScoreLibraryRepository
+    let analytics: any Analytics
     var sort: ScoreItemSort
     var searchQuery = ""
 
@@ -27,9 +29,10 @@ final class ScoreListViewModel {
 
     private var manualOrder: Bool
 
-    init(source: Source, repository: any ScoreLibraryRepository) {
+    init(source: Source, repository: any ScoreLibraryRepository, analytics: any Analytics = NoopAnalytics()) {
         self.source = source
         self.repository = repository
+        self.analytics = analytics
         switch source {
         case .all, .favorites, .taggedWith:
             sort = .dateAddedDesc
@@ -44,6 +47,7 @@ final class ScoreListViewModel {
     func selectSort(_ next: ScoreItemSort) {
         sort = next
         manualOrder = false
+        analytics.log(.sortChanged(next))
     }
 
     /// Returns to the playlist's manual order. Only valid for `.playlist`.
