@@ -11,6 +11,8 @@ struct SeekRegion: View {
     let durationSeconds: Double
     /// Score name shown below the seek bar (same text Library lists), scrolling when it overflows.
     let title: String
+    /// Called once when a scrub gesture commits, so the owner can log the seek without this view importing analytics.
+    var onScrubCommit: () -> Void = {}
 
     @State private var isScrubbing = false
     @State private var scrubFraction: Double = 0
@@ -54,6 +56,7 @@ struct SeekRegion: View {
             onScrubEnded: {
                 isScrubbing = false
                 playbackSession.endScrub()
+                onScrubCommit()
             },
         )
     }

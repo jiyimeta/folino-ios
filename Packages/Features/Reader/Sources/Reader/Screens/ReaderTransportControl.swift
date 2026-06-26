@@ -114,6 +114,7 @@ struct ReaderTransportControl: View {
                 marks: score.readerRehearsalMarks(),
                 durationSeconds: score.notatedDurationSeconds,
                 title: scoreDisplayTitle,
+                onScrubCommit: { viewModel.logSeekCommitted() },
             )
             transportRow
         }
@@ -221,7 +222,7 @@ struct ReaderTransportControl: View {
             if viewModel.isInPlaylist, atStart, viewModel.hasPreviousPlaylistScore {
                 Task { await viewModel.goToPreviousScore() }
             } else {
-                viewModel.playbackSession.seekToStart()
+                viewModel.seekToStart()
             }
         } glyph: {
             Image(systemName: "backward.fill")
@@ -245,7 +246,7 @@ struct ReaderTransportControl: View {
         transportButton(
             label: Text("reader.toolbar.stepBackward", bundle: .module),
         ) {
-            viewModel.playbackSession.stepMeasureBackward()
+            viewModel.stepMeasureBackward()
         } glyph: {
             MeasureSkipSymbol(direction: .backward)
         }
@@ -255,7 +256,7 @@ struct ReaderTransportControl: View {
         transportButton(
             label: Text("reader.toolbar.stepForward", bundle: .module),
         ) {
-            viewModel.playbackSession.stepMeasureForward()
+            viewModel.stepMeasureForward()
         } glyph: {
             MeasureSkipSymbol(direction: .forward)
         }
@@ -273,7 +274,7 @@ struct ReaderTransportControl: View {
             width: width,
             height: height,
         ) {
-            Task { await viewModel.playbackSession.togglePlayback() }
+            Task { await viewModel.togglePlayback() }
         } glyph: {
             Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: glyphSize, weight: .medium))

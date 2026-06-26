@@ -79,7 +79,7 @@ struct ReaderTopOverlay: View {
                 systemImage: "info.circle",
                 label: Text("reader.toolbar.showInfo", bundle: .module),
             ) {
-                viewModel.isScoreInfoPresented = true
+                viewModel.presentScoreInfo()
             }
 
             Menu {

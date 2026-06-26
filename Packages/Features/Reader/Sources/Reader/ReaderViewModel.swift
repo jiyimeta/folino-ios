@@ -5,6 +5,7 @@ import Observation
 import PDFKit
 import ScoreUI
 import SheetMusicCore
+import UtilityCore
 
 @MainActor
 @Observable
@@ -97,6 +98,20 @@ final class ReaderViewModel {
     @ObservationIgnored let annotationStore: any AnnotationStore
     @ObservationIgnored private let scoresDirectory: URL
     @ObservationIgnored private let defaultStaffSize: Double
+    /// Internal so the transport / overlay / sharing view-layer log sites reach the same sink as the VM-owned events.
+    @ObservationIgnored let analytics: any Analytics
+    /// Origin surface the score was opened from, threaded from the Library navigation. Stamped onto `playback_started`
+    /// so playback can be attributed to where the score was opened (mirrors Library's `select_content` `from`).
+    /// Internal so the session-wiring extension can read it.
+    @ObservationIgnored let openedFrom: AnalyticsSource
+    /// The page/vertical/horizontal layout mode currently shown. Owned by `@AppStorage` in `ReaderRootScreen` (global,
+    /// cross-score); mirrored here so `playback_started` can carry it. The root screen seeds and keeps this in sync.
+    @ObservationIgnored var currentLayoutMode: ReaderLayoutMode = .page
+    /// Baselines for deriving the increase/decrease and up/down direction of tempo / transpose changes. Seeded from the
+    /// loaded preferences (so the first user edit compares against the persisted value), updated on each logged change.
+    /// Internal so the analytics-direction helpers in `ReaderViewModel+Analytics.swift` can read / advance them.
+    @ObservationIgnored var lastTempoMultiplier = 1.0
+    @ObservationIgnored var lastTransposeSemitones = 0
     @ObservationIgnored private var hasUpdatedLastOpened = false
     /// Re-entrancy guard for `advance`: the in-flight engine teardown/reload can deliver a spurious `cursor == nil`
     /// (→ `handlePlaybackReachedEnd`); this blocks a second advance mid-reload.
@@ -114,6 +129,8 @@ final class ReaderViewModel {
         playbackController: (any PlaybackController)? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
         playlistID: PlaylistID? = nil,
+        analytics: any Analytics = NoopAnalytics(),
+        openedFrom: AnalyticsSource = .libraryAll,
     ) {
         self.scoreItem = scoreItem
         self.playlistID = playlistID
@@ -124,6 +141,8 @@ final class ReaderViewModel {
         self.annotationStore = annotationStore
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
+        self.analytics = analytics
+        self.openedFrom = openedFrom
         preferencesStore = ReaderPreferencesStore(
             scoreItemID: scoreItem.id,
             defaultStaffSize: defaultStaffSize,
@@ -143,25 +162,6 @@ final class ReaderViewModel {
         wireMixerModel()
         wirePlaybackSession()
         wirePiPSession()
-    }
-
-    private func wirePiPSession() {
-        pipSession.scoreProvider = { [weak self] in self?.loadState.score }
-        pipSession.isPlayingProvider = { [weak self] in self?.playbackSession.isPlaying ?? false }
-        pipSession.playbackCursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
-        pipSession.scrollAnchorCursorProvider = { [weak self] in self?.playbackSession.scrollAnchorCursor }
-        pipSession.layoutSnapshotProvider = { [weak self] in self?.currentPiPLayoutSnapshot() }
-        pipSession.playbackController = playbackSession.controller
-        pipSession.onTogglePlayback = { [weak self] in await self?.playbackSession.togglePlayback() }
-    }
-
-    private func currentPiPLayoutSnapshot() -> PiPLayoutSnapshot {
-        PiPLayoutSnapshot(
-            staffSize: layoutModel.staffSize,
-            hiddenStaves: layoutModel.hiddenStaves,
-            clefOverrides: layoutModel.staffClefOverrides,
-            transposeSemitones: transposeModel.semitones,
-        )
     }
 
     private func wireMixerModel() {
@@ -200,6 +200,7 @@ final class ReaderViewModel {
     private func wireTempoModel() {
         tempoModel.onChange = { [weak self] in
             guard let self else { return }
+            logTempoChangeIfNeeded()
             await preferencesStore.mutate { prefs in
                 prefs.tempoMultiplier = self.tempoModel.multiplier
             }
@@ -220,6 +221,7 @@ final class ReaderViewModel {
     private func wireTransposeModel() {
         transposeModel.onChange = { [weak self] in
             guard let self else { return }
+            logTransposeChangeIfNeeded()
             recomputeVisibleScore()
             await preferencesStore.mutate { prefs in
                 prefs.transposeSemitones = self.transposeModel.semitones
@@ -255,26 +257,12 @@ final class ReaderViewModel {
         repeatModel.scoreProvider = { [weak self] in self?.loadState.score }
         repeatModel.cursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
         repeatModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
+        // Fired only on a Reader-initiated mode change (the inspector picker or `setMode`), never on a sync from
+        // persistence or an external Settings write — those reseed `mode` under `isSyncing`.
+        repeatModel.onModeChanged = { [weak self] mode in
+            self?.analytics.log(.repeatModeChanged(mode))
+        }
         repeatModel.startObservingGlobalMode()
-    }
-
-    private func wirePlaybackSession() {
-        playbackSession.scoreProvider = { [weak self] in self?.loadState.score }
-        playbackSession.hiddenStavesProvider = { [weak self] in self?.layoutModel.hiddenStaves ?? [] }
-        playbackSession.preferencesProvider = { [weak self] in self?.preferencesStore.preferences }
-        playbackSession.scoreItemProvider = { [weak self] in self?.scoreItem }
-        playbackSession.onPlayingChanged = { [weak self] playing in
-            self?.pipSession.onPlayingChanged(to: playing)
-        }
-        playbackSession.onCursorChanged = { [weak self] in
-            self?.pipSession.notifyCursorChanged()
-        }
-        playbackSession.onReadyForLoopForward = { [weak self] in
-            await self?.repeatModel.forwardLoopRangeToController()
-        }
-        playbackSession.onReachedEnd = { [weak self] in
-            await self?.handlePlaybackReachedEnd()
-        }
     }
 
     func load() async {
@@ -310,6 +298,9 @@ final class ReaderViewModel {
     /// next live playlist score and auto-play it. No-op when standalone, score no longer live, or decision is `.stop`.
     func handlePlaybackReachedEnd() async {
         guard !isAdvancing else { return }
+        // Logged before the playlist/standalone branch so a standalone score (which returns at the queue guard below)
+        // is counted too. The `isAdvancing` guard above keeps a spurious mid-reload nil-cursor from double-logging.
+        analytics.log(.playbackCompleted())
         let queue = currentPlaylistQueue()
         guard let currentIndex = queue.firstIndex(of: scoreItem.id) else { return }
         let action = PlaylistPlaybackProgression.nextAction(
@@ -376,6 +367,10 @@ final class ReaderViewModel {
         a4ReferenceModel.sync(from: prefs)
         layoutModel.sync(from: prefs)
         mixerModel.sync(from: prefs)
+        // Seed the direction baselines from the loaded values so the first user edit compares against what's persisted
+        // (and the sync itself logs nothing — `sync(from:)` bypasses the models' `onChange`).
+        lastTempoMultiplier = tempoModel.effectiveMultiplier
+        lastTransposeSemitones = transposeModel.semitones
     }
 
     func updateLastOpenedAtOnce() async {
