@@ -200,10 +200,15 @@ reconciles markers to actual opt-in state every launch).
 
 When Folino is **opted out** but the shared file still exists **and** `reclaimIfUnused()`'s `foreignWanters` is
 non-empty (a sibling is installed and opted in), Folino's Settings → Soundfonts area shows an informational note naming
-the using app via the marker's `displayName`, e.g. *"The high-quality soundfont is kept because <VocalTuner> is using
-it."* (**Exact copy TBD** — must obey the lowercase-brand rule for `folino`, use the sibling's published `displayName`,
-and avoid internal feature names.) The note explains why opt-out did not free storage. The data is already computed for
-the reference count, so this is a presentation-only addition. A symmetric note in VocalTuner ("kept because folino is
+the using app via the marker's `displayName` (`%@`). Final copy (EN / JA; other supported locales adapted to match
+tone during implementation):
+
+- EN: `Shared with %@, so it’s kept on your device. To free this storage, turn it off in %@ as well.`
+- JA: `%@ と共有しているため端末に残しています。容量を解放するには %@ 側でもオフにしてください。`
+
+`%@` is the sibling's published `displayName` (e.g. `VocalTuner`); `folino` stays lowercase in its own contexts. The
+note explains why opt-out did not free storage and how to reclaim it. The data is already computed for the reference
+count, so this is a presentation-only addition. A symmetric note in VocalTuner ("kept because folino is
 using it") is an **optional** parallel add (see Out of scope).
 
 ### 7. Entitlements & Info.plist
@@ -310,7 +315,8 @@ opted in.
 3. **RESOLVED**: defer the atomic-`replaceItemAt` hardening; keep the existing remove+move (benign, rare race).
 4. **RESOLVED**: reference-counted reclaim uses opt-in markers + `canOpenURL` liveness (no heartbeat window); deletion is
    immediate when the last interested app leaves, caught on opt-out or next launch.
-5. Finalize the §6 "in use" copy (and decide whether to add the symmetric VocalTuner note) during implementation.
+5. **RESOLVED**: §6 "in use" copy is the Actionable variant above (EN/JA fixed; other locales adapted in tone during
+   implementation). The symmetric VocalTuner note stays optional.
 
 ## Cross-repo note
 
