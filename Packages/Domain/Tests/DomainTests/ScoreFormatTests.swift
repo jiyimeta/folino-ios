@@ -15,9 +15,9 @@ struct ScoreFormatTests {
         #expect(ScoreFormat.detect(filename: "song.smf") == .midi)
     }
 
-    @Test func `returns nil for PDF in V 1`() {
-        #expect(ScoreFormat.detect(filename: "song.pdf") == nil)
-        #expect(ScoreFormat.detect(filename: "song.PDF") == nil)
+    @Test func `detects PDF`() {
+        #expect(ScoreFormat.detect(filename: "song.pdf") == .pdf)
+        #expect(ScoreFormat.detect(filename: "song.PDF") == .pdf)
     }
 
     @Test func `returns nil for unknown extension`() {

@@ -1,3 +1,4 @@
+import Domain
 import SheetMusicCore
 import SwiftUI
 import UtilityUI
@@ -14,31 +15,35 @@ struct ReaderTransportControl: View {
     /// bottom padding, so it hugs the top of the bottom safe area. Used by `ReaderRootScreen` to inset the horizontal /
     /// page viewport so the score never renders under it.
     static let collapsedContentHeight: CGFloat = 44
-    /// Height the expanded card's content reserves above the bottom safe area — top 12 + rehearsal-mark bar (32, with
-    /// an -8 overlap onto the seek bar) + seek ~28 + transport row 44 ≈ 108. Reserved unconditionally (even for scores
-    /// without rehearsal marks, which omit the mark bar) so the inset stays a constant. The glass background
-    /// additionally bleeds down into the safe area (stopping `cardMargin` from the physical edge), but that region sits
-    /// below the safe area where the score never renders, so the inset only needs the content height.
-    static let expandedContentHeight: CGFloat = 108
+    /// Height the expanded card's content reserves above the bottom safe area — top 6 + rehearsal-mark bar (32, with an
+    /// -8 overlap onto the seek bar) + seek ~28 + time/title row (~17, pulled up -6) + transport row 44 ≈ 114. Reserved
+    /// unconditionally (even for scores without rehearsal marks, which omit the mark bar) so the inset stays constant.
+    /// The glass background additionally bleeds down into the safe area (stopping `cardMargin` from the physical edge),
+    /// but that region sits below the safe area where the score never renders, so the inset only needs the content
+    /// height. The A/B pill that floats above the card is intentionally excluded — it overlays the score bottom-right.
+    static let expandedContentHeight: CGFloat = 114
 
     /// Spacing on each side of the centered prev / play / next triad in the expanded card — kept short so step-back and
-    /// step-forward sit close to the play/pause button, equidistant from it.
-    private static let transportTriadSpacing: CGFloat = 12
+    /// step-forward sit close to the play/pause button, equidistant from it. Matches VocalTuner's transport card.
+    private static let transportTriadSpacing: CGFloat = 4
 
     /// Margin between the seek card and the screen edges (leading / trailing / bottom). Kept small so the card hugs the
-    /// edges; the corner radius is derived from it so the card nests concentrically inside the device's rounded screen.
-    /// The glass invades the bottom safe area and stops this far from the physical edge; the content stays above the
-    /// safe area.
-    private static let cardMargin: CGFloat = 10
-    /// Floor for the card's corner radius, so square-cornered devices (e.g. iPhone SE, iPad) still get a rounded card.
-    private static let minCardCornerRadius: CGFloat = 16
+    /// edges; the bottom corner radius is derived from it so the card nests concentrically inside the device's rounded
+    /// screen. The glass invades the bottom safe area and stops this far from the physical edge; the content stays
+    /// above the safe area. Matches VocalTuner's `cardMargin`.
+    private static let cardMargin: CGFloat = 6
+    /// Floor for the bottom corner radius, so square-cornered devices (e.g. iPhone SE, iPad) still get a rounded card.
+    private static let minCardCornerRadius: CGFloat = 14
+    /// Fixed radius for the card's free top corners — a smaller, constant value than the device-hugging bottom corners
+    /// (Apple's medium-detent sheet pattern, matching VocalTuner).
+    private static let topCornerRadius: CGFloat = 18
     /// Upper bound on the card width. On wide screens (iPad) the card stops growing and is center-aligned instead of
     /// spanning the full width, keeping the seek bar within comfortable reach.
     private static let maxCardWidth: CGFloat = 520
 
-    /// Corner radius that nests the card concentrically inside the device's screen corners: `deviceCorner - margin`,
-    /// floored at `minCardCornerRadius` for square-cornered devices.
-    private var cardCornerRadius: CGFloat {
+    /// Bottom corner radius that nests the card concentrically inside the device's screen corners: `deviceCorner -
+    /// margin`, floored at `minCardCornerRadius` for square-cornered devices.
+    private var bottomCornerRadius: CGFloat {
         max(DeviceMetrics.screenCornerRadius - Self.cardMargin, Self.minCardCornerRadius)
     }
 
@@ -55,15 +60,28 @@ struct ReaderTransportControl: View {
         }
     }
 
-    // MARK: Collapsed (today's layout)
+    /// Score name shown under the seek bar — the same text Library lists (title plus subtitle when present).
+    private var scoreDisplayTitle: String {
+        let title = viewModel.scoreItem.title
+        if let subtitle = viewModel.scoreItem.subtitle, !subtitle.isEmpty {
+            return "\(title) \(subtitle)"
+        }
+        return title
+    }
+
+    // MARK: Collapsed (compact pill)
 
     private var collapsedLayout: some View {
         HStack(spacing: 12) {
-            resetZoomButton
             Spacer()
-            endpointButtons(flat: false)
-            if case .loaded = viewModel.loadState {
-                transportPill
+            // Playback affordances (A/B endpoints + transport pill) only render when the session can play. PDFs carry
+            // no notation, so `canPlay` is false and the transport collapses to just the reset-zoom button. The zoom
+            // and page-navigation gestures are handled inside the reader containers and remain available for PDFs.
+            if viewModel.capabilities.canPlay {
+                endpointButtons(flat: false)
+                if case .loaded = viewModel.loadState {
+                    transportPill
+                }
             }
         }
         .padding(.horizontal)
@@ -75,10 +93,15 @@ struct ReaderTransportControl: View {
 
     private func expandedLayout(score: Score) -> some View {
         VStack(spacing: 8) {
-            if viewModel.viewportZoom > 1.0 {
-                HStack { resetZoomButton; Spacer() }
-                    .frame(maxWidth: Self.maxCardWidth)
-                    .padding(.horizontal, Self.cardMargin)
+            // The A/B endpoint pill floats above the card, pinned to the score area's bottom-right, only in AB-loop
+            // mode — pushed out of the card so the transport row reads cleanly.
+            if viewModel.repeatModel.mode == .abLoop {
+                HStack {
+                    Spacer()
+                    endpointButtons(flat: false)
+                }
+                .frame(maxWidth: Self.maxCardWidth)
+                .padding(.horizontal, Self.cardMargin)
             }
             seekCard(score: score)
         }
@@ -90,20 +113,29 @@ struct ReaderTransportControl: View {
                 playbackSession: viewModel.playbackSession,
                 marks: score.readerRehearsalMarks(),
                 durationSeconds: score.notatedDurationSeconds,
+                title: scoreDisplayTitle,
             )
             transportRow
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
+        .padding(.top, 6)
         .frame(maxWidth: Self.maxCardWidth)
         .background {
             // The glass invades the bottom safe area (`.ignoresSafeArea`) but its own `.padding(.bottom, cardMargin)`
             // keeps the rounded rect `cardMargin` clear of the physical edge, nesting it concentrically inside the
-            // device corners. The foreground content is unaffected by `.ignoresSafeArea`, so it stays above the
-            // home indicator.
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            // device corners. The free top corners use a smaller fixed radius. The foreground content is unaffected by
+            // `.ignoresSafeArea`, so it stays above the home indicator.
+            let bottom = bottomCornerRadius
+            let shape = UnevenRoundedRectangle(
+                topLeadingRadius: min(Self.topCornerRadius, bottom),
+                bottomLeadingRadius: bottom,
+                bottomTrailingRadius: bottom,
+                topTrailingRadius: min(Self.topCornerRadius, bottom),
+                style: .continuous,
+            )
+            shape
                 .fill(.clear)
-                .glassEffect(.regular, in: .rect(cornerRadius: cardCornerRadius))
+                .glassEffect(.regular, in: shape)
                 .padding(.bottom, Self.cardMargin)
                 .ignoresSafeArea(.container, edges: .bottom)
         }
@@ -113,45 +145,40 @@ struct ReaderTransportControl: View {
     }
 
     /// Transport row. The prev / play / next triad is centered as one tight group, so play/pause sits at the card's
-    /// horizontal center with step-back and step-forward an equal, short distance on either side. Jump-to-start is
-    /// pinned to the leading edge and the A/B endpoint buttons (AB-loop only) to the trailing edge, layered behind the
-    /// centered triad so they don't shift it.
+    /// horizontal center. The jump-to-start (or previous-score) button is pinned to the leading edge and, in a
+    /// playlist, the next-score button to the trailing edge; equal flexible side groups keep the triad centered whether
+    /// or not the trailing button is present.
     private var transportRow: some View {
-        ZStack {
+        HStack(spacing: 0) {
+            jumpBackButton
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             HStack(spacing: Self.transportTriadSpacing) {
                 stepBackwardButton
                 playPauseButton(width: 56, height: 44, glyphSize: 34)
                 stepForwardButton
             }
 
-            HStack(spacing: 8) {
-                jumpToStartButton
-                Spacer()
-                endpointButtons(flat: true)
-            }
+            trailingNavGroup
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    /// Trailing side of the transport row: the next-score button in a playlist, otherwise a 44pt clear placeholder.
+    /// The placeholder is essential — an empty `@ViewBuilder` branch under `.frame(maxWidth: .infinity)` collapses to
+    /// zero width, so the leading group would claim all the slack and shove the centered triad to the right.
+    @ViewBuilder private var trailingNavGroup: some View {
+        if viewModel.isInPlaylist {
+            nextScoreButton
+        } else {
+            Color.clear.frame(width: 44, height: 44)
         }
     }
 
     // MARK: Shared pieces
 
-    @ViewBuilder private var resetZoomButton: some View {
-        if viewModel.viewportZoom > 1.0 {
-            Button {
-                viewModel.resetZoom()
-            } label: {
-                Label {
-                    Text("reader.toolbar.resetZoom", bundle: .module)
-                } icon: {
-                    Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
-                }
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
-            }
-        }
-    }
-
     /// A / B repeat-endpoint pill, shown only in AB-loop mode. `flat` selects the expanded card's quiet material look
-    /// over the collapsed layout's interactive glass + shadow.
+    /// over the floating interactive glass + shadow.
     @ViewBuilder private func endpointButtons(flat: Bool) -> some View {
         if viewModel.repeatModel.mode == .abLoop {
             ABEndpointPill(
@@ -170,33 +197,67 @@ struct ReaderTransportControl: View {
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
-    /// Primary transport buttons in document order: jump-to-start, step back a measure, play/pause, step forward a
-    /// measure. Shared between the collapsed pill (rendered in sequence) and the expanded card (laid out around a
-    /// centered play/pause), so the two layouts stay in sync.
+    /// Primary transport buttons in document order: jump-to-start (or previous score), step back a measure, play/pause,
+    /// step forward a measure, then — in a playlist — next score. Used in sequence by the collapsed pill and piecewise
+    /// by the expanded card, so the two layouts stay in sync.
     @ViewBuilder private var transportButtonsContent: some View {
-        jumpToStartButton
+        jumpBackButton
         stepBackwardButton
         playPauseButton()
         stepForwardButton
+        if viewModel.isInPlaylist {
+            nextScoreButton
+        }
     }
 
-    /// Same glyph as page mode's "jump to first page" tap zone — a custom symbol bundled with the Reader module
-    /// (`PageTapZoneKind.first`), since no system SF Symbol matches the `arrow.uturn.backward.to.line` shape.
-    private var jumpToStartButton: some View {
+    /// Leading transport button. Normally rewinds to the first measure; in a playlist, pressing it while already parked
+    /// at measure 1 jumps to the previous score instead (falling back to rewind at the head of the playlist, so it is
+    /// never disabled).
+    private var jumpBackButton: some View {
         transportButton(
-            image: Image("arrow.uturn.backward.to.line", bundle: .module),
             label: Text("reader.toolbar.jumpToStart", bundle: .module),
         ) {
-            viewModel.playbackSession.seekToStart()
+            let atStart = (viewModel.playbackSession.playbackCursor?.measureIndex ?? 0) == 0
+            if viewModel.isInPlaylist, atStart, viewModel.hasPreviousPlaylistScore {
+                Task { await viewModel.goToPreviousScore() }
+            } else {
+                viewModel.playbackSession.seekToStart()
+            }
+        } glyph: {
+            Image(systemName: "backward.fill")
+                .font(.system(size: 20, weight: .medium))
         }
+    }
+
+    private var nextScoreButton: some View {
+        transportButton(
+            label: Text("reader.toolbar.nextScore", bundle: .module),
+        ) {
+            Task { await viewModel.goToNextScore() }
+        } glyph: {
+            Image(systemName: "forward.fill")
+                .font(.system(size: 20, weight: .medium))
+        }
+        .disabled(!viewModel.hasNextPlaylistScore)
     }
 
     private var stepBackwardButton: some View {
         transportButton(
-            image: Image(systemName: "chevron.left.2"),
             label: Text("reader.toolbar.stepBackward", bundle: .module),
         ) {
             viewModel.playbackSession.stepMeasureBackward()
+        } glyph: {
+            MeasureSkipSymbol(direction: .backward)
+        }
+    }
+
+    private var stepForwardButton: some View {
+        transportButton(
+            label: Text("reader.toolbar.stepForward", bundle: .module),
+        ) {
+            viewModel.playbackSession.stepMeasureForward()
+        } glyph: {
+            MeasureSkipSymbol(direction: .forward)
         }
     }
 
@@ -205,41 +266,33 @@ struct ReaderTransportControl: View {
     /// keeping the row's 44pt height.
     private func playPauseButton(width: CGFloat = 44, height: CGFloat = 44, glyphSize: CGFloat = 20) -> some View {
         transportButton(
-            image: Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill"),
             label: Text(
                 viewModel.playbackSession.isPlaying ? "reader.toolbar.pause" : "reader.toolbar.play",
                 bundle: .module,
             ),
-            glyphSize: glyphSize,
             width: width,
             height: height,
         ) {
             Task { await viewModel.playbackSession.togglePlayback() }
-        }
-    }
-
-    private var stepForwardButton: some View {
-        transportButton(
-            image: Image(systemName: "chevron.right.2"),
-            label: Text("reader.toolbar.stepForward", bundle: .module),
-        ) {
-            viewModel.playbackSession.stepMeasureForward()
+        } glyph: {
+            Image(systemName: viewModel.playbackSession.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: glyphSize, weight: .medium))
         }
     }
 
     private func transportButton(
-        image: Image,
         label: Text,
-        glyphSize: CGFloat = 20,
         width: CGFloat = 44,
         height: CGFloat = 44,
         action: @escaping () -> Void,
+        @ViewBuilder glyph: () -> some View,
     ) -> some View {
         Button(action: action) {
-            image
-                .font(.system(size: glyphSize, weight: .medium))
+            glyph()
                 .frame(width: width, height: height)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(TransportButtonStyle())
         .tint(.primary)
         .accessibilityLabel(label)
     }

@@ -147,7 +147,7 @@ struct VisualInspectorScreen: View {
         HStack(spacing: 8) {
             Spacer()
             clefMenu(address: address)
-            visibilityButton(address: address)
+            StaffVisibilityButton(layoutModel: layoutModel, address: address)
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
@@ -155,20 +155,5 @@ struct VisualInspectorScreen: View {
 
     private func clefMenu(address: StaffAddress) -> some View {
         ClefMenu(layoutModel: layoutModel, address: address)
-    }
-
-    @ViewBuilder
-    func visibilityButton(address: StaffAddress) -> some View {
-        let isVisible = !layoutModel.hiddenStaves.contains(address)
-
-        Button {
-            Task { await layoutModel.toggleStaff(address) }
-        } label: {
-            EyeIcon(isOpen: isVisible, lineWidth: 2)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 28, height: 24)
-        }
-        .contentShape(.rect)
-        .animation(.spring(duration: 0.18), value: isVisible)
     }
 }

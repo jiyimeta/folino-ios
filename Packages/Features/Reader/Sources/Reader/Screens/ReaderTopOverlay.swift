@@ -33,10 +33,17 @@ struct ReaderTopOverlay: View {
                 )
                 .glassEffect(.regular.interactive())
             }
+            if !viewModel.capabilities.canPlay {
+                // `canPlay == false` ⇔ PDF in this reader: surface a brand badge next to the back button.
+                PDFBadge()
+            }
             Spacer()
 
             if case let .loaded(score) = viewModel.loadState {
                 loadedActions(score: score)
+            } else if case .loadedPDF = viewModel.loadState {
+                pdfLayoutButton
+                    .glassEffect(.regular.interactive())
             }
         }
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
@@ -120,6 +127,7 @@ struct ReaderTopOverlay: View {
             .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
                 PlaybackInspectorScreen(
                     mixerModel: viewModel.mixerModel,
+                    layoutModel: viewModel.layoutModel,
                     tempoModel: viewModel.tempoModel,
                     masterVolumeModel: viewModel.masterVolumeModel,
                     a4ReferenceModel: viewModel.a4ReferenceModel,
@@ -153,6 +161,23 @@ struct ReaderTopOverlay: View {
         }
     }
 
+    /// The single inspector affordance for PDFs: a page/vertical layout toggle plus the "settings unavailable" note.
+    /// Replaces the score reader's playback + visual inspector pills, which require a parsed `Score`.
+    private var pdfLayoutButton: some View {
+        overlayButton(
+            systemImage: "text.page",
+            label: Text("reader.toolbar.showDisplaySettings", bundle: .module),
+        ) {
+            viewModel.isVisualInspectorPresented.toggle()
+        }
+        .popover(isPresented: $viewModel.isVisualInspectorPresented) {
+            PDFLayoutInspectorScreen()
+                .frame(idealWidth: 320, idealHeight: 200)
+                .presentationDetents([.medium])
+                .presentationCompactAdaptation(.sheet)
+        }
+    }
+
     private func overlayButton(
         systemImage: String,
         label: Text,
@@ -170,6 +195,20 @@ struct ReaderTopOverlay: View {
         Image(systemName: systemImage)
             .font(.system(size: 20, weight: .medium))
             .frame(width: 44, height: 44)
+    }
+}
+
+/// A small "PDF" pill shown when the open item is a fixed-layout PDF. The text is a brand literal and is intentionally
+/// not localized (iOS/Android parity).
+struct PDFBadge: View {
+    var body: some View {
+        Text(verbatim: "PDF")
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Color.secondary.opacity(0.18), in: Capsule())
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(Text(verbatim: "PDF"))
     }
 }
 
