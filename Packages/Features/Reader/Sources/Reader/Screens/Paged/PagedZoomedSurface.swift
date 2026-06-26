@@ -75,16 +75,12 @@ struct PagedZoomedSurface: View {
         doc: LayoutDocument,
     ) -> some View {
         let pageRange = pages[idx]
-        let lastSystemIndex = pageRange.upperBound - 1
         // Start the clip from the previous page's last-system bottom (or `0` for the first page) so the gap above the
         // current page's first system — where rehearsal marks sit, plus the title frame on page 0 — renders here.
         let pageStartY = PagedZoomedSurface.pageStartY(
             forPage: idx, pages: pages, doc: doc,
         )
-        let pageEndY: CGFloat = (0 ..< doc.systems.count).contains(lastSystemIndex)
-            ? doc.systems[lastSystemIndex].origin.y
-            + doc.systems[lastSystemIndex].size.height
-            : pageStartY
+        let pageEndY = PagedPageGeometry.pageEndY(forPage: idx, pages: pages, doc: doc)
         let pageHeight = max(0, pageEndY - pageStartY)
         // Sub-document containing only this page's systems — each ScoreView would otherwise construct a
         // `SystemLayerView` for every system in the full doc, multiplying layout cost by `windowIndices.count`.

@@ -119,11 +119,12 @@ struct HorizontalScoreContainer: View {
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
-        // Reproject (and reseed the canvas) only on reflow / score-swap and initial appear — NOT on
-        // `viewModel.annotationDrawings`: while drawing, the canvas is the source of truth (kept equal to the live ink
-        // in `annotationSpec`), so reseeding would wipe the just-committed stroke. Mirrors `VerticalScoreContainer`.
+        // Reproject on reflow / score-swap / appear and on async annotation-load (not while annotating).
         .onChange(of: document) { _, _ in reprojectAnnotations() }
         .onAppear { reprojectAnnotations() }
+        .onChange(of: viewModel.annotationDrawings) { _, _ in
+            if !viewModel.isAnnotating { reprojectAnnotations() }
+        }
     }
 
     /// Folds a finished pinch into `viewportZoom` and queues a scroll so the content under the user's fingers at
