@@ -42,7 +42,7 @@ struct AnnotationAnalyticsTests {
     /// `count` anchored strokes — only the array length matters to the commit-detection logic, so the encoded payload
     /// is just an index byte to keep the elements distinct.
     private static func strokes(_ count: Int) -> [DrawingAnchor] {
-        (0 ..< count).map { DrawingAnchor(anchor: anchor(), encodedDrawing: Data([UInt8($0 & 0xFF)])) }
+        (0 ..< count).map { DrawingAnchor(kind: .musical(anchor()), encodedDrawing: Data([UInt8($0 & 0xFF)])) }
     }
 
     @Test func `entering annotation mode logs annotation_started once`() {
