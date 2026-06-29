@@ -155,10 +155,6 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "annotation_started")
     }
 
-    public static func annotationInkCommitted() -> AnalyticsEvent {
-        AnalyticsEvent(name: "annotation_ink_committed")
-    }
-
     // MARK: Share
 
     public static func share(method: String, source: AnalyticsSource, mode: AnalyticsActionMode) -> AnalyticsEvent {

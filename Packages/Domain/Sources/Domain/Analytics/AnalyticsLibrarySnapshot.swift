@@ -5,8 +5,7 @@ import UtilityCore
 /// `museScoreMajorVersion` is `nil` for non-MuseScore rows and for rows imported before the field was introduced;
 /// analytics treats `nil` as v4 (the current default). Counts are raw — bucket at analysis time.
 ///
-/// Lifted into Domain so iOS and a future Android path share one implementation without duplicating the predicate logic
-/// that already lives in `AnalyticsUserPropertySync`.
+/// Lifted into Domain so iOS and a future Android path share one implementation without duplicating predicate logic.
 public enum AnalyticsLibrarySnapshot {
     /// Build the `library_snapshot` event from the current library state.
     ///

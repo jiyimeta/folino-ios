@@ -7,12 +7,6 @@ import UtilityCore
 @MainActor
 @Suite(.serialized)
 struct AnnotationAnalyticsTests {
-    /// Clean up the legacy `hasUsedAnnotation` key so tests are deterministic even though the current implementation
-    /// no longer writes it. Keeps the constant reference alive and the test suite isolated.
-    init() {
-        UserDefaults.standard.removeObject(forKey: AnalyticsStateKey.hasUsedAnnotation)
-    }
-
     private static func makeItem() -> ScoreItem {
         ScoreItem(
             title: "Test", composer: nil, instrumentationSummary: nil,
