@@ -21,9 +21,10 @@
 - Don't duplicate Firebase auto-collected events (`first_open`, `session_start`, etc.).
 - Wire names/params are a stable contract once chosen (parity with the future Android catalog); don't churn them.
 - No GPL dependencies. Do not add AudioKit.
-- Package tests run via xcodebuild on an iOS Simulator (the SwiftLint plugin breaks `swift test`):
-  `xcodebuild test -scheme <Package>-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:<Target>/<Suite>`
-  (the scheme may be `<Package>` or `<Package>-Package` depending on the xcodegen output; try `-Package` first). Test targets: `UtilityCoreTests`, `DomainTests`, `InfrastructureTests`, `ReaderTests`, `LibraryTests`, `SettingsTests`.
+- Package tests run via xcodebuild on an iOS Simulator (the SwiftLint plugin breaks `swift test`). **Run from the package directory**, scheme = the package name (no `-Package` suffix — confirmed `Domain`, `Reader`, `Library`, `Settings`, `Infrastructure`, `Utility`):
+  `env -C <worktree>/<package-dir> xcodebuild test -scheme <Package> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:<Target>/<Suite>`
+  Package dirs / schemes / targets: `Packages/Domain` → `Domain` / `DomainTests`; `Packages/Utility` → `Utility` / `UtilityCoreTests`; `Packages/Infrastructure` → `Infrastructure` / `InfrastructureTests`; `Packages/Features/Reader` → `Reader` / `ReaderTests`; `Packages/Features/Library` → `Library` / `LibraryTests`; `Packages/Features/Settings` → `Settings` / `SettingsTests`.
+- **Worktree:** all work happens in `/Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/analytics-events-first` on branch `worktree-analytics-events-first`. Use absolute worktree paths and `git -C <worktree>` for every git command — never commit to the primary checkout.
 
 ---
 
