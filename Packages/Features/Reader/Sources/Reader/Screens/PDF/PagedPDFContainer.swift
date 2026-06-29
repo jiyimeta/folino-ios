@@ -1,5 +1,6 @@
 import Domain
 import PDFKit
+import PencilKit
 import SwiftUI
 
 /// Page-by-page PDF viewing. Each physical PDF page maps to one reader page. Navigation, zoom, slide/swipe/pinch, and
@@ -21,6 +22,9 @@ struct PagedPDFContainer: View {
     @State var contentInsetTop: CGFloat = 0
     @State var pinch = PinchState()
     @State var committedZoom: CGFloat = 1.0
+    /// The annotation model for the CURRENT PDF page, projected to band space. Reseeded on page/model change; kept
+    /// equal to the live ink while drawing so the canvas seed never round-trips an in-progress stroke.
+    @State var projectedAnnotations = PKDrawing()
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -66,7 +70,13 @@ struct PagedPDFContainer: View {
 
     // swiftlint:disable:next function_body_length
     private func scrollContent(viewport: CGSize) -> some View {
-        ScoreScrollHost(
+        // Observe live magnification so each frame of a commit-reset ease re-renders this view → the host re-syncs the
+        // annotation canvas, keeping the ink locked to the page through the eased zoom commit (see PinchState).
+        _ = pinch.magnification
+        // Observe the annotation model so a change (load, capture, cross-mode edit) re-renders here and reassigns the
+        // hosted surface's rootView — otherwise the hosted static ink layers keep a stale (often empty) model.
+        _ = viewModel.annotationDrawings
+        return ScoreScrollHost(
             contentOffset: $liveScrollOffset,
             contentInsetTop: $contentInsetTop,
             pendingScroll: $pendingScroll,
@@ -85,6 +95,7 @@ struct PagedPDFContainer: View {
                 )
             },
             onPinchBegan: { anchor, _ in
+                pinch.cancelResetAnimation() // don't let a trailing commit ease fight the new gesture
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor
                 pinch.magnification = 1.0
@@ -104,7 +115,7 @@ struct PagedPDFContainer: View {
                     viewport: viewport,
                 )
             },
-            annotationOverlay: nil,
+            annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             PagedReaderSurface(
                 viewModel: viewModel,
@@ -136,6 +147,89 @@ struct PagedPDFContainer: View {
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area; the hosted surface re-applies
         // `pageInsets` as padding so the band sits inside the safe area at zoom 1.
         .ignoresSafeArea()
+        .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        .onChange(of: viewModel.annotationDrawings) { _, _ in
+            if !viewModel.isAnnotating { reprojectCurrentPage(viewport: viewport) }
+        }
+        // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
+        .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        .onAppear { reprojectCurrentPage(viewport: viewport) }
+    }
+
+    /// A page's frame in band (viewport) space: the page fitted into the viewport (preserving aspect) and centered —
+    /// identical to `PDFPageView`'s composition, so ink normalizes against exactly the rendered page rect.
+    private func pageFrame(forPage idx: Int, viewport: CGSize) -> CGRect? {
+        let index = min(max(idx, 0), max(document.pageCount - 1, 0))
+        guard let page = document.page(at: index) else { return nil }
+        let b = page.bounds(for: .mediaBox).size
+        guard b.width > 0, b.height > 0, viewport.width > 0, viewport.height > 0 else { return nil }
+        let fit = min(viewport.width / b.width, viewport.height / b.height)
+        let w = b.width * fit
+        let h = b.height * fit
+        return CGRect(x: (viewport.width - w) / 2, y: (viewport.height - h) / 2, width: w, height: h)
+    }
+
+    private func currentPageFrame(viewport: CGSize) -> CGRect? {
+        pageFrame(forPage: pageState.pageIndex, viewport: viewport)
+    }
+
+    private func annotationSpec(viewport: CGSize) -> AnnotationOverlaySpec {
+        AnnotationOverlaySpec(
+            isAnnotating: viewModel.isAnnotating,
+            isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            displayDrawing: projectedAnnotations,
+            onChange: { drawing in
+                // Capture ONLY while annotating. Leaving annotation empties the live canvas (static layers take over),
+                // and `canvas.drawing = empty` fires `canvasViewDrawingDidChange` — recapturing the empty canvas here
+                // would wipe this page's committed anchors. See `PagedScoreContainer`.
+                guard viewModel.isAnnotating, let frame = currentPageFrame(viewport: viewport) else { return }
+                let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
+                projectedAnnotations = drawing // canvas is source of truth this page
+                let (_, offPage) = PDFAnnotationAnchoring.partitionByPage(viewModel.annotationDrawings, pageIndex: idx)
+                let captured = PDFAnnotationAnchoring.capturePage(
+                    strokes: drawing.strokes, pageIndex: idx, pageFrame: frame,
+                )
+                viewModel.annotationDrawingsDidChange(offPage + captured)
+            },
+            state: { annotationCanvasState(viewport: viewport) },
+        )
+    }
+
+    /// Mirror the current page band onto the viewport-pinned canvas — same composition as `PagedScoreContainer`
+    /// (band documentSize = viewport, band offset by `pageInsets`, zoom = `viewportZoom × magnification`, live pan on
+    /// both axes). PDF page mode uses `viewModel.viewportZoom` directly (the value `PDFPageView` is told to scale by).
+    private func annotationCanvasState(viewport: CGSize) -> AnnotationCanvasState {
+        let zoomC = viewModel.viewportZoom
+        let m = pinch.magnification
+        let z = zoomC * m
+        let padX = pageInsets.leading
+        let padY = pageInsets.top
+        let paddedW = viewport.width + pageInsets.leading + pageInsets.trailing
+        let paddedH = viewport.height + pageInsets.top + pageInsets.bottom
+        let anchorTermX = pinch.anchor.x * paddedW * (1 - m) * zoomC
+        let anchorTermY = pinch.anchor.y * paddedH * (1 - m) * zoomC
+        let slack: CGFloat = 100_000
+        return AnnotationCanvasState(
+            documentSize: CGSize(width: viewport.width, height: viewport.height),
+            zoomScale: z,
+            contentOffsetBias: CGPoint(
+                x: -padX * z - anchorTermX - pinch.offsetX,
+                y: -padY * z - anchorTermY - pinch.offsetY,
+            ),
+            contentInset: UIEdgeInsets(top: slack, left: slack, bottom: slack, right: slack),
+        )
+    }
+
+    private func reprojectCurrentPage(viewport: CGSize) {
+        // Live canvas shows ink only while annotating; static layers in `pdfPage` cover display for every page.
+        // Empty the live canvas when not annotating.
+        guard viewModel.isAnnotating, let frame = currentPageFrame(viewport: viewport) else {
+            projectedAnnotations = PKDrawing(); return
+        }
+        let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
+        projectedAnnotations = PDFAnnotationAnchoring.displayPage(
+            viewModel.annotationDrawings, pageIndex: idx, pageFrame: frame,
+        )
     }
 
     private func commitPinch(
@@ -155,24 +249,16 @@ struct PagedPDFContainer: View {
         let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
 
         if r.isBounceBack {
-            withAnimation(.smooth(duration: 0.18)) {
-                pinch.magnification = 1.0
-                pinch.offsetX = 0
-                pinch.offsetY = 0
-            }
+            // Ease frame-by-frame (CADisplayLink) so the annotation ink overlay follows the rubber-band release in
+            // lockstep instead of snapping ahead — see PinchState. (Was `withAnimation`, which the ink couldn't track.)
+            pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
         } else {
             committedZoom = r.targetZoom
             pendingScroll = .immediate(scrollToTarget)
             if r.snapToUnit {
                 viewModel.resetZoom()
                 pinch.magnification = r.compensatedMag
-                DispatchQueue.main.async {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        pinch.magnification = 1.0
-                        pinch.offsetX = 0
-                        pinch.offsetY = 0
-                    }
-                }
+                pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
             } else {
                 viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
@@ -188,8 +274,22 @@ struct PagedPDFContainer: View {
         let index = min(max(idx, 0), max(document.pageCount - 1, 0))
         if let page = document.page(at: index) {
             PDFPageView(page: page, viewport: viewport, zoom: viewModel.viewportZoom)
+                // Committed ink as a static layer that rides the page so it slides on a turn; hidden for the page being
+                // actively annotated (the viewport-pinned live canvas owns it).
+                    .overlay(alignment: .topLeading) { pageInkLayer(forPage: index, viewport: viewport) }
         } else {
             Color.white.frame(width: viewport.width, height: viewport.height)
+        }
+    }
+
+    @ViewBuilder
+    private func pageInkLayer(forPage idx: Int, viewport: CGSize) -> some View {
+        if !(viewModel.isAnnotating && idx == pageState.pageIndex),
+           let frame = pageFrame(forPage: idx, viewport: viewport)
+        {
+            StaticInkLayer(drawing: PDFAnnotationAnchoring.displayPage(
+                viewModel.annotationDrawings, pageIndex: idx, pageFrame: frame,
+            ), size: viewport)
         }
     }
 }
