@@ -135,6 +135,22 @@ class MainActivity : ComponentActivity(), PipHost {
         AndroidAnalytics.initialize(applicationContext)
         AndroidAnalytics.setCollectionEnabled(analyticsEnabled)
 
+        // Push the launch analytics user-property snapshot (mirrors iOS AppBootstrap.pushAnalyticsSnapshot). These
+        // non-library properties come from DataStore; the library size / sort / per-format-count properties are
+        // applied once the Library store is hydrated (LibraryNavGraph), since they need the score snapshot.
+        // has_used_annotation is always false (no Pencil annotation on Android). soundfont_preset is reported as the
+        // bundled "lightweight" default — reflecting a downloaded high-quality tier is a deferred follow-up (that
+        // state lives in the separate Soundfont JNI module, not available this early in onCreate).
+        val analyticsLayoutMode = runBlocking { prefs.layoutMode.first() }
+        AndroidAnalytics.applyUserProperties(
+            AndroidAnalytics.bridge.launchUserProperties(
+                layoutMode = analyticsLayoutMode,
+                crashReportingEnabled = crashEnabled,
+                hasUsedAnnotation = false,
+                soundfontPreset = "lightweight",
+            ),
+        )
+
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
         // TEMPORARY GUARD — remove this `if` (always load) any time after 1.0.0 has shipped.
@@ -274,6 +290,13 @@ private fun LibraryNavGraph(
     val context = LocalContext.current
     val vm: LibraryAndroidStoreViewModel =
         viewModel(factory = LibraryVMFactory(context.applicationContext))
+
+    // Push the library user-property snapshot once the store is hydrated (mirrors iOS launch sync via
+    // AnalyticsUserPropertySync). The store hydrates synchronously in its init, so the first snapshot reflects the
+    // current library. Re-sync after import/delete is a deferred minor (iOS additionally re-syncs on mutation).
+    LaunchedEffect(Unit) {
+        AndroidAnalytics.applyUserProperties(vm.libraryUserProperties())
+    }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -516,10 +539,21 @@ private fun LibraryNavGraph(
                     hiddenStaves = perScoreHidden,
                     clefOverrides = perScoreClefs,
                 )
+                // Analytics baselines: the last persisted tempo / transpose, so the inspector's persist callbacks can
+                // log a direction (increase/decrease, up/down) on each committed change. Re-seeded per score.
+                var lastTempoForAnalytics by remember(currentScoreId) {
+                    mutableStateOf(if (prefsState.tempoMultiplier == 0.0) 1.0 else prefsState.tempoMultiplier)
+                }
+                var lastTransposeForAnalytics by remember(currentScoreId) {
+                    mutableStateOf(prefsState.transposeSemitones)
+                }
                 ReaderScreen(
                     scoreId = currentScoreId,
                     title = title,
-                    onEditInfo = { nav.navigate("editInfo/$currentScoreId") },
+                    onEditInfo = {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.scoreInfoOpened("readerOverlay"))
+                        nav.navigate("editInfo/$currentScoreId")
+                    },
                     onShare = {
                         scope.launch {
                             shareFormats = withContext(Dispatchers.Default) { vm.exportFormats(currentScoreId) }
@@ -529,6 +563,11 @@ private fun LibraryNavGraph(
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
+                        // Reader-initiated layout switch (display-options inspector). Distinct event from the Settings
+                        // `setting_changed` layout_mode key, mirroring iOS layout_mode_changed.
+                        if (o.mode != displayOptions.mode) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.layoutModeChanged(o.mode.toPref()))
+                        }
                         // Global half → DataStore.
                         scope.launch {
                             prefs.setLayoutMode(o.mode.toPref())
@@ -572,12 +611,28 @@ private fun LibraryNavGraph(
                     initialA4ReferenceHz =
                         if (prefsState.a4ReferenceHz == 0.0) globalA4Hz else prefsState.a4ReferenceHz,
                     persistMasterVolume = { v -> prefsVm.setMasterVolume(v) },
-                    persistTempoMultiplier = { v -> prefsVm.setTempoMultiplier(v) },
+                    persistTempoMultiplier = { v ->
+                        if (v > lastTempoForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.tempoIncreased())
+                        } else if (v < lastTempoForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.tempoDecreased())
+                        }
+                        lastTempoForAnalytics = v
+                        prefsVm.setTempoMultiplier(v)
+                    },
                     persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
                     // Persist-only: the transpose audio/notation effect is not implemented on Android yet;
                     // the inspector stepper only stores this value through the ReaderPreferences bridge.
                     transposeSemitones = prefsState.transposeSemitones,
-                    persistTranspose = { v -> prefsVm.setTranspose(v) },
+                    persistTranspose = { v ->
+                        if (v > lastTransposeForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeUp())
+                        } else if (v < lastTransposeForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeDown())
+                        }
+                        lastTransposeForAnalytics = v
+                        prefsVm.setTranspose(v)
+                    },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
                     // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
@@ -608,7 +663,11 @@ private fun LibraryNavGraph(
                     persistAbRange = { r ->
                         abRepeatStore.saveAbRepeat(currentScoreId, r?.let { it.startMeasure to it.endMeasure })
                     },
-                    persistRepeatMode = { m -> scope.launch { prefs.setRepeatMode(m.wire) } },
+                    persistRepeatMode = { m ->
+                        // Reader-initiated repeat-mode change (inspector). Distinct from the Settings repeat_mode key.
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.repeatModeChanged(m.wire))
+                        scope.launch { prefs.setRepeatMode(m.wire) }
+                    },
                     // Playlist provenance (the route's optional playlistId) drives both the auto-advance
                     // logic and the inspector's continuation row (isInPlaylist is derived from playlistId
                     // inside ReaderScreen). The continuation-mode wire value is shown in the inspector;
@@ -625,6 +684,26 @@ private fun LibraryNavGraph(
                     onRetargetScore = { next -> currentScoreId = next },
                     continuationModeWire = continuationModeWire,
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
+                    // Playback analytics (the Reader module can't import the analytics library, so it raises these
+                    // semantic callbacks and the app maps them to the shared catalog). `from` is best-effort, mirroring
+                    // iOS: playlist if opened from a playlist, else library_all.
+                    onAnalyticsPlaybackStarted = {
+                        AndroidAnalytics.log(
+                            AndroidAnalytics.bridge.playbackStarted(
+                                displayOptions.mode.toPref(),
+                                if (playlistId != null) "playlist" else "libraryAll",
+                            ),
+                        )
+                    },
+                    onAnalyticsPlaybackPaused = { AndroidAnalytics.log(AndroidAnalytics.bridge.playbackPaused()) },
+                    onAnalyticsPlaybackCompleted = {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.playbackCompleted())
+                    },
+                    onAnalyticsTransportPrevious = {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.transportPrevious())
+                    },
+                    onAnalyticsTransportNext = { AndroidAnalytics.log(AndroidAnalytics.bridge.transportNext()) },
+                    onAnalyticsSeek = { AndroidAnalytics.log(AndroidAnalytics.bridge.seek()) },
                     onBack = { nav.popBackStackIfResumed() },
                 )
                 if (showShareSheet) {
@@ -639,6 +718,11 @@ private fun LibraryNavGraph(
                                     Toast.makeText(context, exportFailedMsg, Toast.LENGTH_SHORT).show()
                                 } else {
                                     ScoreShareLauncher.share(context, listOf(path))
+                                    // Reader share (iOS parity: readerOverlay / single). `token` is the export-format
+                                    // token; the bridge maps it to the share method's wire value.
+                                    AndroidAnalytics.log(
+                                        AndroidAnalytics.bridge.share(token, "readerOverlay", "single"),
+                                    )
                                 }
                             }
                         },

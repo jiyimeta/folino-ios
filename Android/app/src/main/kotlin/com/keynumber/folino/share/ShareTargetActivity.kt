@@ -42,6 +42,7 @@ import androidx.lifecycle.lifecycleScope
 import com.keynumber.folino.LibraryVMFactory
 import com.keynumber.folino.MainActivity
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -112,6 +113,19 @@ class ShareTargetActivity : ComponentActivity() {
                 )
             }
             cleanupStaged(files)
+            // importShared returns per-file analytics tokens (parallel arrays). Log one share-ext event per imported /
+            // failed (non-duplicate) file; the wire strings + bucketing live in Swift.
+            for (fmt in result.analyticsImportedFormats) {
+                AndroidAnalytics.log(AndroidAnalytics.bridge.scoreImportedShareExt(fmt))
+            }
+            for (i in result.analyticsFailedFormats.indices) {
+                AndroidAnalytics.log(
+                    AndroidAnalytics.bridge.scoreImportFailedShareExt(
+                        result.analyticsFailedFormats[i],
+                        result.analyticsFailedReasons[i],
+                    ),
+                )
+            }
             val openId = result.openAfterId
             if (openAfter && openId.isNotEmpty()) {
                 // importShared() called reload() synchronously, so vm.scores already reflects the freshly imported score here.

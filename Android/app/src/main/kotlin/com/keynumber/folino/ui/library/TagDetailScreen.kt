@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.ScoreRowWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
@@ -95,7 +96,17 @@ fun TagDetailScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            LibrarySearchField(query = searchQuery, onQueryChange = { searchQuery = it })
+            LibrarySearchField(
+                query = searchQuery,
+                onQueryChange = { newValue ->
+                    // One `search` per session on the empty -> non-empty edge, mirroring iOS (whose tag detail embeds
+                    // ScoreListScreen, which logs search the same way).
+                    if (searchQuery.isEmpty() && newValue.isNotEmpty()) {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.search())
+                    }
+                    searchQuery = newValue
+                },
+            )
             if (items.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
@@ -126,12 +137,21 @@ fun TagDetailScreen(
                                             onClick = {
                                                 rowMenu = false
                                                 viewModel.setTagAssigned(row.id, tagId, false)
+                                                AndroidAnalytics.log(
+                                                    AndroidAnalytics.bridge.tagUnassigned("scoreRowMenu", 1),
+                                                )
                                             },
                                         )
                                     }
                                 }
                             },
-                            modifier = Modifier.clickable { onOpenScore(row) },
+                            modifier = Modifier.clickable {
+                                // searchResult overrides the tag source when a search query is active, mirroring iOS
+                                // ScoreListScreen.openSource for a .taggedWith list.
+                                val from = if (searchQuery.isNotBlank()) "searchResult" else "tag"
+                                AndroidAnalytics.log(AndroidAnalytics.bridge.scoreOpened(from))
+                                onOpenScore(row)
+                            },
                         )
                     }
                 }
@@ -160,6 +180,7 @@ fun TagDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteTag(tagId)
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.tagDeleted("tag"))
                     showDelete = false
                     onBack()
                 }) {

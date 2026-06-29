@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.ScoreRowWire
 import com.keynumber.folino.share.isAcceptedScoreFilename
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
@@ -48,7 +49,9 @@ fun LibraryScreen(
                 val store = com.keynumber.folino.library.RoomLibraryStore(context)
                 try {
                     val before = store.loadAll().count { it.deletedAt <= 0.0 }
-                    viewModel.importScore(cacheFile.absolutePath)
+                    // importScore builds + returns the score_imported / score_import_failed analytics event itself;
+                    // log it here (the picker callback runs on the main thread). Mirrors iOS LibraryViewModel.commit.
+                    AndroidAnalytics.log(viewModel.importScore(cacheFile.absolutePath))
                     val after = store.loadAll().count { it.deletedAt <= 0.0 }
                     if (after <= before) {
                         com.keynumber.folino.diagnostics.CrashReporting.recordNonFatal(
@@ -78,6 +81,7 @@ fun LibraryScreen(
         titleRes = R.string.library_title,
         emptyTitleRes = R.string.library_empty_title,
         emptyHintRes = R.string.library_empty_hint,
+        listSource = "libraryAll",
         onOpenScore = onOpenScore,
         onOpenDrawer = onOpenDrawer,
         onEditInfoForScore = onEditInfoForScore,

@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.PlaylistRowWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
@@ -102,6 +103,7 @@ fun PlaylistsListScreen(
             confirmLabel = stringResource(R.string.create),
             onConfirm = { name ->
                 viewModel.createPlaylist(name)
+                AndroidAnalytics.log(AndroidAnalytics.bridge.playlistCreated("playlist"))
                 showCreate = false
             },
             onDismiss = { showCreate = false },
@@ -116,6 +118,7 @@ fun PlaylistsListScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deletePlaylist(row.id)
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.playlistDeleted("playlist"))
                     pendingDelete = null
                 }) {
                     Text(stringResource(R.string.playlists_delete))

@@ -8,6 +8,7 @@
 import Domain // ScoreFormat, ScorePresentation, ScoreShareFormat, ScoreExportNaming
 import Foundation
 import Observation
+import UtilityCore // Analytics, AnalyticsEvent, AnalyticsUserProperty (shared catalog, for the analytics builders)
 
 // SheetMusicMIDI (MidiRenderer/MidiWriter) is used directly rather than the umbrella `SheetMusic`, which
 // `@_exported import`s SheetMusicCore and would make `ScoreItemID` ambiguous with Domain's.
@@ -86,9 +87,16 @@ public final class LibraryAndroidStore {
     /// live record. Foundation-only (zlib + XMLParser); unreadable/unparseable
     /// input is ignored (no crash, no row).
     @WireletExpose
-    public func importScore(_ path: String) {
+    public func importScore(_ path: String) -> AnalyticsEventWire {
         let url = URL(fileURLWithPath: path)
-        guard let score = try? MSCZReader.parse(contentsOf: url) else { return }
+        // Format the user picked, derived from the original filename (iOS parity: log the imported format). Android's
+        // manual import only parses MuseScore containers, so a non-mscz pick fails to parse below → import_failed.
+        let pickedFormat = ScoreFormat.detect(filename: url.lastPathComponent)
+        guard let score = try? MSCZReader.parse(contentsOf: url) else {
+            return AnalyticsBridge.encode(
+                .scoreImportFailed(format: pickedFormat?.analyticsValue ?? "unknown", reason: "parse_failed"),
+            )
+        }
         // Shared Domain presenter — identical title/subtitle/composer rules as iOS.
         let fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, score: score)
         let id = UUID().uuidString
@@ -107,6 +115,11 @@ public final class LibraryAndroidStore {
             lastOpenedAt: 0,
         ))
         reload()
+        // museScoreMajorVersion is nil: Android does not yet persist the MuseScore wire version (see
+        // libraryUserProperties), so it crosses as "unknown" — the lone parity gap vs iOS's per-import version.
+        return AnalyticsBridge.encode(.scoreImported(
+            format: pickedFormat ?? .mscz, source: "file_picker", isDuplicate: false, museScoreMajorVersion: nil,
+        ))
     }
 
     /// Share import (iOS Share Extension parity). `paths`/`originalNames` are parallel arrays of staged files the
@@ -148,6 +161,28 @@ public final class LibraryAndroidStore {
 
         reload()
         reloadPlaylists()
+
+        // Per-file analytics facts for Kotlin to log (iOS IncomingShareCoordinator parity: success / failure split,
+        // duplicates logged by neither). Successes = the staged files that were not skipped, mapped to a ScoreFormat
+        // case-name token (undetectable-format successes are dropped, matching iOS which skips logging them).
+        let skippedNames = Set(shared.skipped.map(\.originalName))
+        let importedFormats = files
+            .filter { !skippedNames.contains($0.originalName) }
+            .compactMap { ScoreFormat.detect(filename: $0.originalName).map(Self.analyticsFormatToken) }
+        var failedFormats: [String] = []
+        var failedReasons: [String] = []
+        for skip in shared.skipped {
+            let reason: String
+            switch skip.reason {
+            case .missingFile: reason = "file_not_found"
+            case .parseFailed: reason = "parse_failed"
+            case .persistenceFailed: reason = "persistence_failed"
+            case .duplicate: continue // duplicates are skipped silently (iOS parity), logged by neither event
+            }
+            failedFormats.append(ScoreFormat.detect(filename: skip.originalName).map(Self.analyticsFormatToken) ?? "")
+            failedReasons.append(reason)
+        }
+
         return ImportSharedResultWire(
             importedCount: Int32(shared.importedIDs.count),
             skippedCount: Int32(shared.skipped.count),
@@ -155,6 +190,9 @@ public final class LibraryAndroidStore {
             createdPlaylistId: shared.createdPlaylistID ?? "",
             targetPlaylistId: shared.targetPlaylistID ?? "",
             playlistCreateFailureName: shared.playlistCreateFailureName ?? "",
+            analyticsImportedFormats: importedFormats,
+            analyticsFailedFormats: failedFormats,
+            analyticsFailedReasons: failedReasons,
         )
     }
 
@@ -863,9 +901,75 @@ public final class LibraryAndroidStore {
         editSheetScoreID = nil
         reloadTags()
     }
+
+    // MARK: Analytics — library user-property snapshot
+
+    /// Compute the library user-property snapshot via the SHARED `AnalyticsUserPropertySync` (identical bucketing to
+    /// iOS) and return it for Kotlin to push to Firebase. Called at launch and after import/delete. Sort is the
+    /// Android default (`.dateAddedDesc`); MuseScore version is not persisted on Android yet, so the version-bucketed
+    /// counts treat every mscz as v4 (matching iOS's `nil` → v4 default) — the one known parity gap.
+    @WireletExpose
+    public func libraryUserProperties() -> [AnalyticsPropertyWire] {
+        let items = store.loadAll()
+            .filter { $0.deletedAt <= 0 }
+            .map(Self.analyticsItem)
+        let collector = CollectingAnalytics()
+        AnalyticsUserPropertySync.syncLibrary(items: items, sort: .dateAddedDesc, into: collector)
+        return collector.properties
+    }
 }
 
 // swiftlint:enable type_body_length
+
+// MARK: - Analytics helpers (file-scope, non-@WireletExpose)
+
+extension LibraryAndroidStore {
+    /// `ScoreFormat` → its Swift case-name token, the inverse of `AnalyticsBridge.scoreFormat(_:)`. The bridge maps the
+    /// token back to the enum so the stable wire string stays authored in the Domain catalog.
+    static func analyticsFormatToken(_ format: ScoreFormat) -> String {
+        switch format {
+        case .mscx: "mscx"
+        case .mscz: "mscz"
+        case .musicXML: "musicXML"
+        case .mxl: "mxl"
+        case .midi: "midi"
+        case .pdf: "pdf"
+        }
+    }
+
+    /// Minimal `ScoreItem` for the user-property sync. Only `localFileName` (→ format) and `museScoreMajorVersion` are
+    /// read by `AnalyticsUserPropertySync`; the rest are placeholders. Version is nil (Android does not persist it).
+    static func analyticsItem(_ rec: ScoreRecordWire) -> ScoreItem {
+        ScoreItem(
+            title: rec.title,
+            composer: rec.composer.isEmpty ? nil : rec.composer,
+            instrumentationSummary: nil,
+            localFileName: rec.localFileName,
+            contentHash: rec.contentHash,
+            sizeBytes: 0,
+            lengthBeats: 0,
+            defaultTempoBpm: 0,
+            primaryKey: nil,
+            addedAt: Date(timeIntervalSince1970: 0),
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+            deletedAt: nil,
+            museScoreMajorVersion: nil,
+        )
+    }
+}
+
+/// Captures the user-property assignments emitted by the shared `AnalyticsUserPropertySync` so `libraryUserProperties`
+/// can return them as a wire array, rather than pushing to a live Firebase sink (Kotlin owns the Firebase call).
+private final class CollectingAnalytics: Analytics, @unchecked Sendable {
+    private(set) var properties: [AnalyticsPropertyWire] = []
+    func setCollectionEnabled(_: Bool) {}
+    func log(_: AnalyticsEvent) {}
+    func setUserProperty(_ value: String?, for property: AnalyticsUserProperty) {
+        properties.append(AnalyticsPropertyWire(name: property.name, value: value ?? ""))
+    }
+}
 
 // MARK: - Owner helpers (called by AndroidSharePlaylistTarget; non-@WireletExpose so an extension is fine)
 
