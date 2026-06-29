@@ -161,6 +161,7 @@ public struct ReaderRootScreen: View {
             // user leaves the Reader; backgrounding keeps the engine alive so background audio + PiP continue.
             guard scenePhase == .active else { return }
             let viewModel = viewModel
+            viewModel.endAnnotationSessionIfNeeded()
             Task {
                 await viewModel.flushPendingAnnotationSave()
                 await viewModel.playbackSession.releaseEngine()

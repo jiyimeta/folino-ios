@@ -81,6 +81,10 @@ final class ReaderViewModel {
 
     var viewportZoom: CGFloat = 1.0
     var isAnnotating = false // true → canvas draws; false → all touches reach navigation + tap-to-seek
+    /// Strokes committed since the current annotation session began. Flushed into `annotation_ended` on exit.
+    @ObservationIgnored var annotationStrokeCount = 0
+    /// Wall-clock start of the current annotation session, for `annotation_ended`'s `duration_sec`.
+    @ObservationIgnored var annotationSessionStart: Date?
     var isPlaybackInspectorPresented = false
     var isVisualInspectorPresented = false
     var isScoreInfoPresented = false
