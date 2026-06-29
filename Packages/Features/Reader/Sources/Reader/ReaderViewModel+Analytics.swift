@@ -66,26 +66,37 @@ extension ReaderViewModel {
 
     // MARK: Annotation
 
-    /// Toggle annotation (Apple Pencil) mode. Logs `annotation_started` only on ENTER — the mode-entry signal — never
-    /// on exit. The distinct, real pencil-usage signal is `annotation_ink_committed`, logged separately from
-    /// `annotationDrawingsDidChange` when a stroke is actually committed to the canvas. Called by the overlay's toggle
-    /// button instead of poking `isAnnotating` directly, so the entry is logged once at its real action site.
+    /// Toggle annotation (Apple Pencil) mode. Entering logs `annotation_started` and starts a stroke/duration session;
+    /// exiting flushes the session as one `annotation_ended`. Entry is the mode-entry signal; the session summary is
+    /// the real pencil-usage signal (events-first: aggregated, not per-stroke).
     func toggleAnnotation() {
         isAnnotating.toggle()
         if isAnnotating {
+            annotationStrokeCount = 0
+            annotationSessionStart = Date()
             analytics.log(.annotationStarted())
+        } else {
+            endAnnotationSessionIfNeeded()
         }
     }
 
-    /// Log one committed annotation stroke and, on the first commit the app has ever seen, persist the
-    /// `hasUsedAnnotation` flag and set the `has_used_annotation` user property to `"true"`. The event fires on every
-    /// genuine commit; the flag/property write is idempotent — guarded on the persisted flag so it happens exactly once
-    /// across the app's lifetime. Task 13 reads the flag at launch to seed the user property on cold start.
-    func logAnnotationInkCommitted() {
-        analytics.log(.annotationInkCommitted())
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: AnalyticsStateKey.hasUsedAnnotation) else { return }
-        defaults.set(true, forKey: AnalyticsStateKey.hasUsedAnnotation)
-        analytics.setUserProperty("true", for: .hasUsedAnnotation)
+    /// Count one committed stroke for the active session. Called from `annotationDrawingsDidChange` when a stroke is
+    /// genuinely committed (net increase). Emits nothing on its own — the total ships in `annotation_ended`.
+    func recordAnnotationStroke() {
+        annotationStrokeCount += 1
+    }
+
+    /// Flush the current annotation session as one `annotation_ended`, if a session is active. Idempotent: a second
+    /// call without a new session does nothing. Called on annotation-mode exit and on Reader teardown.
+    ///
+    /// Best-effort limitation: if the app backgrounds mid-annotation, this flushes the in-flight session. When the
+    /// user returns and continues drawing while still in annotation mode, post-resume strokes are not counted because
+    /// the session is not re-armed. This is acceptable for best-effort analytics.
+    func endAnnotationSessionIfNeeded() {
+        guard let start = annotationSessionStart else { return }
+        let duration = Date().timeIntervalSince(start)
+        analytics.log(.annotationEnded(strokes: annotationStrokeCount, durationSec: duration))
+        annotationSessionStart = nil
+        annotationStrokeCount = 0
     }
 }

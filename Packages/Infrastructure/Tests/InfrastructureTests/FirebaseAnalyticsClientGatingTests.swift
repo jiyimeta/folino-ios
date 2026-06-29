@@ -14,7 +14,7 @@ struct FirebaseAnalyticsClientGatingTests {
         client.setCollectionEnabled(true)
         client.setCollectionEnabled(false)
         client.log(AnalyticsEvent(name: "score_imported"))
-        client.setUserProperty("page", for: .layoutMode)
+        client.setUserProperty("page", for: AnalyticsUserProperty(name: "layout_mode"))
         #expect(loggedEvents.items.isEmpty)
         #expect(setProps.items.isEmpty)
     }
@@ -28,7 +28,7 @@ struct FirebaseAnalyticsClientGatingTests {
         )
         client.setCollectionEnabled(true)
         client.log(AnalyticsEvent(name: "score_imported"))
-        client.setUserProperty("page", for: .layoutMode)
+        client.setUserProperty("page", for: AnalyticsUserProperty(name: "layout_mode"))
         #expect(loggedEvents.items == ["score_imported"])
         #expect(setProps.items == ["layout_mode"])
     }

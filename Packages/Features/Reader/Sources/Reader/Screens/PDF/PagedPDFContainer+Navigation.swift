@@ -1,33 +1,8 @@
-import Domain
-import SheetMusicCore
-import SheetMusicLayout
 import SwiftUI
 
-// MARK: - Page-index navigation (taps / cursor follow)
+// MARK: - Page-index navigation (taps)
 
-extension PagedScoreContainer {
-    func followCursor(_ cursor: ScoreCursor?) {
-        guard !pageState.isDragging else { return }
-        guard let cursor, let doc = document else { return }
-        let mi = measureIndex(of: cursor)
-        guard let sys = systemIndex(forMeasureIndex: mi, in: doc) else { return }
-        guard let target = pages.firstIndex(where: { $0.contains(sys) }) else { return }
-        guard target != pageState.pageIndex else { return }
-        commitPageTurn(to: target)
-    }
-
-    private func systemIndex(
-        forMeasureIndex mi: Int,
-        in doc: LayoutDocument,
-    ) -> Int? {
-        for (i, sys) in doc.systems.enumerated()
-            where sys.measures.contains(where: { $0.measureIndex == mi })
-        {
-            return i
-        }
-        return nil
-    }
-
+extension PagedPDFContainer {
     func goToPage(delta: Int) {
         jumpToPage(at: pageState.pageIndex + delta)
     }
@@ -37,11 +12,11 @@ extension PagedScoreContainer {
     }
 
     func goToLastPage() {
-        jumpToPage(at: pages.count - 1)
+        jumpToPage(at: document.pageCount - 1)
     }
 
     private func jumpToPage(at target: Int) {
-        guard target >= 0, target < pages.count else { return }
+        guard target >= 0, target < document.pageCount else { return }
         guard target != pageState.pageIndex else { return }
         viewModel.resetZoom()
         committedZoom = 1.0
@@ -52,7 +27,7 @@ extension PagedScoreContainer {
         commitPageTurn(to: target)
     }
 
-    /// Drives the page turn by mutating `pageIndex` inside `withAnimation`. `PagedZoomedSurface` keeps adjacent pages
+    /// Drives the page turn by mutating `pageIndex` inside `withAnimation`. `PagedReaderSurface` keeps adjacent pages
     /// pre-rendered, and every page's `.offset` is a pure function of its index vs the current one — so a single
     /// `pageIndex` change makes the moving side interpolate while the static side stays put.
     ///
@@ -60,7 +35,7 @@ extension PagedScoreContainer {
     /// duration. Otherwise idx 0 would slide between `-viewport.width` (its always-rule resting position) and `0` (its
     /// current-page slide position), reading as a sideways slide rather than the symmetric fade idx-last gets for free.
     /// The flag is released in `completion:` so the static state can settle back while idx 0 is invisible.
-    private func commitPageTurn(to target: Int) {
+    func commitPageTurn(to target: Int) {
         let previous = pageState.pageIndex
         let isJump = abs(target - previous) > 1
         let involvesFirstPage = target == 0 || previous == 0
@@ -86,13 +61,13 @@ extension PagedScoreContainer {
 
 // MARK: - Swipe gesture
 
-extension PagedScoreContainer {
+extension PagedPDFContainer {
     /// Page-swipe activation gate: only at unit zoom, with no pinch in flight, on a multi-page document. The 0.001
     /// epsilon guards against floating-point drift.
     var pageSwipeEnabled: Bool {
         abs(viewModel.viewportZoom - 1.0) < 0.001
             && pinchSession == nil
-            && pages.count > 1
+            && document.pageCount > 1
     }
 
     /// Live drag → `dragTranslationX`. Applies rubber-band damping on the impossible-commit side. If the gate flips
@@ -104,7 +79,6 @@ extension PagedScoreContainer {
         guard pageSwipeEnabled else {
             if pageState.isDragging {
                 pageState.isDragging = false
-                swipeStartCursor = nil
                 withAnimation(PagedReaderNavigation.cancelAnimation(
                     snapBackDistance: pageState.dragTranslationX,
                     viewportWidth: viewportWidth,
@@ -114,12 +88,9 @@ extension PagedScoreContainer {
             }
             return
         }
-        if !pageState.isDragging {
-            swipeStartCursor = playbackCursor
-        }
         pageState.isDragging = true
         let atFirst = pageState.pageIndex == 0
-        let atLast = pageState.pageIndex == pages.count - 1
+        let atLast = pageState.pageIndex == document.pageCount - 1
         let needsDamping = (translationX > 0 && atFirst)
             || (translationX < 0 && atLast)
         pageState.dragTranslationX = needsDamping
@@ -128,9 +99,7 @@ extension PagedScoreContainer {
     }
 
     /// Drag release → run through `outcome` and dispatch. Commit folds `dragTranslationX` back into the
-    /// `commitPageTurn` animation; cancel snaps back with a shorter curve. Either way, `isDragging` clears and —
-    /// only when the playback cursor actually advanced during the gesture — `followCursor` re-runs so the page
-    /// catches up to active playback. A static cursor leaves the user's swipe destination alone.
+    /// `commitPageTurn` animation; cancel snaps back with a shorter curve. Either way, `isDragging` clears.
     func onSwipeEnded(
         translationX: CGFloat,
         predictedEndX: CGFloat,
@@ -139,7 +108,7 @@ extension PagedScoreContainer {
     ) {
         guard pageState.isDragging else { return }
         let atFirst = pageState.pageIndex == 0
-        let atLast = pageState.pageIndex == pages.count - 1
+        let atLast = pageState.pageIndex == document.pageCount - 1
         let outcome = PagedReaderNavigation.outcome(
             translationX: translationX,
             predictedEndX: predictedEndX,
@@ -149,8 +118,6 @@ extension PagedScoreContainer {
         )
 
         pageState.isDragging = false
-        let cursorAdvancedDuringSwipe = playbackCursor != swipeStartCursor
-        swipeStartCursor = nil
 
         switch outcome {
         case .commitNext:
@@ -171,17 +138,13 @@ extension PagedScoreContainer {
                 pageState.dragTranslationX = 0
             }
         }
-
-        if cursorAdvancedDuringSwipe {
-            followCursor(playbackCursor)
-        }
     }
 
     /// Drag-commit variant of `commitPageTurn`. Mutates `pageIndex` and `dragTranslationX` inside the same
     /// `withAnimation` block so every page interpolates from "old baseline + drag" to "new baseline + 0" as one
     /// motion. No freeze-first-page handling — drag commits are always ±1.
     private func commitDragTurn(to target: Int, velocityX: CGFloat, viewportWidth: CGFloat) {
-        guard target >= 0, target < pages.count else {
+        guard target >= 0, target < document.pageCount else {
             withAnimation(PagedReaderNavigation.cancelAnimation(
                 snapBackDistance: pageState.dragTranslationX,
                 viewportWidth: viewportWidth,

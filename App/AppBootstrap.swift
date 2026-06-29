@@ -130,35 +130,47 @@ final class AppBootstrap {
         analytics = FirebaseAnalyticsClient.make(collectionEnabled: enabled)
     }
 
-    /// Reads the current settings snapshot and posts all non-library user properties to analytics. Called once at
-    /// launch after the repository is ready (so library-count properties are also current). The library half is
-    /// delegated to `AnalyticsUserPropertySync.syncLibrary`, which derives format/version breakdowns from the live
-    /// `scoreItems` list. Sort is fixed to `.dateAddedDesc` because the Library's sort order is only held in-memory
-    /// inside `ScoreListViewModel` and is not persisted to `UserDefaults`.
+    /// Emits the two launch snapshot events (events-first; no user properties). Called once after the repository is
+    /// ready so library counts are current. Behind the consent gate inside the sink. Sort order is not persisted
+    /// (held in-memory in `ScoreListViewModel`), so it is intentionally not part of the settings snapshot — sort is
+    /// captured by the `sort_changed` event instead.
     private func pushAnalyticsSnapshot(repository: LiveScoreLibraryRepository) {
         guard let analytics else { return }
         let defaults = UserDefaults.standard
-        AnalyticsUserPropertySync.syncLibrary(
+
+        analytics.log(AnalyticsLibrarySnapshot.event(
             items: repository.scoreItems,
-            sort: .dateAddedDesc,
-            into: analytics,
-        )
-        analytics.setUserProperty(
-            defaults.string(forKey: ReaderGlobalSettingsKey.layoutMode) ?? ReaderLayoutMode.page.rawValue,
-            for: .layoutMode,
-        )
-        analytics.setUserProperty(
-            museScoreGeneralProvider?.currentPreset.rawValue ?? SoundfontPreset.lightweight.rawValue,
-            for: .soundfontPreset,
-        )
-        analytics.setUserProperty(
-            (defaults.object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true) ? "true" : "false",
-            for: .crashReportingEnabled,
-        )
-        analytics.setUserProperty(
-            defaults.bool(forKey: AnalyticsStateKey.hasUsedAnnotation) ? "true" : "false",
-            for: .hasUsedAnnotation,
-        )
+            playlistCount: repository.playlists.count,
+            tagCount: repository.tags.count,
+        ))
+
+        func boolSetting(_ key: String, default defaultValue: Bool) -> Bool {
+            defaults.object(forKey: key) as? Bool ?? defaultValue
+        }
+        let repeatMode = RepeatMode(rawValue: defaults.string(forKey: ReaderGlobalSettingsKey.repeatMode) ?? "")
+            ?? .off
+        let continuation = PlaylistContinuationMode(
+            rawValue: defaults.string(forKey: ReaderGlobalSettingsKey.playlistContinuationMode) ?? "",
+        ) ?? .playThrough
+        let layoutMode = ReaderLayoutMode(rawValue: defaults.string(forKey: ReaderGlobalSettingsKey.layoutMode) ?? "")
+            ?? .page
+        let a4 = defaults.object(forKey: ReaderGlobalSettingsKey.a4ReferenceHz) as? Double ?? A4Reference.standardHz
+
+        analytics.log(.settingsSnapshot(
+            metronome: boolSetting(ReaderGlobalSettingsKey.metronomeEnabled, default: false),
+            pictureInPicture: boolSetting(ReaderGlobalSettingsKey.pictureInPictureEnabled, default: false),
+            collapseMultiMeasureRests: boolSetting(ReaderGlobalSettingsKey.collapseMultiMeasureRests, default: false),
+            showInvisibles: boolSetting(ReaderGlobalSettingsKey.showInvisibleElements, default: false),
+            keepScreenAwake: boolSetting(ReaderGlobalSettingsKey.keepScreenAwakeEnabled, default: true),
+            showSeekBar: boolSetting(ReaderGlobalSettingsKey.showSeekBarEnabled, default: true),
+            repeatMode: repeatMode,
+            playlistContinuation: continuation,
+            a4ReferenceHz: a4,
+            layoutMode: layoutMode,
+            crashReportingEnabled: boolSetting(PrivacySettingsKey.crashReportingEnabled, default: true),
+            soundfontPreset: museScoreGeneralProvider?.currentPreset.rawValue
+                ?? SoundfontPreset.lightweight.rawValue,
+        ))
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {

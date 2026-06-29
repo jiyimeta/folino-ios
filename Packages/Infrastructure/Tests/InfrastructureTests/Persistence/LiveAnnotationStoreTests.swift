@@ -32,7 +32,7 @@ struct LiveAnnotationStoreTests {
         )
         return AnnotationLayer(
             scoreItemID: scoreID,
-            drawings: [DrawingAnchor(anchor: anchor, encodedDrawing: Data([0x01]))],
+            drawings: [DrawingAnchor(kind: .musical(anchor), encodedDrawing: Data([0x01]))],
             textBoxes: [],
             updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
         )
