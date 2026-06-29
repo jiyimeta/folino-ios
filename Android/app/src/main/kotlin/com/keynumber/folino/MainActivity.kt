@@ -135,22 +135,6 @@ class MainActivity : ComponentActivity(), PipHost {
         AndroidAnalytics.initialize(applicationContext)
         AndroidAnalytics.setCollectionEnabled(analyticsEnabled)
 
-        // Push the launch analytics user-property snapshot (mirrors iOS AppBootstrap.pushAnalyticsSnapshot). These
-        // non-library properties come from DataStore; the library size / sort / per-format-count properties are
-        // applied once the Library store is hydrated (LibraryNavGraph), since they need the score snapshot.
-        // has_used_annotation is always false (no Pencil annotation on Android). soundfont_preset is reported as the
-        // bundled "lightweight" default — reflecting a downloaded high-quality tier is a deferred follow-up (that
-        // state lives in the separate Soundfont JNI module, not available this early in onCreate).
-        val analyticsLayoutMode = runBlocking { prefs.layoutMode.first() }
-        AndroidAnalytics.applyUserProperties(
-            AndroidAnalytics.bridge.launchUserProperties(
-                layoutMode = analyticsLayoutMode,
-                crashReportingEnabled = crashEnabled,
-                hasUsedAnnotation = false,
-                soundfontPreset = "lightweight",
-            ),
-        )
-
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
         // TEMPORARY GUARD — remove this `if` (always load) any time after 1.0.0 has shipped.
@@ -202,6 +186,9 @@ class MainActivity : ComponentActivity(), PipHost {
                                     // mirroring iOS which logs it once at the settings button. Once per open; the
                                     // drawer's gear is the only nav action to "settings", so no duplicate.
                                     AndroidAnalytics.log(AndroidAnalytics.bridge.settingsOpened())
+                                    // screen_view for settings (its own rootNav destination; single entry point here,
+                                    // mirroring iOS SettingsSheet.onAppear → .settings).
+                                    AndroidAnalytics.log(AndroidAnalytics.bridge.screen("settings"))
                                     rootNav.navigate("settings")
                                 },
                                 pendingOpenScoreId = activity?.pendingOpenScoreId,
@@ -291,16 +278,34 @@ private fun LibraryNavGraph(
     val vm: LibraryAndroidStoreViewModel =
         viewModel(factory = LibraryVMFactory(context.applicationContext))
 
-    // Push the library user-property snapshot once the store is hydrated (mirrors iOS launch sync via
-    // AnalyticsUserPropertySync). The store hydrates synchronously in its init, so the first snapshot reflects the
-    // current library. Re-sync after import/delete is a deferred minor (iOS additionally re-syncs on mutation).
+    // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
+    // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
+    // after import/delete is a deferred minor (iOS emits once at launch too).
     LaunchedEffect(Unit) {
-        AndroidAnalytics.applyUserProperties(vm.libraryUserProperties())
+        AndroidAnalytics.log(vm.librarySnapshot())
+        AndroidAnalytics.log(
+            AndroidAnalytics.bridge.settingsSnapshot(
+                metronome = prefs.metronome.first(),
+                pictureInPicture = prefs.pip.first(),
+                collapseMultiMeasureRests = prefs.collapseRests.first(),
+                showInvisibles = prefs.showInvisible.first(),
+                keepScreenAwake = prefs.keepAwake.first(),
+                showSeekBar = prefs.showSeekBar.first(),
+                repeatMode = prefs.repeatMode.first(),
+                playlistContinuation = prefs.playlistContinuationMode.first(),
+                a4ReferenceHz = prefs.a4ReferenceHz.first(),
+                layoutMode = prefs.layoutMode.first(),
+                crashReportingEnabled = prefs.crashReporting.first(),
+                // soundfont_preset: the live downloaded tier lives in a separate JNI module; report the bundled default.
+                soundfontPreset = "lightweight",
+            ),
+        )
     }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
+
     // Reader is a detail pushed on top; only the top-level list destinations
     // expose the drawer (hamburger + edge swipe).
     val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted" ||
@@ -357,6 +362,7 @@ private fun LibraryNavGraph(
         val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
         NavHost(nav, startDestination = "list") {
             composable("list") {
+                ScreenViewEffect("library")
                 LibraryScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -365,6 +371,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("recent") {
+                ScreenViewEffect("library")
                 RecentScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -372,6 +379,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("favorites") {
+                ScreenViewEffect("library")
                 FavoritesListScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -383,6 +391,7 @@ private fun LibraryNavGraph(
                 DebugRoute(onBack = { nav.popBackStackIfResumed() })
             }
             composable("recentlyDeleted") {
+                ScreenViewEffect("recentlyDeleted")
                 RecentlyDeletedScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -390,6 +399,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("playlists") {
+                ScreenViewEffect("library")
                 PlaylistsListScreen(
                     viewModel = vm,
                     onOpenPlaylist = { id, name ->
@@ -407,6 +417,7 @@ private fun LibraryNavGraph(
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
                 val name = URLDecoder.decode(entry.arguments?.getString("name") ?: "", "UTF-8")
+                ScreenViewEffect("playlistDetail")
                 PlaylistDetailScreen(
                     viewModel = vm,
                     playlistId = id,
@@ -420,6 +431,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("tags") {
+                ScreenViewEffect("library")
                 TagsListScreen(
                     viewModel = vm,
                     onOpenTag = { id, name ->
@@ -437,6 +449,7 @@ private fun LibraryNavGraph(
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
                 val name = URLDecoder.decode(entry.arguments?.getString("name") ?: "", "UTF-8")
+                ScreenViewEffect("tagDetail")
                 TagDetailScreen(
                     viewModel = vm,
                     tagId = id,
@@ -450,6 +463,7 @@ private fun LibraryNavGraph(
                 arguments = listOf(navArgument("id") { type = NavType.StringType }),
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
+                ScreenViewEffect("scoreInfo")
                 EditScoreInfoScreen(
                     load = { vm.scoreInfoForEditing(id) },
                     onSave = { f ->
@@ -547,6 +561,7 @@ private fun LibraryNavGraph(
                 var lastTransposeForAnalytics by remember(currentScoreId) {
                     mutableStateOf(prefsState.transposeSemitones)
                 }
+                ScreenViewEffect("reader")
                 ReaderScreen(
                     scoreId = currentScoreId,
                     title = title,
@@ -822,6 +837,20 @@ private fun VersionHistoryRoute(
         },
     ) { padding ->
         Box(Modifier.padding(padding)) { VersionHistoryScreen(versionItems) }
+    }
+}
+
+/**
+ * Manual `screen_view` for a top-level Compose destination, mirroring iOS `.onAppear { logScreen(...) }`. Fires once
+ * when the destination enters composition (Compose is a single Activity, so per-screen views are not auto-collected).
+ * [token] is an `AnalyticsScreen` case-name token; the bridge maps it to the wire `screen_name`. Library browsing
+ * destinations (all / favorites / recent / playlists / tags) all pass "library", matching iOS where they are one
+ * segmented `LibraryRootScreen`.
+ */
+@Composable
+private fun ScreenViewEffect(token: String) {
+    LaunchedEffect(Unit) {
+        AndroidAnalytics.log(AndroidAnalytics.bridge.screen(token))
     }
 }
 

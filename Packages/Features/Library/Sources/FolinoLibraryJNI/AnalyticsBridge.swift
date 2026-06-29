@@ -248,41 +248,57 @@ public final class AnalyticsBridge {
         Self.encode(.settingsOpened())
     }
 
-    // MARK: User properties (launch snapshot)
+    // MARK: Screen views
 
-    /// The non-library launch user properties, mirroring iOS `AppBootstrap.pushAnalyticsSnapshot`. The library
-    /// properties (size / sort / per-format counts) come from `LibraryAndroidStore.libraryUserProperties()` via the
-    /// shared `AnalyticsUserPropertySync`. Property names + value vocab are authored here in Swift; Kotlin passes only
-    /// the raw DataStore state. `layoutMode` / `soundfontPreset` are case-name tokens; `hasUsedAnnotation` is always
-    /// `false` on Android (no Pencil annotation), but is threaded so the property exists at iOS parity.
+    /// Manual `screen_view` (Compose, like SwiftUI, is a single host, so screen views are not auto-collected). `name`
+    /// is an `AnalyticsScreen` case-name token; the wire `screen_name` value stays in the Domain enum.
     @WireletExpose
-    public func launchUserProperties(
-        layoutMode: String, crashReportingEnabled: Bool, hasUsedAnnotation: Bool, soundfontPreset: String,
-    ) -> [AnalyticsPropertyWire] {
-        [
-            AnalyticsPropertyWire(
-                name: AnalyticsUserProperty.layoutMode.name, value: Self.layoutMode(layoutMode).analyticsValue,
-            ),
-            AnalyticsPropertyWire(
-                name: AnalyticsUserProperty.soundfontPreset.name, value: Self.soundfontPreset(soundfontPreset).rawValue,
-            ),
-            AnalyticsPropertyWire(
-                name: AnalyticsUserProperty.crashReportingEnabled.name,
-                value: crashReportingEnabled ? "true" : "false",
-            ),
-            AnalyticsPropertyWire(
-                name: AnalyticsUserProperty.hasUsedAnnotation.name, value: hasUsedAnnotation ? "true" : "false",
-            ),
-        ]
+    public func screen(name: String) -> AnalyticsEventWire {
+        Self.encode(.screen(Self.screen(name)))
+    }
+
+    // MARK: Launch snapshots (events-first replacement for user properties)
+
+    /// One-per-launch `settings_snapshot` of durable settings, mirroring iOS `AppBootstrap`. Raw values — bucket at
+    /// analysis time. Kotlin reads DataStore and passes the values; enum params cross as case-name tokens. The
+    /// companion `library_snapshot` is built by `LibraryAndroidStore.librarySnapshot()` (it owns the score records).
+    @WireletExpose
+    public func settingsSnapshot(
+        metronome: Bool,
+        pictureInPicture: Bool,
+        collapseMultiMeasureRests: Bool,
+        showInvisibles: Bool,
+        keepScreenAwake: Bool,
+        showSeekBar: Bool,
+        repeatMode: String,
+        playlistContinuation: String,
+        a4ReferenceHz: Double,
+        layoutMode: String,
+        crashReportingEnabled: Bool,
+        soundfontPreset: String,
+    ) -> AnalyticsEventWire {
+        Self.encode(.settingsSnapshot(
+            metronome: metronome,
+            pictureInPicture: pictureInPicture,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showInvisibles: showInvisibles,
+            keepScreenAwake: keepScreenAwake,
+            showSeekBar: showSeekBar,
+            repeatMode: Self.repeatMode(repeatMode),
+            playlistContinuation: Self.continuationMode(playlistContinuation),
+            a4ReferenceHz: a4ReferenceHz,
+            layoutMode: Self.layoutMode(layoutMode),
+            crashReportingEnabled: crashReportingEnabled,
+            soundfontPreset: soundfontPreset,
+        ))
     }
 
     // MARK: - Marshaling
 
     /// Marshal a shared `AnalyticsEvent` into the JNI wire shape, mirroring iOS `FirebaseAnalyticsClient`'s
     /// `AnalyticsValue -> Firebase` mapping (.string -> String, .int -> Long, .double -> Double, .bool -> Bool).
-    /// All four cases are handled so a future parameter type is never silently dropped — even though today's catalog
-    /// only emits `.string` and `.bool`. (`.int` widths beyond Int32 cannot occur today: counts are bucketed to
-    /// strings before they reach analytics, so the Int32 wire field is never narrowed in practice.)
+    /// All four cases are handled: events-first logs raw counts as `.int` (e.g. `score_deleted.count`,
+    /// `library_snapshot` totals) and `.double` for `a4_reference_hz` / `duration_sec`, so every payload kind is live.
     static func encode(_ event: AnalyticsEvent) -> AnalyticsEventWire {
         let params = event.parameters.map { key, value -> AnalyticsParamWire in
             switch value {
@@ -366,7 +382,16 @@ public final class AnalyticsBridge {
         }
     }
 
-    private static func soundfontPreset(_ token: String) -> SoundfontPreset {
-        SoundfontPreset(rawValue: token) ?? .lightweight
+    private static func screen(_ token: String) -> AnalyticsScreen {
+        switch token {
+        case "library": .library
+        case "reader": .reader
+        case "scoreInfo": .scoreInfo
+        case "settings": .settings
+        case "recentlyDeleted": .recentlyDeleted
+        case "playlistDetail": .playlistDetail
+        case "tagDetail": .tagDetail
+        default: .library
+        }
     }
 }

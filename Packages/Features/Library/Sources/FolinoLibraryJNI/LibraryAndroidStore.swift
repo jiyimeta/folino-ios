@@ -8,7 +8,7 @@
 import Domain // ScoreFormat, ScorePresentation, ScoreShareFormat, ScoreExportNaming
 import Foundation
 import Observation
-import UtilityCore // Analytics, AnalyticsEvent, AnalyticsUserProperty (shared catalog, for the analytics builders)
+import UtilityCore // AnalyticsEvent (shared catalog type, for the analytics event builders)
 
 // SheetMusicMIDI (MidiRenderer/MidiWriter) is used directly rather than the umbrella `SheetMusic`, which
 // `@_exported import`s SheetMusicCore and would make `ScoreItemID` ambiguous with Domain's.
@@ -116,7 +116,7 @@ public final class LibraryAndroidStore {
         ))
         reload()
         // museScoreMajorVersion is nil: Android does not yet persist the MuseScore wire version (see
-        // libraryUserProperties), so it crosses as "unknown" — the lone parity gap vs iOS's per-import version.
+        // librarySnapshot), so it crosses as "unknown" — the lone parity gap vs iOS's per-import version.
         return AnalyticsBridge.encode(.scoreImported(
             format: pickedFormat ?? .mscz, source: "file_picker", isDuplicate: false, museScoreMajorVersion: nil,
         ))
@@ -902,20 +902,22 @@ public final class LibraryAndroidStore {
         reloadTags()
     }
 
-    // MARK: Analytics — library user-property snapshot
+    // MARK: Analytics — library snapshot (events-first)
 
-    /// Compute the library user-property snapshot via the SHARED `AnalyticsUserPropertySync` (identical bucketing to
-    /// iOS) and return it for Kotlin to push to Firebase. Called at launch and after import/delete. Sort is the
-    /// Android default (`.dateAddedDesc`); MuseScore version is not persisted on Android yet, so the version-bucketed
-    /// counts treat every mscz as v4 (matching iOS's `nil` → v4 default) — the one known parity gap.
+    /// Build the one-per-launch `library_snapshot` event via the SHARED `AnalyticsLibrarySnapshot` (identical
+    /// predicate/count logic to iOS). Counts are raw — bucket at analysis time. MuseScore version is not persisted on
+    /// Android yet, so the mscz2/3/4 split treats every mscz as v4 (matching iOS's `nil` → v4 default) — the one
+    /// known parity gap. Returns the wire event for Kotlin to log at launch.
     @WireletExpose
-    public func libraryUserProperties() -> [AnalyticsPropertyWire] {
+    public func librarySnapshot() -> AnalyticsEventWire {
         let items = store.loadAll()
             .filter { $0.deletedAt <= 0 }
             .map(Self.analyticsItem)
-        let collector = CollectingAnalytics()
-        AnalyticsUserPropertySync.syncLibrary(items: items, sort: .dateAddedDesc, into: collector)
-        return collector.properties
+        return AnalyticsBridge.encode(AnalyticsLibrarySnapshot.event(
+            items: items,
+            playlistCount: store.loadPlaylists().count,
+            tagCount: store.loadTags().count,
+        ))
     }
 }
 
@@ -937,8 +939,9 @@ extension LibraryAndroidStore {
         }
     }
 
-    /// Minimal `ScoreItem` for the user-property sync. Only `localFileName` (→ format) and `museScoreMajorVersion` are
-    /// read by `AnalyticsUserPropertySync`; the rest are placeholders. Version is nil (Android does not persist it).
+    /// Minimal `ScoreItem` for `AnalyticsLibrarySnapshot.event`. Only `localFileName` (→ format),
+    /// `museScoreMajorVersion`, and `isFavorite` (→ favorite_count) are read; the rest are placeholders. Version is
+    /// nil (Android does not persist it).
     static func analyticsItem(_ rec: ScoreRecordWire) -> ScoreItem {
         ScoreItem(
             title: rec.title,
@@ -953,21 +956,10 @@ extension LibraryAndroidStore {
             addedAt: Date(timeIntervalSince1970: 0),
             lastOpenedAt: nil,
             tagIDs: [],
-            isFavorite: false,
+            isFavorite: rec.isFavorite,
             deletedAt: nil,
             museScoreMajorVersion: nil,
         )
-    }
-}
-
-/// Captures the user-property assignments emitted by the shared `AnalyticsUserPropertySync` so `libraryUserProperties`
-/// can return them as a wire array, rather than pushing to a live Firebase sink (Kotlin owns the Firebase call).
-private final class CollectingAnalytics: Analytics, @unchecked Sendable {
-    private(set) var properties: [AnalyticsPropertyWire] = []
-    func setCollectionEnabled(_: Bool) {}
-    func log(_: AnalyticsEvent) {}
-    func setUserProperty(_ value: String?, for property: AnalyticsUserProperty) {
-        properties.append(AnalyticsPropertyWire(name: property.name, value: value ?? ""))
     }
 }
 

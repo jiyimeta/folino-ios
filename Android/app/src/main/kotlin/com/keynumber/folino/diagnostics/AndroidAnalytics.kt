@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.keynumber.folino.library.AnalyticsEventWire
-import com.keynumber.folino.library.AnalyticsPropertyWire
 import com.keynumber.folino.library.generated.AnalyticsBridgeViewModel
 
 /**
@@ -56,21 +55,9 @@ object AndroidAnalytics {
         firebaseAnalytics?.setAnalyticsCollectionEnabled(value)
     }
 
-    /**
-     * Set (or clear, when [value] is null) a user property. No-op when the local gate is disabled or before
-     * [initialize]. Property names come from the shared catalog via the bridge's `libraryUserProperties()` /
-     * `launchUserProperties(...)` builders ([AnalyticsPropertyWire]), never literalled here. Mirrors iOS
-     * `Analytics.setUserProperty(_:for:)`.
-     */
-    fun setUserProperty(name: String, value: String?) {
-        if (!enabled) return
-        firebaseAnalytics?.setUserProperty(name, value)
-    }
-
-    /** Convenience: apply a batch of [AnalyticsPropertyWire] from a bridge builder. */
-    fun applyUserProperties(properties: List<AnalyticsPropertyWire>) {
-        for (property in properties) setUserProperty(property.name, property.value)
-    }
+    // Events-first taxonomy: no custom user properties. The former launch user-property push is replaced by the
+    // `library_snapshot` + `settings_snapshot` events (built by the bridge / LibraryAndroidStore, logged via `log`).
+    // `setUserProperty` is intentionally NOT exposed — if a future low-latency targeting need appears, add it then.
 
     /**
      * Log an event produced by an [AnalyticsBridgeViewModel] builder. No-op when the local gate is disabled or
