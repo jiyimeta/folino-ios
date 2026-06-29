@@ -63,6 +63,7 @@ import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.PlaylistContinuationMode
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.reader.toPref
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.theme.FolinoTheme
@@ -127,6 +128,13 @@ class MainActivity : ComponentActivity(), PipHost {
         val crashEnabled = runBlocking { prefs.crashReporting.first() }
         CrashReporting.setCollectionEnabled(crashEnabled)
 
+        // Same opt-out re-apply for Firebase Analytics. initialize() binds the SDK to the app Context (required
+        // before setCollectionEnabled, unlike Crashlytics' no-arg singleton); the persisted flag then gates both
+        // the SDK and the local AndroidAnalytics gate. Default true = opt-in, matching iOS bootstrap.
+        val analyticsEnabled = runBlocking { prefs.analytics.first() }
+        AndroidAnalytics.initialize(applicationContext)
+        AndroidAnalytics.setCollectionEnabled(analyticsEnabled)
+
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
         // TEMPORARY GUARD — remove this `if` (always load) any time after 1.0.0 has shipped.
@@ -172,7 +180,14 @@ class MainActivity : ComponentActivity(), PipHost {
                             val activity = LocalContext.current as? MainActivity
                             LibraryNavGraph(
                                 prefs = prefs,
-                                onOpenSettings = { rootNav.navigate("settings") },
+                                onOpenSettings = {
+                                    // Task 18 smoke event: fire settings_opened through the REAL pipeline
+                                    // (Swift builder → AndroidAnalytics.log) at the single Settings entry point,
+                                    // mirroring iOS which logs it once at the settings button. Once per open; the
+                                    // drawer's gear is the only nav action to "settings", so no duplicate.
+                                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingsOpened())
+                                    rootNav.navigate("settings")
+                                },
                                 pendingOpenScoreId = activity?.pendingOpenScoreId,
                                 pendingOpenScoreTitle = activity?.pendingOpenScoreTitle,
                                 onPendingOpenConsumed = {

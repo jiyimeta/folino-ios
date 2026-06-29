@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.BuildConfig
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.RepeatModePicker
@@ -68,6 +70,7 @@ fun SettingsScreen(
     val layout by prefs.layoutMode.collectAsState(initial = "page")
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
+    val analyticsEnabled by prefs.analytics.collectAsState(initial = true)
     val repeatModeWire by prefs.repeatMode.collectAsState(initial = "off")
     val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
     val showInvisible by prefs.showInvisible.collectAsState(initial = false)
@@ -294,6 +297,18 @@ fun SettingsScreen(
                 onChange = { v ->
                     scope.launch { prefs.setCrashReporting(v) }
                     CrashReporting.setCollectionEnabled(v)
+                },
+            )
+        }
+        item {
+            ToggleRow(
+                icon = Icons.Filled.Analytics,
+                title = stringResource(R.string.settings_privacy_analytics_title),
+                subtitle = stringResource(R.string.settings_privacy_analytics_description),
+                checked = analyticsEnabled,
+                onChange = { v ->
+                    scope.launch { prefs.setAnalytics(v) }
+                    AndroidAnalytics.setCollectionEnabled(v)
                 },
             )
         }
