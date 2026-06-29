@@ -79,4 +79,46 @@ struct AnalyticsEventFactoryTests {
         #expect(event.parameters["count"] == .int(12))
         #expect(event.parameters["source"] == .string("bulk_edit"))
     }
+
+    @Test func `screen factory`() {
+        let event = AnalyticsEvent.screen(.reader)
+        #expect(event.name == "screen_view")
+        #expect(event.parameters["firebase_screen"] == .string("reader"))
+    }
+
+    @Test func `annotation ended factory`() {
+        let event = AnalyticsEvent.annotationEnded(strokes: 12, durationSec: 34.5)
+        #expect(event.name == "annotation_ended")
+        #expect(event.parameters["ink_strokes"] == .int(12))
+        #expect(event.parameters["duration_sec"] == .double(34.5))
+    }
+
+    @Test func `library snapshot factory`() {
+        let event = AnalyticsEvent.librarySnapshot(
+            total: 30, mscz2: 1, mscz3: 2, mscz4: 3, musicXML: 4, midi: 5, pdf: 6,
+            playlistCount: 7, tagCount: 8, favoriteCount: 9,
+        )
+        #expect(event.name == "library_snapshot")
+        #expect(event.parameters["score_count_total"] == .int(30))
+        #expect(event.parameters["score_count_mscz4"] == .int(3))
+        #expect(event.parameters["score_count_pdf"] == .int(6))
+        #expect(event.parameters["playlist_count"] == .int(7))
+        #expect(event.parameters["favorite_count"] == .int(9))
+    }
+
+    @Test func `settings snapshot factory`() {
+        let event = AnalyticsEvent.settingsSnapshot(
+            metronome: true, pictureInPicture: false, collapseMultiMeasureRests: true,
+            showInvisibles: false, keepScreenAwake: true, showSeekBar: true,
+            repeatMode: .abLoop, playlistContinuation: .playThrough, a4ReferenceHz: 442,
+            layoutMode: .page, crashReportingEnabled: true, soundfontPreset: "lightweight",
+        )
+        #expect(event.name == "settings_snapshot")
+        #expect(event.parameters["metronome_enabled"] == .bool(true))
+        #expect(event.parameters["repeat_mode"] == .string("ab_loop"))
+        #expect(event.parameters["playlist_continuation"] == .string("play_through"))
+        #expect(event.parameters["a4_reference_hz"] == .double(442))
+        #expect(event.parameters["layout_mode"] == .string("page"))
+        #expect(event.parameters["soundfont_preset"] == .string("lightweight"))
+    }
 }

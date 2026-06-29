@@ -177,4 +177,76 @@ extension AnalyticsEvent {
     public static func settingsOpened() -> AnalyticsEvent {
         AnalyticsEvent(name: "settings_opened")
     }
+
+    // MARK: Screen views
+
+    /// Manual `screen_view` (reserved GA4 recommended event). `firebase_screen` is the only param; Firebase fills the
+    /// rest. Emitted from each top-level screen's `onAppear` because SwiftUI screen views are not auto-collected.
+    public static func screen(_ screen: AnalyticsScreen) -> AnalyticsEvent {
+        AnalyticsEvent(name: "screen_view", parameters: ["firebase_screen": .string(screen.rawValue)])
+    }
+
+    // MARK: Launch snapshots (events-first replacements for user properties)
+
+    /// One-per-launch snapshot of durable settings. Raw values — bucket at analysis time. "Current settings per user"
+    /// is the latest `settings_snapshot`; `setting_changed` adds the change history.
+    public static func settingsSnapshot(
+        metronome: Bool,
+        pictureInPicture: Bool,
+        collapseMultiMeasureRests: Bool,
+        showInvisibles: Bool,
+        keepScreenAwake: Bool,
+        showSeekBar: Bool,
+        repeatMode: RepeatMode,
+        playlistContinuation: PlaylistContinuationMode,
+        a4ReferenceHz: Double,
+        layoutMode: ReaderLayoutMode,
+        crashReportingEnabled: Bool,
+        soundfontPreset: String,
+    ) -> AnalyticsEvent {
+        AnalyticsEvent(name: "settings_snapshot", parameters: [
+            "metronome_enabled": .bool(metronome),
+            "picture_in_picture_enabled": .bool(pictureInPicture),
+            "collapse_multi_measure_rests": .bool(collapseMultiMeasureRests),
+            "show_invisible_elements": .bool(showInvisibles),
+            "keep_screen_awake": .bool(keepScreenAwake),
+            "show_seek_bar": .bool(showSeekBar),
+            "repeat_mode": .string(repeatMode.analyticsValue),
+            "playlist_continuation": .string(playlistContinuation.analyticsValue),
+            "a4_reference_hz": .double(a4ReferenceHz),
+            "layout_mode": .string(layoutMode.analyticsValue),
+            "crash_reporting_enabled": .bool(crashReportingEnabled),
+            "soundfont_preset": .string(soundfontPreset),
+        ])
+    }
+
+    /// One-per-launch snapshot of library composition. Raw counts (metrics) — bucket at analysis time. Replaces the
+    /// former library-count user properties.
+    public static func librarySnapshot(
+        total: Int, mscz2: Int, mscz3: Int, mscz4: Int,
+        musicXML: Int, midi: Int, pdf: Int,
+        playlistCount: Int, tagCount: Int, favoriteCount: Int,
+    ) -> AnalyticsEvent {
+        AnalyticsEvent(name: "library_snapshot", parameters: [
+            "score_count_total": .int(total),
+            "score_count_mscz2": .int(mscz2),
+            "score_count_mscz3": .int(mscz3),
+            "score_count_mscz4": .int(mscz4),
+            "score_count_musicxml": .int(musicXML),
+            "score_count_midi": .int(midi),
+            "score_count_pdf": .int(pdf),
+            "playlist_count": .int(playlistCount),
+            "tag_count": .int(tagCount),
+            "favorite_count": .int(favoriteCount),
+        ])
+    }
+
+    /// Session-level annotation summary, emitted when annotation mode exits. Replaces the per-stroke
+    /// `annotation_ink_committed` so the pipeline is not flooded with one event per stroke.
+    public static func annotationEnded(strokes: Int, durationSec: Double) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "annotation_ended",
+            parameters: ["ink_strokes": .int(strokes), "duration_sec": .double(durationSec)],
+        )
+    }
 }
