@@ -70,4 +70,47 @@ enum PDFAnnotationAnchoring {
         }
         return PKDrawing(strokes: strokes)
     }
+
+    /// Split anchors into those on `pageIndex` and the rest (off-page anchors preserved for the merge).
+    static func partitionByPage(
+        _ drawings: [DrawingAnchor], pageIndex: Int,
+    ) -> (onPage: [DrawingAnchor], offPage: [DrawingAnchor]) {
+        var onPage: [DrawingAnchor] = []
+        var offPage: [DrawingAnchor] = []
+        for drawing in drawings {
+            if case let .page(anchor) = drawing.kind, anchor.pageIndex == pageIndex {
+                onPage.append(drawing)
+            } else {
+                offPage.append(drawing)
+            }
+        }
+        return (onPage, offPage)
+    }
+
+    /// Display only the anchors on `pageIndex`, denormalized into band-space `pageFrame` (the centered fitted page).
+    static func displayPage(_ drawings: [DrawingAnchor], pageIndex: Int, pageFrame: CGRect) -> PKDrawing {
+        guard let denormalize = displayTransform(pageFrame: pageFrame) else { return PKDrawing() }
+        var strokes: [PKStroke] = []
+        for drawing in drawings {
+            guard case let .page(anchor) = drawing.kind, anchor.pageIndex == pageIndex else { continue }
+            guard var stored = try? PKDrawing(data: drawing.encodedDrawing) else { continue }
+            stored.transform(using: denormalize)
+            strokes.append(contentsOf: stored.strokes)
+        }
+        return PKDrawing(strokes: strokes)
+    }
+
+    /// Capture band-space strokes as `.page(pageIndex)` anchors, normalized to `pageFrame`. In paged mode every stroke
+    /// belongs to the single visible page, so the page is passed in rather than resolved from the centroid.
+    static func capturePage(strokes: [PKStroke], pageIndex: Int, pageFrame: CGRect) -> [DrawingAnchor] {
+        guard let normalize = normalizeTransform(pageFrame: pageFrame) else { return [] }
+        return strokes.map { stroke in
+            var normalized = PKDrawing(strokes: [stroke])
+            normalized.transform(using: normalize)
+            return DrawingAnchor(
+                kind: .page(PageAnchor(pageIndex: pageIndex)),
+                encodedDrawing: normalized.dataRepresentation(),
+            )
+        }
+    }
 }
