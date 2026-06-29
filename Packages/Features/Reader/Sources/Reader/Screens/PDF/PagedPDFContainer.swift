@@ -10,6 +10,8 @@ import SwiftUI
 /// Pinch composition matches `PagedScoreContainer` (same `committedZoom`, two `scaleEffect`s, snap-to-unit commit).
 struct PagedPDFContainer: View {
     let document: PDFDocument
+    /// User opt-out: when false, the page-turn tap zones are hidden (swipe still works).
+    let showsPageTurnButtons: Bool
     @Bindable var viewModel: ReaderViewModel
 
     /// Page index + swipe-drag state — `@Observable` reference so `withAnimation` transactions reach the
@@ -130,6 +132,7 @@ struct PagedPDFContainer: View {
                 },
                 showsHint: !pageTapHintDismissed,
                 onAnyZoneTouchDown: { pageTapHintDismissed = true },
+                showsTapZones: showsPageTurnButtons,
                 pageContent: { idx in pdfPage(idx, viewport: viewport) },
             )
         }

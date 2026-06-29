@@ -37,6 +37,8 @@ struct PagedReaderSurface<Page: View>: View {
     let onSwipeEnded: (CGFloat, CGFloat, CGFloat) -> Void
     let showsHint: Bool
     let onAnyZoneTouchDown: () -> Void
+    /// When false, the page-turn tap-zone overlay is not rendered. Swipe-to-turn (the band gesture) is unaffected.
+    let showsTapZones: Bool
     @ViewBuilder let pageContent: (Int) -> Page
 
     var body: some View {
@@ -75,9 +77,11 @@ struct PagedReaderSurface<Page: View>: View {
                 // Tap zones extend `pageInsets.leading` / `pageInsets.trailing` outward so the tap-active area reaches
                 // the host's edges in landscape, where there is otherwise a safe-area gutter that would swallow edge
                 // taps.
-                tapOverlay()
-                    .padding(.top, pageInsets.top)
-                    .padding(.bottom, pageInsets.bottom)
+                if showsTapZones {
+                    tapOverlay()
+                        .padding(.top, pageInsets.top)
+                        .padding(.bottom, pageInsets.bottom)
+                }
             }
             .scaleEffect(pinch.magnification, anchor: pinch.anchor)
             .scaleEffect(zoom, anchor: .topLeading)

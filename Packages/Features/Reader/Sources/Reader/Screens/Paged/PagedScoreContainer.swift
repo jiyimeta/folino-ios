@@ -29,6 +29,8 @@ struct PagedScoreContainer: View {
     /// User opt-out: when false, continuous playback no longer auto-turns the page. Manual navigation (tap-seek,
     /// measure-step) still turns to keep its target visible (see `readerShouldFollowPlayback`).
     let autoFollowEnabled: Bool
+    /// User opt-out: when false, the page-turn tap zones are hidden (swipe + auto-page-turn still work).
+    let showsPageTurnButtons: Bool
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -197,6 +199,7 @@ struct PagedScoreContainer: View {
                 },
                 showsHint: !pageTapHintDismissed,
                 onAnyZoneTouchDown: { pageTapHintDismissed = true },
+                showsTapZones: showsPageTurnButtons,
             )
         }
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area; the hosted surface re-applies

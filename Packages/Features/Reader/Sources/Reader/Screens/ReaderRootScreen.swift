@@ -36,6 +36,9 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.autoFollowEnabled)
     private var autoFollowEnabled = true
 
+    @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
+    private var pageTurnButtonsVisible = true
+
     @Environment(\.scenePhase) private var scenePhase
 
     private var layoutMode: ReaderLayoutMode {
@@ -249,6 +252,7 @@ public struct ReaderRootScreen: View {
                         playbackCursor: viewModel.playbackSession.displayCursor,
                         pageAnchorCursor: viewModel.playbackSession.pageAnchorCursor,
                         autoFollowEnabled: autoFollowEnabled,
+                        showsPageTurnButtons: pageTurnButtonsVisible,
                         transposeSemitones: viewModel.transposeModel.semitones,
                         viewModel: viewModel,
                     )
@@ -261,7 +265,11 @@ public struct ReaderRootScreen: View {
             case .vertical:
                 VerticalPDFContainer(document: document, viewModel: viewModel)
             case .page, .horizontal:
-                PagedPDFContainer(document: document, viewModel: viewModel)
+                PagedPDFContainer(
+                    document: document,
+                    showsPageTurnButtons: pageTurnButtonsVisible,
+                    viewModel: viewModel,
+                )
             }
         case let .failed(error):
             ContentUnavailableView {

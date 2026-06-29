@@ -38,6 +38,7 @@ struct PagedZoomedSurface: View {
     let onSwipeEnded: (CGFloat, CGFloat, CGFloat) -> Void
     let showsHint: Bool
     let onAnyZoneTouchDown: () -> Void
+    let showsTapZones: Bool
 
     var body: some View {
         PagedReaderSurface(
@@ -55,6 +56,7 @@ struct PagedZoomedSurface: View {
             onSwipeEnded: onSwipeEnded,
             showsHint: showsHint,
             onAnyZoneTouchDown: onAnyZoneTouchDown,
+            showsTapZones: showsTapZones,
             pageContent: { idx in scorePage(forPage: idx) },
         )
     }
