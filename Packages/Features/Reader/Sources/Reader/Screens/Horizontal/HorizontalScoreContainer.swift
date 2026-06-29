@@ -17,6 +17,9 @@ struct HorizontalScoreContainer: View {
     /// Lookahead anchor (2 beats ahead) used for the X auto-scroll trigger ONLY — never the highlight. `nil`
     /// when not playing, in which case the scroll falls back to the reactive measure keep-in-view.
     let scrollAnchorCursor: ScoreCursor?
+    /// User opt-out: when false, continuous playback no longer auto-scrolls. Manual navigation still keeps its
+    /// target in view (see `readerShouldFollowPlayback`).
+    let autoFollowEnabled: Bool
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -112,6 +115,10 @@ struct HorizontalScoreContainer: View {
         // UIView frame is otherwise shrunk by the system safe area and parent overlay reserve.
         .ignoresSafeArea()
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
+            guard readerShouldFollowPlayback(
+                autoFollowEnabled: autoFollowEnabled,
+                isPlaybackDriven: scrollAnchorCursor != nil,
+            ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
     }

@@ -33,6 +33,9 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
     private var showSeekBar = true
 
+    @AppStorage(ReaderGlobalSettingsKey.autoFollowEnabled)
+    private var autoFollowEnabled = true
+
     @Environment(\.scenePhase) private var scenePhase
 
     private var layoutMode: ReaderLayoutMode {
@@ -218,6 +221,7 @@ public struct ReaderRootScreen: View {
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
                         scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
+                        autoFollowEnabled: autoFollowEnabled,
                         transposeSemitones: viewModel.transposeModel.semitones,
                         bottomControlClearance: bottomControlContentHeight,
                         viewModel: viewModel,
@@ -231,6 +235,7 @@ public struct ReaderRootScreen: View {
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
                         scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
+                        autoFollowEnabled: autoFollowEnabled,
                         transposeSemitones: viewModel.transposeModel.semitones,
                         viewModel: viewModel,
                     )
@@ -243,6 +248,7 @@ public struct ReaderRootScreen: View {
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
                         pageAnchorCursor: viewModel.playbackSession.pageAnchorCursor,
+                        autoFollowEnabled: autoFollowEnabled,
                         transposeSemitones: viewModel.transposeModel.semitones,
                         viewModel: viewModel,
                     )
