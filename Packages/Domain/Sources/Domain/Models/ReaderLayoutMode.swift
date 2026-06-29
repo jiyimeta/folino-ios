@@ -63,4 +63,15 @@ public enum ReaderGlobalSettingsKey {
     /// `A4Reference.standardHz` (440 Hz) when absent. Key used by both `@AppStorage` (Settings UI, future) and
     /// `UserDefaults.standard` (PlaybackPreferences builder, no-View context).
     public static let a4ReferenceHz = "reader.a4ReferenceHz"
+
+    /// Bool. When true (the default at each `@AppStorage` site), the Reader follows the playhead during playback —
+    /// auto-scroll in `.vertical` / `.horizontal`, auto-page-turn in `.page`. When false, continuous playback no
+    /// longer moves the score; manual navigation (tap-seek, measure-step, scrub) still keeps its target in view.
+    /// Score only — PDFs have no playback cursor.
+    public static let autoFollowEnabled = "readerAutoFollowEnabled"
+
+    /// Bool. When true (the default at each `@AppStorage` site), the `.page`-mode tap-zone navigation overlay
+    /// (`TapOverlay`) is shown. When false it is hidden; swipe-to-turn and auto-page-turn still work. Read by the
+    /// shared `PagedReaderSurface`, so it applies to both the score and PDF paged readers.
+    public static let pageTurnButtonsVisible = "readerPageTurnButtonsVisible"
 }

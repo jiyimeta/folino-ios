@@ -67,6 +67,18 @@ public func scrollOffsetPinningSystemTop(
     return max(0, systemMin - topInset)
 }
 
+/// Whether the Reader should run its playback-cursor follow (auto-scroll in vertical/horizontal, auto-page-turn in
+/// page mode) for the current cursor change. `autoFollowEnabled` is the user's opt-out toggle; `isPlaybackDriven` is
+/// true when the change comes from continuous playback — i.e. the lookahead anchor cursor is non-nil — rather than a
+/// manual seek / scrub / measure-step.
+///
+/// When the toggle is on, always follow. When off, follow only manual navigation (`!isPlaybackDriven`) so a tap-seek,
+/// measure-step, or scrub still brings the target on screen while continuous playback no longer scrolls or turns the
+/// page. Shared by iOS and the Android Reader (parity: one implementation).
+public func readerShouldFollowPlayback(autoFollowEnabled: Bool, isPlaybackDriven: Bool) -> Bool {
+    autoFollowEnabled || !isPlaybackDriven
+}
+
 /// Horizontal auto-scroll offset for measure-anchored stepping. When the
 /// cursor's measure `[measureMin, measureMax]` is fully visible in the viewport
 /// `[current, current + viewport]`, the offset is unchanged (preserves manual

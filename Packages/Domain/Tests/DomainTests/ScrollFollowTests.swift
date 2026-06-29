@@ -139,3 +139,19 @@ struct HorizontalMeasureScrollOffsetTests {
         #expect(r == 592)
     }
 }
+
+struct ReaderShouldFollowPlaybackTests {
+    @Test func `follows everything while enabled`() {
+        #expect(readerShouldFollowPlayback(autoFollowEnabled: true, isPlaybackDriven: true))
+        #expect(readerShouldFollowPlayback(autoFollowEnabled: true, isPlaybackDriven: false))
+    }
+
+    @Test func `suppresses only playback-driven follow when disabled`() {
+        #expect(readerShouldFollowPlayback(autoFollowEnabled: false, isPlaybackDriven: true) == false)
+    }
+
+    @Test func `keeps manual navigation in view when disabled`() {
+        // Manual seek / scrub (anchor nil → not playback-driven) still follows so the target stays on screen.
+        #expect(readerShouldFollowPlayback(autoFollowEnabled: false, isPlaybackDriven: false))
+    }
+}
