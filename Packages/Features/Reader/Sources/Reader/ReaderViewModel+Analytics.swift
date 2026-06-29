@@ -88,6 +88,10 @@ extension ReaderViewModel {
 
     /// Flush the current annotation session as one `annotation_ended`, if a session is active. Idempotent: a second
     /// call without a new session does nothing. Called on annotation-mode exit and on Reader teardown.
+    ///
+    /// Best-effort limitation: if the app backgrounds mid-annotation, this flushes the in-flight session. When the
+    /// user returns and continues drawing while still in annotation mode, post-resume strokes are not counted because
+    /// the session is not re-armed. This is acceptable for best-effort analytics.
     func endAnnotationSessionIfNeeded() {
         guard let start = annotationSessionStart else { return }
         let duration = Date().timeIntervalSince(start)

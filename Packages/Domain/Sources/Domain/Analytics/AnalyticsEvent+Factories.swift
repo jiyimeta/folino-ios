@@ -176,10 +176,12 @@ extension AnalyticsEvent {
 
     // MARK: Screen views
 
-    /// Manual `screen_view` (reserved GA4 recommended event). `firebase_screen` is the only param; Firebase fills the
-    /// rest. Emitted from each top-level screen's `onAppear` because SwiftUI screen views are not auto-collected.
+    /// Manual `screen_view` (reserved GA4 recommended event). `screen_name` (`AnalyticsParameterScreenName`) is the
+    /// only param; Firebase surfaces it as `firebase_screen` in BigQuery. Firebase fills the rest. Emitted from each
+    /// top-level screen's `onAppear` because SwiftUI screen views are not auto-collected. Do not use the reserved
+    /// `firebase_` prefix for custom params — Firebase silently drops them.
     public static func screen(_ screen: AnalyticsScreen) -> AnalyticsEvent {
-        AnalyticsEvent(name: "screen_view", parameters: ["firebase_screen": .string(screen.rawValue)])
+        AnalyticsEvent(name: "screen_view", parameters: ["screen_name": .string(screen.rawValue)])
     }
 
     // MARK: Launch snapshots (events-first replacements for user properties)

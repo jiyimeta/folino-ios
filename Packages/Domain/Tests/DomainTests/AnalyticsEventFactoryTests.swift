@@ -83,7 +83,14 @@ struct AnalyticsEventFactoryTests {
     @Test func `screen factory`() {
         let event = AnalyticsEvent.screen(.reader)
         #expect(event.name == "screen_view")
-        #expect(event.parameters["firebase_screen"] == .string("reader"))
+        #expect(event.parameters["screen_name"] == .string("reader"))
+    }
+
+    @Test func `analyticsSource wire values are stable snake_case`() {
+        #expect(AnalyticsSource.searchResult.rawValue == "search_result")
+        #expect(AnalyticsSource.scoreRowMenu.rawValue == "score_row_menu")
+        #expect(AnalyticsSource.libraryAll.rawValue == "library_all")
+        #expect(AnalyticsSource.bulkEdit.rawValue == "bulk_edit")
     }
 
     @Test func `annotation ended factory`() {
@@ -115,10 +122,16 @@ struct AnalyticsEventFactoryTests {
         )
         #expect(event.name == "settings_snapshot")
         #expect(event.parameters["metronome_enabled"] == .bool(true))
+        #expect(event.parameters["picture_in_picture_enabled"] == .bool(false))
+        #expect(event.parameters["collapse_multi_measure_rests"] == .bool(true))
+        #expect(event.parameters["show_invisible_elements"] == .bool(false))
+        #expect(event.parameters["keep_screen_awake"] == .bool(true))
+        #expect(event.parameters["show_seek_bar"] == .bool(true))
         #expect(event.parameters["repeat_mode"] == .string("ab_loop"))
         #expect(event.parameters["playlist_continuation"] == .string("play_through"))
         #expect(event.parameters["a4_reference_hz"] == .double(442))
         #expect(event.parameters["layout_mode"] == .string("page"))
+        #expect(event.parameters["crash_reporting_enabled"] == .bool(true))
         #expect(event.parameters["soundfont_preset"] == .string("lightweight"))
     }
 }

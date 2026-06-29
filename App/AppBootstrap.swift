@@ -154,7 +154,7 @@ final class AppBootstrap {
         ) ?? .playThrough
         let layoutMode = ReaderLayoutMode(rawValue: defaults.string(forKey: ReaderGlobalSettingsKey.layoutMode) ?? "")
             ?? .page
-        let a4 = defaults.object(forKey: ReaderGlobalSettingsKey.a4ReferenceHz) as? Double ?? 440
+        let a4 = defaults.object(forKey: ReaderGlobalSettingsKey.a4ReferenceHz) as? Double ?? A4Reference.standardHz
 
         analytics.log(.settingsSnapshot(
             metronome: boolSetting(ReaderGlobalSettingsKey.metronomeEnabled, default: false),
