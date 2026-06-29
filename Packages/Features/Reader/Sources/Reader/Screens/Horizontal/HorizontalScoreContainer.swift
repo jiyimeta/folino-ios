@@ -63,7 +63,10 @@ struct HorizontalScoreContainer: View {
     }
 
     private func scrollContent(viewport: CGSize) -> some View {
-        ScoreScrollHost(
+        // Observe live magnification so each frame of a commit-reset ease re-renders this view → the host re-syncs the
+        // annotation canvas, keeping the ink locked to the score through the eased zoom commit (see PinchState).
+        _ = pinch.magnification
+        return ScoreScrollHost(
             contentOffset: $liveScrollOffset,
             contentInsetTop: $contentInsetTop,
             pendingScroll: $pendingScroll,
@@ -80,6 +83,7 @@ struct HorizontalScoreContainer: View {
                 )
             },
             onPinchBegan: { anchor, _ in
+                pinch.cancelResetAnimation() // don't let a trailing commit ease fight the new gesture
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor
                 pinch.magnification = 1.0
@@ -154,22 +158,16 @@ struct HorizontalScoreContainer: View {
         let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(-postInsetTop, r.rawScrollTarget.y))
 
         if r.isBounceBack {
-            withAnimation(.smooth(duration: 0.18)) {
-                pinch.magnification = 1.0
-                pinch.offsetY = 0
-            }
+            // Ease frame-by-frame (CADisplayLink) so the annotation ink overlay follows the rubber-band release in
+            // lockstep instead of snapping ahead — see PinchState. (Was `withAnimation`, which the ink couldn't track.)
+            pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
         } else {
             committedZoom = r.targetZoom
             pendingScroll = .immediate(scrollToTarget)
             if r.snapToUnit {
                 viewModel.resetZoom()
                 pinch.magnification = r.compensatedMag
-                DispatchQueue.main.async {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        pinch.magnification = 1.0
-                        pinch.offsetY = 0
-                    }
-                }
+                pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
             } else {
                 viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
@@ -177,9 +175,7 @@ struct HorizontalScoreContainer: View {
 
                 let scrollAbsorbsOffset = postFramedH > viewport.height
                 if pinch.offsetY != 0, !scrollAbsorbsOffset {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        pinch.offsetY = 0
-                    }
+                    pinch.animateReset(toMagnification: pinch.magnification, offsetX: 0, offsetY: 0)
                 } else {
                     pinch.offsetY = 0
                 }

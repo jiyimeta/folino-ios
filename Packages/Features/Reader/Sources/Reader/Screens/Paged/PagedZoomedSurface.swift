@@ -105,6 +105,23 @@ struct PagedZoomedSurface: View {
             // (just like `SheetMusicUI.PagedScoreView`'s canvas) rather than the host scroll background.
             .frame(width: viewport.width, height: viewport.height, alignment: .top)
             .background(Color.white)
+            // Committed ink as a static band-space layer so it slides with the page on a turn (the viewport-pinned live
+            // canvas can't follow the slide). Hidden for the page being actively annotated — the live canvas owns it.
+            .overlay(alignment: .topLeading) {
+                pageInkLayer(forPage: idx, doc: doc, pageStartY: pageStartY, pageEndY: pageEndY)
+            }
+    }
+
+    @ViewBuilder
+    private func pageInkLayer(
+        forPage idx: Int, doc: LayoutDocument, pageStartY: CGFloat, pageEndY: CGFloat,
+    ) -> some View {
+        if !(viewModel.isAnnotating && idx == pageState.pageIndex) {
+            StaticInkLayer(drawing: AnnotationAnchoring.displayPaged(
+                viewModel.annotationDrawings, in: doc,
+                pageStartY: pageStartY, pageEndY: pageEndY, contentPadding: horizontalContentPadding,
+            ), size: viewport)
+        }
     }
 
     private func scoreSurface(

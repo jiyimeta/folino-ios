@@ -128,7 +128,11 @@ struct PagedScoreContainer: View {
 
     // swiftlint:disable:next function_body_length
     private func scrollContent(viewport: CGSize) -> some View {
-        ScoreScrollHost(
+        // Observe live magnification (commit-ease frames re-sync the annotation canvas — see PinchState) and the
+        // annotation model (a change reassigns the hosted surface's rootView so static ink layers never go stale).
+        _ = pinch.magnification
+        _ = viewModel.annotationDrawings
+        return ScoreScrollHost(
             contentOffset: $liveScrollOffset,
             contentInsetTop: $contentInsetTop,
             pendingScroll: $pendingScroll,
@@ -147,6 +151,7 @@ struct PagedScoreContainer: View {
                 )
             },
             onPinchBegan: { anchor, _ in
+                pinch.cancelResetAnimation() // don't let a trailing commit ease fight the new gesture
                 pinchSession = PinchSession(baseZoom: viewModel.viewportZoom)
                 pinch.anchor = anchor
                 pinch.magnification = 1.0
@@ -209,10 +214,11 @@ struct PagedScoreContainer: View {
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onChange(of: document) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onChange(of: viewModel.annotationDrawings) { _, _ in
-            // Read-mode model changes (load, cross-mode edit) reseed the current page. While drawing, the canvas is the
-            // source of truth, so skip — reseeding the round-tripped projection would wipe the in-progress stroke.
+            // Reseed on read-mode model changes; skip while drawing (the canvas is source of truth).
             if !viewModel.isAnnotating { reprojectCurrentPage(viewport: viewport) }
         }
+        // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
+        .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onAppear { reprojectCurrentPage(viewport: viewport) }
     }
 
@@ -233,24 +239,15 @@ struct PagedScoreContainer: View {
         let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
 
         if r.isBounceBack {
-            withAnimation(.smooth(duration: 0.18)) {
-                pinch.magnification = 1.0
-                pinch.offsetX = 0
-                pinch.offsetY = 0
-            }
+            // Ease frame-by-frame so the ink overlay follows the rubber-band release in lockstep (PinchState).
+            pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
         } else {
             committedZoom = r.targetZoom
             pendingScroll = .immediate(scrollToTarget)
             if r.snapToUnit {
                 viewModel.resetZoom()
                 pinch.magnification = r.compensatedMag
-                DispatchQueue.main.async {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        pinch.magnification = 1.0
-                        pinch.offsetX = 0
-                        pinch.offsetY = 0
-                    }
-                }
+                pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
             } else {
                 viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
@@ -276,7 +273,11 @@ struct PagedScoreContainer: View {
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
-                guard let doc = document, let band = currentPageBand(viewport: viewport) else { return }
+                // Capture ONLY while annotating: leaving annotation empties the live canvas, and that programmatic
+                // `canvas.drawing = empty` fires didChange — recapturing it would wipe this page's committed anchors.
+                guard viewModel.isAnnotating, let doc = document, let band = currentPageBand(viewport: viewport) else {
+                    return
+                }
                 projectedAnnotations = drawing // canvas is source of truth this page
                 // Re-capture THIS page's strokes; keep every other page's anchors verbatim.
                 let (_, offPage) = AnnotationAnchoring.partitionByPage(
@@ -291,10 +292,8 @@ struct PagedScoreContainer: View {
         )
     }
 
-    /// Mirror the current page band onto the viewport-pinned canvas. Document space = the page band (viewport-sized);
-    /// the band sits at `pageInsets.leading/top` inside the padded content, scaled by `viewportZoom × magnification`.
-    /// Paged mode carries live pan on BOTH `pinch.offsetX` and `pinch.offsetY`. (At rest the page slide offset is 0;
-    /// during an active slide the ink does not track — see device-verification notes.)
+    /// Mirror the current page band onto the viewport-pinned live canvas (band = viewport, offset by `pageInsets`,
+    /// scaled by `viewportZoom × magnification`). Paged carries live pan on both `pinch.offsetX` and `pinch.offsetY`.
     private func annotationCanvasState(viewport: CGSize) -> AnnotationCanvasState {
         let zoomC = viewModel.viewportZoom
         let m = pinch.magnification
@@ -318,7 +317,9 @@ struct PagedScoreContainer: View {
     }
 
     private func reprojectCurrentPage(viewport: CGSize) {
-        guard let doc = document, let band = currentPageBand(viewport: viewport) else {
+        // Live canvas shows ink only while annotating the current page; static band-space layers (PagedZoomedSurface)
+        // cover display for every page. Seed the live canvas while annotating, empty it otherwise.
+        guard viewModel.isAnnotating, let doc = document, let band = currentPageBand(viewport: viewport) else {
             projectedAnnotations = PKDrawing(); return
         }
         projectedAnnotations = AnnotationAnchoring.displayPaged(
