@@ -46,6 +46,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { doneToolbar }
         }
+        .onAppear { analytics.logScreen(.settings) }
     }
 
     @ToolbarContentBuilder

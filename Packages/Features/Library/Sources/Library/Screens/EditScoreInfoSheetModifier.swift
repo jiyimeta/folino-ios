@@ -12,6 +12,7 @@ struct EditScoreInfoSheetModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.sheet(item: $target) { item in
             EditScoreInfoSheet(model: viewModel, item: item)
+                .onAppear { viewModel.analytics.logScreen(.scoreInfo) }
         }
     }
 }

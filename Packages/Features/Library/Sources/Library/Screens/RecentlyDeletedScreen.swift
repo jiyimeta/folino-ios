@@ -86,6 +86,7 @@ struct RecentlyDeletedScreen: View {
                 }
             }
         }
+        .onAppear { library.analytics.logScreen(.recentlyDeleted) }
     }
 
     private func exitSelectionMode() {

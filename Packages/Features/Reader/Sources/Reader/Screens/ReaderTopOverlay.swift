@@ -69,6 +69,7 @@ struct ReaderTopOverlay: View {
         }
         .sheet(isPresented: $viewModel.isScoreInfoPresented) {
             EditScoreInfoSheet(model: viewModel, item: viewModel.scoreItem)
+                .onAppear { viewModel.analytics.logScreen(.scoreInfo) }
         }
         .sheet(item: $viewModel.shareTarget) { target in
             ActivityViewControllerRepresentable(items: target.urls)

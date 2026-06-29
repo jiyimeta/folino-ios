@@ -47,6 +47,7 @@ struct TagDetailScreen: View {
                 onAddToPlaylist: onAddToPlaylist,
             )
         }
+        .onAppear { library.analytics.logScreen(.tagDetail) }
     }
 
     private func commitRename(_ newName: String) async {

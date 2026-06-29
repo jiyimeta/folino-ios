@@ -89,6 +89,7 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                     playlistReaderDestination(route)
                 }
         }
+        .onAppear { viewModel.analytics.logScreen(.library) }
         .onChange(of: viewModel.repository.scoreItems, initial: true) { _, items in
             recentlyOpened = items.mostRecentlyOpened(limit: 5)
             favoriteCount = items.reduce(0) { $0 + ($1.isFavorite ? 1 : 0) }

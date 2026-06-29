@@ -146,6 +146,7 @@ public struct ReaderRootScreen: View {
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake }
+        .onAppear { viewModel.analytics.logScreen(.reader) }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             // `onDisappear` fires both on a genuine in-app close (back to the Library) AND when the app merely
