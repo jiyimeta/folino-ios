@@ -21,8 +21,18 @@ struct VisualInspectorScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
     private var showSeekBar = true
 
+    @AppStorage(ReaderGlobalSettingsKey.autoFollowEnabled)
+    private var autoFollowEnabled = true
+
+    @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
+    private var pageTurnButtonsVisible = true
+
     @AppStorage("reader.inspector.visual.general.expanded") private var generalExpanded = true
     @AppStorage("reader.inspector.visual.parts.expanded") private var partsExpanded = true
+
+    private var layoutMode: ReaderLayoutMode {
+        ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
+    }
 
     var body: some View {
         List {
@@ -34,6 +44,10 @@ struct VisualInspectorScreen: View {
                 collapseRow
                 showInvisibleRow
                 seekBarRow
+                autoFollowRow
+                if layoutMode == .page {
+                    pageTurnButtonsRow
+                }
             } header: {
                 Text("reader.inspector.section.general", bundle: .module)
             }
@@ -117,6 +131,26 @@ struct VisualInspectorScreen: View {
         }
     }
 
+    /// Playback auto-follow opt-out. The label tracks the layout mode: scrolling modes read "auto-scroll", page mode
+    /// reads "auto page turn".
+    private var autoFollowRow: some View {
+        Toggle(isOn: $autoFollowEnabled) {
+            Text(
+                layoutMode == .page
+                    ? "reader.inspector.autoPageTurn"
+                    : "reader.inspector.autoScroll",
+                bundle: .module,
+            )
+        }
+    }
+
+    /// Page-mode tap-zone visibility opt-out. Only meaningful in `.page`, so the caller gates its presence on the mode.
+    private var pageTurnButtonsRow: some View {
+        Toggle(isOn: $pageTurnButtonsVisible) {
+            Text("reader.inspector.showPageTurnButtons", bundle: .module)
+        }
+    }
+
     @ViewBuilder
     private var staffSizeRow: some View {
         let staffSize = Binding<Double>(
@@ -157,3 +191,27 @@ struct VisualInspectorScreen: View {
         ClefMenu(layoutModel: layoutModel, address: address)
     }
 }
+
+#if DEBUG
+private func visualInspectorPreviewScore() -> Score {
+    Score(division: 480, parts: [], metaTags: ["workTitle": "Sample"])
+}
+
+#Preview("Visual inspector · page") {
+    UserDefaults.standard.set(ReaderLayoutMode.page.rawValue, forKey: ReaderGlobalSettingsKey.layoutMode)
+    return VisualInspectorScreen(
+        layoutModel: LayoutSettingsModel(),
+        transposeModel: TransposeModel(),
+        score: visualInspectorPreviewScore(),
+    )
+}
+
+#Preview("Visual inspector · vertical") {
+    UserDefaults.standard.set(ReaderLayoutMode.vertical.rawValue, forKey: ReaderGlobalSettingsKey.layoutMode)
+    return VisualInspectorScreen(
+        layoutModel: LayoutSettingsModel(),
+        transposeModel: TransposeModel(),
+        score: visualInspectorPreviewScore(),
+    )
+}
+#endif
