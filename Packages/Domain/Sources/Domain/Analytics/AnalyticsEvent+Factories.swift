@@ -38,11 +38,10 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "sort_changed", parameters: ["sort_order": .string(sort.analyticsValue)])
     }
 
-    /// `count` is always bucketed through `countBucket` before it reaches analytics: the privacy contract forbids
-    /// raw counts. The factories own the bucketing so a caller can never accidentally leak a precise magnitude.
+    /// `count` is logged raw (events-first: bucket at analysis time, not at collection — see the analytics spec).
     public static func scoreDeleted(source: AnalyticsSource, mode: AnalyticsActionMode, count: Int) -> AnalyticsEvent {
         AnalyticsEvent(name: "score_deleted", parameters: [
-            "source": .string(source.rawValue), "mode": .string(mode.rawValue), "count": .string(countBucket(count)),
+            "source": .string(source.rawValue), "mode": .string(mode.rawValue), "count": .int(count),
         ])
     }
 
@@ -79,14 +78,14 @@ extension AnalyticsEvent {
     public static func scoreAddedToPlaylist(source: AnalyticsSource, count: Int) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "score_added_to_playlist",
-            parameters: ["source": .string(source.rawValue), "count": .string(countBucket(count))],
+            parameters: ["source": .string(source.rawValue), "count": .int(count)],
         )
     }
 
     public static func scoreRemovedFromPlaylist(source: AnalyticsSource, count: Int) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "score_removed_from_playlist",
-            parameters: ["source": .string(source.rawValue), "count": .string(countBucket(count))],
+            parameters: ["source": .string(source.rawValue), "count": .int(count)],
         )
     }
 
@@ -105,14 +104,14 @@ extension AnalyticsEvent {
     public static func tagAssigned(source: AnalyticsSource, count: Int) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "tag_assigned",
-            parameters: ["source": .string(source.rawValue), "count": .string(countBucket(count))],
+            parameters: ["source": .string(source.rawValue), "count": .int(count)],
         )
     }
 
     public static func tagUnassigned(source: AnalyticsSource, count: Int) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "tag_unassigned",
-            parameters: ["source": .string(source.rawValue), "count": .string(countBucket(count))],
+            parameters: ["source": .string(source.rawValue), "count": .int(count)],
         )
     }
 

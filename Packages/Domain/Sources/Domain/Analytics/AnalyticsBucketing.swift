@@ -1,5 +1,8 @@
-/// Bucket a raw count into a low-cardinality string so no precise magnitude reaches analytics.
-public func countBucket(_ count: Int) -> String {
+/// Bucket a raw count into a low-cardinality string.
+///
+/// - Note: Kept `internal` for `AnalyticsUserPropertySync` until it is removed in Task 7. Do not add new
+///   callers — events-first: bucket at analysis time, not at collection.
+func countBucket(_ count: Int) -> String {
     switch count {
     case ..<1: "0"
     case 1 ... 5: "1-5"

@@ -44,19 +44,39 @@ struct AnalyticsEventFactoryTests {
         #expect(event.parameters["mode"] == .string("bulk"))
     }
 
-    @Test func `count parameters are bucketed not raw`() {
-        // Privacy contract: factories must emit a bucketed string, never a raw `.int`.
-        #expect(
-            AnalyticsEvent.scoreDeleted(source: .bulkEdit, mode: .bulk, count: 3)
-                .parameters["count"] == .string("1-5"),
-        )
-        #expect(
-            AnalyticsEvent.scoreAddedToPlaylist(source: .scoreRowMenu, count: 25)
-                .parameters["count"] == .string("21-50"),
-        )
-        #expect(
-            AnalyticsEvent.tagAssigned(source: .bulkEdit, count: 0)
-                .parameters["count"] == .string("0"),
-        )
+    @Test func `scoreDeleted logs raw count`() {
+        let event = AnalyticsEvent.scoreDeleted(source: .bulkEdit, mode: .bulk, count: 7)
+        #expect(event.name == "score_deleted")
+        #expect(event.parameters["count"] == .int(7))
+        #expect(event.parameters["source"] == .string("bulk_edit"))
+        #expect(event.parameters["mode"] == .string("bulk"))
+    }
+
+    @Test func `scoreAddedToPlaylist logs raw count`() {
+        let event = AnalyticsEvent.scoreAddedToPlaylist(source: .scoreRowMenu, count: 25)
+        #expect(event.name == "score_added_to_playlist")
+        #expect(event.parameters["count"] == .int(25))
+        #expect(event.parameters["source"] == .string("score_row_menu"))
+    }
+
+    @Test func `scoreRemovedFromPlaylist logs raw count`() {
+        let event = AnalyticsEvent.scoreRemovedFromPlaylist(source: .bulkEdit, count: 3)
+        #expect(event.name == "score_removed_from_playlist")
+        #expect(event.parameters["count"] == .int(3))
+        #expect(event.parameters["source"] == .string("bulk_edit"))
+    }
+
+    @Test func `tagAssigned logs raw count`() {
+        let event = AnalyticsEvent.tagAssigned(source: .bulkEdit, count: 0)
+        #expect(event.name == "tag_assigned")
+        #expect(event.parameters["count"] == .int(0))
+        #expect(event.parameters["source"] == .string("bulk_edit"))
+    }
+
+    @Test func `tagUnassigned logs raw count`() {
+        let event = AnalyticsEvent.tagUnassigned(source: .bulkEdit, count: 12)
+        #expect(event.name == "tag_unassigned")
+        #expect(event.parameters["count"] == .int(12))
+        #expect(event.parameters["source"] == .string("bulk_edit"))
     }
 }
