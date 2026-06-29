@@ -77,16 +77,12 @@ struct PagedZoomedSurface: View {
         doc: LayoutDocument,
     ) -> some View {
         let pageRange = pages[idx]
-        let lastSystemIndex = pageRange.upperBound - 1
         // Start the clip from the previous page's last-system bottom (or `0` for the first page) so the gap above the
         // current page's first system — where rehearsal marks sit, plus the title frame on page 0 — renders here.
         let pageStartY = PagedZoomedSurface.pageStartY(
             forPage: idx, pages: pages, doc: doc,
         )
-        let pageEndY: CGFloat = (0 ..< doc.systems.count).contains(lastSystemIndex)
-            ? doc.systems[lastSystemIndex].origin.y
-            + doc.systems[lastSystemIndex].size.height
-            : pageStartY
+        let pageEndY = PagedPageGeometry.pageEndY(forPage: idx, pages: pages, doc: doc)
         let pageHeight = max(0, pageEndY - pageStartY)
         // Sub-document containing only this page's systems — each ScoreView would otherwise construct a
         // `SystemLayerView` for every system in the full doc, multiplying layout cost by `windowIndices.count`.
@@ -111,6 +107,23 @@ struct PagedZoomedSurface: View {
             // (just like `SheetMusicUI.PagedScoreView`'s canvas) rather than the host scroll background.
             .frame(width: viewport.width, height: viewport.height, alignment: .top)
             .background(Color.white)
+            // Committed ink as a static band-space layer so it slides with the page on a turn (the viewport-pinned live
+            // canvas can't follow the slide). Hidden for the page being actively annotated — the live canvas owns it.
+            .overlay(alignment: .topLeading) {
+                pageInkLayer(forPage: idx, doc: doc, pageStartY: pageStartY, pageEndY: pageEndY)
+            }
+    }
+
+    @ViewBuilder
+    private func pageInkLayer(
+        forPage idx: Int, doc: LayoutDocument, pageStartY: CGFloat, pageEndY: CGFloat,
+    ) -> some View {
+        if !(viewModel.isAnnotating && idx == pageState.pageIndex) {
+            StaticInkLayer(drawing: AnnotationAnchoring.displayPaged(
+                viewModel.annotationDrawings, in: doc,
+                pageStartY: pageStartY, pageEndY: pageEndY, contentPadding: horizontalContentPadding,
+            ), size: viewport)
+        }
     }
 
     private func scoreSurface(
@@ -171,18 +184,11 @@ struct PagedZoomedSurface: View {
             }
     }
 
-    /// First page renders from doc-Y `0` (so the title frame and any pre-system decoration are visible); every
-    /// subsequent page starts at the previous page's last-system bottom (so the gap above its own first system —
-    /// rehearsal marks, etc. — lands on the right page).
     fileprivate static func pageStartY(
         forPage index: Int,
         pages: [Range<Int>],
         doc: LayoutDocument,
     ) -> CGFloat {
-        guard index > 0 else { return 0 }
-        let prevLastIndex = pages[index - 1].upperBound - 1
-        guard (0 ..< doc.systems.count).contains(prevLastIndex) else { return 0 }
-        return doc.systems[prevLastIndex].origin.y
-            + doc.systems[prevLastIndex].size.height
+        PagedPageGeometry.pageStartY(forPage: index, pages: pages, doc: doc)
     }
 }

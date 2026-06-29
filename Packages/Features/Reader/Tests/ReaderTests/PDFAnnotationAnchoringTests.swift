@@ -1,4 +1,6 @@
 import CoreGraphics
+import Domain
+import PencilKit
 @testable import Reader
 import Testing
 
@@ -47,5 +49,36 @@ struct PDFAnnotationAnchoringTests {
 
     @Test func `nil transform for zero width`() {
         #expect(PDFAnnotationAnchoring.normalizeTransform(pageFrame: CGRect(x: 0, y: 0, width: 0, height: 10)) == nil)
+    }
+
+    @Test func `partitionByPage splits by page index`() {
+        let a0 = DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: Data())
+        let a1 = DrawingAnchor(kind: .page(PageAnchor(pageIndex: 1)), encodedDrawing: Data())
+        let split = PDFAnnotationAnchoring.partitionByPage([a0, a1], pageIndex: 1)
+        #expect(split.onPage.count == 1)
+        #expect(split.offPage.count == 1)
+    }
+
+    @Test func `capturePage then displayPage round-trips at the same frame`() throws {
+        let frame = CGRect(x: 30, y: 50, width: 200, height: 260) // a centered fitted-page rect in band space
+        let point = CGPoint(x: frame.midX + 10, y: frame.midY - 20)
+        let stroke = PaintTestSupport.dot(at: point)
+        let captured = PDFAnnotationAnchoring.capturePage(strokes: [stroke], pageIndex: 3, pageFrame: frame)
+        #expect(captured.count == 1)
+        if case let .page(anchor) = try #require(captured.first).kind {
+            #expect(anchor.pageIndex == 3)
+        } else { Issue.record("expected .page anchor") }
+        let shown = PDFAnnotationAnchoring.displayPage(captured, pageIndex: 3, pageFrame: frame)
+        let out = try #require(shown.strokes.first?.renderBounds.center)
+        #expect(abs(out.x - point.x) < 1.0)
+        #expect(abs(out.y - point.y) < 1.0)
+    }
+
+    @Test func `displayPage shows only the requested page`() {
+        let frame = CGRect(x: 0, y: 0, width: 100, height: 120)
+        let stroke = PaintTestSupport.dot(at: CGPoint(x: 50, y: 60))
+        let captured = PDFAnnotationAnchoring.capturePage(strokes: [stroke], pageIndex: 2, pageFrame: frame)
+        #expect(PDFAnnotationAnchoring.displayPage(captured, pageIndex: 5, pageFrame: frame).strokes.isEmpty)
+        #expect(!PDFAnnotationAnchoring.displayPage(captured, pageIndex: 2, pageFrame: frame).strokes.isEmpty)
     }
 }
