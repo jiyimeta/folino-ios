@@ -53,8 +53,6 @@ struct ReaderSettingsSection: View {
             if let provider {
                 SoundfontPresetRow(provider: provider)
             }
-        } footer: {
-            Text("settings.reader.continuation.footer", bundle: .module)
         }
     }
 

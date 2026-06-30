@@ -63,6 +63,7 @@ struct PlaylistContinuationSettingRow: View {
         ReaderModeMenuRowLayout(
             titleKey: "settings.reader.continuation",
             titleSystemImage: "music.note.list",
+            footerKey: "settings.reader.continuation.footer",
             valueTitleKey: titleKey(for: mode),
             valueIcon: { icon(for: mode) },
         ) {
@@ -103,31 +104,49 @@ struct PlaylistContinuationSettingRow: View {
 private struct ReaderModeMenuRowLayout<ValueIcon: View, MenuContent: View>: View {
     let titleKey: LocalizedStringKey
     let titleSystemImage: String
+    /// Optional secondary line shown on its own row beneath the title+menu (aligned under the title text), matching the
+    /// toggle rows that carry an inline footnote. Kept off the title row so the trailing menu value never truncates.
+    /// `nil` keeps the row a single title line.
+    var footerKey: LocalizedStringKey?
     let valueTitleKey: LocalizedStringKey
     @ViewBuilder let valueIcon: () -> ValueIcon
     @ViewBuilder let menuContent: () -> MenuContent
 
     var body: some View {
-        HStack {
-            Label {
-                Text(titleKey, bundle: .module)
-            } icon: {
-                Image(systemName: titleSystemImage)
-            }
-            .layoutPriority(1)
-            Spacer(minLength: 8)
-            Menu {
-                menuContent()
-            } label: {
-                HStack(spacing: 4) {
-                    valueIcon()
-                    Text(valueTitleKey, bundle: .module)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .imageScale(.small)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Label {
+                    Text(titleKey, bundle: .module)
+                } icon: {
+                    Image(systemName: titleSystemImage)
                 }
-                .foregroundStyle(Color.accentColor)
+                .layoutPriority(1)
+                Spacer(minLength: 8)
+                Menu {
+                    menuContent()
+                } label: {
+                    HStack(spacing: 4) {
+                        valueIcon()
+                        Text(valueTitleKey, bundle: .module)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .imageScale(.small)
+                    }
+                    .foregroundStyle(Color.accentColor)
+                }
+            }
+            if let footerKey {
+                Label {
+                    Text(footerKey, bundle: .module)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } icon: {
+                    // Invisible placeholder so the description aligns under the title text, not under the icon. The
+                    // Label keeps the ambient (body) font, so this hidden icon matches the title row's icon width.
+                    Image(systemName: titleSystemImage)
+                        .hidden()
+                }
             }
         }
     }
