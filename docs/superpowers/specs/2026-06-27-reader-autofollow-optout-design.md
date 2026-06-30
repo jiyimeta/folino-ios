@@ -77,9 +77,20 @@ Add one row:
 The distinguishing signal already exists: the lookahead anchor cursors
 (`scrollAnchorCursor` / `pageAnchorCursor`) are non-`nil` **only** during
 continuous playback (`isPlaying && scrubCursor == nil`). Manual navigation
-arrives with the anchor `nil`. So the gate is: when `autoFollowEnabled` is
-`false`, skip the follow **only when the anchor cursor is non-`nil`**; let the
-existing keep-in-view path run for manual navigation.
+arrives with the anchor `nil`. So the base gate is: when `autoFollowEnabled` is
+`false`, skip the follow when the anchor cursor is non-`nil`; let the existing
+keep-in-view path run for manual navigation.
+
+One refinement on top of that signal: pausing / stopping playback toggles the
+anchor from non-`nil` to `nil` **without moving the cursor**, which would
+otherwise re-fire the follow and recenter a reader who had scrolled away. So
+when opted out, the keep-in-view runs only for a **genuine cursor move**
+(`cursorMoved` — the playback cursor itself changed, true for a seek / step /
+scrub, false for a pause/stop anchor toggle). The gate is therefore: follow when
+`autoFollowEnabled || (!isPlaybackDriven && cursorMoved)`, encoded in the pure
+`readerShouldFollowPlayback(autoFollowEnabled:isPlaybackDriven:cursorMoved:)`
+(parity-shared). When auto-follow is **on**, behavior is unchanged (pause still
+keeps the playhead in view).
 
 ### Page-turn-buttons OFF
 

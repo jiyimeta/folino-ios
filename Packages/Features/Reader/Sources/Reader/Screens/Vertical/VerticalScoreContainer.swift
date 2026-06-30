@@ -173,10 +173,11 @@ struct VerticalScoreContainer: View {
                 lastManualCursor: $lastManualCursor,
             )
         }
-        .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
+        .onChange(of: [playbackCursor, scrollAnchorCursor]) { old, new in
             guard readerShouldFollowPlayback(
                 autoFollowEnabled: autoFollowEnabled,
                 isPlaybackDriven: scrollAnchorCursor != nil,
+                cursorMoved: old[0] != new[0],
             ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }

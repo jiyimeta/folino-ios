@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// PagedScoreContainer hosts the page-band layout / pagination / pinch pipeline plus the annotation overlay and
+// cursor-follow plumbing for the paged Reader; its breadth keeps it just over the file_length budget.
+
 import Domain
 import PencilKit
 import SheetMusicCore
@@ -214,10 +218,11 @@ struct PagedScoreContainer: View {
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area; the hosted surface re-applies
         // `pageInsets` as padding so the band sits inside the safe area at zoom 1.
         .ignoresSafeArea()
-        .onChange(of: [playbackCursor, pageAnchorCursor]) { _, _ in
+        .onChange(of: [playbackCursor, pageAnchorCursor]) { old, new in
             guard readerShouldFollowPlayback(
                 autoFollowEnabled: autoFollowEnabled,
                 isPlaybackDriven: pageAnchorCursor != nil,
+                cursorMoved: old[0] != new[0],
             ) else { return }
             followCursor(pageAnchorCursor ?? playbackCursor)
         }
