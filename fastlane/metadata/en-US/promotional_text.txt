@@ -1,1 +1,1 @@
-Score viewer & player for performers. Reads .mscz, .mscx, MusicXML, and MIDI, with MIDI playback, A-B repeat, metronome, and tempo control for reading and practice.
+Score viewer & player for performers. Import PDFs, .mscz, MusicXML, and MIDI with playback and a follow cursor, plus annotation with Apple Pencil or your finger.

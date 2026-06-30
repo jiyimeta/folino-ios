@@ -1,4 +1,3 @@
-- Added transposition (key change)
-- Added pitch calibration (reference pitch tuning)
-- Added continuous playback across playlists
-- Improved Picture in Picture on iPad
+- Added PDF import and playback
+- Added handwriting with Apple Pencil or your finger
+- Added a setting to turn off auto-scroll and page turning

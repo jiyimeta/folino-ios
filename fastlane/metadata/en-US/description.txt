@@ -4,10 +4,14 @@ Once you open a score, it stays easy to use offline, whether you are in rehearsa
 
 [Supported Formats]
 Import MuseScore `.mscz` and `.mscx` files, MusicXML, and MIDI, then play them back while reading the score.
+You can also import PDF scores to view them, and play back the ones that parse successfully.
 
 [Readable by Design]
 Switch between vertical scrolling and page mode, then use zoom and cursor movement to quickly check the passage you need.
 Show or hide individual parts so you can focus on the staff you need, even on the smaller iPhone screen.
+
+[Annotation]
+Write directly on scores and PDFs with Apple Pencil or your finger. Keep fingerings, practice notes, and dynamics right on top of the music.
 
 [Practice Features]
 Adjust volume per part, mute or solo individual staves, and change instruments for each part so you can focus on the line you want to hear.
@@ -21,6 +25,8 @@ Group the pieces you need and open them quickly for rehearsal, performance, or r
 
 [Key Features]
 - Score display: vertical scroll / page mode
+- PDF import and viewing
+- Handwriting with Apple Pencil or finger
 - Zoom and playback cursor movement
 - MIDI playback
 - Per-part volume, mute, and solo

@@ -1,1 +1,1 @@
-为演奏者打造的乐谱查看与播放器。支持 .mscz、.mscx、MusicXML、MIDI，通过 MIDI 回放、A-B 循环、节拍器和速度调节，助你读谱与练习。
+为演奏者打造的乐谱查看与播放器。可导入 PDF、.mscz、MusicXML、MIDI，支持播放与光标跟随，还能用 Apple Pencil 或手指在乐谱上手写批注，助你读谱与练习。
