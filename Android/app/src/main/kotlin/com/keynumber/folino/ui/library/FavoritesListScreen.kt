@@ -25,6 +25,7 @@ fun FavoritesListScreen(
         titleRes = R.string.nav_favorites,
         emptyTitleRes = R.string.favorites_empty_title,
         emptyHintRes = R.string.favorites_empty_hint,
+        listSource = "favorites",
         onOpenScore = onOpenScore,
         onOpenDrawer = onOpenDrawer,
         onEditInfoForScore = onEditInfoForScore,

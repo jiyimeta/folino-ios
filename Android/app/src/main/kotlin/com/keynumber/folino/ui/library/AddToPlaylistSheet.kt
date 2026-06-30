@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,8 +57,14 @@ fun AddToPlaylistSheet(
                         modifier = Modifier.clickable {
                             if (pick.contains) {
                                 viewModel.removeFromPlaylist(scoreId, pick.id)
+                                AndroidAnalytics.log(
+                                    AndroidAnalytics.bridge.scoreRemovedFromPlaylist("scoreRowMenu", 1),
+                                )
                             } else {
                                 viewModel.addToPlaylist(scoreId, pick.id)
+                                AndroidAnalytics.log(
+                                    AndroidAnalytics.bridge.scoreAddedToPlaylist("scoreRowMenu", 1),
+                                )
                             }
                         },
                     )
@@ -66,6 +73,9 @@ fun AddToPlaylistSheet(
                         headlineContent = { Text(pick.name) },
                         modifier = Modifier.clickable {
                             viewModel.bulkAddToPlaylist(pick.id, bulkScoreIds)
+                            AndroidAnalytics.log(
+                                AndroidAnalytics.bridge.scoreAddedToPlaylist("bulkEdit", bulkScoreIds.size),
+                            )
                             onDismiss()
                         },
                     )
@@ -81,6 +91,11 @@ fun AddToPlaylistSheet(
             onConfirm = { name ->
                 val ids = if (scoreId != null) listOf(scoreId) else bulkScoreIds
                 viewModel.createPlaylistWithScores(name, ids)
+                // createPlaylistWithScores both creates the playlist and adds the scores, so log both — mirroring iOS
+                // AddToPlaylistScreen.commitNewPlaylist (single) / BulkAddToPlaylistScreen.commitCreate (bulk).
+                val source = if (scoreId != null) "scoreRowMenu" else "bulkEdit"
+                AndroidAnalytics.log(AndroidAnalytics.bridge.playlistCreated(source))
+                AndroidAnalytics.log(AndroidAnalytics.bridge.scoreAddedToPlaylist(source, ids.size))
                 showCreate = false
                 onDismiss()
             },

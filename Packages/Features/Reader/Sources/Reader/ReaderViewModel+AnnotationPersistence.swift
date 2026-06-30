@@ -20,7 +20,7 @@ extension ReaderViewModel {
         // count); only a higher count is a fresh commit, so this logs once per committed stroke, never per change tick
         // and never per pixel. Must run before `annotationDrawings` is reassigned below (it is the previous count).
         if drawings.count > annotationDrawings.count {
-            logAnnotationInkCommitted()
+            recordAnnotationStroke()
         }
         annotationDrawings = drawings
         pendingAnnotationDrawings = drawings

@@ -86,11 +86,11 @@ an in-console dimension, happens at analysis time.
 
 | Event | Params | Where |
 |---|---|---|
-| `screen_view` | `firebase_screen` (see values below) | each main `Screen`'s `onAppear` |
+| `screen_view` | `screen_name` (`AnalyticsParameterScreenName`; surfaces as `firebase_screen` in BigQuery) — see values below | each main `Screen`'s `onAppear` |
 | `settings_snapshot` | one param per durable setting, current values (≤25, raw) | once at launch / app start |
 | `library_snapshot` | raw counts: `score_count_total`, `score_count_mscz2/3/4`, `score_count_musicxml`, `score_count_midi`, `score_count_pdf`, `playlist_count`, `tag_count`, `favorite_count` | once at launch, after repository ready |
 
-`firebase_screen` values (coarse, finalized against the actual `Screen` types during
+`screen_name` values (coarse, finalized against the actual `Screen` types during
 implementation): `library`, `reader`, `score_info`, `settings`, `recently_deleted`,
 `playlist_detail`, `tag_detail`. Note: SwiftUI is a single `UIHostingController`, so
 `screen_view` is **not** auto-collected and must be emitted manually.
@@ -174,7 +174,7 @@ any PII; anything wanted only for *analysis* (library composition, settings — 
 | `Domain/.../Analytics/AnalyticsUserPropertySync.swift` | **delete** |
 | `Utility/.../UtilityCore/AnalyticsUserProperty+Keys.swift` | **delete** |
 | `Domain/.../Analytics/AnalyticsEvent+Factories.swift` | edit — unbucket counts; add `screen`/`settingsSnapshot`/`librarySnapshot`/`annotationEnded`; drop `annotationInkCommitted` |
-| `Domain/.../Analytics/AnalyticsScreen.swift` (or enum in factories) | **new** — `firebase_screen` value set + a `logScreen` convenience |
+| `Domain/.../Analytics/AnalyticsScreen.swift` (or enum in factories) | **new** — `screen_name` value set (`AnalyticsParameterScreenName`; surfaces as `firebase_screen` in BigQuery) |
 | `App/AppBootstrap.swift` | edit — `pushAnalyticsSnapshot` emits snapshot **events**, not user properties |
 | Reader / Library / Settings call sites | edit — `screen_view` on appear; remove user-property calls; annotation session pair; raw counts |
 | `Infrastructure/.../FirebaseAnalyticsClient.swift` | (likely unchanged; verify mapping) |
@@ -184,7 +184,8 @@ any PII; anything wanted only for *analysis* (library composition, settings — 
 
 - Keep typed factories so event names can't drift; add `.screen(_:)`, `.settingsSnapshot(...)`,
   `.librarySnapshot(...)`, `.annotationEnded(strokes:duration:)`.
-- Add an `analytics.logScreen(_:)` convenience → reserved `screen_view` + `firebase_screen`.
+- Add an `analytics.logScreen(_:)` convenience → reserved `screen_view` + `screen_name` param
+  (`AnalyticsParameterScreenName`; surfaces as `firebase_screen` in BigQuery).
 - Emit `library_snapshot` + `settings_snapshot` from the existing launch hooks in
   `AppBootstrap` (where `pushAnalyticsSnapshot` runs today), behind the consent gate.
 - Numeric settings logged raw (delete the bucketing helper; no rounding at collection).

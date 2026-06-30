@@ -6,6 +6,13 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/AppTheme">
+        <!-- Disable Firebase's automatic Activity-level screen_view. Folino is a single-Activity Compose app, so the
+             auto event only ever reports "MainActivity"; the app emits a manual per-screen screen_view with a
+             screen_name instead (events-first parity with iOS, which has no auto screen tracking — see the analytics
+             spec guardrail against duplicating auto-collected events). -->
+        <meta-data
+            android:name="google_analytics_automatic_screen_reporting_enabled"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

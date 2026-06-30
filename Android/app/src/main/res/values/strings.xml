@@ -82,6 +82,8 @@
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_privacy_crash_title">Send crash reports</string>
     <string name="settings_privacy_crash_description">Helps fix bugs by sharing anonymous crash diagnostics. Never linked to you.</string>
+    <string name="settings_privacy_analytics_title">Share usage analytics</string>
+    <string name="settings_privacy_analytics_description">Helps improve folino by sharing anonymous usage trends. Your scores\' contents are never collected.</string>
     <string name="share_import_count">Import %d score(s)</string>
     <string name="share_unsupported_skipped">%d unsupported file(s) skipped</string>
     <string name="share_add_to">Add to</string>

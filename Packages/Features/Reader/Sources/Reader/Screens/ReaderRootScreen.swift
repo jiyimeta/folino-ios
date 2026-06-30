@@ -152,6 +152,7 @@ public struct ReaderRootScreen: View {
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake }
+        .onAppear { viewModel.analytics.logScreen(.reader) }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             // `onDisappear` fires both on a genuine in-app close (back to the Library) AND when the app merely
@@ -165,8 +166,9 @@ public struct ReaderRootScreen: View {
             // engine on a `.playback` session as active audio output and would inhibit auto-lock for the rest of the
             // app's lifetime if we never tore it down — releasing on a real close lets screen lock resume once the
             // user leaves the Reader; backgrounding keeps the engine alive so background audio + PiP continue.
-            guard scenePhase == .active else { return }
             let viewModel = viewModel
+            viewModel.endAnnotationSessionIfNeeded()
+            guard scenePhase == .active else { return }
             Task {
                 await viewModel.flushPendingAnnotationSave()
                 await viewModel.playbackSession.releaseEngine()

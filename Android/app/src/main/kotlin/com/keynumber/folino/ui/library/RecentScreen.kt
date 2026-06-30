@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.ScoreRowWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
@@ -39,6 +40,13 @@ fun RecentScreen(
     val today by viewModel.recentToday.collectAsStateWithLifecycle()
     val thisWeek by viewModel.recentThisWeek.collectAsStateWithLifecycle()
     val earlier by viewModel.recentEarlier.collectAsStateWithLifecycle()
+
+    // Log `select_content` attributed to the recently-opened section before opening. Mirrors iOS
+    // LibraryRootRecentsSection.openScore.
+    val openWithLog: (ScoreRowWire) -> Unit = { row ->
+        AndroidAnalytics.log(AndroidAnalytics.bridge.scoreOpened("recentlyOpened"))
+        onOpenScore(row)
+    }
 
     Scaffold(
         topBar = {
@@ -68,9 +76,9 @@ fun RecentScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            recentSection(R.string.recent_today, today, onOpenScore)
-            recentSection(R.string.recent_this_week, thisWeek, onOpenScore)
-            recentSection(R.string.recent_earlier, earlier, onOpenScore)
+            recentSection(R.string.recent_today, today, openWithLog)
+            recentSection(R.string.recent_this_week, thisWeek, openWithLog)
+            recentSection(R.string.recent_earlier, earlier, openWithLog)
         }
     }
 }

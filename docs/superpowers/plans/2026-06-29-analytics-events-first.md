@@ -21,9 +21,10 @@
 - Don't duplicate Firebase auto-collected events (`first_open`, `session_start`, etc.).
 - Wire names/params are a stable contract once chosen (parity with the future Android catalog); don't churn them.
 - No GPL dependencies. Do not add AudioKit.
-- Package tests run via xcodebuild on an iOS Simulator (the SwiftLint plugin breaks `swift test`):
-  `xcodebuild test -scheme <Package>-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:<Target>/<Suite>`
-  (the scheme may be `<Package>` or `<Package>-Package` depending on the xcodegen output; try `-Package` first). Test targets: `UtilityCoreTests`, `DomainTests`, `InfrastructureTests`, `ReaderTests`, `LibraryTests`, `SettingsTests`.
+- Package tests run via xcodebuild on an iOS Simulator (the SwiftLint plugin breaks `swift test`). **Run from the package directory**, scheme = the package name (no `-Package` suffix — confirmed `Domain`, `Reader`, `Library`, `Settings`, `Infrastructure`, `Utility`):
+  `env -C <worktree>/<package-dir> xcodebuild test -scheme <Package> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:<Target>/<Suite>`
+  Package dirs / schemes / targets: `Packages/Domain` → `Domain` / `DomainTests`; `Packages/Utility` → `Utility` / `UtilityCoreTests`; `Packages/Infrastructure` → `Infrastructure` / `InfrastructureTests`; `Packages/Features/Reader` → `Reader` / `ReaderTests`; `Packages/Features/Library` → `Library` / `LibraryTests`; `Packages/Features/Settings` → `Settings` / `SettingsTests`.
+- **Worktree:** all work happens in `/Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/analytics-events-first` on branch `worktree-analytics-events-first`. Use absolute worktree paths and `git -C <worktree>` for every git command — never commit to the primary checkout.
 
 ---
 
@@ -33,7 +34,7 @@ Removes `countBucket` and switches the five count-bearing factories to raw `.int
 
 **Files:**
 - Modify: `Packages/Domain/Sources/Domain/Analytics/AnalyticsEvent+Factories.swift` (`scoreDeleted`, `scoreAddedToPlaylist`, `scoreRemovedFromPlaylist`, `tagAssigned`, `tagUnassigned`)
-- Delete: `Packages/Domain/Sources/Domain/Analytics/AnalyticsBucketing.swift`
+- Modify: `Packages/Domain/Sources/Domain/Analytics/AnalyticsBucketing.swift` (make `countBucket` `internal` — it is still used by `AnalyticsUserPropertySync`, which is deleted in Task 7; this file is deleted there too, NOT here, to keep the build green)
 - Delete: `Packages/Domain/Tests/DomainTests/AnalyticsBucketingTests.swift`
 - Test: `Packages/Domain/Tests/DomainTests/AnalyticsEventFactoryTests.swift`
 - Test: `Packages/Features/Library/Tests/LibraryTests/LibraryAnalyticsTests.swift` (only if it asserts a bucketed `count` string)
@@ -108,10 +109,17 @@ Also update the doc comment above `scoreDeleted` (lines 41-42) — it currently 
     /// `count` is logged raw (events-first: bucket at analysis time, not at collection — see the analytics spec).
 ```
 
-- [ ] **Step 4: Delete the bucketing helper and its test**
+- [ ] **Step 4: Make `countBucket` internal; delete its test**
+
+`AnalyticsBucketing.swift` cannot be deleted yet — `AnalyticsUserPropertySync` (deleted in Task 7) still calls `countBucket`, and deleting it now would break the Domain build (violating the build-green-every-task invariant). Instead, drop it from the public API by making it `internal`, and delete its now-redundant test:
+
+```swift
+/// Bucket a raw count into a low-cardinality string. Internal-only legacy helper kept until Task 7 removes its last
+/// caller (`AnalyticsUserPropertySync`); events-first logs counts raw, so no new code should call this.
+func countBucket(_ count: Int) -> String {
+```
 
 ```bash
-git rm Packages/Domain/Sources/Domain/Analytics/AnalyticsBucketing.swift
 git rm Packages/Domain/Tests/DomainTests/AnalyticsBucketingTests.swift
 ```
 
@@ -122,8 +130,8 @@ Expected after the edits above: the only remaining hit is `AnalyticsUserProperty
 
 - [ ] **Step 6: Run Domain + Library tests, verify pass**
 
-Run: `xcodebuild test -scheme Domain-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:DomainTests/AnalyticsEventFactoryTests`
-Run: `xcodebuild test -scheme Library-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:LibraryTests/LibraryAnalyticsTests`
+Run: `env -C <worktree>/Packages/Domain xcodebuild test -scheme Domain -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:DomainTests/AnalyticsEventFactoryTests`
+Run: `env -C <worktree>/Packages/Features/Library xcodebuild test -scheme Library -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:LibraryTests/LibraryAnalyticsTests`
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
@@ -703,6 +711,7 @@ Everything below is now unused (verified by grep). Delete it and run the full an
 **Files:**
 - Delete: `Packages/Domain/Sources/Domain/Analytics/AnalyticsUserPropertySync.swift`
 - Delete: `Packages/Domain/Tests/DomainTests/AnalyticsUserPropertySyncTests.swift`
+- Delete: `Packages/Domain/Sources/Domain/Analytics/AnalyticsBucketing.swift` (its last caller `AnalyticsUserPropertySync` is deleted here; Task 1 already deleted its test and made `countBucket` internal)
 - Delete: `Packages/Utility/Sources/UtilityCore/AnalyticsUserProperty+Keys.swift`
 - Delete: `Packages/Utility/Tests/UtilityCoreTests/AnalyticsUserPropertyKeyTests.swift`
 - Modify: `Packages/Domain/Sources/Domain/Analytics/AnalyticsEvent+Factories.swift` (remove `annotationInkCommitted`)
@@ -719,6 +728,7 @@ Expected: no production hits (only the definitions about to be deleted). If a hi
 ```bash
 git rm Packages/Domain/Sources/Domain/Analytics/AnalyticsUserPropertySync.swift
 git rm Packages/Domain/Tests/DomainTests/AnalyticsUserPropertySyncTests.swift
+git rm Packages/Domain/Sources/Domain/Analytics/AnalyticsBucketing.swift
 git rm Packages/Utility/Sources/UtilityCore/AnalyticsUserProperty+Keys.swift
 git rm Packages/Utility/Tests/UtilityCoreTests/AnalyticsUserPropertyKeyTests.swift
 ```

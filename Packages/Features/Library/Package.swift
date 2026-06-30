@@ -19,7 +19,10 @@ if isAndroid {
     // (Foundation + SheetMusicCore only, so it cross-compiles to Android and
     // builds on the macOS host for tests). Domain provides `ScorePresentation`,
     // the shared row-field derivation that keeps this store in lockstep with
-    // the iOS Library. Utility (iOS-only SwiftUI) is still not pulled.
+    // the iOS Library. UtilityCore (Foundation-only) provides the shared
+    // analytics catalog (`AnalyticsEvent`/`AnalyticsValue`) the analytics bridge
+    // marshals across JNI; it already cross-compiles as a Domain dependency, so
+    // only the `UtilityCore` product is pulled (never UtilityUI, which is SwiftUI).
     packageDependencies += [
         // swiftlint:disable:next line_length
         .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4"),
@@ -28,6 +31,7 @@ if isAndroid {
             revision: "680d48e43840eb5959e48e3428a957e418689878",
         ),
         .package(path: "../../Domain"),
+        .package(path: "../../Utility"),
     ]
     products += [
         .library(name: "FolinoLibraryJNI", type: .dynamic, targets: ["FolinoLibraryJNI"]),
@@ -37,6 +41,7 @@ if isAndroid {
             name: "FolinoLibraryJNI",
             dependencies: [
                 "Domain",
+                .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "Wirelet", package: "swift-wirelet"),
                 .product(name: "WireletObservable", package: "swift-wirelet"),
                 .product(name: "WireletProvided", package: "swift-wirelet"),

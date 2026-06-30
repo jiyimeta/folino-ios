@@ -188,6 +188,15 @@ fun ReaderScreen(
     onRetargetScore: (String) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
+    // Analytics seams. The Reader module cannot import the analytics library, so the app layer passes
+    // these callbacks and ReaderScreen only decides WHEN each fires (parity with iOS playback events).
+    // All default to no-ops so existing callers / tests compile unchanged.
+    onAnalyticsPlaybackStarted: () -> Unit = {},
+    onAnalyticsPlaybackPaused: () -> Unit = {},
+    onAnalyticsPlaybackCompleted: () -> Unit = {},
+    onAnalyticsTransportPrevious: () -> Unit = {},
+    onAnalyticsTransportNext: () -> Unit = {},
+    onAnalyticsSeek: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val fontProvider = remember(context) { bundledFontProvider(context) }
@@ -214,12 +223,18 @@ fun ReaderScreen(
     // Set when this screen initiates an auto-advance; consumed once the next score reaches PREPARED.
     var pendingAutoplay by remember { mutableStateOf(false) }
 
-    // Playlist auto-advance: on a real end-of-score, ask the shared Domain decision (via JNI) what to
-    // do next. Only active in a playlist context. Re-derives the live queue + re-reads the global
-    // continuation mode each time (parity with iOS).
+    // End-of-score handling: on a real end-of-score, log playback completion (for EVERY score), then —
+    // only in a playlist context — ask the shared Domain decision (via JNI) what to do next, re-deriving
+    // the live queue + re-reading the global continuation mode each time (parity with iOS).
     LaunchedEffect(playlistId, scoreId) {
-        if (playlistId == null) return@LaunchedEffect
         audioVm.onReachedEnd.collect {
+            // Genuine end-of-score: the VM clears hasLoadedIntoPlayback before emitting onReachedEnd, so
+            // a teardown (onCleared stop) / mid-score re-prepare cursor-nil cannot re-fire this. Log
+            // completion for every score — iOS logs completion for standalone scores too, not only the
+            // playlist auto-advance case — so fire it before (and independent of) the playlist decision.
+            onAnalyticsPlaybackCompleted()
+
+            if (playlistId == null) return@collect
             val queue = playlistQueueProvider()
             val index = queue.indexOf(scoreId)
             if (index < 0) return@collect
@@ -282,6 +297,25 @@ fun ReaderScreen(
 
     val pipActive by ReaderPipController.isInPipMode.collectAsStateWithLifecycle()
     val playbackState by audioVm.state.collectAsStateWithLifecycle()
+
+    // Analytics: one central playback-state observer covers every play/pause path exactly once (the
+    // TransportBar FAB, the floating FAB, and the PiP transport all funnel through audioVm.state).
+    // Fire "started" on every transition INTO PLAYING (tap-play, autoplay, resume-after-pause — iOS
+    // fires on every transition to playing) and "paused" only on PLAYING→PAUSED. A transition to
+    // STOPPED is end-of-score / close, not a pause, so it is ignored here. Keyed on Unit so it neither
+    // re-launches nor double-fires on recomposition / in-place score retargets; the previous-state
+    // seed equals the StateFlow's current value so the first (conflated) emission never spuriously fires.
+    LaunchedEffect(Unit) {
+        var previousPlaybackState = audioVm.state.value
+        audioVm.state.collect { current ->
+            if (current == PlaybackState.PLAYING && previousPlaybackState != PlaybackState.PLAYING) {
+                onAnalyticsPlaybackStarted()
+            } else if (current == PlaybackState.PAUSED && previousPlaybackState == PlaybackState.PLAYING) {
+                onAnalyticsPlaybackPaused()
+            }
+            previousPlaybackState = current
+        }
+    }
 
     // Continuous playback implies auto-play: once the retargeted score finishes preparing, start it.
     LaunchedEffect(playbackState) {
@@ -352,8 +386,19 @@ fun ReaderScreen(
                 onDisplaySettings = { showDisplayInspector = true },
             )
         },
-        bottomBar = { if (showSeekBar) TransportBar(audioVm) },
-        floatingActionButton = { if (!showSeekBar) PlaybackFab(audioVm) },
+        bottomBar = {
+            if (showSeekBar) {
+                TransportBar(
+                    audioVm = audioVm,
+                    onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
+                    onAnalyticsTransportNext = onAnalyticsTransportNext,
+                    onAnalyticsSeek = onAnalyticsSeek,
+                )
+            }
+        },
+        floatingActionButton = {
+            if (!showSeekBar) PlaybackFab(audioVm, onAnalyticsSeek = onAnalyticsSeek)
+        },
         floatingActionButtonPosition = FabPosition.End,
     ) { padding ->
         Box(
@@ -766,7 +811,12 @@ private fun focalAdjustedOffset(
 ): Float = pad + ratio * (currentScroll - pad + centroid) - centroid
 
 @Composable
-private fun TransportBar(audioVm: ReaderAudioViewModel) {
+private fun TransportBar(
+    audioVm: ReaderAudioViewModel,
+    onAnalyticsTransportPrevious: () -> Unit = {},
+    onAnalyticsTransportNext: () -> Unit = {},
+    onAnalyticsSeek: () -> Unit = {},
+) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val currentSecs by audioVm.currentTimeSeconds.collectAsStateWithLifecycle()
     val totalSecs by audioVm.totalTimeSeconds.collectAsStateWithLifecycle()
@@ -806,6 +856,8 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
             fraction = rehearsalPreview ?: liveFraction,
             enabled = isPrepared,
             onSeek = { fraction -> if (totalSecs > 0) engine?.seek(fraction * totalSecs) },
+            // Analytics: count one seek per deliberate scrub COMMIT (drag release), not per drag frame.
+            onSeekCommit = onAnalyticsSeek,
             modifier = Modifier.fillMaxWidth(),
         )
         // Transport row with the time readout OVERLAID on its top band rather than stacked above it
@@ -839,7 +891,12 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
             // jump-to-start: no circle, but the same icon size and tap target as play/pause. Pinned
             // to the leading edge (the prev/next-measure buttons live in the centered cluster below).
             IconButton(
-                onClick = { if (isPrepared) engine?.seek(0.0) },
+                onClick = {
+                    if (isPrepared) {
+                        engine?.seek(0.0)
+                        onAnalyticsSeek()
+                    }
+                },
                 enabled = isPrepared,
                 modifier = Modifier.align(Alignment.BottomStart).size(transportButtonSize),
             ) {
@@ -858,7 +915,10 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 IconButton(
-                    onClick = { audioVm.stepMeasureBackward() },
+                    onClick = {
+                        audioVm.stepMeasureBackward()
+                        onAnalyticsTransportPrevious()
+                    },
                     enabled = isPrepared,
                     modifier = Modifier.size(measureStepButtonSize),
                 ) {
@@ -891,7 +951,10 @@ private fun TransportBar(audioVm: ReaderAudioViewModel) {
                     }
                 }
                 IconButton(
-                    onClick = { audioVm.stepMeasureForward() },
+                    onClick = {
+                        audioVm.stepMeasureForward()
+                        onAnalyticsTransportNext()
+                    },
                     enabled = isPrepared,
                     modifier = Modifier.size(measureStepButtonSize),
                 ) {
@@ -953,12 +1016,15 @@ private val rehearsalBubbleRowHeight = 28.dp
  *
  * @param fraction current playback position, 0..1.
  * @param onSeek invoked with the new 0..1 fraction on tap and on each drag move.
+ * @param onSeekCommit invoked once when a scrub is committed (drag release) — for analytics, so a
+ *   deliberate seek counts once rather than per drag frame. Not called for every [onSeek] move.
  */
 @Composable
 private fun ReaderSeekBar(
     fraction: Float,
     enabled: Boolean,
     onSeek: (Float) -> Unit,
+    onSeekCommit: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var dragging by remember { mutableStateOf(false) }
@@ -996,7 +1062,10 @@ private fun ReaderSeekBar(
                         dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
                         onSeek(dragFraction)
                     },
-                    onDragEnd = { dragging = false },
+                    onDragEnd = {
+                        dragging = false
+                        onSeekCommit()
+                    },
                     onDragCancel = { dragging = false },
                     onHorizontalDrag = { change, _ ->
                         dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
@@ -1195,7 +1264,10 @@ private fun RehearsalMarkPill(
  * not ported. Actions are guarded on the prepared state, matching [TransportBar].
  */
 @Composable
-fun PlaybackFab(audioVm: ReaderAudioViewModel) {
+fun PlaybackFab(
+    audioVm: ReaderAudioViewModel,
+    onAnalyticsSeek: () -> Unit = {},
+) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
     val engine by audioVm.engine.collectAsStateWithLifecycle()
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
@@ -1227,7 +1299,12 @@ fun PlaybackFab(audioVm: ReaderAudioViewModel) {
             )
         }
         SmallFloatingActionButton(
-            onClick = { if (isPrepared) engine?.seek(0.0) },
+            onClick = {
+                if (isPrepared) {
+                    engine?.seek(0.0)
+                    onAnalyticsSeek()
+                }
+            },
             containerColor = fabContainerColor,
             contentColor = fabContentColor,
         ) {

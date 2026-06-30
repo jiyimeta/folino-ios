@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.TagRowWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
@@ -102,6 +103,7 @@ fun TagsListScreen(
             nameHint = R.string.tags_name_hint,
             onConfirm = { name ->
                 viewModel.createTag(name)
+                AndroidAnalytics.log(AndroidAnalytics.bridge.tagCreated("tag"))
                 showCreate = false
             },
             onDismiss = { showCreate = false },
@@ -116,6 +118,7 @@ fun TagsListScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteTag(row.id)
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.tagDeleted("tag"))
                     pendingDelete = null
                 }) {
                     Text(stringResource(R.string.tags_delete))

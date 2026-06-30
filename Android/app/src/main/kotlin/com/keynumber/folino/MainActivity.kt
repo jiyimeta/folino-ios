@@ -63,6 +63,7 @@ import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.PlaylistContinuationMode
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.reader.toPref
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.theme.FolinoTheme
@@ -127,6 +128,13 @@ class MainActivity : ComponentActivity(), PipHost {
         val crashEnabled = runBlocking { prefs.crashReporting.first() }
         CrashReporting.setCollectionEnabled(crashEnabled)
 
+        // Same opt-out re-apply for Firebase Analytics. initialize() binds the SDK to the app Context (required
+        // before setCollectionEnabled, unlike Crashlytics' no-arg singleton); the persisted flag then gates both
+        // the SDK and the local AndroidAnalytics gate. Default true = opt-in, matching iOS bootstrap.
+        val analyticsEnabled = runBlocking { prefs.analytics.first() }
+        AndroidAnalytics.initialize(applicationContext)
+        AndroidAnalytics.setCollectionEnabled(analyticsEnabled)
+
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
         // TEMPORARY GUARD — remove this `if` (always load) any time after 1.0.0 has shipped.
@@ -172,7 +180,17 @@ class MainActivity : ComponentActivity(), PipHost {
                             val activity = LocalContext.current as? MainActivity
                             LibraryNavGraph(
                                 prefs = prefs,
-                                onOpenSettings = { rootNav.navigate("settings") },
+                                onOpenSettings = {
+                                    // Task 18 smoke event: fire settings_opened through the REAL pipeline
+                                    // (Swift builder → AndroidAnalytics.log) at the single Settings entry point,
+                                    // mirroring iOS which logs it once at the settings button. Once per open; the
+                                    // drawer's gear is the only nav action to "settings", so no duplicate.
+                                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingsOpened())
+                                    // screen_view for settings (its own rootNav destination; single entry point here,
+                                    // mirroring iOS SettingsSheet.onAppear → .settings).
+                                    AndroidAnalytics.log(AndroidAnalytics.bridge.screen("settings"))
+                                    rootNav.navigate("settings")
+                                },
                                 pendingOpenScoreId = activity?.pendingOpenScoreId,
                                 pendingOpenScoreTitle = activity?.pendingOpenScoreTitle,
                                 onPendingOpenConsumed = {
@@ -260,9 +278,34 @@ private fun LibraryNavGraph(
     val vm: LibraryAndroidStoreViewModel =
         viewModel(factory = LibraryVMFactory(context.applicationContext))
 
+    // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
+    // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
+    // after import/delete is a deferred minor (iOS emits once at launch too).
+    LaunchedEffect(Unit) {
+        AndroidAnalytics.log(vm.librarySnapshot())
+        AndroidAnalytics.log(
+            AndroidAnalytics.bridge.settingsSnapshot(
+                metronome = prefs.metronome.first(),
+                pictureInPicture = prefs.pip.first(),
+                collapseMultiMeasureRests = prefs.collapseRests.first(),
+                showInvisibles = prefs.showInvisible.first(),
+                keepScreenAwake = prefs.keepAwake.first(),
+                showSeekBar = prefs.showSeekBar.first(),
+                repeatMode = prefs.repeatMode.first(),
+                playlistContinuation = prefs.playlistContinuationMode.first(),
+                a4ReferenceHz = prefs.a4ReferenceHz.first(),
+                layoutMode = prefs.layoutMode.first(),
+                crashReportingEnabled = prefs.crashReporting.first(),
+                // soundfont_preset: the live downloaded tier lives in a separate JNI module; report the bundled default.
+                soundfontPreset = "lightweight",
+            ),
+        )
+    }
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
+
     // Reader is a detail pushed on top; only the top-level list destinations
     // expose the drawer (hamburger + edge swipe).
     val drawerCapable = currentRoute == "list" || currentRoute == "recentlyDeleted" ||
@@ -319,6 +362,7 @@ private fun LibraryNavGraph(
         val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
         NavHost(nav, startDestination = "list") {
             composable("list") {
+                ScreenViewEffect("library")
                 LibraryScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -327,6 +371,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("recent") {
+                ScreenViewEffect("library")
                 RecentScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -334,6 +379,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("favorites") {
+                ScreenViewEffect("library")
                 FavoritesListScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -345,6 +391,7 @@ private fun LibraryNavGraph(
                 DebugRoute(onBack = { nav.popBackStackIfResumed() })
             }
             composable("recentlyDeleted") {
+                ScreenViewEffect("recentlyDeleted")
                 RecentlyDeletedScreen(
                     viewModel = vm,
                     onOpenScore = openReader,
@@ -352,6 +399,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("playlists") {
+                ScreenViewEffect("library")
                 PlaylistsListScreen(
                     viewModel = vm,
                     onOpenPlaylist = { id, name ->
@@ -369,6 +417,7 @@ private fun LibraryNavGraph(
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
                 val name = URLDecoder.decode(entry.arguments?.getString("name") ?: "", "UTF-8")
+                ScreenViewEffect("playlistDetail")
                 PlaylistDetailScreen(
                     viewModel = vm,
                     playlistId = id,
@@ -382,6 +431,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable("tags") {
+                ScreenViewEffect("library")
                 TagsListScreen(
                     viewModel = vm,
                     onOpenTag = { id, name ->
@@ -399,6 +449,7 @@ private fun LibraryNavGraph(
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
                 val name = URLDecoder.decode(entry.arguments?.getString("name") ?: "", "UTF-8")
+                ScreenViewEffect("tagDetail")
                 TagDetailScreen(
                     viewModel = vm,
                     tagId = id,
@@ -412,6 +463,7 @@ private fun LibraryNavGraph(
                 arguments = listOf(navArgument("id") { type = NavType.StringType }),
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
+                ScreenViewEffect("scoreInfo")
                 EditScoreInfoScreen(
                     load = { vm.scoreInfoForEditing(id) },
                     onSave = { f ->
@@ -501,10 +553,22 @@ private fun LibraryNavGraph(
                     hiddenStaves = perScoreHidden,
                     clefOverrides = perScoreClefs,
                 )
+                // Analytics baselines: the last persisted tempo / transpose, so the inspector's persist callbacks can
+                // log a direction (increase/decrease, up/down) on each committed change. Re-seeded per score.
+                var lastTempoForAnalytics by remember(currentScoreId) {
+                    mutableStateOf(if (prefsState.tempoMultiplier == 0.0) 1.0 else prefsState.tempoMultiplier)
+                }
+                var lastTransposeForAnalytics by remember(currentScoreId) {
+                    mutableStateOf(prefsState.transposeSemitones)
+                }
+                ScreenViewEffect("reader")
                 ReaderScreen(
                     scoreId = currentScoreId,
                     title = title,
-                    onEditInfo = { nav.navigate("editInfo/$currentScoreId") },
+                    onEditInfo = {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.scoreInfoOpened("readerOverlay"))
+                        nav.navigate("editInfo/$currentScoreId")
+                    },
                     onShare = {
                         scope.launch {
                             shareFormats = withContext(Dispatchers.Default) { vm.exportFormats(currentScoreId) }
@@ -514,6 +578,11 @@ private fun LibraryNavGraph(
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
                     onDisplayOptionsChange = { o ->
+                        // Reader-initiated layout switch (display-options inspector). Distinct event from the Settings
+                        // `setting_changed` layout_mode key, mirroring iOS layout_mode_changed.
+                        if (o.mode != displayOptions.mode) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.layoutModeChanged(o.mode.toPref()))
+                        }
                         // Global half → DataStore.
                         scope.launch {
                             prefs.setLayoutMode(o.mode.toPref())
@@ -557,12 +626,28 @@ private fun LibraryNavGraph(
                     initialA4ReferenceHz =
                         if (prefsState.a4ReferenceHz == 0.0) globalA4Hz else prefsState.a4ReferenceHz,
                     persistMasterVolume = { v -> prefsVm.setMasterVolume(v) },
-                    persistTempoMultiplier = { v -> prefsVm.setTempoMultiplier(v) },
+                    persistTempoMultiplier = { v ->
+                        if (v > lastTempoForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.tempoIncreased())
+                        } else if (v < lastTempoForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.tempoDecreased())
+                        }
+                        lastTempoForAnalytics = v
+                        prefsVm.setTempoMultiplier(v)
+                    },
                     persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
                     // Persist-only: the transpose audio/notation effect is not implemented on Android yet;
                     // the inspector stepper only stores this value through the ReaderPreferences bridge.
                     transposeSemitones = prefsState.transposeSemitones,
-                    persistTranspose = { v -> prefsVm.setTranspose(v) },
+                    persistTranspose = { v ->
+                        if (v > lastTransposeForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeUp())
+                        } else if (v < lastTransposeForAnalytics) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeDown())
+                        }
+                        lastTransposeForAnalytics = v
+                        prefsVm.setTranspose(v)
+                    },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
                     // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
@@ -593,7 +678,11 @@ private fun LibraryNavGraph(
                     persistAbRange = { r ->
                         abRepeatStore.saveAbRepeat(currentScoreId, r?.let { it.startMeasure to it.endMeasure })
                     },
-                    persistRepeatMode = { m -> scope.launch { prefs.setRepeatMode(m.wire) } },
+                    persistRepeatMode = { m ->
+                        // Reader-initiated repeat-mode change (inspector). Distinct from the Settings repeat_mode key.
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.repeatModeChanged(m.wire))
+                        scope.launch { prefs.setRepeatMode(m.wire) }
+                    },
                     // Playlist provenance (the route's optional playlistId) drives both the auto-advance
                     // logic and the inspector's continuation row (isInPlaylist is derived from playlistId
                     // inside ReaderScreen). The continuation-mode wire value is shown in the inspector;
@@ -610,6 +699,26 @@ private fun LibraryNavGraph(
                     onRetargetScore = { next -> currentScoreId = next },
                     continuationModeWire = continuationModeWire,
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
+                    // Playback analytics (the Reader module can't import the analytics library, so it raises these
+                    // semantic callbacks and the app maps them to the shared catalog). `from` is best-effort, mirroring
+                    // iOS: playlist if opened from a playlist, else library_all.
+                    onAnalyticsPlaybackStarted = {
+                        AndroidAnalytics.log(
+                            AndroidAnalytics.bridge.playbackStarted(
+                                displayOptions.mode.toPref(),
+                                if (playlistId != null) "playlist" else "libraryAll",
+                            ),
+                        )
+                    },
+                    onAnalyticsPlaybackPaused = { AndroidAnalytics.log(AndroidAnalytics.bridge.playbackPaused()) },
+                    onAnalyticsPlaybackCompleted = {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.playbackCompleted())
+                    },
+                    onAnalyticsTransportPrevious = {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.transportPrevious())
+                    },
+                    onAnalyticsTransportNext = { AndroidAnalytics.log(AndroidAnalytics.bridge.transportNext()) },
+                    onAnalyticsSeek = { AndroidAnalytics.log(AndroidAnalytics.bridge.seek()) },
                     onBack = { nav.popBackStackIfResumed() },
                 )
                 if (showShareSheet) {
@@ -624,6 +733,11 @@ private fun LibraryNavGraph(
                                     Toast.makeText(context, exportFailedMsg, Toast.LENGTH_SHORT).show()
                                 } else {
                                     ScoreShareLauncher.share(context, listOf(path))
+                                    // Reader share (iOS parity: readerOverlay / single). `token` is the export-format
+                                    // token; the bridge maps it to the share method's wire value.
+                                    AndroidAnalytics.log(
+                                        AndroidAnalytics.bridge.share(token, "readerOverlay", "single"),
+                                    )
                                 }
                             }
                         },
@@ -723,6 +837,20 @@ private fun VersionHistoryRoute(
         },
     ) { padding ->
         Box(Modifier.padding(padding)) { VersionHistoryScreen(versionItems) }
+    }
+}
+
+/**
+ * Manual `screen_view` for a top-level Compose destination, mirroring iOS `.onAppear { logScreen(...) }`. Fires once
+ * when the destination enters composition (Compose is a single Activity, so per-screen views are not auto-collected).
+ * [token] is an `AnalyticsScreen` case-name token; the bridge maps it to the wire `screen_name`. Library browsing
+ * destinations (all / favorites / recent / playlists / tags) all pass "library", matching iOS where they are one
+ * segmented `LibraryRootScreen`.
+ */
+@Composable
+private fun ScreenViewEffect(token: String) {
+    LaunchedEffect(Unit) {
+        AndroidAnalytics.log(AndroidAnalytics.bridge.screen(token))
     }
 }
 

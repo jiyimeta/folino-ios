@@ -13,7 +13,8 @@ public struct AnalyticsEvent: Sendable, Equatable {
     }
 }
 
-/// A wire-ready user-property key. Construct via the typed statics in `AnalyticsUserProperty+Keys.swift`.
+/// A wire-ready user-property key. Construct via `init(name:)` (the typed key catalog was removed in the
+/// events-first migration).
 public struct AnalyticsUserProperty: Sendable, Equatable {
     public let name: String
     public init(name: String) {

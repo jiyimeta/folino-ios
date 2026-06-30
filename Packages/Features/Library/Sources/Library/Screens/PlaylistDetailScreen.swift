@@ -105,6 +105,7 @@ struct PlaylistDetailScreen: View {
             }
             Button(role: .cancel) {} label: { L10n.Common.cancel }
         }
+        .onAppear { library.analytics.logScreen(.playlistDetail) }
     }
 
     private var orderedItems: [ScoreItem] {

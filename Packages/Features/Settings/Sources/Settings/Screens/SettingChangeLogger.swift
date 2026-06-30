@@ -18,20 +18,6 @@ struct SettingChangeLogger {
     }
 }
 
-/// Stable wire identifiers for each Settings control's `setting_changed` event. Independent of the `@AppStorage`
-/// `UserDefaults` key strings so a storage-key refactor never shifts analytics, and from the user-facing copy so a
-/// wording change never shifts analytics.
-enum SettingKey: String {
-    case metronome = "metronome_enabled"
-    case pictureInPicture = "picture_in_picture_enabled"
-    case collapseMultiMeasureRests = "collapse_multi_measure_rests"
-    case showInvisibleElements = "show_invisible_elements"
-    case keepScreenAwake = "keep_screen_awake"
-    case showSeekBar = "show_seek_bar"
-    case repeatMode = "repeat_mode"
-    case playlistContinuation = "playlist_continuation"
-    case a4Reference = "a4_reference_hz"
-    case layoutMode = "layout_mode"
-    case crashReporting = "crash_reporting_enabled"
-    case analytics = "analytics_enabled"
-}
+// `SettingKey` (the stable `setting_changed` wire keys) now lives in `Domain` so the Android `AnalyticsBridge`
+// resolves the identical catalog ([[feedback_ios_android_parity]]). `import Domain` at the top of this file brings
+// it into scope; `SettingChangeLogger` consumes it unchanged.

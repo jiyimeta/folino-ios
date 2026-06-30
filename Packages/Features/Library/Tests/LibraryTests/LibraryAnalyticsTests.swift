@@ -97,7 +97,7 @@ struct LibraryAnalyticsTests {
         let event = f.analytics.event(named: "score_deleted")
         #expect(event?.parameters["source"] == .string("score_row_menu"))
         #expect(event?.parameters["mode"] == .string("single"))
-        #expect(event?.parameters["count"] == .string("1-5"))
+        #expect(event?.parameters["count"] == .int(1))
     }
 
     @Test func `bulk delete logs bulk source`() async {
@@ -203,7 +203,7 @@ struct LibraryAnalyticsTests {
         await f.vm.bulkAddToPlaylist([a.id, b.id], to: playlist)
         let event = f.analytics.event(named: "score_added_to_playlist")
         #expect(event?.parameters["source"] == .string("bulk_edit"))
-        #expect(event?.parameters["count"] == .string("1-5"))
+        #expect(event?.parameters["count"] == .int(2))
     }
 
     @Test func `bulk add tags logs assignment`() async {
