@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import SwiftUI
+import UtilityCore
 import UtilityUI
 
 struct PlaylistDetailScreen: View {
@@ -34,7 +35,10 @@ struct PlaylistDetailScreen: View {
         PlaylistDetailView(
             playlistName: playlist.name,
             items: orderedItems,
-            onOpen: { item in onOpenInPlaylist(item, playlist.id) },
+            onOpen: { item in
+                library.analytics.log(.scoreOpened(from: .playlist))
+                onOpenInPlaylist(item, playlist.id)
+            },
             onMove: { offsets, destination in move(from: offsets, to: destination) },
             onRemoveFromPlaylist: { item in removeFromPlaylist(item) },
             onRename: { newName in Task { await commitRename(newName) } },
@@ -101,6 +105,7 @@ struct PlaylistDetailScreen: View {
             }
             Button(role: .cancel) {} label: { L10n.Common.cancel }
         }
+        .onAppear { library.analytics.logScreen(.playlistDetail) }
     }
 
     private var orderedItems: [ScoreItem] {
@@ -146,39 +151,53 @@ struct PlaylistDetailScreen: View {
     }
 
     private func move(from offsets: IndexSet, to destination: Int) {
-        var ids = currentPlaylist().orderedScoreItemIDs
+        let current = currentPlaylist()
+        var ids = current.orderedScoreItemIDs
         ids.move(fromOffsets: offsets, toOffset: destination)
-        var updated = currentPlaylist()
+        guard ids != current.orderedScoreItemIDs else { return }
+        var updated = current
         updated.orderedScoreItemIDs = ids
-        Task { await save(updated) }
+        Task {
+            if await save(updated) { library.analytics.log(.playlistReordered()) }
+        }
     }
 
     private func removeFromPlaylist(_ item: ScoreItem) {
         var updated = currentPlaylist()
         updated.remove([item.id])
-        Task { await save(updated) }
+        Task {
+            if await save(updated) {
+                library.analytics.log(.scoreRemovedFromPlaylist(source: .playlist, count: 1))
+            }
+        }
     }
 
     private func commitRename(_ newName: String) async {
         var updated = currentPlaylist()
         updated.name = newName
-        await save(updated)
+        if await save(updated) { library.analytics.log(.playlistRenamed(source: .playlist)) }
     }
 
     private func commitDelete() async {
         do {
             try await library.repository.deletePlaylist(id: playlist.id)
+            library.analytics.log(.playlistDeleted(source: .playlist))
             onPlaylistDeleted()
         } catch {
             library.currentError = error
         }
     }
 
-    private func save(_ updated: Playlist) async {
+    /// Persist `updated`; returns `true` on success so callers log the matching analytics event only when the write
+    /// actually landed.
+    @discardableResult
+    private func save(_ updated: Playlist) async -> Bool {
         do {
             try await library.repository.savePlaylist(updated)
+            return true
         } catch {
             library.currentError = error
+            return false
         }
     }
 }

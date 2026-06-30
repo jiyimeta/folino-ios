@@ -18,6 +18,7 @@ final class RepeatModel {
     var mode: RepeatMode = .off {
         didSet {
             guard mode != oldValue, !isSyncing else { return }
+            onModeChanged?(mode)
             RepeatModeStorage.set(mode)
             Task { [weak self] in
                 await self?.forwardLoopRangeToController()
@@ -30,6 +31,9 @@ final class RepeatModel {
     private(set) var pendingB: ChordPath?
 
     @ObservationIgnored var onChange: (() async -> Void)?
+    /// Fired on a user-initiated repeat-mode change (the inspector picker binding's `didSet` and the awaitable
+    /// `setMode`), suppressed while `isSyncing` so a persistence reseed or external Settings write doesn't fire it.
+    @ObservationIgnored var onModeChanged: ((RepeatMode) -> Void)?
     @ObservationIgnored var scoreProvider: () -> Score? = { nil }
     @ObservationIgnored var cursorProvider: () -> ScoreCursor? = { nil }
     @ObservationIgnored var controllerProvider: () -> (any PlaybackController)? = { nil }
@@ -91,6 +95,7 @@ final class RepeatModel {
         isSyncing = true
         mode = value
         isSyncing = false
+        onModeChanged?(value)
         RepeatModeStorage.set(value)
         await forwardLoopRangeToController()
     }

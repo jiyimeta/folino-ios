@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.BuildConfig
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.RepeatModePicker
@@ -68,6 +70,7 @@ fun SettingsScreen(
     val layout by prefs.layoutMode.collectAsState(initial = "page")
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
+    val analyticsEnabled by prefs.analytics.collectAsState(initial = true)
     val repeatModeWire by prefs.repeatMode.collectAsState(initial = "off")
     val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
     val showInvisible by prefs.showInvisible.collectAsState(initial = false)
@@ -100,7 +103,10 @@ fun SettingsScreen(
                 icon = MetronomeIcon,
                 title = stringResource(R.string.settings_reader_metronome),
                 checked = metronome,
-                onChange = { v -> scope.launch { prefs.setMetronome(v) } },
+                onChange = { v ->
+                    scope.launch { prefs.setMetronome(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("metronome", v))
+                },
             )
         }
         item {
@@ -109,7 +115,10 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_reader_pip),
                 checked = pip,
                 subtitle = stringResource(R.string.settings_reader_pip_footer),
-                onChange = { v -> scope.launch { prefs.setPip(v) } },
+                onChange = { v ->
+                    scope.launch { prefs.setPip(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("pictureInPicture", v))
+                },
             )
         }
         item {
@@ -117,7 +126,10 @@ fun SettingsScreen(
                 icon = Icons.Filled.UnfoldLess,
                 title = stringResource(R.string.settings_reader_collapse_rests),
                 checked = collapse,
-                onChange = { v -> scope.launch { prefs.setCollapseRests(v) } },
+                onChange = { v ->
+                    scope.launch { prefs.setCollapseRests(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("collapseMultiMeasureRests", v))
+                },
             )
         }
         item {
@@ -125,7 +137,10 @@ fun SettingsScreen(
                 icon = Icons.Filled.Visibility,
                 title = stringResource(R.string.settings_reader_show_invisible),
                 checked = showInvisible,
-                onChange = { v -> scope.launch { prefs.setShowInvisible(v) } },
+                onChange = { v ->
+                    scope.launch { prefs.setShowInvisible(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("showInvisibleElements", v))
+                },
             )
         }
         item {
@@ -134,7 +149,10 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_reader_keep_awake),
                 checked = keepAwake,
                 subtitle = stringResource(R.string.settings_reader_keep_awake_footer),
-                onChange = { v -> scope.launch { prefs.setKeepAwake(v) } },
+                onChange = { v ->
+                    scope.launch { prefs.setKeepAwake(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("keepScreenAwake", v))
+                },
             )
         }
         item {
@@ -142,7 +160,10 @@ fun SettingsScreen(
                 icon = Icons.Filled.Timeline,
                 title = stringResource(R.string.settings_reader_show_seek_bar),
                 checked = showSeekBar,
-                onChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
+                onChange = { v ->
+                    scope.launch { prefs.setShowSeekBar(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("showSeekBar", v))
+                },
             )
         }
         item {
@@ -151,7 +172,13 @@ fun SettingsScreen(
                 RepeatModePicker(
                     selected = RepeatMode.fromWire(repeatModeWire),
                     enabled = true,
-                    onSelect = { scope.launch { prefs.setRepeatMode(it.wire) } },
+                    onSelect = {
+                        // Gate on an actual change (iOS logs via .onChange): re-selecting the current mode emits nothing.
+                        if (it.wire != repeatModeWire) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedRepeatMode(it.wire))
+                        }
+                        scope.launch { prefs.setRepeatMode(it.wire) }
+                    },
                 )
             }
         }
@@ -191,6 +218,11 @@ fun SettingsScreen(
                                     null
                                 },
                                 onClick = {
+                                    if (raw != continuationModeWire) {
+                                        AndroidAnalytics.log(
+                                            AndroidAnalytics.bridge.settingChangedPlaylistContinuation(raw),
+                                        )
+                                    }
                                     scope.launch { prefs.setPlaylistContinuationMode(raw) }
                                     expanded = false
                                 },
@@ -201,6 +233,9 @@ fun SettingsScreen(
             }
         }
         item {
+            // Last A4 value we logged, so a touch-release with no net move (or a reset when already 440) emits no
+            // `setting_changed` — mirroring iOS .onChange(of: globalA4Hz), which only fires on an actual change.
+            var lastLoggedA4Hz by remember { mutableStateOf(a4Hz) }
             A4SliderRow(
                 hz = a4Hz,
                 onValueChange = { scope.launch { prefs.setA4ReferenceHz(it.toDouble()) } },
@@ -211,8 +246,18 @@ fun SettingsScreen(
                         else -> a4Hz
                     }
                     if (snapped != a4Hz) scope.launch { prefs.setA4ReferenceHz(snapped) }
+                    if (snapped != lastLoggedA4Hz) {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedA4(snapped))
+                        lastLoggedA4Hz = snapped
+                    }
                 },
-                onReset = { scope.launch { prefs.setA4ReferenceHz(440.0) } },
+                onReset = {
+                    scope.launch { prefs.setA4ReferenceHz(440.0) }
+                    if (lastLoggedA4Hz != 440.0) {
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedA4(440.0))
+                        lastLoggedA4Hz = 440.0
+                    }
+                },
             )
         }
         item {
@@ -254,6 +299,9 @@ fun SettingsScreen(
                                     null
                                 },
                                 onClick = {
+                                    if (raw != layout) {
+                                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedLayoutMode(raw))
+                                    }
                                     scope.launch { prefs.setLayoutMode(raw) }
                                     expanded = false
                                 },
@@ -294,6 +342,22 @@ fun SettingsScreen(
                 onChange = { v ->
                     scope.launch { prefs.setCrashReporting(v) }
                     CrashReporting.setCollectionEnabled(v)
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("crashReporting", v))
+                },
+            )
+        }
+        item {
+            ToggleRow(
+                icon = Icons.Filled.Analytics,
+                title = stringResource(R.string.settings_privacy_analytics_title),
+                subtitle = stringResource(R.string.settings_privacy_analytics_description),
+                checked = analyticsEnabled,
+                onChange = { v ->
+                    scope.launch { prefs.setAnalytics(v) }
+                    AndroidAnalytics.setCollectionEnabled(v)
+                    // Log AFTER toggling collection: enabling records the change; disabling is silently dropped by the
+                    // now-off sink, so opting out never emits a parting event. Mirrors iOS PrivacySettingsSection.
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("analytics", v))
                 },
             )
         }

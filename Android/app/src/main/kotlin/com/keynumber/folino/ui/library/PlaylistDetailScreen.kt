@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.ScoreRowWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import sh.calvin.reorderable.ReorderableItem
@@ -74,6 +75,9 @@ fun PlaylistDetailScreen(
         local.add(to.index, local.removeAt(from.index))
         viewModel.setPlaylistOrder(playlistId, local.map { it.id })
     }
+    // Snapshot the order when a drag begins so we can log `playlist_reordered` exactly once per drag gesture, and only
+    // when the order actually changed (the reorder callback fires per intermediate swap). Mirrors iOS `move`.
+    var orderAtDragStart by remember { mutableStateOf<List<String>>(emptyList()) }
 
     Scaffold(
         topBar = {
@@ -140,7 +144,19 @@ fun PlaylistDetailScreen(
                                 supportingContent = { if (row.composer.isNotEmpty()) Text(row.composer) },
                                 leadingContent = {
                                     if (!searching) {
-                                        IconButton(modifier = Modifier.draggableHandle(), onClick = {}) {
+                                        IconButton(
+                                            modifier = Modifier.draggableHandle(
+                                                onDragStarted = { orderAtDragStart = local.map { row -> row.id } },
+                                                onDragStopped = {
+                                                    if (local.map { row -> row.id } != orderAtDragStart) {
+                                                        AndroidAnalytics.log(
+                                                            AndroidAnalytics.bridge.playlistReordered(),
+                                                        )
+                                                    }
+                                                },
+                                            ),
+                                            onClick = {},
+                                        ) {
                                             Icon(
                                                 Icons.Filled.DragHandle,
                                                 contentDescription = stringResource(R.string.playlist_reorder_handle),
@@ -162,12 +178,19 @@ fun PlaylistDetailScreen(
                                                 onClick = {
                                                     rowMenu = false
                                                     viewModel.removeFromPlaylist(row.id, playlistId)
+                                                    AndroidAnalytics.log(
+                                                        AndroidAnalytics.bridge
+                                                            .scoreRemovedFromPlaylist("playlist", 1),
+                                                    )
                                                 },
                                             )
                                         }
                                     }
                                 },
-                                modifier = Modifier.clickable { onOpenScore(row) },
+                                modifier = Modifier.clickable {
+                                    AndroidAnalytics.log(AndroidAnalytics.bridge.scoreOpened("playlist"))
+                                    onOpenScore(row)
+                                },
                             )
                         }
                     }
@@ -183,6 +206,7 @@ fun PlaylistDetailScreen(
             initial = playlistName,
             onConfirm = { name ->
                 viewModel.renamePlaylist(playlistId, name)
+                AndroidAnalytics.log(AndroidAnalytics.bridge.playlistRenamed("playlist"))
                 showRename = false
             },
             onDismiss = { showRename = false },
@@ -196,6 +220,7 @@ fun PlaylistDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deletePlaylist(playlistId)
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.playlistDeleted("playlist"))
                     showDelete = false
                     onBack()
                 }) {

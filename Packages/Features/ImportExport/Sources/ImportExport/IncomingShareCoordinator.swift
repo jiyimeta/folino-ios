@@ -17,11 +17,17 @@ public final class IncomingShareCoordinator {
     private let appGroupContainer: URL
     private let clock: any Clock
     private let duplicateResolver: (any ImportDuplicateResolver)?
+    private let analytics: any Analytics
+    private let crashReporter: any CrashReporter
     private let logger = Logger(
         subsystem: "com.KeyNumber.Folino",
         category: "IncomingShareCoordinator",
     )
     private var inFlight: Task<DrainResult, Never>?
+
+    /// Logical origin label for every import that arrives through the Share Extension (mirrors Library's
+    /// `"file_picker"`). Kept distinct so analytics can separate share-sheet imports from in-app file-picker imports.
+    private static let importSource = "share_ext"
 
     public init(
         importer: any ScoreFileImporter,
@@ -29,12 +35,16 @@ public final class IncomingShareCoordinator {
         appGroupContainer: URL,
         clock: any Clock,
         duplicateResolver: (any ImportDuplicateResolver)? = nil,
+        analytics: any Analytics = NoopAnalytics(),
+        crashReporter: any CrashReporter = NoopCrashReporter(),
     ) {
         self.importer = importer
         self.repository = repository
         self.appGroupContainer = appGroupContainer
         self.clock = clock
         self.duplicateResolver = duplicateResolver
+        self.analytics = analytics
+        self.crashReporter = crashReporter
     }
 
     /// Drains a single token (when `token != nil`) or every staged token in chronological order (when `token == nil`).
@@ -145,6 +155,7 @@ public final class IncomingShareCoordinator {
         if let failedName = shared.playlistCreateFailureName {
             // Preserve the staged token on disk so the user can retry on the next drain (cold launch). The spec
             // mandates: nothing is imported, and the banner reports `Couldn't create playlist "<name>"`.
+            crashReporter.record(error: ShareImportFailure.playlistCreateFailed)
             return DrainResult(
                 imported: [],
                 skipped: [],
@@ -156,6 +167,7 @@ public final class IncomingShareCoordinator {
             )
         }
 
+        logImportOutcome(shared, importer: iosImporter)
         try? FileManager.default.removeItem(at: tokenURL)
 
         let imported = shared.importedIDs.compactMap { UUID(uuidString: $0).map(ScoreItemID.init(rawValue:)) }
@@ -173,6 +185,39 @@ public final class IncomingShareCoordinator {
             targetPlaylistID: targetID,
             targetPlaylistName: targetName,
         )
+    }
+
+    /// Split the per-token import outcome into analytics + Crashlytics non-fatals: one `score_imported` (source
+    /// `share_ext`) per committed item, and one `score_import_failed` + non-fatal per genuinely failed file. Duplicate
+    /// skips are dedupes, not failures, so they are deliberately not logged here.
+    private func logImportOutcome(_ shared: SharedImportResult, importer: IOSShareImporter) {
+        for id in shared.importedIDs {
+            guard let item = importer.itemsByID[id],
+                  let format = ScoreFormat.detect(filename: item.localFileName) else { continue }
+            analytics.log(.scoreImported(
+                format: format,
+                source: Self.importSource,
+                isDuplicate: false,
+                museScoreMajorVersion: item.museScoreMajorVersion,
+            ))
+        }
+        for skip in shared.skipped {
+            guard let failure = Self.failure(for: skip.reason) else { continue }
+            crashReporter.record(error: failure.error)
+            let format = ScoreFormat.detect(filename: skip.originalName)?.analyticsValue ?? "unknown"
+            analytics.log(.scoreImportFailed(format: format, reason: failure.reason))
+        }
+    }
+
+    /// Maps a skip reason to a stable low-cardinality analytics `reason` (matching the Library file-picker labels) plus
+    /// the non-fatal error class. Returns `nil` for `.duplicate`, which is a dedupe rather than an import failure.
+    private static func failure(for reason: SharedImportSkipReason) -> (reason: String, error: ShareImportFailure)? {
+        switch reason {
+        case .missingFile: ("file_not_found", .fileNotFound)
+        case .parseFailed: ("parse_failed", .parseFailed)
+        case .persistenceFailed: ("persistence_failed", .persistenceFailed)
+        case .duplicate: nil
+        }
     }
 
     private static func choice(from intent: IncomingShareIntent) -> PlaylistChoice {

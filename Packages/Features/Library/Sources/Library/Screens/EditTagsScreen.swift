@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityCore
 
 struct EditTagsScreen: View {
     let scoreItem: ScoreItem
@@ -17,12 +18,22 @@ struct EditTagsScreen: View {
 
     private func toggle(_ tag: Tag) async {
         var updated = currentScoreItem()
-        if updated.tagIDs.contains(tag.id) {
+        let wasAssigned = updated.tagIDs.contains(tag.id)
+        if wasAssigned {
             updated.tagIDs.remove(tag.id)
         } else {
             updated.tagIDs.insert(tag.id)
         }
-        await library.save(updated)
+        do {
+            try await library.repository.saveScoreItem(updated)
+            if wasAssigned {
+                library.analytics.log(.tagUnassigned(source: .scoreRowMenu, count: 1))
+            } else {
+                library.analytics.log(.tagAssigned(source: .scoreRowMenu, count: 1))
+            }
+        } catch {
+            library.currentError = error
+        }
     }
 
     private func commitNewTag(_ name: String) async {
@@ -32,9 +43,15 @@ struct EditTagsScreen: View {
         } catch {
             return
         }
+        library.analytics.log(.tagCreated(source: .scoreRowMenu))
         var updated = currentScoreItem()
         updated.tagIDs.insert(tag.id)
-        await library.save(updated)
+        do {
+            try await library.repository.saveScoreItem(updated)
+            library.analytics.log(.tagAssigned(source: .scoreRowMenu, count: 1))
+        } catch {
+            library.currentError = error
+        }
     }
 
     /// Re-read from the repository on each operation in case other operations have mutated the score's tagIDs while

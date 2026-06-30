@@ -57,7 +57,7 @@ struct VerticalZoomedSurface: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
-                playbackCursor: playbackCursor, playbackCursorColor: .accentColor,
+                playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
             .coordinateSpace(name: "scoreSurface")
             .gesture(tapSeekGesture(document: doc))

@@ -27,8 +27,12 @@ struct AnnotationLayerTests {
             id: AnnotationLayerID(),
             scoreItemID: ScoreItemID(),
             drawings: [
-                DrawingAnchor(id: AnnotationID(), anchor: anchor(measure: 0), encodedDrawing: Data([0xDE, 0xAD])),
-                DrawingAnchor(id: AnnotationID(), anchor: anchor(measure: 3), encodedDrawing: Data([0xBE, 0xEF])),
+                DrawingAnchor(
+                    id: AnnotationID(), kind: .musical(anchor(measure: 0)), encodedDrawing: Data([0xDE, 0xAD]),
+                ),
+                DrawingAnchor(
+                    id: AnnotationID(), kind: .musical(anchor(measure: 3)), encodedDrawing: Data([0xBE, 0xEF]),
+                ),
             ],
             textBoxes: [
                 TextBoxAnchor(id: AnnotationID(), anchor: anchor(measure: 1), text: "fingering"),
@@ -42,7 +46,7 @@ struct AnnotationLayerTests {
 
     @Test func `drawing anchor is identifiable`() {
         let id = AnnotationID()
-        let d = DrawingAnchor(id: id, anchor: anchor(), encodedDrawing: Data())
+        let d = DrawingAnchor(id: id, kind: .musical(anchor()), encodedDrawing: Data())
         #expect(d.id == id)
     }
 

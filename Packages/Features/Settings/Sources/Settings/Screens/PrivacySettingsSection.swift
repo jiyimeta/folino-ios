@@ -8,6 +8,10 @@ struct PrivacySettingsSection: View {
     let crashReporter: any CrashReporter
     let analytics: any Analytics
 
+    private var changeLog: SettingChangeLogger {
+        SettingChangeLogger(analytics: analytics)
+    }
+
     @AppStorage(PrivacySettingsKey.crashReportingEnabled)
     private var isCrashReportingEnabled = true
 
@@ -30,6 +34,7 @@ struct PrivacySettingsSection: View {
             }
             .onChange(of: isCrashReportingEnabled) { _, newValue in
                 crashReporter.setCollectionEnabled(newValue)
+                changeLog.log(.crashReporting, newValue)
             }
             Toggle(isOn: $isAnalyticsEnabled) {
                 Label {
@@ -45,6 +50,9 @@ struct PrivacySettingsSection: View {
             }
             .onChange(of: isAnalyticsEnabled) { _, newValue in
                 analytics.setCollectionEnabled(newValue)
+                // Log AFTER toggling collection: enabling records the change, while disabling is silently dropped by
+                // the now-off analytics sink — opting out never emits a parting event, and there is no half-state.
+                changeLog.log(.analytics, newValue)
             }
         } header: {
             Text("settings.privacy.title", bundle: .module)

@@ -34,7 +34,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     public var body: some View {
         NavigationStack {
             Form {
-                ReaderSettingsSection(provider: provider)
+                ReaderSettingsSection(provider: provider, analytics: analytics)
                 PrivacySettingsSection(crashReporter: crashReporter, analytics: analytics)
                 AboutSettingsSection(
                     versionHistoryLoader: versionHistoryLoader,
@@ -46,6 +46,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { doneToolbar }
         }
+        .onAppear { analytics.logScreen(.settings) }
     }
 
     @ToolbarContentBuilder

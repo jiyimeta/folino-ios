@@ -27,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +62,11 @@ fun EditTagsSheet(
                         trailingContent = { Checkbox(checked = pick.contains, onCheckedChange = null) },
                         modifier = Modifier.clickable {
                             viewModel.setTagAssigned(scoreId, pick.id, !pick.contains)
+                            if (pick.contains) {
+                                AndroidAnalytics.log(AndroidAnalytics.bridge.tagUnassigned("scoreRowMenu", 1))
+                            } else {
+                                AndroidAnalytics.log(AndroidAnalytics.bridge.tagAssigned("scoreRowMenu", 1))
+                            }
                         },
                     )
                 } else {
@@ -87,6 +93,10 @@ fun EditTagsSheet(
                     onClick = {
                         // Union-add each selected tag across all selected scores.
                         bulkSelected.forEach { tagId -> viewModel.bulkAddTag(tagId, bulkScoreIds) }
+                        // One `tag_assigned` per Apply action, count = scores affected — mirrors iOS bulkAddTags which
+                        // unions all selected tags in a single call and logs once. (Button is enabled only when
+                        // bulkSelected is non-empty.)
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.tagAssigned("bulkEdit", bulkScoreIds.size))
                         onDismiss()
                     },
                 ) {
@@ -103,6 +113,10 @@ fun EditTagsSheet(
             nameHint = R.string.tags_name_hint,
             onConfirm = { name ->
                 viewModel.createTag(name)
+                // tagCreated only: Android's create-from-sheet does not auto-assign the new tag (unlike iOS
+                // EditTagsScreen.commitNewTag), so no tag_assigned is emitted here.
+                val source = if (scoreId != null) "scoreRowMenu" else "bulkEdit"
+                AndroidAnalytics.log(AndroidAnalytics.bridge.tagCreated(source))
                 showCreate = false
             },
             onDismiss = { showCreate = false },

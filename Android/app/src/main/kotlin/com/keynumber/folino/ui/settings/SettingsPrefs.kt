@@ -61,6 +61,13 @@ object SettingsKeys {
      * `privacyCrashReportingEnabled`. The toggle is an opt-*out*.
      */
     val crashReportingEnabled = booleanPreferencesKey("privacy.crashReporting.enabled")
+
+    /**
+     * Whether Firebase Analytics usage collection is enabled. Opt-out semantics:
+     * absent (first launch) is treated as `true`, mirroring iOS
+     * `privacyAnalyticsEnabled`. The toggle is an opt-*out*.
+     */
+    val analyticsEnabled = booleanPreferencesKey("privacy.analytics.enabled")
 }
 
 class SettingsPrefs(private val context: Context) {
@@ -82,6 +89,8 @@ class SettingsPrefs(private val context: Context) {
         context.dataStore.data.map { it[SettingsKeys.playlistContinuationMode] ?: "playThrough" }
     val crashReporting: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.crashReportingEnabled] ?: true }
+    val analytics: Flow<Boolean> =
+        context.dataStore.data.map { it[SettingsKeys.analyticsEnabled] ?: true }
 
     suspend fun setMetronome(v: Boolean) = context.dataStore.edit { it[SettingsKeys.metronomeEnabled] = v }
     suspend fun setPip(v: Boolean) = context.dataStore.edit { it[SettingsKeys.pipEnabled] = v }
@@ -102,4 +111,7 @@ class SettingsPrefs(private val context: Context) {
 
     suspend fun setCrashReporting(v: Boolean) =
         context.dataStore.edit { it[SettingsKeys.crashReportingEnabled] = v }
+
+    suspend fun setAnalytics(v: Boolean) =
+        context.dataStore.edit { it[SettingsKeys.analyticsEnabled] = v }
 }

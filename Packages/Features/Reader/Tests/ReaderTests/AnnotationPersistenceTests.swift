@@ -62,7 +62,7 @@ struct AnnotationPersistenceTests {
     @Test func `loads persisted drawings into the observable property`() async throws {
         let store = FakeAnnotationStore()
         let scoreID = ScoreItemID()
-        let drawings = [DrawingAnchor(anchor: Self.anchor(), encodedDrawing: Data([0x01, 0x02]))]
+        let drawings = [DrawingAnchor(kind: .musical(Self.anchor()), encodedDrawing: Data([0x01, 0x02]))]
         try await store.saveAnnotationLayer(AnnotationLayer(
             scoreItemID: scoreID, drawings: drawings, textBoxes: [], updatedAt: Date(timeIntervalSince1970: 0),
         ))
@@ -75,7 +75,7 @@ struct AnnotationPersistenceTests {
         let store = FakeAnnotationStore()
         let scoreID = ScoreItemID()
         let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
-        let drawings = [DrawingAnchor(anchor: Self.anchor(), encodedDrawing: Data([0xAA]))]
+        let drawings = [DrawingAnchor(kind: .musical(Self.anchor()), encodedDrawing: Data([0xAA]))]
         vm.annotationDrawingsDidChange(drawings)
         await vm.flushPendingAnnotationSave()
         let saved = try await store.annotationLayer(forScoreItem: scoreID)
@@ -88,7 +88,7 @@ struct AnnotationPersistenceTests {
         let scoreID = ScoreItemID()
         try await store.saveAnnotationLayer(AnnotationLayer(
             scoreItemID: scoreID,
-            drawings: [DrawingAnchor(anchor: Self.anchor(), encodedDrawing: Data([0x01]))],
+            drawings: [DrawingAnchor(kind: .musical(Self.anchor()), encodedDrawing: Data([0x01]))],
             textBoxes: [], updatedAt: Date(timeIntervalSince1970: 0),
         ))
         let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)

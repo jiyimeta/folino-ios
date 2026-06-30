@@ -15,6 +15,13 @@ extension ReaderViewModel {
     /// model immediately (so a re-render projects the live ink, not a stale model) and debounces a save ~0.5 s; an
     /// empty model deletes the layer instead of storing an empty one.
     func annotationDrawingsDidChange(_ drawings: [DrawingAnchor]) {
+        // A net increase in anchored strokes means new ink was actually committed — the real pencil-usage signal. The
+        // canvas's `canvasViewDrawingDidChange` also fires for reflow re-anchoring (same count) and erase (lower
+        // count); only a higher count is a fresh commit, so this logs once per committed stroke, never per change tick
+        // and never per pixel. Must run before `annotationDrawings` is reassigned below (it is the previous count).
+        if drawings.count > annotationDrawings.count {
+            recordAnnotationStroke()
+        }
         annotationDrawings = drawings
         pendingAnnotationDrawings = drawings
         annotationSaveTask?.cancel()

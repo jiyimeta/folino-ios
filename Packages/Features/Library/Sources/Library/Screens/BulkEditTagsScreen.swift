@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import SwiftUI
+import UtilityCore
 
 struct BulkEditTagsScreen: View {
     let selectedIDs: Set<ScoreItemID>
@@ -25,6 +26,7 @@ struct BulkEditTagsScreen: View {
         let tag = Tag(name: name, colorHex: "#5856D6")
         do {
             try await library.repository.saveTag(tag)
+            library.analytics.log(.tagCreated(source: .bulkEdit))
         } catch {
             library.currentError = error
             return

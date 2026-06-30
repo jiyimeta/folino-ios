@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.R
+import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.ScoreRowWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import kotlinx.coroutines.Dispatchers
@@ -78,6 +79,9 @@ fun ScoreListScaffold(
     titleRes: Int,
     emptyTitleRes: Int,
     emptyHintRes: Int,
+    /// select_content attribution for opens from this list: "libraryAll" or "favorites" (a non-blank search query
+    /// overrides it to "searchResult"). Mirrors iOS `ScoreListScreen.openSource`.
+    listSource: String,
     onOpenScore: (ScoreRowWire) -> Unit,
     onOpenDrawer: () -> Unit,
     onEditInfoForScore: (String) -> Unit,
@@ -101,6 +105,9 @@ fun ScoreListScaffold(
         mutableStateOf<List<com.keynumber.folino.library.ScoreExportFormatWire>>(emptyList())
     }
     var exportTargets by remember { mutableStateOf<List<String>>(emptyList()) }
+    // Whether the in-flight export was started from the CAB (bulk) vs a single row, so `share` is attributed to the
+    // matching source/mode once the share actually launches.
+    var exportIsBulk by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     val exportFailedMsg = stringResource(R.string.export_failed)
@@ -115,9 +122,10 @@ fun ScoreListScaffold(
         if (selectedIds.isEmpty()) selectionMode = false
     }
 
-    fun beginExport(ids: List<String>) {
+    fun beginExport(ids: List<String>, isBulk: Boolean) {
         if (ids.isEmpty()) return
         exportTargets = ids
+        exportIsBulk = isBulk
         scope.launch {
             val formats = withContext(Dispatchers.Default) { viewModel.exportFormats(ids.first()) }
             exportFormats = formats
@@ -140,6 +148,15 @@ fun ScoreListScaffold(
                 return@launch
             }
             com.keynumber.folino.export.ScoreShareLauncher.share(context, paths)
+            // Log `share` on success (a launched share with the chosen format), not on intent — mirroring iOS
+            // `LibraryViewModel.requestShare` / `requestBulkShare`. `token` is the format chosen in ExportFormatSheet.
+            AndroidAnalytics.log(
+                AndroidAnalytics.bridge.share(
+                    token,
+                    if (exportIsBulk) "bulkEdit" else "scoreRowMenu",
+                    if (exportIsBulk) "bulk" else "single",
+                ),
+            )
         }
     }
 
@@ -162,11 +179,15 @@ fun ScoreListScaffold(
                         IconButton(
                             enabled = selectedIds.isNotEmpty(),
                             onClick = {
+                                val enabled = !selectedAllFavorited
                                 if (selectedAllFavorited) {
                                     viewModel.unfavoriteMany(selectedIds.toList())
                                 } else {
                                     viewModel.favoriteMany(selectedIds.toList())
                                 }
+                                AndroidAnalytics.log(
+                                    AndroidAnalytics.bridge.favoriteToggled(enabled, "bulkEdit", "bulk"),
+                                )
                                 exitSelection()
                             },
                         ) {
@@ -179,7 +200,7 @@ fun ScoreListScaffold(
                         }
                         IconButton(
                             enabled = selectedIds.isNotEmpty(),
-                            onClick = { beginExport(selectedIds.toList()) },
+                            onClick = { beginExport(selectedIds.toList(), isBulk = true) },
                         ) {
                             Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.export))
                         }
@@ -210,7 +231,11 @@ fun ScoreListScaffold(
                         IconButton(
                             enabled = selectedIds.isNotEmpty(),
                             onClick = {
+                                val count = selectedIds.size
                                 viewModel.deleteMany(selectedIds.toList())
+                                AndroidAnalytics.log(
+                                    AndroidAnalytics.bridge.scoreDeleted("bulkEdit", "bulk", count),
+                                )
                                 exitSelection()
                             },
                         ) {
@@ -244,7 +269,17 @@ fun ScoreListScaffold(
                 .fillMaxSize(),
         ) {
             if (!selectionMode) {
-                LibrarySearchField(query = searchQuery, onQueryChange = { searchQuery = it })
+                LibrarySearchField(
+                    query = searchQuery,
+                    onQueryChange = { newValue ->
+                        // Log one `search` per session: the empty -> non-empty edge marks a new search starting,
+                        // mirroring iOS ScoreListScreen.
+                        if (searchQuery.isEmpty() && newValue.isNotEmpty()) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.search())
+                        }
+                        searchQuery = newValue
+                    },
+                )
             }
             if (scores.isEmpty()) {
                 if (searchQuery.isBlank()) {
@@ -269,16 +304,31 @@ fun ScoreListScaffold(
                             row = row,
                             selectionMode = selectionMode,
                             selected = selectedIds.contains(row.id),
-                            onClick = { if (selectionMode) toggle(row.id) else onOpenScore(row) },
+                            onClick = {
+                                if (selectionMode) {
+                                    toggle(row.id)
+                                } else {
+                                    val from = if (searchQuery.isNotBlank()) "searchResult" else listSource
+                                    AndroidAnalytics.log(AndroidAnalytics.bridge.scoreOpened(from))
+                                    onOpenScore(row)
+                                }
+                            },
                             onLongClick = {
                                 if (!selectionMode) selectionMode = true
                                 toggle(row.id)
                             },
                             onToggleFavorite = {
+                                val enabled = !row.isFavorite
                                 if (row.isFavorite) viewModel.unfavorite(row.id) else viewModel.favorite(row.id)
+                                AndroidAnalytics.log(
+                                    AndroidAnalytics.bridge.favoriteToggled(enabled, "scoreRowMenu", "single"),
+                                )
                             },
                             onDelete = {
                                 viewModel.delete(row.id)
+                                AndroidAnalytics.log(
+                                    AndroidAnalytics.bridge.scoreDeleted("scoreRowMenu", "single", 1),
+                                )
                                 scope.launch {
                                     val result = snackbarHost.showSnackbar(
                                         message = context.getString(R.string.library_deleted),
@@ -295,7 +345,7 @@ fun ScoreListScaffold(
                                 singleTagTarget = row.id
                                 viewModel.beginEditTags(row.id)
                             },
-                            onExport = { beginExport(listOf(row.id)) },
+                            onExport = { beginExport(listOf(row.id), isBulk = false) },
                             onEditInfo = { onEditInfoForScore(row.id) },
                         )
                     }
