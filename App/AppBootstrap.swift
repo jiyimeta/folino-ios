@@ -30,6 +30,9 @@ final class AppBootstrap {
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var importer: LiveScoreFileImporter?
     private(set) var playbackController: LivePlaybackController?
+    /// Stateless PDF → playable-score parser (ssm OMR). Always available on Apple, no async setup, so
+    /// it's a plain constant rather than a slot filled during `start()`.
+    let pdfPlaybackParser = LivePDFPlaybackParser()
     private(set) var reachability: LiveNetworkReachability?
     private(set) var museScoreGeneralProvider: LiveMuseScoreGeneralProvider?
     private(set) var soundfontResolver: GMSoundfontResolver?

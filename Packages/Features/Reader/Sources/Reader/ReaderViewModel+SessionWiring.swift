@@ -7,7 +7,9 @@ import UtilityCore
 /// `ReaderViewModel.swift` to keep that file within the file-length budget; called once from the VM's `init`.
 extension ReaderViewModel {
     func wirePlaybackSession() {
-        playbackSession.scoreProvider = { [weak self] in self?.loadState.score }
+        // `playbackScore` is the natively loaded score, or — for a PDF — its parsed-for-playback score
+        // once OMR succeeds, so the whole transport / cursor / seek path works for PDFs unchanged.
+        playbackSession.scoreProvider = { [weak self] in self?.playbackScore }
         playbackSession.hiddenStavesProvider = { [weak self] in self?.layoutModel.hiddenStaves ?? [] }
         playbackSession.preferencesProvider = { [weak self] in self?.preferences }
         playbackSession.scoreItemProvider = { [weak self] in self?.scoreItem }

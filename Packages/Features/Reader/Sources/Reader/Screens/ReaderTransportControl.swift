@@ -52,8 +52,16 @@ struct ReaderTransportControl: View {
         return nil
     }
 
+    /// The score the transport drives: the natively loaded score, or — for a PDF whose background parse
+    /// succeeded — its parsed-for-playback score. `nil` until something is playable, so the transport
+    /// stays collapsed (and the expanded seek card is withheld) until then.
+    private var transportScore: Score? {
+        if let loadedScore { return loadedScore }
+        return viewModel.isPDFPlaybackReady ? viewModel.playbackScore : nil
+    }
+
     var body: some View {
-        if showSeekBar, let score = loadedScore {
+        if showSeekBar, let score = transportScore {
             expandedLayout(score: score)
         } else {
             collapsedLayout
@@ -74,14 +82,18 @@ struct ReaderTransportControl: View {
     private var collapsedLayout: some View {
         HStack(spacing: 12) {
             Spacer()
-            // Playback affordances (A/B endpoints + transport pill) only render when the session can play. PDFs carry
-            // no notation, so `canPlay` is false and the transport collapses to just the reset-zoom button. The zoom
-            // and page-navigation gestures are handled inside the reader containers and remain available for PDFs.
+            // Playback affordances (A/B endpoints + transport pill) render for a loaded score, and — once a
+            // PDF's background OMR parse succeeds — for a playable PDF too. A PDF whose parse hasn't landed
+            // (or failed) keeps `canPlay` false and `isPDFPlaybackReady` false, so the transport collapses.
+            // Zoom and page-navigation gestures live in the reader containers and remain available regardless.
             if viewModel.capabilities.canPlay {
                 endpointButtons(flat: false)
                 if case .loaded = viewModel.loadState {
                     transportPill
                 }
+            } else if viewModel.isPDFPlaybackReady {
+                // No AB-loop endpoints for PDFs — the PDF reader has no inspector to set them.
+                transportPill
             }
         }
         .padding(.horizontal)

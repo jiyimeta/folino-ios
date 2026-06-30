@@ -67,8 +67,12 @@ public enum ReaderGlobalSettingsKey {
     /// Bool. When true (the default at each `@AppStorage` site), the Reader follows the playhead during playback —
     /// auto-scroll in `.vertical` / `.horizontal`, auto-page-turn in `.page`. When false, continuous playback no
     /// longer moves the score; manual navigation (tap-seek, measure-step, scrub) still keeps its target in view.
-    /// Score only — PDFs have no playback cursor.
+    /// Applies to parsed PDFs too (auto-scroll / auto-page-turn over the original PDF) once OMR makes them playable.
     public static let autoFollowEnabled = "readerAutoFollowEnabled"
+
+    /// Bool. `true` once the user chose "Don't show again" on the PDF-playback caveat dialog, suppressing its
+    /// automatic presentation thereafter. Defaults to `false`; the caveat stays reachable any time via the PDF badge.
+    public static let pdfPlaybackNoticeDismissed = "readerPdfPlaybackNoticeDismissed"
 
     /// Bool. When true (the default at each `@AppStorage` site), the `.page`-mode tap-zone navigation overlay
     /// (`TapOverlay`) is shown. When false it is hidden; swipe-to-turn and auto-page-turn still work. Read by the

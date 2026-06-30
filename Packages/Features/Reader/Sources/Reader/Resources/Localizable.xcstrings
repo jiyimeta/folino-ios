@@ -1621,36 +1621,172 @@
         }
       }
     },
-    "reader.pdf.settingsNote" : {
+    "reader.pdf.playback.notice.body" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Display adjustment and playback aren't available for PDF scores."
+            "value" : "folino reads the PDF to play it and follow along with a cursor. The result isn't always perfect — it works best with PDFs exported from MuseScore or folino."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 楽譜では表示調整・再生は利用できません。"
+            "value" : "folino は PDF を解析して再生し、カーソルで追従します。解析は常に完璧とは限らず、MuseScore や folino から書き出した PDF で最もうまく動作します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 악보에서는 표시 조정과 재생을 사용할 수 없습니다."
+            "value" : "folino는 PDF를 분석해 재생하고 커서로 따라갑니다. 분석이 항상 완벽하지는 않으며, MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 乐谱不支持显示调整与播放。"
+            "value" : "folino 会解析 PDF 以进行播放并用光标跟随。解析并非总是完美，使用从 MuseScore 或 folino 导出的 PDF 效果最佳。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 樂譜不支援顯示調整與播放。"
+            "value" : "folino 會解析 PDF 以進行播放並用游標跟隨。解析並非總是完美，使用從 MuseScore 或 folino 匯出的 PDF 效果最佳。"
+          }
+        }
+      }
+    },
+    "reader.pdf.playback.notice.dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Don't show again"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次回から表示しない"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다시 표시 안 함"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不再显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不再顯示"
+          }
+        }
+      }
+    },
+    "reader.pdf.playback.notice.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About PDF playback"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 再生について"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 재생 정보"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于 PDF 播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關於 PDF 播放"
+          }
+        }
+      }
+    },
+    "reader.pdf.playback.unavailable.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino couldn't read this PDF for playback. Playback works best with PDFs exported from MuseScore or folino."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この PDF は再生用に解析できませんでした。再生は MuseScore や folino から書き出した PDF で最もうまく動作します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 PDF는 재생용으로 분석할 수 없습니다. 재생은 MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino 无法解析此 PDF 进行播放。播放使用从 MuseScore 或 folino 导出的 PDF 效果最佳。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino 無法解析此 PDF 進行播放。播放使用從 MuseScore 或 folino 匯出的 PDF 效果最佳。"
+          }
+        }
+      }
+    },
+    "reader.pdf.settingsNote" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display adjustments like transpose and staff size aren't available for PDF scores."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 楽譜では移調や譜表サイズなどの表示調整は利用できません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 악보에서는 조옮김이나 보표 크기 같은 표시 조정을 사용할 수 없습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 乐谱不支持移调、谱表大小等显示调整。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 樂譜不支援移調、譜表大小等顯示調整。"
           }
         }
       }

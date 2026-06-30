@@ -17,6 +17,10 @@ struct ReaderTopOverlay: View {
     /// navigation back to the library.
     let onBack: (() -> Void)?
 
+    /// Invoked when the user taps the PDF badge — the parent (`ReaderRootScreen`) presents the PDF-playback caveat
+    /// dialog. Defaults to a no-op so previews can omit it.
+    var onShowPDFNotice: () -> Void = {}
+
     /// Vertical space the overlay occupies inside the safe area (button 40 + top padding 4 + a little breathing room).
     /// Used by `ReaderRootScreen` to extend the score's safe area so the first staff is never hidden under the floating
     /// buttons. `nonisolated` so non–main-actor contexts (preview helpers, `onGeometryChange` transform closures) can
@@ -34,8 +38,10 @@ struct ReaderTopOverlay: View {
                 .glassEffect(.regular.interactive())
             }
             if !viewModel.capabilities.canPlay {
-                // `canPlay == false` ⇔ PDF in this reader: surface a brand badge next to the back button.
-                PDFBadge()
+                // `canPlay == false` ⇔ PDF in this reader: a tappable brand badge that opens the PDF-playback caveat
+                // dialog — reachable any time, in place of an always-on note.
+                Button { onShowPDFNotice() } label: { PDFBadge() }
+                    .buttonStyle(.plain)
             }
             Spacer()
 

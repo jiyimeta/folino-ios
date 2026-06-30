@@ -1,5 +1,7 @@
+import Domain
 import PDFKit
 import PencilKit
+import SheetMusicCore
 import SwiftUI
 
 /// Vertical-continuous PDF viewing. Pages are stacked top-to-bottom at their natural sizes; the whole stack is
@@ -30,6 +32,11 @@ struct VerticalPDFContainer: View {
 
     /// Vertical gap between stacked pages, in unzoomed content points.
     private let pageGap: CGFloat = 8
+
+    /// User opt-out for playback follow. When on (default), the scroll keeps the playing cursor in view; when off,
+    /// the cursor still draws but only manual operations recenter.
+    @AppStorage(ReaderGlobalSettingsKey.autoFollowEnabled)
+    private var autoFollowEnabled = true
 
     var body: some View {
         GeometryReader { geo in
@@ -66,7 +73,31 @@ struct VerticalPDFContainer: View {
                 if !viewModel.isAnnotating { reproject(sizes: sizes) }
             }
             .onAppear { reproject(sizes: sizes) }
+            // Keep the playing cursor on screen, honoring the auto-follow opt-out (mirrors the score vertical reader).
+            .onChange(of: cursorFollowKey) { old, new in
+                followPlaybackScroll(old: old, new: new, viewport: viewport, sizes: sizes)
+            }
         }
+    }
+
+    /// The cursors whose change drives auto-scroll: the live display cursor plus its scroll-lookahead anchor.
+    private var cursorFollowKey: [ScoreCursor?] {
+        [viewModel.playbackSession.displayCursor, viewModel.playbackSession.scrollAnchorCursor]
+    }
+
+    /// Auto-scroll the playing cursor into view on a cursor change, subject to the shared follow gate.
+    private func followPlaybackScroll(old: [ScoreCursor?], new: [ScoreCursor?], viewport: CGSize, sizes: [CGSize]) {
+        guard readerShouldFollowPlayback(
+            autoFollowEnabled: autoFollowEnabled,
+            isPlaybackDriven: viewModel.playbackSession.scrollAnchorCursor != nil,
+            cursorMoved: old[0] != new[0],
+        ) else { return }
+        autoScroll(
+            realCursor: viewModel.playbackSession.displayCursor,
+            lookaheadCursor: viewModel.playbackSession.scrollAnchorCursor,
+            viewport: viewport,
+            sizes: sizes,
+        )
     }
 
     // MARK: Page geometry (unzoomed content space)
@@ -168,6 +199,51 @@ struct VerticalPDFContainer: View {
             viewModel.annotationDrawings, pageFrames: pageFrames(sizes: sizes),
         )
     }
+
+    // MARK: Playback follow
+
+    /// Keep the playing cursor (and its lookahead) on screen, scaling content-space coords into the live scroll
+    /// space and reusing the shared keep-in-view follow logic (`scrollOffsetKeepingInView`).
+    private func autoScroll(
+        realCursor: ScoreCursor?,
+        lookaheadCursor: ScoreCursor?,
+        viewport: CGSize,
+        sizes: [CGSize],
+    ) {
+        guard let realCursor, let realRect = cursorContentRect(for: realCursor, sizes: sizes) else { return }
+        let cw = sizes.map(\.width).max() ?? 0
+        guard cw > 0 else { return }
+        let zoom = viewModel.viewportZoom * (viewport.width / cw)
+        let pad: CGFloat = 24 * zoom
+        let targetMinY = realRect.minY * zoom
+        // Anticipate by keeping the lookahead's bottom in view during playback; falls back to the real cursor.
+        let lookRect = lookaheadCursor.flatMap { cursorContentRect(for: $0, sizes: sizes) }
+        let targetMaxY = (lookRect?.maxY ?? realRect.maxY) * zoom
+        let curY = liveScrollOffset.y
+        let newY = CGFloat(scrollOffsetKeepingInView(
+            current: Double(curY),
+            targetMin: Double(targetMinY),
+            targetMax: Double(targetMaxY),
+            viewport: Double(viewport.height),
+            pad: Double(pad),
+        ))
+        guard abs(newY - curY) >= 0.5 else { return }
+        pendingScroll = .animated(CGPoint(x: liveScrollOffset.x, y: newY))
+    }
+
+    /// The cursor's rect in UNZOOMED content space — its page's stacked position plus its in-page rect — or `nil`.
+    private func cursorContentRect(for cursor: ScoreCursor, sizes: [CGSize]) -> CGRect? {
+        guard let rect = viewModel.pdfCursorRect(for: cursor) else { return nil }
+        let frames = pageFrames(sizes: sizes)
+        guard frames.indices.contains(rect.pageIndex) else { return nil }
+        let pageFrame = frames[rect.pageIndex]
+        return CGRect(
+            x: pageFrame.minX + rect.rect.minX,
+            y: pageFrame.minY + rect.rect.minY,
+            width: rect.rect.width,
+            height: rect.rect.height,
+        )
+    }
 }
 
 /// The hosted PDF page stack. A separate `View` (like `VerticalZoomedSurface`) so it reads `pinch.*` /
@@ -188,10 +264,68 @@ private struct VerticalPDFSurface: View {
         let stackHeight = pageSizes.reduce(0) { $0 + $1.height } + pageGap * CGFloat(max(0, pageSizes.count - 1))
         let zoom = cw > 0 ? viewModel.viewportZoom * (viewport.width / cw) : viewModel.viewportZoom
         return pageStack(contentWidth: cw, zoom: zoom)
-            .scaleEffect(pinch.magnification, anchor: pinch.anchor)
-            .scaleEffect(zoom, anchor: .topLeading)
-            .offset(x: pinch.offsetX, y: 0)
-            .frame(width: cw * zoom, height: stackHeight * zoom, alignment: .topLeading)
+            // Cursor lives in the same unzoomed content space as the pages, so it rides both scaleEffects + offset.
+                .overlay(alignment: .topLeading) { cursorOverlay(contentWidth: cw) }
+                // Tap-to-seek in content space (the named space is declared here, before the scaleEffects).
+                .coordinateSpace(name: Self.seekSpace)
+                .gesture(seekGesture(contentWidth: cw))
+                .scaleEffect(pinch.magnification, anchor: pinch.anchor)
+                .scaleEffect(zoom, anchor: .topLeading)
+                .offset(x: pinch.offsetX, y: 0)
+                .frame(width: cw * zoom, height: stackHeight * zoom, alignment: .topLeading)
+    }
+
+    /// Named coordinate space for tap-to-seek — the unzoomed content space of the stacked pages.
+    static let seekSpace = "pdfVerticalSeek"
+
+    private func seekGesture(contentWidth: CGFloat) -> some Gesture {
+        SpatialTapGesture(coordinateSpace: .named(Self.seekSpace)).onEnded { value in
+            guard !viewModel.isAnnotating,
+                  let geometry = viewModel.pdfPlaybackData?.geometry,
+                  let (page, point) = pageAndPoint(atContent: value.location, contentWidth: contentWidth),
+                  let cursor = geometry.cursor(at: point, pageIndex: page) else { return }
+            viewModel.playbackSession.setManualCursor(cursor)
+        }
+    }
+
+    /// Resolve a content-space point to (page index, in-page top-left mediaBox point), or `nil` if it's in a gap.
+    private func pageAndPoint(atContent point: CGPoint, contentWidth: CGFloat) -> (page: Int, point: CGPoint)? {
+        var y: CGFloat = 0
+        for (index, size) in pageSizes.enumerated() {
+            let pageX = (contentWidth - size.width) / 2
+            if CGRect(x: pageX, y: y, width: size.width, height: size.height).contains(point) {
+                return (index, CGPoint(x: point.x - pageX, y: point.y - y))
+            }
+            y += size.height + pageGap
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private func cursorOverlay(contentWidth: CGFloat) -> some View {
+        if let cursor = viewModel.pdfDisplayCursorRect,
+           let rect = contentRect(for: cursor, contentWidth: contentWidth)
+        {
+            Rectangle()
+                .fill(PDFPlaybackCursor.color)
+                .frame(width: rect.width, height: rect.height)
+                .offset(x: rect.minX, y: rect.minY)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// The cursor's rect in this surface's unzoomed content space, matching `pageStack`'s centered VStack layout.
+    private func contentRect(for cursor: PDFCursorRect, contentWidth: CGFloat) -> CGRect? {
+        guard pageSizes.indices.contains(cursor.pageIndex) else { return nil }
+        var y: CGFloat = 0
+        for (index, size) in pageSizes.enumerated() {
+            if index == cursor.pageIndex {
+                let x = (contentWidth - size.width) / 2 + cursor.rect.minX
+                return CGRect(x: x, y: y + cursor.rect.minY, width: cursor.rect.width, height: cursor.rect.height)
+            }
+            y += size.height + pageGap
+        }
+        return nil
     }
 
     private func pageStack(contentWidth: CGFloat, zoom: CGFloat) -> some View {

@@ -1,6 +1,7 @@
 import Domain
 import PDFKit
 import PencilKit
+import SheetMusicCore
 import SwiftUI
 
 /// Page-by-page PDF viewing. Each physical PDF page maps to one reader page. Navigation, zoom, slide/swipe/pinch, and
@@ -33,6 +34,11 @@ struct PagedPDFContainer: View {
     @AppStorage(ReaderGlobalSettingsKey.pageTapHintDismissed)
     var pageTapHintDismissed = false
 
+    /// User opt-out for playback follow. When on (default), the page turns to keep the playing cursor in view; when
+    /// off, the cursor still draws but the page only turns from manual gestures.
+    @AppStorage(ReaderGlobalSettingsKey.autoFollowEnabled)
+    private var autoFollowEnabled = true
+
     /// Insets that position the page band inside the full-screen scroll host: top includes the parent's
     /// `safeAreaPadding(.top, ReaderTopOverlay.height)` so the band clears the navigation chrome; the other edges are
     /// the raw system insets. Sampled from a sibling reader that ignores the safe area so the values stay correct even
@@ -46,6 +52,9 @@ struct PagedPDFContainer: View {
     /// Curve applied when mutating `pageState.pageIndex` — every page's `.offset` depends on `pageIndex`, so this curve
     /// governs every page's slide.
     static let pageTransitionAnimation: Animation = .easeOut(duration: 0.18)
+
+    /// Named coordinate space for the per-page tap-to-seek gesture (the page's own band rect).
+    static let seekSpace = "pdfPageSeek"
 
     var body: some View {
         // Outer `GeometryReader` honors parent's `safeAreaPadding(.top, ReaderTopOverlay.height)` and system insets,
@@ -78,6 +87,9 @@ struct PagedPDFContainer: View {
         // Observe the annotation model so a change (load, capture, cross-mode edit) re-renders here and reassigns the
         // hosted surface's rootView — otherwise the hosted static ink layers keep a stale (often empty) model.
         _ = viewModel.annotationDrawings
+        // Same reason for the playback cursor: observe it here so each cursor change reassigns the hosted surface's
+        // rootView and the current page redraws the on-PDF cursor bar.
+        _ = viewModel.pdfDisplayCursorRect
         return ScoreScrollHost(
             contentOffset: $liveScrollOffset,
             contentInsetTop: $contentInsetTop,
@@ -156,6 +168,15 @@ struct PagedPDFContainer: View {
         }
         // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
         .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        // Turn to the page the playing cursor (or its lookahead) sits on, honoring the auto-follow opt-out.
+        .onChange(of: pageFollowKey) { old, new in
+            guard readerShouldFollowPlayback(
+                autoFollowEnabled: autoFollowEnabled,
+                isPlaybackDriven: viewModel.playbackSession.pageAnchorCursor != nil,
+                cursorMoved: old[0] != new[0],
+            ) else { return }
+            followPlaybackToPage(viewModel.playbackSession.pageAnchorCursor ?? viewModel.playbackSession.displayCursor)
+        }
         .onAppear { reprojectCurrentPage(viewport: viewport) }
     }
 
@@ -280,8 +301,72 @@ struct PagedPDFContainer: View {
                 // Committed ink as a static layer that rides the page so it slides on a turn; hidden for the page being
                 // actively annotated (the viewport-pinned live canvas owns it).
                     .overlay(alignment: .topLeading) { pageInkLayer(forPage: index, viewport: viewport) }
+                    // Playback cursor for a parsed PDF, projected from original-PDF coords into this page's band rect.
+                    .overlay(alignment: .topLeading) { pageCursorLayer(forPage: index, viewport: viewport) }
+                    // Tap-to-seek: a center tap maps back to a Score cursor. Sits behind the page-turn tap zones (which
+                    // own the left/right edges), so edge taps still turn pages.
+                    .coordinateSpace(name: Self.seekSpace)
+                    .gesture(pageSeekGesture(forPage: index, viewport: viewport))
         } else {
             Color.white.frame(width: viewport.width, height: viewport.height)
+        }
+    }
+
+    /// The on-PDF playback cursor for `idx`, when this page is the one the live cursor is on. Projects the cursor's
+    /// original-PDF (top-left mediaBox) rect into band space by the same fit + centering `pageFrame` uses, so it lands
+    /// exactly over the rendered page and rides the surface's zoom / pan.
+    @ViewBuilder
+    private func pageCursorLayer(forPage idx: Int, viewport: CGSize) -> some View {
+        if let cursor = viewModel.pdfDisplayCursorRect, cursor.pageIndex == idx,
+           let frame = pageFrame(forPage: idx, viewport: viewport),
+           let pageSize = viewModel.pdfPlaybackData?.geometry.pageSizes[idx], pageSize.width > 0
+        {
+            let fit = frame.width / pageSize.width
+            let bandRect = CGRect(
+                x: frame.minX + cursor.rect.minX * fit,
+                y: frame.minY + cursor.rect.minY * fit,
+                width: cursor.rect.width * fit,
+                height: cursor.rect.height * fit,
+            )
+            Rectangle()
+                .fill(PDFPlaybackCursor.color)
+                .frame(width: bandRect.width, height: bandRect.height)
+                .offset(x: bandRect.minX, y: bandRect.minY)
+                .frame(width: viewport.width, height: viewport.height, alignment: .topLeading)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// The cursors whose change drives auto-page-turn: the live display cursor plus its page-lookahead anchor.
+    private var pageFollowKey: [ScoreCursor?] {
+        [viewModel.playbackSession.displayCursor, viewModel.playbackSession.pageAnchorCursor]
+    }
+
+    /// Turn to the page that `cursor` resolves to on the original PDF (no-op while dragging, or when already there).
+    private func followPlaybackToPage(_ cursor: ScoreCursor?) {
+        guard !pageState.isDragging,
+              let cursor,
+              let page = viewModel.pdfCursorRect(for: cursor)?.pageIndex,
+              page != pageState.pageIndex else { return }
+        commitPageTurn(to: page)
+    }
+
+    /// Map a tap on page `idx` to a Score cursor (via the geometry's hit-test) and seek there. No-op when the PDF
+    /// isn't playable, while annotating, off the current page, or outside the rendered page rect.
+    private func pageSeekGesture(forPage idx: Int, viewport: CGSize) -> some Gesture {
+        SpatialTapGesture(coordinateSpace: .named(Self.seekSpace)).onEnded { value in
+            guard !viewModel.isAnnotating, idx == pageState.pageIndex,
+                  let geometry = viewModel.pdfPlaybackData?.geometry,
+                  let frame = pageFrame(forPage: idx, viewport: viewport),
+                  let pageSize = geometry.pageSizes[idx], pageSize.width > 0,
+                  frame.contains(value.location) else { return }
+            let fit = frame.width / pageSize.width
+            let inPage = CGPoint(
+                x: (value.location.x - frame.minX) / fit,
+                y: (value.location.y - frame.minY) / fit,
+            )
+            guard let cursor = geometry.cursor(at: inPage, pageIndex: idx) else { return }
+            viewModel.playbackSession.setManualCursor(cursor)
         }
     }
 

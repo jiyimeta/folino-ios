@@ -21,9 +21,10 @@ extension ReaderViewModel {
         }
     }
 
-    /// Loads a PDF item into `.loadedPDF`. PDFs carry no notation, so there is no `Score` to parse — the document is
-    /// opened straight from disk and handed to the PDF reader. Preferences and annotations still load (the annotation
-    /// layer is keyed by score-item id regardless of format), and the layout mode is clamped to a PDF-allowed one.
+    /// Loads a PDF item into `.loadedPDF`: the document is opened straight from disk and handed to the PDF reader for
+    /// display. Preferences and annotations still load (the annotation layer is keyed by score-item id regardless of
+    /// format), and the layout mode is clamped to a PDF-allowed one. Separately, the PDF is parsed for playback in the
+    /// background (best-effort OMR) so it can be played with an on-PDF cursor once the parse succeeds.
     func loadPDF(url: URL) async {
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
             loadState = .failed(error: DomainError.scoreParseFailed(reason: "Unreadable or empty PDF"))
@@ -34,6 +35,9 @@ extension ReaderViewModel {
         loadState = .loadedPDF(doc)
         await loadAnnotations()
         await updateLastOpenedAtOnce()
+        // The document is already on screen; parse it for playback in the background. Detached from `load()` so the PDF
+        // displays immediately and the engine arms only when the parse lands.
+        Task { [weak self] in await self?.parsePDFForPlayback(url: url) }
     }
 
     /// PDFs don't support horizontal mode. If the global layout mode is horizontal when a PDF opens, fall back to page

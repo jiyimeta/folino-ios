@@ -389,6 +389,7 @@ private struct ReadyShell: View {
             annotationStore: annotationStore,
             scoresDirectory: scoresDirectory,
             playbackController: bootstrap.playbackController,
+            pdfPlaybackParser: bootstrap.pdfPlaybackParser,
             museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
             playlistID: playlistID,
             analytics: bootstrap.analytics ?? NoopAnalytics(),
