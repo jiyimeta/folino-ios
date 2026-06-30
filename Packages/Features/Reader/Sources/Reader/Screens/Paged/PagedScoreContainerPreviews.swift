@@ -28,6 +28,8 @@ private func paged(
         showInvisibleElements: false,
         playbackCursor: nil,
         pageAnchorCursor: nil,
+        autoFollowEnabled: true,
+        showsPageTurnButtons: true,
         transposeSemitones: 0,
         viewModel: vm,
     )

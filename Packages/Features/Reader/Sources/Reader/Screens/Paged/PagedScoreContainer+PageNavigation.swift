@@ -172,7 +172,8 @@ extension PagedScoreContainer {
             }
         }
 
-        if cursorAdvancedDuringSwipe {
+        // The catch-up only chases active playback; honor the opt-out so a manual swipe is not yanked back.
+        if cursorAdvancedDuringSwipe, autoFollowEnabled {
             followCursor(playbackCursor)
         }
     }

@@ -37,6 +37,9 @@ struct VerticalScoreContainer: View {
     /// playback, so the viewport scrolls before the playing cursor reaches the edge. `nil` when not playing /
     /// scrubbing, in which case auto-scroll falls back to `playbackCursor`. Never passed to the highlight.
     let scrollAnchorCursor: ScoreCursor?
+    /// User opt-out: when false, continuous playback no longer auto-scrolls. Manual navigation still keeps its
+    /// target in view (see `readerShouldFollowPlayback`).
+    let autoFollowEnabled: Bool
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -170,7 +173,12 @@ struct VerticalScoreContainer: View {
                 lastManualCursor: $lastManualCursor,
             )
         }
-        .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
+        .onChange(of: [playbackCursor, scrollAnchorCursor]) { old, new in
+            guard readerShouldFollowPlayback(
+                autoFollowEnabled: autoFollowEnabled,
+                isPlaybackDriven: scrollAnchorCursor != nil,
+                cursorMoved: old[0] != new[0],
+            ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
         // Reproject (and reseed the canvas) ONLY on reflow / score-swap (document changes) and initial appear — NOT on

@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// HorizontalScoreContainer hosts the natural-width scroll / pinch / zoom pipeline plus the annotation overlay and
+// auto-scroll plumbing for the horizontal Reader; its breadth keeps it just over the file_length budget.
+
 import Domain
 import PencilKit
 import SheetMusicCore
@@ -18,6 +22,9 @@ struct HorizontalScoreContainer: View {
     /// Lookahead anchor (2 beats ahead) used for the X auto-scroll trigger ONLY — never the highlight. `nil`
     /// when not playing, in which case the scroll falls back to the reactive measure keep-in-view.
     let scrollAnchorCursor: ScoreCursor?
+    /// User opt-out: when false, continuous playback no longer auto-scrolls. Manual navigation still keeps its
+    /// target in view (see `readerShouldFollowPlayback`).
+    let autoFollowEnabled: Bool
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -62,6 +69,7 @@ struct HorizontalScoreContainer: View {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     private func scrollContent(viewport: CGSize) -> some View {
         // Observe live magnification so each frame of a commit-reset ease re-renders this view → the host re-syncs the
         // annotation canvas, keeping the ink locked to the score through the eased zoom commit (see PinchState).
@@ -120,7 +128,12 @@ struct HorizontalScoreContainer: View {
         // Let the score reach the screen edges and slide under the translucent overlays — the `UIViewRepresentable`'s
         // UIView frame is otherwise shrunk by the system safe area and parent overlay reserve.
         .ignoresSafeArea()
-        .onChange(of: [playbackCursor, scrollAnchorCursor]) { _, _ in
+        .onChange(of: [playbackCursor, scrollAnchorCursor]) { old, new in
+            guard readerShouldFollowPlayback(
+                autoFollowEnabled: autoFollowEnabled,
+                isPlaybackDriven: scrollAnchorCursor != nil,
+                cursorMoved: old[0] != new[0],
+            ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
         // Reproject on reflow / score-swap / appear and on async annotation-load (not while annotating).
