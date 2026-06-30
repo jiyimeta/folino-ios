@@ -41,6 +41,12 @@ final class ReaderViewModel {
     /// playback and all layout-derivation settings; only page/vertical viewing remains).
     private(set) var capabilities: ReaderCapabilities = .forScore
 
+    /// Background OMR-playback readiness for an opened PDF. The PDF is displayed immediately
+    /// (`loadState == .loadedPDF`); in parallel it's parsed into a playable `Score` + on-PDF geometry.
+    /// Settable (not `private(set)`) so the PDF load path in `ReaderViewModel+Load.swift` and the parse
+    /// method in `ReaderViewModel+PDFPlayback.swift` can drive the transitions.
+    var pdfPlayback: PDFPlaybackState = .idle
+
     /// The score's annotation model: one `DrawingAnchor` per stroke, each pinned to a `MusicalAnchor`. Loaded on open,
     /// rewritten on every canvas change. The container projects this to the current layout for display.
     var annotationDrawings: [DrawingAnchor] = []
@@ -100,6 +106,10 @@ final class ReaderViewModel {
     @ObservationIgnored let shareService: any ScoreShareService
     @ObservationIgnored let metadataReader: any ScoreMetadataReading
     @ObservationIgnored let annotationStore: any AnnotationStore
+    /// Optional PDF → playable-score parser. `nil` on platforms / builds without ssm's PDF importer;
+    /// when present, `loadPDF` parses the opened PDF in the background to enable playback + the on-PDF
+    /// cursor. Internal so the PDF load path in `ReaderViewModel+Load.swift` can reach it.
+    @ObservationIgnored let pdfPlaybackParser: (any PDFPlaybackParser)?
     @ObservationIgnored private let scoresDirectory: URL
     @ObservationIgnored private let defaultStaffSize: Double
     /// Internal so the transport / overlay / sharing view-layer log sites reach the same sink as the VM-owned events.
@@ -131,6 +141,7 @@ final class ReaderViewModel {
         scoresDirectory: URL,
         defaultStaffSize: Double = 14,
         playbackController: (any PlaybackController)? = nil,
+        pdfPlaybackParser: (any PDFPlaybackParser)? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
         playlistID: PlaylistID? = nil,
         analytics: any Analytics = NoopAnalytics(),
@@ -143,6 +154,7 @@ final class ReaderViewModel {
         self.shareService = shareService
         self.metadataReader = metadataReader
         self.annotationStore = annotationStore
+        self.pdfPlaybackParser = pdfPlaybackParser
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
         self.analytics = analytics

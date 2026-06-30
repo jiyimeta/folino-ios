@@ -39,6 +39,11 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
     private var pageTurnButtonsVisible = true
 
+    /// `true` once the user dismissed the one-time "PDF playback is experimental" banner. The same caveat stays
+    /// reachable by tapping the PDF badge.
+    @AppStorage(ReaderGlobalSettingsKey.pdfPlaybackNoticeDismissed)
+    private var pdfPlaybackNoticeDismissed = false
+
     @Environment(\.scenePhase) private var scenePhase
 
     private var layoutMode: ReaderLayoutMode {
@@ -83,6 +88,7 @@ public struct ReaderRootScreen: View {
         annotationStore: any AnnotationStore,
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
+        pdfPlaybackParser: (any PDFPlaybackParser)? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
         playlistID: PlaylistID? = nil,
         analytics: any Analytics = NoopAnalytics(),
@@ -104,6 +110,7 @@ public struct ReaderRootScreen: View {
                 scoresDirectory: scoresDirectory,
                 defaultStaffSize: initialDefault,
                 playbackController: playbackController,
+                pdfPlaybackParser: pdfPlaybackParser,
                 museScoreGeneralProvider: museScoreGeneralProvider,
                 playlistID: playlistID,
                 analytics: analytics,
@@ -130,9 +137,19 @@ public struct ReaderRootScreen: View {
                     viewModel: viewModel,
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
                 )
+                // One-time, dismissible "PDF playback is experimental" banner, shown the first time an opened PDF
+                // becomes playable (until the user opts out). The badge keeps the caveat reachable afterwards.
+                if viewModel.isPDFPlaybackReady, !pdfPlaybackNoticeDismissed {
+                    PDFPlaybackNoticeBanner {
+                        withAnimation { pdfPlaybackNoticeDismissed = true }
+                    }
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 Spacer()
                 ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
             }
+            .animation(.easeOut(duration: 0.2), value: viewModel.isPDFPlaybackReady)
         }
         .navigationTitle("")
         .toolbarVisibility(.hidden, for: .navigationBar)
