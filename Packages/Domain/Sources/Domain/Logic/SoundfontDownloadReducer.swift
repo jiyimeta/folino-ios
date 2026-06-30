@@ -7,12 +7,17 @@ public enum SoundfontDownloadReducer {
         _ current: SoundfontDownloadState,
         on event: SoundfontDownloadEvent,
     ) -> SoundfontDownloadState {
-        _ = current // state is intentionally unused: every event fully determines the next state
         switch event {
         case .started:
             return .downloading(progress: 0)
         case let .progress(fraction):
-            return .downloading(progress: min(1, max(0, fraction)))
+            // Order-independent progress. The background-download delegate hops every URLSession callback to the
+            // main actor through an independent `Task { @MainActor in … }`, which carries no ordering guarantee, so
+            // a `.progress` event can arrive after `.finished`, after a cancel, or behind a higher fraction. Progress
+            // therefore only advances an in-flight `.downloading`, and only forward — it never revives a terminal
+            // `.downloaded`/`.failed` (the "completed but still shows downloading" bug) nor moves the bar backward.
+            guard case let .downloading(soFar) = current else { return current }
+            return .downloading(progress: max(soFar, min(1, max(0, fraction))))
         case .finished:
             return .downloaded
         case let .failed(reason):
