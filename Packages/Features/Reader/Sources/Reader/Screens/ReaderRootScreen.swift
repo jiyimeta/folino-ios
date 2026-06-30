@@ -39,10 +39,15 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
     private var pageTurnButtonsVisible = true
 
-    /// `true` once the user dismissed the one-time "PDF playback is experimental" banner. The same caveat stays
-    /// reachable by tapping the PDF badge.
+    /// `true` once the user chose "Don't show again" on the PDF-playback caveat — stops it from auto-presenting.
     @AppStorage(ReaderGlobalSettingsKey.pdfPlaybackNoticeDismissed)
     private var pdfPlaybackNoticeDismissed = false
+
+    /// Drives the PDF-playback caveat dialog: shown automatically the first time an opened PDF becomes playable
+    /// (unless permanently dismissed), and on demand from the PDF badge. `hasAutoShownPDFNotice` keeps the
+    /// auto-presentation to once per Reader open; "OK" just closes it for now, "Don't show again" sets the flag above.
+    @State private var isPDFNoticePresented = false
+    @State private var hasAutoShownPDFNotice = false
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -136,23 +141,25 @@ public struct ReaderRootScreen: View {
                 ReaderTopOverlay(
                     viewModel: viewModel,
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
+                    onShowPDFNotice: { isPDFNoticePresented = true },
                 )
-                // One-time, dismissible "PDF playback is experimental" banner, shown the first time an opened PDF
-                // becomes playable (until the user opts out). The badge keeps the caveat reachable afterwards.
-                if viewModel.isPDFPlaybackReady, !pdfPlaybackNoticeDismissed {
-                    PDFPlaybackNoticeBanner {
-                        withAnimation { pdfPlaybackNoticeDismissed = true }
-                    }
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
                 Spacer()
                 ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
             }
-            .animation(.easeOut(duration: 0.2), value: viewModel.isPDFPlaybackReady)
         }
         .navigationTitle("")
         .toolbarVisibility(.hidden, for: .navigationBar)
+        .pdfPlaybackNoticeAlert(
+            state: viewModel.pdfPlayback,
+            isPresented: $isPDFNoticePresented,
+            onDontShowAgain: { pdfPlaybackNoticeDismissed = true },
+        )
+        .onChange(of: viewModel.isPDFPlaybackReady) { _, isReady in
+            // Auto-present the caveat once per open, the first time a PDF becomes playable — unless dismissed for good.
+            guard isReady, !hasAutoShownPDFNotice, !pdfPlaybackNoticeDismissed else { return }
+            hasAutoShownPDFNotice = true
+            isPDFNoticePresented = true
+        }
         .task {
             // Mirror the global layout mode onto the view model so `playback_started` carries the right layout. Kept in
             // sync by `.onChange(of: layoutMode)` below.

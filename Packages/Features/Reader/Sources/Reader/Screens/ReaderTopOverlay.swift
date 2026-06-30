@@ -17,8 +17,9 @@ struct ReaderTopOverlay: View {
     /// navigation back to the library.
     let onBack: (() -> Void)?
 
-    /// Drives the PDF-playback caveat sheet opened by tapping the PDF badge.
-    @State private var isPDFNoticePresented = false
+    /// Invoked when the user taps the PDF badge — the parent (`ReaderRootScreen`) presents the PDF-playback caveat
+    /// dialog. Defaults to a no-op so previews can omit it.
+    var onShowPDFNotice: () -> Void = {}
 
     /// Vertical space the overlay occupies inside the safe area (button 40 + top padding 4 + a little breathing room).
     /// Used by `ReaderRootScreen` to extend the score's safe area so the first staff is never hidden under the floating
@@ -38,12 +39,9 @@ struct ReaderTopOverlay: View {
             }
             if !viewModel.capabilities.canPlay {
                 // `canPlay == false` ⇔ PDF in this reader: a tappable brand badge that opens the PDF-playback caveat
-                // (OMR is best-effort) — reachable any time, in place of an always-on note.
-                Button { isPDFNoticePresented = true } label: { PDFBadge() }
+                // dialog — reachable any time, in place of an always-on note.
+                Button { onShowPDFNotice() } label: { PDFBadge() }
                     .buttonStyle(.plain)
-                    .sheet(isPresented: $isPDFNoticePresented) {
-                        PDFPlaybackNoticeSheet(state: viewModel.pdfPlayback)
-                    }
             }
             Spacer()
 

@@ -70,9 +70,8 @@ public enum ReaderGlobalSettingsKey {
     /// Applies to parsed PDFs too (auto-scroll / auto-page-turn over the original PDF) once OMR makes them playable.
     public static let autoFollowEnabled = "readerAutoFollowEnabled"
 
-    /// Bool. `true` once the user has dismissed the one-time "PDF playback is experimental" notice. Defaults to
-    /// `false`; once flipped, stays true for the install lifetime. The same caveat stays reachable any time by
-    /// tapping the PDF badge.
+    /// Bool. `true` once the user chose "Don't show again" on the PDF-playback caveat dialog, suppressing its
+    /// automatic presentation thereafter. Defaults to `false`; the caveat stays reachable any time via the PDF badge.
     public static let pdfPlaybackNoticeDismissed = "readerPdfPlaybackNoticeDismissed"
 
     /// Bool. When true (the default at each `@AppStorage` site), the `.page`-mode tap-zone navigation overlay

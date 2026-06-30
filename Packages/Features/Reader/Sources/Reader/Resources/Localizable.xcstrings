@@ -1694,31 +1694,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF playback is experimental"
+            "value" : "About PDF playback"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 再生はベータ機能です"
+            "value" : "PDF 再生について"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 재생은 베타 기능입니다"
+            "value" : "PDF 재생 정보"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 播放为实验功能"
+            "value" : "关于 PDF 播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 播放為實驗功能"
+            "value" : "關於 PDF 播放"
           }
         }
       }
