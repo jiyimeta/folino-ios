@@ -8,6 +8,15 @@ struct PDFLayoutInspectorScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
 
+    @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
+    private var pageTurnButtonsVisible = true
+
+    /// For PDFs every non-`vertical` selection resolves to page (mirrors `ReaderRootScreen.pdfLayoutMode`), so the
+    /// tap-zone toggle shows whenever the layout is not vertical.
+    private var isPageLayout: Bool {
+        (ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page) != .vertical
+    }
+
     var body: some View {
         List {
             Section {
@@ -28,6 +37,14 @@ struct PDFLayoutInspectorScreen: View {
                 }
             } footer: {
                 Text("reader.pdf.settingsNote", bundle: .module)
+            }
+
+            if isPageLayout {
+                Section {
+                    Toggle(isOn: $pageTurnButtonsVisible) {
+                        Text("reader.inspector.showPageTurnButtons", bundle: .module)
+                    }
+                }
             }
         }
     }

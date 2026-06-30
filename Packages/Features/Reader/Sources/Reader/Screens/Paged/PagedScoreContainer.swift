@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// PagedScoreContainer hosts the page-band layout / pagination / pinch pipeline plus the annotation overlay and
+// cursor-follow plumbing for the paged Reader; its breadth keeps it just over the file_length budget.
+
 import Domain
 import PencilKit
 import SheetMusicCore
@@ -27,6 +31,11 @@ struct PagedScoreContainer: View {
     /// Lookahead anchor (1 beat ahead) used to turn the page early — the page containing this cursor is made
     /// active. `nil` when not playing, in which case page-follow falls back to the real cursor (manual seek).
     let pageAnchorCursor: ScoreCursor?
+    /// User opt-out: when false, continuous playback no longer auto-turns the page. Manual navigation (tap-seek,
+    /// measure-step) still turns to keep its target visible (see `readerShouldFollowPlayback`).
+    let autoFollowEnabled: Bool
+    /// User opt-out: when false, the page-turn tap zones are hidden (swipe + auto-page-turn still work).
+    let showsPageTurnButtons: Bool
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `TaskKey` — the score passed in is
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
@@ -203,12 +212,18 @@ struct PagedScoreContainer: View {
                 },
                 showsHint: !pageTapHintDismissed,
                 onAnyZoneTouchDown: { pageTapHintDismissed = true },
+                showsTapZones: showsPageTurnButtons,
             )
         }
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area; the hosted surface re-applies
         // `pageInsets` as padding so the band sits inside the safe area at zoom 1.
         .ignoresSafeArea()
-        .onChange(of: [playbackCursor, pageAnchorCursor]) { _, _ in
+        .onChange(of: [playbackCursor, pageAnchorCursor]) { old, new in
+            guard readerShouldFollowPlayback(
+                autoFollowEnabled: autoFollowEnabled,
+                isPlaybackDriven: pageAnchorCursor != nil,
+                cursorMoved: old[0] != new[0],
+            ) else { return }
             followCursor(pageAnchorCursor ?? playbackCursor)
         }
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }

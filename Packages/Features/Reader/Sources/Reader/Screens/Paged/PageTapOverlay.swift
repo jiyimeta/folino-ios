@@ -112,7 +112,14 @@ private struct PageTapZone: View {
                 .updating($isPressed) { _, state, _ in state = true }
                 .onEnded { value in
                     let bounds = CGRect(x: 0, y: 0, width: width, height: height)
-                    if bounds.contains(value.location) { action() }
+                    // Inclusive of the trailing / bottom edge. A release on the right "next" column (against the
+                    // screen edge) clamps to x == width, which fails the half-open `CGRect.contains` (`x < maxX`) and
+                    // was silently dropped — the intermittent "edge tap does nothing". Treat the exact max edge as
+                    // inside so a screen-edge tap counts.
+                    let loc = value.location
+                    let inside = loc.x >= bounds.minX && loc.x <= bounds.maxX
+                        && loc.y >= bounds.minY && loc.y <= bounds.maxY
+                    if inside { action() }
                 },
         )
         .onChange(of: isPressed) { _, new in onPressChange(new) }

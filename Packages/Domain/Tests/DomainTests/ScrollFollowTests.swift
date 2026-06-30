@@ -139,3 +139,29 @@ struct HorizontalMeasureScrollOffsetTests {
         #expect(r == 592)
     }
 }
+
+struct ReaderShouldFollowPlaybackTests {
+    @Test func `follows everything while enabled`() {
+        // Enabled: follow regardless of how the cursor changed.
+        #expect(readerShouldFollowPlayback(autoFollowEnabled: true, isPlaybackDriven: true, cursorMoved: true))
+        #expect(readerShouldFollowPlayback(autoFollowEnabled: true, isPlaybackDriven: false, cursorMoved: false))
+    }
+
+    @Test func `suppresses playback-driven follow when disabled`() {
+        #expect(readerShouldFollowPlayback(
+            autoFollowEnabled: false, isPlaybackDriven: true, cursorMoved: true,
+        ) == false)
+    }
+
+    @Test func `keeps manual navigation in view when disabled`() {
+        // A real seek / step / scrub moves the cursor (anchor nil → not playback-driven) → still follows.
+        #expect(readerShouldFollowPlayback(autoFollowEnabled: false, isPlaybackDriven: false, cursorMoved: true))
+    }
+
+    @Test func `does not recenter on pause when disabled`() {
+        // Pause / stop toggles the anchor to nil without moving the cursor → no recenter for a reader scrolled away.
+        #expect(readerShouldFollowPlayback(
+            autoFollowEnabled: false, isPlaybackDriven: false, cursorMoved: false,
+        ) == false)
+    }
+}
