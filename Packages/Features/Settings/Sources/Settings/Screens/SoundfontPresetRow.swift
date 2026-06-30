@@ -69,9 +69,20 @@ struct SoundfontPresetRow: View {
     @ViewBuilder
     private var siblingNote: some View {
         if let siblingName = provider.soundfontKeptBySiblingDisplayName {
+            // Opted out, but a sibling keeps the shared file on device.
             Text(verbatim: String(
                 format: String(localized: "settings.soundfont.keptBySibling", bundle: .module),
                 siblingName, siblingName,
+            ))
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        } else if provider.isOptedIn, provider.museScoreGeneralFileURLSync != nil,
+                  let siblingName = provider.siblingInstalledDisplayName
+        {
+            // Opted in + file present + sibling installed → one shared file across both apps (saves space).
+            Text(verbatim: String(
+                format: String(localized: "settings.soundfont.sharingWith", bundle: .module),
+                siblingName,
             ))
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -99,9 +110,11 @@ struct SoundfontPresetRow: View {
                 noWiFiAlertPresented = true
             }
         } else {
-            if case .downloaded = provider.downloadState {
+            if case .downloaded = provider.downloadState, provider.siblingInUseDisplayName == nil {
+                // File on device and no sibling is using it → opting out reclaims it. Confirm the deletion.
                 deleteCacheAlertPresented = true
             } else {
+                // No file to delete, or an installed sibling keeps it on device → opt out without deleting.
                 provider.setOptedIn(false)
             }
         }

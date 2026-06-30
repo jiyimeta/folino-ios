@@ -21,6 +21,12 @@ public protocol MuseScoreGeneralProvider: AnyObject, Observable, Sendable {
     /// app is opted out; `nil` otherwise. Drives the Settings "kept because <sibling> is using it" note. Defaults to
     /// `nil` so conformers that don't participate in cross-app sharing need not implement it.
     var soundfontKeptBySiblingDisplayName: String? { get }
+    /// Display name of an installed sibling that is opted in (using the shared file), un-gated by this app's own
+    /// opt-in — for the opt-out delete-vs-keep decision. Defaults to `nil`.
+    var siblingInUseDisplayName: String? { get }
+    /// Display name of an installed sibling app (regardless of its opt-in) — for the Settings "shared with <sibling>"
+    /// note shown while this app is opted in. Defaults to `nil`.
+    var siblingInstalledDisplayName: String? { get }
 
     /// File system URL of the downloaded preset, or `nil` if absent. `GMSoundfontResolver` consults this every time the
     /// engine asks for `defaultGMSoundfontURL` via the `nonisolated` sync variant; this main-actor accessor exists for
@@ -70,6 +76,14 @@ extension MuseScoreGeneralProvider {
     }
 
     public var soundfontKeptBySiblingDisplayName: String? {
+        nil
+    }
+
+    public var siblingInUseDisplayName: String? {
+        nil
+    }
+
+    public var siblingInstalledDisplayName: String? {
         nil
     }
 }

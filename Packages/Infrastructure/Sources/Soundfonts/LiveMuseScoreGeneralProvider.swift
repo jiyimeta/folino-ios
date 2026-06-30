@@ -255,6 +255,18 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         guard !isOptedIn, museScoreGeneralFileURLSync != nil else { return nil }
         return reclaimer?.siblingInUseDisplayName()
     }
+
+    /// Installed sibling that is currently opted in (using the shared file), un-gated by this app's own opt-in — for
+    /// the opt-out delete-vs-keep decision. `nil` when no installed sibling is opted in.
+    public var siblingInUseDisplayName: String? {
+        reclaimer?.siblingInUseDisplayName()
+    }
+
+    /// Installed sibling app (regardless of its opt-in), for the Settings "shared with <sibling>" note shown while
+    /// this app is opted in. `nil` when no sibling app is installed.
+    public var siblingInstalledDisplayName: String? {
+        reclaimer?.siblingInstalledDisplayName()
+    }
 }
 
 /// `URLSessionDownloadDelegate` lives outside the class (URLSession's delegate callbacks are not isolated). It hops

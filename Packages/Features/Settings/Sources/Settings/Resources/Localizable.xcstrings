@@ -1036,6 +1036,41 @@
         }
       }
     },
+    "settings.soundfont.sharingWith" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uses the same file, saving storage space."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ でも同じファイルを使用し、容量を節約しています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@도 같은 파일을 사용하여 저장 공간을 절약합니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 也使用同一文件，节省存储空间。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 也使用同一檔案，節省儲存空間。"
+          }
+        }
+      }
+    },
     "settings.soundfont.state.failed" : {
       "localizations" : {
         "en" : {

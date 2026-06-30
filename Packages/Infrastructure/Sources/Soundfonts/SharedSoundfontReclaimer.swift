@@ -3,9 +3,13 @@ import Foundation
 public struct SiblingApp: Sendable, Equatable {
     public let bundleId: String
     public let urlScheme: String
-    public init(bundleId: String, urlScheme: String) {
+    /// The sibling's user-facing brand name, used for the "shared with <sibling>" note when the sibling is installed
+    /// but has not published a marker (not opted in), so its name can't be read from the shared container.
+    public let displayName: String
+    public init(bundleId: String, urlScheme: String, displayName: String = "") {
         self.bundleId = bundleId
         self.urlScheme = urlScheme
+        self.displayName = displayName
     }
 }
 
@@ -84,6 +88,15 @@ public struct SharedSoundfontReclaimer: Sendable {
                 return name
             }
             return sibling.bundleId // marker present but unreadable — fall back to the bundle id
+        }
+        return nil
+    }
+
+    /// Display name of an installed sibling (regardless of its opt-in state), for the "shared with <sibling>" note.
+    /// `nil` when no sibling app is installed.
+    public func siblingInstalledDisplayName() -> String? {
+        for sibling in siblings where installedChecker.isInstalled(urlScheme: sibling.urlScheme) {
+            return sibling.displayName
         }
         return nil
     }

@@ -237,7 +237,7 @@ final class AppBootstrap {
     private static let legacySoundfontCacheCleanupDidRunKey = "soundfont.legacyCacheCleanupDidRun"
     static let soundfontMinimumValidByteSize: Int64 = 150 * 1024 * 1024
     static let soundfontSiblings: [SiblingApp] = [
-        SiblingApp(bundleId: "com.KeyNumber.VocalTuner", urlScheme: "vocaltuner"),
+        SiblingApp(bundleId: "com.KeyNumber.VocalTuner", urlScheme: "vocaltuner", displayName: "VocalTuner"),
     ]
 
     /// One-shot migration of the repeat mode from per-score to global. The repeat mode used to be stored per-score in
