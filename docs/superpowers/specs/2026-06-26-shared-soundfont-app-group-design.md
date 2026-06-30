@@ -296,6 +296,31 @@ Folino user), launch the updated build, verify the file moved to the shared cont
 then confirm VocalTuner sees the shared file, and that opt-out reference-counting frees space only when no sibling is
 opted in.
 
+## Android / cross-platform parity
+
+**On Android, this cross-app sharing is deliberately NOT replicated — each app keeps its own SoundFont copy.** Android
+has no clean equivalent of an iOS App Group (a private filesystem container two same-developer apps can both read/write
+directly):
+
+- `sharedUserId` (the closest analog) is **deprecated since API 29** and cannot be added to an already-published app.
+- Scoped storage makes a shared *public* location user-visible and permission-gated — wrong for a 206 MB internal asset.
+- A `ContentProvider`/`FileProvider` (`content://`) is request/response and owner-app-dependent — it doesn't give two
+  apps an always-available shared directory to load an audio asset from.
+
+This is **not a parity violation**. Per the repo's iOS/Android parity rule, *shareable logic* (download, opt-in,
+bundled fallback, resolve) is reused on Android via the shared Swift Domain; the *sharing optimization* itself
+(`SharedSoundfontReclaimer` markers + reclaim) is inseparable from the App Group container primitive, which is an
+iOS-only platform capability with no Android analog. Its absence on Android is idiomatic, not a divergent code path.
+
+**It degrades for free.** The shared path resolver gates on `containerURL(forSecurityApplicationGroupIdentifier:)`,
+which has no App Group concept on Android and returns `nil` there → the resolver falls through to the per-app private
+directory (the same nil-container degradation used on iOS). So when Android VocalTuner (or Android Folino) adds/uses
+SoundFont handling, reusing the shared logic automatically yields "each app, its own copy, no cross-app sharing" with
+**zero Android-specific code**. The only individually-portable piece — the sibling-installed check (iOS `canOpenURL` →
+Android `PackageManager` + manifest `<queries>`) — is not worth building alone without a shared container, so it is not
+ported. (When implementing Android SoundFont handling, verify `containerURL` actually returns `nil` on the Android
+Foundation in use; if not, hard-degrade to the private directory explicitly.)
+
 ## Out of scope
 
 - **Score / sheet-music file sharing** (`Scores/`; reconciling GRDB vs Realm metadata) — the planned next spec; the

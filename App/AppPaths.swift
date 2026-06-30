@@ -23,6 +23,11 @@ enum AppPaths {
 
     /// `<shared container>/Soundfonts/`. `nil` when the container is unavailable (entitlement/provisioning gap) — the
     /// resolver and migration both degrade to `legacySoundfontsDirectory` so playback never breaks.
+    ///
+    /// Cross-app SoundFont sharing is **iOS-only by design**: App Groups have no clean Android equivalent
+    /// (`sharedUserId` is deprecated; scoped storage / ContentProvider don't give two apps a shared private container),
+    /// so on Android each app keeps its own copy — `containerURL` returns `nil` and this degrades to the per-app
+    /// private directory automatically. See the spec's "Android / cross-platform parity" section.
     static var sharedSoundfontsDirectory: URL? {
         FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: sharedAppGroupIdentifier)?
