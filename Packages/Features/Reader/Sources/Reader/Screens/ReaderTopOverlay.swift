@@ -110,18 +110,45 @@ struct ReaderTopOverlay: View {
     }
 
     /// Single-button glass pill that toggles annotation mode. When active, the canvas accepts Pencil/finger input;
-    /// when inactive, all touches reach navigation and tap-to-seek.
+    /// when inactive, all touches reach navigation and tap-to-seek. Disabled during playback: entering draw mode hides
+    /// the transport, which would strand the user with no visible way to pause — so the toggle is gated until stopped.
     private func annotationToggleButton() -> some View {
-        overlayButton(
-            systemImage: viewModel.isAnnotating ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle",
-            label: Text(
-                viewModel.isAnnotating
-                    ? "reader.toolbar.annotate.stop"
-                    : "reader.toolbar.annotate.start",
-                bundle: .module,
-            ),
-        ) {
+        let isPlaying = viewModel.playbackSession.isPlaying
+        return Button {
             viewModel.toggleAnnotation()
+        } label: {
+            annotationGlyph
+        }
+        .tint(.primary)
+        .accessibilityLabel(Text(
+            viewModel.isAnnotating
+                ? "reader.toolbar.annotate.stop"
+                : "reader.toolbar.annotate.start",
+            bundle: .module,
+        ))
+        .disabled(isPlaying)
+        // Dim the glyph while disabled so the unavailable state reads at a glance, matched to the transport's fade.
+        .opacity(isPlaying ? 0.35 : 1)
+        .animation(.easeOut(duration: 0.2), value: isPlaying)
+    }
+
+    /// The annotation button's glyph. Same symbol in both states — no icon swap. Pen mode fills the whole button with a
+    /// black disc (inset 2pt from the glass pill's edge) and draws the `pencil.tip.crop.circle` in white on top, so
+    /// "active" reads as a colour inversion rather than a different shape.
+    @ViewBuilder
+    private var annotationGlyph: some View {
+        if viewModel.isAnnotating {
+            Image(systemName: "pencil.tip.crop.circle")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle()
+                        .fill(.black)
+                        .padding(2)
+                }
+        } else {
+            overlayIcon("pencil.tip.crop.circle")
         }
     }
 

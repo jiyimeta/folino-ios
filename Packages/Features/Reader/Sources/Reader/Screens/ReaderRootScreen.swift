@@ -144,7 +144,15 @@ public struct ReaderRootScreen: View {
                     onShowPDFNotice: { isPDFNoticePresented = true },
                 )
                 Spacer()
+                // Fade the transport control out while annotating so it doesn't sit over the drawing surface. It stays
+                // mounted (opacity only) and stops taking touches, so a partial seek/playback state survives the
+                // annotation session. Layout is deliberately left untouched: `bottomControlInset` /
+                // `bottomControlContentHeight` don't depend on `isAnnotating`, so page breaks (and the vertical bottom
+                // clearance) stay identical whether the card is shown or hidden — the card just fades in place.
                 ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
+                    .opacity(viewModel.isAnnotating ? 0 : 1)
+                    .allowsHitTesting(!viewModel.isAnnotating)
+                    .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
             }
         }
         .navigationTitle("")

@@ -153,7 +153,9 @@ struct PagedPDFContainer: View {
                         viewportWidth: viewport.width,
                     )
                 },
-                showsHint: !pageTapHintDismissed,
+                // Suppress the onboarding hint while annotating so the dashed preview doesn't sit over the drawing
+                // surface; it returns (if not permanently dismissed) once drawing stops.
+                showsHint: !pageTapHintDismissed && !viewModel.isAnnotating,
                 onAnyZoneTouchDown: { pageTapHintDismissed = true },
                 showsTapZones: showsPageTurnButtons,
                 pageContent: { idx in pdfPage(idx, viewport: viewport) },
