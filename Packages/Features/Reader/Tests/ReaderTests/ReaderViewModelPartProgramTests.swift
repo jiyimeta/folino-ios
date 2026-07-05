@@ -74,6 +74,65 @@ struct ReaderViewModelPartProgramTests {
         #expect(Set(pianoCalls.map(\.staff)) == [1, 2])
     }
 
+    @Test func `part program override survives an app relaunch`() async {
+        let item = Self.makeItem()
+        // One repository stands in for the on-disk store across both "launches".
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()],
+                ),
+                Part(
+                    id: "P1", trackName: "Pno",
+                    instrument: Instrument(id: "p", channels: [InstrumentChannel(program: 0)]),
+                    staves: [Staff(), Staff()],
+                ),
+            ],
+            metaTags: [:],
+        )
+        let pianoTop = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        let pianoBottom = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+
+        // Session 1: choose Harpsichord (program 6) for the piano part.
+        let vm1 = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: FakePlaybackController(),
+        )
+        await vm1.load()
+        await vm1.mixerModel.setPartProgram(6, forPartIndex: 1)
+
+        // The choice was written through to persistence.
+        #expect(repo.storedReaderPreferences[item.id]?.staffProgramOverrides[pianoTop] == 6)
+
+        // Session 2 (app relaunch): a brand-new view model + mixer over the same store.
+        let controller2 = FakePlaybackController()
+        let vm2 = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller2,
+        )
+        await vm2.load()
+        await vm2.playbackSession.prepareForPlayback()
+
+        // The mixer shows the override again…
+        #expect(vm2.mixerModel.effectiveProgram(forPartIndex: 1) == 6)
+        #expect(vm2.mixerModel.hasProgramOverride(forPartIndex: 1))
+        #expect(vm2.mixerModel.staffProgramOverrides[pianoTop] == 6)
+        #expect(vm2.mixerModel.staffProgramOverrides[pianoBottom] == 6)
+
+        // …and the engine is seeded with it on load, so playback actually uses it. Piano staves flatten
+        // to indices 1 and 2 (violin takes 0).
+        let seeded = controller2.lastLoadedPreferences?.perStaff ?? []
+        #expect(seeded.first { $0.staffIndex == 1 }?.gmProgram == 6)
+        #expect(seeded.first { $0.staffIndex == 2 }?.gmProgram == 6)
+    }
+
     @Test func `clear part program override reverts every staff to score default`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
