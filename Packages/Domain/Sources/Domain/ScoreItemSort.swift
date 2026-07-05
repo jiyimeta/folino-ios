@@ -50,3 +50,12 @@ public enum ScoreItemSort: String, CaseIterable, Identifiable, Sendable {
         }
     }
 }
+
+/// `UserDefaults` keys for Library settings that persist across launches. Co-located with `ScoreItemSort` so the raw
+/// string is not duplicated as a literal across packages (mirrors `ReaderGlobalSettingsKey`).
+public enum LibrarySettingsKey {
+    /// `ScoreItemSort.rawValue` (String). The global sort order for the All / Favorites / Tag score lists, applied and
+    /// persisted across launches. Defaults to `ScoreItemSort.dateAddedDesc` when absent. Playlists keep their own
+    /// manual order and neither read nor write this key.
+    public static let sortOrder = "librarySortOrder"
+}

@@ -30,6 +30,42 @@ struct ScoreListViewModelTests {
         return repo
     }
 
+    /// A clean, isolated `UserDefaults` domain so persistence assertions don't leak into `.standard` or each other.
+    private static func makeDefaults(_ suite: String) throws -> UserDefaults {
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    @Test func `sort defaults to date added desc when nothing persisted`() throws {
+        let defaults = try Self.makeDefaults("test.librarySort.default")
+        let vm = ScoreListViewModel(source: .all, repository: Self.makeRepo(items: []), defaults: defaults)
+        #expect(vm.sort == .dateAddedDesc)
+    }
+
+    @Test func `selected sort persists across view model recreation`() throws {
+        let defaults = try Self.makeDefaults("test.librarySort.persist")
+        let repo = Self.makeRepo(items: [])
+        let vm1 = ScoreListViewModel(source: .all, repository: repo, defaults: defaults)
+        vm1.selectSort(.titleAsc)
+        // Simulate an app relaunch: a fresh view model over the same defaults must recover the picked sort.
+        let vm2 = ScoreListViewModel(source: .all, repository: repo, defaults: defaults)
+        #expect(vm2.sort == .titleAsc)
+    }
+
+    @Test func `playlist sort selection does not persist to the global library sort`() throws {
+        let defaults = try Self.makeDefaults("test.librarySort.playlist")
+        let id1 = ScoreItemID()
+        let repo = Self.makeRepo(items: [Self.makeItem(id: id1, title: "A")])
+        let playlistVM = ScoreListViewModel(
+            source: .playlist(orderedIDs: [id1]), repository: repo, defaults: defaults,
+        )
+        playlistVM.selectSort(.titleAsc)
+        // Playlists default to manual order on relaunch, so their sort pick is transient and must not leak globally.
+        let libraryVM = ScoreListViewModel(source: .all, repository: repo, defaults: defaults)
+        #expect(libraryVM.sort == .dateAddedDesc)
+    }
+
     @Test func `source all returns everything sorted`() {
         let repo = Self.makeRepo(items: [
             Self.makeItem(title: "B", addedOffset: 100),

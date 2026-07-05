@@ -29,24 +29,39 @@ final class ScoreListViewModel {
 
     private var manualOrder: Bool
 
-    init(source: Source, repository: any ScoreLibraryRepository, analytics: any Analytics = NoopAnalytics()) {
+    /// Backs the persisted global library sort. Not part of the view-tree state, so it's excluded from observation.
+    @ObservationIgnored private let defaults: UserDefaults
+
+    init(
+        source: Source,
+        repository: any ScoreLibraryRepository,
+        analytics: any Analytics = NoopAnalytics(),
+        defaults: UserDefaults = .standard,
+    ) {
         self.source = source
         self.repository = repository
         self.analytics = analytics
+        self.defaults = defaults
+        let storedSort = defaults.string(forKey: LibrarySettingsKey.sortOrder)
+            .flatMap(ScoreItemSort.init(rawValue:)) ?? .dateAddedDesc
         switch source {
         case .all, .favorites, .taggedWith:
-            sort = .dateAddedDesc
+            sort = storedSort
             manualOrder = false
         case .playlist:
-            sort = .dateAddedDesc // value is ignored while manualOrder is true
+            sort = storedSort // value is ignored while manualOrder is true
             manualOrder = true
         }
     }
 
-    /// Switches off manual order; further reads honour `sort`.
+    /// Switches off manual order; further reads honour `sort`. For non-playlist lists the pick persists as the global
+    /// library sort so it survives relaunch; playlists keep their manual order per-playlist and don't write the key.
     func selectSort(_ next: ScoreItemSort) {
         sort = next
         manualOrder = false
+        if !isPlaylistSource {
+            defaults.set(next.rawValue, forKey: LibrarySettingsKey.sortOrder)
+        }
         analytics.log(.sortChanged(next))
     }
 
@@ -54,6 +69,11 @@ final class ScoreListViewModel {
     func selectManualOrder() {
         guard case .playlist = source else { return }
         manualOrder = true
+    }
+
+    private var isPlaylistSource: Bool {
+        if case .playlist = source { return true }
+        return false
     }
 
     var displayedItems: [ScoreItem] {
