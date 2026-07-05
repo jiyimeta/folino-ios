@@ -379,6 +379,7 @@ private struct ReadyShell: View {
         playlistID: PlaylistID?,
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
+        leadingIsSidebarToggle: Bool = false,
     ) -> some View {
         ReaderRootScreen(
             scoreItem: item,
@@ -398,6 +399,7 @@ private struct ReadyShell: View {
             openedFrom: playlistID != nil ? .playlist : .libraryAll,
             onBack: onBack,
             hidesBackButton: hidesBackButton,
+            leadingIsSidebarToggle: leadingIsSidebarToggle,
         )
     }
 
@@ -409,6 +411,10 @@ private struct ReadyShell: View {
                 playlistID: detailPlaylistID,
                 onBack: { columnVisibility = .doubleColumn },
                 hidesBackButton: columnVisibility == .doubleColumn,
+                // Split-view detail: the leading affordance reveals the library sidebar column rather than
+                // popping a stack, so it reads as a sidebar toggle, not a back chevron. The compact
+                // NavigationStack path keeps the default (back); the sidebar's own control collapses it.
+                leadingIsSidebarToggle: true,
             )
             // Force a fresh view identity per score so ReaderRootScreen's @State (viewModel seeded from scoreItem in
             // init) is rebuilt when the user opens a different score from the iPad sidebar.

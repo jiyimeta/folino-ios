@@ -13,9 +13,15 @@ import UtilityUI
 /// to a plain `ToolbarContent`.
 struct ReaderTopOverlay: View {
     @Bindable var viewModel: ReaderViewModel
-    /// `nil` hides the back button entirely — used by iPad split-view detail where the sidebar already provides
-    /// navigation back to the library.
+    /// The leading affordance's action, or `nil` to hide it entirely. In a `NavigationStack` (compact) it pops back to
+    /// the library; in the iPad split-view detail it reveals the sidebar column. `nil` is used by the split-view detail
+    /// while both columns are already visible.
     let onBack: (() -> Void)?
+
+    /// When `true`, the leading button renders as a sidebar-reveal affordance (`sidebar.leading` icon, "show sidebar"
+    /// label) rather than a back chevron. Set by the iPad split-view detail, where tapping reveals the library sidebar
+    /// column instead of popping a navigation stack. Has no effect when `onBack` is `nil` (no leading button shown).
+    var leadingIsSidebarToggle = false
 
     /// Invoked when the user taps the PDF badge — the parent (`ReaderRootScreen`) presents the PDF-playback caveat
     /// dialog. Defaults to a no-op so previews can omit it.
@@ -31,8 +37,10 @@ struct ReaderTopOverlay: View {
         HStack(spacing: 12) {
             if let onBack {
                 overlayButton(
-                    systemImage: "chevron.backward",
-                    label: Text("reader.toolbar.back", bundle: .module),
+                    systemImage: leadingIsSidebarToggle ? "sidebar.leading" : "chevron.backward",
+                    label: leadingIsSidebarToggle
+                        ? Text("reader.toolbar.showSidebar", bundle: .module)
+                        : Text("reader.toolbar.back", bundle: .module),
                     action: onBack,
                 )
                 .glassEffect(.regular.interactive())

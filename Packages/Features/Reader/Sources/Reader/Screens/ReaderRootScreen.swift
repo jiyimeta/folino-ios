@@ -11,6 +11,7 @@ public struct ReaderRootScreen: View {
     @Environment(\.dismiss) private var dismiss
     private let onBack: (() -> Void)?
     private let hidesBackButton: Bool
+    private let leadingIsSidebarToggle: Bool
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
@@ -100,6 +101,7 @@ public struct ReaderRootScreen: View {
         openedFrom: AnalyticsSource = .libraryAll,
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
+        leadingIsSidebarToggle: Bool = false,
     ) {
         // Seed the device-class default at construction time. The view model only uses this if no persisted record
         // exists.
@@ -124,6 +126,7 @@ public struct ReaderRootScreen: View {
         )
         self.onBack = onBack
         self.hidesBackButton = hidesBackButton
+        self.leadingIsSidebarToggle = leadingIsSidebarToggle
     }
 
     public var body: some View {
@@ -141,6 +144,7 @@ public struct ReaderRootScreen: View {
                 ReaderTopOverlay(
                     viewModel: viewModel,
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
+                    leadingIsSidebarToggle: leadingIsSidebarToggle,
                     onShowPDFNotice: { isPDFNoticePresented = true },
                 )
                 Spacer()
