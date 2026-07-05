@@ -17,8 +17,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// a setLoop / clearLoop.
     var loadedScore: Score?
     /// Cached preferences from the most recent `load(...)` — replayed against the engine during `reloadSoundfont()` so
-    /// per-staff volumes / mutes / solos / tempo survive the soundfont swap. Internal so the +Reload extension can
-    /// reach it.
+    /// per-staff volumes / mutes / solos / programs and tempo survive the soundfont swap. Internal so the +Reload
+    /// extension can reach it.
     var loadedPreferences: PlaybackPreferences?
     /// Cursor the user picked while the engine's sequencer wasn't yet built (it's lazy — first `play(from:in:)` builds
     /// it). `seek` early-outs in that state, so we stash the request here and apply it on the next `play()` via
@@ -120,16 +120,15 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// `metronomeEnabled` declared above plus `applyPreferences` / `publishNowPlayingInfo` below, but is otherwise
     /// self-contained.
     func applyPreferences(_ preferences: PlaybackPreferences) {
+        // Re-seat every per-staff engine channel from the saved preferences. Runs on a fresh load() after a
+        // relaunch and on a mid-session soundfont hot-swap, so volume / mute / solo / program are all re-asserted
+        // here: prepare(score:) otherwise leaves the channel on the score's authored program, silently dropping the
+        // user's instrument override. Bank is fixed at prepare time; mirrors the live setStaffInstrument(...) path.
         for state in preferences.perStaff {
-            engine.setVolume(
-                forChannel: .staff(state.staffIndex), to: Float(state.volume),
-            )
-            engine.setMuted(
-                forChannel: .staff(state.staffIndex), to: state.isMuted,
-            )
-            engine.setSoloed(
-                forChannel: .staff(state.staffIndex), to: state.isSolo,
-            )
+            engine.setVolume(forChannel: .staff(state.staffIndex), to: Float(state.volume))
+            engine.setMuted(forChannel: .staff(state.staffIndex), to: state.isMuted)
+            engine.setSoloed(forChannel: .staff(state.staffIndex), to: state.isSolo)
+            engine.setProgram(forChannel: .staff(state.staffIndex), to: UInt8(clamping: state.gmProgram))
         }
         engine.setRate(Float(preferences.tempoMultiplier))
         applyMasterVolume(preferences.masterVolume)
