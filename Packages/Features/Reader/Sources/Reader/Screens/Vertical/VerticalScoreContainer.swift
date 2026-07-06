@@ -157,6 +157,9 @@ struct VerticalScoreContainer: View {
             },
             annotationOverlay: annotationSpec(viewport: viewport),
             onPinchCommitDocWidth: { document?.size.width ?? 0 },
+            onUserViewportInteractionBegan: {
+                viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
+            },
         ) {
             VerticalZoomedSurface(
                 viewModel: viewModel,
@@ -178,6 +181,7 @@ struct VerticalScoreContainer: View {
                 autoFollowEnabled: autoFollowEnabled,
                 isPlaybackDriven: scrollAnchorCursor != nil,
                 cursorMoved: old[0] != new[0],
+                followSuspended: viewModel.playbackSession.isPlaybackFollowSuspended,
             ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }

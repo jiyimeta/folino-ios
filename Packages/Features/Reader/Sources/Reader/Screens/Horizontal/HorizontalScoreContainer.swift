@@ -111,6 +111,9 @@ struct HorizontalScoreContainer: View {
                     viewport: viewport,
                 )
             },
+            onUserViewportInteractionBegan: {
+                viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
+            },
             annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             HorizontalZoomedSurface(
@@ -133,6 +136,7 @@ struct HorizontalScoreContainer: View {
                 autoFollowEnabled: autoFollowEnabled,
                 isPlaybackDriven: scrollAnchorCursor != nil,
                 cursorMoved: old[0] != new[0],
+                followSuspended: viewModel.playbackSession.isPlaybackFollowSuspended,
             ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }

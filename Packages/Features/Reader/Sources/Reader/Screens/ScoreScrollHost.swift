@@ -68,6 +68,11 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
     /// (in host coords), and the scroll view's contentOffset at the moment of release — `VerticalScoreContainer` uses
     /// these to compute the post-commit scroll target and the new `viewportZoom`.
     let onPinchEnded: (CGFloat, CGPoint, CGPoint) -> Void
+    /// Fires when the USER begins a hands-on viewport change — a finger drag (`scrollViewWillBeginDragging`) or a pinch
+    /// (`.began`). NOT called for programmatic `setContentOffset` (auto-scroll / pinch-commit re-anchor). The reader
+    /// uses this to suspend playback cursor auto-follow when the user takes manual control during playback. Default
+    /// no-op leaves callers that don't opt in unchanged.
+    var onUserViewportInteractionBegan: () -> Void = {}
     /// Opt-in annotation overlay. When non-nil, a viewport-sized `PKCanvasView` is installed as a SUBVIEW of the
     /// scroll view (pinned to `frameLayoutGuide`), so the scroll view's pan + custom pinch — ancestors of the canvas —
     /// receive finger touches by the UIKit responder contract while `.pencilOnly` keeps the Pencil drawing. Default
@@ -241,6 +246,12 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
 
         // MARK: UIScrollViewDelegate
 
+        /// Only user-initiated drags reach this delegate callback; programmatic `setContentOffset` does not. So it is a
+        /// reliable "the user is scrolling by hand" signal for suspending playback auto-follow.
+        func scrollViewWillBeginDragging(_: UIScrollView) {
+            parent.onUserViewportInteractionBegan()
+        }
+
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard !isApplyingProgrammaticScroll else { return }
             let offset = scrollView.contentOffset
@@ -297,6 +308,8 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 )
                 let anchor = UnitPoint(x: clampedX, y: clampedY)
                 parent.onPinchBegan(anchor, pinchStartLocation)
+                // A pinch is a hands-on viewport change too — suspend playback auto-follow (zoom in/out during play).
+                parent.onUserViewportInteractionBegan()
             case .changed:
                 let translation = scrollView.map { sv -> CGPoint in
                     let loc = gr.location(in: sv)

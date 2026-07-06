@@ -43,6 +43,9 @@ extension PagedScoreContainer {
     private func jumpToPage(at target: Int) {
         guard target >= 0, target < pages.count else { return }
         guard target != pageState.pageIndex else { return }
+        // A tap-zone page turn is a manual viewport change → suspend playback follow while playing so the reader stays
+        // on the page they turned to instead of the next cursor tick snapping back to the playhead.
+        viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
         viewModel.resetZoom()
         committedZoom = 1.0
         pinch.magnification = 1.0
@@ -172,8 +175,10 @@ extension PagedScoreContainer {
             }
         }
 
-        // The catch-up only chases active playback; honor the opt-out so a manual swipe is not yanked back.
-        if cursorAdvancedDuringSwipe, autoFollowEnabled {
+        // The catch-up only chases active playback; honor the opt-out so a manual swipe is not yanked back. Also skip
+        // it once the swipe suspended follow (a committed turn during playback) — the reader chose to leave the
+        // playhead's page, so don't chase it back on this same gesture.
+        if cursorAdvancedDuringSwipe, autoFollowEnabled, !viewModel.playbackSession.isPlaybackFollowSuspended {
             followCursor(playbackCursor)
         }
     }
@@ -191,6 +196,8 @@ extension PagedScoreContainer {
             }
             return
         }
+        // A committed swipe page-turn is a manual viewport change → suspend playback follow while playing.
+        viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
         let remaining = max(0, viewportWidth - abs(pageState.dragTranslationX))
         let animation = PagedReaderNavigation.commitAnimation(
             remainingDistance: remaining,

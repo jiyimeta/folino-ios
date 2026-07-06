@@ -32,6 +32,9 @@ struct VerticalReaderShell<Content: View>: View {
     /// The content-space document width for the commit's `scrollAbsorbsOffset` check — `document?.size.width` for the
     /// score, the fitted page width for PDF. Supplied by the content so the shell stays content-agnostic.
     let onPinchCommitDocWidth: () -> CGFloat
+    /// Forwarded to `ScoreScrollHost`: fires when the user begins a hands-on scroll or pinch, so the container can
+    /// suspend playback auto-follow during playback.
+    var onUserViewportInteractionBegan: () -> Void = {}
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -63,6 +66,7 @@ struct VerticalReaderShell<Content: View>: View {
             onPinchEnded: { magnification, startLocation, currentOffset in
                 commitPinch(magnification: magnification, startLocation: startLocation, currentOffset: currentOffset)
             },
+            onUserViewportInteractionBegan: onUserViewportInteractionBegan,
             annotationOverlay: annotationOverlay,
             content: content,
         )

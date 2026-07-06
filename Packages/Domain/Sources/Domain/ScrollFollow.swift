@@ -68,19 +68,30 @@ public func scrollOffsetPinningSystemTop(
 }
 
 /// Whether the Reader should run its playback-cursor follow (auto-scroll in vertical/horizontal, auto-page-turn in
-/// page mode) for the current cursor change. `autoFollowEnabled` is the user's opt-out toggle; `isPlaybackDriven` is
-/// true when the change comes from continuous playback — i.e. the lookahead anchor cursor is non-nil — rather than a
-/// manual seek / scrub / measure-step. `cursorMoved` is whether the playback cursor itself changed in this update:
-/// true for a real seek / step / scrub, false when only the lookahead anchor toggled (e.g. when playback pauses or
-/// stops, which nils the anchor without moving the cursor).
+/// page mode) for the current cursor change. `autoFollowEnabled` is the user's persistent opt-out toggle;
+/// `isPlaybackDriven` is true when the change comes from continuous playback — i.e. the lookahead anchor cursor is
+/// non-nil — rather than a manual seek / scrub / measure-step. `cursorMoved` is whether the playback cursor itself
+/// changed in this update: true for a real seek / step / scrub, false when only the lookahead anchor toggled (e.g. when
+/// playback pauses or stops, which nils the anchor without moving the cursor).
 ///
-/// When the toggle is on, always follow. When off, follow only a genuine manual move
-/// (`!isPlaybackDriven && cursorMoved`) — a tap-seek, measure-step, or scrub still brings the target on screen, while
-/// continuous playback no longer scrolls or turns the page AND a pause / stop does not recenter a reader who has
+/// `followSuspended` is the RUNTIME, session-scoped suspension set when the user takes manual control of the viewport
+/// (scroll / pinch-zoom / page-turn) *during* playback; it is cleared when playback restarts or the cursor is set
+/// manually. It is independent of `autoFollowEnabled` — the persistent toggle governs the default, this flag lets a
+/// reader temporarily look ahead / back without the page yanking to the playhead every cursor tick.
+///
+/// Follow only when auto-follow is enabled AND not currently suspended. Otherwise (toggle off OR suspended) follow only
+/// a genuine manual move (`!isPlaybackDriven && cursorMoved`) — a tap-seek, measure-step, or scrub still brings the
+/// target on screen (and, at the call site, also clears `followSuspended` so continuous playback resumes following),
+/// while continuous playback no longer scrolls or turns the page AND a pause / stop does not recenter a reader who has
 /// scrolled away (the anchor toggling to nil must not be mistaken for manual navigation). Shared by iOS and the
 /// Android Reader (parity: one implementation).
-public func readerShouldFollowPlayback(autoFollowEnabled: Bool, isPlaybackDriven: Bool, cursorMoved: Bool) -> Bool {
-    if autoFollowEnabled { return true }
+public func readerShouldFollowPlayback(
+    autoFollowEnabled: Bool,
+    isPlaybackDriven: Bool,
+    cursorMoved: Bool,
+    followSuspended: Bool,
+) -> Bool {
+    if autoFollowEnabled, !followSuspended { return true }
     return !isPlaybackDriven && cursorMoved
 }
 

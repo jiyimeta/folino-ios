@@ -129,6 +129,9 @@ struct PagedPDFContainer: View {
                     viewport: viewport,
                 )
             },
+            onUserViewportInteractionBegan: {
+                viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
+            },
             annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             PagedReaderSurface(
@@ -176,6 +179,7 @@ struct PagedPDFContainer: View {
                 autoFollowEnabled: autoFollowEnabled,
                 isPlaybackDriven: viewModel.playbackSession.pageAnchorCursor != nil,
                 cursorMoved: old[0] != new[0],
+                followSuspended: viewModel.playbackSession.isPlaybackFollowSuspended,
             ) else { return }
             followPlaybackToPage(viewModel.playbackSession.pageAnchorCursor ?? viewModel.playbackSession.displayCursor)
         }

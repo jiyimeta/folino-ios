@@ -1,3 +1,8 @@
+// swiftlint:disable file_length
+// ReaderPlaybackSession owns the whole engine lifecycle — load / play / pause, the cursor stream with hidden-staves
+// translation, scrub + manual-cursor seeking, playback-follow suspension, and the soundfont hot-swap watcher; that
+// cohesive surface keeps it just over the file_length budget.
+
 import Domain
 import Foundation
 import Observation
@@ -11,6 +16,14 @@ import SheetMusicCore
 final class ReaderPlaybackSession {
     private(set) var isPlaying = false
     private(set) var playbackCursor: ScoreCursor?
+
+    /// Runtime, session-scoped suspension of playback cursor auto-follow (auto-scroll / auto-page-turn). Set when the
+    /// user takes manual control of the viewport — scroll, pinch-zoom, or page-turn — WHILE playing; cleared when
+    /// playback (re)starts or the cursor is set manually (tap-seek / measure-step / scrub commit). Independent of the
+    /// persistent `readerAutoFollowEnabled` opt-out: it lets a reader temporarily look ahead / back during playback
+    /// without the page yanking to the playhead every cursor tick. Read at the containers' follow gate via
+    /// `readerShouldFollowPlayback(..., followSuspended:)`.
+    private(set) var isPlaybackFollowSuspended = false
 
     /// Provisional cursor shown while the user drags the seek bar. Non-nil only mid-scrub. The score
     /// views render `displayCursor`, so they follow this instead of the live `playbackCursor`; audio
@@ -201,6 +214,9 @@ final class ReaderPlaybackSession {
         } else {
             do {
                 try await controller.play()
+                // Resuming playback re-arms auto-follow: any suspension from the previous play run (the user having
+                // scrolled / pinched / turned the page by hand) is cleared so the page follows the playhead again.
+                resumePlaybackFollow()
                 setPlaying(true)
             } catch {
                 setPlaying(false)
@@ -296,6 +312,9 @@ final class ReaderPlaybackSession {
     /// Seek the cursor to the first tick of `measureIndex` without changing play / pause state. A `.beat` cursor is
     /// staff-agnostic, so no hidden-staves translation is needed.
     private func seek(toMeasureStart measureIndex: Int) {
+        // A manual measure-step / seek-to-start is an explicit cursor set → resume follow so the container re-centers
+        // this target and continued playback keeps following.
+        resumePlaybackFollow()
         let target = ScoreCursor.beat(measureIndex: measureIndex, tickInMeasure: 0)
         rawPlaybackCursor = target
         playbackCursor = target
@@ -305,6 +324,9 @@ final class ReaderPlaybackSession {
     }
 
     func setManualCursor(_ cursor: ScoreCursor) {
+        // Tapping the score / PDF to place the cursor is an explicit manual set → resume follow (clears any suspension
+        // from the user having scrolled away during playback).
+        resumePlaybackFollow()
         let hidden = hiddenStavesProvider()
         let engineCursor = scoreProvider()?.engineCursorForFilteredTap(
             cursor,
@@ -347,6 +369,8 @@ final class ReaderPlaybackSession {
     /// immediate feedback (the engine's cursor stream then re-syncs it), and clear scrub state.
     func endScrub() {
         guard let target = scrubCursor else { return }
+        // Committing a seek-bar scrub is a manual cursor set → resume follow.
+        resumePlaybackFollow()
         let fraction = lastScrubFraction
         rawPlaybackCursor = target
         playbackCursor = target
@@ -367,7 +391,23 @@ final class ReaderPlaybackSession {
         applyCursorTranslation(rawPlaybackCursor)
     }
 
+    /// The user scrolled, pinch-zoomed, or turned the page by hand. While playback is active this suspends cursor
+    /// auto-follow (auto-scroll / auto-page-turn) until playback restarts or the cursor is set manually — so the reader
+    /// can look ahead / back without the page snapping back to the playhead. A no-op when not playing: there is nothing
+    /// to follow while paused / stopped, and a stray gesture must not leave a suspension that survives into the next
+    /// play (the next play resumes following regardless, via `resumePlaybackFollow`).
+    func suspendPlaybackFollowForManualViewportChange() {
+        guard isPlaying else { return }
+        isPlaybackFollowSuspended = true
+    }
+
     // MARK: - Private
+
+    /// Clear the manual-viewport suspension so playback auto-follow resumes. Called when playback (re)starts or the
+    /// user sets the cursor by hand (tap-seek / measure-step / seek-to-start / scrub commit).
+    private func resumePlaybackFollow() {
+        isPlaybackFollowSuspended = false
+    }
 
     private func setPlaying(_ playing: Bool) {
         guard isPlaying != playing else { return }

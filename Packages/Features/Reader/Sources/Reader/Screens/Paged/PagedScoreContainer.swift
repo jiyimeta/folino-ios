@@ -180,6 +180,9 @@ struct PagedScoreContainer: View {
                     viewport: viewport,
                 )
             },
+            onUserViewportInteractionBegan: {
+                viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
+            },
             annotationOverlay: annotationSpec(viewport: viewport),
         ) {
             PagedZoomedSurface(
@@ -225,6 +228,7 @@ struct PagedScoreContainer: View {
                 autoFollowEnabled: autoFollowEnabled,
                 isPlaybackDriven: pageAnchorCursor != nil,
                 cursorMoved: old[0] != new[0],
+                followSuspended: viewModel.playbackSession.isPlaybackFollowSuspended,
             ) else { return }
             followCursor(pageAnchorCursor ?? playbackCursor)
         }
