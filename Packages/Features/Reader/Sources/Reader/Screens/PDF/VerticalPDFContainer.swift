@@ -55,6 +55,9 @@ struct VerticalPDFContainer: View {
                 expectedContentSize: { expectedSize(viewport: viewport, sizes: sizes) },
                 annotationOverlay: annotationSpec(viewport: viewport, sizes: sizes),
                 onPinchCommitDocWidth: { contentWidth(sizes: sizes) },
+                onUserViewportInteractionBegan: {
+                    viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
+                },
             ) {
                 VerticalPDFSurface(
                     viewModel: viewModel,
@@ -91,6 +94,7 @@ struct VerticalPDFContainer: View {
             autoFollowEnabled: autoFollowEnabled,
             isPlaybackDriven: viewModel.playbackSession.scrollAnchorCursor != nil,
             cursorMoved: old[0] != new[0],
+            followSuspended: viewModel.playbackSession.isPlaybackFollowSuspended,
         ) else { return }
         autoScroll(
             realCursor: viewModel.playbackSession.displayCursor,

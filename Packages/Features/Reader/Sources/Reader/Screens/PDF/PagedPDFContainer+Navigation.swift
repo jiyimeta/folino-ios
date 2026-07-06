@@ -18,6 +18,9 @@ extension PagedPDFContainer {
     private func jumpToPage(at target: Int) {
         guard target >= 0, target < document.pageCount else { return }
         guard target != pageState.pageIndex else { return }
+        // A tap-zone page turn is a manual viewport change → suspend playback follow while playing so the reader stays
+        // on the page they turned to instead of the next cursor tick snapping back to the playhead.
+        viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
         viewModel.resetZoom()
         committedZoom = 1.0
         pinch.magnification = 1.0
@@ -153,6 +156,8 @@ extension PagedPDFContainer {
             }
             return
         }
+        // A committed swipe page-turn is a manual viewport change → suspend playback follow while playing.
+        viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
         let remaining = max(0, viewportWidth - abs(pageState.dragTranslationX))
         let animation = PagedReaderNavigation.commitAnimation(
             remainingDistance: remaining,
