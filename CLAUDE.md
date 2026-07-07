@@ -45,7 +45,7 @@ If you have unrelated edits in the same file, use `git stash`, edit again, and c
 | Regenerate Xcode project after editing `project.yml` | `xcodegen generate` |
 | Build app (project, simulator) | `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation build` |
 | Run app + UI tests | `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation test` |
-| Test one Swift package in isolation | `xcodebuild test -scheme <Pkg\|Pkg-Package> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'` (run from the package dir) |
+| Test one Swift package in isolation | `xcodebuild test -scheme <Pkg\|Pkg-Package> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation` (run from the package dir) |
 | Run a single Swift Testing suite/test | append `-only-testing:<Scheme>/<SuiteName>` to the command above |
 
 `swift test` does **not** work in this repo: the SwiftLint build-tool plugin (applied to every package target) requires a macOS host context that the SwiftPM CLI can't satisfy, so package tests must go through `xcodebuild test` on an iOS Simulator destination. Use **iPhone 17 Pro Max** as the destination — it is the 6.9" device App Store Connect requires for screenshots, so standardizing on it keeps build/test and screenshot runs on one booted simulator (iPhone 16 is not installed). For feature-isolated iteration (SwiftUI previews, fast unit-test loop), open the relevant `Packages/.../Package.swift` directly in Xcode rather than the app project.
@@ -55,25 +55,28 @@ If you have unrelated edits in the same file, use `git stash`, edit again, and c
 Strict layered SPM modules. **Read `docs/engineering/module-architecture.md` for details** — the rules below are summary only.
 
 ```
-App ──▶ Features ──▶ Domain ◀── swift-sheet-music
- │                    ▲
- └──▶ Infrastructure ─┘                Utility is reachable from any layer.
+App ──▶ Features ──┬─▶ Domain ◀── swift-sheet-music
+ │                 └─▶ ScoreUI ──▶ Domain
+ │                          └────▶ Utility
+ └──▶ Infrastructure ─▶ Domain         Utility is reachable from any layer.
 ```
 
 - **`Packages/Utility/`** — app-agnostic building blocks (`UtilityCore`, `UtilityUI`, `Navigation`).
 - **`Packages/Domain/`** — value types + protocols. Foundation-only.
-- **`Packages/Infrastructure/`** — concrete adapters (`Persistence`, `CloudSync`, `Soundfonts`, `Audio`, `ScoreFiles`).
-- **`Packages/Features/<Name>/`** — one package per feature (Library, Reader, Editor, ImportExport, Settings).
+- **`Packages/Infrastructure/`** — concrete adapters (`Persistence`, `CloudSync`, `Soundfonts`, `Audio`, `ScoreFiles`, `CrashReporting`, `Analytics`; plus the Android-gated `FolinoSoundfontJNI` dynamic JNI library, built only when cross-compiling for Android).
+- **`Packages/ScoreUI/`** — shared score-aware SwiftUI components reused across Features (e.g. `ShareSubmenu`, `EditScoreInfoSheet`). Depends on Domain + Utility only.
+- **`Packages/Features/<Name>/`** — one package per feature (Library, Reader, Editor, ImportExport, Settings). Depends on Domain and the shared `ScoreUI` layer only.
 - **`App/`** — composition root. The only place that wires Infrastructure adapters into Feature view models.
 
 `swift-sheet-music` is consumed by Domain (model re-export) and Infrastructure (adapters). Features never import it directly.
 
 **Forbidden** (will be flagged in review):
 
-- Feature → Feature (lift shared code into Domain or compose at App).
+- Feature → Feature (lift shared code into Domain, the shared `ScoreUI` layer, or compose at App).
 - Feature → Infrastructure (always go through a Domain protocol).
 - Feature → `swift-sheet-music` directly.
 - Domain → Infrastructure / Features / App.
+- ScoreUI → Feature / Infrastructure / App (ScoreUI sits below Features; Domain + Utility only).
 - Utility → anything else in this repo.
 
 ### Dependency Injection
@@ -94,6 +97,10 @@ Folino is becoming cross-platform (iOS/iPadOS native; Android via `swift-wirelet
 - **Logic / behavior → match iOS exactly, and share the code.** Business logic, domain rules, and persistence semantics (soft-delete representation, file-naming conventions, import flow, the presentation/derivation that maps a score to its displayed fields) must behave identically on both platforms. If a piece of logic would otherwise be duplicated between the iOS and Android paths, refactor it into shared code (Domain, or a shared Android-gated Swift target) and have both platforms call it. Keep Android-specific code to the minimum that *can only* be implemented on Android: the JNI bridge types (`@WireletObservable` / `@WireletProvided` and their wire `@WireFormat` projections), the Kotlin/Room/SQLite persistence backend, Android file I/O (`filesDir`, `content://` document pickers), and the Compose UI. Never reimplement iOS logic a second time as a divergent Android code path — lift it and reuse it.
 
 - **UI / UX placement → Android idioms are preferred.** Button placement, icons, copy/wording, navigation patterns, and screen transitions follow Android conventions (e.g. FAB for the primary action, swipe-to-dismiss + Snackbar undo, gear-icon Settings) rather than mirroring the iOS layout. The *content* shown stays at iOS parity; only the *presentation/placement* adapts to the platform.
+
+### Android builds (pointer)
+
+The Android half lives in `Android/` (Gradle + Compose); the Swift JNI `.so`s are built by `Scripts/android-build-libs.sh` (Settings) and `Scripts/android-build-{library,reader,soundfont}-libs.sh`. Cross-compiling needs the release toolchain first on `PATH` (`PATH="/Library/Developer/Toolchains/swift-6.3.2-RELEASE.xctoolchain/usr/bin:$PATH"`) — the Xcode-bundled Swift is incompatible with the prebuilt Android SDK. Ordering matters: run the Gradle wirelet codegen first, then (re)build the `.so`s, then `assembleDebug` — building `.so`s first in a fresh worktree yields libraries without `JNI_OnLoad` that crash at launch. See the project memory for the detailed gotchas.
 
 ## Build-Time Tooling
 
