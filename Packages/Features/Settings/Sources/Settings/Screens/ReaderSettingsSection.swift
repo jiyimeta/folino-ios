@@ -31,12 +31,22 @@ struct ReaderSettingsSection: View {
     private var keepScreenAwake = true
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
     private var showSeekBar = true
+    @AppStorage(ReaderGlobalSettingsKey.autoFollowEnabled)
+    private var autoFollowEnabled = true
+    @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
+    private var pageTurnButtonsVisible = true
     @AppStorage(ReaderGlobalSettingsKey.repeatMode)
     private var repeatMode: RepeatMode = .off
     @AppStorage(ReaderGlobalSettingsKey.playlistContinuationMode)
     private var continuationMode: PlaylistContinuationMode = .playThrough
     @AppStorage(ReaderGlobalSettingsKey.a4ReferenceHz)
     private var globalA4Hz = A4Reference.standardHz
+
+    /// Resolves the global layout mode. Drives the auto-follow row's label (scroll vs page-turn) and gates the
+    /// page-turn-buttons row, which only has an effect in `.page` — mirroring the Reader visual inspector.
+    private var layoutMode: ReaderLayoutMode {
+        ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
+    }
 
     var body: some View {
         Section {
@@ -46,6 +56,10 @@ struct ReaderSettingsSection: View {
             showInvisibleToggle
             keepScreenAwakeToggle
             seekBarToggle
+            autoFollowToggle
+            if layoutMode == .page {
+                pageTurnButtonsToggle
+            }
             repeatModeRow
             playlistContinuationRow
             a4ReferenceRow
@@ -143,6 +157,42 @@ struct ReaderSettingsSection: View {
             }
         }
         .onChange(of: showSeekBar) { _, value in changeLog.log(.showSeekBar, value) }
+    }
+
+    /// Playback auto-follow opt-out — the global counterpart of the visual inspector's row. The label tracks the
+    /// layout mode: scrolling modes read "auto-scroll", page mode reads "auto page turn".
+    private var autoFollowToggle: some View {
+        Toggle(isOn: $autoFollowEnabled) {
+            Label {
+                Text(
+                    layoutMode == .page
+                        ? "settings.reader.autoPageTurn"
+                        : "settings.reader.autoScroll",
+                    bundle: .module,
+                )
+            } icon: {
+                Image(systemName: "text.line.first.and.arrowtriangle.forward")
+            }
+        }
+        .onChange(of: autoFollowEnabled) { _, value in changeLog.log(.autoFollow, value) }
+    }
+
+    /// Page-mode tap-zone visibility opt-out. Shown only in `.page` (the caller gates it), matching the visual
+    /// inspector. The footnote reassures that swipe-to-turn stays available when the buttons are off.
+    private var pageTurnButtonsToggle: some View {
+        Toggle(isOn: $pageTurnButtonsVisible) {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("settings.reader.pageTurnButtons", bundle: .module)
+                    Text("settings.reader.pageTurnButtons.footer", bundle: .module)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "hand.tap")
+            }
+        }
+        .onChange(of: pageTurnButtonsVisible) { _, value in changeLog.log(.pageTurnButtons, value) }
     }
 
     /// Snap detents for the global A4 slider — same values as the per-score inspector.

@@ -13,6 +13,8 @@ public enum SettingKey: String, Sendable, CaseIterable {
     case showInvisibleElements = "show_invisible_elements"
     case keepScreenAwake = "keep_screen_awake"
     case showSeekBar = "show_seek_bar"
+    case autoFollow = "auto_follow_enabled"
+    case pageTurnButtons = "page_turn_buttons_visible"
     case repeatMode = "repeat_mode"
     case playlistContinuation = "playlist_continuation"
     case a4Reference = "a4_reference_hz"
@@ -31,6 +33,8 @@ public enum SettingKey: String, Sendable, CaseIterable {
         case "showInvisibleElements": self = .showInvisibleElements
         case "keepScreenAwake": self = .keepScreenAwake
         case "showSeekBar": self = .showSeekBar
+        case "autoFollow": self = .autoFollow
+        case "pageTurnButtons": self = .pageTurnButtons
         case "repeatMode": self = .repeatMode
         case "playlistContinuation": self = .playlistContinuation
         case "a4Reference": self = .a4Reference
