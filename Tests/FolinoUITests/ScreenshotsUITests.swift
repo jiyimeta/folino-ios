@@ -32,4 +32,8 @@ final class ScreenshotsUITests: XCTestCase {
     func testCapturePiP() {
         captureScene(id: "06_PiP", languages: languages, in: self)
     }
+
+    func testCaptureAnnotation() {
+        captureScene(id: "07_Annotation", languages: languages, in: self)
+    }
 }

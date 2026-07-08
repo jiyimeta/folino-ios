@@ -12,6 +12,10 @@ public struct ReaderRootScreen: View {
     private let onBack: (() -> Void)?
     private let hidesBackButton: Bool
     private let leadingIsSidebarToggle: Bool
+    /// Screenshot-only: when non-nil, renders in place of the live score container, so the top chrome and bottom
+    /// transport stay LIVE (and follow future app changes) while the score + ink come from a real-device capture the
+    /// simulator can't reproduce (PencilKit ink doesn't composite in the simulator; note spacing is OS/device-bound).
+    private let scoreContentOverride: AnyView?
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
@@ -54,6 +58,13 @@ public struct ReaderRootScreen: View {
 
     private var layoutMode: ReaderLayoutMode {
         ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
+    }
+
+    /// Screenshot-capture mode (launch arg `-readerCaptureMode 1`): hides the top chrome and bottom transport so a real
+    /// device produces a clean score+ink image (no toolbar shadow bleeding into it) for the marketing shot, which then
+    /// composites that image UNDER the live chrome/transport (see `scoreContentOverride`). No effect in normal use.
+    private var isCaptureMode: Bool {
+        UserDefaults.standard.bool(forKey: "readerCaptureMode")
     }
 
     /// The layout mode to use for PDFs: the persisted mode if it is PDF-allowed, else page. Guards against a stale
@@ -102,6 +113,7 @@ public struct ReaderRootScreen: View {
         onBack: (() -> Void)? = nil,
         hidesBackButton: Bool = false,
         leadingIsSidebarToggle: Bool = false,
+        scoreContentOverride: AnyView? = nil,
     ) {
         // Seed the device-class default at construction time. The view model only uses this if no persisted record
         // exists.
@@ -127,13 +139,20 @@ public struct ReaderRootScreen: View {
         self.onBack = onBack
         self.hidesBackButton = hidesBackButton
         self.leadingIsSidebarToggle = leadingIsSidebarToggle
+        self.scoreContentOverride = scoreContentOverride
     }
 
     public var body: some View {
         ZStack {
-            content
-                .safeAreaPadding(.top, ReaderTopOverlay.height)
-                .safeAreaPadding(.bottom, bottomControlInset)
+            Group {
+                if let scoreContentOverride {
+                    scoreContentOverride // screenshot capture stands in for the live score; chrome + transport live
+                } else {
+                    content
+                }
+            }
+            .safeAreaPadding(.top, isCaptureMode ? 0 : ReaderTopOverlay.height)
+            .safeAreaPadding(.bottom, isCaptureMode ? 0 : bottomControlInset)
             if ReaderPiPSession.isSupported {
                 ScorePiPHostView(coordinator: viewModel.pipSession.coordinator)
                     .frame(width: 1, height: 1)
@@ -141,22 +160,26 @@ public struct ReaderRootScreen: View {
                     .allowsHitTesting(false)
             }
             VStack(spacing: 0) {
-                ReaderTopOverlay(
-                    viewModel: viewModel,
-                    onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
-                    leadingIsSidebarToggle: leadingIsSidebarToggle,
-                    onShowPDFNotice: { isPDFNoticePresented = true },
-                )
+                if !isCaptureMode {
+                    ReaderTopOverlay(
+                        viewModel: viewModel,
+                        onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
+                        leadingIsSidebarToggle: leadingIsSidebarToggle,
+                        onShowPDFNotice: { isPDFNoticePresented = true },
+                    )
+                }
                 Spacer()
                 // Fade the transport control out while annotating so it doesn't sit over the drawing surface. It stays
                 // mounted (opacity only) and stops taking touches, so a partial seek/playback state survives the
                 // annotation session. Layout is deliberately left untouched: `bottomControlInset` /
                 // `bottomControlContentHeight` don't depend on `isAnnotating`, so page breaks (and the vertical bottom
                 // clearance) stay identical whether the card is shown or hidden — the card just fades in place.
-                ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
-                    .opacity(viewModel.isAnnotating ? 0 : 1)
-                    .allowsHitTesting(!viewModel.isAnnotating)
-                    .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
+                if !isCaptureMode {
+                    ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
+                        .opacity(viewModel.isAnnotating ? 0 : 1)
+                        .allowsHitTesting(!viewModel.isAnnotating)
+                        .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
+                }
             }
         }
         .navigationTitle("")

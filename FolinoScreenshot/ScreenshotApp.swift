@@ -12,14 +12,17 @@ struct ScreenshotApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if let id = ScreenshotEnvironment.requestedSceneID,
-               let scene = ScreenshotScene.allCases.first(where: { $0.id == id })
-            {
-                scene.view
-                    .environment(\.screenshotIdiom, ScreenshotEnvironment.idiom)
-            } else {
-                Text("No scene requested")
+            Group {
+                if let id = ScreenshotEnvironment.requestedSceneID,
+                   let scene = ScreenshotScene.allCases.first(where: { $0.id == id })
+                {
+                    scene.view
+                } else {
+                    // No scene arg (icon tap / plain Xcode Run on a device) → the on-device ink capture tool.
+                    CaptureScene()
+                }
             }
+            .environment(\.screenshotIdiom, ScreenshotEnvironment.idiom)
         }
     }
 }

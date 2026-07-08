@@ -47,7 +47,7 @@ packages:
     from: 7.0.0
   swift-sheet-music:
     url: https://github.com/jiyimeta/swift-sheet-music.git
-    revision: 94e214a5894a9a938c1c888cad625573ebba8e7d
+    revision: 6b1e351df41eef0a9016ae08bc0cbcbea3bb8aa8
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
     exactVersion: 0.63.2
@@ -198,6 +198,12 @@ targets:
         excludes:
           - Resources
       - path: FolinoScreenshot/Resources/Now_is_the_time.mscz
+        type: file
+        buildPhase: resources
+      - path: FolinoScreenshot/Resources/annotated-device.png
+        type: file
+        buildPhase: resources
+      - path: FolinoScreenshot/Resources/annotated-device-iphone.png
         type: file
         buildPhase: resources
     settings:

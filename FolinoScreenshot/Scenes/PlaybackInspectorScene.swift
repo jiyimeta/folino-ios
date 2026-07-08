@@ -82,6 +82,7 @@ struct PlaybackInspectorScene: View {
     private var inspector: some View {
         PlaybackInspectorScreen(
             mixerModel: viewModel.mixerModel,
+            layoutModel: viewModel.layoutModel,
             tempoModel: viewModel.tempoModel,
             masterVolumeModel: viewModel.masterVolumeModel,
             a4ReferenceModel: viewModel.a4ReferenceModel,
@@ -102,6 +103,7 @@ struct PlaybackInspectorScene: View {
                 gateway: FixtureGateway(),
                 shareService: FixtureShareService(),
                 metadataReader: FixtureMetadataReader(),
+                annotationStore: FixtureAnnotationStore(),
                 scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                 hidesBackButton: true,
             )

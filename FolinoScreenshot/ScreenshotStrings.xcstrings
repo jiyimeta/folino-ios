@@ -106,6 +106,76 @@
         }
       }
     },
+    "scene.annotation.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Circle the tricky bars\nJot fingerings and cues\nSaved automatically"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "難所に印をつけ、\n運指やヒントをメモ。\n書き込みは自動で保存"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "어려운 마디에 표시하고\n운지와 힌트를 메모\n필기는 자동 저장"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圈出难点小节\n记下指法和提示\n手写自动保存"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圈出難點小節\n記下指法和提示\n手寫自動儲存"
+          }
+        }
+      }
+    },
+    "scene.annotation.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make every score yours"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自分だけの楽譜に"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "나만의 악보로"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打造你的专属乐谱"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打造你的專屬樂譜"
+          }
+        }
+      }
+    },
     "scene.library.subtitle" : {
       "extractionState" : "stale",
       "localizations" : {

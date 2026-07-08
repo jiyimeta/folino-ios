@@ -52,6 +52,7 @@ struct ReaderScene: View {
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
                     metadataReader: FixtureMetadataReader(),
+                    annotationStore: FixtureAnnotationStore(),
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
                 )

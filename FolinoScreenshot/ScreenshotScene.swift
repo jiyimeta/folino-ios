@@ -7,6 +7,7 @@ enum ScreenshotScene: CaseIterable {
     case abRepeat
     case library
     case pip
+    case annotation
 
     var id: String {
         switch self {
@@ -16,6 +17,7 @@ enum ScreenshotScene: CaseIterable {
         case .abRepeat: "04_ABRepeat"
         case .library: "05_Library"
         case .pip: "06_PiP"
+        case .annotation: "07_Annotation"
         }
     }
 
@@ -28,6 +30,7 @@ enum ScreenshotScene: CaseIterable {
         case .abRepeat: ABRepeatScene()
         case .library: LibraryScene()
         case .pip: PiPScene()
+        case .annotation: AnnotationScene()
         }
     }
 }
