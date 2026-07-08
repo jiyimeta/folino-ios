@@ -145,9 +145,15 @@ struct VisualInspectorScreen: View {
     }
 
     /// Page-mode tap-zone visibility opt-out. Only meaningful in `.page`, so the caller gates its presence on the mode.
+    /// The caption reassures that turning the zones off does not disable swipe-to-turn, which stays available.
     private var pageTurnButtonsRow: some View {
         Toggle(isOn: $pageTurnButtonsVisible) {
-            Text("reader.inspector.showPageTurnButtons", bundle: .module)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("reader.inspector.showPageTurnButtons", bundle: .module)
+                Text("reader.inspector.showPageTurnButtons.footer", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

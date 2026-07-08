@@ -2745,6 +2745,40 @@
           }
         }
       }
+    },
+    "reader.inspector.showPageTurnButtons.footer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe to turn pages still works even when this is off."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフにしてもスワイプでページをめくれます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "꺼도 스와이프로 페이지를 넘길 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即使关闭，仍可滑动翻页。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即使關閉，仍可滑動翻頁。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
