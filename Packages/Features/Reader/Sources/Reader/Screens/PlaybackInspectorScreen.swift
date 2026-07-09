@@ -47,6 +47,7 @@ struct PlaybackInspectorScreen: View {
     let isInPlaylist: Bool
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
+    @AppStorage(ReaderGlobalSettingsKey.precountEnabled) private var isPrecountEnabled = false
     @AppStorage(ReaderGlobalSettingsKey.playlistContinuationMode)
     private var continuationMode: PlaylistContinuationMode = .playThrough
 
@@ -59,6 +60,7 @@ struct PlaybackInspectorScreen: View {
             // icon (metronome / tempo gauge / repeat / speaker) keeps them readable without further separators.
             CollapsibleSection(isExpanded: $generalExpanded) {
                 metronomeRow
+                precountRow
                 tempoRow
                 repeatModeRow
                 if isInPlaylist {
@@ -282,6 +284,16 @@ struct PlaybackInspectorScreen: View {
                 Image(systemName: isMetronomeEnabled ? "metronome.fill" : "metronome")
                     .foregroundStyle(Color.accentColor)
                 Text("reader.inspector.metronome", bundle: .module)
+            }
+        }
+    }
+
+    private var precountRow: some View {
+        Toggle(isOn: $isPrecountEnabled) {
+            HStack {
+                Image(systemName: "timer")
+                    .foregroundStyle(Color.accentColor)
+                Text("reader.inspector.precount", bundle: .module)
             }
         }
     }

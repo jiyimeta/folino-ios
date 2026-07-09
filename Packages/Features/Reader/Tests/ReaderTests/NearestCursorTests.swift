@@ -24,6 +24,7 @@ struct NearestCursorTests {
             isBeamed: false, voiceIndex: 0,
             stemExtension: 0,
             stemIsInvisible: false,
+            mag: 1.0,
         )
     }
 

@@ -23,7 +23,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        revision: "94e214a5894a9a938c1c888cad625573ebba8e7d",
+        revision: "b574afa8acc1160c95c0b58d4886645462f56748",
     ),
     .package(path: "../Domain"),
     .package(path: "../Utility"),

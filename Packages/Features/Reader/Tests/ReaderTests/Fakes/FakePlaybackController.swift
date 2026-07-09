@@ -6,6 +6,7 @@ import SheetMusicCore
 final class FakePlaybackController: PlaybackController {
     private(set) var loadCount = 0
     private(set) var playCount = 0
+    private(set) var lastPlayCountIn: Bool?
     private(set) var pauseCount = 0
     private(set) var lastLoadedPreferences: PlaybackPreferences?
     private(set) var lastLoadedDisplayTitle: String?
@@ -61,9 +62,10 @@ final class FakePlaybackController: PlaybackController {
         lastLoadedDisplayTitle = displayTitle
     }
 
-    func play() throws {
+    func play(countIn: Bool) throws {
         if let error = playError { throw error }
         playCount += 1
+        lastPlayCountIn = countIn
     }
 
     func pause() {

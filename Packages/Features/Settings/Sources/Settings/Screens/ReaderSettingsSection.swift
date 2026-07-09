@@ -19,6 +19,8 @@ struct ReaderSettingsSection: View {
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
     private var isMetronomeEnabled = false
+    @AppStorage(ReaderGlobalSettingsKey.precountEnabled)
+    private var isPrecountEnabled = false
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
     @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
@@ -51,6 +53,7 @@ struct ReaderSettingsSection: View {
     var body: some View {
         Section {
             metronomeToggle
+            precountToggle
             pictureInPictureToggle
             collapseRestsToggle
             showInvisibleToggle
@@ -79,6 +82,17 @@ struct ReaderSettingsSection: View {
             }
         }
         .onChange(of: isMetronomeEnabled) { _, value in changeLog.log(.metronome, value) }
+    }
+
+    private var precountToggle: some View {
+        Toggle(isOn: $isPrecountEnabled) {
+            Label {
+                Text("settings.reader.precount", bundle: .module)
+            } icon: {
+                Image(systemName: "timer")
+            }
+        }
+        .onChange(of: isPrecountEnabled) { _, value in changeLog.log(.precount, value) }
     }
 
     private var collapseRestsToggle: some View {

@@ -13,7 +13,12 @@ public protocol PlaybackController: Sendable {
         score: Score, displayTitle: String?, preferences: PlaybackPreferences,
     ) async throws
 
-    func play() async throws
+    /// Begin playback from the loaded score's current cursor. When `countIn` is true, the engine prepends a
+    /// metronome pre-roll (one measure plus any mid-measure lead-in) before real playback begins, with the cursor
+    /// pinned at the start position until the pre-roll completes. Every caller besides
+    /// `ReaderPlaybackSession.togglePlayback` (remote command center, playlist auto-advance) passes `false` — Swift
+    /// protocol requirements cannot carry a default argument, so callers must pass the flag explicitly.
+    func play(countIn: Bool) async throws
     func pause() async
 
     /// Tear down the audio engine and deactivate the audio session so the system can resume normal auto-lock behavior.
