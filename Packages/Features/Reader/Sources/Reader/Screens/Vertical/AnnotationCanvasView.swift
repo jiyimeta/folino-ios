@@ -54,6 +54,16 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     /// mode turns off (while annotating we restrict them to fingers so the Pencil never scrolls/zooms).
     private var defaultPanTouchTypes: [NSNumber] = []
     private var defaultPinchTouchTypes: [NSNumber] = []
+    /// Rightmost inked column (`drawing.bounds.maxX`, in document points) of whatever is currently on the canvas — the
+    /// quantity that decides when deep zoom would push committed ink off PencilKit's texture. Cached (refreshed only
+    /// when the drawing changes, in `applyDrawing` / `canvasViewDrawingDidChange`) so the per-tick `sync` never pays a
+    /// bounds recompute. `0` means "no ink" — no texture clamp needed.
+    private var inkRightEdge: CGFloat = 0
+
+    /// Leave headroom under the GPU's hard 16,384px max 2D-texture edge (see the class ROOT-CAUSE NOTE) so we split the
+    /// zoom *before* PencilKit starts dropping strokes from the right — internal padding / rounding eats a little of
+    /// the nominal budget in practice.
+    private static let inkTextureBudget: CGFloat = 15000
 
     /// Install the canvas once, as a viewport-pinned subview of the scroll view (pinned to `frameLayoutGuide`).
     func install(in scroll: UIScrollView, pinch: UIPinchGestureRecognizer?, spec: AnnotationOverlaySpec) {
@@ -114,15 +124,62 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     }
 
     /// Mirror the host's scroll offset + zoom onto PencilKit's own scroll machinery so the ink overlays the score.
+    ///
+    /// Deep-zoom texture clamp: past a point, `inkRightEdge * zoomScale * screenScale` exceeds the GPU texture budget
+    /// and PencilKit clamps its committed-ink render to an origin-anchored sub-rect, dropping strokes from the right
+    /// edge first (the "ink disappears when you zoom all the way in" bug). We can't grow that budget, so we cap the
+    /// PencilKit `zoomScale` at the texture-safe ceiling and carry the *residual* zoom as a plain view transform on the
+    /// viewport-sized canvas — a cheap CALayer bitmap upscale that never clips (it only softens the ink slightly past
+    /// the ceiling). Splitting `z = zc * residual` and dividing `residual` back out of `contentOffset` keeps the
+    /// on-screen mapping `screen(p) = p * z - target` exactly invariant, so the ink stays pixel-aligned with the score.
+    /// Below the ceiling `residual == 1` and this is byte-identical to a plain `zoomScale = z` mirror.
     func sync(scrollOffset: CGPoint) {
         guard let canvas, let state else { return }
         let s = state()
         if canvas.contentSize != s.documentSize { canvas.contentSize = s.documentSize }
         if canvas.contentInset != s.contentInset { canvas.contentInset = s.contentInset }
         let z = max(0.01, s.zoomScale)
-        if abs(canvas.zoomScale - z) > 0.0001 { canvas.zoomScale = z }
+        let (zc, residual) = zoomSplit(for: z, canvas: canvas)
+        if abs(canvas.zoomScale - zc) > 0.0001 { canvas.zoomScale = zc }
         let target = CGPoint(x: scrollOffset.x + s.contentOffsetBias.x, y: scrollOffset.y + s.contentOffsetBias.y)
-        if canvas.contentOffset != target { canvas.contentOffset = target }
+        // `contentOffset` lives in the un-residual-scaled space; the residual view transform re-multiplies it back.
+        let adjusted = residual == 1
+            ? target
+            : CGPoint(x: target.x / residual, y: target.y / residual)
+        if canvas.contentOffset != adjusted { canvas.contentOffset = adjusted }
+        applyResidualTransform(residual, to: canvas)
+    }
+
+    /// Split an on-screen zoom `z` into `(zoomScale, residual)`: PencilKit renders committed ink at `zoomScale` (kept
+    /// within the texture budget), and the caller scales the canvas view by `residual` for anything beyond it. Returns
+    /// `(z, 1)` when the ink comfortably fits — the overwhelmingly common case. The cap is origin-anchored on the
+    /// rightmost inked column because PencilKit's clamp is too (a stroke at x drops when `x * zoomScale * screenScale`
+    /// crosses the budget), and never exceeds `maximumZoomScale`, past which the `zoomScale` setter silently clamps and
+    /// desyncs the mirror.
+    private func zoomSplit(for z: CGFloat, canvas: PKCanvasView) -> (zoomScale: CGFloat, residual: CGFloat) {
+        guard inkRightEdge > 0 else { return (z, 1) }
+        let displayScale = canvas.traitCollection.displayScale
+        let screenScale = displayScale > 0 ? displayScale : 2
+        let safeZoom = Self.inkTextureBudget / (inkRightEdge * screenScale)
+        let cap = min(safeZoom, canvas.maximumZoomScale)
+        guard z > cap else { return (z, 1) }
+        return (cap, z / cap)
+    }
+
+    /// Scale the viewport-sized canvas view about its top-left corner (matching the score's `.topLeading` committed
+    /// zoom) so the residual zoom rides a cheap CALayer bitmap upscale instead of PencilKit's texture. Identity when
+    /// `residual == 1`. `UIView.transform` pivots about the view's center, so offset the translation to move the pivot
+    /// to the top-left corner.
+    private func applyResidualTransform(_ residual: CGFloat, to canvas: PKCanvasView) {
+        let size = canvas.bounds.size
+        let transform: CGAffineTransform = residual == 1 || size.width == 0 || size.height == 0
+            ? .identity
+            : CGAffineTransform(
+                a: residual, b: 0, c: 0, d: residual,
+                tx: (residual - 1) * size.width / 2,
+                ty: (residual - 1) * size.height / 2,
+            )
+        if canvas.transform != transform { canvas.transform = transform }
     }
 
     func teardown() {
@@ -131,6 +188,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
 
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         lastSeededDrawing = canvasView.drawing // our own edit is the source of truth; don't let applyDrawing echo it
+        inkRightEdge = Self.rightEdge(of: canvasView.drawing)
         onChange(canvasView.drawing)
     }
 
@@ -140,10 +198,19 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         guard let canvas else { return }
         if drawing.dataRepresentation() != lastSeededDrawing.dataRepresentation() {
             lastSeededDrawing = drawing
+            inkRightEdge = Self.rightEdge(of: drawing)
             if canvas.drawing.dataRepresentation() != drawing.dataRepresentation() {
                 canvas.drawing = drawing
             }
         }
+    }
+
+    /// Rightmost inked column in document points, or `0` when there is no ink — `PKDrawing.bounds` is `.null` for an
+    /// empty drawing (its `maxX` is not meaningful), so guard on the stroke count.
+    private static func rightEdge(of drawing: PKDrawing) -> CGFloat {
+        guard !drawing.strokes.isEmpty else { return 0 }
+        let maxX = drawing.bounds.maxX
+        return maxX.isFinite ? max(0, maxX) : 0
     }
 
     private func applyToolPicker(visible: Bool) {
