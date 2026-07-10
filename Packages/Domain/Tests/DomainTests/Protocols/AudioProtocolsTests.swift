@@ -21,7 +21,7 @@ private final class FakePlaybackController: PlaybackController {
         loadedScores += 1
     }
 
-    func play() throws {}
+    func play(countIn _: Bool) throws {}
     func pause() {}
     func releaseEngine() {}
     func reloadSoundfont() {}

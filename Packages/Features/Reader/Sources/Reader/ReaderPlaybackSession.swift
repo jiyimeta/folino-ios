@@ -95,6 +95,12 @@ final class ReaderPlaybackSession {
 
     @ObservationIgnored let controller: (any PlaybackController)?
 
+    /// Reads the user's global count-in preference at the moment `togglePlayback()` presses play.
+    /// `ReaderGlobalSettingsKey.precountEnabled` — overridable in tests.
+    @ObservationIgnored var isPrecountEnabled: () -> Bool = {
+        UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.precountEnabled)
+    }
+
     @ObservationIgnored private let museScoreGeneralProvider: (any MuseScoreGeneralProvider)?
     @ObservationIgnored private var hasLoadedIntoPlayback = false
     @ObservationIgnored private var preloadTask: Task<Void, Error>?
@@ -213,7 +219,7 @@ final class ReaderPlaybackSession {
             setPlaying(false)
         } else {
             do {
-                try await controller.play()
+                try await controller.play(countIn: isPrecountEnabled())
                 // Resuming playback re-arms auto-follow: any suspension from the previous play run (the user having
                 // scrolled / pinched / turned the page by hand) is cleared so the page follows the playhead again.
                 resumePlaybackFollow()

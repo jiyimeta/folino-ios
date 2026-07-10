@@ -57,5 +57,7 @@ struct SettingChangedAnalyticsTests {
         #expect(SettingKey.layoutMode.rawValue == "layout_mode")
         #expect(SettingKey.crashReporting.rawValue == "crash_reporting_enabled")
         #expect(SettingKey.analytics.rawValue == "analytics_enabled")
+        #expect(SettingKey.precount.rawValue == "precount_enabled")
+        #expect(SettingKey(caseToken: "precount") == .precount)
     }
 }

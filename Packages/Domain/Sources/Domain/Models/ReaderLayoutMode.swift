@@ -17,6 +17,10 @@ public enum ReaderGlobalSettingsKey {
     /// Bool. Preserved verbatim from the pre-refactor key so existing user state survives the refactor — do not rename.
     public static let metronomeEnabled = "readerMetronomeEnabled"
 
+    /// Bool. When true, pressing play sounds a one-measure count-in (plus any mid-measure lead-in) before
+    /// playback, independent of `metronomeEnabled`. Default false.
+    public static let precountEnabled = "readerPrecountEnabled"
+
     /// `ReaderLayoutMode.rawValue` (String).
     public static let layoutMode = "readerLayoutMode"
 

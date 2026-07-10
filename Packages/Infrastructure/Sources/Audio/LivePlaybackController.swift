@@ -136,9 +136,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine.setTranspose(semitones: preferences.transposeSemitones)
     }
 
-    public func play() throws {
+    public func play(countIn: Bool) throws {
         guard let score = loadedScore else { return }
-        engine.play(from: pendingCursor, in: score)
+        engine.play(from: pendingCursor, in: score, countIn: countIn)
         pendingCursor = nil
         publishNowPlayingInfo()
     }
@@ -268,7 +268,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
             guard let self else { return .commandFailed }
             return MainActor.assumeIsolated {
                 do {
-                    try self.play()
+                    // Remote command center play never sounds a count-in — that's a Reader-only preference.
+                    try self.play(countIn: false)
                     return .success
                 } catch {
                     return .commandFailed
