@@ -21,6 +21,9 @@ Thumbs.db
 # Local signing / per-developer overrides
 Config/Local.xcconfig
 
+# Local Swift toolchain pin (swiftly / swiftenv); machine-specific, never tracked
+.swift-version
+
 # Git worktrees
 .worktrees/
 
