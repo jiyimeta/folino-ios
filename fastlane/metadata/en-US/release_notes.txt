@@ -1,3 +1,5 @@
-- Added PDF import and playback
-- Added handwriting with Apple Pencil or your finger
-- Added a setting to turn off auto-scroll and page turning
+- Added PDF file import
+- Added score annotation with Apple Pencil
+- Improved playback
+- Added a setting to hide the page-turn buttons
+- Added a count-in playback setting

@@ -1,3 +1,30 @@
+- version: 1.8.0
+  descriptions:
+    - en: Added PDF file import
+      ja: PDFファイル読み込み機能を追加
+      ko: PDF 파일 가져오기 기능 추가
+      zh-Hans: 新增 PDF 文件导入功能
+      zh-Hant: 新增 PDF 檔案匯入功能
+    - en: Added score annotation with Apple Pencil
+      ja: 楽譜書き込み機能を追加 (Apple Pencil対応)
+      ko: Apple Pencil 악보 필기 기능 추가
+      zh-Hans: 新增乐谱手写批注功能（支持 Apple Pencil）
+      zh-Hant: 新增樂譜手寫註記功能（支援 Apple Pencil）
+    - en: Improved playback
+      ja: 再生機能を改善
+      ko: 재생 기능 개선
+      zh-Hans: 改进播放功能
+      zh-Hant: 改善播放功能
+    - en: Added a setting to hide the page-turn buttons
+      ja: ページめくりボタンを非表示にする設定を追加
+      ko: 페이지 넘김 버튼 숨기기 설정 추가
+      zh-Hans: 新增隐藏翻页按钮的设置
+      zh-Hant: 新增隱藏翻頁按鈕的設定
+    - en: Added a count-in playback setting
+      ja: カウントイン再生設定を追加
+      ko: 카운트인 재생 설정 추가
+      zh-Hans: 新增预备拍播放设置
+      zh-Hant: 新增預備拍播放設定
 - version: 1.7.0
   descriptions:
     - en: Added transposition (key change)
