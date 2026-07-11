@@ -28,6 +28,10 @@ struct PagedPDFContainer: View {
     /// The annotation model for the CURRENT PDF page, projected to band space. Reseeded on page/model change; kept
     /// equal to the live ink while drawing so the canvas seed never round-trips an in-progress stroke.
     @State var projectedAnnotations = PKDrawing()
+    /// The current page-band viewport, mirrored from the body so the `withAnimation` page-turn commits (which run
+    /// outside the body and have no `proxy`) can reseed the live annotation canvas synchronously — see
+    /// `commitPageTurn` / `commitDragTurn`.
+    @State var lastViewport: CGSize = .zero
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -65,6 +69,9 @@ struct PagedPDFContainer: View {
             let viewportHeight = proxy.size.height
             let viewport = CGSize(width: viewportWidth, height: viewportHeight)
             scrollContent(viewport: viewport)
+                // Mirror the live viewport so the out-of-body page-turn commits can reseed the annotation canvas
+                // synchronously. `initial: true` seeds the first layout; it then tracks rotation / resize.
+                    .onChange(of: viewport, initial: true) { _, newValue in lastViewport = newValue }
         }
         .background {
             // Sibling reader extending past the safe area so its `proxy.safeAreaInsets` still reflects the chrome the
@@ -250,7 +257,8 @@ struct PagedPDFContainer: View {
         )
     }
 
-    private func reprojectCurrentPage(viewport: CGSize) {
+    /// Not `private`: the page-turn commits in `PagedPDFContainer+Navigation` call this to reseed synchronously.
+    func reprojectCurrentPage(viewport: CGSize) {
         // Live canvas shows ink only while annotating; static layers in `pdfPage` cover display for every page.
         // Empty the live canvas when not annotating.
         guard viewModel.isAnnotating, let frame = currentPageFrame(viewport: viewport) else {

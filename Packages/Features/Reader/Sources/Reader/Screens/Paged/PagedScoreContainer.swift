@@ -61,6 +61,10 @@ struct PagedScoreContainer: View {
     /// The annotation model for the CURRENT page, projected to band space. Reseeded on page/document/model change;
     /// kept equal to the live ink while drawing so the canvas seed never round-trips an in-progress stroke.
     @State var projectedAnnotations = PKDrawing()
+    /// The current page-band viewport, mirrored from the body so the `withAnimation` page-turn commits (which run
+    /// outside the body and have no `proxy`) can reseed the live annotation canvas synchronously — see
+    /// `commitPageTurn` / `commitDragTurn`.
+    @State var lastViewport: CGSize = .zero
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -108,19 +112,22 @@ struct PagedScoreContainer: View {
                 staffSize * 4,
             )
             scrollContent(viewport: viewport)
-                .task(id: TaskKey(
-                    score: score, size: staffSize, width: contentWidth,
-                    honorLayoutBreaks: honorLayoutBreaks,
-                    collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    showInvisibleElements: showInvisibleElements,
-                    pageHeight: viewportHeight,
-                    transposeSemitones: transposeSemitones,
-                )) {
-                    await rebuildLayout(
-                        width: contentWidth,
+                // Mirror the live viewport so the out-of-body page-turn commits can reseed the annotation canvas
+                // synchronously. `initial: true` seeds the first layout; it then tracks rotation / resize.
+                    .onChange(of: viewport, initial: true) { _, newValue in lastViewport = newValue }
+                    .task(id: TaskKey(
+                        score: score, size: staffSize, width: contentWidth,
+                        honorLayoutBreaks: honorLayoutBreaks,
+                        collapseMultiMeasureRests: collapseMultiMeasureRests,
+                        showInvisibleElements: showInvisibleElements,
                         pageHeight: viewportHeight,
-                    )
-                }
+                        transposeSemitones: transposeSemitones,
+                    )) {
+                        await rebuildLayout(
+                            width: contentWidth,
+                            pageHeight: viewportHeight,
+                        )
+                    }
         }
         .background {
             // Sibling reader extending past the safe area so its `proxy.safeAreaInsets` still reflects the chrome the
@@ -337,7 +344,8 @@ struct PagedScoreContainer: View {
         )
     }
 
-    private func reprojectCurrentPage(viewport: CGSize) {
+    /// Not `private`: the page-turn commits in `PagedScoreContainer+PageNavigation` call this to reseed synchronously.
+    func reprojectCurrentPage(viewport: CGSize) {
         // Live canvas shows ink only while annotating the current page; static band-space layers (PagedZoomedSurface)
         // cover display for every page. Seed the live canvas while annotating, empty it otherwise.
         guard viewModel.isAnnotating, let doc = document, let band = currentPageBand(viewport: viewport) else {
