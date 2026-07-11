@@ -1,4 +1,4 @@
-import CoreGraphics
+import Foundation
 
 /// A rectangle on one page of the original imported PDF, expressed in that page's TOP-LEFT-origin
 /// coordinate space (mediaBox points, y growing downward). Produced by `PDFPlaybackGeometry` so the

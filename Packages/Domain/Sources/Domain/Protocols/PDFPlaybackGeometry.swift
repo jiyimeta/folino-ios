@@ -1,4 +1,4 @@
-import CoreGraphics
+import Foundation
 import SheetMusicCore
 
 /// Maps a parsed PDF score's musical positions back to geometry on the ORIGINAL imported PDF, so the
