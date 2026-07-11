@@ -1,5 +1,1 @@
-- Added PDF file import
-- Added score annotation with Apple Pencil
-- Improved playback
-- Added a setting to hide the page-turn buttons
-- Added a count-in playback setting
+- Minor improvements and bug fixes
