@@ -24,7 +24,7 @@ EXPECTED_LIBS=(
 APK="${1:-}"
 if [[ -z "$APK" ]]; then
     echo "==> No APK given; building :app:assembleDebug"
-    PATH="/Library/Developer/Toolchains/swift-6.3.2-RELEASE.xctoolchain/usr/bin:$PATH" \
+    PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH" \
         "$ROOT/Android/gradlew" -p "$ROOT/Android" :app:assembleDebug --no-daemon
     APK="$ROOT/Android/app/build/outputs/apk/debug/app-debug.apk"
 fi

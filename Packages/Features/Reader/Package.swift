@@ -53,7 +53,7 @@ if isAndroid {
     packageDependencies += [
         .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
         // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x; 0.5.0 removed APIs the
-        // jextract tool needs under swift-6.3.2. Pin to 0.4.0 (matches Settings/Library). Remove once swift-java
+        // jextract tool needs under swift-6.3.3. Pin to 0.4.0 (matches Settings/Library). Remove once swift-java
         // ships against swift-subprocess 0.5+.
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
     ]

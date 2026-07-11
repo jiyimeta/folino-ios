@@ -100,7 +100,7 @@ Folino is becoming cross-platform (iOS/iPadOS native; Android via `swift-wirelet
 
 ### Android builds (pointer)
 
-The Android half lives in `Android/` (Gradle + Compose); the Swift JNI `.so`s are built by `Scripts/android-build-libs.sh` (Settings) and `Scripts/android-build-{library,reader,soundfont}-libs.sh`. Cross-compiling needs the release toolchain first on `PATH` (`PATH="/Library/Developer/Toolchains/swift-6.3.2-RELEASE.xctoolchain/usr/bin:$PATH"`) — the Xcode-bundled Swift is incompatible with the prebuilt Android SDK. Ordering matters: run the Gradle wirelet codegen first, then (re)build the `.so`s, then `assembleDebug` — building `.so`s first in a fresh worktree yields libraries without `JNI_OnLoad` that crash at launch. See the project memory for the detailed gotchas.
+The Android half lives in `Android/` (Gradle + Compose); the Swift JNI `.so`s are built by `Scripts/android-build-libs.sh` (Settings) and `Scripts/android-build-{library,reader,soundfont}-libs.sh`. Cross-compiling needs the release toolchain first on `PATH` (`PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"`) — the Xcode-bundled Swift is incompatible with the prebuilt Android SDK. Ordering matters: run the Gradle wirelet codegen first, then (re)build the `.so`s, then `assembleDebug` — building `.so`s first in a fresh worktree yields libraries without `JNI_OnLoad` that crash at launch. See the project memory for the detailed gotchas.
 
 ## Build-Time Tooling
 
