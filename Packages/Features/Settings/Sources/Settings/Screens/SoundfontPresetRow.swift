@@ -77,9 +77,11 @@ struct SoundfontPresetRow: View {
             .font(.footnote)
             .foregroundStyle(.secondary)
         } else if provider.isOptedIn, provider.museScoreGeneralFileURLSync != nil,
-                  let siblingName = provider.siblingInstalledDisplayName
+                  let siblingName = provider.siblingInUseDisplayName
         {
-            // Opted in + file present + sibling installed → one shared file across both apps (saves space).
+            // Opted in + file present + sibling ALSO opted in → both apps genuinely share the one file (saves space).
+            // Gate on "in use" (marker present), not merely "installed": if the sibling is opted out there is no
+            // active sharing and the file is ours alone, so this note would be misleading.
             Text(verbatim: String(
                 format: String(localized: "settings.soundfont.sharingWith", bundle: .module),
                 siblingName,
