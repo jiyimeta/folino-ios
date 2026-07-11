@@ -28,7 +28,7 @@ if isAndroid {
         .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            revision: "2e445383e124dbceaa0ba8fdd6ee84df6a473569",
+            revision: "be336454aa5400300a34b48eca14860d7ad4acbd",
         ),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),

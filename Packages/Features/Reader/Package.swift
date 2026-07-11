@@ -18,7 +18,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(path: "../../Utility"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        revision: "2e445383e124dbceaa0ba8fdd6ee84df6a473569",
+        revision: "be336454aa5400300a34b48eca14860d7ad4acbd",
     ),
 ]
 
@@ -53,7 +53,7 @@ if isAndroid {
     packageDependencies += [
         .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
         // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x; 0.5.0 removed APIs the
-        // jextract tool needs under swift-6.3.2. Pin to 0.4.0 (matches Settings/Library). Remove once swift-java
+        // jextract tool needs under swift-6.3.3. Pin to 0.4.0 (matches Settings/Library). Remove once swift-java
         // ships against swift-subprocess 0.5+.
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
     ]

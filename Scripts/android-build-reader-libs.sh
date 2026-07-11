@@ -9,14 +9,20 @@
 # Android module's jniLibs / java-generated destinations).
 set -euo pipefail
 
-: "${TOOLCHAINS:=org.swift.632202605101a}"
-export TOOLCHAINS
+# Use the open-source swift.org toolchain paired with the Android SDK.
+# Prepend it to PATH so plain `swift` resolves to it — the swiftly shim on
+# some hosts ignores TOOLCHAINS, and Apple's Xcode swiftc produces
+# incompatible swiftmodules.
+TOOLCHAIN_BIN="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin"
+if [[ -d "$TOOLCHAIN_BIN" ]]; then
+    export PATH="$TOOLCHAIN_BIN:$PATH"
+fi
 export FOLINO_ANDROID=1
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 PKG_PATH="$ROOT/Packages/Features/Reader"
 JNI_DIR="$ROOT/Android/FolinoReaderAndroid/src/main/jniLibs"
-SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle"
+SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.3-RELEASE_android.artifactbundle"
 RUNTIME_BASE="$SDK_BUNDLE/swift-android/swift-resources/usr/lib"
 
 # Locate the NDK so we can also stage libc++_shared.so per ABI (Swift runtime
