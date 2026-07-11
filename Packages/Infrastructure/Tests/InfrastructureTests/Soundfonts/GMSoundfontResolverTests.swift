@@ -33,17 +33,31 @@ struct GMSoundfontResolverTests {
         let url = resolver.defaultGMSoundfontURL
         #expect(url?.lastPathComponent == "GeneralUser-GS.sf2")
     }
+
+    @Test func `defaultGMSoundfontURL falls back to lightweight when opted out even if file present`() throws {
+        // An opted-in sibling keeps the shared high-quality file on disk, but this app is opted out — playback must
+        // use the bundled lightweight preset, not the shared file that only lingers for the sibling's sake.
+        let downloaded = URL(filePath: "/tmp/MuseScore_General.sf2")
+        let resolver = try GMSoundfontResolver(
+            provider: StubProvider(downloadedURL: downloaded, optedIn: false),
+            bundle: makeBundleStub(),
+        )
+        #expect(resolver.defaultGMSoundfontURL?.lastPathComponent == "GeneralUser-GS.sf2")
+    }
 }
 
 @MainActor
 @Observable
 private final class StubProvider: MuseScoreGeneralProvider {
     @ObservationIgnored nonisolated let downloadedURL: URL?
-    var isOptedIn = true
+    @ObservationIgnored nonisolated let optedInSync: Bool
+    var isOptedIn: Bool
     var downloadState: SoundfontDownloadState
 
-    init(downloadedURL: URL?) {
+    init(downloadedURL: URL?, optedIn: Bool = true) {
         self.downloadedURL = downloadedURL
+        optedInSync = optedIn
+        isOptedIn = optedIn
         downloadState = downloadedURL == nil ? .idle : .downloaded
     }
 
@@ -58,6 +72,11 @@ private final class StubProvider: MuseScoreGeneralProvider {
     nonisolated var museScoreGeneralFileURLSync: URL? {
         // `downloadedURL` is set once during init and never mutated; safe to read without an actor hop.
         downloadedURL
+    }
+
+    nonisolated var isOptedInSync: Bool {
+        // `optedInSync` is set once during init and never mutated; safe to read without an actor hop.
+        optedInSync
     }
 
     nonisolated var isCurrentlyWiFi: Bool {

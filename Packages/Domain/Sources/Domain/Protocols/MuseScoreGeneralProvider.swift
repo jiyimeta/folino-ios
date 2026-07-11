@@ -45,6 +45,13 @@ public protocol MuseScoreGeneralProvider: AnyObject, Observable, Sendable {
     /// `any MuseScoreGeneralProvider` existentials.
     nonisolated var museScoreGeneralFileURLSync: URL? { get }
 
+    /// Synchronous, audio-thread-safe opt-in snapshot for the soundfont resolver. `nonisolated` so the audio engine
+    /// can consult it without an actor hop. Distinct from `museScoreGeneralFileURLSync`, which reports physical file
+    /// presence: the shared high-quality file can linger on device (kept by an opted-in sibling) while this app is
+    /// opted out, and in that case playback must still fall through to the bundled lightweight preset. Defaults to
+    /// `true` so conformers that always serve their downloaded file need not implement it.
+    nonisolated var isOptedInSync: Bool { get }
+
     /// Current network reachability snapshot used by the Settings UI to decide whether to prompt the user before
     /// kicking off a cellular download. Cheap synchronous read backed by the provider's internal `NWPathMonitor`.
     nonisolated var isCurrentlyWiFi: Bool { get }
@@ -73,6 +80,12 @@ extension MuseScoreGeneralProvider {
     /// actor hop (e.g. `LiveMuseScoreGeneralProvider.museScoreGeneralFileURLSync`).
     public nonisolated var museScoreGeneralFileURLSync: URL? {
         nil
+    }
+
+    /// Default opt-in snapshot. Returns `true` — conformers that participate in opt-out gating (the live provider)
+    /// override it with a thread-safe read of the real flag.
+    public nonisolated var isOptedInSync: Bool {
+        true
     }
 
     public var soundfontKeptBySiblingDisplayName: String? {

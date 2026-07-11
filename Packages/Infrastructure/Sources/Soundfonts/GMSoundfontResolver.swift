@@ -22,10 +22,12 @@ public struct GMSoundfontResolver: SheetMusicAudio.SoundfontResolver {
     }
 
     public var defaultGMSoundfontURL: URL? {
-        // `museScoreGeneralFileURLSync` is `nonisolated` on the provider and reads only the immutable
-        // `targetDirectory` constant plus `FileManager.fileExists`, so this is safe to call from the
-        // audio thread without an actor hop.
-        if let downloaded = provider.museScoreGeneralFileURLSync {
+        // Both `isOptedInSync` and `museScoreGeneralFileURLSync` are `nonisolated` on the provider (a lock-guarded
+        // opt-in snapshot and an immutable `targetDirectory` + `FileManager.fileExists`), so this is safe to call
+        // from the audio thread without an actor hop. Serve the downloaded high-quality file only when this app is
+        // opted in: the shared file can linger on device because an opted-in sibling keeps it, but an opted-out app
+        // must fall through to the bundled lightweight preset.
+        if provider.isOptedInSync, let downloaded = provider.museScoreGeneralFileURLSync {
             return downloaded
         }
         return bundle.url(

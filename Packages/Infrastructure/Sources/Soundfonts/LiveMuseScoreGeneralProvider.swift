@@ -29,6 +29,9 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     @ObservationIgnored private let wifiSession: URLSession
     @ObservationIgnored private let cellularSession: URLSession
     @ObservationIgnored private let reclaimer: SharedSoundfontReclaimer?
+    /// Thread-safe mirror of `isOptedIn` for the audio thread (`isOptedInSync`). Written from the main actor on every
+    /// opt-in change; read `nonisolated` by `GMSoundfontResolver` without an actor hop.
+    @ObservationIgnored private let optedInSnapshot = OSAllocatedUnfairLock<Bool>(initialState: true)
     @ObservationIgnored private let logger = Logger(
         subsystem: "com.KeyNumber.Folino", category: "MuseScoreGeneralProvider",
     )
@@ -55,7 +58,9 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         self.wifiSession = wifiSession ?? Self.makeSession(allowsCellular: false)
         self.cellularSession = cellularSession ?? Self.makeSession(allowsCellular: true)
         self.reclaimer = reclaimer
-        isOptedIn = defaults.object(forKey: Self.optInKey) as? Bool ?? true
+        let optedIn = defaults.object(forKey: Self.optInKey) as? Bool ?? true
+        isOptedIn = optedIn
+        optedInSnapshot.withLock { $0 = optedIn }
         let fileURL = targetDirectory.appending(path: SoundfontPreset.highQuality.fileName)
         downloadState = FileManager.default.fileExists(atPath: fileURL.path) ? .downloaded : .idle
         pathMonitor.start { [weak self] isWiFi in
@@ -98,6 +103,10 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    public nonisolated var isOptedInSync: Bool {
+        optedInSnapshot.withLock { $0 }
+    }
+
     public var currentPreset: SoundfontPreset {
         SoundfontDownloadReducer.preset(isOptedIn: isOptedIn, isDownloaded: isDownloaded)
     }
@@ -105,6 +114,7 @@ public final class LiveMuseScoreGeneralProvider: MuseScoreGeneralProvider {
     public func setOptedIn(_ value: Bool) {
         defaults.set(value, forKey: Self.optInKey)
         isOptedIn = value
+        optedInSnapshot.withLock { $0 = value }
         if value {
             reclaimer?.syncOwnMarker(isOptedIn: true)
             startDownloadIfNeeded()
