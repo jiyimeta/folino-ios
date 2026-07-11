@@ -101,4 +101,20 @@ struct SharedSoundfontReclaimerTests {
             .write(to: d.appendingPathComponent("consumers").appendingPathComponent(sibling.bundleId))
         #expect(make(d, checker: FakeChecker([])).siblingInUseDisplayName() == nil)
     }
+
+    @Test func `sibling in use display name prefers hardcoded name over empty published marker`() {
+        // Some shipped sibling builds publish an empty `displayName` in their marker; the note must fall back to our
+        // own hardcoded brand name rather than render blank.
+        let d = dir()
+        let named = SiblingApp(bundleId: sibling.bundleId, urlScheme: sibling.urlScheme, displayName: "VocalTuner")
+        try? fm.createDirectory(at: d.appendingPathComponent("consumers"), withIntermediateDirectories: true)
+        try? Data(#"{"displayName":""}"#.utf8)
+            .write(to: d.appendingPathComponent("consumers").appendingPathComponent(sibling.bundleId))
+        let r = SharedSoundfontReclaimer(
+            fileManager: fm, soundfontsDirectory: d, soundfontFileName: name, minimumValidByteSize: minBytes,
+            ownBundleId: "com.KeyNumber.Folino", ownDisplayName: "folino",
+            siblings: [named], installedChecker: FakeChecker([named.urlScheme]),
+        )
+        #expect(r.siblingInUseDisplayName() == "VocalTuner")
+    }
 }

@@ -81,13 +81,18 @@ public struct SharedSoundfontReclaimer: Sendable {
         for sibling in siblings where installedChecker.isInstalled(urlScheme: sibling.urlScheme) {
             let url = markerURL(sibling.bundleId)
             guard fileManager.fileExists(atPath: url.path) else { continue }
+            // Prefer our own hardcoded brand name for the sibling. Some shipped sibling builds publish an empty
+            // `displayName` in their marker, which would otherwise render the "kept by <sibling>" note blank.
+            if !sibling.displayName.isEmpty {
+                return sibling.displayName
+            }
             if let data = try? Data(contentsOf: url),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-               let name = json["displayName"]
+               let name = json["displayName"], !name.isEmpty
             {
                 return name
             }
-            return sibling.bundleId // marker present but unreadable — fall back to the bundle id
+            return sibling.bundleId // no local name, marker unreadable/nameless — fall back to the bundle id
         }
         return nil
     }
