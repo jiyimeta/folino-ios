@@ -58,7 +58,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -630,16 +629,6 @@ private fun ReadyScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // Sticky playback-follow suspension (Task 5): the FIRST moment a scroll/fling begins on either axis
-    // DURING playback, suspend cursor auto-follow so an automatic re-pin never fights the reader looking
-    // ahead/back. Unlike the old live "is a gesture in progress" flag this is STICKY — it persists after
-    // the gesture ends and is cleared only when playback restarts or the cursor is set manually (see
-    // `ReaderAudioViewModel.isPlaybackFollowSuspended`). `suspend…()` is a no-op when not playing.
-    LaunchedEffect(vScroll, hScroll, audioVm) {
-        snapshotFlow { vScroll.isScrollInProgress || hScroll.isScrollInProgress }
-            .collect { scrolling -> if (scrolling) audioVm.suspendPlaybackFollowForManualViewportChange() }
-    }
-
     // Fixed-density render: pxPerMM is the same on every device, so the staff is the same on-screen
     // size on phone and tablet. The engine reflows to the viewport width (reported below) so a wider
     // screen shows MORE music, not bigger notes. Pinch `scale` multiplies on top. (iOS parity.)
@@ -663,8 +652,9 @@ private fun ReadyScore(
     // Auto-scroll: keep the playback cursor in view via the shared Domain keep-in-view math (JNI).
     // Vertical: pin the playing system to the top when the lookahead anchor is set (playing), falling
     // back to gentle keep-in-view when paused / on a manual seek (anchor == null). Horizontal: always
-    // follows the real cursor when zoomed.
-    LaunchedEffect(scoreHandle, fitPxPerMM, scale) {
+    // follows the real cursor when zoomed. `autoFollowEnabled` is a key so a mid-playback toggle flip
+    // re-arms / disarms follow promptly instead of lagging until an unrelated restart.
+    LaunchedEffect(scoreHandle, fitPxPerMM, scale, autoFollowEnabled) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (fitPxPerMM <= 0f) return@LaunchedEffect
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
@@ -796,6 +786,30 @@ private fun ReadyScore(
                                 }
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            // Sticky playback-follow suspension (Task 5) — fired ONLY by a real single-finger DRAG.
+            // Observes on the Initial pass and NEVER consumes, so the vertical/horizontal scroll
+            // modifiers below still get the gesture (native fling + overscroll). Firing on real pointer
+            // MOVEMENT — not `ScrollableState.isScrollInProgress` — is the whole fix: the auto-follow
+            // re-pin drives `animateScrollTo`, which flips `isScrollInProgress` true WITHOUT any pointer
+            // event, so the old snapshotFlow trigger mistook the auto-scroll's own re-pin for a manual
+            // gesture and latched suspension permanently OFF. A programmatic scroll emits no pointer
+            // input, so this detector never self-suspends (mirrors Page mode's `DragInteraction.Start`).
+            // A pure tap (down+up, no move) is a seek — requiring `positionChanged` skips it; two-finger
+            // contact is the pinch detector's job above. Sticky: cleared only on play/seek (see
+            // `ReaderAudioViewModel.isPlaybackFollowSuspended`); `suspend…()` is a no-op when not playing.
+            .pointerInput(audioVm) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var suspended = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (!suspended && event.changes.any { it.pressed && it.positionChanged() }) {
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
+                            suspended = true
                         }
                     } while (event.changes.any { it.pressed })
                 }
@@ -1469,13 +1483,6 @@ internal fun HorizontalScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // Sticky playback-follow suspension (Task 5) — see the identical block in [ReadyScore] for the full
-    // rationale. A scroll/fling beginning during playback suspends auto-follow until play/seek.
-    LaunchedEffect(vScroll, hScroll, audioVm) {
-        snapshotFlow { vScroll.isScrollInProgress || hScroll.isScrollInProgress }
-            .collect { scrolling -> if (scrolling) audioVm.suspendPlaybackFollowForManualViewportChange() }
-    }
-
     // Fixed-density render (same pxPerMM as vertical) so the single-system row is the same on-screen
     // size on phone and tablet. The row is natural-width (no wrap) → horizontal scroll, and this
     // surface reports no viewport width to the VM (unlike vertical), so the engine's wrap width is moot.
@@ -1496,8 +1503,9 @@ internal fun HorizontalScore(
     val needsVScroll = contentHeightPx > viewportSize.height + 0.5f
 
     // Auto-scroll: X = measure-anchored leading-edge with lookahead (measure frame + shared
-    // Domain fn); Y = keep-in-view, only meaningful when zoomed taller.
-    LaunchedEffect(scoreHandle, fitPxPerMM, scale) {
+    // Domain fn); Y = keep-in-view, only meaningful when zoomed taller. `autoFollowEnabled` is a key
+    // so a mid-playback toggle flip re-arms / disarms follow promptly (parity with ReadyScore).
+    LaunchedEffect(scoreHandle, fitPxPerMM, scale, autoFollowEnabled) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (fitPxPerMM <= 0f) return@LaunchedEffect
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
@@ -1626,6 +1634,25 @@ internal fun HorizontalScore(
                                 }
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            // Sticky playback-follow suspension (Task 5), fired ONLY by a real single-finger DRAG — see
+            // the identical detector in [ReadyScore] for the full rationale. Observes on the Initial pass
+            // and never consumes, so the horizontal/vertical scroll modifiers below still get the gesture.
+            // A programmatic auto-follow re-pin (`animateScrollTo`) emits no pointer input, so unlike the
+            // old `isScrollInProgress` snapshotFlow this never self-suspends; a pure tap has no movement so
+            // it is skipped; two-finger contact is the pinch detector's job above.
+            .pointerInput(audioVm) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var suspended = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (!suspended && event.changes.any { it.pressed && it.positionChanged() }) {
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
+                            suspended = true
                         }
                     } while (event.changes.any { it.pressed })
                 }

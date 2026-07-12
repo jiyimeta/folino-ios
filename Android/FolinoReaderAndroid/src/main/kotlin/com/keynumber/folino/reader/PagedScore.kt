@@ -151,7 +151,7 @@ fun PagedScore(
     // The auto-follow gate is applied in `collectLatest` (NOT `mapNotNull`) so `distinctUntilChanged`
     // still tracks the real target page while suspended; otherwise a suspend-then-resume to the same
     // page the playhead already occupies would be deduped away and never snap back.
-    LaunchedEffect(scoreHandle, breaksMm.size, breaksMm.firstOrNull(), breaksMm.lastOrNull()) {
+    LaunchedEffect(scoreHandle, breaksMm.size, breaksMm.firstOrNull(), breaksMm.lastOrNull(), autoFollowEnabled) {
         val h = scoreHandle ?: return@LaunchedEffect
         if (breaksMm.size < 2) return@LaunchedEffect
         combine(audioVm.currentCursor, audioVm.pageAnchorCursor) { real, anchor -> real to anchor }
