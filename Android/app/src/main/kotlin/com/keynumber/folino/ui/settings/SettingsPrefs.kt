@@ -42,6 +42,10 @@ object SettingsKeys {
      * viewport on the playhead. Default true mirrors iOS `ReaderGlobalSettingsKey.autoFollowEnabled`.
      * When off the reader keeps full manual control of the viewport during playback. */
     val autoFollowEnabled = booleanPreferencesKey("reader.autoFollow.enabled")
+    /** Whether the page-mode tap zones (edge buttons that turn the page) render. Default true mirrors
+     * iOS `ReaderGlobalSettingsKey.pageTurnButtonsVisible`. When off, swiping to turn pages still
+     * works — only the tap zones themselves are hidden. Has no effect outside page mode. */
+    val pageTurnButtonsVisible = booleanPreferencesKey("reader.pageTurnButtonsVisible.enabled")
     /**
      * Global A4 reference pitch in Hz. Shared key with the iOS side so both platforms default to
      * the same persisted value when reading a cross-platform DataStore export.
@@ -88,6 +92,8 @@ class SettingsPrefs(private val context: Context) {
     val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
     val showSeekBar: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showSeekBar] ?: true }
     val autoFollow: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.autoFollowEnabled] ?: true }
+    val pageTurnButtonsVisible: Flow<Boolean> =
+        context.dataStore.data.map { it[SettingsKeys.pageTurnButtonsVisible] ?: true }
     val a4ReferenceHz: Flow<Double> = context.dataStore.data.map { it[SettingsKeys.a4ReferenceHz] ?: 440.0 }
     val repeatMode: Flow<String> = context.dataStore.data.map { it[SettingsKeys.repeatMode] ?: "off" }
     val playlistContinuationMode: Flow<String> =
@@ -110,6 +116,8 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
     suspend fun setShowSeekBar(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showSeekBar] = v }
     suspend fun setAutoFollow(v: Boolean) = context.dataStore.edit { it[SettingsKeys.autoFollowEnabled] = v }
+    suspend fun setPageTurnButtonsVisible(v: Boolean) =
+        context.dataStore.edit { it[SettingsKeys.pageTurnButtonsVisible] = v }
     suspend fun setA4ReferenceHz(v: Double) = context.dataStore.edit { it[SettingsKeys.a4ReferenceHz] = v }
     suspend fun setRepeatMode(v: String) = context.dataStore.edit { it[SettingsKeys.repeatMode] = v }
     suspend fun setPlaylistContinuationMode(v: String) =

@@ -186,6 +186,11 @@ fun ReaderScreen(
      * the viewport during playback. Mirrors iOS `readerAutoFollowEnabled`. */
     autoFollowEnabled: Boolean = true,
     onAutoFollowChange: (Boolean) -> Unit = {},
+    /** When true (SettingsPrefs default), the page-mode tap zones (edge buttons that turn the page) render;
+     * when false, only swipe-to-turn remains. Has no effect outside page mode. Mirrors iOS
+     * `readerPageTurnButtonsVisible`. */
+    pageTurnButtonsVisible: Boolean = true,
+    onPageTurnButtonsVisibleChange: (Boolean) -> Unit = {},
     /** Loads the persisted global repeat mode (suspending so the DataStore value is resolved before
      * the controller is installed). */
     initialRepeatModeLoader: suspend () -> RepeatMode = { RepeatMode.OFF },
@@ -470,6 +475,7 @@ fun ReaderScreen(
                         pageTapHintDismissed = pageTapHintDismissed,
                         onDismissPageTapHint = onDismissPageTapHint,
                         autoFollowEnabled = autoFollowEnabled,
+                        pageTurnButtonsVisible = pageTurnButtonsVisible,
                     )
                 }
             }
@@ -510,6 +516,8 @@ fun ReaderScreen(
             onShowSeekBarChange = onShowSeekBarChange,
             autoFollowEnabled = autoFollowEnabled,
             onAutoFollowChange = onAutoFollowChange,
+            pageTurnButtonsVisible = pageTurnButtonsVisible,
+            onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
         )

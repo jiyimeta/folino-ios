@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.ViewArray
@@ -77,6 +78,7 @@ fun SettingsScreen(
     val showInvisible by prefs.showInvisible.collectAsState(initial = false)
     val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
     val autoFollow by prefs.autoFollow.collectAsState(initial = true)
+    val pageTurnButtonsVisible by prefs.pageTurnButtonsVisible.collectAsState(initial = true)
     val soundfontVM = remember { com.keynumber.folino.soundfont.SoundfontController.viewModel(context) }
     val sfState by soundfontVM.stateWire.collectAsState()
 
@@ -176,6 +178,18 @@ fun SettingsScreen(
                 onChange = { v ->
                     scope.launch { prefs.setAutoFollow(v) }
                     AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("autoFollow", v))
+                },
+            )
+        }
+        item {
+            ToggleRow(
+                icon = Icons.Filled.TouchApp,
+                title = stringResource(R.string.settings_reader_page_turn_buttons),
+                checked = pageTurnButtonsVisible,
+                subtitle = stringResource(R.string.settings_reader_page_turn_buttons_footer),
+                onChange = { v ->
+                    scope.launch { prefs.setPageTurnButtonsVisible(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("pageTurnButtons", v))
                 },
             )
         }

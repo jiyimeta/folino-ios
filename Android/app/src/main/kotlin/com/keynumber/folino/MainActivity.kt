@@ -509,6 +509,7 @@ private fun LibraryNavGraph(
                 val keepScreenAwake by prefs.keepAwake.collectAsState(initial = true)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val autoFollowEnabled by prefs.autoFollow.collectAsState(initial = true)
+                val pageTurnButtonsVisible by prefs.pageTurnButtonsVisible.collectAsState(initial = true)
                 val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
@@ -678,6 +679,11 @@ private fun LibraryNavGraph(
                     onAutoFollowChange = { v ->
                         AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("autoFollow", v))
                         scope.launch { prefs.setAutoFollow(v) }
+                    },
+                    pageTurnButtonsVisible = pageTurnButtonsVisible,
+                    onPageTurnButtonsVisibleChange = { v ->
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("pageTurnButtons", v))
+                        scope.launch { prefs.setPageTurnButtonsVisible(v) }
                     },
                     initialRepeatModeLoader = { RepeatMode.fromWire(prefs.repeatMode.first()) },
                     loadAbRange = {

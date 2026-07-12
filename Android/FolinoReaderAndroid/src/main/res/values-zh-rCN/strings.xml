@@ -13,6 +13,7 @@
     <string name="reader_pref_show_invisible">显示隐藏元素</string>
     <string name="reader_pref_show_seek_bar">显示进度条</string>
     <string name="reader_pref_auto_follow">自动滚动</string>
+    <string name="reader_pref_page_turn_buttons">翻页按钮</string>
     <string name="reader_display_settings">显示设置</string>
     <string name="reader_share">共享</string>
     <string name="reader_staff_hide">隐藏谱表</string>

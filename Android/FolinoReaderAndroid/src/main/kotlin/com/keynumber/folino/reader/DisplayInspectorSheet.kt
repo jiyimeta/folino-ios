@@ -112,6 +112,8 @@ fun DisplayInspectorSheet(
     onShowSeekBarChange: (Boolean) -> Unit = {},
     autoFollowEnabled: Boolean = true,
     onAutoFollowChange: (Boolean) -> Unit = {},
+    pageTurnButtonsVisible: Boolean = true,
+    onPageTurnButtonsVisibleChange: (Boolean) -> Unit = {},
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
 ) {
@@ -124,6 +126,8 @@ fun DisplayInspectorSheet(
             onShowSeekBarChange = onShowSeekBarChange,
             autoFollowEnabled = autoFollowEnabled,
             onAutoFollowChange = onAutoFollowChange,
+            pageTurnButtonsVisible = pageTurnButtonsVisible,
+            onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = onTransposeChange,
         )
@@ -147,6 +151,8 @@ fun DisplayInspectorContent(
     onShowSeekBarChange: (Boolean) -> Unit = {},
     autoFollowEnabled: Boolean = true,
     onAutoFollowChange: (Boolean) -> Unit = {},
+    pageTurnButtonsVisible: Boolean = true,
+    onPageTurnButtonsVisibleChange: (Boolean) -> Unit = {},
     initialGeneralExpanded: Boolean = true,
     initialPartsExpanded: Boolean = true,
     transposeSemitones: Int = 0,
@@ -208,6 +214,17 @@ fun DisplayInspectorContent(
                         label = stringResource(R.string.reader_pref_auto_follow),
                         checked = autoFollowEnabled,
                     ) { onAutoFollowChange(it) }
+                }
+                // Only meaningful in page mode — matches the visual inspector and the iOS Settings row,
+                // which is likewise gated to `.page` (the tap zones this toggle controls don't exist in
+                // vertical/horizontal layout).
+                if (options.mode == ReaderLayoutMode.PAGE) {
+                    item {
+                        SwitchRow(
+                            label = stringResource(R.string.reader_pref_page_turn_buttons),
+                            checked = pageTurnButtonsVisible,
+                        ) { onPageTurnButtonsVisibleChange(it) }
+                    }
                 }
             }
 

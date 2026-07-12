@@ -66,6 +66,11 @@ fun PagedScore(
      * inspector row). See [shouldAutoFollow]. Off ⇒ the page never turns itself during playback and never
      * recenters on pause — full manual page control (parity with vertical/horizontal + iOS). */
     autoFollowEnabled: Boolean = true,
+    /** User opt-out for the page-mode tap-zone overlay (SettingsPrefs `pageTurnButtonsVisible` / the
+     * display inspector row). When false, [PageTapOverlay] does not render at all — swipe-to-turn still
+     * works via the pager itself. Independent of [pageTapHintDismissed], which only gates the one-time
+     * onboarding hint drawn on top of the zones (iOS `readerPageTurnButtonsVisible` parity). */
+    pageTurnButtonsVisible: Boolean = true,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -354,39 +359,45 @@ fun PagedScore(
         }
 
         // The nav overlay scales + pans in lockstep with the page content so the buttons zoom with
-        // the score (iOS parity). Transform origin is the top-left to match the content box.
-        PageTapOverlay(
-            viewportSize = viewportSize,
-            currentPage = pagerState.currentPage,
-            pageCount = pageCount,
-            showsHint = !pageTapHintDismissed,
-            onAnyZoneTouchDown = onDismissPageTapHint,
-            // An explicit edge-tap page navigation is a manual page turn → suspend auto-page-turn during
-            // playback so the playhead's page doesn't yank the reader back (Task 5; iOS `jumpToPage`).
-            onFirst = {
-                audioVm.suspendPlaybackFollowForManualViewportChange()
-                scope.launch { pagerState.animateScrollToPage(0) }
-            },
-            onPrev = {
-                audioVm.suspendPlaybackFollowForManualViewportChange()
-                scope.launch { pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0)) }
-            },
-            onNext = {
-                audioVm.suspendPlaybackFollowForManualViewportChange()
-                scope.launch { pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost(pageCount - 1)) }
-            },
-            onLast = {
-                audioVm.suspendPlaybackFollowForManualViewportChange()
-                scope.launch { pagerState.animateScrollToPage(pageCount - 1) }
-            },
-            modifier = Modifier.graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                translationX = panOffset.x
-                translationY = panOffset.y
-                transformOrigin = TransformOrigin(0f, 0f)
-            },
-        )
+        // the score (iOS parity). Transform origin is the top-left to match the content box. Gated on
+        // the opt-out toggle: swipe-to-turn (the pager itself, above) keeps working even when the tap
+        // zones are hidden — only this overlay (and its onboarding hint) disappears.
+        if (pageTurnButtonsVisible) {
+            PageTapOverlay(
+                viewportSize = viewportSize,
+                currentPage = pagerState.currentPage,
+                pageCount = pageCount,
+                showsHint = !pageTapHintDismissed,
+                onAnyZoneTouchDown = onDismissPageTapHint,
+                // An explicit edge-tap page navigation is a manual page turn → suspend auto-page-turn during
+                // playback so the playhead's page doesn't yank the reader back (Task 5; iOS `jumpToPage`).
+                onFirst = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage(0) }
+                },
+                onPrev = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0)) }
+                },
+                onNext = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch {
+                        pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost(pageCount - 1))
+                    }
+                },
+                onLast = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage(pageCount - 1) }
+                },
+                modifier = Modifier.graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = panOffset.x
+                    translationY = panOffset.y
+                    transformOrigin = TransformOrigin(0f, 0f)
+                },
+            )
+        }
     }
 }
 
