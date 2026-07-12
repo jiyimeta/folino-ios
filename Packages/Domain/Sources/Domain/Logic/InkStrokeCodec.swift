@@ -90,6 +90,10 @@ public enum InkStrokeCodec {
         let hasTilt = flags & 0b010 != 0
         let hasTime = flags & 0b100 != 0
 
+        let floatChannels = 3 + (hasForce ? 1 : 0) + (hasTilt ? 2 : 0)
+        let requiredBytes = count * 4 * floatChannels + count * 2 * (hasTime ? 1 : 0)
+        guard r.remaining >= requiredBytes else { throw InkStrokeCodecError.truncated }
+
         func floats(_ n: Int) throws -> [Float] {
             var a = [Float](); a.reserveCapacity(n)
             for _ in 0 ..< n {
@@ -133,6 +137,10 @@ public enum InkStrokeCodec {
 
         mutating func skip(_ n: Int) {
             offset += n
+        }
+
+        var remaining: Int {
+            data.endIndex - offset
         }
 
         mutating func u8() throws -> UInt8 {

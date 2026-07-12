@@ -47,4 +47,21 @@ struct InkStrokeCodecTests {
         let decoded = try InkStrokeCodec.decode(InkStrokeCodec.encode(s))
         #expect(decoded == s)
     }
+
+    @Test func `rejects implausible count instead of allocating unbounded memory`() {
+        // Valid header (magic/version/tool/flags/reserved/color/baseWidth/opacity) followed by a
+        // count of 0xFFFF_FFFF but no array data at all. A naive decoder would reserveCapacity(count)
+        // for billions of elements before ever checking the bytes remain; this must throw instead.
+        var bytes: [UInt8] = [0x46, 0x49, 0x4E, 0x4B] // "FINK" magic
+        bytes.append(1) // version
+        bytes.append(InkStroke.Tool.pen.rawValue) // tool
+        bytes.append(0) // flags: no force, no tilt, no time
+        bytes.append(0) // reserved
+        bytes.append(contentsOf: [0, 0, 0, 0]) // colorRGBA u32
+        bytes.append(contentsOf: [0, 0, 0, 0]) // baseWidthSp f32
+        bytes.append(contentsOf: [0, 0, 0, 0]) // opacity f32
+        bytes.append(contentsOf: [0xFF, 0xFF, 0xFF, 0xFF]) // count u32 = 0xFFFF_FFFF
+        let data = Data(bytes)
+        #expect(throws: InkStrokeCodec.InkStrokeCodecError.self) { try InkStrokeCodec.decode(data) }
+    }
 }
