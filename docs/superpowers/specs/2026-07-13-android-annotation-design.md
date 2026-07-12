@@ -45,6 +45,30 @@ now.
 | D4 | Drawing input | **Finger + stylus both draw.** One-finger/stylus draws; two-finger navigates (pan/zoom). |
 | D5 | iOS format migration timing | **Migrate iOS to the neutral format now** (the install base is tiny — feature is ~2 days old, ~dozens DAU — so this is the cheapest possible migration window). |
 | D6 | iOS migration method | **One-time full migration** of all existing layers to neutral via the validated codec (safe at this scale), with the legacy PencilKit decoder retained permanently. |
+| D7 | Delivery phasing | **Ship the iOS format migration first, as an independent iOS release**, decoupled from the (weeks-long) Android build. |
+
+## 2.1 Phasing
+
+The work splits into two independently shippable phases:
+
+- **Phase 1 — iOS format migration (ship now).** Define the neutral `InkStroke` format + codec, add the
+  iOS `PKDrawing ↔ InkStroke` codec, retain the legacy decoder (read-both), run the one-time migration,
+  write neutral thereafter, and add the CloudKit preserve-don't-clobber insurance. **No user-visible
+  change** — the annotation UX is identical; only the at-rest storage format changes. Rationale: the
+  install base is tiny *now*, so this is the cheapest migration window, and it production-validates the
+  neutral format before Android commits to it.
+
+  **Scope minimization for Phase 1:** iOS only swaps the **persistence codec at the store boundary**
+  (encode the already-baked per-stroke `PKDrawing` ↔ `InkStroke`). The anchoring core stays
+  PencilKit-typed and **unchanged** — the neutralization refactor (§5.1), which only matters for sharing
+  the core with Android, is deferred to Phase 2. This keeps Phase 1 low-risk and fast.
+
+- **Phase 2 — Android annotation (later).** Everything else in this spec: neutralize `AnnotationAnchoring`,
+  ssm anchor primitives, androidx.ink capture/render, Room persistence, tool palette, Reader
+  integration. Built on the Phase-1-validated format.
+
+The sections below describe the full (both-phase) design; §9 + §4 + §10 (codec tests) are the Phase 1
+surface.
 
 ## 3. Architecture overview
 
