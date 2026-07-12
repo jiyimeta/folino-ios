@@ -11,6 +11,14 @@ public enum InkStrokePencilKitBridge {
     private static let sampleSpacingSp: CGFloat = 0.5
 
     static func inkStroke(from stroke: PKStroke) -> InkStroke {
+        // `PKStroke.path` is pre-transform geometry — Apple docs: `transform` is "the affine transform of the stroke
+        // WHEN RENDERED", and `PKDrawing.transform(using:)` (used to bake anchoring's normalize/denormalize) composes
+        // into that `transform` property, not into `path`'s points. Since the neutral wire format has no transform
+        // slot, bake it here so the stored x/y are the actual rendered (post-transform) geometry — matching what
+        // `PKDrawing.dataRepresentation()` implicitly preserved by archiving `path` and `transform` together.
+        let t = stroke.transform
+        let widthScale = Float(sqrt(abs((t.a * t.d) - (t.b * t.c))))
+
         let samples = Array(stroke.path.interpolatedPoints(by: .distance(sampleSpacingSp)))
         let points = samples.isEmpty ? Array(stroke.path) : samples
 
@@ -18,9 +26,10 @@ public enum InkStrokePencilKitBridge {
         var force = [Float](); var azimuth = [Float](); var altitude = [Float](); var time = [UInt16]()
         x.reserveCapacity(points.count); y.reserveCapacity(points.count); width.reserveCapacity(points.count)
         for p in points {
-            x.append(Float(p.location.x))
-            y.append(Float(p.location.y))
-            width.append(Float(p.size.width))
+            let location = p.location.applying(t)
+            x.append(Float(location.x))
+            y.append(Float(location.y))
+            width.append(Float(p.size.width) * widthScale)
             force.append(Float(p.force))
             azimuth.append(Float(p.azimuth))
             altitude.append(Float(p.altitude))
@@ -30,7 +39,7 @@ public enum InkStrokePencilKitBridge {
         return InkStroke(
             tool: tool(from: stroke.ink.inkType),
             colorRGBA: rgba(from: stroke.ink.color),
-            baseWidthSp: Float(nominalWidth(of: stroke)),
+            baseWidthSp: Float(nominalWidth(of: stroke)) * widthScale,
             opacity: 1,
             x: x, y: y, width: width, force: force, azimuth: azimuth, altitude: altitude, timeMillis: time,
         )
