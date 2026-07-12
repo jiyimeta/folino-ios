@@ -111,6 +111,13 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
  * than passing under it. Only applied while the seek bar is off (the FAB is shown). */
 private val fabClusterReservedHeight = 72.dp
 
+/**
+ * Alpha applied to the on-screen playback cursor fill color (iOS parity: `accent.opacity(0.6)`).
+ * The PiP cursor ([ReaderPipContent]) stays fully opaque, so [HorizontalScore] only applies this
+ * when it is not rendering into the PiP window (`pipFit == false`).
+ */
+internal const val ON_SCREEN_CURSOR_ALPHA = 0.6f
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -778,7 +785,7 @@ private fun ReadyScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,
-                        color = abAccent,
+                        color = abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
@@ -1574,7 +1581,9 @@ internal fun HorizontalScore(
                             pxPerMM = fitPxPerMM,
                             scale = scale,
                             panOffset = Offset.Zero,
-                            color = abAccent,
+                            // Shared with the PiP surface (pipFit = true): only dim on-screen, PiP stays
+                            // fully opaque (iOS parity — the PiP cursor is never dimmed).
+                            color = if (pipFit) abAccent else abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
                             modifier = Modifier.fillMaxSize(),
                         )
                         // Loop region highlight only in A–B loop mode (see the vertical surface note).

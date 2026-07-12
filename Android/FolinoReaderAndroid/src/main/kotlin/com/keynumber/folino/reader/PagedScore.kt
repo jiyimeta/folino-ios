@@ -285,7 +285,7 @@ fun PagedScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
-                        color = abAccent,
+                        color = abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
                         modifier = Modifier.fillMaxSize(),
                     )
                     // Loop region highlight only in A–B loop mode (whole-piece repeat would tint the
