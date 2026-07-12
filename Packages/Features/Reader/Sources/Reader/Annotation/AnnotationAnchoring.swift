@@ -63,7 +63,10 @@ enum AnnotationAnchoring {
             // (see `display` for why a transform-only round-trip clamps under zoom).
             var normalized = PKDrawing(strokes: [stroke])
             normalized.transform(using: normalize)
-            return DrawingAnchor(kind: .musical(anchor), encodedDrawing: normalized.dataRepresentation())
+            return DrawingAnchor(
+                kind: .musical(anchor),
+                encodedDrawing: InkStrokePencilKitBridge.encodeStoredDrawing(normalized),
+            )
         }
     }
 
@@ -98,7 +101,7 @@ enum AnnotationAnchoring {
                   let (point, _) = anchorPoint(for: anchor, in: document),
                   point.y >= pageStartY, point.y < pageEndY,
                   let denormalize = displayTransform(for: anchor, in: document),
-                  var stored = try? PKDrawing(data: drawing.encodedDrawing)
+                  var stored = InkStrokePencilKitBridge.decodeStoredDrawing(drawing.encodedDrawing)
             else { continue }
             stored.transform(using: denormalize.concatenating(docToBand))
             strokes.append(contentsOf: stored.strokes)
@@ -121,7 +124,10 @@ enum AnnotationAnchoring {
             guard let (anchor, normalize) = normalizeTransform(forCentroid: centroid, in: document) else { return nil }
             var normalized = PKDrawing(strokes: [docStroke])
             normalized.transform(using: normalize)
-            return DrawingAnchor(kind: .musical(anchor), encodedDrawing: normalized.dataRepresentation())
+            return DrawingAnchor(
+                kind: .musical(anchor),
+                encodedDrawing: InkStrokePencilKitBridge.encodeStoredDrawing(normalized),
+            )
         }
     }
 
@@ -132,7 +138,7 @@ enum AnnotationAnchoring {
         for drawing in drawings {
             guard case let .musical(anchor) = drawing.kind else { continue }
             guard let denormalize = displayTransform(for: anchor, in: document) else { continue }
-            guard var stored = try? PKDrawing(data: drawing.encodedDrawing) else { continue }
+            guard var stored = InkStrokePencilKitBridge.decodeStoredDrawing(drawing.encodedDrawing) else { continue }
             // BAKE the denormalize into the stroke geometry (not a per-stroke `transform`): PencilKit derives its
             // renderable content extent from the path bounds and ignores the per-stroke transform, so a normalized
             // (tiny, origin-centred) path carrying a large scale `transform` renders OUTSIDE the computed content and
