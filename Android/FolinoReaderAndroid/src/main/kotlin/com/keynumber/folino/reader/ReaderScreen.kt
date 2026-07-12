@@ -1,5 +1,6 @@
 package com.keynumber.folino.reader
 
+import android.view.WindowManager
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -166,6 +167,9 @@ fun ReaderScreen(
     persistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
+    /** When true (SettingsPrefs default), the screen is kept from dimming/locking while the Reader
+     * is on screen — applied via [KeepScreenOn]. */
+    keepScreenAwake: Boolean = true,
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
@@ -200,6 +204,10 @@ fun ReaderScreen(
 ) {
     val context = LocalContext.current
     val fontProvider = remember(context) { bundledFontProvider(context) }
+
+    // Applies for as long as ReaderScreen is composed (including while shown in PiP), and clears the
+    // instant it isn't — either the pref flips off or the Reader is navigated away from.
+    KeepScreenOn(keepScreenAwake)
 
     val state by readerVm.state.collectAsStateWithLifecycle()
     val scoreHandle by readerVm.scoreHandle.collectAsStateWithLifecycle()
@@ -485,6 +493,24 @@ fun ReaderScreen(
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
         )
+    }
+}
+
+/**
+ * Keeps the device screen from dimming/locking while [enabled] is true, by applying
+ * `FLAG_KEEP_SCREEN_ON` to the hosting Activity's window. Re-evaluated whenever [enabled] changes,
+ * and cleared on every disposal — a pref flip to false, or this composable leaving the composition
+ * (e.g. navigating away from the Reader) — so the flag never outlives the Reader being on screen.
+ * `findActivity()` (declared in [ReaderPipController]'s file) walks the `ContextWrapper` chain to the
+ * Activity; the flag is a no-op if that lookup ever fails to find one.
+ */
+@Composable
+private fun KeepScreenOn(enabled: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(enabled) {
+        val window = context.findActivity()?.window
+        if (enabled) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 }
 

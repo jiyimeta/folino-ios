@@ -506,6 +506,7 @@ private fun LibraryNavGraph(
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
+                val keepScreenAwake by prefs.keepAwake.collectAsState(initial = true)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
                 val scope = rememberCoroutineScope()
@@ -669,6 +670,7 @@ private fun LibraryNavGraph(
                         prefsVm.setStaffVolume(addr.partIndex, addr.staffIndexInPart, volume.toDouble())
                     },
                     pipEnabled = pipEnabled,
+                    keepScreenAwake = keepScreenAwake,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
                     initialRepeatModeLoader = { RepeatMode.fromWire(prefs.repeatMode.first()) },
