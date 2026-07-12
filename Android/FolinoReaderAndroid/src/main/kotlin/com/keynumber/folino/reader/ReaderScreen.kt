@@ -180,6 +180,11 @@ fun ReaderScreen(
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
+    /** When true (SettingsPrefs default), continuous playback auto-scrolls / auto-page-turns the score and
+     * pausing recenters the viewport on the playhead; when false, the reader keeps full manual control of
+     * the viewport during playback. Mirrors iOS `readerAutoFollowEnabled`. */
+    autoFollowEnabled: Boolean = true,
+    onAutoFollowChange: (Boolean) -> Unit = {},
     /** Loads the persisted global repeat mode (suspending so the DataStore value is resolved before
      * the controller is installed). */
     initialRepeatModeLoader: suspend () -> RepeatMode = { RepeatMode.OFF },
@@ -449,8 +454,12 @@ fun ReaderScreen(
                         // is off) so the last system can scroll out from under the floating play FAB.
                         bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
                         onLayoutWidthMm = readerVm::setLayoutWidthMm,
+                        autoFollowEnabled = autoFollowEnabled,
                     )
-                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
+                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
+                        s, scoreHandle, fontProvider, audioVm, layoutOptions,
+                        autoFollowEnabled = autoFollowEnabled,
+                    )
                     ReaderLayoutMode.PAGE -> PagedScore(
                         state = s,
                         scoreHandle = scoreHandle,
@@ -497,6 +506,8 @@ fun ReaderScreen(
             onChange = onDisplayOptionsChange,
             showSeekBar = showSeekBar,
             onShowSeekBarChange = onShowSeekBarChange,
+            autoFollowEnabled = autoFollowEnabled,
+            onAutoFollowChange = onAutoFollowChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
         )
@@ -595,6 +606,9 @@ private fun ReadyScore(
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
     onLayoutWidthMm: (Double) -> Unit = {},
+    /** User opt-out for continuous-playback auto-scroll (SettingsPrefs `autoFollow` / the display
+     * inspector row). See [shouldAutoFollow]. */
+    autoFollowEnabled: Boolean = true,
 ) {
     val page = state.program.pages.first()
 
@@ -636,6 +650,15 @@ private fun ReadyScore(
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
             .collectLatest { (real, anchor) ->
                 if (real == null) return@collectLatest
+                val isPlaying = anchor != null
+                // Auto-follow opt-out (parity: iOS `readerAutoFollowEnabled`): off means no re-pin
+                // during playback AND no recenter-on-pause — full manual viewport control.
+                if (!autoFollowEnabled) return@collectLatest
+                // `userInteracting` is always false here — wired to the live scroll/pinch gesture
+                // state in a follow-up (Task 5's "suspend while panning/zooming").
+                if (isPlaying && !shouldAutoFollow(autoFollowEnabled, isPlaying, userInteracting = false)) {
+                    return@collectLatest
+                }
                 val realBytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(real))
                 if (realBytes.isEmpty()) return@collectLatest
                 val realFrame = DecodedFrameCodec.decode(realBytes)
@@ -1384,6 +1407,10 @@ internal fun HorizontalScore(
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
     pipFit: Boolean = false,
+    /** User opt-out for continuous-playback auto-scroll (SettingsPrefs `autoFollow` / the display
+     * inspector row). See [shouldAutoFollow]. Defaults true so the PiP surface (which doesn't pass
+     * this) keeps following regardless of the main Reader's toggle. */
+    autoFollowEnabled: Boolean = true,
 ) {
     val page = state.program.pages.first()
 
@@ -1422,6 +1449,15 @@ internal fun HorizontalScore(
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
             .collectLatest { (real, anchor) ->
                 if (real == null) return@collectLatest
+                val isPlaying = anchor != null
+                // Auto-follow opt-out (parity: iOS `readerAutoFollowEnabled`): off means no re-pin
+                // during playback AND no recenter-on-pause — full manual viewport control.
+                if (!autoFollowEnabled) return@collectLatest
+                // `userInteracting` is always false here — wired to the live scroll/pinch gesture
+                // state in a follow-up (Task 5's "suspend while panning/zooming").
+                if (isPlaying && !shouldAutoFollow(autoFollowEnabled, isPlaying, userInteracting = false)) {
+                    return@collectLatest
+                }
                 val realEnc = ScoreCursorCodec.encode(real)
 
                 val realMBytes = SheetMusicJNI.nativeMeasureFrame(handle, realEnc)

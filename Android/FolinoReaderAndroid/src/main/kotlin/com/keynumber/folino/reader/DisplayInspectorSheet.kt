@@ -110,6 +110,8 @@ fun DisplayInspectorSheet(
     onChange: (LayoutOptions) -> Unit,
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
+    autoFollowEnabled: Boolean = true,
+    onAutoFollowChange: (Boolean) -> Unit = {},
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
 ) {
@@ -120,6 +122,8 @@ fun DisplayInspectorSheet(
             onChange = onChange,
             showSeekBar = showSeekBar,
             onShowSeekBarChange = onShowSeekBarChange,
+            autoFollowEnabled = autoFollowEnabled,
+            onAutoFollowChange = onAutoFollowChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = onTransposeChange,
         )
@@ -141,6 +145,8 @@ fun DisplayInspectorContent(
     modifier: Modifier = Modifier,
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
+    autoFollowEnabled: Boolean = true,
+    onAutoFollowChange: (Boolean) -> Unit = {},
     initialGeneralExpanded: Boolean = true,
     initialPartsExpanded: Boolean = true,
     transposeSemitones: Int = 0,
@@ -196,6 +202,12 @@ fun DisplayInspectorContent(
                         label = stringResource(R.string.reader_pref_show_seek_bar),
                         checked = showSeekBar,
                     ) { onShowSeekBarChange(it) }
+                }
+                item {
+                    SwitchRow(
+                        label = stringResource(R.string.reader_pref_auto_follow),
+                        checked = autoFollowEnabled,
+                    ) { onAutoFollowChange(it) }
                 }
             }
 

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.ScreenLockPortrait
@@ -75,6 +76,7 @@ fun SettingsScreen(
     val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
     val showInvisible by prefs.showInvisible.collectAsState(initial = false)
     val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
+    val autoFollow by prefs.autoFollow.collectAsState(initial = true)
     val soundfontVM = remember { com.keynumber.folino.soundfont.SoundfontController.viewModel(context) }
     val sfState by soundfontVM.stateWire.collectAsState()
 
@@ -163,6 +165,17 @@ fun SettingsScreen(
                 onChange = { v ->
                     scope.launch { prefs.setShowSeekBar(v) }
                     AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("showSeekBar", v))
+                },
+            )
+        }
+        item {
+            ToggleRow(
+                icon = Icons.Filled.MyLocation,
+                title = stringResource(R.string.settings_reader_auto_follow),
+                checked = autoFollow,
+                onChange = { v ->
+                    scope.launch { prefs.setAutoFollow(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("autoFollow", v))
                 },
             )
         }

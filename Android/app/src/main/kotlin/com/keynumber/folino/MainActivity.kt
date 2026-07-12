@@ -508,6 +508,7 @@ private fun LibraryNavGraph(
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val keepScreenAwake by prefs.keepAwake.collectAsState(initial = true)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
+                val autoFollowEnabled by prefs.autoFollow.collectAsState(initial = true)
                 val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
@@ -673,6 +674,11 @@ private fun LibraryNavGraph(
                     keepScreenAwake = keepScreenAwake,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
+                    autoFollowEnabled = autoFollowEnabled,
+                    onAutoFollowChange = { v ->
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("autoFollow", v))
+                        scope.launch { prefs.setAutoFollow(v) }
+                    },
                     initialRepeatModeLoader = { RepeatMode.fromWire(prefs.repeatMode.first()) },
                     loadAbRange = {
                         abRepeatStore.loadAbRepeat(currentScoreId)?.let { AbRepeatRange(it.first, it.second) }
