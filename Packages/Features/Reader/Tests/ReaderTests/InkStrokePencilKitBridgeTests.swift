@@ -91,4 +91,22 @@ struct InkStrokePencilKitBridgeTests {
         let legacy = empty.dataRepresentation()
         #expect(InkStrokePencilKitBridge.inkStrokeDataFromLegacyPKDrawing(legacy) == nil)
     }
+
+    @Test func `pixel-erased stroke stays legacy through encode, decode, and migrate`() throws {
+        var masked = stroke(inkType: .pen, color: .black)
+        masked = PKStroke(
+            ink: masked.ink, path: masked.path, transform: masked.transform,
+            mask: UIBezierPath(rect: CGRect(x: 0, y: 0, width: 1, height: 1)),
+        )
+        let maskedDrawing = PKDrawing(strokes: [masked])
+
+        let encoded = InkStrokePencilKitBridge.encodeStoredDrawing(maskedDrawing)
+        #expect(!InkStrokeCodec.isInkStroke(encoded))
+
+        let decoded = try #require(InkStrokePencilKitBridge.decodeStoredDrawing(encoded))
+        #expect(decoded.strokes.first?.mask != nil)
+
+        let legacy = maskedDrawing.dataRepresentation()
+        #expect(InkStrokePencilKitBridge.inkStrokeDataFromLegacyPKDrawing(legacy) == nil)
+    }
 }

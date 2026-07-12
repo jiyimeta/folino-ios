@@ -58,9 +58,11 @@ enum AnnotationAnchoring {
         strokes.compactMap { stroke in
             let centroid = AnnotationAnchorPolicy.representativePoint(of: stroke)
             guard let (anchor, normalize) = normalizeTransform(forCentroid: centroid, in: document) else { return nil }
-            // Store the stroke normalized to (origin = anchor point P, unit = sp), BAKED into the points via
-            // `PKDrawing.transform(using:)` so display can re-bake the inverse without a lingering per-stroke transform
-            // (see `display` for why a transform-only round-trip clamps under zoom).
+            // Compose `normalize` (origin = anchor point P, unit = sp) into the stroke's `.transform` property via
+            // `PKDrawing.transform(using:)` — this does NOT touch `path`'s points. The actual baking into stored
+            // geometry happens one step later, inside `encodeStoredDrawing` -> `inkStroke(from:)`, which samples
+            // `path` post-transform because the neutral wire format has no transform slot to carry (see that
+            // function's comment for the full rationale).
             var normalized = PKDrawing(strokes: [stroke])
             normalized.transform(using: normalize)
             return DrawingAnchor(

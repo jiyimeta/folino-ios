@@ -94,6 +94,9 @@ public enum InkStrokePencilKitBridge {
     static func encodeStoredDrawing(_ drawing: PKDrawing) -> Data {
         assert(drawing.strokes.count <= 1, "encodeStoredDrawing expects a baked single-stroke drawing")
         guard let stroke = drawing.strokes.first else { return drawing.dataRepresentation() }
+        // A pixel-erased stroke carries a `mask` clip that the neutral format can't represent; keep it as a legacy
+        // PKDrawing archive (read-both handles legacy permanently) so the erase is preserved losslessly.
+        if stroke.mask != nil { return drawing.dataRepresentation() }
         return InkStrokeCodec.encode(inkStroke(from: stroke))
     }
 
@@ -109,6 +112,7 @@ public enum InkStrokePencilKitBridge {
         guard !InkStrokeCodec.isInkStroke(data) else { return nil }
         guard let drawing = try? PKDrawing(data: data) else { return nil }
         guard !drawing.strokes.isEmpty else { return nil }
+        guard drawing.strokes.allSatisfy({ $0.mask == nil }) else { return nil } // leave pixel-erased strokes legacy
         return encodeStoredDrawing(drawing)
     }
 

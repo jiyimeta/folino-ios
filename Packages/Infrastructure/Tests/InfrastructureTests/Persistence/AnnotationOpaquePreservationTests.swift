@@ -27,7 +27,7 @@ struct AnnotationOpaquePreservationTests {
 
     @Test func `unknown format drawing survives round trip`() async throws {
         let (db, tmp) = try makeDatabase()
-        _ = tmp
+        defer { withExtendedLifetime(tmp) {} }
         let store = LiveAnnotationStore(database: db)
         let scoreID = ScoreItemID()
         try await insertScore(db, id: scoreID)

@@ -14,6 +14,16 @@ import Foundation
 ///   force[count] f32       (only if hasForce)
 ///   azimuth[count] f32, altitude[count] f32   (only if hasTilt)
 ///   timeMillis[count] u16  (only if hasTime)
+///
+/// `timeMillis` stores each sample's ABSOLUTE offset in milliseconds from the stroke's start (`p.timeOffset * 1000`,
+/// clamped to `UInt16`), NOT deltas between consecutive samples. A `UInt16` ceiling means offsets beyond ~65s from
+/// stroke start saturate at `UInt16.max` rather than wrapping — authoritative for any future decoder (e.g. the
+/// Android/sharing side) that must match this byte layout exactly.
+///
+/// Extensibility discipline: a future channel may be added ONLY as a new flag bit plus a new, flag-gated array
+/// appended at the END of the layout — never bump `version`, and never insert a channel in the middle of the
+/// existing layout. Old decoders tolerate trailing bytes they don't know about (`remaining >= requiredBytes` only
+/// checks what THAT decoder needs) and ignore unknown flag bits, so appending-only keeps v1 forward-compatible.
 public enum InkStrokeCodec {
     public enum InkStrokeCodecError: Error, Equatable {
         case badMagic
