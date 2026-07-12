@@ -1,3 +1,10 @@
+- version: 1.8.2
+  descriptions:
+    - en: Minor improvements and bug fixes
+      ja: 細かな改善と不具合の修正
+      ko: 사소한 개선 및 버그 수정
+      zh-Hans: 细节改进与问题修复
+      zh-Hant: 細節改進與問題修復
 - version: 1.8.1
   descriptions:
     - en: Minor improvements and bug fixes
