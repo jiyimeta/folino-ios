@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -620,6 +621,17 @@ private fun ReadyScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
+    // Live "is the user right now touching the score" signal (Task 5): true while a single-finger
+    // scroll/fling is in progress on either axis, or while a two-finger pinch is live. Suspends the
+    // playing re-pin below so an automatic scroll never fights a live gesture; resumes the instant the
+    // gesture ends (the next cursor tick re-evaluates `shouldAutoFollow` with the fresh value) — no
+    // separate "resume on next play" bookkeeping is needed since this reflects live touch state, not a
+    // sticky suspension.
+    var pinchInProgress by remember { mutableStateOf(false) }
+    val userInteracting by remember {
+        derivedStateOf { vScroll.isScrollInProgress || hScroll.isScrollInProgress || pinchInProgress }
+    }
+
     // Fixed-density render: pxPerMM is the same on every device, so the staff is the same on-screen
     // size on phone and tablet. The engine reflows to the viewport width (reported below) so a wider
     // screen shows MORE music, not bigger notes. Pinch `scale` multiplies on top. (iOS parity.)
@@ -654,9 +666,10 @@ private fun ReadyScore(
                 // Auto-follow opt-out (parity: iOS `readerAutoFollowEnabled`): off means no re-pin
                 // during playback AND no recenter-on-pause — full manual viewport control.
                 if (!autoFollowEnabled) return@collectLatest
-                // `userInteracting` is always false here — wired to the live scroll/pinch gesture
-                // state in a follow-up (Task 5's "suspend while panning/zooming").
-                if (isPlaying && !shouldAutoFollow(autoFollowEnabled, isPlaying, userInteracting = false)) {
+                // Suspend just the playing re-pin while the user is actively dragging/pinching (Task
+                // 5); the paused/manual keep-in-view branch below still runs — a gesture there is the
+                // user positioning the view themselves, not something to fight.
+                if (isPlaying && !shouldAutoFollow(autoFollowEnabled, isPlaying, userInteracting)) {
                     return@collectLatest
                 }
                 val realBytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(real))
@@ -749,6 +762,11 @@ private fun ReadyScore(
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressed = event.changes.count { it.pressed }
                         if (pressed >= 2) {
+                            // A live two-finger contact suspends playback auto-follow (Task 5), even
+                            // before any actual zoom delta — `scrollState.isScrollInProgress` alone
+                            // would miss a pinch, since two fingers holding steady on the score never
+                            // register as a scroll gesture.
+                            pinchInProgress = true
                             val zoom = event.calculateZoom()
                             if (zoom != 1f) {
                                 val centroid = event.calculateCentroid(useCurrent = true)
@@ -768,6 +786,8 @@ private fun ReadyScore(
                             }
                         }
                     } while (event.changes.any { it.pressed })
+                    // Gesture over (all pointers lifted) — resume auto-follow on the next cursor tick.
+                    pinchInProgress = false
                 }
             },
         contentAlignment = Alignment.TopStart,
@@ -1422,6 +1442,13 @@ internal fun HorizontalScore(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
+    // Live "is the user right now touching the score" signal — see the identical block in
+    // [ReadyScore] for the full rationale (Task 5).
+    var pinchInProgress by remember { mutableStateOf(false) }
+    val userInteracting by remember {
+        derivedStateOf { vScroll.isScrollInProgress || hScroll.isScrollInProgress || pinchInProgress }
+    }
+
     // Fixed-density render (same pxPerMM as vertical) so the single-system row is the same on-screen
     // size on phone and tablet. The row is natural-width (no wrap) → horizontal scroll, and this
     // surface reports no viewport width to the VM (unlike vertical), so the engine's wrap width is moot.
@@ -1453,9 +1480,9 @@ internal fun HorizontalScore(
                 // Auto-follow opt-out (parity: iOS `readerAutoFollowEnabled`): off means no re-pin
                 // during playback AND no recenter-on-pause — full manual viewport control.
                 if (!autoFollowEnabled) return@collectLatest
-                // `userInteracting` is always false here — wired to the live scroll/pinch gesture
-                // state in a follow-up (Task 5's "suspend while panning/zooming").
-                if (isPlaying && !shouldAutoFollow(autoFollowEnabled, isPlaying, userInteracting = false)) {
+                // Suspend just the playing re-pin while the user is actively dragging/pinching (Task
+                // 5); the paused/manual keep-in-view branches below still run.
+                if (isPlaying && !shouldAutoFollow(autoFollowEnabled, isPlaying, userInteracting)) {
                     return@collectLatest
                 }
                 val realEnc = ScoreCursorCodec.encode(real)
@@ -1552,6 +1579,9 @@ internal fun HorizontalScore(
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressed = event.changes.count { it.pressed }
                         if (pressed >= 2) {
+                            // See [ReadyScore]'s identical comment: a live two-finger contact suspends
+                            // auto-follow (Task 5) even before any zoom delta.
+                            pinchInProgress = true
                             val zoom = event.calculateZoom()
                             if (zoom != 1f) {
                                 val centroid = event.calculateCentroid(useCurrent = true)
@@ -1568,6 +1598,7 @@ internal fun HorizontalScore(
                             }
                         }
                     } while (event.changes.any { it.pressed })
+                    pinchInProgress = false
                 }
             },
         contentAlignment = Alignment.Center,
