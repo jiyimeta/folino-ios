@@ -36,7 +36,21 @@ public struct AnnotationFormatMigrator: Sendable {
                     drawings: newDrawings, textBoxes: layer.textBoxes, updatedAt: layer.updatedAt,
                 )
                 let newRecord = try AnnotationLayerRecord(domain: updated)
-                try await database.pool.write { db in try newRecord.save(db) }
+                let didWrite = try await database.pool.write { db -> Bool in
+                    // Re-fetch and compare updatedAt inside the same write transaction so the
+                    // read-check-and-write is atomic: if the user saved a newer version of this
+                    // layer since our snapshot, skip it rather than clobbering their edit. It will
+                    // convert lazily on their next edit.
+                    guard
+                        let current = try AnnotationLayerRecord
+                            .filter(Column("score_item_id") == record.scoreItemId)
+                            .fetchOne(db),
+                            current.updatedAt == record.updatedAt
+                    else { return false }
+                    try newRecord.save(db)
+                    return true
+                }
+                guard didWrite else { continue }
                 rewritten += 1
             }
             return rewritten
