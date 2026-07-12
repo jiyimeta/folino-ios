@@ -65,6 +65,30 @@ public enum InkStrokePencilKitBridge {
         return PKStroke(ink: PKInk(inkType(from: ink.tool), color: color(from: ink.colorRGBA)), path: path)
     }
 
+    /// Bakes each stroke's `transform` into its control-point locations (and width into `size`), returning strokes
+    /// with identity transform and full-size paths. PencilKit derives its renderable content extent from PATH BOUNDS
+    /// and ignores the per-stroke transform, so a tiny normalized path + large transform clamps under zoom on
+    /// device; baking makes the path full-size so it renders unclamped (matches the pre-neutral-format behavior).
+    static func bakingTransformIntoPoints(_ drawing: PKDrawing) -> PKDrawing {
+        PKDrawing(strokes: drawing.strokes.map { stroke in
+            let t = stroke.transform
+            let widthScale = sqrt(abs((t.a * t.d) - (t.b * t.c)))
+            let points = stroke.path.map { p in
+                PKStrokePoint(
+                    location: p.location.applying(t),
+                    timeOffset: p.timeOffset,
+                    size: CGSize(width: p.size.width * widthScale, height: p.size.height * widthScale),
+                    opacity: p.opacity, force: p.force, azimuth: p.azimuth, altitude: p.altitude,
+                )
+            }
+            return PKStroke(
+                ink: stroke.ink,
+                path: PKStrokePath(controlPoints: points, creationDate: Date(timeIntervalSince1970: 0)),
+                transform: .identity, mask: stroke.mask,
+            )
+        })
+    }
+
     // MARK: - Stored-blob helpers (the PencilKit⇄bytes boundary)
 
     static func encodeStoredDrawing(_ drawing: PKDrawing) -> Data {

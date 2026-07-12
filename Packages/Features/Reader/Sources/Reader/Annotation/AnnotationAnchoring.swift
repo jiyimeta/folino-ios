@@ -104,7 +104,7 @@ enum AnnotationAnchoring {
                   var stored = InkStrokePencilKitBridge.decodeStoredDrawing(drawing.encodedDrawing)
             else { continue }
             stored.transform(using: denormalize.concatenating(docToBand))
-            strokes.append(contentsOf: stored.strokes)
+            strokes.append(contentsOf: InkStrokePencilKitBridge.bakingTransformIntoPoints(stored).strokes)
         }
         return PKDrawing(strokes: strokes)
     }
@@ -139,14 +139,14 @@ enum AnnotationAnchoring {
             guard case let .musical(anchor) = drawing.kind else { continue }
             guard let denormalize = displayTransform(for: anchor, in: document) else { continue }
             guard var stored = InkStrokePencilKitBridge.decodeStoredDrawing(drawing.encodedDrawing) else { continue }
-            // BAKE the denormalize into the stroke geometry (not a per-stroke `transform`): PencilKit derives its
-            // renderable content extent from the path bounds and ignores the per-stroke transform, so a normalized
-            // (tiny, origin-centred) path carrying a large scale `transform` renders OUTSIDE the computed content and
-            // gets clamped under zoom. `PKDrawing.transform(using:)` rewrites the points so the projected ink is full
-            // size at its document position — identical in form to freshly drawn ink — which the canvas renders without
-            // clamping.
+            // `PKDrawing.transform(using:)` composes the denormalize into each stroke's `.transform` property, NOT
+            // into `.path`'s points. PencilKit derives its renderable content extent from PATH BOUNDS and ignores the
+            // per-stroke transform, so a normalized (tiny, origin-centred) path carrying a large scale `.transform`
+            // renders OUTSIDE the computed extent and gets clamped under zoom on device. So bake the (now-composed)
+            // transform into the points explicitly — the projected ink becomes full size at its document position,
+            // identical in form to freshly drawn ink, which the canvas renders without clamping.
             stored.transform(using: denormalize)
-            strokes.append(contentsOf: stored.strokes)
+            strokes.append(contentsOf: InkStrokePencilKitBridge.bakingTransformIntoPoints(stored).strokes)
         }
         return PKDrawing(strokes: strokes)
     }

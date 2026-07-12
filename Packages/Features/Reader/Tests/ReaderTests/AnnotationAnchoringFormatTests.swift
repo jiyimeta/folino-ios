@@ -65,4 +65,24 @@ struct AnnotationAnchoringFormatTests {
         }
         #expect(!AnnotationAnchoring.display(legacy, in: d).strokes.isEmpty)
     }
+
+    @Test func `display bakes the projection into points, not the stroke transform`() throws {
+        let d = doc()
+        let ref = try #require(
+            d.anchorReferencePoint(measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0),
+        )
+        let anchors = AnnotationAnchoring.capture(strokes: [strokeNear(ref.point)], in: d)
+        let projected = AnnotationAnchoring.display(anchors, in: d)
+        let stroke = try #require(projected.strokes.first)
+        let t = stroke.transform
+        // PencilKit derives its renderable content extent from PATH BOUNDS and ignores a lingering per-stroke
+        // transform, so a correct bake must leave `transform` at (approximately) identity — the projection must
+        // already be folded into the control-point locations.
+        #expect(abs(t.a - 1) < 0.001)
+        #expect(abs(t.b) < 0.001)
+        #expect(abs(t.c) < 0.001)
+        #expect(abs(t.d - 1) < 0.001)
+        #expect(abs(t.tx) < 0.001)
+        #expect(abs(t.ty) < 0.001)
+    }
 }

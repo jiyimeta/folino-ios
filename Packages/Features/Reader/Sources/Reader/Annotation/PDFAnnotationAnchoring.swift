@@ -66,7 +66,7 @@ enum PDFAnnotationAnchoring {
             guard let denormalize = displayTransform(pageFrame: pageFrames[anchor.pageIndex]) else { continue }
             guard var stored = InkStrokePencilKitBridge.decodeStoredDrawing(drawing.encodedDrawing) else { continue }
             stored.transform(using: denormalize)
-            strokes.append(contentsOf: stored.strokes)
+            strokes.append(contentsOf: InkStrokePencilKitBridge.bakingTransformIntoPoints(stored).strokes)
         }
         return PKDrawing(strokes: strokes)
     }
@@ -95,7 +95,7 @@ enum PDFAnnotationAnchoring {
             guard case let .page(anchor) = drawing.kind, anchor.pageIndex == pageIndex else { continue }
             guard var stored = InkStrokePencilKitBridge.decodeStoredDrawing(drawing.encodedDrawing) else { continue }
             stored.transform(using: denormalize)
-            strokes.append(contentsOf: stored.strokes)
+            strokes.append(contentsOf: InkStrokePencilKitBridge.bakingTransformIntoPoints(stored).strokes)
         }
         return PKDrawing(strokes: strokes)
     }
