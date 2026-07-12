@@ -59,6 +59,7 @@ public enum InkStrokePencilKitBridge {
     // MARK: - Stored-blob helpers (the PencilKit⇄bytes boundary)
 
     static func encodeStoredDrawing(_ drawing: PKDrawing) -> Data {
+        assert(drawing.strokes.count <= 1, "encodeStoredDrawing expects a baked single-stroke drawing")
         guard let stroke = drawing.strokes.first else { return drawing.dataRepresentation() }
         return InkStrokeCodec.encode(inkStroke(from: stroke))
     }
@@ -74,6 +75,7 @@ public enum InkStrokePencilKitBridge {
     public static func inkStrokeDataFromLegacyPKDrawing(_ data: Data) -> Data? {
         guard !InkStrokeCodec.isInkStroke(data) else { return nil }
         guard let drawing = try? PKDrawing(data: data) else { return nil }
+        guard !drawing.strokes.isEmpty else { return nil }
         return encodeStoredDrawing(drawing)
     }
 
@@ -111,7 +113,11 @@ public enum InkStrokePencilKitBridge {
     private static func rgba(from color: UIColor) -> UInt32 {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         let resolved = color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
-        resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+        if !resolved.getRed(&r, green: &g, blue: &b, alpha: &a) {
+            // Not RGB-convertible (e.g. a pattern or grayscale-only color) — fall back to opaque
+            // black rather than silently emitting transparent black.
+            r = 0; g = 0; b = 0; a = 1
+        }
         func c(_ v: CGFloat) -> UInt32 {
             UInt32((max(0, min(1, v)) * 255).rounded())
         }

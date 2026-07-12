@@ -85,4 +85,10 @@ struct InkStrokePencilKitBridgeTests {
         // Already-neutral input is left alone.
         #expect(InkStrokePencilKitBridge.inkStrokeDataFromLegacyPKDrawing(neutral) == nil)
     }
+
+    @Test func `migrator returns nil for zero-stroke legacy input`() {
+        let empty = PKDrawing()
+        let legacy = empty.dataRepresentation()
+        #expect(InkStrokePencilKitBridge.inkStrokeDataFromLegacyPKDrawing(legacy) == nil)
+    }
 }
