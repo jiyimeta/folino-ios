@@ -7,9 +7,16 @@ import ImportExport
 import ImportExportAppGroup
 import Observation
 import Persistence
+import Reader
 import ScoreFiles
 import Soundfonts
 import UtilityCore
+
+/// One-shot flag guarding `AnnotationFormatMigrator`: once every stored annotation layer has been rewritten to the
+/// neutral InkStroke format, this is set and the migration is skipped on subsequent launches.
+private enum AnnotationMigrationKey {
+    static let neutralFormatMigrated = "annotation.neutralFormatMigrated.v1"
+}
 
 @MainActor
 @Observable
@@ -99,6 +106,7 @@ final class AppBootstrap {
             incomingShareCoordinator = shareCoordinator
             installAudioStack(gateway: gateway)
             reachability = LiveNetworkReachability()
+            migrateAnnotationFormatIfNeeded(database: database)
 
             Task { [weak self] in await self?.finishStartup(repository: repository, writer: writer) }
         } catch {
@@ -261,6 +269,25 @@ final class AppBootstrap {
             mode = prefs.repeatMode
         }
         defaults.set(mode.rawValue, forKey: ReaderGlobalSettingsKey.repeatMode)
+    }
+
+    /// One-shot rewrite of every stored `AnnotationLayer`'s drawings from legacy PKDrawing bytes to the neutral
+    /// InkStroke format. Read-both decoding (in Reader) already keeps the app correct against old data, so this
+    /// runs off the main thread and is allowed to silently fail — on error the flag stays unset and the next launch
+    /// retries. Gated on a `UserDefaults` flag so a completed migration never re-scans the table.
+    private func migrateAnnotationFormatIfNeeded(database: AppDatabase) {
+        guard !UserDefaults.standard.bool(forKey: AnnotationMigrationKey.neutralFormatMigrated) else { return }
+        let migrator = AnnotationFormatMigrator(database: database)
+        Task.detached(priority: .utility) {
+            do {
+                _ = try await migrator.migrate(transcode: { data in
+                    InkStrokePencilKitBridge.inkStrokeDataFromLegacyPKDrawing(data)
+                })
+                UserDefaults.standard.set(true, forKey: AnnotationMigrationKey.neutralFormatMigrated)
+            } catch {
+                // Non-fatal: read-both keeps the app correct; retry on next launch (flag stays unset).
+            }
+        }
     }
 
     /// Move-then-dedup the high-quality SoundFont into the shared App Group container before the provider is built.
