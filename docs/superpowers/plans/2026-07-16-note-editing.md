@@ -723,7 +723,9 @@ extension EditorViewModel {
 - [ ] Implement `EditorViewModel+Pitch.swift`: all four fetch the selected `.note(noteID)` (else no-op), read `keySig = editor.score.activeKey(at: noteID)`, build the appropriate `SetNotePitch`/`SetAccidental`, and go through `applyCommand`. `commitPitchDrag` sets `accidental: PitchSpelling.displayedAccidental(forTpc: newTpc, in: keySig)`. Run → green.
 - [ ] Commit: `feat(editor): pitch keys, staff-step drag math, accidentals`
 
----### Task 7: Chords, ties, tuplets, voices (TDD)
+---
+
+### Task 7: Chords, ties, tuplets, voices (TDD)
 
 **Files**
 
