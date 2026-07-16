@@ -1,5 +1,6 @@
 import CoreGraphics
 import Domain
+import ReaderAnnotationCore
 import SheetMusicLayout
 
 /// iOS `AnchorResolving` backed by an in-process `LayoutDocument`. Bridges ssm's `ResolvedAnchor` to the Domain

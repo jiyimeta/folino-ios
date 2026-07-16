@@ -1,6 +1,26 @@
-import CoreGraphics
 import Domain
 import Foundation
+
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+
+#if !canImport(CoreGraphics)
+// Android has no CoreGraphics. Provide the minimal geometry primitives the neutral core uses (CGPoint / CGFloat)
+// so it cross-compiles without pulling in a heavy layout dependency. iOS compiles this block out and uses the real
+// CoreGraphics types; the core never touches CGRect / CGAffineTransform (it carries its own `StrokeTransform`).
+public typealias CGFloat = Double
+public struct CGPoint: Hashable, Sendable {
+    public var x: CGFloat
+    public var y: CGFloat
+    public init(x: CGFloat, y: CGFloat) {
+        self.x = x
+        self.y = y
+    }
+
+    public static let zero = CGPoint(x: 0, y: 0)
+}
+#endif
 
 // Platform-neutral anchoring core for freehand annotation. Operates on the shared `InkStroke` and an injected
 // `AnchorResolving` — NO PencilKit, NO `LayoutDocument` — so it compiles for both the Apple and Android toolchains and

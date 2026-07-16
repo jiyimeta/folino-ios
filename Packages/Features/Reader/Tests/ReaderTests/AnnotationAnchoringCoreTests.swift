@@ -2,6 +2,7 @@ import CoreGraphics
 import Domain
 import Foundation
 @testable import Reader
+import ReaderAnnotationCore
 import SheetMusicCore
 import SheetMusicLayout
 import Testing

@@ -1,6 +1,7 @@
 import CoreGraphics
 import Domain
 import PencilKit
+import ReaderAnnotationCore
 import SheetMusicLayout
 
 /// iOS PencilKit adapter over the platform-neutral `AnnotationAnchoringCore`. Bridges `PKStroke ↔ InkStroke` at the UI
