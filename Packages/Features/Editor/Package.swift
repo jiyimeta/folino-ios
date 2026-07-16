@@ -37,6 +37,7 @@ let package = Package(
             name: "EditorTests",
             dependencies: [
                 "Editor",
+                .product(name: "SheetMusicUI", package: "swift-sheet-music"),
                 .product(name: "SheetMusicLayoutApple", package: "swift-sheet-music"),
             ],
         ),

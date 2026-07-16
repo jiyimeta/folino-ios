@@ -1,6 +1,7 @@
 import Domain
 @testable import Editor
 import Foundation
+import SheetMusicUI
 import Testing
 
 @MainActor
@@ -50,5 +51,13 @@ struct EditorViewModelSessionTests {
         vm.applyCommand(SetNotePitch(at: EditorFixtures.noteID(element: 1), pitch: 61, tpc: 21))
         #expect(vm.generation == 0)
         #expect(vm.score == EditorFixtures.fourQuarterRests())
+    }
+
+    @Test func `applyCommand re-derives selection onto the newly input note`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        #expect(vm.selectedItem == .note(EditorFixtures.noteID(element: 1)))
+        #expect(vm.selection == .single(.note(EditorFixtures.noteID(element: 1))))
     }
 }

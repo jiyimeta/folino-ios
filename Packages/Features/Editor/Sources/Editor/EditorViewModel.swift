@@ -95,17 +95,19 @@ public final class EditorViewModel {
 
     public func undo() {
         guard let editor, editor.canUndo else { return }
-        try? editor.undo()
+        // Mirror applyCommand's do/catch contract: a swallowed engine failure must not fire a false
+        // generation bump / onSelectionChanged / onScoreChanged (Task 3 review parity fix).
+        do { try editor.undo() } catch { return }
         generation += 1
-        selection = .none
+        rederiveSelection()
         onScoreChanged(editor.score)
     }
 
     public func redo() {
         guard let editor, editor.canRedo else { return }
-        try? editor.redo()
+        do { try editor.redo() } catch { return }
         generation += 1
-        selection = .none
+        rederiveSelection()
         onScoreChanged(editor.score)
     }
 
@@ -122,7 +124,42 @@ public final class EditorViewModel {
             return
         }
         generation += 1
-        selection = .none
+        rederiveSelection()
         onScoreChanged(editor.score)
+    }
+
+    /// Re-derives the selection from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
+    /// positional, so a stored selection can drift after any mutation — after every apply/undo/redo the
+    /// selection is recomputed against the current score. When no slot was touched
+    /// (`lastAffectedLocation == nil`) the current selection is preserved rather than cleared.
+    private func rederiveSelection() {
+        guard let editor, let location = editor.lastAffectedLocation else { return }
+        select(
+            SelectionRederivation.item(
+                at: location,
+                in: editor.score,
+                preferringNoteIndex: previousNoteIndex(at: location),
+            ),
+        )
+    }
+
+    /// The `noteIndexInChord` of the current selection when it is a `.note` anchored at exactly `location`,
+    /// so re-derivation can keep the caret on the same chord tone across edits that add/remove siblings.
+    private func previousNoteIndex(at location: VoiceElementID) -> Int? {
+        guard case let .note(noteID)? = selectedItem,
+              noteID.staff == location.staff,
+              noteID.measureIndex == location.measureIndex,
+              noteID.voiceIndex == location.voiceIndex,
+              noteID.elementIndex == location.elementIndex
+        else { return nil }
+        return noteID.noteIndexInChord
+    }
+
+    /// Sets `selection` / `selectedItem` and notifies. Internal (not private) so Tasks 5-10's ops
+    /// extensions in sibling files can drive selection directly (e.g. after a hit-test tap).
+    func select(_ item: SheetMusicCore.ScoreItemID?) {
+        selection = item.map(ScoreSelection.single) ?? .none
+        selectedItem = item
+        onSelectionChanged(selection, selectedItem)
     }
 }
