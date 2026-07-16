@@ -427,7 +427,9 @@ The host `xcodebuild` path exercises the *macOS* build of the target; the shippi
 
 ## Downstream sub-plans (design-level outline — each expands to its own bite-sized plan when executed)
 
-### Sub-plan A — Shared anchoring-core neutralize (Folino Reader, iOS-verifiable, NEXT after B)
+### Sub-plan A — Shared anchoring-core neutralize (Folino Reader, iOS-verifiable) — ✅ DONE (needs device verification)
+
+**Status (2026-07-16):** A1 (`941488d3`) added the shared `AnnotationAnchoringCore` + `AnchorResolving` + `StrokeTransform` + `LayoutDocumentAnchorResolver` + round-trip tests (pure addition). A2 (`5091855b`) routed iOS `AnnotationAnchoring.{capture,display,partitionByPage,anchorPoint}` through the core (behavior-preserving dual path: masked→legacy PKDrawing, unmasked→core byte-equivalent; read-both preserved). Verified: all 6 annotation suites (29 tests) green on the iPhone 17 Pro Max sim. No stored-format change / no migration. **Remaining: on-device verification** (annotation has device-only render/gesture behavior — `reference_pencilkit_annotation`). The paged band-space variants (`capturePaged`/`displayPaged`) and `PDFAnnotationAnchoring` (iOS-only, no Android PDF) were intentionally left on their proven path — a later A3 increment can route paged through the core if desired.
 
 Neutralize `Reader/Annotation/AnnotationAnchoring.swift` (and `AnnotationAnchorPolicy.swift`, `PDFAnnotationAnchoring.swift`) so the core operates on `InkStroke` and an injected anchor resolver, not `PKStroke` + `LayoutDocument`:
 
