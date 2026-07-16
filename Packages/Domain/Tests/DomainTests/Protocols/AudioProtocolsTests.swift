@@ -36,6 +36,11 @@ private final class FakePlaybackController: PlaybackController {
 
     func playPreview(noteID: NoteID, duration: TimeInterval) {}
 
+    private(set) var scorePreviewCalls: [(noteID: NoteID, duration: TimeInterval)] = []
+    func playPreview(noteID: NoteID, in _: Score, duration: TimeInterval) {
+        scorePreviewCalls.append((noteID, duration))
+    }
+
     func setLoopRange(_ range: ABRepeatRange?) {}
     func setMetronomeEnabled(_ enabled: Bool) {}
     func setTempoMultiplier(_ value: Double) {
@@ -61,5 +66,15 @@ struct AudioProtocolsTests {
         await controller.setTempoMultiplier(0.75)
         #expect(controller.lastCursor == target)
         #expect(controller.lastTempo == 0.75)
+    }
+
+    @MainActor @Test func `playback controller previews a note against a caller-supplied score`() async {
+        let controller = FakePlaybackController()
+        let noteID = NoteID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
+        )
+        await controller.playPreview(noteID: noteID, in: Score(division: 480), duration: 0.3)
+        #expect(controller.scorePreviewCalls.count == 1)
     }
 }
