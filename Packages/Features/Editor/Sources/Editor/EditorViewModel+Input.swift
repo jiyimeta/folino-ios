@@ -15,7 +15,7 @@ extension EditorViewModel {
             inputPitch(letter: letter, onRest: restID, in: score)
         case let .note(noteID):
             guard !isAddToChordArmed else {
-                // Task 7: the chord-arm add-note path (AddNoteToChord) lands here.
+                addLetterToChord(letter, at: noteID, in: score)
                 return
             }
             inputPitch(letter: letter, onNote: noteID, in: score)
@@ -129,7 +129,8 @@ extension EditorViewModel {
 
 /// Nearest pitch to `reference` spelled as `letter` under `keySig`: `NoteInputPlanner`'s natural-letter octave
 /// search, retargeted by the key's alteration so the search lands on the nearest ALTERED pitch instead.
-private func inKeyPitch(
+/// Not `private`: Task 7's `EditorViewModel+ChordTieTuplet.swift` reuses it for the chord-arm letter-add path.
+func inKeyPitch(
     forLetter letter: Character, nearestTo reference: Int, keySig: Int,
 ) -> (pitch: Int, tpc: Int)? {
     guard let natural = NoteInputKeyMap.pitch(forLetter: letter, octave: 4) else { return nil }
