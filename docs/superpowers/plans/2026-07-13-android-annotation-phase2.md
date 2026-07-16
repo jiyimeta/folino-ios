@@ -403,13 +403,13 @@ Note: `anchorReferencePoint` is not `@available`-gated in `SheetMusicLayout`, so
 
 ### Task B6: Android `.so` cross-build (the real "does it compile for Android" gate)
 
-The host `xcodebuild` path exercises the *macOS* build of the target; the shipping artifact is the Android `.so`, whose jextract codegen must also succeed. Cross-build the ssm Android JNI from the worktree:
+The host `xcodebuild` path exercises the *macOS* build of the target; the shipping artifact is the Android `.so`, whose jextract codegen must also succeed. It also exercises the Android-only `#if !canImport(CoreGraphics)` `CGFloat`/`CGPoint` shim path in `AnchorBridge.swift`, which the host build does NOT compile. Cross-build the ssm Android JNI from the worktree:
 
-- [ ] **Step 1** — prepend the release toolchain to `PATH` (Xcode's bundled Swift is incompatible with the prebuilt Android SDK; per `project_android_build_toolchain`):
-  `PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"` (use the installed release toolchain; `swift-6.3.3-RELEASE` per memory — verify the exact path on the box).
-- [ ] **Step 2** — build the Android JNI target with `SWIFT_SHEET_MUSIC_ANDROID=1` and the Android Swift SDK (the same invocation `Scripts/android-build-*.sh` use in Folino; here it is the ssm package's own Android build). Expected: `SheetMusicAndroidJNI` compiles for `aarch64-unknown-linux-android`, jextract emits Java including `nativeResolveAnchor` / `nativeAnchorReferencePoint`.
-- [ ] **Step 3** — grep the generated jextract Java for the two new symbols to confirm they were exported.
-- [ ] **Step 4: Commit** any generated-artifact changes that ssm tracks (if ssm commits jextract output; otherwise none).
+- [x] **Step 1** — prepend the release toolchain to `PATH` (Xcode's bundled Swift is incompatible with the prebuilt Android SDK; per `project_android_build_toolchain`): `PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"` (installed release toolchain confirmed: `swift-6.3.3-RELEASE`, SDK `swift-6.3.3-RELEASE_android`).
+- [x] **Step 2** — `PATH="…swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH" SWIFT_SHEET_MUSIC_ANDROID=1 swift build --package-path <ssm-worktree> --product SheetMusicAndroidJNI --swift-sdk aarch64-unknown-linux-android28 -c release` (the per-ABI core of `Scripts/android-build-libs.sh`).
+- [x] **Step 3** — grep the generated jextract Java for the two symbols.
+
+**Result (2026-07-13):** `Build of product 'SheetMusicAndroidJNI' complete! (397 s)` — `AnchorBridge.swift` compiled for `aarch64-unknown-linux-android28`, `libSheetMusicAndroidJNI.so` linked, jextract wrote a 209-symbol export list. `SheetMusicAndroidJNI.java` exports `public static Data nativeResolveAnchor(long, double, double, SwiftArena)` and `public static Data nativeAnchorReferencePoint(long, Data, SwiftArena)` — signatures matching the Kotlin facade (B5). No ssm-tracked generated artifacts changed (jextract output is staged into `jniLibs`/`java-generated` only by the full `Scripts/android-build-libs.sh`, deferred to the post-hold publish).
 
 ### Task B7: Verification wrap-up + HOLD
 
