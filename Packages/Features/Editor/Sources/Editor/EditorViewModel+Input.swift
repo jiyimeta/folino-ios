@@ -133,17 +133,9 @@ private func inKeyPitch(
     forLetter letter: Character, nearestTo reference: Int, keySig: Int,
 ) -> (pitch: Int, tpc: Int)? {
     guard let natural = NoteInputKeyMap.pitch(forLetter: letter, octave: 4) else { return nil }
-    let keyedTpc = inKeyTpc(naturalTpc: natural.tpc, keySig: keySig)
+    let keyedTpc = StaffStepPitch.inKeyTpc(naturalTpc: natural.tpc, keySig: keySig)
     let alteration = (keyedTpc - natural.tpc) / 7
     guard let nearestNatural = NoteInputPlanner.pitch(forLetter: letter, nearestTo: reference - alteration)
     else { return nil }
     return (nearestNatural.pitch + alteration, keyedTpc)
-}
-
-/// tpc ≡ naturalTpc (mod 7), shifted into the window `13+keySig ... 19+keySig`. Task 6 moves this into
-/// `StaffStepPitch`.
-private func inKeyTpc(naturalTpc: Int, keySig: Int) -> Int {
-    let low = 13 + keySig
-    let offset = ((naturalTpc - low) % 7 + 7) % 7
-    return low + offset
 }
