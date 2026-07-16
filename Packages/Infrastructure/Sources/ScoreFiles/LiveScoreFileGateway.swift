@@ -94,9 +94,27 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
         }.value
     }
 
-    public func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
-        // v1: swift-sheet-music has no Score → MSCX/MSCZ/MusicXML serializer. The Editor plan will fill this in.
-        throw DomainError.unsupportedFormat(format.canonicalExtension)
+    public func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) async throws {
+        // `.mscx`/`.mscz` route through the engine's encoders. Other formats have no Score → bytes encoder yet; the
+        // Editor decides where such sources land on save (e.g. a sibling `.mscz`) rather than this gateway guessing.
+        switch format {
+        case .mscx, .mscz:
+            try await Task.detached(priority: .userInitiated) {
+                do {
+                    if format == .mscx {
+                        try SheetMusic.exportMSCX(score, to: fileURL)
+                    } else {
+                        try SheetMusic.exportMSCZ(score, to: fileURL)
+                    }
+                } catch {
+                    throw DomainError.scoreWriteFailed(reason: "\(error)")
+                }
+            }.value
+        case .musicXML, .mxl, .midi, .pdf:
+            // No upstream encoder for these formats. The Editor saves such sources as a sibling `.mscz` instead
+            // (format policy lives in the Editor feature, not here).
+            throw DomainError.unsupportedFormat(format.canonicalExtension)
+        }
     }
 
     /// Bridges a swift-sheet-music MSCX/MSCZ parse result into the gateway's `(Score, [ScoreParseDiagnostic])` shape.

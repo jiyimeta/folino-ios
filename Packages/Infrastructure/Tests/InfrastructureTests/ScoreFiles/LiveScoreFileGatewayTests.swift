@@ -4,6 +4,20 @@ import Foundation
 import SheetMusic
 import Testing
 
+/// `MSCXEncoder` always resynthesizes `Part.id` as sequential 1-based integers on encode (see the doc comment on
+/// `MSCXEncoder+Part.encodeDeclaration` in swift-sheet-music) — deliberate upstream behavior unrelated to this
+/// gateway, not a defect it can (or should) work around. Normalizing both sides to the same convention keeps a
+/// round-trip assertion meaningful for the content this gateway is actually responsible for.
+private func normalizingPartIDs(_ score: Score) -> Score {
+    var normalized = score
+    normalized.parts = normalized.parts.enumerated().map { index, part in
+        var part = part
+        part.id = String(index + 1)
+        return part
+    }
+    return normalized
+}
+
 struct LiveScoreFileGatewayTests {
     @Test func `detects known extensions`() {
         let gateway = LiveScoreFileGateway()
@@ -96,18 +110,37 @@ struct LiveScoreFileGatewayTests {
         #expect(result.score.parts.isEmpty == false)
     }
 
-    @Test func `save score throws unsupported format in V 1`() async throws {
+    @Test func `save score round trips MSCX semantically`() async throws {
+        let tmp = try TempDirectory()
+        let gateway = LiveScoreFileGateway()
+        let score = try SheetMusic.loadScore(mscxData: Fixtures.minimalMSCXData())
+        let outURL = tmp.url.appending(path: "out.mscx")
+        try await gateway.saveScore(score, fileURL: outURL, format: .mscx)
+        let reloaded = try await gateway.loadScore(fileURL: outURL)
+        #expect(normalizingPartIDs(reloaded.score) == normalizingPartIDs(score))
+    }
+
+    @Test func `save score round trips MSCZ semantically`() async throws {
         let tmp = try TempDirectory()
         let gateway = LiveScoreFileGateway()
         let score = try SheetMusic.loadScore(mscxData: Fixtures.minimalMSCXData())
         let outURL = tmp.url.appending(path: "out.mscz")
-        do {
-            try await gateway.saveScore(score, fileURL: outURL, format: .mscz)
-            Issue.record("expected throw")
-        } catch DomainError.unsupportedFormat {
-            // Expected.
-        } catch {
-            Issue.record("unexpected error: \(error)")
+        try await gateway.saveScore(score, fileURL: outURL, format: .mscz)
+        let reloaded = try await gateway.loadScore(fileURL: outURL)
+        #expect(normalizingPartIDs(reloaded.score) == normalizingPartIDs(score))
+    }
+
+    @Test func `save score still rejects encoder-less formats`() async throws {
+        let tmp = try TempDirectory()
+        let gateway = LiveScoreFileGateway()
+        let score = try SheetMusic.loadScore(mscxData: Fixtures.minimalMSCXData())
+        for format in [ScoreFormat.musicXML, .mxl, .midi, .pdf] {
+            do {
+                try await gateway.saveScore(score, fileURL: tmp.url.appending(path: "x.bin"), format: format)
+                Issue.record("expected throw for \(format)")
+            } catch DomainError.unsupportedFormat {
+                // Expected.
+            }
         }
     }
 
