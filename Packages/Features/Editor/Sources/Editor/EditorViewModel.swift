@@ -120,6 +120,20 @@ public final class EditorViewModel {
         scheduleAutosave()
     }
 
+    /// Bridges ScoreEditor's own stacks to the system UndoManager so three-finger swipe gestures work. Each mutation
+    /// registers one undo action; performing it re-registers the redo symmetrically. The ScoreEditor remains the
+    /// source of truth — the UndoManager holds only trampolines.
+    func registerSystemUndo(with manager: UndoManager?) {
+        guard let manager else { return }
+        manager.registerUndo(withTarget: self) { vm in
+            vm.undo()
+            manager.registerUndo(withTarget: vm) { vm2 in
+                vm2.redo()
+                vm2.registerSystemUndo(with: manager)
+            }
+        }
+    }
+
     /// Central apply choke point: every command goes through here so selection re-derivation, generation bump,
     /// onScoreChanged, and autosave scheduling can never be skipped. Internal — ops extensions call it.
     func applyCommand(_ command: any EditCommand) {

@@ -15,6 +15,17 @@ public struct EditorChromeView: View {
     private let selectionAnchor: CGRect?
     private let onDone: () -> Void
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.undoManager) private var undoManager
+
+    /// Measured size of the rendered `EditorCalloutView` capsule (Task 16 carry-over fix), captured via
+    /// `.onGeometryChange` in `callout(anchor:proxy:)`. Seeded to the OLD hardcoded estimate (2×180 / 2×30) so the
+    /// very first frame — before any measurement has landed — clamps exactly as before; every frame after that uses
+    /// the callout's real size, so the clamp no longer collapses on narrow phones.
+    @State private var calloutSize = CGSize(width: 360, height: 60)
+
+    /// One-time "saved as .mscz" notice (Task 16, spec §11-2) — shown at most once per install.
+    @AppStorage("editorSiblingMSCZNoticeShown") private var siblingMSCZNoticeShown = false
+    @State private var showsSiblingNotice = false
 
     public init(viewModel: EditorViewModel, selectionAnchor: CGRect?, onDone: @escaping () -> Void) {
         self.viewModel = viewModel
@@ -45,6 +56,48 @@ public struct EditorChromeView: View {
                     .padding(.bottom, 8)
             }
         }
+        // Task 16: bridges ScoreEditor's undo/redo stacks to the system UndoManager so three-finger swipe gestures
+        // work. [Task 17 verify] confirm the three-finger swipe reaches this view's UndoManager through the glass
+        // overlay hierarchy on device — if it doesn't, the on-screen undo/redo buttons remain the primary path.
+        .onChange(of: viewModel.generation) { _, _ in
+            viewModel.registerSystemUndo(with: undoManager)
+        }
+        .onDisappear {
+            undoManager?.removeAllActions(withTarget: viewModel)
+        }
+        .onChange(of: viewModel.didSaveAsSiblingMSCZ) { _, saved in
+            guard saved, !siblingMSCZNoticeShown else { return }
+            siblingMSCZNoticeShown = true
+            showsSiblingNotice = true
+        }
+        .overlay(alignment: .top) {
+            if showsSiblingNotice {
+                siblingMSCZNoticeBanner
+                    .task {
+                        try? await Task.sleep(for: .seconds(4))
+                        showsSiblingNotice = false
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showsSiblingNotice)
+    }
+
+    // MARK: One-time sibling-mscz notice
+
+    /// Top-center glass banner (spec §11-2): informs the user their edits are now saved as a sibling `.mscz` copy,
+    /// the first time a non-MuseScore source gets rewritten that way. Mirrors `DrainBannerView`'s capsule + auto-
+    /// dismiss pattern (`App/DrainBannerView.swift`).
+    private var siblingMSCZNoticeBanner: some View {
+        Text("editor.notice.savedAsMscz", bundle: .module)
+            .font(.footnote)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .glassEffect(.regular, in: Capsule())
+            .padding(.top, 8)
+            .padding(.horizontal, 24)
+            .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+            .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     // MARK: Top cluster
@@ -92,27 +145,33 @@ public struct EditorChromeView: View {
     // MARK: Callout positioning
 
     /// Places the callout centered horizontally over the selection and just above it, clamped so it stays at least
-    /// 8 pt inside the horizontal edges and above the bottom pad clearance. Uses a conservative size estimate for the
-    /// clamp; exact placement/measurement is deferred to the Task 17 visual pass.
+    /// 8 pt inside the horizontal edges and above the bottom pad clearance. Task 16 carry-over fix: the clamp uses
+    /// the callout's ACTUAL measured size (`calloutSize`, captured below via `.onGeometryChange`) instead of a
+    /// hardcoded half-width — on phones narrower than the old ~360 pt estimate (≤376 pt), the fixed constant made
+    /// `minX > maxX` collapse to a single point, so the callout stopped tracking the selection and sat dead-center.
+    /// With the real width, `minX`/`maxX` stay correctly ordered down to any phone width the callout itself fits on.
     private func callout(anchor: CGRect, proxy: GeometryProxy) -> some View {
         let global = proxy.frame(in: .global)
         let localMidX = anchor.midX - global.minX
         let localMinY = anchor.minY - global.minY
 
-        let estHalfWidth: CGFloat = 180
-        let estHalfHeight: CGFloat = 30
+        let halfWidth = calloutSize.width / 2
+        let halfHeight = calloutSize.height / 2
         let inset: CGFloat = 8
 
-        let minX = estHalfWidth + inset
-        let maxX = max(minX, proxy.size.width - estHalfWidth - inset)
+        let minX = halfWidth + inset
+        let maxX = max(minX, proxy.size.width - halfWidth - inset)
         let clampedX = min(max(localMidX, minX), maxX)
 
-        let topLimit = proxy.safeAreaInsets.top + estHalfHeight + inset
-        let bottomLimit = max(topLimit, proxy.size.height - Self.bottomClearance - estHalfHeight)
-        let desiredY = localMinY - estHalfHeight - 12
+        let topLimit = proxy.safeAreaInsets.top + halfHeight + inset
+        let bottomLimit = max(topLimit, proxy.size.height - Self.bottomClearance - halfHeight)
+        let desiredY = localMinY - halfHeight - 12
         let clampedY = min(max(desiredY, topLimit), bottomLimit)
 
         return EditorCalloutView(viewModel: viewModel)
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { newSize in
+                calloutSize = newSize
+            }
             .position(x: clampedX, y: clampedY)
     }
 }

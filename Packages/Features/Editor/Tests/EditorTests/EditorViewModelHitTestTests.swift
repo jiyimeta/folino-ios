@@ -98,4 +98,75 @@ struct EditorViewModelHitTestTests {
         #expect(vm.selectedItem == voice0Rest)
         #expect(vm.selectedItem?.voiceIndex == 0)
     }
+
+    // MARK: - Task 16: hoverItem(at:) — same resolution as handleTap, without mutating selection
+
+    @Test func `hover over a notehead resolves it without mutating selection`() throws {
+        let score = EditorFixtures.chordAtIndex1()
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        let doc = LayoutTestSupport.document(for: score)
+        vm.documentProvider = { doc }
+
+        // Seed an unrelated prior selection so a hover-driven mutation would be visible.
+        let restTarget = SheetMusicCore.ScoreItemID.rest(EditorFixtures.restID(element: 2))
+        let restAnchor = try #require(LayoutTestSupport.anchorPoint(of: restTarget, in: doc))
+        vm.handleTap(at: restAnchor)
+        #expect(vm.selectedItem == restTarget)
+
+        let noteTarget = SheetMusicCore.ScoreItemID.note(EditorFixtures.noteID(element: 1))
+        let noteAnchor = try #require(LayoutTestSupport.anchorPoint(of: noteTarget, in: doc))
+
+        #expect(vm.hoverItem(at: noteAnchor) == noteTarget)
+        // Selection is untouched by the hover resolution.
+        #expect(vm.selectedItem == restTarget)
+        #expect(vm.selection == .single(restTarget))
+    }
+
+    @Test func `hover over empty staff space returns nil and leaves the prior selection untouched`() throws {
+        let score = EditorFixtures.chordAtIndex1()
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        let doc = LayoutTestSupport.document(for: score)
+        vm.documentProvider = { doc }
+
+        let noteTarget = SheetMusicCore.ScoreItemID.note(EditorFixtures.noteID(element: 1))
+        let anchor = try #require(LayoutTestSupport.anchorPoint(of: noteTarget, in: doc))
+        vm.handleTap(at: anchor)
+        #expect(vm.selectedItem == noteTarget)
+
+        // Well below the single system — outside the y-band of every hit zone in the ladder (same point
+        // `handleTap`'s "tap empty staff space deselects" test uses).
+        #expect(vm.hoverItem(at: CGPoint(x: anchor.x, y: anchor.y + 200)) == nil)
+        #expect(vm.selectedItem == noteTarget)
+        #expect(vm.selection == .single(noteTarget))
+    }
+
+    @Test func `hover near a voice-0 rest prefers the active voice when it falls in the slop rect`() throws {
+        // Mirrors the equivalent `handleTap` slop-rect test above — hover must apply the same active-voice
+        // preference so the pre-highlight always shows what a tap at that point would actually select.
+        var score = EditorFixtures.fourQuarterRests()
+        score.parts[0].staves[0].measures[0].voices.append(
+            Voice(elements: [.rest(duration: .measure)]),
+        )
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        let doc = LayoutTestSupport.document(for: score)
+        vm.documentProvider = { doc }
+
+        let voice0Rest = SheetMusicCore.ScoreItemID.rest(EditorFixtures.restID(element: 3))
+        let voice1Rest = SheetMusicCore.ScoreItemID.rest(
+            RestID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 1, elementIndex: 0),
+        )
+        let anchor = try #require(LayoutTestSupport.anchorPoint(of: voice0Rest, in: doc))
+
+        vm.activeVoice = 1
+        #expect(vm.hoverItem(at: anchor) == voice1Rest)
+        // No selection was ever made — hover must not have created one.
+        #expect(vm.selectedItem == nil)
+
+        vm.activeVoice = 0
+        #expect(vm.hoverItem(at: anchor) == voice0Rest)
+        #expect(vm.selectedItem == nil)
+    }
 }

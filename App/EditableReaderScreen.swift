@@ -78,6 +78,9 @@ struct EditableReaderScreen: View {
             guard let vm else { return }
             vm.commitPitchDrag(steps: steps)
         }
+        host.onHover = { [weak host, weak vm] point in
+            host?.hoverItem = point.flatMap { vm?.hoverItem(at: $0) }
+        }
         vm.documentProvider = { [weak host] in
             guard let host else { return nil }
             return host.document

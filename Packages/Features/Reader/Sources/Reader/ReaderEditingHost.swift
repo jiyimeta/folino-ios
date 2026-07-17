@@ -24,6 +24,9 @@ public final class ReaderEditingHost {
     public var selection: ScoreSelection = .none
     /// The caret target (insertion indicator drawn by the Reader's editing overlay).
     public var caretItem: SheetMusicCore.ScoreItemID?
+    /// Written by the App (mirroring `EditorViewModel.hoverItem(at:)`), read by the Reader: the item under an Apple
+    /// Pencil hover, drawn as a soft pre-highlight by the editing overlay. `nil` when nothing is hovered.
+    public var hoverItem: SheetMusicCore.ScoreItemID?
 
     /// Written by the Reader, read by the App/Editor:
     /// Latest LayoutDocument of the editing surface (published by VerticalScoreContainer).
@@ -37,6 +40,9 @@ public final class ReaderEditingHost {
     public var onTap: @MainActor (CGPoint) -> Void = { _ in }
     /// Staff-step drag commit from the pitch-drag handle; positive steps = up.
     public var onPitchDragCommit: @MainActor (Int) -> Void = { _ in }
+    /// Apple Pencil hover position (score-surface coordinates), or `nil` when the hover ends. `nil` by default so
+    /// the Reader's `.onContinuousHover` is a no-op until the App wires it up.
+    public var onHover: (@MainActor (CGPoint?) -> Void)?
 
     /// The editing chrome's 完了 requests exit through here (the chrome is App-injected and cannot call Reader code).
     public private(set) var isExitRequested = false
