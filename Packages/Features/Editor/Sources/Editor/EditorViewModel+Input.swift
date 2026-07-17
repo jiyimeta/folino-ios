@@ -97,6 +97,7 @@ extension EditorViewModel {
               )
         else { return }
         let veID = VoiceElementID(restID)
+        let generationBeforeInput = generation
         if let armed = armedDuration, rest.duration != armed {
             applyCommand(CompositeEditCommand(
                 commands: [
@@ -108,6 +109,9 @@ extension EditorViewModel {
         } else {
             applyCommand(InputNote(at: restID, pitch: planned.pitch, tpc: planned.tpc))
         }
+        // Capture the freshly re-derived note (applyCommand's rederiveSelection already moved `selectedItem`
+        // onto it) and audition it BEFORE auto-advance moves the selection past it.
+        auditionSelectedNote(unlessStillAt: generationBeforeInput)
         advanceSelection(after: veID)
     }
 
@@ -115,7 +119,9 @@ extension EditorViewModel {
         guard let note = score[noteID] else { return }
         let keySig = score.activeKey(at: noteID)
         guard let target = inKeyPitch(forLetter: letter, nearestTo: note.pitch, keySig: keySig) else { return }
+        let generationBeforeInput = generation
         applyCommand(SetNotePitch(at: noteID, pitch: target.pitch, tpc: target.tpc))
+        auditionSelectedNote(unlessStillAt: generationBeforeInput)
         advanceSelection(after: VoiceElementID(noteID))
     }
 

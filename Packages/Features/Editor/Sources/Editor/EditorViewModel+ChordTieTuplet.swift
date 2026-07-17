@@ -45,19 +45,22 @@ extension EditorViewModel {
 
     /// Shared `AddNoteToChord` apply + select-the-added-note landing, used by both the chord-arm letter path and
     /// the iPad interval shortcuts. A refused add (duplicate pitch) leaves `generation` and selection untouched.
+    /// Auditions the newly added note on success (spec §5.6).
     private func addNoteToChord(at noteID: NoteID, pitch: Int, tpc: Int, keySig: Int) {
         let accidental = PitchSpelling.displayedAccidental(forTpc: tpc, in: keySig)
         let veID = VoiceElementID(noteID)
         let generationBeforeAdd = generation
         applyCommand(AddNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental))
         guard generation != generationBeforeAdd, let score, case let .chord(chord)? = score[veID] else { return }
-        select(.note(NoteID(
+        let addedNoteID = NoteID(
             staff: noteID.staff,
             measureIndex: noteID.measureIndex,
             voiceIndex: noteID.voiceIndex,
             elementIndex: noteID.elementIndex,
             noteIndexInChord: chord.notes.count - 1,
-        )))
+        )
+        select(.note(addedNoteID))
+        audition(addedNoteID)
     }
 
     // MARK: - Ties

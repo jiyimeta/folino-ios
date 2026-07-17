@@ -34,9 +34,13 @@ public final class EditorViewModel {
     public internal(set) var isAddToChordArmed = false
     public var activeVoice = 0
 
-    // Stored autosave / audition state — declared HERE (extensions cannot add stored properties); used by
-    // Tasks 9/10: `@ObservationIgnored var autosaveTask: Task<Void, Never>?`,
-    // `@ObservationIgnored var auditionTask: Task<Void, Never>?`, `@ObservationIgnored var isDirty = false`,
+    /// Stored audition state (Task 9) — declared HERE (extensions cannot add stored properties). Set synchronously
+    /// by `audition(_:)` (`EditorViewModel+Audition.swift`) so tests can deterministically `await
+    /// vm.auditionTask?.value` instead of racing a fire-and-forget preview.
+    @ObservationIgnored var auditionTask: Task<Void, Never>?
+
+    // Stored autosave state — declared HERE (extensions cannot add stored properties); used by Task 10:
+    // `@ObservationIgnored var autosaveTask: Task<Void, Never>?`, `@ObservationIgnored var isDirty = false`,
     // and `public internal(set) var didSaveAsSiblingMSCZ = false`.
 
     public var canUndo: Bool {
