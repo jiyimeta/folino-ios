@@ -72,7 +72,6 @@ struct VerticalZoomedSurface: View {
                 voiceColors: Self.editingVoiceColors,
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
-            .coordinateSpace(name: "scoreSurface")
             .gesture(tapSeekGesture(document: doc))
             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
@@ -96,6 +95,10 @@ struct VerticalZoomedSurface: View {
                 EditingSelectionOverlay(host: host, score: score, document: doc)
             }
         }
+        // Named on the ZStack (the common ancestor of `ScoreView` and `EditingSelectionOverlay`), not on `ScoreView`
+        // alone — a SwiftUI named coordinate space is visible only to descendants of the tagged view, and the
+        // pitch-drag gesture in `EditingSelectionOverlay` (a ZStack sibling of `ScoreView`) needs to resolve it too.
+        .coordinateSpace(name: "scoreSurface")
     }
 
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {

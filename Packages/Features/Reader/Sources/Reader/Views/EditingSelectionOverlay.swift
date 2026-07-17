@@ -41,11 +41,18 @@ struct EditingSelectionOverlay: View {
         }
         .frame(width: document.size.width, height: document.size.height, alignment: .topLeading)
         // Belt-and-suspenders: the caret view itself clears `selectionScreenFrame` on every geometry change while
-        // it's on screen, but a caret that stops resolving to a frame (item removed by an edit, stale ID after
-        // reflow) would otherwise leave the last-published frame stuck. Catch that here too.
-        .onChange(of: host.caretItem) { _, newValue in
-            if newValue == nil { host.selectionScreenFrame = nil }
+        // it's on screen, but a caret that stops resolving to a frame at all (item removed by an edit, or a stale
+        // ID/reflow that makes `caretGeometry` unresolvable while `caretItem` itself is unchanged) never fires
+        // `onGeometryChange` again — the last-published frame would otherwise stay stuck. Watching
+        // `hasCaretGeometry` (rather than just `host.caretItem`) catches the reflow-only case too.
+        .onChange(of: hasCaretGeometry) { _, hasGeometry in
+            if !hasGeometry { host.selectionScreenFrame = nil }
         }
+    }
+
+    /// Whether `caretGeometry` currently resolves to a frame — drives the belt-and-suspenders clear above.
+    private var hasCaretGeometry: Bool {
+        caretGeometry != nil
     }
 
     // MARK: - 1. Rest tint
@@ -112,22 +119,9 @@ struct EditingSelectionOverlay: View {
         guard let item = host.caretItem,
               let frame = document.cursorFrame(for: .item(item), in: score)
         else { return nil }
-        let (staff, measureIndex) = Self.staffAndMeasureIndex(of: item)
-        guard let band = staffBand(for: staff, measureIndex: measureIndex) else { return nil }
+        guard let band = staffBand(for: item.staff, measureIndex: item.measureIndex) else { return nil }
         let sp = document.metrics.sp
         return (x: frame.minX - sp * 0.8, band: band)
-    }
-
-    /// `ScoreItemID`'s (staff, measureIndex) pair — every case carries both, directly or (a staff-default clef,
-    /// which has no explicit measure) at the staff's opening measure.
-    private static func staffAndMeasureIndex(of item: ScoreItemID) -> (staff: StaffAddress, measureIndex: Int) {
-        switch item {
-        case let .note(id): (id.staff, id.measureIndex)
-        case let .rest(id): (id.staff, id.measureIndex)
-        case let .tuplet(id): (id.staff, id.measureIndex)
-        case let .clef(.explicit(id)): (id.staff, id.measureIndex)
-        case let .clef(.staffDefault(staff)): (staff, 0)
-        }
     }
 
     /// Vertical band (document coords) spanning `staff`'s five lines, one `sp` clear on each side, within the
