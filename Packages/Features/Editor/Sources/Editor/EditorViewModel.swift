@@ -39,9 +39,12 @@ public final class EditorViewModel {
     /// vm.auditionTask?.value` instead of racing a fire-and-forget preview.
     @ObservationIgnored var auditionTask: Task<Void, Never>?
 
-    // Stored autosave state — declared HERE (extensions cannot add stored properties); used by Task 10:
-    // `@ObservationIgnored var autosaveTask: Task<Void, Never>?`, `@ObservationIgnored var isDirty = false`,
-    // and `public internal(set) var didSaveAsSiblingMSCZ = false`.
+    // Stored autosave state (Task 10) — declared HERE (extensions cannot add stored properties).
+    @ObservationIgnored var autosaveTask: Task<Void, Never>?
+    @ObservationIgnored var isDirty = false
+    /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
+    /// it drives the Task 16 one-time "saved as .mscz" notice.
+    public internal(set) var didSaveAsSiblingMSCZ = false
 
     public var canUndo: Bool {
         editor?.canUndo ?? false
@@ -89,13 +92,11 @@ public final class EditorViewModel {
         isAddToChordArmed = false
     }
 
-    // swiftlint:disable async_without_await
     /// Flushes any pending autosave (Task 10) and tears the session down.
     public func endSession() async {
+        await flushPendingSave()
         editor = nil
     }
-
-    // swiftlint:enable async_without_await
 
     public func undo() {
         guard let editor, editor.canUndo else { return }
@@ -105,6 +106,8 @@ public final class EditorViewModel {
         generation += 1
         rederiveSelection()
         onScoreChanged(editor.score)
+        isDirty = true
+        scheduleAutosave()
     }
 
     public func redo() {
@@ -113,10 +116,12 @@ public final class EditorViewModel {
         generation += 1
         rederiveSelection()
         onScoreChanged(editor.score)
+        isDirty = true
+        scheduleAutosave()
     }
 
     /// Central apply choke point: every command goes through here so selection re-derivation, generation bump,
-    /// onScoreChanged, and (Task 10) autosave scheduling can never be skipped. Internal — ops extensions call it.
+    /// onScoreChanged, and autosave scheduling can never be skipped. Internal — ops extensions call it.
     func applyCommand(_ command: any EditCommand) {
         guard let editor else { return }
         do {
@@ -130,6 +135,8 @@ public final class EditorViewModel {
         generation += 1
         rederiveSelection()
         onScoreChanged(editor.score)
+        isDirty = true
+        scheduleAutosave()
     }
 
     /// Re-derives the selection from the engine's post-mutation `lastAffectedLocation`. Engine IDs are

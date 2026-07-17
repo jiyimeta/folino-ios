@@ -19,6 +19,8 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
 
     func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
         savedCalls.append((score, fileURL, format))
+        // Write real bytes so callers that hash the saved file (Task 10's EditorFileFacts) see deterministic content.
+        try Data("saved".utf8).write(to: fileURL)
     }
 }
 
