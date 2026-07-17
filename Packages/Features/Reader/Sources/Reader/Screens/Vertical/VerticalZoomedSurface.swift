@@ -20,6 +20,17 @@ struct VerticalZoomedSurface: View {
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
+    /// `nil` (or `isEditing == false`) keeps taps on the manual-cursor seek path and the score render byte-identical
+    /// to before Task 12. While editing, taps route to `editingHost.onTap` instead, `ScoreView` renders the host's
+    /// selection, and `EditingSelectionOverlay` draws the caret / rest tint / pitch-drag chrome on top.
+    let editingHost: ReaderEditingHost?
+
+    /// Voice colors passed to `ScoreView` while editing: `SelectionRenderState.color(for:voiceIndex:)` only tints
+    /// items present in `ScoreSelection`, so a flat accent-color map for every voice index is safe — non-selected
+    /// items render unaffected regardless of their voice.
+    private static let editingVoiceColors: [Int: Color] = [
+        0: .accentColor, 1: .accentColor, 2: .accentColor, 3: .accentColor,
+    ]
 
     var body: some View {
         if let doc = document {
@@ -57,6 +68,8 @@ struct VerticalZoomedSurface: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
+                selection: editingHost?.isEditing == true ? (editingHost?.selection ?? .none) : .none,
+                voiceColors: Self.editingVoiceColors,
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
             .coordinateSpace(name: "scoreSurface")
@@ -76,12 +89,22 @@ struct VerticalZoomedSurface: View {
                     end: viewModel.repeatModel.pendingRepeatB,
                 )
             }
+
+            // Caret / rest-tint / pitch-drag chrome, in the SAME document-coordinate ZStack as `ScoreView` above (no
+            // zoom conversion needed — the whole stack is scaled together by the modifiers in `body`).
+            if let host = editingHost, host.isEditing {
+                EditingSelectionOverlay(host: host, score: score, document: doc)
+            }
         }
     }
 
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named("scoreSurface"))
             .onEnded { value in
+                if let host = editingHost, host.isEditing {
+                    host.onTap(value.location)
+                    return
+                }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor

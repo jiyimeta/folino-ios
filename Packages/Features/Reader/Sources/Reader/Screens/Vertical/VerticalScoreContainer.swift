@@ -50,8 +50,11 @@ struct VerticalScoreContainer: View {
     /// down. The control floats over this padding in a sibling overlay; vertical mode reserves no `safeAreaPadding`.
     let bottomControlClearance: CGFloat
     @Bindable var viewModel: ReaderViewModel
-    /// Unused until Task 12 wires the note-editing overlay (tap / caret / pitch-drag). Present now, as a no-op
-    /// optional, only so `ReaderRootScreen`'s editing branch can pass it without a forward-declared parameter.
+    /// Drives the note-editing overlay: `nil` (or `isEditing == false`) keeps every editing seam byte-identical to
+    /// the non-editing path. While editing, taps route to `editingHost.onTap` instead of the manual-cursor seek, the
+    /// rebuilt `LayoutDocument` is published to `editingHost.document` for the App-side editing chrome, and
+    /// `editingHost.editGeneration` is folded into the layout task's identity so an edit that doesn't change the
+    /// score's structural signature (e.g. a pitch-drag on an existing note) still triggers a relayout.
     var editingHost: ReaderEditingHost?
 
     @State private var document: LayoutDocument?
@@ -111,6 +114,7 @@ struct VerticalScoreContainer: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     transposeSemitones: transposeSemitones,
+                    editGeneration: editingHost?.editGeneration ?? 0,
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }
@@ -177,6 +181,7 @@ struct VerticalScoreContainer: View {
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
+                editingHost: editingHost,
             )
         }
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { old, new in
@@ -301,7 +306,9 @@ struct VerticalScoreContainer: View {
         // settles to its final width, so the first synchronous layout may be narrower than the viewport (leaving a
         // right-side gap). Re-running on width change ensures the snapshot uses the settled width and fills the view.
         guard document == nil || width != lastWidth else { return }
-        document = LayoutEngine.layout(score: score, options: scoreOptions, availableWidth: width)
+        let newDoc = LayoutEngine.layout(score: score, options: scoreOptions, availableWidth: width)
+        document = newDoc
+        editingHost?.document = newDoc
         lastWidth = width
     }
 
@@ -315,6 +322,7 @@ struct VerticalScoreContainer: View {
         }.value
         guard !Task.isCancelled else { return }
         document = newDoc
+        editingHost?.document = newDoc
         lastWidth = width
     }
 
@@ -411,6 +419,11 @@ struct VerticalScoreContainer: View {
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
         let transposeSemitones: Int
+        /// `ReaderEditingHost.editGeneration`, bumped by the editing surface on every edit that needs a relayout.
+        /// `scoreSignature` only tracks STRUCTURAL shape (part/staff counts, division, opening clefs) — a pitch
+        /// change or other in-place note edit leaves it unchanged even though `score`'s contents differ, so without
+        /// this field the `.task(id:)` would never re-run after such an edit. `0` when not editing.
+        let editGeneration: Int
 
         init(
             score: Score,
@@ -420,6 +433,7 @@ struct VerticalScoreContainer: View {
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
             transposeSemitones: Int,
+            editGeneration: Int,
         ) {
             // `Score` is Equatable but not Hashable. Use a cheap identity proxy: structural shape + opening clefs.
             // The opening-clef hash is what makes a clef override (a field-level edit that leaves parts.count / staff
@@ -435,6 +449,7 @@ struct VerticalScoreContainer: View {
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
             self.showInvisibleElements = showInvisibleElements
             self.transposeSemitones = transposeSemitones
+            self.editGeneration = editGeneration
         }
     }
 }
