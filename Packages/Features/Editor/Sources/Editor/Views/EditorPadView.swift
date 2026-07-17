@@ -79,27 +79,19 @@ public struct EditorPadView: View {
         }
     }
 
-    /// ▴/▾ semitone keys. A tap shifts by a semitone; a long-press shifts by an octave instead (spec §5.3).
+    /// ▴/▾ semitone keys. A tap shifts by a semitone; a long-press shifts by an octave instead (spec §5.3) — the two
+    /// are mutually exclusive, never both. See `PitchStepButton` for how that exclusivity is enforced.
     private var pitchStepKeys: some View {
         HStack(spacing: 4) {
-            pitchStepKey(systemName: "chevron.up", label: "editor.pad.pitchUp", semitones: 1, octaves: 1)
-            pitchStepKey(systemName: "chevron.down", label: "editor.pad.pitchDown", semitones: -1, octaves: -1)
+            PitchStepButton(
+                systemName: "chevron.up", label: "editor.pad.pitchUp", semitones: 1, octaves: 1,
+                viewModel: viewModel,
+            )
+            PitchStepButton(
+                systemName: "chevron.down", label: "editor.pad.pitchDown", semitones: -1, octaves: -1,
+                viewModel: viewModel,
+            )
         }
-    }
-
-    private func pitchStepKey(
-        systemName: String, label: LocalizedStringKey, semitones: Int, octaves: Int,
-    ) -> some View {
-        Button {
-            viewModel.shiftPitch(bySemitones: semitones)
-        } label: {
-            PadKeyGlyph.symbol(systemName)
-        }
-        .buttonStyle(PadKeyStyle())
-        .simultaneousGesture(LongPressGesture().onEnded { _ in
-            viewModel.shiftOctave(by: octaves)
-        })
-        .accessibilityLabel(Text(label, bundle: .module))
     }
 
     private var deleteKey: some View {
@@ -111,6 +103,42 @@ public struct EditorPadView: View {
         .buttonStyle(PadKeyStyle())
         .tint(.primary)
         .accessibilityLabel(Text("editor.pad.delete", bundle: .module))
+    }
+}
+
+/// A single ▴/▾ pitch-step key. Tap and long-press must be mutually exclusive — a real long-press (hold past the
+/// threshold, then lift) has to apply ONLY `shiftOctave`, never also `shiftPitch` on release.
+///
+/// `.simultaneousGesture` deliberately does not suppress the `Button`'s own tap recognizer, so without a guard a
+/// long-press would fire both: `shiftOctave` when `LongPressGesture` reaches its threshold, and `shiftPitch` when the
+/// finger lifts and the `Button` sees that as a completed tap — moving the note 13 semitones across two undo steps.
+/// `didOctaveShift` closes that gap: `LongPressGesture.onEnded` fires at the hold threshold, strictly before the
+/// tap fires on release, so by the time the `Button` action runs it can check the flag and swallow the spurious tap.
+private struct PitchStepButton: View {
+    let systemName: String
+    let label: LocalizedStringKey
+    let semitones: Int
+    let octaves: Int
+    let viewModel: EditorViewModel
+
+    @State private var didOctaveShift = false
+
+    var body: some View {
+        Button {
+            if didOctaveShift {
+                didOctaveShift = false
+            } else {
+                viewModel.shiftPitch(bySemitones: semitones)
+            }
+        } label: {
+            PadKeyGlyph.symbol(systemName)
+        }
+        .buttonStyle(PadKeyStyle())
+        .simultaneousGesture(LongPressGesture().onEnded { _ in
+            didOctaveShift = true
+            viewModel.shiftOctave(by: octaves)
+        })
+        .accessibilityLabel(Text(label, bundle: .module))
     }
 }
 
