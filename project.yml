@@ -134,6 +134,8 @@ targets:
       - package: Settings
       - package: swift-sheet-music
         product: SheetMusicLayoutApple
+      - package: swift-sheet-music
+        product: SheetMusicUI
       - package: LicenseList
         product: LicenseList
       - target: FolinoShareExtension
