@@ -103,6 +103,10 @@ extension EditorViewModel {
     /// `normalNotes` follows MuseScore's convention — the largest power of two strictly less than `actualNotes`
     /// (3→2, 5→4, 6→4, 7→4).
     public func createTuplet(actualNotes: Int) {
+        // Defensive lower bound: `CreateTuplet` asserts `actualNotes >= 2` (a 1:1 tuplet is meaningless), and its
+        // precondition is a hard crash. The UI only ever passes 3 / 5 / 6 / 7, but returning here closes that
+        // crash-risk for any out-of-range programmatic caller.
+        guard actualNotes >= 2 else { return }
         guard let selectedItem else { return }
         let veID = VoiceElementID(
             staff: selectedItem.staff,
