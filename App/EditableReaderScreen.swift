@@ -62,16 +62,33 @@ struct EditableReaderScreen: View {
         isWired = true
         let host = editingHost
         let vm = editorViewModel
-        host.onBeginEditing = { score in vm.beginSession(score: score) }
-        host.onEndEditing = { Task { await vm.endSession() } }
-        host.onTap = { point in vm.handleTap(at: point) }
-        host.onPitchDragCommit = { steps in vm.commitPitchDrag(steps: steps) }
-        vm.documentProvider = { host.document }
-        vm.onScoreChanged = { score in
+        host.onBeginEditing = { [weak vm] score in
+            guard let vm else { return }
+            vm.beginSession(score: score)
+        }
+        host.onEndEditing = { [weak vm] in
+            guard let vm else { return }
+            Task { await vm.endSession() }
+        }
+        host.onTap = { [weak vm] point in
+            guard let vm else { return }
+            vm.handleTap(at: point)
+        }
+        host.onPitchDragCommit = { [weak vm] steps in
+            guard let vm else { return }
+            vm.commitPitchDrag(steps: steps)
+        }
+        vm.documentProvider = { [weak host] in
+            guard let host else { return nil }
+            return host.document
+        }
+        vm.onScoreChanged = { [weak host] score in
+            guard let host else { return }
             host.editedScore = score
             host.editGeneration += 1
         }
-        vm.onSelectionChanged = { selection, item in
+        vm.onSelectionChanged = { [weak host] selection, item in
+            guard let host else { return }
             host.selection = selection
             host.caretItem = item
         }
