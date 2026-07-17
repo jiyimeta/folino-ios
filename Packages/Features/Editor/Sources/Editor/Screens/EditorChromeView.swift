@@ -57,9 +57,13 @@ public struct EditorChromeView: View {
             }
         }
         // Task 16: bridges ScoreEditor's undo/redo stacks to the system UndoManager so three-finger swipe gestures
-        // work. [Task 17 verify] confirm the three-finger swipe reaches this view's UndoManager through the glass
-        // overlay hierarchy on device — if it doesn't, the on-screen undo/redo buttons remain the primary path.
-        .onChange(of: viewModel.generation) { _, _ in
+        // work. Triggers off `appliedEditCount` — NOT `generation` — because `generation` also bumps on undo/redo;
+        // re-registering here on every undo/redo would double up with `registerSystemUndo`'s own symmetric
+        // re-registration and drift the system stack from `ScoreEditor`'s real depth (Task 16 review fix). Only a
+        // genuinely new applied edit should arm a fresh trampoline. [Task 17 verify] confirm the three-finger swipe
+        // reaches this view's UndoManager through the glass overlay hierarchy on device — if it doesn't, the
+        // on-screen undo/redo buttons remain the primary path.
+        .onChange(of: viewModel.appliedEditCount) { _, _ in
             viewModel.registerSystemUndo(with: undoManager)
         }
         .onDisappear {

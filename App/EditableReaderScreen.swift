@@ -79,7 +79,14 @@ struct EditableReaderScreen: View {
             vm.commitPitchDrag(steps: steps)
         }
         host.onHover = { [weak host, weak vm] point in
-            host?.hoverItem = point.flatMap { vm?.hoverItem(at: $0) }
+            // Task 16 review fix: `.onContinuousHover`'s `.active` branch (EditingSelectionOverlay.swift) calls
+            // this closure every frame while the Pencil hovers, even when it resolves to the same item — write
+            // only when the resolved item actually changes, so `@Observable` doesn't fan out a redundant
+            // dependent-view invalidation on every frame.
+            guard let host else { return }
+            let newItem = point.flatMap { vm?.hoverItem(at: $0) }
+            guard newItem != host.hoverItem else { return }
+            host.hoverItem = newItem
         }
         vm.documentProvider = { [weak host] in
             guard let host else { return nil }

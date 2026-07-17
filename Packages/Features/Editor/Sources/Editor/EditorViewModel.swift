@@ -20,6 +20,13 @@ public final class EditorViewModel {
     /// Bumped on every applied / undone / redone command. The Reader includes it in its layout task key so the
     /// score re-lays-out after edits that don't change the structural score signature.
     public private(set) var generation = 0
+
+    /// Bumped ONLY by `applyCommand`'s success path — never by `undo()`/`redo()`. Distinct from `generation` (which
+    /// bumps on all three) because `EditorChromeView`'s system-undo bridge must re-register its `UndoManager`
+    /// trampoline only on a genuinely NEW edit; re-registering after undo/redo would double up with
+    /// `registerSystemUndo`'s own symmetric re-registration and drift the system stack from `ScoreEditor`'s real
+    /// depth (Task 16 review fix).
+    public private(set) var appliedEditCount = 0
     public var isSessionActive: Bool {
         editor != nil
     }
@@ -86,6 +93,7 @@ public final class EditorViewModel {
     public func beginSession(score: Score) {
         editor = ScoreEditor(score: score)
         generation = 0
+        appliedEditCount = 0
         selection = .none
         selectedItem = nil
         armedDuration = nil
@@ -147,6 +155,7 @@ public final class EditorViewModel {
             return
         }
         generation += 1
+        appliedEditCount += 1
         rederiveSelection()
         onScoreChanged(editor.score)
         isDirty = true
