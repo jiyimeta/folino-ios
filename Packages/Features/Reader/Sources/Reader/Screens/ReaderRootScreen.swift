@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// ReaderRootScreen composes the score/PDF content, top overlay, transport control, and the note-editing chrome/
+// lifecycle seam (`ReaderEditingHost`, spec §9); that breadth keeps it just over the file_length budget.
+
 import Domain
 import SheetMusicCore
 import SwiftUI
@@ -16,6 +20,14 @@ public struct ReaderRootScreen: View {
     /// transport stay LIVE (and follow future app changes) while the score + ink come from a real-device capture the
     /// simulator can't reproduce (PencilKit ink doesn't composite in the simulator; note spacing is OS/device-bound).
     private let scoreContentOverride: AnyView?
+    /// The note-editing injection seam (design spec §9, Option 1). `nil` means this Reader instance never enters edit
+    /// mode — the edit button in `ReaderTopOverlay` stays hidden and `startEditing()`/`finishEditing()` are no-ops.
+    /// The App composition root (Task 15) is the only caller that supplies a non-nil host; the Reader never imports or
+    /// references the Editor feature that owns the other end of the seam.
+    private let editingHost: ReaderEditingHost?
+    /// Builds the Editor feature's chrome (score-info bar, keyboard, 完了 button) from the current selection. Supplied
+    /// by the App alongside `editingHost`; `nil` hides the chrome overlay (mirrors `editingHost == nil`).
+    private let editingChrome: ((ReaderEditingChromeContext) -> AnyView)?
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
@@ -114,6 +126,8 @@ public struct ReaderRootScreen: View {
         hidesBackButton: Bool = false,
         leadingIsSidebarToggle: Bool = false,
         scoreContentOverride: AnyView? = nil,
+        editingHost: ReaderEditingHost? = nil,
+        editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
     ) {
         // Seed the device-class default at construction time. The view model only uses this if no persisted record
         // exists.
@@ -140,6 +154,8 @@ public struct ReaderRootScreen: View {
         self.hidesBackButton = hidesBackButton
         self.leadingIsSidebarToggle = leadingIsSidebarToggle
         self.scoreContentOverride = scoreContentOverride
+        self.editingHost = editingHost
+        self.editingChrome = editingChrome
     }
 
     public var body: some View {
@@ -159,28 +175,8 @@ public struct ReaderRootScreen: View {
                     .opacity(0)
                     .allowsHitTesting(false)
             }
-            VStack(spacing: 0) {
-                if !isCaptureMode {
-                    ReaderTopOverlay(
-                        viewModel: viewModel,
-                        onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
-                        leadingIsSidebarToggle: leadingIsSidebarToggle,
-                        onShowPDFNotice: { isPDFNoticePresented = true },
-                    )
-                }
-                Spacer()
-                // Fade the transport control out while annotating so it doesn't sit over the drawing surface. It stays
-                // mounted (opacity only) and stops taking touches, so a partial seek/playback state survives the
-                // annotation session. Layout is deliberately left untouched: `bottomControlInset` /
-                // `bottomControlContentHeight` don't depend on `isAnnotating`, so page breaks (and the vertical bottom
-                // clearance) stay identical whether the card is shown or hidden — the card just fades in place.
-                if !isCaptureMode {
-                    ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
-                        .opacity(viewModel.isAnnotating ? 0 : 1)
-                        .allowsHitTesting(!viewModel.isAnnotating)
-                        .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
-                }
-            }
+            topAndBottomChrome
+            editingChromeOverlay
         }
         .navigationTitle("")
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -264,88 +260,191 @@ public struct ReaderRootScreen: View {
                 viewModel.pipSession.dismissIfActive()
             }
         }
+        .onChange(of: editingHost?.isExitRequested ?? false) { _, requested in
+            // The editing chrome's 完了 button lives in App-injected code and can't call `finishEditing()` directly
+            // (the Reader never exposes it), so it signals exit through the host instead.
+            if requested { finishEditing() }
+        }
+    }
+
+    /// The floating top overlay + bottom transport, both faded out (opacity + `allowsHitTesting`) while editing so the
+    /// App-injected chrome reads as the foreground without losing the reader's mounted playback / sheet state.
+    /// Extracted from `body` to keep the outer `ZStack` closure under SwiftLint's body-length limit.
+    private var topAndBottomChrome: some View {
+        VStack(spacing: 0) {
+            if !isCaptureMode {
+                ReaderTopOverlay(
+                    viewModel: viewModel,
+                    onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
+                    leadingIsSidebarToggle: leadingIsSidebarToggle,
+                    onShowPDFNotice: { isPDFNoticePresented = true },
+                    onStartEditing: editingHost == nil ? nil : { startEditing() },
+                )
+                // Fade the top overlay out while editing — its buttons (back / share / annotate / inspectors) have no
+                // meaning over the editing surface, and the App-injected chrome takes over that space instead. Same
+                // opacity-only + `allowsHitTesting(false)` treatment as the transport's `isAnnotating` fade below, so
+                // the mounted state (popovers, sheets) survives an edit session.
+                .opacity(editingHost?.isEditing == true ? 0 : 1)
+                    .allowsHitTesting(editingHost?.isEditing != true)
+                    .animation(.easeOut(duration: 0.2), value: editingHost?.isEditing)
+            }
+            Spacer()
+            // Fade the transport control out while annotating (or editing) so it doesn't sit over the drawing /
+            // editing surface. It stays mounted (opacity only) and stops taking touches, so a partial seek / playback
+            // state survives the session. Layout is deliberately left untouched: `bottomControlInset` /
+            // `bottomControlContentHeight` don't depend on `isAnnotating` / editing, so page breaks (and the vertical
+            // bottom clearance) stay identical whether the card is shown or hidden — it just fades in place.
+            if !isCaptureMode {
+                ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
+                    .opacity(viewModel.isAnnotating || editingHost?.isEditing == true ? 0 : 1)
+                    .allowsHitTesting(!viewModel.isAnnotating && editingHost?.isEditing != true)
+                    .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
+                    .animation(.easeOut(duration: 0.2), value: editingHost?.isEditing)
+            }
+        }
+    }
+
+    /// The App-injected editing chrome (score-info bar, keyboard, 完了), shown only while `editingHost.isEditing` and
+    /// a builder was supplied. `nil` on either side leaves this an empty overlay — the default, so every existing
+    /// `ReaderRootScreen` call site (which passes neither) is unaffected.
+    @ViewBuilder
+    private var editingChromeOverlay: some View {
+        if let host = editingHost, host.isEditing, let editingChrome {
+            editingChrome(ReaderEditingChromeContext(selectionScreenFrame: host.selectionScreenFrame))
+                .transition(.opacity)
+        }
+    }
+
+    /// Enter edit mode: pause playback (the editing surface never plays), end any in-progress annotation session (ink
+    /// and note editing are mutually exclusive surfaces), then hand the currently loaded score to the host so the App
+    /// can seed the Editor feature's view model.
+    private func startEditing() {
+        guard case let .loaded(score) = viewModel.loadState, let host = editingHost else { return }
+        Task {
+            if viewModel.playbackSession.isPlaying { await viewModel.playbackSession.togglePlayback() }
+            viewModel.endAnnotationSessionIfNeeded()
+            host.editedScore = score
+            host.editGeneration += 1
+            host.isEditing = true
+            host.onBeginEditing(score)
+        }
+    }
+
+    /// Exit edit mode: let the App flush any final edit, adopt the edited score back into the Reader (reloading the
+    /// audio engine so playback reflects the new notes — see `ReaderViewModel.adoptEditedScore`), then reset the
+    /// host's transient state for the next editing session.
+    private func finishEditing() {
+        guard let host = editingHost else { return }
+        Task {
+            host.onEndEditing()
+            if let edited = host.editedScore { await viewModel.adoptEditedScore(edited) }
+            host.isEditing = false
+            host.selection = .none
+            host.caretItem = nil
+            host.resetExitRequest()
+        }
     }
 
     @ViewBuilder
     private var content: some View {
-        switch viewModel.loadState {
-        case .loading:
-            ProgressView().controlSize(.large)
-        case .loaded:
-            // `visibleScore` is the clef-applied / transposed / hidden-filtered score, cached on the view model and
-            // recomputed only when its inputs change — so this body no longer rebuilds the score on every re-eval.
-            if let visible = viewModel.visibleScore {
-                switch layoutMode {
-                case .vertical:
-                    VerticalScoreContainer(
-                        score: visible,
-                        staffSize: viewModel.layoutModel.staffSize,
-                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                        collapseMultiMeasureRests: collapseMultiMeasureRests,
-                        showInvisibleElements: showInvisibleElements,
-                        playbackCursor: viewModel.playbackSession.displayCursor,
-                        scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
-                        autoFollowEnabled: autoFollowEnabled,
-                        transposeSemitones: viewModel.transposeModel.semitones,
-                        bottomControlClearance: bottomControlContentHeight,
-                        viewModel: viewModel,
-                    )
-                case .horizontal:
-                    HorizontalScoreContainer(
-                        score: visible,
-                        staffSize: viewModel.layoutModel.staffSize,
-                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                        collapseMultiMeasureRests: collapseMultiMeasureRests,
-                        showInvisibleElements: showInvisibleElements,
-                        playbackCursor: viewModel.playbackSession.displayCursor,
-                        scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
-                        autoFollowEnabled: autoFollowEnabled,
-                        transposeSemitones: viewModel.transposeModel.semitones,
-                        viewModel: viewModel,
-                    )
-                case .page:
-                    PagedScoreContainer(
-                        score: visible,
-                        staffSize: viewModel.layoutModel.staffSize,
-                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                        collapseMultiMeasureRests: collapseMultiMeasureRests,
-                        showInvisibleElements: showInvisibleElements,
-                        playbackCursor: viewModel.playbackSession.displayCursor,
-                        pageAnchorCursor: viewModel.playbackSession.pageAnchorCursor,
-                        autoFollowEnabled: autoFollowEnabled,
-                        showsPageTurnButtons: pageTurnButtonsVisible,
-                        transposeSemitones: viewModel.transposeModel.semitones,
-                        viewModel: viewModel,
-                    )
-                }
-            } else {
+        if let host = editingHost, host.isEditing, let editScore = host.editedScore {
+            // Forced-vertical editing presentation (spec §11): raw score (no transpose / hidden staves / collapsed
+            // multi-measure rests) so positional IDs the Editor VM tracks stay valid, and no playback cursor / auto-
+            // follow since the transport is hidden for the duration.
+            VerticalScoreContainer(
+                score: editScore,
+                staffSize: viewModel.layoutModel.staffSize,
+                honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                collapseMultiMeasureRests: false,
+                showInvisibleElements: showInvisibleElements,
+                playbackCursor: nil,
+                scrollAnchorCursor: nil,
+                autoFollowEnabled: false,
+                transposeSemitones: 0,
+                bottomControlClearance: bottomControlContentHeight,
+                viewModel: viewModel,
+                editingHost: host,
+            )
+        } else {
+            switch viewModel.loadState {
+            case .loading:
                 ProgressView().controlSize(.large)
-            }
-        case let .loadedPDF(document):
-            switch pdfLayoutMode {
-            case .vertical:
-                VerticalPDFContainer(document: document, viewModel: viewModel)
-            case .page, .horizontal:
-                PagedPDFContainer(
-                    document: document,
-                    showsPageTurnButtons: pageTurnButtonsVisible,
-                    viewModel: viewModel,
-                )
-            }
-        case let .failed(error):
-            ContentUnavailableView {
-                Label {
-                    Text("reader.error.cannotOpen.title", bundle: .module)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
+            case .loaded:
+                // `visibleScore` is the clef-applied / transposed / hidden-filtered score, cached on the view model and
+                // recomputed only when its inputs change — so this body no longer rebuilds the score on every re-eval.
+                if let visible = viewModel.visibleScore {
+                    switch layoutMode {
+                    case .vertical:
+                        VerticalScoreContainer(
+                            score: visible,
+                            staffSize: viewModel.layoutModel.staffSize,
+                            honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                            collapseMultiMeasureRests: collapseMultiMeasureRests,
+                            showInvisibleElements: showInvisibleElements,
+                            playbackCursor: viewModel.playbackSession.displayCursor,
+                            scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
+                            autoFollowEnabled: autoFollowEnabled,
+                            transposeSemitones: viewModel.transposeModel.semitones,
+                            bottomControlClearance: bottomControlContentHeight,
+                            viewModel: viewModel,
+                        )
+                    case .horizontal:
+                        HorizontalScoreContainer(
+                            score: visible,
+                            staffSize: viewModel.layoutModel.staffSize,
+                            honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                            collapseMultiMeasureRests: collapseMultiMeasureRests,
+                            showInvisibleElements: showInvisibleElements,
+                            playbackCursor: viewModel.playbackSession.displayCursor,
+                            scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
+                            autoFollowEnabled: autoFollowEnabled,
+                            transposeSemitones: viewModel.transposeModel.semitones,
+                            viewModel: viewModel,
+                        )
+                    case .page:
+                        PagedScoreContainer(
+                            score: visible,
+                            staffSize: viewModel.layoutModel.staffSize,
+                            honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                            collapseMultiMeasureRests: collapseMultiMeasureRests,
+                            showInvisibleElements: showInvisibleElements,
+                            playbackCursor: viewModel.playbackSession.displayCursor,
+                            pageAnchorCursor: viewModel.playbackSession.pageAnchorCursor,
+                            autoFollowEnabled: autoFollowEnabled,
+                            showsPageTurnButtons: pageTurnButtonsVisible,
+                            transposeSemitones: viewModel.transposeModel.semitones,
+                            viewModel: viewModel,
+                        )
+                    }
+                } else {
+                    ProgressView().controlSize(.large)
                 }
-            } description: {
-                Text(describeReaderError(error))
-            } actions: {
-                Button { Task { await viewModel.load() } } label: {
-                    Text("reader.error.retry", bundle: .module)
+            case let .loadedPDF(document):
+                switch pdfLayoutMode {
+                case .vertical:
+                    VerticalPDFContainer(document: document, viewModel: viewModel)
+                case .page, .horizontal:
+                    PagedPDFContainer(
+                        document: document,
+                        showsPageTurnButtons: pageTurnButtonsVisible,
+                        viewModel: viewModel,
+                    )
                 }
-                .buttonStyle(.borderedProminent)
+            case let .failed(error):
+                ContentUnavailableView {
+                    Label {
+                        Text("reader.error.cannotOpen.title", bundle: .module)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle")
+                    }
+                } description: {
+                    Text(describeReaderError(error))
+                } actions: {
+                    Button { Task { await viewModel.load() } } label: {
+                        Text("reader.error.retry", bundle: .module)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
         }
     }

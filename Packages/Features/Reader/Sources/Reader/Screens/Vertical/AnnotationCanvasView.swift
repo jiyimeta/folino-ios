@@ -32,6 +32,10 @@ struct AnnotationOverlaySpec {
     /// Emits the canvas's live drawing on every change; the container re-anchors its strokes and persists.
     var onChange: (PKDrawing) -> Void
     var state: () -> AnnotationCanvasState
+    /// True while note editing is active (spec §5.9): existing ink dims to a translucent reference layer and stops
+    /// accepting touches, so the editing overlay reads as the foreground without the user losing sight of prior
+    /// annotations.
+    var isInkDimmed = false
 }
 
 /// Owns the annotation `PKCanvasView`: installs it as a viewport-pinned subview of the host scroll view, mirrors the
@@ -117,7 +121,10 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         pinch?.allowedTouchTypes = spec.isAnnotating ? fingerOnly : defaultPinchTouchTypes
         // Touch handling on only while annotating: then .pencilOnly draws the Pencil and fingers fall through to the
         // scroll view's recognizers. Off → the canvas is transparent to touches (committed ink still displays).
-        canvas.isUserInteractionEnabled = spec.isAnnotating
+        // While note editing is active, the ink is a dimmed reference layer only — never interactive, regardless of
+        // `isAnnotating` (the annotation toggle is hidden during editing, but this guards belt-and-suspenders).
+        canvas.isUserInteractionEnabled = !spec.isInkDimmed && spec.isAnnotating
+        canvas.alpha = spec.isInkDimmed ? 0.4 : 1.0
         applyDrawing(spec.displayDrawing)
         applyToolPicker(visible: spec.isAnnotating)
         sync(scrollOffset: scroll.contentOffset)

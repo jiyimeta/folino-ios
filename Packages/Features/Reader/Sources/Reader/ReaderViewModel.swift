@@ -1,3 +1,8 @@
+// swiftlint:disable file_length
+// ReaderViewModel owns the whole Reader session: load state, every sub-model (repeat/tempo/volume/transpose/layout/
+// mixer), playback + PiP session wiring, playlist advance, and now the note-editing score-adoption reload path
+// (`adoptEditedScore`); that breadth keeps it just over the file_length budget.
+
 import CoreGraphics
 import Domain
 import Foundation
@@ -357,6 +362,17 @@ final class ReaderViewModel {
         if autoPlay {
             await playbackSession.togglePlayback()
         }
+    }
+
+    /// Adopt the edited score as the loaded score and re-prepare the audio engine against it (the engine's sequencer
+    /// still holds the pre-edit score). Mirrors the `advance(to:)` reload sequence without swapping the item — the
+    /// score item, preferences store, and playlist context are all unchanged; only the note content is new.
+    func adoptEditedScore(_ score: Score) async {
+        loadState = .loaded(score)
+        recomputeVisibleScore()
+        await playbackSession.releaseEngine()
+        await playbackSession.prepareForPlayback()
+        pipSession.armIfReady()
     }
 
     /// Rebuild `visibleScore` from the loaded score and the current layout / transpose inputs. Cheap no-op when nothing

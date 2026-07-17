@@ -50,6 +50,9 @@ struct VerticalScoreContainer: View {
     /// down. The control floats over this padding in a sibling overlay; vertical mode reserves no `safeAreaPadding`.
     let bottomControlClearance: CGFloat
     @Bindable var viewModel: ReaderViewModel
+    /// Unused until Task 12 wires the note-editing overlay (tap / caret / pitch-drag). Present now, as a no-op
+    /// optional, only so `ReaderRootScreen`'s editing branch can pass it without a forward-declared parameter.
+    var editingHost: ReaderEditingHost?
 
     @State private var document: LayoutDocument?
     @State private var lastWidth: CGFloat = 0
@@ -217,6 +220,7 @@ struct VerticalScoreContainer: View {
                 )
             },
             state: { annotationCanvasState(viewport: viewport) },
+            isInkDimmed: editingHost?.isEditing == true,
         )
     }
 
