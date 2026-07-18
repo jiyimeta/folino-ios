@@ -267,24 +267,53 @@ struct PagedScoreContainer: View {
             startLocation: startLocation, currentOffset: currentOffset,
             offsetX: pinch.offsetX, offsetY: pinch.offsetY,
         ))
-        let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
+        // Clamp the anchor-preserving target into the post-commit valid range and keep the residual the clamp removed.
+        // In paged mode both axes ride `pinch.offset` (the full-bleed scroll view has no scrollable extent at zoom 1),
+        // so the residual is fully animatable: seed it into the live offset to hold the content at its released
+        // position, then ease it to zero so it settles at the edge-aligned rest instead of snapping there. Content
+        // area = page band + safe-area insets, scaled by the committed zoom; the scroll host is full-bleed so its
+        // bounds equal that same padded band at zoom 1. Compute the size explicitly (not via the `expectedContentSize`
+        // closure, which reads `committedZoom` — the value we are about to mutate).
+        let paddedBounds = CGSize(
+            width: viewport.width + pageInsets.leading + pageInsets.trailing,
+            height: viewport.height + pageInsets.top + pageInsets.bottom,
+        )
+        let contentSize = CGSize(width: paddedBounds.width * r.targetZoom, height: paddedBounds.height * r.targetZoom)
+        let (clamped, residual) = ReaderPinchCommit.clampScrollTarget(
+            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds, inset: .zero,
+        )
 
         if r.isBounceBack {
             // Ease frame-by-frame so the ink overlay follows the rubber-band release in lockstep (PinchState).
             pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
         } else {
             committedZoom = r.targetZoom
-            pendingScroll = .immediate(scrollToTarget)
+            pendingScroll = .immediate(clamped)
             if r.snapToUnit {
                 viewModel.resetZoom()
                 pinch.magnification = r.compensatedMag
+                // Hold at release (seed the residual) then co-ease magnification and offset on one CADisplayLink so
+                // scale and position settle together. For snap the range collapses to the origin, so the residual is
+                // `-rawScrollTarget` — which also absorbs the live pan the raw target subtracted.
+                pinch.offsetX = residual.x
+                pinch.offsetY = residual.y
                 pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
             } else {
                 viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
                 pinch.anchor = .center
-                pinch.offsetX = 0
-                pinch.offsetY = 0
+                if residual == .zero {
+                    // Seamless fast path: the anchor-preserving target was already in range — nothing to ease.
+                    pinch.offsetX = 0
+                    pinch.offsetY = 0
+                } else {
+                    // Overscrolled past a content edge: hold at release, then ease to the edge-aligned rest. The ease
+                    // rewrites `magnification` every frame (even at a constant 1.0), so the container's observation
+                    // re-fires and re-syncs the ink overlay in lockstep with the offset.
+                    pinch.offsetX = residual.x
+                    pinch.offsetY = residual.y
+                    pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
+                }
             }
         }
     }

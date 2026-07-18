@@ -1,4 +1,5 @@
 import CoreGraphics
+import UIKit
 
 struct PinchCommitInput {
     let baseZoom: CGFloat
@@ -42,5 +43,33 @@ enum ReaderPinchCommit {
             snapToUnit: targetZoom <= 1.0,
             compensatedMag: targetZoom == 0 ? 1 : combined / targetZoom,
         )
+    }
+
+    /// Clamp a requested scroll offset into `UIScrollView`'s valid `contentOffset` range and report the residual the
+    /// clamp removed. Mirrors the range `UIScrollView` itself enforces — `[-inset.left, contentSize - bounds +
+    /// inset.right]` per axis (`max`-guarded so a content-fits-viewport axis collapses to a single point) — so this is
+    /// the single source of truth for both `ScoreScrollHost`'s pre-clamp and the pinch-commit re-anchor.
+    ///
+    /// `residual = clamped - raw`. It is `.zero` exactly when `raw` was already in range (the seamless-commit fast
+    /// path). When non-zero — the user overscrolled past a content edge during the pinch — it is the screen-space
+    /// vector the commit must fold into the live `.offset` (then ease to zero) so the content stays put at release and
+    /// animates to the edge-aligned rest instead of snapping there in a single frame. Sign: `.offset(+x)` moves content
+    /// right, `contentOffset(+x)` moves it left, so seeding `pinch.offset = residual` cancels the clamp shift exactly.
+    static func clampScrollTarget(
+        _ raw: CGPoint,
+        contentSize: CGSize,
+        bounds: CGSize,
+        inset: UIEdgeInsets,
+    ) -> (clamped: CGPoint, residual: CGPoint) {
+        let minX = -inset.left
+        let maxX = max(minX, contentSize.width + inset.right - bounds.width)
+        let minY = -inset.top
+        let maxY = max(minY, contentSize.height + inset.bottom - bounds.height)
+        let clamped = CGPoint(
+            x: max(minX, min(maxX, raw.x)),
+            y: max(minY, min(maxY, raw.y)),
+        )
+        let residual = CGPoint(x: clamped.x - raw.x, y: clamped.y - raw.y)
+        return (clamped, residual)
     }
 }
