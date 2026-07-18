@@ -29,6 +29,10 @@ struct VerticalPDFContainer: View {
     /// scroll / pinch / zoom — and kept equal to the live ink while the user draws, so the canvas seed never
     /// round-trips and wipes an in-progress stroke. Passed to the canvas as the seed drawing.
     @State private var projectedAnnotations = PKDrawing()
+    /// Stable handle the canvas controller links itself into (see `AnnotationCanvasHandle`). Continuous-scroll mode
+    /// has no page-turn commit, so nothing calls `reseedForPageTurn` here — the handle only satisfies the shared
+    /// `AnnotationOverlaySpec` initializer.
+    @State private var annotationHandle = AnnotationCanvasHandle()
 
     /// Vertical gap between stacked pages, in unzoomed content points.
     private let pageGap: CGFloat = 8
@@ -168,6 +172,7 @@ struct VerticalPDFContainer: View {
                 )
             },
             state: { annotationCanvasState(viewport: viewport, sizes: sizes) },
+            handle: annotationHandle,
         )
     }
 

@@ -72,6 +72,10 @@ struct VerticalScoreContainer: View {
     /// The annotation model projected to the current layout. Recomputed only when `document` or the model changes —
     /// NOT on scroll/pinch — so per-tick rendering stays cheap. Passed to the canvas as the seed drawing.
     @State private var projectedAnnotations = PKDrawing()
+    /// Stable handle the canvas controller links itself into (see `AnnotationCanvasHandle`). Continuous-scroll mode
+    /// has no page-turn commit, so nothing calls `reseedForPageTurn` here — the handle only satisfies the shared
+    /// `AnnotationOverlaySpec` initializer.
+    @State private var annotationHandle = AnnotationCanvasHandle()
 
     /// Vertical padding inside the scaled content. Top is larger so the first system clears the nav chrome / safe
     /// area when `ignoresSafeArea()` lets the score slide underneath.
@@ -217,6 +221,7 @@ struct VerticalScoreContainer: View {
                 )
             },
             state: { annotationCanvasState(viewport: viewport) },
+            handle: annotationHandle,
         )
     }
 

@@ -59,12 +59,14 @@ extension PagedPDFContainer {
         if liveScrollOffset != .zero {
             pendingScroll = .immediate(.zero)
         }
-        // Reseed the viewport-pinned live canvas to the NEW page synchronously. The canvas is pinned to the viewport
-        // (it can't slide with the page) and sits above every page, so if it keeps the previous page's ink it stays
-        // painted over the new page after the turn. `pageIndex` is already the target here, so this projects the new
-        // page. The reactive `.onChange(of: pageState.pageIndex)` also fires, but not reliably in step with the
-        // `withAnimation` turn — this makes the handoff to the new page's static ink layer immediate.
-        reprojectCurrentPage(viewport: lastViewport)
+        // Reseed the viewport-pinned live canvas to the NEW page imperatively, synchronously, and BEFORE any queued
+        // PencilKit `didChange` echo of the just-left page can run — see `reseedLiveCanvasForPageTurn`. The canvas is
+        // pinned to the viewport (it can't slide with the page) and sits above every page, so if it keeps the previous
+        // page's ink it stays painted over the new page after the turn. `pageIndex` is already the target here, so
+        // this projects the new page. The reactive `.onChange(of: pageState.pageIndex)` also fires, but not reliably
+        // in step with the `withAnimation` turn, and its `applyDrawing` byte guard can't win the echo race — this
+        // makes the handoff to the new page's ink immediate and race-proof.
+        reseedLiveCanvasForPageTurn(viewport: lastViewport)
     }
 }
 
@@ -175,7 +177,7 @@ extension PagedPDFContainer {
             pageState.dragTranslationX = 0
         }
         pendingScroll = .immediate(.zero)
-        // Reseed the viewport-pinned live canvas to the new page synchronously — see `commitPageTurn`.
-        reprojectCurrentPage(viewport: lastViewport)
+        // Reseed the viewport-pinned live canvas to the new page imperatively, synchronously — see `commitPageTurn`.
+        reseedLiveCanvasForPageTurn(viewport: lastViewport)
     }
 }

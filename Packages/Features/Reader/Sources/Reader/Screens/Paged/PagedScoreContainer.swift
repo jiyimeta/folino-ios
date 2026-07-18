@@ -65,6 +65,9 @@ struct PagedScoreContainer: View {
     /// outside the body and have no `proxy`) can reseed the live annotation canvas synchronously — see
     /// `commitPageTurn` / `commitDragTurn`.
     @State var lastViewport: CGSize = .zero
+    /// Stable handle for imperatively reseeding the live annotation canvas at a page-turn commit (see
+    /// `AnnotationCanvasHandle`) — used by `reseedLiveCanvasForPageTurn`.
+    @State var annotationHandle = AnnotationCanvasHandle()
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -317,6 +320,7 @@ struct PagedScoreContainer: View {
                 viewModel.annotationDrawingsDidChange(offPage + captured)
             },
             state: { annotationCanvasState(viewport: viewport) },
+            handle: annotationHandle,
         )
     }
 
@@ -344,17 +348,32 @@ struct PagedScoreContainer: View {
         )
     }
 
-    /// Not `private`: the page-turn commits in `PagedScoreContainer+PageNavigation` call this to reseed synchronously.
+    /// Not `private`: reactive reseed points (pageIndex / document / isAnnotating / model change) call this.
     func reprojectCurrentPage(viewport: CGSize) {
-        // Live canvas shows ink only while annotating the current page; static band-space layers (PagedZoomedSurface)
-        // cover display for every page. Seed the live canvas while annotating, empty it otherwise.
+        projectedAnnotations = projectedDrawing(viewport: viewport)
+    }
+
+    /// The current page's annotation model projected to band space, or an empty drawing when not annotating / no
+    /// resolvable band (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    private func projectedDrawing(viewport: CGSize) -> PKDrawing {
         guard viewModel.isAnnotating, let doc = document, let band = currentPageBand(viewport: viewport) else {
-            projectedAnnotations = PKDrawing(); return
+            return PKDrawing()
         }
-        projectedAnnotations = AnnotationAnchoring.displayPaged(
+        return AnnotationAnchoring.displayPaged(
             viewModel.annotationDrawings, in: doc,
             pageStartY: band.startY, pageEndY: band.endY, contentPadding: band.contentPadding,
         )
+    }
+
+    /// Reseed the viewport-pinned live canvas to the current page synchronously at a page-turn commit. Unlike the
+    /// reactive `reprojectCurrentPage` (which only sets `projectedAnnotations` and relies on the next render + the
+    /// canvas's byte-identity guard — a race a stale echo can defeat), this drives the canvas imperatively via the
+    /// handle so the reseed and its echo-suppression are armed in the commit callout, before any queued echo runs.
+    /// An empty projection here force-clears any pre-existing stranded ink.
+    func reseedLiveCanvasForPageTurn(viewport: CGSize) {
+        let drawing = projectedDrawing(viewport: viewport)
+        projectedAnnotations = drawing
+        annotationHandle.reseedForPageTurn(drawing)
     }
 
     var scoreOptions: ScoreViewOptions {

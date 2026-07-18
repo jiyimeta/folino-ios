@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// PagedPDFContainer mirrors PagedScoreContainer's page-band pagination / pinch / annotation-overlay plumbing for
+// paged PDF viewing; the parallel structure keeps it just over the file_length budget.
+
 import Domain
 import PDFKit
 import PencilKit
@@ -32,6 +36,9 @@ struct PagedPDFContainer: View {
     /// outside the body and have no `proxy`) can reseed the live annotation canvas synchronously — see
     /// `commitPageTurn` / `commitDragTurn`.
     @State var lastViewport: CGSize = .zero
+    /// Stable handle for imperatively reseeding the live annotation canvas at a page-turn commit (see
+    /// `AnnotationCanvasHandle`) — used by `reseedLiveCanvasForPageTurn`.
+    @State var annotationHandle = AnnotationCanvasHandle()
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -229,6 +236,7 @@ struct PagedPDFContainer: View {
                 viewModel.annotationDrawingsDidChange(offPage + captured)
             },
             state: { annotationCanvasState(viewport: viewport) },
+            handle: annotationHandle,
         )
     }
 
@@ -257,17 +265,30 @@ struct PagedPDFContainer: View {
         )
     }
 
-    /// Not `private`: the page-turn commits in `PagedPDFContainer+Navigation` call this to reseed synchronously.
+    /// Not `private`: reactive reseed points (pageIndex / isAnnotating / model change) call this.
     func reprojectCurrentPage(viewport: CGSize) {
-        // Live canvas shows ink only while annotating; static layers in `pdfPage` cover display for every page.
-        // Empty the live canvas when not annotating.
+        projectedAnnotations = projectedDrawing(viewport: viewport)
+    }
+
+    /// The current page's annotation model projected to band space, or an empty drawing when not annotating / no
+    /// resolvable page frame (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    private func projectedDrawing(viewport: CGSize) -> PKDrawing {
         guard viewModel.isAnnotating, let frame = currentPageFrame(viewport: viewport) else {
-            projectedAnnotations = PKDrawing(); return
+            return PKDrawing()
         }
         let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
-        projectedAnnotations = PDFAnnotationAnchoring.displayPage(
+        return PDFAnnotationAnchoring.displayPage(
             viewModel.annotationDrawings, pageIndex: idx, pageFrame: frame,
         )
+    }
+
+    /// Reseed the viewport-pinned live canvas to the current page synchronously at a page-turn commit. See
+    /// `PagedScoreContainer.reseedLiveCanvasForPageTurn` for the full rationale — same imperative-echo-suppression
+    /// fix, mirrored for the PDF page geometry.
+    func reseedLiveCanvasForPageTurn(viewport: CGSize) {
+        let drawing = projectedDrawing(viewport: viewport)
+        projectedAnnotations = drawing
+        annotationHandle.reseedForPageTurn(drawing)
     }
 
     private func commitPinch(
