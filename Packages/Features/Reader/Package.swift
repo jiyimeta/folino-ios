@@ -65,6 +65,12 @@ if isAndroid {
         // jextract tool needs under swift-6.3.3. Pin to 0.4.0 (matches Settings/Library). Remove once swift-java
         // ships against swift-subprocess 0.5+.
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
+        // swift-wirelet @WireFormat TLV codecs for the annotation JNI wire boundary (decode ssm's anchor bytes,
+        // encode the DrawingAnchor / transform payloads). Pinned to the same revision Library uses.
+        .package(
+            url: "https://github.com/jiyimeta/swift-wirelet.git",
+            revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4",
+        ),
     ]
     products += [
         .library(
@@ -80,6 +86,7 @@ if isAndroid {
                 "Domain",
                 "ReaderAnnotationCore",
                 .product(name: "SwiftJava", package: "swift-java"),
+                .product(name: "Wirelet", package: "swift-wirelet"),
             ],
             exclude: [
                 "swift-java.config",
