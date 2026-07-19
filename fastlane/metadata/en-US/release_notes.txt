@@ -1,1 +1,5 @@
-- Minor improvements and bug fixes
+- Fixed playback of repeat signs
+- Fixed occasional audio dropouts
+- Fixed display of scores imported from MIDI files
+- Fixed glissando display
+- Fixed pinch-to-zoom

@@ -1,3 +1,30 @@
+- version: 1.8.3
+  descriptions:
+    - en: Fixed playback of repeat signs
+      ja: 繰り返し記号の再生を修正
+      ko: 반복 기호 재생 수정
+      zh-Hans: 修复反复记号的播放
+      zh-Hant: 修正反覆記號的播放
+    - en: Fixed occasional audio dropouts
+      ja: たまに音が途切れる問題を修正
+      ko: 간헐적인 소리 끊김 문제 수정
+      zh-Hans: 修复偶尔出现的声音中断问题
+      zh-Hant: 修正偶爾出現的聲音中斷問題
+    - en: Fixed display of scores imported from MIDI files
+      ja: MIDIファイルから読み込んだ楽譜の表示を修正
+      ko: MIDI 파일에서 불러온 악보 표시 수정
+      zh-Hans: 修复从 MIDI 文件导入的乐谱显示
+      zh-Hant: 修正從 MIDI 檔案匯入的樂譜顯示
+    - en: Fixed glissando display
+      ja: グリッサンド表示を修正
+      ko: 글리산도 표시 수정
+      zh-Hans: 修复滑音显示
+      zh-Hant: 修正滑音顯示
+    - en: Fixed pinch-to-zoom
+      ja: ピンチ操作 (拡大・縮小) を修正
+      ko: 핀치 확대/축소 조작 수정
+      zh-Hans: 修复双指缩放操作
+      zh-Hant: 修正雙指縮放操作
 - version: 1.8.2
   descriptions:
     - en: Minor improvements and bug fixes
