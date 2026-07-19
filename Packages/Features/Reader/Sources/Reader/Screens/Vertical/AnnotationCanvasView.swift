@@ -17,6 +17,21 @@ struct AnnotationCanvasState {
     var contentInset: UIEdgeInsets
 }
 
+/// A stable, view-identity-independent handle the paged containers use to imperatively reseed the live annotation
+/// canvas at a page-turn commit — synchronously, in the commit callout, BEFORE any queued PencilKit `didChange`
+/// echo of the just-left page can run. The reactive spec path (`displayDrawing`) can't win that race: its byte
+/// guard is only armed at the next render, after the echo. Held as `@State` by the container; the controller links
+/// itself in on install/update.
+@MainActor
+final class AnnotationCanvasHandle {
+    fileprivate weak var controller: AnnotationCanvasController?
+
+    /// Force the live canvas to `drawing` for the new page and suppress echo capture until the user next draws.
+    func reseedForPageTurn(_ drawing: PKDrawing) {
+        controller?.reseedForPageTurn(drawing)
+    }
+}
+
 /// Opt-in annotation overlay config passed to `ScoreScrollHost`. When present, the host installs a viewport-sized
 /// `PKCanvasView` as a SUBVIEW of its scroll view (pinned to the `frameLayoutGuide` — the visible viewport, NOT the
 /// content). Because the scroll view's pan + custom pinch are then ancestors of the canvas, they receive finger
@@ -32,6 +47,9 @@ struct AnnotationOverlaySpec {
     /// Emits the canvas's live drawing on every change; the container re-anchors its strokes and persists.
     var onChange: (PKDrawing) -> Void
     var state: () -> AnnotationCanvasState
+    /// Stable handle the container uses to imperatively reseed the canvas at a page-turn commit (see
+    /// `AnnotationCanvasHandle`). The controller links itself into this on install/update.
+    var handle: AnnotationCanvasHandle
     /// True while note editing is active (spec §5.9): existing ink dims to a translucent reference layer and stops
     /// accepting touches, so the editing overlay reads as the foreground without the user losing sight of prior
     /// annotations.
@@ -63,6 +81,11 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     /// when the drawing changes, in `applyDrawing` / `canvasViewDrawingDidChange`) so the per-tick `sync` never pays a
     /// bounds recompute. `0` means "no ink" — no texture clamp needed.
     private var inkRightEdge: CGFloat = 0
+    /// After a page-turn reseed, PencilKit `didChange` deliveries (the programmatic reseed's own echo, and any late
+    /// wet-to-dry echo of the page we just left) are NOT user edits — swallow them until the user puts a tool down
+    /// on the new page. Otherwise the echo clobbers `projectedAnnotations` back to the old ink and/or mis-anchors it
+    /// to the new page. Armed by `reseedForPageTurn`, cleared by the tool lifecycle.
+    private var ignoreEchoesUntilUserDraws = false
 
     /// Leave headroom under the GPU's hard 16,384px max 2D-texture edge (see the class ROOT-CAUSE NOTE) so we split the
     /// zoom *before* PencilKit starts dropping strokes from the right — internal padding / rounding eats a little of
@@ -73,6 +96,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     func install(in scroll: UIScrollView, pinch: UIPinchGestureRecognizer?, spec: AnnotationOverlaySpec) {
         guard canvas == nil else { return }
         onChange = spec.onChange
+        spec.handle.controller = self
         defaultPanTouchTypes = scroll.panGestureRecognizer.allowedTouchTypes
         defaultPinchTouchTypes = pinch?.allowedTouchTypes ?? []
         let view = PKCanvasView()
@@ -109,6 +133,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     func update(spec: AnnotationOverlaySpec, scroll: UIScrollView, pinch: UIPinchGestureRecognizer?) {
         guard let canvas else { return }
         onChange = spec.onChange
+        spec.handle.controller = self
         state = spec.state
         // Re-assert each cycle: .pencilOnly re-enables the canvas's own pan.
         canvas.drawingPolicy = spec.isPencilPreferred ? .pencilOnly : .anyInput
@@ -196,7 +221,34 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         lastSeededDrawing = canvasView.drawing // our own edit is the source of truth; don't let applyDrawing echo it
         inkRightEdge = Self.rightEdge(of: canvasView.drawing)
+        // After a page-turn reseed, swallow echoes until the user actually puts a tool down on the new page — see
+        // `ignoreEchoesUntilUserDraws`. The next genuine stroke re-enables capture and recaptures the whole canvas.
+        guard !ignoreEchoesUntilUserDraws else { return }
         onChange(canvasView.drawing)
+    }
+
+    /// A genuine user edit is starting on the current page — stop swallowing echoes so the stroke gets captured.
+    func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        ignoreEchoesUntilUserDraws = false
+    }
+
+    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        ignoreEchoesUntilUserDraws = false
+    }
+
+    /// Imperatively force the live canvas to the new page's ink at a page-turn commit, and suppress echo capture
+    /// until the user next puts a tool down. Called synchronously from the container's page-turn commit (via
+    /// `AnnotationCanvasHandle`) so the suppression is armed BEFORE any queued PencilKit `didChange` echo of the
+    /// just-left page can run — the reactive `displayDrawing` path can't, since its byte guard is only armed at the
+    /// next render. Unconditional assign (unlike `applyDrawing`'s byte-identity guard, which a stale same-instance
+    /// echo could satisfy and skip — the original linger). Guard the canvas FIRST so a nil canvas never advances
+    /// `lastSeededDrawing` past an un-applied seed (which would later read as byte-equal and silently skip).
+    func reseedForPageTurn(_ drawing: PKDrawing) {
+        guard let canvas else { return }
+        ignoreEchoesUntilUserDraws = true
+        lastSeededDrawing = drawing
+        inkRightEdge = Self.rightEdge(of: drawing)
+        canvas.drawing = drawing
     }
 
     /// Seed/replace the canvas only when the projected model actually changed (load or reflow); never echo the user's

@@ -46,6 +46,10 @@ struct HorizontalScoreContainer: View {
     /// scroll/pinch — so per-tick rendering stays cheap. Passed to the canvas as the seed drawing. Mirrors
     /// `VerticalScoreContainer.projectedAnnotations`.
     @State private var projectedAnnotations = PKDrawing()
+    /// Stable handle the canvas controller links itself into (see `AnnotationCanvasHandle`). Continuous-scroll mode
+    /// has no page-turn commit, so nothing calls `reseedForPageTurn` here — the handle only satisfies the shared
+    /// `AnnotationOverlaySpec` initializer.
+    @State private var annotationHandle = AnnotationCanvasHandle()
 
     private let scorePadding: CGFloat = 16
 
@@ -213,6 +217,7 @@ struct HorizontalScoreContainer: View {
                 viewModel.annotationDrawingsDidChange(AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc))
             },
             state: { annotationCanvasState(viewport: viewport) },
+            handle: annotationHandle,
         )
     }
 

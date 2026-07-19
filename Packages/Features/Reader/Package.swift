@@ -18,7 +18,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(path: "../../Utility"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        revision: "be336454aa5400300a34b48eca14860d7ad4acbd",
+        exact: "1.2.0",
     ),
 ]
 
@@ -27,10 +27,19 @@ var products: [Product] = [
 ]
 
 var targets: [Target] = [
+    // Platform-neutral annotation anchoring logic (InkStroke ⇄ MusicalAnchor). Foundation + Domain only, no PencilKit
+    // / SheetMusicLayout, so BOTH the Apple `Reader` UI target and the Android `FolinoReaderJNI` bridge depend on it —
+    // shared logic lives here, not inside the iOS-only `Reader` target. No SwiftLint build-tool plugin (it is
+    // cross-compiled for Android like `FolinoReaderJNI`; the pre-commit hook lints it on the host instead).
+    .target(
+        name: "ReaderAnnotationCore",
+        dependencies: ["Domain"],
+    ),
     .target(
         name: "Reader",
         dependencies: [
             "Domain",
+            "ReaderAnnotationCore",
             "ScoreUI",
             .product(name: "UtilityCore", package: "Utility"),
             .product(name: "UtilityUI", package: "Utility"),
@@ -44,7 +53,7 @@ var targets: [Target] = [
     ),
     .testTarget(
         name: "ReaderTests",
-        dependencies: ["Reader"],
+        dependencies: ["Reader", "ReaderAnnotationCore"],
         resources: [.process("Resources")],
     ),
 ]
@@ -69,6 +78,7 @@ if isAndroid {
             name: "FolinoReaderJNI",
             dependencies: [
                 "Domain",
+                "ReaderAnnotationCore",
                 .product(name: "SwiftJava", package: "swift-java"),
             ],
             exclude: [

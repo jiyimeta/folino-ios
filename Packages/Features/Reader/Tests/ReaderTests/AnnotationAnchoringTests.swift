@@ -166,4 +166,20 @@ struct AnnotationAnchoringTests {
         )
         #expect(shown.strokes.isEmpty)
     }
+
+    @Test
+    func `capture then display round-trips a PKStroke through the neutral adapter`() throws {
+        let d = doc()
+        let docPoint = try #require(
+            d.anchorReferencePoint(measureIndex: 1, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0)?.point,
+        )
+        let target = CGPoint(x: docPoint.x + 20, y: docPoint.y - 6)
+        let captured = AnnotationAnchoring.capture(strokes: [PaintTestSupport.dot(at: target)], in: d)
+        #expect(captured.count == 1)
+        // A non-masked stroke round-trips through the shared core: displayed ink lands back at the source point.
+        let shown = AnnotationAnchoring.display(captured, in: d)
+        let outPoint = try #require(shown.strokes.first?.renderBounds.center)
+        #expect(abs(outPoint.x - target.x) < 1.0)
+        #expect(abs(outPoint.y - target.y) < 1.0)
+    }
 }

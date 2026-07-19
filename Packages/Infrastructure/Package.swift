@@ -23,7 +23,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        revision: "be336454aa5400300a34b48eca14860d7ad4acbd",
+        exact: "1.2.0",
     ),
     .package(path: "../Domain"),
     .package(path: "../Utility"),
@@ -53,6 +53,9 @@ var targets: [Target] = [
         dependencies: [
             "Domain",
             .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
+            // Pure-Swift, MIT SoundFont2 synth. Injected into the live `PlaybackEngine` to replace the built-in
+            // AUMIDISynth path, whose voice stealing dropped notes in dense passages (App Store dropout regression).
+            .product(name: "SheetMusicAudioSwiftySynth", package: "swift-sheet-music"),
         ],
         plugins: swiftLintPlugins,
     ),

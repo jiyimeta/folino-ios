@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// PagedPDFContainer mirrors PagedScoreContainer's page-band pagination / pinch / annotation-overlay plumbing for
+// paged PDF viewing; the parallel structure keeps it just over the file_length budget.
+
 import Domain
 import PDFKit
 import PencilKit
@@ -32,6 +36,9 @@ struct PagedPDFContainer: View {
     /// outside the body and have no `proxy`) can reseed the live annotation canvas synchronously — see
     /// `commitPageTurn` / `commitDragTurn`.
     @State var lastViewport: CGSize = .zero
+    /// Stable handle for imperatively reseeding the live annotation canvas at a page-turn commit (see
+    /// `AnnotationCanvasHandle`) — used by `reseedLiveCanvasForPageTurn`.
+    @State var annotationHandle = AnnotationCanvasHandle()
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -229,6 +236,7 @@ struct PagedPDFContainer: View {
                 viewModel.annotationDrawingsDidChange(offPage + captured)
             },
             state: { annotationCanvasState(viewport: viewport) },
+            handle: annotationHandle,
         )
     }
 
@@ -257,17 +265,30 @@ struct PagedPDFContainer: View {
         )
     }
 
-    /// Not `private`: the page-turn commits in `PagedPDFContainer+Navigation` call this to reseed synchronously.
+    /// Not `private`: reactive reseed points (pageIndex / isAnnotating / model change) call this.
     func reprojectCurrentPage(viewport: CGSize) {
-        // Live canvas shows ink only while annotating; static layers in `pdfPage` cover display for every page.
-        // Empty the live canvas when not annotating.
+        projectedAnnotations = projectedDrawing(viewport: viewport)
+    }
+
+    /// The current page's annotation model projected to band space, or an empty drawing when not annotating / no
+    /// resolvable page frame (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    private func projectedDrawing(viewport: CGSize) -> PKDrawing {
         guard viewModel.isAnnotating, let frame = currentPageFrame(viewport: viewport) else {
-            projectedAnnotations = PKDrawing(); return
+            return PKDrawing()
         }
         let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
-        projectedAnnotations = PDFAnnotationAnchoring.displayPage(
+        return PDFAnnotationAnchoring.displayPage(
             viewModel.annotationDrawings, pageIndex: idx, pageFrame: frame,
         )
+    }
+
+    /// Reseed the viewport-pinned live canvas to the current page synchronously at a page-turn commit. See
+    /// `PagedScoreContainer.reseedLiveCanvasForPageTurn` for the full rationale — same imperative-echo-suppression
+    /// fix, mirrored for the PDF page geometry.
+    func reseedLiveCanvasForPageTurn(viewport: CGSize) {
+        let drawing = projectedDrawing(viewport: viewport)
+        projectedAnnotations = drawing
+        annotationHandle.reseedForPageTurn(drawing)
     }
 
     private func commitPinch(
@@ -284,7 +305,20 @@ struct PagedPDFContainer: View {
             startLocation: startLocation, currentOffset: currentOffset,
             offsetX: pinch.offsetX, offsetY: pinch.offsetY,
         ))
-        let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
+        // Clamp the anchor-preserving target into the post-commit valid range and keep the residual the clamp removed.
+        // Both axes ride `pinch.offset` in paged mode, so the residual is fully animatable: seed it into the live
+        // offset to hold the content where the finger released it, then ease to zero so it settles at the edge-aligned
+        // rest instead of snapping there. Content area = page band + safe-area insets scaled by the committed zoom; the
+        // full-bleed host's bounds equal that padded band at zoom 1. Size is computed explicitly rather than through
+        // the `expectedContentSize` closure, which reads the `committedZoom` we are about to mutate.
+        let paddedBounds = CGSize(
+            width: viewport.width + pageInsets.leading + pageInsets.trailing,
+            height: viewport.height + pageInsets.top + pageInsets.bottom,
+        )
+        let contentSize = CGSize(width: paddedBounds.width * r.targetZoom, height: paddedBounds.height * r.targetZoom)
+        let (clamped, residual) = ReaderPinchCommit.clampScrollTarget(
+            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds, inset: .zero,
+        )
 
         if r.isBounceBack {
             // Ease frame-by-frame (CADisplayLink) so the annotation ink overlay follows the rubber-band release in
@@ -292,17 +326,32 @@ struct PagedPDFContainer: View {
             pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
         } else {
             committedZoom = r.targetZoom
-            pendingScroll = .immediate(scrollToTarget)
+            pendingScroll = .immediate(clamped)
             if r.snapToUnit {
                 viewModel.resetZoom()
                 pinch.magnification = r.compensatedMag
+                // Hold at release (seed the residual) then co-ease magnification and offset on one CADisplayLink. For
+                // snap the range collapses to the origin, so the residual is `-rawScrollTarget`, which also absorbs the
+                // live pan the raw target subtracted.
+                pinch.offsetX = residual.x
+                pinch.offsetY = residual.y
                 pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
             } else {
                 viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
                 pinch.anchor = .center
-                pinch.offsetX = 0
-                pinch.offsetY = 0
+                if residual == .zero {
+                    // Seamless fast path: the anchor-preserving target was already in range — nothing to ease.
+                    pinch.offsetX = 0
+                    pinch.offsetY = 0
+                } else {
+                    // Overscrolled past a content edge: hold at release, then ease to the edge-aligned rest. The ease
+                    // rewrites `magnification` every frame (even at a constant 1.0), so the container's observation
+                    // re-fires and re-syncs the ink overlay in lockstep with the offset.
+                    pinch.offsetX = residual.x
+                    pinch.offsetY = residual.y
+                    pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
+                }
             }
         }
     }

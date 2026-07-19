@@ -183,21 +183,15 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             // instantaneously and UIScroll View re-clamps on the next layout pass; the transient frame paints the
             // content at the wrong scroll position (visible as a brief "上にずれる" before the clamp lands). Clamping here
             // keeps the offset in range from the start.
-            let inset = uiView.contentInset
             // Use the container's expected content size for clamping — `uiView.contentSize` lags one render cycle
             // behind SwiftUI for the same reason `intrinsicContentSize` does (the new rootView's layout hasn't
             // propagated yet), and clamping against the stale size would still land outside UIScrollView's
-            // eventually-valid range.
+            // eventually-valid range. `clampScrollTarget` is the shared range clamp; the pinch commit uses the same
+            // function to derive the residual it eases, so the host and the commit can never disagree on the edge.
             let size = expectedContentSize()
-            let bounds = uiView.bounds
-            let minX = -inset.left
-            let maxX = max(minX, size.width + inset.right - bounds.width)
-            let minY = -inset.top
-            let maxY = max(minY, size.height + inset.bottom - bounds.height)
-            let clampedPoint = CGPoint(
-                x: max(minX, min(maxX, command.point.x)),
-                y: max(minY, min(maxY, command.point.y)),
-            )
+            let clampedPoint = ReaderPinchCommit.clampScrollTarget(
+                command.point, contentSize: size, bounds: uiView.bounds.size, inset: uiView.contentInset,
+            ).clamped
             // Apply offset synchronously so the new offset paints in the same frame as the new `viewportZoom`. The flag
             // suppresses the resulting `scrollViewDidScroll` from mutating `parent.contentOffset` mid-update (which
             // would trigger the "Modifying state during view update" warning).

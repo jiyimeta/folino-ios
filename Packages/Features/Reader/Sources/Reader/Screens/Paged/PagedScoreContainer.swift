@@ -65,6 +65,9 @@ struct PagedScoreContainer: View {
     /// outside the body and have no `proxy`) can reseed the live annotation canvas synchronously — see
     /// `commitPageTurn` / `commitDragTurn`.
     @State var lastViewport: CGSize = .zero
+    /// Stable handle for imperatively reseeding the live annotation canvas at a page-turn commit (see
+    /// `AnnotationCanvasHandle`) — used by `reseedLiveCanvasForPageTurn`.
+    @State var annotationHandle = AnnotationCanvasHandle()
 
     /// First-tap onboarding hint state. `false` until the user touches any page-nav zone for the first time, then
     /// permanently `true`. See `ReaderGlobalSettingsKey.pageTapHintDismissed`.
@@ -264,24 +267,53 @@ struct PagedScoreContainer: View {
             startLocation: startLocation, currentOffset: currentOffset,
             offsetX: pinch.offsetX, offsetY: pinch.offsetY,
         ))
-        let scrollToTarget = CGPoint(x: max(0, r.rawScrollTarget.x), y: max(0, r.rawScrollTarget.y))
+        // Clamp the anchor-preserving target into the post-commit valid range and keep the residual the clamp removed.
+        // In paged mode both axes ride `pinch.offset` (the full-bleed scroll view has no scrollable extent at zoom 1),
+        // so the residual is fully animatable: seed it into the live offset to hold the content at its released
+        // position, then ease it to zero so it settles at the edge-aligned rest instead of snapping there. Content
+        // area = page band + safe-area insets, scaled by the committed zoom; the scroll host is full-bleed so its
+        // bounds equal that same padded band at zoom 1. Compute the size explicitly (not via the `expectedContentSize`
+        // closure, which reads `committedZoom` — the value we are about to mutate).
+        let paddedBounds = CGSize(
+            width: viewport.width + pageInsets.leading + pageInsets.trailing,
+            height: viewport.height + pageInsets.top + pageInsets.bottom,
+        )
+        let contentSize = CGSize(width: paddedBounds.width * r.targetZoom, height: paddedBounds.height * r.targetZoom)
+        let (clamped, residual) = ReaderPinchCommit.clampScrollTarget(
+            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds, inset: .zero,
+        )
 
         if r.isBounceBack {
             // Ease frame-by-frame so the ink overlay follows the rubber-band release in lockstep (PinchState).
             pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
         } else {
             committedZoom = r.targetZoom
-            pendingScroll = .immediate(scrollToTarget)
+            pendingScroll = .immediate(clamped)
             if r.snapToUnit {
                 viewModel.resetZoom()
                 pinch.magnification = r.compensatedMag
+                // Hold at release (seed the residual) then co-ease magnification and offset on one CADisplayLink so
+                // scale and position settle together. For snap the range collapses to the origin, so the residual is
+                // `-rawScrollTarget` — which also absorbs the live pan the raw target subtracted.
+                pinch.offsetX = residual.x
+                pinch.offsetY = residual.y
                 pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
             } else {
                 viewModel.viewportZoom = r.targetZoom
                 pinch.magnification = 1.0
                 pinch.anchor = .center
-                pinch.offsetX = 0
-                pinch.offsetY = 0
+                if residual == .zero {
+                    // Seamless fast path: the anchor-preserving target was already in range — nothing to ease.
+                    pinch.offsetX = 0
+                    pinch.offsetY = 0
+                } else {
+                    // Overscrolled past a content edge: hold at release, then ease to the edge-aligned rest. The ease
+                    // rewrites `magnification` every frame (even at a constant 1.0), so the container's observation
+                    // re-fires and re-syncs the ink overlay in lockstep with the offset.
+                    pinch.offsetX = residual.x
+                    pinch.offsetY = residual.y
+                    pinch.animateReset(toMagnification: 1.0, offsetX: 0, offsetY: 0)
+                }
             }
         }
     }
@@ -317,6 +349,7 @@ struct PagedScoreContainer: View {
                 viewModel.annotationDrawingsDidChange(offPage + captured)
             },
             state: { annotationCanvasState(viewport: viewport) },
+            handle: annotationHandle,
         )
     }
 
@@ -344,17 +377,32 @@ struct PagedScoreContainer: View {
         )
     }
 
-    /// Not `private`: the page-turn commits in `PagedScoreContainer+PageNavigation` call this to reseed synchronously.
+    /// Not `private`: reactive reseed points (pageIndex / document / isAnnotating / model change) call this.
     func reprojectCurrentPage(viewport: CGSize) {
-        // Live canvas shows ink only while annotating the current page; static band-space layers (PagedZoomedSurface)
-        // cover display for every page. Seed the live canvas while annotating, empty it otherwise.
+        projectedAnnotations = projectedDrawing(viewport: viewport)
+    }
+
+    /// The current page's annotation model projected to band space, or an empty drawing when not annotating / no
+    /// resolvable band (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    private func projectedDrawing(viewport: CGSize) -> PKDrawing {
         guard viewModel.isAnnotating, let doc = document, let band = currentPageBand(viewport: viewport) else {
-            projectedAnnotations = PKDrawing(); return
+            return PKDrawing()
         }
-        projectedAnnotations = AnnotationAnchoring.displayPaged(
+        return AnnotationAnchoring.displayPaged(
             viewModel.annotationDrawings, in: doc,
             pageStartY: band.startY, pageEndY: band.endY, contentPadding: band.contentPadding,
         )
+    }
+
+    /// Reseed the viewport-pinned live canvas to the current page synchronously at a page-turn commit. Unlike the
+    /// reactive `reprojectCurrentPage` (which only sets `projectedAnnotations` and relies on the next render + the
+    /// canvas's byte-identity guard — a race a stale echo can defeat), this drives the canvas imperatively via the
+    /// handle so the reseed and its echo-suppression are armed in the commit callout, before any queued echo runs.
+    /// An empty projection here force-clears any pre-existing stranded ink.
+    func reseedLiveCanvasForPageTurn(viewport: CGSize) {
+        let drawing = projectedDrawing(viewport: viewport)
+        projectedAnnotations = drawing
+        annotationHandle.reseedForPageTurn(drawing)
     }
 
     var scoreOptions: ScoreViewOptions {
