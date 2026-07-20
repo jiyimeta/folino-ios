@@ -1,6 +1,5 @@
 import Domain
 import Foundation
-import ReaderAnnotationCore
 import Testing
 
 @Suite("AnnotationLayerCodec")

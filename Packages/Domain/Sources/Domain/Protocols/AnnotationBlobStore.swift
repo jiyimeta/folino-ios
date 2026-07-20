@@ -1,4 +1,3 @@
-import Domain
 import Foundation
 
 /// The dumb per-score blob store the `AnnotationSaveCoordinator` writes through. Raw payload bytes only — no assembly,

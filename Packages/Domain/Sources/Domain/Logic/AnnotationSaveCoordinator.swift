@@ -1,4 +1,3 @@
-import Domain
 import Foundation
 
 /// The single shared annotation save policy both platforms drive: assemble a layer from the current drawings, coalesce

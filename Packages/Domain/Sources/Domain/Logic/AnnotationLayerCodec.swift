@@ -1,4 +1,3 @@
-import Domain
 import Foundation
 
 /// The shared JSON codec for an annotation layer's persisted payload — the `{ drawings, textBoxes }` body both

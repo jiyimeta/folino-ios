@@ -32,7 +32,9 @@ final class AppBootstrap {
     private var didStart = false
 
     private(set) var database: AppDatabase?
-    private(set) var annotationStore: LiveAnnotationStore?
+    /// The shared annotation save policy, backed by `LiveAnnotationStore` (an `AnnotationBlobStore`). Injected into
+    /// every `ReaderViewModel` so iOS and Android drive the same debounce / empty→delete / assembly cadence.
+    private(set) var annotationCoordinator: AnnotationSaveCoordinator?
     private(set) var repository: LiveScoreLibraryRepository?
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var importer: LiveScoreFileImporter?
@@ -99,7 +101,7 @@ final class AppBootstrap {
             }
 
             self.database = database
-            self.annotationStore = annotationStore
+            annotationCoordinator = AnnotationSaveCoordinator(store: annotationStore)
             self.repository = repository
             self.gateway = gateway
             self.importer = importer

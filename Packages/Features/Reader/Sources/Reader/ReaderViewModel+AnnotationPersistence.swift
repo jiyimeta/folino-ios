@@ -5,15 +5,14 @@ import Foundation
 
 extension ReaderViewModel {
     /// Loads any persisted annotation layer for the current score into `annotationDrawings`. Called from `load()` once
-    /// the score and preferences are ready.
+    /// the score and preferences are ready. The shared coordinator owns the decode + miss handling (empty on no layer).
     func loadAnnotations() async {
-        let layer = try? await annotationStore.annotationLayer(forScoreItem: scoreItem.id)
-        annotationDrawings = layer?.drawings ?? []
+        annotationDrawings = await annotationCoordinator.load(scoreID: scoreItem.id)
     }
 
     /// Called by the container on every canvas change with the freshly re-anchored drawings. Updates the in-memory
-    /// model immediately (so a re-render projects the live ink, not a stale model) and debounces a save ~0.5 s; an
-    /// empty model deletes the layer instead of storing an empty one.
+    /// model immediately (so a re-render projects the live ink, not a stale model) and hands the change to the shared
+    /// `AnnotationSaveCoordinator`, which owns the ~0.5 s debounce, the empty→delete policy, and the payload assembly.
     func annotationDrawingsDidChange(_ drawings: [DrawingAnchor]) {
         // A net increase in anchored strokes means new ink was actually committed — the real pencil-usage signal. The
         // canvas's `canvasViewDrawingDidChange` also fires for reflow re-anchoring (same count) and erase (lower
@@ -23,37 +22,20 @@ extension ReaderViewModel {
             recordAnnotationStroke()
         }
         annotationDrawings = drawings
-        pendingAnnotationDrawings = drawings
-        annotationSaveTask?.cancel()
         let scoreID = scoreItem.id
-        annotationSaveTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(0.5))
-            if Task.isCancelled { return }
-            await self?.persistPendingAnnotation(scoreID: scoreID)
+        // The coordinator is an `actor`, so hop off this synchronous @MainActor canvas callback. Keep the task handle
+        // so `flushPendingAnnotationSave` can await this registration before flushing — preserving the old guarantee
+        // that a score-swap / teardown flush always observes the latest change.
+        annotationChangeTask = Task { [annotationCoordinator] in
+            await annotationCoordinator.drawingsDidChange(drawings, scoreID: scoreID)
         }
     }
 
-    /// Writes (or deletes) the pending model immediately. Safe when nothing is pending. Called before `advance` swaps
-    /// the score and on VM teardown so no ink is lost mid-transition.
+    /// Writes (or deletes) the pending change immediately, bypassing the debounce. Called before `advance` swaps the
+    /// score and on VM teardown so no ink is lost mid-transition. Awaits the most recent `drawingsDidChange` hop first
+    /// so the flush can't race ahead of an in-flight change registration.
     func flushPendingAnnotationSave() async {
-        annotationSaveTask?.cancel()
-        annotationSaveTask = nil
-        await persistPendingAnnotation(scoreID: scoreItem.id)
-    }
-
-    private func persistPendingAnnotation(scoreID: Domain.ScoreItemID) async {
-        guard let drawings = pendingAnnotationDrawings else { return }
-        pendingAnnotationDrawings = nil
-        if drawings.isEmpty {
-            try? await annotationStore.deleteAnnotationLayer(forScoreItem: scoreID)
-            return
-        }
-        let layer = AnnotationLayer(
-            scoreItemID: scoreID,
-            drawings: drawings,
-            textBoxes: [],
-            updatedAt: Date(),
-        )
-        try? await annotationStore.saveAnnotationLayer(layer)
+        await annotationChangeTask?.value
+        await annotationCoordinator.flush()
     }
 }

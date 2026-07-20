@@ -3,31 +3,47 @@ import Foundation
 @testable import Reader
 import Testing
 
-private actor FakeAnnotationStore: AnnotationStore {
-    private(set) var layers: [ScoreItemID: AnnotationLayer] = [:]
-    private(set) var saveCount = 0
-    private(set) var deleteCount = 0
+/// In-memory `AnnotationBlobStore` for the VM persistence tests. Access is serialized by the coordinator (one store
+/// call at a time) and the VM awaits the change registration before flushing; the lock keeps counter/payload reads
+/// data-race-clean across the actor boundary regardless.
+private final class FakeBlobStore: AnnotationBlobStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [ScoreItemID: Data] = [:]
+    private var _saveCount = 0
+    private var _deleteCount = 0
 
-    // swiftlint:disable async_without_await
-    func annotationLayer(forScoreItem id: ScoreItemID) async throws -> AnnotationLayer? {
-        layers[id]
+    var saveCount: Int {
+        lock.withLock { _saveCount }
     }
 
-    func saveAnnotationLayer(_ layer: AnnotationLayer) async throws {
-        saveCount += 1
-        layers[layer.scoreItemID] = layer
+    var deleteCount: Int {
+        lock.withLock { _deleteCount }
     }
 
-    func deleteAnnotationLayer(forScoreItem id: ScoreItemID) async throws {
-        deleteCount += 1
-        layers.removeValue(forKey: id)
+    func preStore(_ payload: Data, for id: ScoreItemID) {
+        lock.withLock { stored[id] = payload }
     }
-    // swiftlint:enable async_without_await
+
+    func storedPayload(for id: ScoreItemID) -> Data? {
+        lock.withLock { stored[id] }
+    }
+
+    func load(scoreID: ScoreItemID) throws -> Data? {
+        lock.withLock { stored[scoreID] }
+    }
+
+    func save(scoreID: ScoreItemID, updatedAt _: Date, payload: Data) throws {
+        lock.withLock { _saveCount += 1; stored[scoreID] = payload }
+    }
+
+    func delete(scoreID: ScoreItemID) throws {
+        lock.withLock { _deleteCount += 1; stored[scoreID] = nil }
+    }
 }
 
 @MainActor
 struct AnnotationPersistenceTests {
-    private static func makeVM(scoreID: ScoreItemID, annotationStore: any AnnotationStore) -> ReaderViewModel {
+    private static func makeVM(scoreID: ScoreItemID, store: any AnnotationBlobStore) -> ReaderViewModel {
         let item = ScoreItem(
             id: scoreID,
             title: "test",
@@ -48,7 +64,7 @@ struct AnnotationPersistenceTests {
             scoreItem: item,
             repository: FakeScoreLibraryRepository(),
             gateway: FakeScoreFileGateway(),
-            annotationStore: annotationStore,
+            annotationCoordinator: AnnotationSaveCoordinator(store: store),
             scoresDirectory: URL(fileURLWithPath: "/dev/null"),
         )
     }
@@ -59,42 +75,42 @@ struct AnnotationPersistenceTests {
         )
     }
 
-    @Test func `loads persisted drawings into the observable property`() async throws {
-        let store = FakeAnnotationStore()
+    @Test func `loads persisted drawings into the observable property`() async {
+        let store = FakeBlobStore()
         let scoreID = ScoreItemID()
         let drawings = [DrawingAnchor(kind: .musical(Self.anchor()), encodedDrawing: Data([0x01, 0x02]))]
-        try await store.saveAnnotationLayer(AnnotationLayer(
-            scoreItemID: scoreID, drawings: drawings, textBoxes: [], updatedAt: Date(timeIntervalSince1970: 0),
-        ))
-        let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
+        store.preStore(AnnotationLayerCodec.encode(drawings: drawings, textBoxes: []), for: scoreID)
+        let vm = Self.makeVM(scoreID: scoreID, store: store)
         await vm.loadAnnotations()
         #expect(vm.annotationDrawings == drawings)
     }
 
     @Test func `debounced change persists one layer with the drawings`() async throws {
-        let store = FakeAnnotationStore()
+        let store = FakeBlobStore()
         let scoreID = ScoreItemID()
-        let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
+        let vm = Self.makeVM(scoreID: scoreID, store: store)
         let drawings = [DrawingAnchor(kind: .musical(Self.anchor()), encodedDrawing: Data([0xAA]))]
         vm.annotationDrawingsDidChange(drawings)
         await vm.flushPendingAnnotationSave()
-        let saved = try await store.annotationLayer(forScoreItem: scoreID)
-        #expect(saved?.drawings == drawings)
-        #expect(await store.saveCount == 1)
+        let payload = try #require(store.storedPayload(for: scoreID))
+        #expect(AnnotationLayerCodec.decode(payload)?.drawings == drawings)
+        #expect(store.saveCount == 1)
     }
 
-    @Test func `empty drawings deletes the layer`() async throws {
-        let store = FakeAnnotationStore()
+    @Test func `empty drawings deletes the layer`() async {
+        let store = FakeBlobStore()
         let scoreID = ScoreItemID()
-        try await store.saveAnnotationLayer(AnnotationLayer(
-            scoreItemID: scoreID,
-            drawings: [DrawingAnchor(kind: .musical(Self.anchor()), encodedDrawing: Data([0x01]))],
-            textBoxes: [], updatedAt: Date(timeIntervalSince1970: 0),
-        ))
-        let vm = Self.makeVM(scoreID: scoreID, annotationStore: store)
+        store.preStore(
+            AnnotationLayerCodec.encode(
+                drawings: [DrawingAnchor(kind: .musical(Self.anchor()), encodedDrawing: Data([0x01]))],
+                textBoxes: [],
+            ),
+            for: scoreID,
+        )
+        let vm = Self.makeVM(scoreID: scoreID, store: store)
         vm.annotationDrawingsDidChange([])
         await vm.flushPendingAnnotationSave()
-        #expect(try await store.annotationLayer(forScoreItem: scoreID) == nil)
-        #expect(await store.deleteCount == 1)
+        #expect(store.storedPayload(for: scoreID) == nil)
+        #expect(store.deleteCount == 1)
     }
 }

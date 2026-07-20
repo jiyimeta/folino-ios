@@ -27,7 +27,7 @@ struct AppShellView: View {
                let gateway = bootstrap.gateway,
                let shareService = bootstrap.shareService,
                let metadataReader = bootstrap.metadataReader,
-               let annotationStore = bootstrap.annotationStore,
+               let annotationCoordinator = bootstrap.annotationCoordinator,
                bootstrap.isReady
             {
                 ReadyShell(
@@ -37,7 +37,7 @@ struct AppShellView: View {
                     gateway: gateway,
                     shareService: shareService,
                     metadataReader: metadataReader,
-                    annotationStore: annotationStore,
+                    annotationCoordinator: annotationCoordinator,
                     scoresDirectory: AppPaths.scoresDirectory,
                     versionHistoryPresenter: versionHistoryPresenter,
                 )
@@ -106,7 +106,7 @@ private struct ReadyShell: View {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
-    let annotationStore: any AnnotationStore
+    let annotationCoordinator: AnnotationSaveCoordinator
     let scoresDirectory: URL
     let versionHistoryPresenter: VersionHistoryPresenter
 
@@ -137,7 +137,7 @@ private struct ReadyShell: View {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
-        annotationStore: any AnnotationStore,
+        annotationCoordinator: AnnotationSaveCoordinator,
         scoresDirectory: URL,
         versionHistoryPresenter: VersionHistoryPresenter,
     ) {
@@ -147,7 +147,7 @@ private struct ReadyShell: View {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
-        self.annotationStore = annotationStore
+        self.annotationCoordinator = annotationCoordinator
         self.scoresDirectory = scoresDirectory
         self.versionHistoryPresenter = versionHistoryPresenter
         _libraryVM = State(
@@ -387,7 +387,7 @@ private struct ReadyShell: View {
             gateway: gateway,
             shareService: shareService,
             metadataReader: metadataReader,
-            annotationStore: annotationStore,
+            annotationCoordinator: annotationCoordinator,
             scoresDirectory: scoresDirectory,
             playbackController: bootstrap.playbackController,
             pdfPlaybackParser: bootstrap.pdfPlaybackParser,
