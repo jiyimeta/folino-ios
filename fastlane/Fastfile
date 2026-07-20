@@ -121,7 +121,7 @@ platform :ios do
       skip_metadata: false,
       metadata_path: "./fastlane/metadata",
       submit_for_review: true,
-      automatic_release: false, # manual release: hold for manual "Release" after approval
+      automatic_release: true, # auto-release: publish automatically once Apple approves
       force: true,
       precheck_include_in_app_purchases: false
     )

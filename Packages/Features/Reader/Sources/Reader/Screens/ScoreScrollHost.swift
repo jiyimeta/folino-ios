@@ -305,6 +305,13 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
                 // A pinch is a hands-on viewport change too — suspend playback auto-follow (zoom in/out during play).
                 parent.onUserViewportInteractionBegan()
             case .changed:
+                // Ignore updates once a finger has lifted. `UIPinchGestureRecognizer.location(in:)` is the centroid of
+                // the *remaining* touches, so when the two fingers lift with slightly different timing the centroid
+                // snaps from the 2-finger midpoint to the lone finger — feeding that as translation jerks the content
+                // toward that finger for a frame just before `.ended` commits (the intermittent, pan-independent
+                // release jump). `scale` is likewise undefined with one touch. Freeze the live offset / magnification
+                // at their last 2-finger values; a 1-finger movement belongs to the scroll view's own pan recognizer.
+                guard gr.numberOfTouches >= 2 else { break }
                 let translation = scrollView.map { sv -> CGPoint in
                     let loc = gr.location(in: sv)
                     return CGPoint(

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AVFoundation
 import Domain
 import Foundation
@@ -5,6 +6,7 @@ import MediaPlayer
 import Observation
 import os
 import SheetMusicAudio
+import SheetMusicAudioSwiftySynth
 import SheetMusicCore
 import UIKit
 
@@ -53,7 +55,16 @@ public final class LivePlaybackController: Domain.PlaybackController {
         soundfontResolver: any SheetMusicAudio.SoundfontResolver,
         metronomeClickProvider: (any MetronomeClickProvider)? = nil,
     ) {
-        engine = PlaybackEngine(soundfontResolver: soundfontResolver, metronomeClickProvider: metronomeClickProvider)
+        // Drive live playback through the pure-Swift SwiftySynth backend instead of the built-in AUMIDISynth path.
+        // AUMIDISynth steals voices under dense polyphony, dropping notes mid-passage (the App Store playback-dropout
+        // regression); SwiftySynth renders every voice through its own source node with no stealing. The engine hands
+        // it the same GM SoundFont the resolver already serves, and pushes A4 calibration / transpose / rate onto it.
+        // The offline export path (`LiveScoreAudioExporter`) stays on AUMIDISynth — it ignores an injected backend.
+        engine = PlaybackEngine(
+            soundfontResolver: soundfontResolver,
+            metronomeClickProvider: metronomeClickProvider,
+            backend: SwiftySynthBackend(),
+        )
         startObservingEngine()
         configureRemoteCommands()
     }
