@@ -44,7 +44,7 @@ object InkStrokeSerialization {
             batch.add(
                 type = InputToolType.STYLUS,
                 x = wire.x[i].toFloat(),
-                y = wire.y[i].toFloat(),
+                y = wire.y.getOrElse(i) { 0.0 }.toFloat(),
                 elapsedTimeMillis = wire.timeMillis.getOrElse(i) { (i * 8) }.toLong(),
                 strokeUnitLengthCm = StrokeInput.NO_STROKE_UNIT_LENGTH,
                 pressure = wire.force.getOrNull(i)?.takeIf { it > 0.0 }?.toFloat() ?: StrokeInput.NO_PRESSURE,

@@ -314,6 +314,17 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     fun flushAnnotations() { saveController.flush() }
 
     override fun onCleared() {
+        // Best-effort final flush of any pending annotation write (the Reader route's DisposableEffect
+        // also flushes on exit; this is belt-and-suspenders).
+        saveController.flush()
+        // KNOWN FOLLOW-UP — bounded native leak: the annotation save-bridge VM (`saveController`) is held
+        // as a plain field, NOT scoped to a ViewModelStore, so its own onCleared -> nativeRelease never
+        // fires and the native Swift AnnotationSaveBridge + coordinator + store adapter leak once per
+        // Reader entry. `ViewModel.clear()` is internal in androidx.lifecycle, so release can't be
+        // triggered from here; the fix is to scope the bridge VM via `AnnotationSaveController.factory()`
+        // in the Reader nav route (mirroring `ReaderPreferencesController`). Small per-instance size;
+        // deferred as a tracked follow-up (final whole-branch review finding #1).
+        //
         // Do NOT close `handle`: the same raw Long is used by the playback
         // engine (which outlives this ViewModel via the bound service).
         // Mirrors the example ScoreViewModel.onCleared rationale.
