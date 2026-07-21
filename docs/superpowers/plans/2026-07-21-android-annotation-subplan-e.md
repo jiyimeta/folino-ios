@@ -399,6 +399,8 @@ git -C <worktree> commit -m "feat(reader-android): encodeInkStroke/decodeInkStro
 
 ## Task E4: androidx.ink deps + brush mapping + stroke serialization (Kotlin, pure)
 
+> **REVISED 2026-07-21.** androidx.ink's `Stroke`/`Brush`/`MutableStrokeInputBatch` are native (JNI) — they can't be built in a JVM unit test. So E4 is **compile-gate verified** (`:FolinoReaderAndroid:compileDebugKotlin`, which also proves the androidx.ink API usage — including the UNVERIFIED members — resolves), and the `Stroke → wire → Stroke` runtime round-trip is covered by the **E9 instrumented test**. **Drop the JVM `InkStrokeSerializationTest`** (Steps 3-4/6 below); keep the two source files (`InkBrushMapping`, `InkStrokeSerialization`) + the deps. Prefer passing `colorRGBA`/`baseWidthSp` into `toRawWireBytes` as parameters if the `Brush.colorIntArgb`/`size` getters don't resolve.
+
 **Files:**
 - Modify: `Android/FolinoReaderAndroid/build.gradle.kts`
 - Create: `Android/FolinoReaderAndroid/src/main/kotlin/.../ink/InkBrushMapping.kt`
