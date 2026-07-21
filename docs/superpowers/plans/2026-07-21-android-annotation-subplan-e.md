@@ -20,6 +20,7 @@
 - **swift-wirelet is pinned by revision** `ba1b8e337a508079c5213656e4c01e9edbedc8b4`; Gradle plugin/runtime 0.3.2.
 - **No GPL dependencies.** `androidx.ink` and `androidx.input:input-motionprediction` are Apache-2.0 — compliant.
 - **App name is lowercase `folino`** anywhere user-visible.
+- **`FolinoReaderJNI` is NOT host-unit-testable** (it pulls `swift-java`, which is macOS-only and fails to compile for the iOS Simulator). It is verified by the **arm64 cross-build** (`swift build --product FolinoReaderJNI --swift-sdk aarch64-unknown-linux-android28`, or `Scripts/android-build-reader-libs.sh`) + the E9 emulator runtime. **Any host-testable logic must live in `ReaderAnnotationCore`** (Foundation+Domain, tested via `-scheme Reader` with NO `FOLINO_ANDROID` — the path the existing 29 annotation tests and `PrefetchedAnchorResolver` use). Tests never `import FolinoReaderJNI`.
 
 ## MVP scope (this plan) vs. deferred
 
@@ -45,10 +46,11 @@ Signatures below were verified against the frozen `ink/<module>/api/1.0.0-rc01.t
 
 | File | Responsibility | New? |
 |---|---|---|
-| `Packages/Features/Reader/Sources/FolinoReaderJNI/RawInkStrokeWire.swift` | `@WireFormat` raw stroke geometry (androidx.ink ⇄ Swift), mirrors `Domain.InkStroke` fields. | Create |
+| `Packages/Features/Reader/Sources/ReaderAnnotationCore/InkStrokeRawFields.swift` | Host-testable raw-fields ⇄ `Domain.InkStroke` mapping (Foundation+Domain). | Create |
+| `Packages/Features/Reader/Sources/FolinoReaderJNI/RawInkStrokeWire.swift` | `@WireFormat` mirror of `InkStrokeRawFields` (androidx.ink ⇄ Swift wire). | Create |
 | `Packages/Features/Reader/Sources/FolinoReaderJNI/AnnotationJNISymbols.swift` | Add `nativeEncodeInkStroke` / `nativeDecodeInkStroke` (raw ⇄ FINK, via `Domain.InkStrokeCodec`). | Modify |
 | `Packages/Features/Reader/Sources/FolinoReaderJNI/AnnotationSaveBridge.swift` | Add the **read path**: observable `loadedDrawings: [DrawingAnchorWire]` populated by `open`. | Modify |
-| `Packages/Features/Reader/Tests/ReaderTests/RawInkStrokeCodecTests.swift` | Host round-trip: raw → FINK → raw is exact; miss → empty. | Create |
+| `Packages/Features/Reader/Tests/ReaderTests/InkStrokeRawFieldsTests.swift` | Host round-trip via `-scheme Reader`: raw → FINK → raw is exact (Float32-exact values); unknown tool → pen. | Create |
 | `Android/FolinoReaderAndroid/build.gradle.kts` | Add androidx.ink + motionprediction deps. | Modify |
 | `Android/FolinoReaderAndroid/src/main/kotlin/.../ReaderAnnotationJNI.kt` | Add `encodeInkStroke` / `decodeInkStroke` facade wrappers. | Modify |
 | `Android/FolinoReaderAndroid/src/main/kotlin/.../ink/InkBrushMapping.kt` | `InkStroke.Tool` ⇄ `StockBrushes` family (V1) + color/width mapping. | Create |
@@ -116,6 +118,8 @@ Expected: the `.so` is listed under `jni/arm64-v8a/`. (Runtime presence of `nati
 ---
 
 ## Task E1: `RawInkStrokeWire` + the InkStroke FINK codec seam (Swift/JNI)
+
+> **REVISED 2026-07-21 (supersedes the Steps below).** `FolinoReaderJNI` can't host-test on iOS sim (swift-java macOS-only). Split per the Global-Constraints JNI rule: the raw-fields ⇄ `InkStroke` mapping moves to **`ReaderAnnotationCore/InkStrokeRawFields.swift`** (Foundation+Domain, host round-trip test `ReaderTests/InkStrokeRawFieldsTests.swift` via `-scheme Reader`, NO `FOLINO_ANDROID`; test values Float32-exact). `FolinoReaderJNI` keeps `RawInkStrokeWire.swift` (`@WireFormat` mirroring `InkStrokeRawFields`, converts to/from it) + `nativeEncodeInkStroke`/`nativeDecodeInkStroke` (append to `AnnotationJNISymbols.swift`, delegate to the core mapping + `InkStrokeCodec`), verified by the **arm64 cross-build** `swift build --product FolinoReaderJNI --swift-sdk aarch64-unknown-linux-android28 -c release`. The original Step code below is correct in substance (the wire type + native functions) but its host-test verification is replaced by the split above.
 
 **Files:**
 - Create: `Packages/Features/Reader/Sources/FolinoReaderJNI/RawInkStrokeWire.swift`
@@ -250,6 +254,8 @@ git -C <worktree> commit -m "feat(reader): RawInkStrokeWire + InkStroke FINK enc
 ---
 
 ## Task E2: annotation read path on `AnnotationSaveBridge` (Swift/JNI)
+
+> **REVISED 2026-07-21.** `AnnotationSaveBridge` is inherently in `FolinoReaderJNI` (`@WireletObservable`), so it is NOT host-testable (Global-Constraints JNI rule). The `open`→async-load→`loadedDrawings` behavior and the trivial `DrawingAnchor`→`DrawingAnchorWire` mapping are **verified by the arm64 cross-build** (compiles) + the E9 emulator round-trip (runtime), plus the coordinator's own `Domain` tests already covering `AnnotationSaveCoordinator.load`. **Skip the `AnnotationSaveBridgeReadTests` host test** in Step 1 below — replace it with: implement the `loadedDrawings` property + `open` body (Steps 3), then run the `FolinoReaderJNI` arm64 cross-build (`swift build --product FolinoReaderJNI --swift-sdk aarch64-unknown-linux-android28 -c release`) and confirm `Build complete!`. Everything else in the task (the property, the `open` mapping) stands.
 
 **Files:**
 - Modify: `Packages/Features/Reader/Sources/FolinoReaderJNI/AnnotationSaveBridge.swift`
