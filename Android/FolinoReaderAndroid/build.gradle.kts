@@ -2,6 +2,8 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("io.github.jiyimeta.wirelet") version "0.3.2"
+    id("com.google.devtools.ksp") version "2.0.20-1.0.25"
 }
 
 android {
@@ -45,6 +47,17 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // Wirelet runtime + observable runtime backing the generated annotation bridges:
+    // the @WireletProvided `AnnotationPersistenceStore` interface + native adapter and the
+    // @WireletObservable `AnnotationSaveBridgeViewModel`. Codegen is wired below.
+    api("io.github.jiyimeta:wirelet-runtime:0.3.2")
+    api("io.github.jiyimeta:wirelet-observable-runtime:0.3.2")
+
+    // Room-backed annotation_layers store implementing the generated
+    // AnnotationPersistenceStore interface (per-score annotation-layer blobs).
+    implementation("androidx.room:room-runtime:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+
     // Soundfont download bridge: the reader playback service prefers the downloaded high-quality SF2
     // and hot-swaps the engine onto it via SoundfontController + the generated store view model.
     implementation(project(":FolinoSoundfontAndroid"))
@@ -64,3 +77,61 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 }
+
+val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
+
+wirelet {
+    val readerCheckout = packageRoot.resolve("Packages/Features/Reader/.build/checkouts/swift-wirelet")
+    val rootCheckout = packageRoot.resolve(".build/checkouts/swift-wirelet")
+    swiftPackagePath.set(if (readerCheckout.exists()) readerCheckout else rootCheckout)
+
+    sources {
+        register("main") {
+            schemaPaths.from(packageRoot.resolve("Packages/Features/Reader/Sources/FolinoReaderJNI"))
+            codecPackage.set("com.keynumber.folino.reader")
+            modelPackage.set("com.keynumber.folino.reader")
+            emitModels.set(true)
+        }
+    }
+    observable {
+        register("main") {
+            schemaPaths.from(packageRoot.resolve("Packages/Features/Reader/Sources/FolinoReaderJNI"))
+            viewModelPackage.set("com.keynumber.folino.reader.generated")
+            modelPackage.set("com.keynumber.folino.reader")
+            codecPackage.set("com.keynumber.folino.reader")
+            libraryName.set("FolinoReaderJNI")
+            providedAdapterPackage.set("com.keynumber.folino.reader")
+        }
+    }
+    provided {
+        register("main") {
+            schemaPaths.from(packageRoot.resolve("Packages/Features/Reader/Sources/FolinoReaderJNI"))
+            interfacePackage.set("com.keynumber.folino.reader")
+            adapterPackage.set("com.keynumber.folino.reader")
+            modelPackage.set("com.keynumber.folino.reader")
+            codecPackage.set("com.keynumber.folino.reader")
+        }
+    }
+}
+
+// kotlin.android needs the generated dirs wired manually (the plugin hooks
+// kotlin.jvm only). Mirror the Library module's pattern for the codec task,
+// the observable viewmodel task, AND the provided-interface task.
+val generateCodecs = tasks.named("generateWireletCodecsMain")
+val generateViewModels = tasks.named("generateWireletObservableViewModelsMain")
+val generateProvided = tasks.named("generateWireletProvidedInterfacesMain")
+
+android {
+    sourceSets["main"].kotlin.srcDir(
+        generateCodecs.flatMap { (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletCodecs).outputDir }
+    )
+    sourceSets["main"].kotlin.srcDir(
+        generateViewModels.flatMap { (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletObservableViewModels).outputDir }
+    )
+    sourceSets["main"].kotlin.srcDir(
+        generateProvided.flatMap { (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletProvidedInterfaces).outputDir }
+    )
+}
+
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
+    .configureEach { dependsOn(generateCodecs, generateViewModels, generateProvided) }
