@@ -45,6 +45,16 @@ dependencies {
     implementation("androidx.media3:media3-common:1.5.0")
     implementation("androidx.media:media:1.7.0")
 
+    // androidx.ink 1.0.0 (Apache-2.0): wet capture (authoring, View-based), dry render (rendering), brush, geometry.
+    implementation("androidx.ink:ink-strokes:1.0.0")
+    implementation("androidx.ink:ink-brush:1.0.0")
+    implementation("androidx.ink:ink-brush-compose:1.0.0")
+    implementation("androidx.ink:ink-authoring:1.0.0")
+    implementation("androidx.ink:ink-rendering:1.0.0")
+    implementation("androidx.ink:ink-geometry:1.0.0")
+    // Low-latency motion prediction for wet capture (separate artifact group, Apache-2.0).
+    implementation("androidx.input:input-motionprediction:1.0.0")
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // Wirelet runtime + observable runtime backing the generated annotation bridges:
