@@ -11,6 +11,7 @@ import io.github.jiyimeta.sheetmusic.compose.draw.DrawProgramReader
 import io.github.jiyimeta.sheetmusic.compose.draw.model.DrawProgram
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -266,6 +267,48 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
             null
         }
     }
+
+    // --- Annotation (Sub-plan E) ---
+    private val _annotationMode = MutableStateFlow(false)
+    val annotationMode: StateFlow<Boolean> = _annotationMode.asStateFlow()
+
+    // Committed drawings for the active score (the render + save currency; DrawingAnchorWire objects).
+    private val _drawings = MutableStateFlow<List<DrawingAnchorWire>>(emptyList())
+    val drawings: StateFlow<List<DrawingAnchorWire>> = _drawings.asStateFlow()
+
+    private val saveController = AnnotationSaveController.build(getApplication<Application>())
+
+    // Tracks the long-lived `loadedDrawings` collector started by [onAnnotationOpened] so a
+    // score retarget (playlist auto-advance, mirroring [load]'s loadedScoreId handling) cancels
+    // the prior collector instead of stacking a second one on the same ViewModel.
+    private var annotationDrawingsJob: Job? = null
+
+    fun toggleAnnotationMode() { _annotationMode.value = !_annotationMode.value }
+    fun setAnnotationMode(on: Boolean) { _annotationMode.value = on }
+
+    /** Prime persistence for the score and rehydrate stored drawings into the dry overlay. */
+    fun onAnnotationOpened(scoreId: String) {
+        saveController.open(scoreId)
+        annotationDrawingsJob?.cancel()
+        annotationDrawingsJob = viewModelScope.launch {
+            saveController.loadedDrawings.collect { wires -> _drawings.value = wires }
+        }
+    }
+
+    /** Append a freshly captured drawing and (re)arm the debounced save. */
+    fun addDrawing(drawing: DrawingAnchorWire) {
+        _drawings.value = _drawings.value + drawing
+        saveController.drawingsChanged(_drawings.value)
+    }
+
+    /** Remove a drawing (whole-stroke eraser) and re-arm save. */
+    fun removeDrawing(index: Int) {
+        _drawings.value = _drawings.value.filterIndexed { i, _ -> i != index }
+        saveController.drawingsChanged(_drawings.value)
+    }
+
+    /** Immediate write (call from onPause / score-swap). */
+    fun flushAnnotations() { saveController.flush() }
 
     override fun onCleared() {
         // Do NOT close `handle`: the same raw Long is used by the playback
