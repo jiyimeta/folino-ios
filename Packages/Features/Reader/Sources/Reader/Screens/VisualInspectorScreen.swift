@@ -67,7 +67,7 @@ struct VisualInspectorScreen: View {
                             }
                         }
                     }
-                    .listRowInsets(.vertical, 6)
+                    .verticalRowInsetCompat(6)
                 }
             } header: {
                 Text("reader.inspector.section.parts", bundle: .module)
@@ -195,6 +195,22 @@ struct VisualInspectorScreen: View {
 
     private func clefMenu(address: StaffAddress) -> some View {
         ClefMenu(layoutModel: layoutModel, address: address)
+    }
+}
+
+extension View {
+    /// iOS 18 fallback for `.listRowInsets(.vertical, _:)`, the iOS 26+ edge-specific overload used here and in
+    /// `PlaybackInspectorScreen`. The classic `EdgeInsets`-based overload requires specifying every edge, and
+    /// there's no public API to read the system's current default horizontal inset in order to preserve it exactly
+    /// — so iOS 18 keeps the system's default row insets unchanged rather than guessing at a matching horizontal
+    /// value. Not `fileprivate`: shared with `PlaybackInspectorScreen`, the other Reader screen using this overload.
+    @ViewBuilder
+    func verticalRowInsetCompat(_ length: CGFloat) -> some View {
+        if #available(iOS 26, *) {
+            listRowInsets(.vertical, length)
+        } else {
+            self
+        }
     }
 }
 

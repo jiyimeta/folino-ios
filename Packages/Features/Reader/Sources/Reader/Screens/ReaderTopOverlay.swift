@@ -43,7 +43,7 @@ struct ReaderTopOverlay: View {
                         : Text("reader.toolbar.back", bundle: .module),
                     action: onBack,
                 )
-                .glassEffect(.regular.interactive())
+                .interactiveGlassCompat()
             }
             if !viewModel.capabilities.canPlay {
                 // `canPlay == false` ⇔ PDF in this reader: a tappable brand badge that opens the PDF-playback caveat
@@ -58,9 +58,9 @@ struct ReaderTopOverlay: View {
             } else if case .loadedPDF = viewModel.loadState {
                 HStack(spacing: 12) {
                     annotationToggleButton()
-                        .glassEffect(.regular.interactive())
+                        .interactiveGlassCompat()
                     pdfLayoutButton
-                        .glassEffect(.regular.interactive())
+                        .interactiveGlassCompat()
                 }
             }
         }
@@ -77,9 +77,9 @@ struct ReaderTopOverlay: View {
         HStack(spacing: 12) {
             scoreActionButtons()
             annotationToggleButton()
-                .glassEffect(.regular.interactive())
+                .interactiveGlassCompat()
             inspectorButtons(score: score)
-                .glassEffect(.regular.interactive())
+                .interactiveGlassCompat()
         }
         .sheet(isPresented: $viewModel.isScoreInfoPresented) {
             EditScoreInfoSheet(model: viewModel, item: viewModel.scoreItem)
@@ -114,7 +114,7 @@ struct ReaderTopOverlay: View {
             .tint(.primary)
             .accessibilityLabel(Text("reader.toolbar.share", bundle: .module))
         }
-        .glassEffect(.regular.interactive())
+        .interactiveGlassCompat()
     }
 
     /// Single-button glass pill that toggles annotation mode. When active, the canvas accepts Pencil/finger input;

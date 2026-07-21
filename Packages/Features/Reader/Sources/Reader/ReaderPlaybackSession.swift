@@ -277,13 +277,32 @@ final class ReaderPlaybackSession {
         // Already downloaded at Reader open → the natural controller.load(...) will pick up the
         // high-quality SF2 on its own, no swap needed.
         if case .downloaded = provider.downloadState { return }
-        soundfontDownloadTask = Task { @MainActor [weak self] in
-            let stream = Observations { provider.downloadState }
-            for await state in stream {
-                guard let self else { return }
-                if case .downloaded = state {
-                    handleSoundfontReady()
-                    return
+        if #available(iOS 26, *) {
+            soundfontDownloadTask = Task { @MainActor [weak self] in
+                let stream = Observations { provider.downloadState }
+                for await state in stream {
+                    guard let self else { return }
+                    if case .downloaded = state {
+                        handleSoundfontReady()
+                        return
+                    }
+                }
+            }
+        } else {
+            // iOS 18 fallback for the `Observations` stream above: `Observations` itself is iOS 26+, and this
+            // one-shot "wait for the download to finish" doesn't need push-based delivery, so a coarse poll is a
+            // simple, low-risk substitute — the download itself takes seconds, so a half-second interval is
+            // imperceptible. Polling (rather than a recursive `withObservationTracking` re-arm, as used in
+            // `LivePlaybackController`'s iOS 18 fallback) also means `Task.sleep`'s cancellation support makes
+            // `deinit`'s `soundfontDownloadTask?.cancel()` actually stop the loop promptly.
+            soundfontDownloadTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    guard let self else { return }
+                    if case .downloaded = provider.downloadState {
+                        handleSoundfontReady()
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(500))
                 }
             }
         }

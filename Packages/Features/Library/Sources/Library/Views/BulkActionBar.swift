@@ -22,7 +22,7 @@ struct BulkActionBar: View {
             }
             .tint(.primary)
             .accessibilityLabel(L10n.Common.more)
-            .glassEffect(.regular.interactive())
+            .interactiveGlassCompat()
 
             Spacer(minLength: 0)
 
@@ -32,7 +32,7 @@ struct BulkActionBar: View {
             }
             .tint(.red)
             .accessibilityLabel(L10n.Common.delete)
-            .glassEffect(.regular.interactive())
+            .interactiveGlassCompat()
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 8)

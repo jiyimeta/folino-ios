@@ -25,8 +25,14 @@ extension View {
             isPresented: isPresented,
         ) {
             // iOS 26's `.confirm` role renders as the prominent tinted (colored) action — the emphasized OK. It only
-            // closes the dialog for now; there's no permanent effect.
-            Button(role: .confirm) {} label: { L10n.Common.ok }
+            // closes the dialog for now; there's no permanent effect. On iOS 18 the default-action keyboard shortcut
+            // is what marks an alert button as the emphasized (bold) one.
+            if #available(iOS 26, *) {
+                Button(role: .confirm) {} label: { L10n.Common.ok }
+            } else {
+                Button {} label: { L10n.Common.ok }
+                    .keyboardShortcut(.defaultAction)
+            }
             Button { onDontShowAgain() } label: {
                 Text("reader.pdf.playback.notice.dismiss", bundle: .module)
             }

@@ -93,7 +93,7 @@ struct PlaybackInspectorScreen: View {
                             }
                         }
                     }
-                    .listRowInsets(.vertical, 8)
+                    .verticalRowInsetCompat(8)
                 }
             } header: {
                 Text("reader.inspector.section.parts", bundle: .module)

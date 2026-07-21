@@ -2,6 +2,7 @@ import Domain
 import ImportExportAppGroup
 import SwiftUI
 import UtilityCore
+import UtilityUI
 
 public struct ShareCompletion: Sendable {
     public let outcome: Outcome
@@ -58,7 +59,7 @@ public struct ShareRootView: View {
                         } label: {
                             Image(systemName: "checkmark")
                         }
-                        .buttonStyle(.glassProminent)
+                        .glassProminentButtonStyleCompat()
                         .disabled(summary?.acceptedFiles.isEmpty ?? true)
                     }
                 }
@@ -242,7 +243,7 @@ private struct PreviewLoaded: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {} label: { Image(systemName: "checkmark") }
-                        .buttonStyle(.glassProminent)
+                        .glassProminentButtonStyleCompat()
                         .disabled(files.isEmpty)
                 }
             }

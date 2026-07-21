@@ -1,4 +1,5 @@
 import SwiftUI
+import UtilityUI
 
 /// The A and B repeat-endpoint buttons sharing a single capsule. Each half is tinted accent until its endpoint is set,
 /// so when only one is set the pill reads as accent on exactly one half, split down the middle.
@@ -32,7 +33,7 @@ struct ABEndpointPill: View {
             pill.background(.quaternary, in: .capsule)
         } else {
             pill
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .interactiveGlassCompat(in: .capsule)
                 .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
         }
     }

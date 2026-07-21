@@ -84,28 +84,77 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// depends on. If a future engine tick burst (e.g. fast-tempo wrap with multiple cursor moves inside one main-actor
     /// work item) ever collapses visible chord onsets, the handler signature is small enough to swap to a synchronous
     /// observation primitive without changing the `PlaybackController` protocol contract.
+    ///
+    /// `Observations` itself is iOS 26+; on iOS 18 we fall back to `withObservationTracking(_:onChange:)` (the
+    /// pre-`Observations` primitive, available since iOS 17), re-arming it after every fired change so it keeps
+    /// observing indefinitely — the recursive-reregistration pattern Apple's own Observation docs use for this case.
     private func startObservingEngine() {
         let engine = engine
-        cursorObservationTask = Task { @MainActor [weak self] in
-            let stream = Observations { engine.currentCursor }
-            for await cursor in stream {
+        if #available(iOS 26, *) {
+            cursorObservationTask = Task { @MainActor [weak self] in
+                let stream = Observations { engine.currentCursor }
+                for await cursor in stream {
+                    guard let self else { return }
+                    let now = engine.currentTimeSeconds
+                    if now < lastObservedEngineTime {
+                        // A-B loop wrap (or any other engine-driven backward jump) — re-publish so the lock-screen
+                        // scrubber resets to the new elapsed time instead of continuing to interpolate past B.
+                        publishNowPlayingInfo(seeking: true)
+                    }
+                    lastObservedEngineTime = now
+                    cursorHandler?(cursor)
+                }
+            }
+            stateObservationTask = Task { @MainActor [weak self] in
+                let stream = Observations { engine.state }
+                for await state in stream {
+                    guard let self else { return }
+                    publishNowPlayingInfo()
+                    isPlayingHandler?(state == .playing)
+                }
+            }
+        } else {
+            observeCursorLegacy(engine: engine)
+            observeStateLegacy(engine: engine)
+        }
+    }
+
+    /// iOS 18 fallback for the cursor half of `startObservingEngine()`. `withObservationTracking`'s `onChange` fires
+    /// once per registration and doesn't hand back the new value, so each firing hops onto the main actor, re-reads
+    /// `engine.currentCursor`, and re-arms tracking before returning — an indefinitely repeating equivalent of the
+    /// `for await` loop used on iOS 26. `self` is captured weakly throughout, so the recursive re-registration simply
+    /// stops once the controller deallocates; there is no task to cancel in `deinit` for this path. Re-arming calls
+    /// back into this same method (rather than a locally captured closure) because `onChange` is `@Sendable` and a
+    /// captured local closure value doesn't satisfy that — a plain method call does.
+    private func observeCursorLegacy(engine: PlaybackEngine) {
+        withObservationTracking {
+            _ = engine.currentCursor
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
+                let cursor = engine.currentCursor
                 let now = engine.currentTimeSeconds
                 if now < lastObservedEngineTime {
-                    // A-B loop wrap (or any other engine-driven backward jump) — re-publish so the lock-screen scrubber
-                    // resets to the new elapsed time instead of continuing to interpolate past B.
                     publishNowPlayingInfo(seeking: true)
                 }
                 lastObservedEngineTime = now
                 cursorHandler?(cursor)
+                observeCursorLegacy(engine: engine)
             }
         }
-        stateObservationTask = Task { @MainActor [weak self] in
-            let stream = Observations { engine.state }
-            for await state in stream {
+    }
+
+    /// iOS 18 fallback for the state half of `startObservingEngine()`. Same re-arming pattern as
+    /// `observeCursorLegacy(engine:)`.
+    private func observeStateLegacy(engine: PlaybackEngine) {
+        withObservationTracking {
+            _ = engine.state
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 publishNowPlayingInfo()
-                isPlayingHandler?(state == .playing)
+                isPlayingHandler?(engine.state == .playing)
+                observeStateLegacy(engine: engine)
             }
         }
     }

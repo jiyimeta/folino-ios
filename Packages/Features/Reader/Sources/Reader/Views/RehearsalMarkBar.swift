@@ -41,7 +41,7 @@ struct RehearsalMarkBar: View {
                 // between bubbles. It sits behind the bubbles, so taps still land on the bubble buttons in front.
                 Color.clear.contentShape(Rectangle())
 
-                ForEach(marks.enumerated(), id: \.element.id) { index, mark in
+                ForEach(Array(marks.enumerated()), id: \.element.id) { index, mark in
                     let trueX = barWidth * mark.fraction
                     let width = bodyWidths[mark.id] ?? 0
                     let half = width / 2

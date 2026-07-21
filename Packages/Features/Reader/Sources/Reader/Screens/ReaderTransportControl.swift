@@ -148,7 +148,7 @@ struct ReaderTransportControl: View {
             )
             shape
                 .fill(.clear)
-                .glassEffect(.regular, in: shape)
+                .regularGlassCompat(in: shape)
                 .padding(.bottom, Self.cardMargin)
                 .ignoresSafeArea(.container, edges: .bottom)
         }
@@ -206,7 +206,7 @@ struct ReaderTransportControl: View {
 
     private var transportPill: some View {
         HStack(spacing: 0) { transportButtonsContent }
-            .glassEffect(.regular.interactive())
+            .interactiveGlassCompat()
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
