@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -295,15 +296,17 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Append a freshly captured drawing and (re)arm the debounced save. */
+    /** Append a freshly captured drawing and (re)arm the debounced save. Atomic: E8 invokes this from
+     *  a per-stroke `Dispatchers.Default` coroutine (off-main JNI capture), so concurrent strokes
+     *  racing a plain read-modify-write on `_drawings.value` could drop one — `update` avoids that. */
     fun addDrawing(drawing: DrawingAnchorWire) {
-        _drawings.value = _drawings.value + drawing
+        _drawings.update { it + drawing }
         saveController.drawingsChanged(_drawings.value)
     }
 
-    /** Remove a drawing (whole-stroke eraser) and re-arm save. */
+    /** Remove a drawing (whole-stroke eraser) and re-arm save. Atomic for the same reason as [addDrawing]. */
     fun removeDrawing(index: Int) {
-        _drawings.value = _drawings.value.filterIndexed { i, _ -> i != index }
+        _drawings.update { list -> list.filterIndexed { i, _ -> i != index } }
         saveController.drawingsChanged(_drawings.value)
     }
 

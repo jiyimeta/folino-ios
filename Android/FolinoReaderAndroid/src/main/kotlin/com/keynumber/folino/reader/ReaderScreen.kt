@@ -346,6 +346,15 @@ fun ReaderScreen(
     // Gates the top-bar annotation toggle: disabled while playing (parity w/ iOS).
     val isPlaying = playbackState == PlaybackState.PLAYING
 
+    // Mutual exclusion: annotation is strictly VERTICAL + not-playing. Auto-exit whenever either
+    // condition stops holding (layout mode switches away from VERTICAL, or playback starts) so
+    // annotation mode never lingers active behind a layout that has no overlay/gating support for it —
+    // without this, playing while annotating would leave the score frozen via the detached ScrollState
+    // (scrollModifier stays `Modifier` while `annotationMode` is true, regardless of `isPlaying`).
+    LaunchedEffect(layoutMode, isPlaying) {
+        if (layoutMode != ReaderLayoutMode.VERTICAL || isPlaying) readerVm.setAnnotationMode(false)
+    }
+
     // Analytics: one central playback-state observer covers every play/pause path exactly once (the
     // TransportBar FAB, the floating FAB, and the PiP transport all funnel through audioVm.state).
     // Fire "started" on every transition INTO PLAYING (tap-play, autoplay, resume-after-pause — iOS
@@ -436,12 +445,13 @@ fun ReaderScreen(
                 onPlaybackControls = { showInspector = true },
                 onDisplaySettings = { showDisplayInspector = true },
                 annotationMode = annotationMode,
-                annotationEnabled = !isPlaying,
+                // VERTICAL-only for this MVP (HORIZONTAL/PAGE overlays are deferred).
+                annotationEnabled = !isPlaying && layoutMode == ReaderLayoutMode.VERTICAL,
                 onToggleAnnotate = readerVm::toggleAnnotationMode,
             )
         },
         bottomBar = {
-            if (annotationMode) {
+            if (annotationMode && layoutMode == ReaderLayoutMode.VERTICAL) {
                 AnnotationToolbar(
                     color = rgbaLongToColor(annotationColor),
                     presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
@@ -768,7 +778,10 @@ private fun ReadyScore(
             // the pinch loop consumes two-finger moves — neither steals the other's events. The tap
             // point is in this outer (viewport) px space; fold the scroll offsets and the fixed
             // vertical padding into the content offset so the helper's divide yields document-mm.
-            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions) {
+            // Disabled while annotating: a single-finger tap there is the wet overlay's to consume
+            // (a stroke or an annotation dot), not a seek.
+            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, annotationMode) {
+                if (annotationMode) return@pointerInput
                 val handle = scoreHandle ?: return@pointerInput
                 if (fitPxPerMM <= 0f) return@pointerInput
                 val optionsBytes = layoutOptions.encode()
