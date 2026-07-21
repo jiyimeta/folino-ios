@@ -24,16 +24,17 @@ struct NoopScoreMetadataReading: ScoreMetadataReading {
     }
 }
 
-/// Inert default for `ReaderViewModel.annotationStore`. Production injects `LiveAnnotationStore` from the App
-/// composition root; previews and tests that don't exercise annotations need no extra argument.
-struct NoopAnnotationStore: AnnotationStore {
+/// Inert backing store for the default `ReaderViewModel.annotationCoordinator`. Production injects
+/// `LiveAnnotationStore` (which conforms to `AnnotationBlobStore`) from the App composition root; previews and tests
+/// that don't exercise annotations get this no-op, so the coordinator has a valid store with nothing behind it.
+struct NoopAnnotationBlobStore: AnnotationBlobStore {
     // swiftlint:disable:next async_without_await
-    func annotationLayer(forScoreItem _: ScoreItemID) async throws -> AnnotationLayer? {
+    func load(scoreID _: ScoreItemID) async throws -> Data? {
         nil
     }
 
     // swiftlint:disable:next async_without_await
-    func saveAnnotationLayer(_: AnnotationLayer) async throws {}
+    func save(scoreID _: ScoreItemID, updatedAt _: Date, payload _: Data) async throws {}
     // swiftlint:disable:next async_without_await
-    func deleteAnnotationLayer(forScoreItem _: ScoreItemID) async throws {}
+    func delete(scoreID _: ScoreItemID) async throws {}
 }

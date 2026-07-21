@@ -26,6 +26,16 @@ struct AnnotationLayerRecord: FetchableRecord, PersistableRecord, Codable {
         var textBoxes: [TextBoxAnchor]
     }
 
+    /// Raw-bytes initializer for the `AnnotationBlobStore` write path: the payload is stored verbatim (the shared
+    /// `AnnotationSaveCoordinator` already encoded it with `AnnotationLayerCodec`, byte-identical to `Body`), so there
+    /// is no domain round-trip. Spelled out because the `init(domain:)` below suppresses the memberwise initializer.
+    init(id: String, scoreItemId: String, updatedAt: Double, payload: Data) {
+        self.id = id
+        self.scoreItemId = scoreItemId
+        self.updatedAt = updatedAt
+        self.payload = payload
+    }
+
     init(domain layer: AnnotationLayer) throws {
         id = layer.id.rawValue.uuidString
         scoreItemId = layer.scoreItemID.rawValue.uuidString

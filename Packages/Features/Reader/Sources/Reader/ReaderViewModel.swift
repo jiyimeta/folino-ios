@@ -56,9 +56,8 @@ final class ReaderViewModel {
     /// rewritten on every canvas change. The container projects this to the current layout for display.
     var annotationDrawings: [DrawingAnchor] = []
 
-    // Internal (not private) so `ReaderViewModel+AnnotationPersistence.swift` can reach them.
-    @ObservationIgnored var annotationSaveTask: Task<Void, Never>?
-    @ObservationIgnored var pendingAnnotationDrawings: [DrawingAnchor]?
+    /// Handle to the latest `drawingsDidChange` hop onto the coordinator, awaited by `flushPendingAnnotationSave`.
+    @ObservationIgnored var annotationChangeTask: Task<Void, Never>?
 
     /// The display-ready score: the loaded score with clef overrides applied, transposed, and hidden staves filtered.
     /// Cached and recomputed only when its inputs change (load, clef overrides, transpose, hidden staves) via
@@ -110,7 +109,8 @@ final class ReaderViewModel {
     // Internal so the share methods in `ReaderViewModel+Sharing.swift` can reach it.
     @ObservationIgnored let shareService: any ScoreShareService
     @ObservationIgnored let metadataReader: any ScoreMetadataReading
-    @ObservationIgnored let annotationStore: any AnnotationStore
+    /// The shared annotation save policy (debounce + empty→delete + assembly), reused by iOS and Android.
+    @ObservationIgnored let annotationCoordinator: AnnotationSaveCoordinator
     /// Optional PDF → playable-score parser. `nil` on platforms / builds without ssm's PDF importer;
     /// when present, `loadPDF` parses the opened PDF in the background to enable playback + the on-PDF
     /// cursor. Internal so the PDF load path in `ReaderViewModel+Load.swift` can reach it.
@@ -142,7 +142,7 @@ final class ReaderViewModel {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService = NoopScoreShareService(),
         metadataReader: any ScoreMetadataReading = NoopScoreMetadataReading(),
-        annotationStore: any AnnotationStore = NoopAnnotationStore(),
+        annotationCoordinator: AnnotationSaveCoordinator = AnnotationSaveCoordinator(store: NoopAnnotationBlobStore()),
         scoresDirectory: URL,
         defaultStaffSize: Double = 14,
         playbackController: (any PlaybackController)? = nil,
@@ -158,7 +158,7 @@ final class ReaderViewModel {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
-        self.annotationStore = annotationStore
+        self.annotationCoordinator = annotationCoordinator
         self.pdfPlaybackParser = pdfPlaybackParser
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
