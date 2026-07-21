@@ -19,6 +19,9 @@ public final class AnnotationSaveBridge {
 
     /// Observable read path (Sub-plan E): drawings loaded for the active score, projected to a Kotlin StateFlow by
     /// @WireletObservable. Seeds the dry overlay on open. Written on the main actor after the async load resolves.
+    /// internal(set) (not private(set)): swift-wirelet 0.3.2's ObservableSchemaParser treats every stored `var` as
+    /// mutable — it ignores per-accessor access — and emits a same-module _set bridge, so private(set) fails the
+    /// arm64 FolinoReaderJNI build.
     public internal(set) var loadedDrawings: [DrawingAnchorWire] = []
 
     public init(store: AnnotationPersistenceStore) {
@@ -38,6 +41,7 @@ public final class AnnotationSaveBridge {
         let id = ScoreItemID(rawValue: UUID(uuidString: scoreId) ?? UUID())
         Task { @MainActor in
             let drawings = await coordinator.load(scoreID: id)
+            guard self.scoreId == scoreId else { return } // a newer open() superseded this load; drop the stale result
             self.loadedDrawings = drawings.map { drawing -> DrawingAnchorWire in
                 guard case let .musical(a) = drawing.kind else {
                     return DrawingAnchorWire(
