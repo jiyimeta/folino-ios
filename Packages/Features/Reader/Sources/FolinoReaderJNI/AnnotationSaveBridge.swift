@@ -8,15 +8,18 @@ import WireletObservable
 /// Room blob store injected from Kotlin (`AnnotationPersistenceStore` via `@WireletProvided`). No cadence or codec is
 /// reimplemented here — the coordinator is the only place that logic lives, so Android and iOS persist identically.
 ///
-/// Write-only in v1 (Sub-plan D): Kotlin pushes drawing changes / open / flush down; there is no observable `state`
-/// StateFlow because nothing is projected back to Compose yet. Sub-plan E adds the read path (rehydrating stored
-/// drawings on open). The `@WireletObservable` bridges emitter is happy with zero observable properties — it emits
-/// the constructor and the `@WireletExpose` invoke bridges.
+/// Write-only in v1 (Sub-plan D): Kotlin pushes drawing changes / open / flush down. Sub-plan E adds the read path —
+/// `loadedDrawings` is an observable property that `@WireletObservable` projects to a Kotlin StateFlow, rehydrating
+/// the dry overlay's persisted strokes when a score opens.
 @WireletObservable
 @Observable
 public final class AnnotationSaveBridge {
     @ObservationIgnored private let coordinator: AnnotationSaveCoordinator
     @ObservationIgnored private var scoreId = ""
+
+    /// Observable read path (Sub-plan E): drawings loaded for the active score, projected to a Kotlin StateFlow by
+    /// @WireletObservable. Seeds the dry overlay on open. Written on the main actor after the async load resolves.
+    public internal(set) var loadedDrawings: [DrawingAnchorWire] = []
 
     public init(store: AnnotationPersistenceStore) {
         coordinator = AnnotationSaveCoordinator(store: WireletBackedBlobStore(provided: store))
@@ -24,15 +27,31 @@ public final class AnnotationSaveBridge {
 
     // MARK: - Open / lifecycle
 
-    /// Marks `scoreId` as the active score. Primes the coordinator's load path for the score (the loaded drawings are
-    /// not projected to Compose in D — Sub-plan E wires that read path). Fire-and-forget: the coordinator is an actor,
-    /// so the sync `@WireletExpose` boundary can't await it.
+    /// Marks `scoreId` as the active score and rehydrates its persisted drawings into `loadedDrawings`, projected to
+    /// Compose via the `@WireletObservable` StateFlow. Fire-and-forget: the coordinator is an actor, so the sync
+    /// `@WireletExpose` boundary can't await it; the load resolves asynchronously on the main actor.
     @WireletExpose
     public func open(scoreId: String) {
         self.scoreId = scoreId
+        loadedDrawings = []
         let coordinator = coordinator
         let id = ScoreItemID(rawValue: UUID(uuidString: scoreId) ?? UUID())
-        Task { _ = await coordinator.load(scoreID: id) }
+        Task { @MainActor in
+            let drawings = await coordinator.load(scoreID: id)
+            self.loadedDrawings = drawings.map { drawing -> DrawingAnchorWire in
+                guard case let .musical(a) = drawing.kind else {
+                    return DrawingAnchorWire(
+                        measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0,
+                        dxSp: 0, verticalOffsetSp: 0, encodedDrawing: drawing.encodedDrawing,
+                    )
+                }
+                return DrawingAnchorWire(
+                    measureIndex: Int32(a.measureIndex), tickInMeasure: Int32(a.tickInMeasure),
+                    partIndex: Int32(a.partIndex), staffIndexInPart: Int32(a.staffIndexInPart),
+                    dxSp: a.dxSp, verticalOffsetSp: a.verticalOffsetSp, encodedDrawing: drawing.encodedDrawing,
+                )
+            }
+        }
     }
 
     // MARK: - Drawing changes (Kotlin -> Swift)
