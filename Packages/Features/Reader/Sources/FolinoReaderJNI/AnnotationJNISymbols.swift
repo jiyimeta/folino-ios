@@ -92,3 +92,18 @@ public func nativeAnnotationDisplayTransforms(drawingsBytes: Data, refPointsByte
     }
     return out.encodeToData()
 }
+
+/// Encode a raw androidx.ink stroke (document-mm geometry) into neutral `InkStroke` FINK bytes. Kotlin builds
+/// `RawInkStrokeWire` from a finished `Stroke`; this is the ONLY encode path so the codec never duplicates into Kotlin.
+/// Empty `Data` if the wire fails to decode.
+public func nativeEncodeInkStroke(rawBytes: Data) -> Data {
+    guard let wire = try? RawInkStrokeWire(decoding: rawBytes) else { return Data() }
+    return InkStrokeCodec.encode(wire.fields.toInkStroke())
+}
+
+/// Decode neutral `InkStroke` FINK bytes back to a `RawInkStrokeWire` Kotlin rebuilds a `Stroke` from. Empty `Data`
+/// if the bytes don't decode.
+public func nativeDecodeInkStroke(finkBytes: Data) -> Data {
+    guard let stroke = try? InkStrokeCodec.decode(finkBytes) else { return Data() }
+    return RawInkStrokeWire(InkStrokeRawFields(stroke)).encodeToData()
+}
