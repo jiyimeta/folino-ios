@@ -180,7 +180,7 @@ struct ReaderTopOverlay: View {
                     repeatModel: viewModel.repeatModel,
                     transposeModel: viewModel.transposeModel,
                     score: score,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
+                    playbackSession: viewModel.playbackSession,
                     isInPlaylist: viewModel.isInPlaylist,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)
