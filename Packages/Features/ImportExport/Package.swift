@@ -7,7 +7,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 
 let package = Package(
     name: "ImportExport",
-    platforms: [.iOS(.v26)],
+    platforms: [.iOS(.v18)],
     products: [
         .library(name: "ImportExport", targets: ["ImportExport"]),
         .library(name: "ImportExportAppGroup", targets: ["ImportExportAppGroup"]),

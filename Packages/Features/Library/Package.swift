@@ -87,7 +87,7 @@ if isAndroid {
 let package = Package(
     name: "Library",
     defaultLocalization: "en",
-    platforms: [.iOS(.v26), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v14)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,

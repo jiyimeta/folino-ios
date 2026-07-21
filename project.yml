@@ -2,7 +2,7 @@ name: Folino
 options:
   bundleIdPrefix: com.KeyNumber.Folino
   deploymentTarget:
-    iOS: 26.0
+    iOS: 18.0
   createIntermediateGroups: true
   generateEmptyDirectories: true
   defaultConfig: Debug

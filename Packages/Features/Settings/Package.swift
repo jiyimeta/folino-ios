@@ -97,7 +97,7 @@ if isAndroid {
 let package = Package(
     name: "Settings",
     defaultLocalization: "en",
-    platforms: [.iOS(.v26)],
+    platforms: [.iOS(.v18)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,
