@@ -8,7 +8,6 @@ import com.keynumber.folino.reader.PointMmWireCodec
 import com.keynumber.folino.reader.ReaderAnnotationJNI
 import com.keynumber.folino.reader.ResolvedAnchorWireCodec
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
-import io.github.jiyimeta.wirelet.observable.WireletList
 
 /**
  * Turns a finished androidx.ink [Stroke] (document-mm world coords) into an anchored, persistable
@@ -24,9 +23,8 @@ object AnnotationCaptureController {
         baseWidthSp: Float,
         scoreHandle: Long,
     ): DrawingAnchorWire? {
-        val fink = ReaderAnnotationJNI.encodeInkStroke(
-            InkStrokeSerialization.toRawWireBytes(stroke, tool, colorRGBA, baseWidthSp),
-        )
+        val rawBytes = InkStrokeSerialization.toRawWireBytes(stroke, tool, colorRGBA, baseWidthSp)
+        val fink = ReaderAnnotationJNI.encodeInkStroke(rawBytes)
         if (fink.isEmpty()) return null
 
         val pointBytes = ReaderAnnotationJNI.representativePoint(fink)
@@ -34,7 +32,7 @@ object AnnotationCaptureController {
         val point = PointMmWireCodec.decode(pointBytes)
 
         val resolvedBytes = SheetMusicJNI.nativeResolveAnchor(scoreHandle, point.xMm, point.yMm)
-        if (resolvedBytes.isEmpty()) return null
+        if (resolvedBytes.isEmpty()) return null // off-staff / bad coords
         val resolved = ResolvedAnchorWireCodec.decode(resolvedBytes)
 
         // ssm's `nativeAnchorReferencePoint` wants `[AnchorIdentityWire]` bytes — the identity subset
@@ -48,17 +46,19 @@ object AnnotationCaptureController {
         // `AnchorIdentityWire`'s four Int32 fields, and the trailing dxSp/verticalOffsetSp tags (5-6) land
         // on tags the Swift-side `AnchorIdentityWire` decoder doesn't declare, so it skips them as unknown
         // fields — the same forward-compatible skip every generated codec's decode loop already relies on.
-        // List framing is `io.github.jiyimeta.wirelet.observable.WireletList` (varint count + per-element
-        // length-delimited payload via the codec's `encodePayload`/`decodePayload`, mirroring Swift's
-        // `WireletObservableJNI.encodeArray`/`decodeArray`) — there is no `XxxCodec.encodeList`/`.decodeList`.
+        // List framing MUST be the Wirelet `Array: WireFormat` framing (varint byte-length + per-element
+        // length-delimited payloads) that Swift's `[AnchorIdentityWire](decoding:)` expects — see
+        // `encodeWireArray`/`decodeWireArray` (WireArray.kt). This is NOT the observable `WireletList`
+        // framing (varint COUNT + elements); using WireletList here mis-frames and the Swift decode
+        // throws, so `nativeAnchorReferencePoint` returns empty (bug: strokes silently never anchor).
         val refListBytes = SheetMusicJNI.nativeAnchorReferencePoint(
             scoreHandle,
-            WireletList.encode(listOf(resolved), ResolvedAnchorWireCodec::encodePayload),
+            encodeWireArray(listOf(resolved), ResolvedAnchorWireCodec::encodePayload),
         )
         if (refListBytes.isEmpty()) return null
-        val refs = WireletList.decode(refListBytes, AnchorRefPointWireCodec::decodePayload)
+        val refs = decodeWireArray(refListBytes, AnchorRefPointWireCodec::decodePayload)
         val ref = refs.firstOrNull() ?: return null
-        if (ref.spMm == 0.0) return null // anchor didn't resolve in this layout
+        if (ref.spMm == 0.0) return null // unresolved this layout
 
         val drawingBytes = ReaderAnnotationJNI.capture(fink, resolvedBytes, AnchorRefPointWireCodec.encode(ref))
         if (drawingBytes.isEmpty()) return null
