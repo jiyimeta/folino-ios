@@ -289,9 +289,11 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Prime persistence for the score and rehydrate stored drawings into the dry overlay. */
     fun onAnnotationOpened(scoreId: String) {
-        saveController.open(scoreId)
         annotationDrawingsJob?.cancel()
         annotationDrawingsJob = viewModelScope.launch {
+            // `open()` loads synchronously (a DispatchSemaphore bridges the actor coordinator — see
+            // AnnotationSaveBridge.open); run it off the main thread so that brief block never touches the UI thread.
+            withContext(Dispatchers.IO) { saveController.open(scoreId) }
             saveController.loadedDrawings.collect { wires -> _drawings.value = wires }
         }
     }

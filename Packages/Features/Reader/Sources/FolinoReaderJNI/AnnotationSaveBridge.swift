@@ -1,3 +1,4 @@
+import Dispatch
 import Domain
 import Foundation
 import Observation
@@ -31,31 +32,49 @@ public final class AnnotationSaveBridge {
     // MARK: - Open / lifecycle
 
     /// Marks `scoreId` as the active score and rehydrates its persisted drawings into `loadedDrawings`, projected to
-    /// Compose via the `@WireletObservable` StateFlow. Fire-and-forget: the coordinator is an actor, so the sync
-    /// `@WireletExpose` boundary can't await it; the load resolves asynchronously on the main actor.
+    /// Compose via the `@WireletObservable` StateFlow.
+    ///
+    /// The load runs SYNCHRONOUSLY: `loadedDrawings` is populated before `open()` returns, so the Kotlin StateFlow
+    /// collector that `ReaderViewModel.onAnnotationOpened` starts immediately after this call reads the loaded value.
+    ///
+    /// Why not the async `Task { @MainActor in … }` shape used before: the Android JNI process pumps no main runloop,
+    /// so there is NO MainActor executor. A `Task { @MainActor in … }` is created but never scheduled — its body never
+    /// runs — so `coordinator.load` was never called and persisted strokes silently failed to rehydrate on reopen /
+    /// relaunch (the write path was unaffected: `drawingsChanged` / `flush` use a plain `Task {}` on the global
+    /// executor, which does run on Android). Bridge the `actor` coordinator to this synchronous boundary with a
+    /// `DispatchSemaphore`, mirroring `LibraryAndroidStore.importShared`: the store's `load` is a synchronous Room read
+    /// over JNI with no real suspension point, so the cooperative pool that runs the Task cannot starve on the blocked
+    /// caller and no deadlock is possible. Kotlin invokes `open()` off the main thread, so the brief block never
+    /// touches the UI thread.
     @WireletExpose
     public func open(scoreId: String) {
         self.scoreId = scoreId
-        loadedDrawings = []
-        let coordinator = coordinator
         let id = ScoreItemID(rawValue: UUID(uuidString: scoreId) ?? UUID())
-        Task { @MainActor in
-            let drawings = await coordinator.load(scoreID: id)
-            guard self.scoreId == scoreId else { return } // a newer open() superseded this load; drop the stale result
-            self.loadedDrawings = drawings.map { drawing -> DrawingAnchorWire in
-                guard case let .musical(a) = drawing.kind else {
-                    return DrawingAnchorWire(
-                        measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0,
-                        dxSp: 0, verticalOffsetSp: 0, encodedDrawing: drawing.encodedDrawing,
-                    )
-                }
-                return DrawingAnchorWire(
-                    measureIndex: Int32(a.measureIndex), tickInMeasure: Int32(a.tickInMeasure),
-                    partIndex: Int32(a.partIndex), staffIndexInPart: Int32(a.staffIndexInPart),
-                    dxSp: a.dxSp, verticalOffsetSp: a.verticalOffsetSp, encodedDrawing: drawing.encodedDrawing,
-                )
-            }
+        let coordinator = coordinator
+        let box = LoadedDrawingsBox()
+        let sem = DispatchSemaphore(value: 0)
+        Task {
+            box.drawings = await coordinator.load(scoreID: id)
+            sem.signal()
         }
+        sem.wait()
+        loadedDrawings = box.drawings.map(Self.wire(from:))
+    }
+
+    /// Maps a `Domain.DrawingAnchor` to its `DrawingAnchorWire` projection. A non-musical anchor (v1 only produces
+    /// `.musical`, but the model permits others) degrades to a zeroed identity so the encoded stroke still round-trips.
+    private static func wire(from drawing: DrawingAnchor) -> DrawingAnchorWire {
+        guard case let .musical(a) = drawing.kind else {
+            return DrawingAnchorWire(
+                measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0,
+                dxSp: 0, verticalOffsetSp: 0, encodedDrawing: drawing.encodedDrawing,
+            )
+        }
+        return DrawingAnchorWire(
+            measureIndex: Int32(a.measureIndex), tickInMeasure: Int32(a.tickInMeasure),
+            partIndex: Int32(a.partIndex), staffIndexInPart: Int32(a.staffIndexInPart),
+            dxSp: a.dxSp, verticalOffsetSp: a.verticalOffsetSp, encodedDrawing: drawing.encodedDrawing,
+        )
     }
 
     // MARK: - Drawing changes (Kotlin -> Swift)
@@ -95,6 +114,13 @@ public final class AnnotationSaveBridge {
         let coordinator = coordinator
         Task { await coordinator.flush() }
     }
+}
+
+/// Reference box that lets the escaping load `Task` hand its result back across the `DispatchSemaphore` to the
+/// synchronous `open()` caller. `@unchecked Sendable`: `drawings` is written once by the Task and read once by the
+/// caller after `sem.wait()`, with the semaphore providing the happens-before edge.
+private final class LoadedDrawingsBox: @unchecked Sendable {
+    var drawings: [DrawingAnchor] = []
 }
 
 /// Adapts the synchronous Kotlin-backed `AnnotationPersistenceStore` (`@WireletProvided`) to the async
