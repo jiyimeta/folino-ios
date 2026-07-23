@@ -44,4 +44,16 @@ object ReaderAnnotationJNI {
             arena,
         ).toByteArray()
     }
+
+    /** Encode a raw androidx.ink stroke (RawInkStrokeWire bytes, document-mm) into neutral InkStroke FINK bytes. */
+    fun encodeInkStroke(rawBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEncodeInkStroke(SwiftData.fromByteArray(rawBytes, arena), arena).toByteArray()
+    }
+
+    /** Decode neutral InkStroke FINK bytes back to RawInkStrokeWire bytes for rebuilding an androidx.ink Stroke. */
+    fun decodeInkStroke(finkBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeDecodeInkStroke(SwiftData.fromByteArray(finkBytes, arena), arena).toByteArray()
+    }
 }

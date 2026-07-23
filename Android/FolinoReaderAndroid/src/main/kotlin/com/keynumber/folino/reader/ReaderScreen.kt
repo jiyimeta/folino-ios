@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.ModalBottomSheet
@@ -72,8 +74,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.ink.strokes.Stroke
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.keynumber.folino.reader.ink.AnnotationCaptureController
+import com.keynumber.folino.reader.ink.AnnotationDryOverlay
+import com.keynumber.folino.reader.ink.AnnotationToolbar
+import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
+import com.keynumber.folino.reader.ink.AnnotationWetOverlay
+import com.keynumber.folino.reader.ink.InkBrushMapping
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -83,6 +92,7 @@ import io.github.jiyimeta.sheetmusic.compose.cursor.LoopHighlightOverlay
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -109,6 +119,27 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
  * as bottom padding *inside* the scroll content, so the last system scrolls clear of the FAB rather
  * than passing under it. Only applied while the seek bar is off (the FAB is shown). */
 private val fabClusterReservedHeight = 72.dp
+
+/** Fixed brush size (document-mm world unit) for the pen tool — MVP has no width slider (deferred). */
+private const val ANNOTATION_BASE_WIDTH_SP = 1.2f
+
+/** 0xRRGGBBAA (our neutral annotation color model, matching [InkBrushMapping.colorInt]'s convention) -> Compose [Color]. */
+private fun rgbaLongToColor(rgba: Long): Color {
+    val r = ((rgba shr 24) and 0xFF).toInt()
+    val g = ((rgba shr 16) and 0xFF).toInt()
+    val b = ((rgba shr 8) and 0xFF).toInt()
+    val a = (rgba and 0xFF).toInt()
+    return Color(r, g, b, a)
+}
+
+/** Compose [Color] -> 0xRRGGBBAA Long. */
+private fun Color.toRgbaLong(): Long {
+    val r = (red * 255).toInt().coerceIn(0, 255).toLong()
+    val g = (green * 255).toInt().coerceIn(0, 255).toLong()
+    val b = (blue * 255).toInt().coerceIn(0, 255).toLong()
+    val a = (alpha * 255).toInt().coerceIn(0, 255).toLong()
+    return (r shl 24) or (g shl 16) or (b shl 8) or a
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,7 +238,22 @@ fun ReaderScreen(
     // hit-test must reuse this exact blob (its hidden-staff set) so re-addressing stays in lockstep.
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
-    LaunchedEffect(scoreId) { readerVm.load(scoreId) }
+    // Annotation (Sub-plan E, VERTICAL mode only for this MVP). `annotationColor`/`annotationTool`
+    // are the toolbar's live selection; `drawings` is the committed layer rendered by the dry
+    // overlay + persisted by the VM's debounced save.
+    val annotationMode by readerVm.annotationMode.collectAsStateWithLifecycle()
+    val drawings by readerVm.drawings.collectAsStateWithLifecycle()
+    var annotationColor by remember { mutableStateOf(0x000000FFL) } // 0xRRGGBBAA, default opaque black
+    val annotationTool = 0 // pen (Domain InkStroke.Tool.pen). Eraser/other tools deferred.
+    // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls).
+    val annotationScope = rememberCoroutineScope()
+
+    LaunchedEffect(scoreId) {
+        readerVm.load(scoreId)
+        // Re-fires once per scoreId (same effect as `load`), so this primes persistence + rehydrates
+        // the dry overlay's drawings exactly once per score open, not on every recomposition.
+        readerVm.onAnnotationOpened(scoreId)
+    }
     // Install the repeat controller once per score: resolve the persisted global mode (suspending)
     // and wire per-score A–B persistence. The controller loads any saved A–B range here; the active
     // loop is (re)applied after the engine finishes preparing.
@@ -297,6 +343,17 @@ fun ReaderScreen(
 
     val pipActive by ReaderPipController.isInPipMode.collectAsStateWithLifecycle()
     val playbackState by audioVm.state.collectAsStateWithLifecycle()
+    // Gates the top-bar annotation toggle: disabled while playing (parity w/ iOS).
+    val isPlaying = playbackState == PlaybackState.PLAYING
+
+    // Mutual exclusion: annotation is strictly VERTICAL + not-playing. Auto-exit whenever either
+    // condition stops holding (layout mode switches away from VERTICAL, or playback starts) so
+    // annotation mode never lingers active behind a layout that has no overlay/gating support for it —
+    // without this, playing while annotating would leave the score frozen via the detached ScrollState
+    // (scrollModifier stays `Modifier` while `annotationMode` is true, regardless of `isPlaying`).
+    LaunchedEffect(layoutMode, isPlaying) {
+        if (layoutMode != ReaderLayoutMode.VERTICAL || isPlaying) readerVm.setAnnotationMode(false)
+    }
 
     // Analytics: one central playback-state observer covers every play/pause path exactly once (the
     // TransportBar FAB, the floating FAB, and the PiP transport all funnel through audioVm.state).
@@ -364,6 +421,9 @@ fun ReaderScreen(
         onDispose { ReaderPipController.reset() }
     }
 
+    // Flush any debounced-but-unsaved annotation edits on teardown (screen close / process-death path).
+    DisposableEffect(Unit) { onDispose { readerVm.flushAnnotations() } }
+
     var showInspector by remember { mutableStateOf(false) }
     var showDisplayInspector by remember { mutableStateOf(false) }
     // Open at full height so the dense inspector shows as many rows as possible at once.
@@ -384,10 +444,20 @@ fun ReaderScreen(
                 onEditInfo = onEditInfo,
                 onPlaybackControls = { showInspector = true },
                 onDisplaySettings = { showDisplayInspector = true },
+                annotationMode = annotationMode,
+                // VERTICAL-only for this MVP (HORIZONTAL/PAGE overlays are deferred).
+                annotationEnabled = !isPlaying && layoutMode == ReaderLayoutMode.VERTICAL,
+                onToggleAnnotate = readerVm::toggleAnnotationMode,
             )
         },
         bottomBar = {
-            if (showSeekBar) {
+            if (annotationMode && layoutMode == ReaderLayoutMode.VERTICAL) {
+                AnnotationToolbar(
+                    color = rgbaLongToColor(annotationColor),
+                    presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
+                    onColorChange = { annotationColor = it.toRgbaLong() },
+                )
+            } else if (showSeekBar) {
                 TransportBar(
                     audioVm = audioVm,
                     onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
@@ -434,6 +504,25 @@ fun ReaderScreen(
                         // is off) so the last system can scroll out from under the floating play FAB.
                         bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
                         onLayoutWidthMm = readerVm::setLayoutWidthMm,
+                        annotationMode = annotationMode,
+                        drawings = drawings,
+                        annotationTool = annotationTool,
+                        annotationColorRGBA = annotationColor,
+                        onStrokeCaptured = { stroke ->
+                            // Capture chains 5 sync native JNI calls (E5-M3) — off the main thread, then
+                            // hand the result back to the VM (StateFlow.value assignment is thread-safe).
+                            scoreHandle?.let { handle ->
+                                annotationScope.launch(Dispatchers.Default) {
+                                    AnnotationCaptureController.capture(
+                                        stroke = stroke,
+                                        tool = annotationTool,
+                                        colorRGBA = annotationColor,
+                                        baseWidthSp = ANNOTATION_BASE_WIDTH_SP,
+                                        scoreHandle = handle,
+                                    )?.let { readerVm.addDrawing(it) }
+                                }
+                            }
+                        },
                     )
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
                     ReaderLayoutMode.PAGE -> PagedScore(
@@ -509,6 +598,11 @@ fun ReaderTopBar(
     onDisplaySettings: () -> Unit,
     modifier: Modifier = Modifier,
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
+    /** Whether annotation (pencil) mode is currently active — drives the toggle's checked state. */
+    annotationMode: Boolean = false,
+    /** Disabled while playback is active (parity w/ iOS: can't annotate while the score is playing). */
+    annotationEnabled: Boolean = true,
+    onToggleAnnotate: () -> Unit = {},
 ) {
     TopAppBar(
         modifier = modifier,
@@ -549,6 +643,13 @@ fun ReaderTopBar(
                     contentDescription = stringResource(R.string.reader_display_settings),
                 )
             }
+            FilledIconToggleButton(
+                checked = annotationMode,
+                onCheckedChange = { onToggleAnnotate() },
+                enabled = annotationEnabled,
+            ) {
+                Icon(Icons.Filled.Edit, contentDescription = "Annotate")
+            }
         },
     )
 }
@@ -562,11 +663,21 @@ private fun ReadyScore(
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
     onLayoutWidthMm: (Double) -> Unit = {},
+    annotationMode: Boolean = false,
+    drawings: List<DrawingAnchorWire> = emptyList(),
+    annotationTool: Int = 0,
+    annotationColorRGBA: Long = 0x000000FFL,
+    onStrokeCaptured: (Stroke) -> Unit = {},
 ) {
     val page = state.program.pages.first()
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableFloatStateOf(1f) }
+    // Drives AnnotationDryOverlay's reflow-recompute gate (skip recompute mid-stroke). MVP leaves
+    // this always false and relies on the dry overlay's own recompute-on-`drawings`-change instead —
+    // flipping it true for the duration of an active wet stroke (via the wet overlay's own
+    // start/finish callbacks, which aren't exposed yet) is a future refinement, not required for MVP.
+    val isDrawing = false
 
     val vScroll = rememberScrollState()
     val hScroll = rememberScrollState()
@@ -667,7 +778,10 @@ private fun ReadyScore(
             // the pinch loop consumes two-finger moves — neither steals the other's events. The tap
             // point is in this outer (viewport) px space; fold the scroll offsets and the fixed
             // vertical padding into the content offset so the helper's divide yields document-mm.
-            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions) {
+            // Disabled while annotating: a single-finger tap there is the wet overlay's to consume
+            // (a stroke or an annotation dot), not a seek.
+            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, annotationMode) {
+                if (annotationMode) return@pointerInput
                 val handle = scoreHandle ?: return@pointerInput
                 if (fitPxPerMM <= 0f) return@pointerInput
                 val optionsBytes = layoutOptions.encode()
@@ -717,11 +831,14 @@ private fun ReadyScore(
         contentAlignment = Alignment.TopStart,
     ) {
         // Scroll modifiers: vertical always; horizontal only when zoomed so that
-        // at fit-width there is zero horizontal interaction (no horizontal stretch).
-        val scrollModifier = if (isZoomed) {
-            Modifier.verticalScroll(vScroll).horizontalScroll(hScroll)
-        } else {
-            Modifier.verticalScroll(vScroll)
+        // at fit-width there is zero horizontal interaction (no horizontal stretch). While annotating,
+        // scrolling is off entirely — the wet overlay above consumes the single-finger drag as a
+        // stroke instead; a 2-finger gesture still reaches the pinch pointerInput (a separate,
+        // always-installed handler) so pan/zoom keeps working mid-annotation.
+        val scrollModifier = when {
+            annotationMode -> Modifier
+            isZoomed -> Modifier.verticalScroll(vScroll).horizontalScroll(hScroll)
+            else -> Modifier.verticalScroll(vScroll)
         }
 
         Box(scrollModifier) {
@@ -785,6 +902,52 @@ private fun ReadyScore(
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
                     )
+                    // Dry (persisted) annotation layer — always mounted (so committed strokes show even
+                    // when not actively annotating), same padding as the sibling overlays above so its
+                    // Canvas origin lines up with theirs.
+                    AnnotationDryOverlay(
+                        scoreHandle = handle,
+                        drawings = drawings,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        isDrawing = isDrawing,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = with(density) { vPadPx.toDp() }),
+                    )
+                    if (annotationMode) {
+                        // Wet (in-progress) capture layer, on top, only while annotating. Its
+                        // `worldToScreen` camera MUST match AnnotationDryOverlay's `camera` above
+                        // (pure scale, no translate): both overlays are mounted with the identical
+                        // `.padding(vertical = vPadPx.toDp())`, which already shifts the
+                        // AndroidView/Canvas origin down by vPadPx — re-adding it here via
+                        // postTranslate would double-offset in-progress strokes relative to the
+                        // dry (persisted) render underneath them.
+                        val worldToScreen = remember(fitPxPerMM, scale) {
+                            android.graphics.Matrix().apply {
+                                setScale(fitPxPerMM * scale, fitPxPerMM * scale)
+                            }
+                        }
+                        val brush = remember(annotationTool, annotationColorRGBA) {
+                            InkBrushMapping.brushFor(
+                                annotationTool,
+                                annotationColorRGBA,
+                                widthSp = ANNOTATION_BASE_WIDTH_SP,
+                            )
+                        }
+                        AnnotationWetOverlay(
+                            worldToScreen = worldToScreen,
+                            brush = brush,
+                            onStrokeFinished = onStrokeCaptured,
+                            // The parent Box's pinch pointerInput (above, always installed) already
+                            // handles the 2-finger gesture once the wet overlay cancels its stroke and
+                            // returns `false` from ACTION_POINTER_DOWN — nothing further needed here.
+                            onTwoFingerGesture = {},
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(vertical = with(density) { vPadPx.toDp() }),
+                        )
+                    }
                 }
             }
         }

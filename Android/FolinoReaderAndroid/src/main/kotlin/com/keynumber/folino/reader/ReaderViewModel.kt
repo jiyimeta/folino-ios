@@ -11,12 +11,14 @@ import io.github.jiyimeta.sheetmusic.compose.draw.DrawProgramReader
 import io.github.jiyimeta.sheetmusic.compose.draw.model.DrawProgram
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -267,7 +269,64 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // --- Annotation (Sub-plan E) ---
+    private val _annotationMode = MutableStateFlow(false)
+    val annotationMode: StateFlow<Boolean> = _annotationMode.asStateFlow()
+
+    // Committed drawings for the active score (the render + save currency; DrawingAnchorWire objects).
+    private val _drawings = MutableStateFlow<List<DrawingAnchorWire>>(emptyList())
+    val drawings: StateFlow<List<DrawingAnchorWire>> = _drawings.asStateFlow()
+
+    private val saveController = AnnotationSaveController.build(getApplication<Application>())
+
+    // Tracks the long-lived `loadedDrawings` collector started by [onAnnotationOpened] so a
+    // score retarget (playlist auto-advance, mirroring [load]'s loadedScoreId handling) cancels
+    // the prior collector instead of stacking a second one on the same ViewModel.
+    private var annotationDrawingsJob: Job? = null
+
+    fun toggleAnnotationMode() { _annotationMode.value = !_annotationMode.value }
+    fun setAnnotationMode(on: Boolean) { _annotationMode.value = on }
+
+    /** Prime persistence for the score and rehydrate stored drawings into the dry overlay. */
+    fun onAnnotationOpened(scoreId: String) {
+        annotationDrawingsJob?.cancel()
+        annotationDrawingsJob = viewModelScope.launch {
+            // `open()` loads synchronously (a DispatchSemaphore bridges the actor coordinator — see
+            // AnnotationSaveBridge.open); run it off the main thread so that brief block never touches the UI thread.
+            withContext(Dispatchers.IO) { saveController.open(scoreId) }
+            saveController.loadedDrawings.collect { wires -> _drawings.value = wires }
+        }
+    }
+
+    /** Append a freshly captured drawing and (re)arm the debounced save. Atomic: E8 invokes this from
+     *  a per-stroke `Dispatchers.Default` coroutine (off-main JNI capture), so concurrent strokes
+     *  racing a plain read-modify-write on `_drawings.value` could drop one — `update` avoids that. */
+    fun addDrawing(drawing: DrawingAnchorWire) {
+        _drawings.update { it + drawing }
+        saveController.drawingsChanged(_drawings.value)
+    }
+
+    /** Remove a drawing (whole-stroke eraser) and re-arm save. Atomic for the same reason as [addDrawing]. */
+    fun removeDrawing(index: Int) {
+        _drawings.update { list -> list.filterIndexed { i, _ -> i != index } }
+        saveController.drawingsChanged(_drawings.value)
+    }
+
+    /** Immediate write (call from onPause / score-swap). */
+    fun flushAnnotations() { saveController.flush() }
+
     override fun onCleared() {
+        // Best-effort final flush of any pending annotation write (the Reader route's DisposableEffect
+        // also flushes on exit; this is belt-and-suspenders).
+        saveController.flush()
+        // KNOWN FOLLOW-UP — bounded native leak: the annotation save-bridge VM (`saveController`) is held
+        // as a plain field, NOT scoped to a ViewModelStore, so its own onCleared -> nativeRelease never
+        // fires and the native Swift AnnotationSaveBridge + coordinator + store adapter leak once per
+        // Reader entry. `ViewModel.clear()` is internal in androidx.lifecycle, so release can't be
+        // triggered from here; the fix is to scope the bridge VM via `AnnotationSaveController.factory()`
+        // in the Reader nav route (mirroring `ReaderPreferencesController`). Small per-instance size;
+        // deferred as a tracked follow-up (final whole-branch review finding #1).
+        //
         // Do NOT close `handle`: the same raw Long is used by the playback
         // engine (which outlives this ViewModel via the bound service).
         // Mirrors the example ScoreViewModel.onCleared rationale.
