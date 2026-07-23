@@ -3,7 +3,9 @@ package com.keynumber.folino.reader.ink
 import android.graphics.Matrix
 import android.view.MotionEvent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.ink.authoring.InProgressStrokeId
@@ -33,6 +35,14 @@ fun AnnotationWetOverlay(
     val screenToWorld = remember { Matrix() }
     worldToScreen.invert(screenToWorld)
 
+    // The AndroidView `factory` runs ONCE; its setOnTouchListener/finished-listener closures capture
+    // these by reference. Route the mutable ones through rememberUpdatedState so a stroke started AFTER
+    // the user changes color/tool uses the CURRENT brush (not the initial one captured at factory time),
+    // and finished strokes go to the current callback.
+    val currentBrush by rememberUpdatedState(brush)
+    val currentOnStrokeFinished by rememberUpdatedState(onStrokeFinished)
+    val currentOnTwoFinger by rememberUpdatedState(onTwoFingerGesture)
+
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
@@ -43,7 +53,7 @@ fun AnnotationWetOverlay(
 
             view.addFinishedStrokesListener(object : InProgressStrokesFinishedListener {
                 override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
-                    strokes.values.forEach(onStrokeFinished)
+                    strokes.values.forEach(currentOnStrokeFinished)
                     view.removeFinishedStrokes(strokes.keys) // same frame — avoids wet/dry double-draw
                 }
             })
@@ -54,7 +64,7 @@ fun AnnotationWetOverlay(
                     MotionEvent.ACTION_DOWN -> {
                         v.requestUnbufferedDispatch(event)
                         val pid = event.getPointerId(event.actionIndex)
-                        pointerToStroke[pid] = view.startStroke(event, pid, brush, screenToWorld)
+                        pointerToStroke[pid] = view.startStroke(event, pid, currentBrush, screenToWorld)
                         activeStylus = event.getToolType(event.actionIndex) == MotionEvent.TOOL_TYPE_STYLUS
                         true
                     }
@@ -68,7 +78,7 @@ fun AnnotationWetOverlay(
                             pointerToStroke.values.forEach { view.cancelStroke(it, event) }
                             pointerToStroke.clear()
                             activeStylus = false
-                            onTwoFingerGesture()
+                            currentOnTwoFinger()
                             false
                         }
                     }
