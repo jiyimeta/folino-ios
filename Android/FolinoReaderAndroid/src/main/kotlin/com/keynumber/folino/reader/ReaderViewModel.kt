@@ -60,10 +60,21 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     private val _layoutOptions = MutableStateFlow(LayoutOptions.DEFAULT)
     val layoutOptions: StateFlow<LayoutOptions> = _layoutOptions.asStateFlow()
 
-    // Viewport-derived layout width (mm) for the wrapping (VERTICAL) layout. Seeded to A4 width until
-    // the render surface reports its viewport; pushed via [setLayoutWidthMm]. Drives the recompute.
-    private val _layoutWidthMm = MutableStateFlow(PAGE_WIDTH_MM)
-    val layoutWidthMm: StateFlow<Double> = _layoutWidthMm.asStateFlow()
+    // Viewport-derived layout width (mm) for the wrapping (VERTICAL) layout, pushed via
+    // [setLayoutWidthMm] by the Reader's content area. NULL until that viewport has been measured, and
+    // the recompute loop WAITS for it rather than laying out at a default: seeding A4 width meant the
+    // first layout ran at the wrong width and the score visibly stretched sideways a few hundred ms
+    // later when the real width arrived (the right-hand margin collapsing as it reflowed). Waiting
+    // costs nothing — a viewport that has no width yet has nothing to show either.
+    private val _layoutWidthMm = MutableStateFlow<Double?>(null)
+    val layoutWidthMm: StateFlow<Double?> = _layoutWidthMm.asStateFlow()
+
+    // Bumped once per successful layout recompute. Anything positioned against the layout rather than
+    // against the score model — the annotation overlay's stroke placement — keys off this: a reflow
+    // moves every note within the SAME score handle, so without a signal the placement silently stays
+    // where the previous layout put it.
+    private val _layoutGeneration = MutableStateFlow(0)
+    val layoutGeneration: StateFlow<Int> = _layoutGeneration.asStateFlow()
 
     private var handle: ScoreHandle? = null
 
@@ -111,7 +122,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 Triple(h, opts, widthMm)
             }
                 .mapLatest { (h, opts, widthMm) ->
-                    if (h == null) return@mapLatest
+                    if (h == null || widthMm == null) return@mapLatest
                     delay(RECOMPUTE_DEBOUNCE_MS)
                     val programBytes = layoutMutex.withLock {
                         withContext(Dispatchers.Default) {
@@ -129,6 +140,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                         return@mapLatest
                     }
                     _state.value = ReaderState.Ready(program)
+                    _layoutGeneration.value += 1
                 }
                 .collect { }
         }

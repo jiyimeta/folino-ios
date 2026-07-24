@@ -59,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -79,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationDryOverlay
+import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
 import com.keynumber.folino.reader.ink.AnnotationWetOverlay
@@ -95,7 +97,9 @@ import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.floor
 import androidx.compose.foundation.BorderStroke
@@ -247,6 +251,11 @@ fun ReaderScreen(
     val annotationTool = 0 // pen (Domain InkStroke.Tool.pen). Eraser/other tools deferred.
     // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls).
     val annotationScope = rememberCoroutineScope()
+
+    // For the content Box's width report below (its `onSizeChanged` is not a composable scope).
+    val readerDensity = LocalDensity.current
+    // Bumped on every layout recompute; re-anchors the annotation overlay so committed ink follows a reflow.
+    val layoutGeneration by readerVm.layoutGeneration.collectAsStateWithLifecycle()
 
     LaunchedEffect(scoreId) {
         readerVm.load(scoreId)
@@ -487,7 +496,17 @@ fun ReaderScreen(
                     } else {
                         0.dp
                     },
-                ),
+                )
+                // Report the layout width from HERE, not from the score surface below. This Box is
+                // composed for every state (Loading included), so the engine gets the real width before
+                // it lays anything out. Measuring it inside the Ready branch instead meant the width was
+                // only known after a layout had already been computed and drawn at the seed width — the
+                // score then visibly stretched sideways when the second layout landed. The score
+                // surfaces are `fillMaxSize` inside this Box, so the width measured here is the one they
+                // render into; only the bottom padding above differs.
+                .onSizeChanged { size ->
+                    if (size.width > 0) readerVm.setLayoutWidthMm(layoutWidthMm(size.width, readerDensity.density))
+                },
             contentAlignment = Alignment.Center,
         ) {
             when (val s = state) {
@@ -503,23 +522,30 @@ fun ReaderScreen(
                         // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
                         // is off) so the last system can scroll out from under the floating play FAB.
                         bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
-                        onLayoutWidthMm = readerVm::setLayoutWidthMm,
                         annotationMode = annotationMode,
                         drawings = drawings,
+                        layoutGeneration = layoutGeneration,
                         annotationTool = annotationTool,
                         annotationColorRGBA = annotationColor,
-                        onStrokeCaptured = { stroke ->
+                        onStrokeCaptured = { stroke, onCommitted ->
                             // Capture chains 5 sync native JNI calls (E5-M3) — off the main thread, then
                             // hand the result back to the VM (StateFlow.value assignment is thread-safe).
-                            scoreHandle?.let { handle ->
+                            // `onCommitted` closes the wet→dry handoff and must run on the main thread; it
+                            // takes the committed drawing, or null when the stroke never anchored.
+                            val handle = scoreHandle
+                            if (handle == null) {
+                                onCommitted(null)
+                            } else {
                                 annotationScope.launch(Dispatchers.Default) {
-                                    AnnotationCaptureController.capture(
+                                    val drawing = AnnotationCaptureController.capture(
                                         stroke = stroke,
                                         tool = annotationTool,
                                         colorRGBA = annotationColor,
                                         baseWidthSp = ANNOTATION_BASE_WIDTH_SP,
                                         scoreHandle = handle,
-                                    )?.let { readerVm.addDrawing(it) }
+                                    )
+                                    drawing?.let { readerVm.addDrawing(it) }
+                                    withContext(Dispatchers.Main) { onCommitted(drawing) }
                                 }
                             }
                         },
@@ -662,12 +688,13 @@ private fun ReadyScore(
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
-    onLayoutWidthMm: (Double) -> Unit = {},
     annotationMode: Boolean = false,
     drawings: List<DrawingAnchorWire> = emptyList(),
+    layoutGeneration: Int = 0,
     annotationTool: Int = 0,
     annotationColorRGBA: Long = 0x000000FFL,
-    onStrokeCaptured: (Stroke) -> Unit = {},
+    onStrokeCaptured: (stroke: Stroke, onCommitted: (DrawingAnchorWire?) -> Unit) -> Unit =
+        { _, onCommitted -> onCommitted(null) },
 ) {
     val page = state.program.pages.first()
 
@@ -689,10 +716,20 @@ private fun ReadyScore(
     // screen shows MORE music, not bigger notes. Pinch `scale` multiplies on top. (iOS parity.)
     val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
 
-    // Report the viewport-derived layout width up to the VM, which reflows the score to it.
-    LaunchedEffect(viewportSize.width, density.density) {
-        if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))
+    // Wet→dry ink handoff: androidx.ink keeps drawing a finished stroke until we remove it, so hold that
+    // removal until the dry overlay has painted the committed stroke — otherwise the ink blinks out at
+    // finger-up for the whole asynchronous commit. A retained copy is frozen at the transform captured when
+    // the stroke finished, so a camera change retires it: a brief blink beats a stroke sitting at the old
+    // zoom over a rescaled score.
+    val inkHandoff = remember { AnnotationHandoffQueue<DrawingAnchorWire>() }
+    // Watched through snapshotFlow rather than as LaunchedEffect keys: `scale` changes every frame of a
+    // pinch, and keying on it would cancel and relaunch the effect just as often.
+    LaunchedEffect(Unit) {
+        snapshotFlow { scale }.drop(1).collect { inkHandoff.releaseAll() }
     }
+
+    // The layout width is reported by ReaderScreen's content Box (composed for every state), so the
+    // engine has it before the first layout — `viewportSize` here is only for scroll / zoom / tap math.
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
     val isZoomed = contentWidthPx > viewportSize.width + 0.5f
@@ -908,12 +945,14 @@ private fun ReadyScore(
                     AnnotationDryOverlay(
                         scoreHandle = handle,
                         drawings = drawings,
+                        layoutGeneration = layoutGeneration,
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         isDrawing = isDrawing,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
+                        onRendered = inkHandoff::onDryRendered,
                     )
                     if (annotationMode) {
                         // Wet (in-progress) capture layer, on top, only while annotating. Its
@@ -938,7 +977,11 @@ private fun ReadyScore(
                         AnnotationWetOverlay(
                             worldToScreen = worldToScreen,
                             brush = brush,
-                            onStrokeFinished = onStrokeCaptured,
+                            // Retain the finished stroke on the wet layer, then commit; the queue removes it
+                            // once the dry overlay reports having painted the committed drawing.
+                            onStrokeFinished = { stroke, release ->
+                                onStrokeCaptured(stroke, inkHandoff.retain(release))
+                            },
                             // The parent Box's pinch pointerInput (above, always installed) already
                             // handles the 2-finger gesture once the wet overlay cancels its stroke and
                             // returns `false` from ACTION_POINTER_DOWN — nothing further needed here.

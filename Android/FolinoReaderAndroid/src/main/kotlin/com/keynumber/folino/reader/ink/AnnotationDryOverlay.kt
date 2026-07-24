@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -49,26 +50,40 @@ import kotlinx.coroutines.withContext
 fun AnnotationDryOverlay(
     scoreHandle: Long,
     drawings: List<DrawingAnchorWire>,
+    layoutGeneration: Int,
     pxPerMM: Float,
     scale: Float,
     isDrawing: Boolean,
     modifier: Modifier = Modifier,
+    onRendered: (List<DrawingAnchorWire>) -> Unit = {},
 ) {
-    // Placed = (rebuilt Stroke, placement matrix in doc-mm). Recomputed off-main on reflow; NOT while drawing.
-    var placed by remember { mutableStateOf<List<Pair<Stroke, Matrix>>>(emptyList()) }
-    LaunchedEffect(scoreHandle, drawings, isDrawing) {
+    // The drawings snapshot and the placement computed from it, kept together: a recomposition triggered by
+    // `drawings` changing runs BEFORE the (off-main) recompute finishes, so the snapshot must travel with
+    // the placement it produced — reporting `drawings` on its own would tell the caller a stroke is painted
+    // a frame or two before it actually is.
+    var content by remember { mutableStateOf(DryContent(emptyList(), emptyList())) }
+    // `layoutGeneration` is a key because a reflow moves every note under the SAME `scoreHandle` and
+    // leaves `drawings` untouched: the anchor reference points these placements were derived from are
+    // stale, but nothing else here would tell us. Without it committed ink stays put through a reflow
+    // and only snaps into place the next time a stroke is committed.
+    LaunchedEffect(scoreHandle, drawings, layoutGeneration, isDrawing) {
         if (isDrawing) return@LaunchedEffect
-        placed = withContext(Dispatchers.Default) { computePlacement(scoreHandle, drawings) }
+        val placed = withContext(Dispatchers.Default) { computePlacement(scoreHandle, drawings) }
+        content = DryContent(drawings, placed)
     }
 
     val camera = remember(pxPerMM, scale) { Matrix().apply { setScale(pxPerMM * scale, pxPerMM * scale) } }
+    val currentOnRendered by rememberUpdatedState(onRendered)
 
     AndroidView(
         modifier = modifier,
         factory = { ctx -> InkDryView(ctx) },
-        update = { view -> view.setContent(placed, camera) },
+        update = { view -> view.setContent(content, camera) { currentOnRendered(it) } },
     )
 }
+
+/** A committed-drawings snapshot paired with the placement [computePlacement] derived from it. */
+private class DryContent(val source: List<DrawingAnchorWire>, val placed: List<Pair<Stroke, Matrix>>)
 
 /**
  * Hardware-accelerated overlay that paints committed androidx.ink [Stroke]s. Transparent background (no
@@ -79,30 +94,43 @@ fun AnnotationDryOverlay(
 private class InkDryView(context: Context) : View(context) {
     private val renderer = CanvasStrokeRenderer.create()
     private val viewRenderer = ViewStrokeRenderer(renderer, this)
-    private var placed: List<Pair<Stroke, Matrix>> = emptyList()
+    private var content = DryContent(emptyList(), emptyList())
     private var camera: Matrix = Matrix()
+    private var reported: DryContent? = null
+    private var onRendered: (List<DrawingAnchorWire>) -> Unit = {}
 
     init {
         // A plain View with an overridden onDraw still needs WILL_NOT_DRAW cleared to be invalidated/redrawn.
         setWillNotDraw(false)
     }
 
-    fun setContent(placed: List<Pair<Stroke, Matrix>>, camera: Matrix) {
-        this.placed = placed
+    fun setContent(content: DryContent, camera: Matrix, onRendered: (List<DrawingAnchorWire>) -> Unit) {
+        this.content = content
         this.camera = camera
+        this.onRendered = onRendered
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
-        if (placed.isEmpty()) return
-        viewRenderer.drawWithStrokes(canvas) { scope ->
-            placed.forEach { (stroke, placement) ->
-                val m = Matrix(camera).apply { preConcat(placement) }
-                val save = canvas.save()
-                canvas.concat(m)
-                scope.drawStroke(stroke)
-                canvas.restoreToCount(save)
+        val content = this.content
+        if (content.placed.isNotEmpty()) {
+            viewRenderer.drawWithStrokes(canvas) { scope ->
+                content.placed.forEach { (stroke, placement) ->
+                    val m = Matrix(camera).apply { preConcat(placement) }
+                    val save = canvas.save()
+                    canvas.concat(m)
+                    scope.drawStroke(stroke)
+                    canvas.restoreToCount(save)
+                }
             }
+        }
+        // Report which drawings this frame covers so the wet layer can retire its retained copies (see
+        // AnnotationHandoffQueue). Reported even when nothing was placed — a drawing the engine couldn't
+        // resolve is still "as painted as it will get", and stranding its wet copy would be worse. Posted
+        // rather than called inline: the callback writes state that must not be touched during the draw pass.
+        if (reported !== content) {
+            reported = content
+            post { onRendered(content.source) }
         }
     }
 }
