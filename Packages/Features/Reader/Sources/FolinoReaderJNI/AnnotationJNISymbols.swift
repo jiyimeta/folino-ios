@@ -144,6 +144,21 @@ public func nativeAnnotationErase(drawingsBytes: Data, transformsBytes: Data, re
     ).encodeToData()
 }
 
+/// Place a stored (anchor-relative sp) InkStroke into document-mm using its display transform, so the
+/// caller can re-resolve an anchor for it (phase-2 erase re-anchoring). `strokeBytes` = neutral
+/// InkStroke FINK; `transformBytes` = `StrokeTransformWire`. Returns document-mm FINK, empty on a decode
+/// miss. A `sp == 0` transform (unresolved this layout) also returns empty — an unplaceable stroke.
+public func nativeAnnotationPlace(strokeBytes: Data, transformBytes: Data) -> Data {
+    guard let stroke = try? InkStrokeCodec.decode(strokeBytes),
+          let t = try? StrokeTransformWire(decoding: transformBytes),
+          t.sp != 0
+    else { return Data() }
+    let placed = AnnotationAnchoringCore.place(
+        stroke, with: StrokeTransform(sp: CGFloat(t.sp), px: CGFloat(t.px), py: CGFloat(t.py)),
+    )
+    return InkStrokeCodec.encode(placed)
+}
+
 /// Encode a raw androidx.ink stroke (document-mm geometry) into neutral `InkStroke` FINK bytes. Kotlin builds
 /// `RawInkStrokeWire` from a finished `Stroke`; this is the ONLY encode path so the codec never duplicates into Kotlin.
 /// Empty `Data` if the wire fails to decode.
