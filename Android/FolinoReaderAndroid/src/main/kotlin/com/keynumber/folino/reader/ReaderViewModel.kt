@@ -455,12 +455,19 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * intermediate mutation. Callers drive the gesture's own mutations through [applyDrawings] (or a
      * dedicated method built on it) with `pushHistory = false`. Reads `_drawings.value` and pushes it
      * under [layerLock] so the snapshot can't race a concurrent layer write.
+     *
+     * Returns the exact snapshot it pushed, so a caller that needs a "gesture base" to mutate against
+     * (the eraser drag) can use THIS value instead of separately re-reading a composed/collected
+     * `drawings` state — the latter can lag the VM by a frame (Compose recomposition), which would let
+     * the gesture's base and the undo entry it's covered by silently diverge.
      */
-    fun beginDrawingGesture() {
-        synchronized(layerLock) {
-            history.push(_drawings.value)
+    fun beginDrawingGesture(): List<DrawingAnchorWire> {
+        return synchronized(layerLock) {
+            val snapshot = _drawings.value
+            history.push(snapshot)
             _canUndo.value = history.canUndo
             _canRedo.value = history.canRedo
+            snapshot
         }
     }
 
