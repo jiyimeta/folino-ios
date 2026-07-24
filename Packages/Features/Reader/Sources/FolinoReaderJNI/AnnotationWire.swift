@@ -103,3 +103,31 @@ public struct StrokeTransformWire: Equatable {
         self.py = py
     }
 }
+
+/// One eraser gesture sample batch: the centerline in document mm plus the eraser's geometric radius. Input to
+/// `nativeAnnotationErase`.
+@WireFormat
+public struct EraseRequestWire: Equatable {
+    public let xMm: [Double]
+    public let yMm: [Double]
+    public let radiusMm: Double
+
+    public init(xMm: [Double], yMm: [Double], radiusMm: Double) {
+        self.xMm = xMm
+        self.yMm = yMm
+        self.radiusMm = radiusMm
+    }
+}
+
+/// Result of an erase: the replacement layer plus which of its entries changed geometry. Output of
+/// `nativeAnnotationErase`; see `ReaderAnnotationCore.EraseResult` for the field semantics `changedIndices` mirrors.
+@WireFormat
+public struct EraseResultWire: Equatable {
+    public let drawings: [DrawingAnchorWire]
+    public let changedIndices: [Int32]
+
+    public init(drawings: [DrawingAnchorWire], changedIndices: [Int32]) {
+        self.drawings = drawings
+        self.changedIndices = changedIndices
+    }
+}
