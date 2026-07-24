@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,6 +34,49 @@ private const val PAGE_HEIGHT_MM = 297.0
 // Debounce window for recomputing the layout after a display-setting change,
 // so rapid inspector edits (e.g. dragging staff size) coalesce into one compute.
 private const val RECOMPUTE_DEBOUNCE_MS = 120L
+
+/**
+ * Two-stack undo/redo history over whole annotation-layer snapshots (`List<T>`), generic over the
+ * element type so it is unit-testable with plain `List<String>` layers, without pulling in
+ * `DrawingAnchorWire`. Session-scoped: the owning [ReaderViewModel] clears it on rehydrate and on a
+ * score retarget, never persisted.
+ *
+ * [push] records the layer *before* a mutation and always clears the redo stack — a new edit
+ * invalidates any previously undone future. Depth is capped at [maxDepth]: once the undo stack
+ * exceeds it, the oldest entry is dropped rather than refusing the push.
+ */
+internal class DrawingHistory<T>(private val maxDepth: Int = 30) {
+    private val undoStack = ArrayDeque<List<T>>()
+    private val redoStack = ArrayDeque<List<T>>()
+
+    val canUndo: Boolean get() = undoStack.isNotEmpty()
+    val canRedo: Boolean get() = redoStack.isNotEmpty()
+
+    fun push(previous: List<T>) {
+        undoStack.addLast(previous)
+        if (undoStack.size > maxDepth) undoStack.removeFirst()
+        redoStack.clear()
+    }
+
+    fun undo(current: List<T>): List<T>? {
+        if (undoStack.isEmpty()) return null
+        val previous = undoStack.removeLast()
+        redoStack.addLast(current)
+        return previous
+    }
+
+    fun redo(current: List<T>): List<T>? {
+        if (redoStack.isEmpty()) return null
+        val next = redoStack.removeLast()
+        undoStack.addLast(current)
+        return next
+    }
+
+    fun clear() {
+        undoStack.clear()
+        redoStack.clear()
+    }
+}
 
 class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -162,6 +205,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // is published — which re-drives the layout recompute and the playback prepare.
         if (scoreId == loadedScoreId) return
         loadedScoreId = scoreId
+        // A different score means the undo/redo history belongs to a layer that's about to be replaced;
+        // history is session-scoped per score and must not carry entries across the retarget.
+        history.clear()
         // Suspend the layout recompute until the new score's handle is published. The recompute loop
         // skips while the handle is null, so the last Ready(program) keeps rendering unchanged — without
         // this, the incoming score's per-score display options (e.g. staff size) would briefly re-lay-out
@@ -289,6 +335,16 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     private val _drawings = MutableStateFlow<List<DrawingAnchorWire>>(emptyList())
     val drawings: StateFlow<List<DrawingAnchorWire>> = _drawings.asStateFlow()
 
+    // Session-scoped undo/redo over the annotation layer (cleared on rehydrate and on score retarget —
+    // see [onAnnotationOpened] and [load] — never persisted).
+    private val history = DrawingHistory<DrawingAnchorWire>()
+
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
+
     private val saveController = AnnotationSaveController.build(getApplication<Application>())
 
     // Tracks the long-lived `loadedDrawings` collector started by [onAnnotationOpened] so a
@@ -306,22 +362,72 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
             // `open()` loads synchronously (a DispatchSemaphore bridges the actor coordinator — see
             // AnnotationSaveBridge.open); run it off the main thread so that brief block never touches the UI thread.
             withContext(Dispatchers.IO) { saveController.open(scoreId) }
-            saveController.loadedDrawings.collect { wires -> _drawings.value = wires }
+            saveController.loadedDrawings.collect { wires ->
+                // Rehydration is a fresh score's layer, not an undoable step: neither push history (there
+                // is no prior in-session layer to undo back to) nor persist (that would echo a save of
+                // exactly what was just loaded). Clear history BEFORE the apply, not after: applyDrawings
+                // reads history.canUndo/canRedo to publish _canUndo/_canRedo, and clearing afterward would
+                // leave those StateFlows reporting a stale true from the score being replaced.
+                history.clear()
+                applyDrawings(pushHistory = false, persist = false) { wires }
+            }
         }
     }
 
-    /** Append a freshly captured drawing and (re)arm the debounced save. Atomic: E8 invokes this from
-     *  a per-stroke `Dispatchers.Default` coroutine (off-main JNI capture), so concurrent strokes
-     *  racing a plain read-modify-write on `_drawings.value` could drop one — `update` avoids that. */
-    fun addDrawing(drawing: DrawingAnchorWire) {
-        _drawings.update { it + drawing }
-        saveController.drawingsChanged(_drawings.value)
+    /**
+     * All annotation-layer mutations funnel through here so history and persistence stay in lock-step
+     * with the one `_drawings` write. `updateAndGet` captures the pre-mutation layer atomically:
+     * E8 invokes [addDrawing] from a per-stroke `Dispatchers.Default` coroutine (off-main JNI capture),
+     * so a plain read-modify-write on `_drawings.value` could race a concurrent stroke and drop one.
+     */
+    private fun applyDrawings(
+        pushHistory: Boolean,
+        persist: Boolean,
+        transform: (List<DrawingAnchorWire>) -> List<DrawingAnchorWire>,
+    ) {
+        var previous: List<DrawingAnchorWire>? = null
+        val updated = _drawings.updateAndGet { current ->
+            previous = current
+            transform(current)
+        }
+        if (pushHistory) previous?.let(history::push)
+        if (persist) saveController.drawingsChanged(updated)
+        _canUndo.value = history.canUndo
+        _canRedo.value = history.canRedo
     }
 
-    /** Remove a drawing (whole-stroke eraser) and re-arm save. Atomic for the same reason as [addDrawing]. */
+    /** Append a freshly captured drawing, push an undo entry, and (re)arm the debounced save. */
+    fun addDrawing(drawing: DrawingAnchorWire) {
+        applyDrawings(pushHistory = true, persist = true) { it + drawing }
+    }
+
+    /** Remove a drawing (whole-stroke eraser), push an undo entry, and re-arm save. */
     fun removeDrawing(index: Int) {
-        _drawings.update { list -> list.filterIndexed { i, _ -> i != index } }
-        saveController.drawingsChanged(_drawings.value)
+        applyDrawings(pushHistory = true, persist = true) { l -> l.filterIndexed { i, _ -> i != index } }
+    }
+
+    /**
+     * Snapshot the current layer as a single undo entry before a multi-step gesture (e.g. a
+     * partial-erase drag) begins, so the whole gesture collapses to one undo step rather than one per
+     * intermediate mutation. Callers drive the gesture's own mutations through [applyDrawings] (or a
+     * dedicated method built on it) with `pushHistory = false`.
+     */
+    fun beginDrawingGesture() {
+        history.push(_drawings.value)
+        _canUndo.value = history.canUndo
+        _canRedo.value = history.canRedo
+    }
+
+    /** Step the layer back one undo entry (a no-op when the undo stack is empty) and persist the result. */
+    fun undoDrawings() {
+        val restored = history.undo(_drawings.value) ?: return
+        applyDrawings(pushHistory = false, persist = true) { restored }
+    }
+
+    /** Step the layer forward one redo entry (a no-op when the redo stack is empty) and persist the result. */
+    fun redoDrawings() {
+        val restored = history.redo(_drawings.value) ?: return
+        applyDrawings(pushHistory = false, persist = true) { restored }
     }
 
     /** Immediate write (call from onPause / score-swap). */
