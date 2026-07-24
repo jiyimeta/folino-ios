@@ -80,12 +80,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationDryOverlay
+import com.keynumber.folino.reader.ink.AnnotationEraseController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationTool
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
 import com.keynumber.folino.reader.ink.AnnotationWetOverlay
+import com.keynumber.folino.reader.ink.ErasePhase
 import com.keynumber.folino.reader.ink.InkBrushMapping
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
@@ -126,19 +128,9 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
  * than passing under it. Only applied while the seek bar is off (the FAB is shown). */
 private val fabClusterReservedHeight = 72.dp
 
-/** Fixed brush size (document-mm world unit) for the pen tool — MVP has no width slider (deferred). */
-private const val ANNOTATION_BASE_WIDTH_SP = 1.2f
-
-/** 0xRRGGBBAA (our neutral annotation color model, matching [InkBrushMapping.colorInt]'s convention) -> Compose [Color]. */
-private fun rgbaLongToColor(rgba: Long): Color {
-    val r = ((rgba shr 24) and 0xFF).toInt()
-    val g = ((rgba shr 16) and 0xFF).toInt()
-    val b = ((rgba shr 8) and 0xFF).toInt()
-    val a = (rgba and 0xFF).toInt()
-    return Color(r, g, b, a)
-}
-
-/** Compose [Color] -> 0xRRGGBBAA Long. */
+/** Compose [Color] -> 0xRRGGBBAA Long (our neutral annotation color model, matching
+ * [InkBrushMapping.colorInt]'s convention) — turns a toolbar palette swatch into the wire color the
+ * capture/brush pipeline expects. */
 private fun Color.toRgbaLong(): Long {
     val r = (red * 255).toInt().coerceIn(0, 255).toLong()
     val g = (green * 255).toInt().coerceIn(0, 255).toLong()
@@ -244,26 +236,51 @@ fun ReaderScreen(
     // hit-test must reuse this exact blob (its hidden-staff set) so re-addressing stays in lockstep.
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
-    // Annotation (Sub-plan E, VERTICAL mode only for this MVP). `annotationColor`/`annotationTool`
-    // are the toolbar's live selection; `drawings` is the committed layer rendered by the dry
-    // overlay + persisted by the VM's debounced save.
+    // Annotation (Sub-plan E, VERTICAL mode only for this MVP). `toolState` is the toolbar's live
+    // selection (Task 8: held in the VM, mirroring `layoutOptions`/`setLayoutOptions` — no persistence
+    // yet, that lands in Task 9); `drawings` is the committed layer rendered by the dry overlay and
+    // persisted by the VM's debounced save; `canUndo`/`canRedo` gate the toolbar's undo/redo buttons.
     val annotationMode by readerVm.annotationMode.collectAsStateWithLifecycle()
     val drawings by readerVm.drawings.collectAsStateWithLifecycle()
-    var annotationColor by remember { mutableStateOf(0x000000FFL) } // 0xRRGGBBAA, default opaque black
-    val annotationTool = 0 // pen (Domain InkStroke.Tool.pen). Eraser/other tools deferred.
-    // TODO(Task 8): temporary adapter from the pre-existing `annotationColor` Long to the toolbar's
-    // AnnotationToolState — round-trips only the selected pen's color so the toolbar (Task 7) compiles
-    // against the drawing surface as it exists today. Width, per-pen width memory, eraser selection,
-    // and undo/redo all need the real ReaderViewModel-backed AnnotationToolState + history wiring that
-    // Task 8 adds; this stand-in is replaced wholesale then, not incrementally extended.
-    val annotationToolState = remember(annotationColor) {
-        val selectedIndex = AnnotationToolbarDefaults.DEFAULT_COLORS
-            .indexOf(rgbaLongToColor(annotationColor))
-            .let { if (it >= 0) it else 0 }
-        AnnotationToolState(selected = AnnotationTool.Pen(selectedIndex))
-    }
-    // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls).
+    val toolState by readerVm.toolState.collectAsStateWithLifecycle()
+    val canUndo by readerVm.canUndo.collectAsStateWithLifecycle()
+    val canRedo by readerVm.canRedo.collectAsStateWithLifecycle()
+    // The active pen's wire color (0xRRGGBBAA), derived from the toolbar palette index — used for both
+    // the wet-stroke brush (ReadyScore) and the committed capture below. Falls back to swatch 0 if the
+    // selected tool is the eraser (the brush is unused then; see ReadyScore's `annotationWidthMm` doc).
+    val penColorRGBA = AnnotationToolbarDefaults.DEFAULT_COLORS[
+        (toolState.selected as? AnnotationTool.Pen)?.colorIndex ?: 0
+    ].toRgbaLong()
+    // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls) and for
+    // AnnotationEraseController's calls in the eraser gesture handler below.
     val annotationScope = rememberCoroutineScope()
+
+    // Wet→dry ink handoff (see AnnotationHandoffQueue's own doc for why retention exists at all).
+    // Hoisted here rather than local to ReadyScore: the toolbar's undo/redo buttons live in this
+    // Scaffold's bottomBar — a sibling of ReadyScore, not a descendant — and the eraser gesture handler
+    // built below needs it too. Both must release every retained wet copy before they swap the
+    // annotation layer out from under it, or a not-yet-painted wet stroke could keep rendering for up
+    // to MAX_WET_RETENTION_MS after the drawing it belongs to was undone/erased. Passed down into
+    // ReadyScore as a parameter so the whole screen shares exactly one instance.
+    val inkHandoff = remember { AnnotationHandoffQueue<DrawingAnchorWire>() }
+
+    // Local chained erase-drag state (Task 8). `eraseWorkingAtBegin` is snapshotted ONCE at
+    // ErasePhase.BEGIN and never reassigned during the drag; every MOVE/END tick re-applies the FULL
+    // accumulated `erasePath` against this same BEGIN snapshot rather than chaining tick-to-tick onto
+    // the previous tick's own output — re-cutting a fixed base with the same path is stable across a
+    // throttle's repeated ticks, whereas chaining forward would compound any per-tick geometry drift.
+    // `erasePath` accumulates the whole gesture's contiguous polyline per AnnotationWetOverlay's
+    // BEGIN/MOVE/END emission contract (see its class doc).
+    //
+    // KNOWN RACE (accepted, not solved here): an async pen-capture already in flight from a stroke
+    // drawn just before the user switches to the eraser can land (readerVm.addDrawing) mid-erase-drag.
+    // Because every erase tick re-publishes a whole-layer result derived from the BEGIN snapshot (which
+    // predates that capture), the NEXT erase publish silently overwrites the just-added stroke. The
+    // window requires a tool switch while a capture is still in flight, so it's narrow; closing it would
+    // mean threading capture completion through the same layer state the erase drag holds, which is a
+    // bigger change than this task's wiring scope — flagged here for the reviewer, not fixed.
+    var eraseWorkingAtBegin by remember { mutableStateOf<List<DrawingAnchorWire>>(emptyList()) }
+    var erasePath by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
     // For the content Box's width report below (its `onSizeChanged` is not a composable scope).
     val readerDensity = LocalDensity.current
@@ -475,20 +492,24 @@ fun ReaderScreen(
         bottomBar = {
             if (annotationMode && layoutMode == ReaderLayoutMode.VERTICAL) {
                 AnnotationToolbar(
-                    state = annotationToolState,
+                    state = toolState,
                     presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
-                    // TODO(Task 8): wire real canUndo/canRedo from ReaderViewModel's annotation history.
-                    canUndo = false,
-                    canRedo = false,
-                    onSelect = { tool ->
-                        if (tool is AnnotationTool.Pen) {
-                            annotationColor = AnnotationToolbarDefaults.DEFAULT_COLORS[tool.colorIndex].toRgbaLong()
-                        }
-                        // Eraser selection is a no-op until Task 8 wires the real tool/brush switch.
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    onSelect = { tool -> readerVm.setAnnotationToolState(toolState.copy(selected = tool)) },
+                    onWidthChange = { width ->
+                        readerVm.setAnnotationToolState(toolState.withWidthForSelected(width))
                     },
-                    onWidthChange = {}, // TODO(Task 8): persist per-tool width via AnnotationToolState.
-                    onUndo = {}, // TODO(Task 8): wire undo via ReaderViewModel's annotation history.
-                    onRedo = {}, // TODO(Task 8): wire redo via ReaderViewModel's annotation history.
+                    onUndo = {
+                        // A not-yet-painted wet stroke must not linger on the wet layer for
+                        // MAX_WET_RETENTION_MS after undo removes the drawing it belongs to.
+                        inkHandoff.releaseAll()
+                        readerVm.undoDrawings()
+                    },
+                    onRedo = {
+                        inkHandoff.releaseAll()
+                        readerVm.redoDrawings()
+                    },
                 )
             } else if (showSeekBar) {
                 TransportBar(
@@ -549,8 +570,76 @@ fun ReaderScreen(
                         annotationMode = annotationMode,
                         drawings = drawings,
                         layoutGeneration = layoutGeneration,
-                        annotationTool = annotationTool,
-                        annotationColorRGBA = annotationColor,
+                        annotationTool = 0, // pen (Domain InkStroke.Tool.pen) — the only wet-stroke tool.
+                        annotationColorRGBA = penColorRGBA,
+                        annotationWidthMm = toolState.activeWidth,
+                        eraserMode = toolState.selected is AnnotationTool.Eraser,
+                        onEraseGesture = { phase, pathMm ->
+                            // Defensive: AnnotationWetOverlay already latches eraserMode per-gesture at
+                            // ACTION_DOWN, so this should only ever fire while the eraser is selected —
+                            // this mirrors that guard rather than trusting the latch alone.
+                            if (toolState.selected is AnnotationTool.Eraser) {
+                                when (phase) {
+                                    ErasePhase.BEGIN -> {
+                                        // One undo entry covers the whole drag, not one per throttle
+                                        // tick — mirrors a whole pen stroke, which also gets one entry.
+                                        readerVm.beginDrawingGesture()
+                                        eraseWorkingAtBegin = drawings
+                                        erasePath = pathMm
+                                    }
+                                    ErasePhase.MOVE -> {
+                                        erasePath = erasePath + pathMm
+                                        val handle = scoreHandle
+                                        if (handle != null) {
+                                            val snapshot = eraseWorkingAtBegin
+                                            val path = erasePath
+                                            val radius = toolState.eraserWidth
+                                            annotationScope.launch(Dispatchers.Default) {
+                                                val outcome = AnnotationEraseController.applyErase(
+                                                    snapshot, handle, path, radius,
+                                                )
+                                                // null = native miss (e.g. nothing under the path
+                                                // yet) — leave the layer as the last successful tick
+                                                // published it rather than clobber it with nothing.
+                                                if (outcome != null) {
+                                                    withContext(Dispatchers.Main) {
+                                                        inkHandoff.releaseAll()
+                                                        readerVm.eraseInProgress(outcome.drawings)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ErasePhase.END -> {
+                                        erasePath = erasePath + pathMm
+                                        val handle = scoreHandle
+                                        if (handle != null) {
+                                            val snapshot = eraseWorkingAtBegin
+                                            val path = erasePath
+                                            val radius = toolState.eraserWidth
+                                            annotationScope.launch(Dispatchers.Default) {
+                                                val outcome = AnnotationEraseController.applyErase(
+                                                    snapshot, handle, path, radius,
+                                                )
+                                                if (outcome != null) {
+                                                    val reanchored = AnnotationEraseController.reanchor(
+                                                        outcome.drawings, outcome.changedIndices, handle,
+                                                    )
+                                                    withContext(Dispatchers.Main) {
+                                                        inkHandoff.releaseAll()
+                                                        readerVm.eraseCommitted(reanchored)
+                                                    }
+                                                }
+                                                // outcome == null here too: leave the layer as the last
+                                                // MOVE tick left it (or untouched, for a tap that never
+                                                // found anything under it).
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        inkHandoff = inkHandoff,
                         onStrokeCaptured = { stroke, onCommitted ->
                             // Capture chains 5 sync native JNI calls (E5-M3) — off the main thread, then
                             // hand the result back to the VM (StateFlow.value assignment is thread-safe).
@@ -563,9 +652,9 @@ fun ReaderScreen(
                                 annotationScope.launch(Dispatchers.Default) {
                                     val drawing = AnnotationCaptureController.capture(
                                         stroke = stroke,
-                                        tool = annotationTool,
-                                        colorRGBA = annotationColor,
-                                        baseWidthSp = ANNOTATION_BASE_WIDTH_SP,
+                                        tool = 0, // pen — the wet overlay never starts a stroke in eraser mode.
+                                        colorRGBA = penColorRGBA,
+                                        baseWidthSp = toolState.activeWidth,
                                         scoreHandle = handle,
                                     )
                                     drawing?.let { readerVm.addDrawing(it) }
@@ -717,6 +806,18 @@ private fun ReadyScore(
     layoutGeneration: Int = 0,
     annotationTool: Int = 0,
     annotationColorRGBA: Long = 0x000000FFL,
+    // Document-mm brush size for the pen tool, sourced from the toolbar's AnnotationToolState
+    // (ReaderScreen's `toolState.activeWidth`, Task 8). While the eraser is selected this still reads
+    // `activeWidth` (the eraser's width, not a pen preset) — harmless because the brush built from it
+    // is never drawn with in that mode (see `eraserMode` below), just kept non-null.
+    annotationWidthMm: Float = 1.2f,
+    // True while the eraser tool is selected — swaps the wet overlay from stroke-drawing to the
+    // partial-erase gesture path (see AnnotationWetOverlay's `eraserMode`).
+    eraserMode: Boolean = false,
+    onEraseGesture: (phase: ErasePhase, pathMm: List<Offset>) -> Unit = { _, _ -> },
+    // Shared with the Scaffold's bottomBar toolbar (undo/redo) one level up — see its declaration
+    // site in ReaderScreen for why this is hoisted rather than `remember`ed locally here.
+    inkHandoff: AnnotationHandoffQueue<DrawingAnchorWire>,
     onStrokeCaptured: (stroke: Stroke, onCommitted: (DrawingAnchorWire?) -> Unit) -> Unit =
         { _, onCommitted -> onCommitted(null) },
 ) {
@@ -744,10 +845,10 @@ private fun ReadyScore(
     // removal until the dry overlay has painted the committed stroke — otherwise the ink blinks out at
     // finger-up for the whole asynchronous commit. A retained copy is frozen at the transform captured when
     // the stroke finished, so a camera change retires it: a brief blink beats a stroke sitting at the old
-    // zoom over a rescaled score.
-    val inkHandoff = remember { AnnotationHandoffQueue<DrawingAnchorWire>() }
-    // Watched through snapshotFlow rather than as LaunchedEffect keys: `scale` changes every frame of a
-    // pinch, and keying on it would cancel and relaunch the effect just as often.
+    // zoom over a rescaled score. [inkHandoff] itself is a parameter now (hoisted to ReaderScreen — its
+    // declaration site there explains why), but this camera-retire watch stays here since it needs the
+    // local `scale` state. Watched through snapshotFlow rather than as LaunchedEffect keys: `scale`
+    // changes every frame of a pinch, and keying on it would cancel and relaunch the effect just as often.
     LaunchedEffect(Unit) {
         snapshotFlow { scale }.drop(1).collect { inkHandoff.releaseAll() }
     }
@@ -991,11 +1092,14 @@ private fun ReadyScore(
                                 setScale(fitPxPerMM * scale, fitPxPerMM * scale)
                             }
                         }
-                        val brush = remember(annotationTool, annotationColorRGBA) {
+                        // Re-keyed on color + width only (not `annotationTool`, which is fixed pen(0) for
+                        // every wet stroke — the eraser never starts one). While the eraser is selected
+                        // this still builds a valid brush from its (unused) width — see the parameter doc.
+                        val brush = remember(annotationColorRGBA, annotationWidthMm) {
                             InkBrushMapping.brushFor(
                                 annotationTool,
                                 annotationColorRGBA,
-                                widthSp = ANNOTATION_BASE_WIDTH_SP,
+                                widthSp = annotationWidthMm,
                             )
                         }
                         AnnotationWetOverlay(
@@ -1010,6 +1114,8 @@ private fun ReadyScore(
                             // handles the 2-finger gesture once the wet overlay cancels its stroke and
                             // returns `false` from ACTION_POINTER_DOWN — nothing further needed here.
                             onTwoFingerGesture = {},
+                            eraserMode = eraserMode,
+                            onEraseGesture = onEraseGesture,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(vertical = with(density) { vPadPx.toDp() }),

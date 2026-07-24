@@ -3,6 +3,7 @@ package com.keynumber.folino.reader
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.keynumber.folino.reader.ink.AnnotationToolState
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
 import io.github.jiyimeta.sheetmusic.ScoreHandle
@@ -365,6 +366,18 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleAnnotationMode() { _annotationMode.value = !_annotationMode.value }
     fun setAnnotationMode(on: Boolean) { _annotationMode.value = on }
 
+    // Toolbar tool-state selection (pen color/width, eraser width). Plain MutableStateFlow + setter,
+    // the same shape as [layoutOptions]/[setLayoutOptions] — no persistence here; Task 9 adds a
+    // DataStore-backed restore on top. Held in the VM (not the app layer) so it survives recomposition
+    // but resets on process death, which is acceptable for this task.
+    private val _toolState = MutableStateFlow(AnnotationToolState())
+    val toolState: StateFlow<AnnotationToolState> = _toolState.asStateFlow()
+
+    /** Push a new tool-state selection in from the toolbar. No persistence (Task 9). */
+    fun setAnnotationToolState(state: AnnotationToolState) {
+        _toolState.value = state
+    }
+
     /** Prime persistence for the score and rehydrate stored drawings into the dry overlay. */
     fun onAnnotationOpened(scoreId: String) {
         annotationDrawingsJob?.cancel()
@@ -449,6 +462,27 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
             _canUndo.value = history.canUndo
             _canRedo.value = history.canRedo
         }
+    }
+
+    /**
+     * Publish the layer mid-erase-drag: the eraser gesture handler (ReaderScreen) calls this once per
+     * throttle tick with the whole-layer result of re-cutting the BEGIN snapshot against the
+     * accumulated path. Neither a history entry ([beginDrawingGesture] already pushed the one entry
+     * that covers the whole drag) nor a persist (the drag isn't done yet — [eraseCommitted] persists
+     * the final state) — a plain pass-through to the shared [applyDrawings] choke point.
+     */
+    fun eraseInProgress(layer: List<DrawingAnchorWire>) {
+        applyDrawings(pushHistory = false, persist = false) { layer }
+    }
+
+    /**
+     * Publish the erase gesture's final layer at [com.keynumber.folino.reader.ink.ErasePhase.END]: still no
+     * new history entry (same reason as [eraseInProgress]), but DOES persist since this is the drag's
+     * terminal state — mirrors [addDrawing]/[removeDrawing]'s persist-on-commit, just without their
+     * own history push (the drag already has its one entry).
+     */
+    fun eraseCommitted(layer: List<DrawingAnchorWire>) {
+        applyDrawings(pushHistory = false, persist = true) { layer }
     }
 
     /**
