@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
@@ -23,6 +24,23 @@ import androidx.input.motionprediction.MotionEventPredictor
 private const val MAX_WET_RETENTION_MS = 2_000L
 
 /**
+ * Minimum span of the [MotionEvent.getEventTime] input timeline between two `MOVE`-phase
+ * [AnnotationWetOverlay.onEraseGesture] emissions. Batches the eraser path so downstream hit-testing
+ * (Tasks 6/8) runs at a steady cadence instead of once per touch sample.
+ */
+private const val ERASE_THROTTLE_MS = 50L
+
+/** Phase of an in-progress eraser gesture reported to [AnnotationWetOverlay.onEraseGesture]. */
+enum class ErasePhase { BEGIN, MOVE, END }
+
+/** Maps a screen-px point through [matrix] (the overlay's `screenToWorld`) to a document-mm [Offset]. */
+private fun mapToWorldMm(matrix: Matrix, x: Float, y: Float): Offset {
+    val pts = floatArrayOf(x, y)
+    matrix.mapPoints(pts)
+    return Offset(pts[0], pts[1])
+}
+
+/**
  * Wet capture overlay: an `AndroidView`-wrapped androidx.ink `InProgressStrokesView`, sibling of `ScorePage`
  * inside the sized content `Box` (its local coords == content-Box px, per the doc-mm `worldToScreen` transform
  * supplied by the caller). Routes per-pointer: the first finger or stylus draws a wet stroke. If that stroke
@@ -34,6 +52,12 @@ private const val MAX_WET_RETENTION_MS = 2_000L
  * [onStrokeFinished] also receives a `release` callback. Until it runs, androidx.ink keeps rendering the
  * finished stroke, which is what covers the asynchronous commit (see [AnnotationHandoffQueue]); the caller
  * runs it once the dry layer has painted the committed stroke.
+ *
+ * When [eraserMode] is true, the touch path above is bypassed entirely: no wet stroke is started, and the
+ * touched path (converted to document-mm) is instead batched to [onEraseGesture] — [ErasePhase.BEGIN] with
+ * the first point, throttled [ErasePhase.MOVE] batches at [ERASE_THROTTLE_MS] along the input timeline, and
+ * [ErasePhase.END] with the remainder on finger-up, a second pointer touching down, or a cancel. Actually
+ * erasing strokes is handled downstream by the caller — this overlay only reports the gesture.
  */
 @Composable
 fun AnnotationWetOverlay(
@@ -41,6 +65,8 @@ fun AnnotationWetOverlay(
     brush: Brush,
     onStrokeFinished: (stroke: Stroke, release: () -> Unit) -> Unit,
     onTwoFingerGesture: () -> Unit,
+    eraserMode: Boolean = false,
+    onEraseGesture: (phase: ErasePhase, pathMm: List<Offset>) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val screenToWorld = remember { Matrix() }
@@ -53,6 +79,8 @@ fun AnnotationWetOverlay(
     val currentBrush by rememberUpdatedState(brush)
     val currentOnStrokeFinished by rememberUpdatedState(onStrokeFinished)
     val currentOnTwoFinger by rememberUpdatedState(onTwoFingerGesture)
+    val currentEraserMode by rememberUpdatedState(eraserMode)
+    val currentOnEraseGesture by rememberUpdatedState(onEraseGesture)
 
     AndroidView(
         modifier = modifier,
@@ -61,6 +89,12 @@ fun AnnotationWetOverlay(
             val predictor = MotionEventPredictor.newInstance(view)
             val pointerToStroke = HashMap<Int, InProgressStrokeId>()
             var activeStylus = false
+
+            // Eraser-mode-only state: no wet stroke exists while erasing, so this is a simple point buffer
+            // rather than an androidx.ink stroke handle.
+            val eraseAccum = mutableListOf<Offset>()
+            var eraserPointerId = MotionEvent.INVALID_POINTER_ID
+            var lastEraseEmitTime = 0L
 
             view.addFinishedStrokesListener(object : InProgressStrokesFinishedListener {
                 override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
@@ -83,54 +117,104 @@ fun AnnotationWetOverlay(
             })
 
             view.setOnTouchListener { v, event ->
-                predictor.record(event)
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        v.requestUnbufferedDispatch(event)
-                        val pid = event.getPointerId(event.actionIndex)
-                        pointerToStroke[pid] = view.startStroke(event, pid, currentBrush, screenToWorld)
-                        activeStylus = event.getToolType(event.actionIndex) == MotionEvent.TOOL_TYPE_STYLUS
-                        true
+                if (currentEraserMode) {
+                    // Eraser mode never starts a wet stroke and never touches the predictor — there is
+                    // nothing androidx.ink-side to predict or record.
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            v.requestUnbufferedDispatch(event)
+                            eraserPointerId = event.getPointerId(event.actionIndex)
+                            eraseAccum.clear()
+                            lastEraseEmitTime = event.eventTime
+                            val p = mapToWorldMm(screenToWorld, event.x, event.y)
+                            currentOnEraseGesture(ErasePhase.BEGIN, listOf(p))
+                            true
+                        }
+                        MotionEvent.ACTION_POINTER_DOWN -> {
+                            // Mirrors the pen path's two-finger handoff: flush what's accumulated so far
+                            // (already-erased ink stays erased) and hand the gesture to the parent for
+                            // pan/zoom. The eraser has no stylus-always-erases rule.
+                            currentOnEraseGesture(ErasePhase.END, eraseAccum.toList())
+                            eraseAccum.clear()
+                            eraserPointerId = MotionEvent.INVALID_POINTER_ID
+                            false
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val idx = event.findPointerIndex(eraserPointerId)
+                            if (idx != -1) {
+                                eraseAccum.add(mapToWorldMm(screenToWorld, event.getX(idx), event.getY(idx)))
+                            }
+                            if (event.eventTime - lastEraseEmitTime >= ERASE_THROTTLE_MS) {
+                                currentOnEraseGesture(ErasePhase.MOVE, eraseAccum.toList())
+                                eraseAccum.clear()
+                                lastEraseEmitTime = event.eventTime
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            currentOnEraseGesture(ErasePhase.END, eraseAccum.toList())
+                            eraseAccum.clear()
+                            eraserPointerId = MotionEvent.INVALID_POINTER_ID
+                            true
+                        }
+                        MotionEvent.ACTION_CANCEL -> {
+                            currentOnEraseGesture(ErasePhase.END, eraseAccum.toList())
+                            eraseAccum.clear()
+                            eraserPointerId = MotionEvent.INVALID_POINTER_ID
+                            true
+                        }
+                        else -> false
                     }
-                    MotionEvent.ACTION_POINTER_DOWN -> {
-                        if (pointerToStroke.isNotEmpty() && activeStylus) {
-                            // Stylus is drawing (spec §6.4: stylus always draws) — reject the extra
-                            // finger/palm, keep the stroke.
-                            true // consume so the parent doesn't start pan/zoom
-                        } else {
-                            // Two fingers => navigate. Abort the wet stroke, hand the gesture to the parent.
+                } else {
+                    predictor.record(event)
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            v.requestUnbufferedDispatch(event)
+                            val pid = event.getPointerId(event.actionIndex)
+                            pointerToStroke[pid] = view.startStroke(event, pid, currentBrush, screenToWorld)
+                            activeStylus = event.getToolType(event.actionIndex) == MotionEvent.TOOL_TYPE_STYLUS
+                            true
+                        }
+                        MotionEvent.ACTION_POINTER_DOWN -> {
+                            if (pointerToStroke.isNotEmpty() && activeStylus) {
+                                // Stylus is drawing (spec §6.4: stylus always draws) — reject the extra
+                                // finger/palm, keep the stroke.
+                                true // consume so the parent doesn't start pan/zoom
+                            } else {
+                                // Two fingers => navigate. Abort the wet stroke, hand the gesture to the parent.
+                                pointerToStroke.values.forEach { view.cancelStroke(it, event) }
+                                pointerToStroke.clear()
+                                activeStylus = false
+                                currentOnTwoFinger()
+                                false
+                            }
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val predicted = predictor.predict()
+                            try {
+                                for (i in 0 until event.pointerCount) {
+                                    val sid = pointerToStroke[event.getPointerId(i)] ?: continue
+                                    view.addToStroke(event, event.getPointerId(i), sid, predicted)
+                                }
+                            } finally {
+                                predicted?.recycle()
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                            val pid = event.getPointerId(event.actionIndex)
+                            pointerToStroke.remove(pid)?.let { view.finishStroke(event, pid, it) }
+                            if (pointerToStroke.isEmpty()) activeStylus = false
+                            true
+                        }
+                        MotionEvent.ACTION_CANCEL -> {
                             pointerToStroke.values.forEach { view.cancelStroke(it, event) }
                             pointerToStroke.clear()
                             activeStylus = false
-                            currentOnTwoFinger()
-                            false
+                            true
                         }
+                        else -> false
                     }
-                    MotionEvent.ACTION_MOVE -> {
-                        val predicted = predictor.predict()
-                        try {
-                            for (i in 0 until event.pointerCount) {
-                                val sid = pointerToStroke[event.getPointerId(i)] ?: continue
-                                view.addToStroke(event, event.getPointerId(i), sid, predicted)
-                            }
-                        } finally {
-                            predicted?.recycle()
-                        }
-                        true
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
-                        val pid = event.getPointerId(event.actionIndex)
-                        pointerToStroke.remove(pid)?.let { view.finishStroke(event, pid, it) }
-                        if (pointerToStroke.isEmpty()) activeStylus = false
-                        true
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        pointerToStroke.values.forEach { view.cancelStroke(it, event) }
-                        pointerToStroke.clear()
-                        activeStylus = false
-                        true
-                    }
-                    else -> false
                 }
             }
             view
