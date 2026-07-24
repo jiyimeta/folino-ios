@@ -81,6 +81,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationDryOverlay
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
+import com.keynumber.folino.reader.ink.AnnotationTool
+import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
 import com.keynumber.folino.reader.ink.AnnotationWetOverlay
@@ -249,6 +251,17 @@ fun ReaderScreen(
     val drawings by readerVm.drawings.collectAsStateWithLifecycle()
     var annotationColor by remember { mutableStateOf(0x000000FFL) } // 0xRRGGBBAA, default opaque black
     val annotationTool = 0 // pen (Domain InkStroke.Tool.pen). Eraser/other tools deferred.
+    // TODO(Task 8): temporary adapter from the pre-existing `annotationColor` Long to the toolbar's
+    // AnnotationToolState — round-trips only the selected pen's color so the toolbar (Task 7) compiles
+    // against the drawing surface as it exists today. Width, per-pen width memory, eraser selection,
+    // and undo/redo all need the real ReaderViewModel-backed AnnotationToolState + history wiring that
+    // Task 8 adds; this stand-in is replaced wholesale then, not incrementally extended.
+    val annotationToolState = remember(annotationColor) {
+        val selectedIndex = AnnotationToolbarDefaults.DEFAULT_COLORS
+            .indexOf(rgbaLongToColor(annotationColor))
+            .let { if (it >= 0) it else 0 }
+        AnnotationToolState(selected = AnnotationTool.Pen(selectedIndex))
+    }
     // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls).
     val annotationScope = rememberCoroutineScope()
 
@@ -462,9 +475,20 @@ fun ReaderScreen(
         bottomBar = {
             if (annotationMode && layoutMode == ReaderLayoutMode.VERTICAL) {
                 AnnotationToolbar(
-                    color = rgbaLongToColor(annotationColor),
+                    state = annotationToolState,
                     presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
-                    onColorChange = { annotationColor = it.toRgbaLong() },
+                    // TODO(Task 8): wire real canUndo/canRedo from ReaderViewModel's annotation history.
+                    canUndo = false,
+                    canRedo = false,
+                    onSelect = { tool ->
+                        if (tool is AnnotationTool.Pen) {
+                            annotationColor = AnnotationToolbarDefaults.DEFAULT_COLORS[tool.colorIndex].toRgbaLong()
+                        }
+                        // Eraser selection is a no-op until Task 8 wires the real tool/brush switch.
+                    },
+                    onWidthChange = {}, // TODO(Task 8): persist per-tool width via AnnotationToolState.
+                    onUndo = {}, // TODO(Task 8): wire undo via ReaderViewModel's annotation history.
+                    onRedo = {}, // TODO(Task 8): wire redo via ReaderViewModel's annotation history.
                 )
             } else if (showSeekBar) {
                 TransportBar(
