@@ -60,6 +60,7 @@ import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.ReaderPipController
+import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.reader.toPref
@@ -508,6 +509,10 @@ private fun LibraryNavGraph(
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
+                // Annotation pen setup (Task 9): global DataStore-backed, mirroring the display-options
+                // split above — persisted here in the app module, the Reader module only ever sees the
+                // resolved AnnotationToolState via the prop/callback pair below.
+                val annotationToolState by prefs.annotationToolState.collectAsState(initial = AnnotationToolState())
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
                 // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
@@ -616,6 +621,8 @@ private fun LibraryNavGraph(
                     },
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
+                    annotationToolState = annotationToolState,
+                    onAnnotationToolStateChange = { s -> scope.launch { prefs.setAnnotationToolState(s) } },
                     globalA4ReferenceHz = globalA4Hz,
                     // Per-score playback scalars seeded from the bridge. tempoMultiplier == 0.0 ("none")
                     // and a4ReferenceHz == 0.0 ("inherit") are sentinels resolved to the engine default

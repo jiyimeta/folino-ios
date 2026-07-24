@@ -154,6 +154,17 @@ fun ReaderScreen(
     onShare: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
+    /** Persisted annotation pen setup (four pen widths, eraser width, selected tool), sourced from the
+     * app module's DataStore (Task 9). The VM's live `toolState` is the source of truth for the UI
+     * within a session — this value flows INTO the VM via `LaunchedEffect` below, mirroring how
+     * `displayOptions` flows into `setLayoutOptions`. Undo/redo history is session-only and never
+     * flows through this prop. */
+    annotationToolState: AnnotationToolState = AnnotationToolState(),
+    /** Persists the annotation pen setup on user change (selecting a tool, changing a width). The app
+     * module owns the DataStore write; this screen also updates the VM optimistically so the toolbar's
+     * selection ring / width reflect the change instantly rather than waiting on the DataStore
+     * round-trip. */
+    onAnnotationToolStateChange: (AnnotationToolState) -> Unit = {},
     /** Global A4 reference pitch default (Hz) from SettingsPrefs. Used for the inspector's cents-offset
      * readout (the per-score live value relative to the user's global tuning) and as the inherit value
      * when this score has no per-score A4 override. */
@@ -237,9 +248,12 @@ fun ReaderScreen(
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
     // Annotation (Sub-plan E, VERTICAL mode only for this MVP). `toolState` is the toolbar's live
-    // selection (Task 8: held in the VM, mirroring `layoutOptions`/`setLayoutOptions` — no persistence
-    // yet, that lands in Task 9); `drawings` is the committed layer rendered by the dry overlay and
-    // persisted by the VM's debounced save; `canUndo`/`canRedo` gate the toolbar's undo/redo buttons.
+    // selection (Task 8: held in the VM, mirroring `layoutOptions`/`setLayoutOptions`; Task 9: the
+    // `annotationToolState` prop above seeds it from DataStore on (re)compose, and the toolbar's
+    // onSelect/onWidthChange persist back through `onAnnotationToolStateChange` — see the two call
+    // sites below for the exact wiring); `drawings` is the committed layer rendered by the dry overlay
+    // and persisted by the VM's debounced save; `canUndo`/`canRedo` gate the toolbar's undo/redo
+    // buttons (undo/redo history is session-only, never persisted).
     val annotationMode by readerVm.annotationMode.collectAsStateWithLifecycle()
     val drawings by readerVm.drawings.collectAsStateWithLifecycle()
     val toolState by readerVm.toolState.collectAsStateWithLifecycle()
@@ -411,6 +425,12 @@ fun ReaderScreen(
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
     LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
 
+    // Push the persisted annotation pen setup into the VM (Task 9). DataStore is the source of truth
+    // across restarts; the toolbar's onSelect/onWidthChange below already write the VM optimistically,
+    // so when this later re-fires with the same value the setAnnotationToolState is idempotent — no
+    // feedback loop, because a StateFlow re-set to an equal value doesn't trigger any further collection.
+    LaunchedEffect(annotationToolState) { readerVm.setAnnotationToolState(annotationToolState) }
+
     val pipActive by ReaderPipController.isInPipMode.collectAsStateWithLifecycle()
     val playbackState by audioVm.state.collectAsStateWithLifecycle()
     // Gates the top-bar annotation toggle: disabled while playing (parity w/ iOS).
@@ -527,9 +547,20 @@ fun ReaderScreen(
                     presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
                     canUndo = canUndo,
                     canRedo = canRedo,
-                    onSelect = { tool -> readerVm.setAnnotationToolState(toolState.copy(selected = tool)) },
+                    // Optimistic VM write + persist callback (Task 9): update the VM immediately so the
+                    // toolbar's selection ring / width reflect the change on this frame — the DataStore
+                    // round-trip through onAnnotationToolStateChange -> MainActivity -> collectAsState ->
+                    // LaunchedEffect(annotationToolState) above would otherwise visibly lag by a frame or
+                    // more. That later re-set is idempotent (see the LaunchedEffect's own comment).
+                    onSelect = { tool ->
+                        val next = toolState.copy(selected = tool)
+                        readerVm.setAnnotationToolState(next)
+                        onAnnotationToolStateChange(next)
+                    },
                     onWidthChange = { width ->
-                        readerVm.setAnnotationToolState(toolState.withWidthForSelected(width))
+                        val next = toolState.withWidthForSelected(width)
+                        readerVm.setAnnotationToolState(next)
+                        onAnnotationToolStateChange(next)
                     },
                     onUndo = {
                         // A not-yet-painted wet stroke must not linger on the wet layer for
