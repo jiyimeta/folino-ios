@@ -24,7 +24,12 @@ data class AnnotationToolState(
     /** The width that applies to whichever tool is currently [selected]. */
     val activeWidth: Float
         get() = when (val tool = selected) {
-            is AnnotationTool.Pen -> penWidths[tool.colorIndex]
+            // Bounds-safe like every other palette-index lookup in this file (see AnnotationToolbar's
+            // `penWidths.getOrElse`) — a future restored `penWidths` shorter than the selected
+            // `colorIndex` degrades to the same-slot default rather than throwing.
+            is AnnotationTool.Pen -> penWidths.getOrElse(tool.colorIndex) {
+                AnnotationWidths.PEN_DEFAULTS[tool.colorIndex]
+            }
             AnnotationTool.Eraser -> eraserWidth
         }
 

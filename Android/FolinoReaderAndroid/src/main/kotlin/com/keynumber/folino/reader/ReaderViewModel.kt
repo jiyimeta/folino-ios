@@ -450,46 +450,41 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Snapshot the current layer as a single undo entry before a multi-step gesture (e.g. a
-     * partial-erase drag) begins, so the whole gesture collapses to one undo step rather than one per
-     * intermediate mutation. Callers drive the gesture's own mutations through [applyDrawings] (or a
-     * dedicated method built on it) with `pushHistory = false`. Reads `_drawings.value` and pushes it
-     * under [layerLock] so the snapshot can't race a concurrent layer write.
-     *
-     * Returns the exact snapshot it pushed, so a caller that needs a "gesture base" to mutate against
-     * (the eraser drag) can use THIS value instead of separately re-reading a composed/collected
-     * `drawings` state — the latter can lag the VM by a frame (Compose recomposition), which would let
-     * the gesture's base and the undo entry it's covered by silently diverge.
+     * Read-only snapshot of the current layer (VM truth), for a caller that needs a stable base to
+     * mutate against without triggering any of [applyDrawings]'s side effects — the eraser gesture's
+     * BEGIN uses this instead of a separately-collected `drawings` composable state (which can lag the
+     * VM by a frame) and instead of pushing a history entry up front (see [eraseInProgress]/
+     * [eraseCommitted] for why the push is now deferred to the first ACTUAL change). Reads under
+     * [layerLock] so the snapshot can't race a concurrent layer write.
      */
-    fun beginDrawingGesture(): List<DrawingAnchorWire> {
-        return synchronized(layerLock) {
-            val snapshot = _drawings.value
-            history.push(snapshot)
-            _canUndo.value = history.canUndo
-            _canRedo.value = history.canRedo
-            snapshot
-        }
-    }
+    fun currentDrawings(): List<DrawingAnchorWire> = synchronized(layerLock) { _drawings.value }
 
     /**
      * Publish the layer mid-erase-drag: the eraser gesture handler (ReaderScreen) calls this once per
-     * throttle tick with the whole-layer result of re-cutting the BEGIN snapshot against the
-     * accumulated path. Neither a history entry ([beginDrawingGesture] already pushed the one entry
-     * that covers the whole drag) nor a persist (the drag isn't done yet — [eraseCommitted] persists
-     * the final state) — a plain pass-through to the shared [applyDrawings] choke point.
+     * throttle tick that actually changed the layer (a tick whose `EraseResult.changedIndices` was
+     * non-empty — a miss publishes nothing at all, per spec: "changedIndices empty means the gesture did
+     * nothing: no save, no undo entry, no phase 2"). [pushHistory] is true only for the FIRST such
+     * changing tick of the gesture: [applyDrawings] pushes `_drawings.value` as it stood before this
+     * transform, which — since no changing publish preceded it — is exactly the pre-gesture base, so one
+     * call yields the one undo entry the whole drag should get. Never persists (the drag isn't done yet
+     * — [eraseCommitted] persists the final state); a plain pass-through to the shared [applyDrawings]
+     * choke point either way.
      */
-    fun eraseInProgress(layer: List<DrawingAnchorWire>) {
-        applyDrawings(pushHistory = false, persist = false) { layer }
+    fun eraseInProgress(pushHistory: Boolean, layer: List<DrawingAnchorWire>) {
+        applyDrawings(pushHistory = pushHistory, persist = false) { layer }
     }
 
     /**
-     * Publish the erase gesture's final layer at [com.keynumber.folino.reader.ink.ErasePhase.END]: still no
-     * new history entry (same reason as [eraseInProgress]), but DOES persist since this is the drag's
-     * terminal state — mirrors [addDrawing]/[removeDrawing]'s persist-on-commit, just without their
-     * own history push (the drag already has its one entry).
+     * Publish the erase gesture's final layer at [com.keynumber.folino.reader.ink.ErasePhase.END], but
+     * ONLY when the gesture actually changed something (an empty-`changedIndices` whiff publishes
+     * nothing — same spec line as [eraseInProgress]). [pushHistory] is true iff no earlier tick of this
+     * same gesture already pushed (mirrors [eraseInProgress]'s "first changing tick" rule — if every
+     * change happened at END with no changing MOVE before it, END's own publish IS that first tick).
+     * Always persists since this is the drag's terminal state — mirrors [addDrawing]/[removeDrawing]'s
+     * persist-on-commit, just with the history push made conditional instead of unconditional.
      */
-    fun eraseCommitted(layer: List<DrawingAnchorWire>) {
-        applyDrawings(pushHistory = false, persist = true) { layer }
+    fun eraseCommitted(pushHistory: Boolean, layer: List<DrawingAnchorWire>) {
+        applyDrawings(pushHistory = pushHistory, persist = true) { layer }
     }
 
     /**
