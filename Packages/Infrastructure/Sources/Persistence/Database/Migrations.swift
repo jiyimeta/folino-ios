@@ -19,6 +19,7 @@ enum AppMigrations {
         m.registerMigration("v11", migrate: migrateV11)
         m.registerMigration("v12", migrate: migrateV12)
         m.registerMigration("v13", migrate: migrateV13)
+        m.registerMigration("v14", migrate: migrateV14)
         return m
     }()
 
@@ -335,5 +336,18 @@ enum AppMigrations {
     /// backfill is required.
     private static func migrateV13(_ db: Database) throws {
         try db.execute(sql: "ALTER TABLE score_items ADD COLUMN muse_score_major_version INTEGER")
+    }
+
+    // MARK: - v14
+
+    /// Adds the "authored visibility seeded" marker to `reader_preferences`. `0` (false) means the Reader has not yet
+    /// applied the score's authored `<Part><show>` hidden staves to this row. Existing rows default to `0` so they get
+    /// the one-time back-fill on next open; rows the Reader seeds afterwards store `1`. Keeping user reveals sticky
+    /// across reopens relies on this flag — see `ReaderPreferencesStore.loadOrSeed`.
+    private static func migrateV14(_ db: Database) throws {
+        try db.execute(sql: """
+        ALTER TABLE reader_preferences
+        ADD COLUMN has_seeded_authored_visibility INTEGER NOT NULL DEFAULT 0
+        """)
     }
 }

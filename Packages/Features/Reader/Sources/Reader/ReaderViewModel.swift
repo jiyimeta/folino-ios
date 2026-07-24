@@ -373,9 +373,9 @@ final class ReaderViewModel {
         visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
     }
 
-    /// Internal so both load paths in `ReaderViewModel+Load.swift` can reach the preference / last-opened helpers.
-    func loadOrSeedPreferences() async {
-        let prefs = await preferencesStore.loadOrSeed()
+    /// Reachable from both load paths; `authoredHiddenStaves` (empty for PDFs) are seeded in `loadOrSeed`.
+    func loadOrSeedPreferences(authoredHiddenStaves: Set<StaffAddress> = []) async {
+        let prefs = await preferencesStore.loadOrSeed(authoredHiddenStaves: authoredHiddenStaves)
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
         masterVolumeModel.sync(from: prefs)

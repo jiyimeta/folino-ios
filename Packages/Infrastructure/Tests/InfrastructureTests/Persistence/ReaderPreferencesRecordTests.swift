@@ -52,6 +52,35 @@ struct ReaderPreferencesRecordTests {
         #expect(restored.hiddenStaves == hidden)
     }
 
+    @Test func `has-seeded-authored-visibility round trips through SQLite`() throws {
+        // Exercises the v14 `has_seeded_authored_visibility` column added by AppMigrations.all.
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+        let scoreID = ScoreItemID()
+        try queue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO score_items (id, title, local_file_name, content_hash,
+                    size_bytes, length_beats, default_tempo_bpm, added_at)
+                VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+                """,
+                arguments: [scoreID.rawValue.uuidString],
+            )
+        }
+        let prefs = ReaderPreferences(
+            scoreItemID: scoreID, staffSize: 14, hiddenStaves: [],
+            hasSeededAuthoredVisibility: true,
+        )
+        try queue.write { try ReaderPreferencesRecord(domain: prefs).save($0) }
+        let fetched = try queue.read {
+            try ReaderPreferencesRecord
+                .filter(Column("score_item_id") == scoreID.rawValue.uuidString)
+                .fetchOne($0)
+        }
+        let restored = try #require(fetched).toDomain()
+        #expect(restored.hasSeededAuthoredVisibility)
+    }
+
     @Test func `empty hidden set encodes as empty JSON`() {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
