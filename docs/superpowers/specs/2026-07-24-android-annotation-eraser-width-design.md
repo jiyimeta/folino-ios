@@ -6,12 +6,14 @@ Status: approved design, not yet implemented
 ## Problem
 
 The Android annotation toolbar shipped as a minimum: four fixed colour swatches and one hard-coded
-stroke width (`ANNOTATION_BASE_WIDTH_SP = 1.2f`). There is no eraser, no way to change the width, and
-no undo. iOS gets all three from the system `PKToolPicker` (`AnnotationCanvasView.swift:272`), so this
-is an Android parity gap rather than a new product capability.
+stroke width (`ANNOTATION_BASE_WIDTH_SP = 1.2f`, `ReaderScreen.kt:128`). There is no eraser, no way to
+change the width, and no undo. iOS gets all three from the system `PKToolPicker`
+(`AnnotationCanvasView.swift:272`), so this is an Android parity gap rather than a new product
+capability.
 
-Nothing about the stored ink format changes. Erasing rewrites the annotation layer into new
-`DrawingAnchorWire` values in the existing schema, so there is no migration.
+The stored ink format does not change. Erasing rewrites the annotation layer into new
+`DrawingAnchorWire` values in the existing schema, and Room stores one opaque blob per score
+(`RoomAnnotationStore.kt`), so more and smaller drawings are format-transparent. No migration.
 
 ## Scope
 
@@ -29,6 +31,10 @@ Out of scope:
 - iOS changes. `PKToolPicker` already provides an eraser and a width slider.
 - New tools (highlighter, pencil). The neutral model already carries them; the toolbar does not.
 - A custom colour picker. The palette stays the four fixed presets.
+
+Annotation mode is already restricted to the VERTICAL layout and to a non-playing Reader
+(`annotationEnabled` in `ReaderScreen.kt`). The eraser and the width picker inherit that restriction;
+PAGE and HORIZONTAL are untouched.
 
 ## Tool state
 
@@ -51,8 +57,9 @@ in `AnnotationToolbarDefaults.DEFAULT_COLORS`.
 
 ### Preset values
 
-Units are document-mm, the same world unit `InkBrushMapping.brushFor` already takes. One staff space
-is roughly 1.75mm, which is the scale to judge these against.
+Units are document-mm, the same world unit `InkBrushMapping.brushFor` already takes, and all preset
+values are **widths (diameters)**. The eraser's geometric radius is therefore `eraserWidth / 2`. One
+staff space is roughly 1.75mm, which is the scale to judge these against.
 
 | | Preset 1 | Preset 2 | Preset 3 | Preset 4 |
 | --- | --- | --- | --- | --- |
@@ -66,11 +73,16 @@ opens the picker. Treat both rows as starting values to be tuned by eye on devic
 
 `FolinoReaderAndroid` cannot depend on the app module's `SettingsPrefs` — that would invert the
 `app -> FolinoReaderAndroid` dependency, the same boundary the existing display-settings plumbing
-respects. Tool state therefore travels the identical route as `LayoutOptions`:
+respects. Tool state therefore travels the identical route as `LayoutOptions`, which is **props in, a
+callback out** rather than the app module touching the view model:
 
 1. The app module collects the DataStore flows and assembles an `AnnotationToolState`.
-2. It pushes the snapshot in with `readerVm.setAnnotationToolState(state)`.
-3. Toolbar edits go back out through a callback the app module persists.
+2. It passes that in as a `ReaderScreen` parameter, alongside an `onAnnotationToolStateChange`
+   callback — mirroring today's `displayOptions` / `onDisplayOptionsChange` pair in `MainActivity`.
+3. `ReaderScreen` pushes the snapshot into the view model from a `LaunchedEffect(toolState)`, exactly
+   as it already does for `setLayoutOptions` (`ReaderScreen.kt:351`). The app module never holds a
+   `ReaderViewModel` reference; the view model is a `viewModel()` default inside `ReaderScreen`.
+4. Toolbar edits go out through the callback, and the app module writes them to DataStore.
 
 Keys: `annotation_pen_width_0..3`, `annotation_eraser_width`, `annotation_selected_tool`.
 
@@ -83,9 +95,37 @@ implementation would be exactly the divergent reimplementation the repo's parity
 lands where the work actually has to happen: erasing rewrites the persisted, anchor-relative
 representation, which is a Domain concept, not an androidx.ink one.
 
-`AnnotationAnchoringCore` already supplies both halves of the round trip — `place(_:with:)` puts a
-stored stroke into document-mm, and `capture(strokes:using:)` takes document-mm strokes back to
-anchored `DrawingAnchor`s.
+`AnnotationAnchoringCore.place(_:with:)` already puts a stored stroke into document-mm, which is the
+half of the round trip the erase geometry needs.
+
+### The anchoring constraint, and the two-phase apply
+
+Re-anchoring cannot happen inside the erase call. `FolinoReaderJNI` depends only on `Domain`,
+`ReaderAnnotationCore`, swift-java and Wirelet (`Packages/Features/Reader/Package.swift:84-92`) — it
+has no access to swift-sheet-music, so it cannot resolve an anchor for a point. That is why the
+existing capture flow is Kotlin-orchestrated across four calls, with Kotlin resolving the anchor
+through ssm's `SheetMusicJNI` *before* handing prefetched values to Swift
+(`AnnotationCaptureController.kt`), and why `PrefetchedAnchorResolver` exists at all. A fragment's
+representative point is only known after the split, so it cannot be prefetched.
+
+Erase therefore applies in two phases:
+
+**Phase 1 — during the drag, throttled.** One `nativeAnnotationErase` call. Fragments **inherit the
+parent drawing's anchor**: the six anchor fields are copied unchanged and only `encodedDrawing` is
+replaced with the sliced stroke. Because the stored geometry is anchor-relative, an inherited-anchor
+fragment renders in exactly the place it was drawn — the inheritance is invisible until a reflow, and
+no reflow happens mid-drag.
+
+**Phase 2 — on `ACTION_UP`.** The strokes the gesture changed are re-anchored through the existing
+Kotlin capture pipeline, giving each fragment its own anchor. This is what makes the final state match
+iOS, where `canvasViewDrawingDidChange` hands the whole canvas back and re-captures it after any edit,
+erases included (`AnnotationCanvasView.swift:214-221`).
+
+Only the drawings the erase actually modified are re-anchored, not the whole layer: untouched drawings
+already carry correct anchors, and per-fragment anchor resolution costs one `nativeResolveAnchor` call
+each.
+
+### The erase call
 
 New file `Packages/Features/Reader/Sources/ReaderAnnotationCore/AnnotationEraseCore.swift`:
 
@@ -93,66 +133,84 @@ New file `Packages/Features/Reader/Sources/ReaderAnnotationCore/AnnotationEraseC
 public enum AnnotationEraseCore {
     public static func erase(
         _ drawings: [DrawingAnchor],
-        using resolver: AnchorResolving,
-        path: [CGPoint],      // eraser centreline, document-mm
+        transforms: [StrokeTransform?],   // from the existing display(_:using:) path
+        path: [CGPoint],                  // eraser centreline, document-mm
         radiusMm: Double
     ) -> EraseResult
 }
 
 public struct EraseResult {
     public let drawings: [DrawingAnchor]
-    public let changed: Bool
+    /// Indices into the RETURNED array whose geometry changed, so the caller knows what to re-anchor.
+    public let changedIndices: [Int]
 }
 ```
 
+Taking `transforms` rather than an `AnchorResolving` keeps the call honest about what it can do: it
+places and cuts, it does not resolve.
+
 Algorithm, per drawing:
 
-1. Resolve its `StrokeTransform` through the existing `display(_:using:)` path and `place()` the stroke
-   into document-mm.
-2. Mark point *i* erased when `distanceToPolyline(point_i, path) <= radiusMm + width[i] / 2`. Using the
-   stroke's own per-point width means a thick stroke erases when the eraser touches its edge, not only
-   its centreline, without needing androidx.ink's mesh geometry.
-3. Split the surviving indices into maximal contiguous runs. Drop runs shorter than two points — a
-   single-point remnant renders as nothing and would only clutter the layer.
-4. Then:
-   - no point erased: return the drawing unchanged, without re-anchoring, so an erase that misses
-     produces no diff;
-   - every point erased: drop the drawing;
-   - otherwise: slice every parallel array (`x`, `y`, `width`, `force`, `azimuth`, `altitude`,
-     `timeMillis`) per run into a new `InkStroke`, and `capture()` each run so every fragment gets its
-     own anchor.
+1. `place()` the stroke into document-mm using its transform. A drawing whose transform is `nil` or
+   whose `sp == 0` is unresolved this layout — it cannot be placed, so it is passed through untouched
+   and never erased.
+2. Mark a stroke **segment** erased when its distance to the eraser polyline is
+   `<= radiusMm + halfWidth`, where `halfWidth = max(width[i], baseWidthSp) / 2` after placement.
+   Testing segments rather than sample points matters: samples are spaced by drawing speed, and an
+   eraser crossing perpendicular between two samples of a fast stroke would otherwise erase neither
+   endpoint and appear to do nothing. Per-point `width[]` is currently 0 for every Android-authored
+   stroke (`InkStrokeSerialization.kt:24` writes 0 in v1), so `baseWidthSp` is the value that actually
+   carries the thickness today; taking the max keeps the test correct if per-point widths are
+   populated later.
+3. Split the surviving samples into maximal contiguous runs. Cuts land on sample boundaries, so an
+   erased edge can be up to one sample-interval ragged; that is accepted for v1.
+4. Drop runs shorter than two points. androidx.ink renders a single-input stroke as a dot, so keeping
+   them would leave stray dots along an erased path.
+5. Then:
+   - no segment erased: return the drawing unchanged and do not list it in `changedIndices`, so an
+     erase that misses produces no diff at all;
+   - every segment erased: drop the drawing;
+   - otherwise: slice the parallel arrays per run into a new `InkStroke`. `x`, `y` and `width` are
+     always present and stay index-aligned; `force`, `azimuth`, `altitude` and `timeMillis` may be
+     empty (`InkStroke.swift:27-28` — Android never populates `azimuth`/`altitude`,
+     `InkStrokeRawFields.swift`), and an empty array stays empty rather than being padded.
 
-`changed` is false when no drawing was touched, so a no-op erase neither marks the layer dirty nor
-pushes an undo entry.
+`changedIndices` empty means the gesture did nothing: no save, no undo entry, no phase 2.
 
 ### JNI
 
-One new entry point, symmetrical with the existing `nativeAnnotationDisplayTransforms`:
+One new entry point, alongside the existing `nativeAnnotationDisplayTransforms`:
 
 ```
-nativeAnnotationErase(drawingsBytes, refPointsBytes, eraseRequestBytes) -> [DrawingAnchorWire] bytes
+nativeAnnotationErase(drawingsBytes, transformsBytes, eraseRequestBytes) -> EraseResultWire bytes
 ```
 
-`eraseRequestBytes` is a new `@WireFormat` carrying the path points and the radius. List framing must
-use the Wirelet `Array: WireFormat` framing (varint byte-length plus length-delimited elements) that
-Swift's `[T](decoding:)` expects — not the observable `WireletList` framing. `AnnotationCaptureController`
-documents this trap in full; mis-framing makes the Swift decode throw and the call silently return
-empty.
+`eraseRequestBytes` is a new `@WireFormat` carrying the path points and the radius; `EraseResultWire`
+carries the new drawings plus `changedIndices`. Returning a struct rather than a bare list keeps the
+established "empty `Data` means the call failed" convention usable (`ReaderAnnotationJNI.kt:14-15`) —
+an empty result is a decode failure and must leave the layer alone, which is a different outcome from
+a successful erase that changed nothing.
+
+List framing must use the Wirelet `Array: WireFormat` framing (varint byte-length plus
+length-delimited elements) that Swift's `[T](decoding:)` expects — not the observable `WireletList`
+framing. `AnnotationCaptureController` documents this trap in full; mis-framing makes the Swift decode
+throw and the call silently return empty.
 
 ### Input handling
 
-While the eraser is selected, the wet overlay must not start an androidx.ink stroke. It instead
-collects the pointer path, converted to document-mm by the same `screenToWorld` matrix the pen path
-uses.
+While the eraser is selected, the wet overlay must not start an androidx.ink stroke. It collects the
+pointer path instead, converted to document-mm by the same `screenToWorld` matrix the pen path uses.
 
 Erase applies during the drag, not only on lift, because waiting until the finger comes up feels
-broken. Apply on a throttle — roughly every 50ms or every N points — with a final apply on
-`ACTION_UP`.
+broken. Apply on a throttle — roughly every 50ms or every N points — with the final apply and the
+phase-2 re-anchor on `ACTION_UP`.
 
-Each apply replaces the layer, which re-runs the dry overlay's placement recompute for every drawing.
-That is a real cost on a large layer and needs measuring on device. If it stutters, the fix is to
-re-place only the drawings the erase actually changed rather than the whole layer; that optimisation
-is deliberately deferred until there is a measurement justifying it.
+Gesture interruption: a second pointer going down (which today cancels the wet stroke and hands the
+gesture to the parent for pan/zoom, `AnnotationWetOverlay.kt`) and `ACTION_CANCEL` both **keep** what
+has already been erased and run phase 2. Erasing is incremental and already visible on screen;
+silently restoring it would be more surprising than keeping it, and the `ACTION_DOWN` undo entry makes
+it recoverable either way. A single tap is a one-point path, which erases a disc of the eraser's
+radius.
 
 ## Undo/redo
 
@@ -162,12 +220,31 @@ reference rather than a diff log.
 `ReaderViewModel` gains undo and redo stacks and funnels every mutation through one choke point:
 
 ```kotlin
-private fun applyDrawings(new: List<DrawingAnchorWire>, pushHistory: Boolean)
+private fun applyDrawings(
+    pushHistory: Boolean,
+    persist: Boolean,
+    transform: (List<DrawingAnchorWire>) -> List<DrawingAnchorWire>,
+)
 ```
 
-Drawing commits, erase applies, undo, redo, and rehydration all go through it, and it is the single
-place that calls `saveController.drawingsChanged`. Today that call is duplicated across `addDrawing`
-and `deleteDrawing`; consolidating removes the chance of a future mutation forgetting to save.
+Three details are load-bearing:
+
+- **It takes a transform, not a new list.** Pen commits land asynchronously from `Dispatchers.Default`
+  coroutines, which is why `addDrawing` uses an atomic `_drawings.update { it + drawing }` today. An
+  erase apply that wrote back a list captured at `ACTION_DOWN` would silently drop a pen stroke that
+  committed in between. Every mutation is a function of the current value, and erase applies chain off
+  the previous apply's output rather than off the gesture's opening snapshot.
+- **`persist` is separate from `pushHistory`.** Rehydration on score open must do neither, or opening
+  a score would arm a debounced save echoing back what was just loaded. Throttled erase applies push
+  no history and do not persist; `drawingsChanged` is called once per gesture, at `ACTION_UP`, after
+  phase 2. That keeps the "one place calls `drawingsChanged`" property while avoiding re-marshalling
+  the whole layer across JNI twenty times a second (`AnnotationSaveBridge.swift` decodes the full list
+  on every call; the debounce coalesces disk writes, not marshalling).
+- **It releases the wet→dry handoff queue.** `AnnotationHandoffQueue.onDryRendered` retires a retained
+  wet copy by matching the committed wire's identity against the rendered layer. Undo — or an erase —
+  removes that identity before the dry layer ever paints it, so the androidx.ink copy would keep
+  drawing an undone stroke for the full `MAX_WET_RETENTION_MS` (2s). Any mutation that is not a plain
+  append calls `releaseAll()`.
 
 Rules:
 
@@ -176,7 +253,10 @@ Rules:
 - Session-scoped. Both stacks clear when the score closes or the Reader is retargeted, and nothing is
   persisted.
 - Depth capped at 30 to bound memory.
-- A redo stack cleared by any new mutation.
+- Any new mutation clears the redo stack.
+
+Consolidating also removes today's duplicated `saveController.drawingsChanged` calls in `addDrawing`
+and `removeDrawing`.
 
 ## Toolbar
 
@@ -200,21 +280,36 @@ that UI placement follows platform convention while behaviour matches iOS.
 
 ## Testing
 
-- Swift unit tests for `AnnotationEraseCore`: a miss leaves the layer identical and reports
-  `changed == false`; an eraser crossing a stroke's middle yields two fragments; covering a whole
-  stroke drops it; single-point remnants are discarded; every parallel array stays the same length as
-  `x` after slicing; a thick stroke erases on an edge touch that misses its centreline.
-- Kotlin unit tests for the undo/redo stacks: one entry per gesture, redo cleared by a new mutation,
-  depth cap, stacks cleared on score change.
-- Kotlin unit tests for width preset mapping and the tool-state round trip through DataStore.
-- On-device verification: erase across a stroke and confirm the surviving fragments stay anchored
-  through a reflow; confirm the pen setup survives an app restart.
+Swift unit tests for `AnnotationEraseCore`:
+
+- A miss leaves the layer identical and returns empty `changedIndices`.
+- An eraser crossing a stroke's middle yields two fragments.
+- Covering a whole stroke drops it.
+- Single-point remnants are discarded.
+- An eraser crossing a segment between two distant samples still cuts it (the sparse-sampling case).
+- A thick stroke erases on an edge touch that misses its centreline, driven by `baseWidthSp`.
+- Present arrays stay index-aligned after slicing; absent optional channels stay empty.
+- A drawing with an unresolved transform passes through untouched.
+
+Kotlin unit tests:
+
+- Undo/redo: one entry per gesture, redo cleared by a new mutation, depth cap, stacks cleared on score
+  change.
+- `applyDrawings` composes correctly when a pen commit interleaves with an erase apply.
+- Width preset mapping and the tool-state round trip through DataStore.
+
+On-device verification: erase across a stroke and confirm the surviving fragments stay anchored
+through a reflow (the phase-2 re-anchor is what this proves); undo immediately after finger-up and
+confirm no ghost stroke lingers; confirm the pen setup survives an app restart.
 
 ## Risks
 
-- **Erase throughput.** Every throttled apply currently re-places the whole layer. Measure before
-  trusting it on a dense score.
-- **Fragment anchoring.** Each fragment re-anchors independently, so a fragment landing off-staff can
-  fail to resolve and be dropped. `capture()` already returns nothing for unresolvable strokes; the
-  erase path must treat that as "this fragment is gone" rather than losing the whole drawing.
+- **Erase throughput.** Every throttled apply re-places the whole layer in the dry overlay. Measure on
+  a dense score before trusting it. If it stutters, re-place only the drawings the erase changed —
+  `changedIndices` already carries what is needed.
+- **Phase-2 anchoring failures.** A fragment landing off-staff resolves to nothing, and `capture()`
+  returns nothing for it. The re-anchor pass must treat that as "this fragment is gone" and keep the
+  rest of the layer, never discarding a whole drawing because one of its fragments failed.
+- **Ragged cut edges.** Cuts land on sample boundaries, so a slow-sampled stroke can erase slightly
+  more or less than the eraser outline suggests.
 - **Preset values are guesses.** Both rows need a pass by eye on device.
