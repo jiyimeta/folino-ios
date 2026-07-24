@@ -575,65 +575,67 @@ fun ReaderScreen(
                         annotationWidthMm = toolState.activeWidth,
                         eraserMode = toolState.selected is AnnotationTool.Eraser,
                         onEraseGesture = { phase, pathMm ->
-                            // Defensive: AnnotationWetOverlay already latches eraserMode per-gesture at
-                            // ACTION_DOWN, so this should only ever fire while the eraser is selected —
-                            // this mirrors that guard rather than trusting the latch alone.
-                            if (toolState.selected is AnnotationTool.Eraser) {
-                                when (phase) {
-                                    ErasePhase.BEGIN -> {
-                                        // One undo entry covers the whole drag, not one per throttle
-                                        // tick — mirrors a whole pen stroke, which also gets one entry.
-                                        readerVm.beginDrawingGesture()
-                                        eraseWorkingAtBegin = drawings
-                                        erasePath = pathMm
-                                    }
-                                    ErasePhase.MOVE -> {
-                                        erasePath = erasePath + pathMm
-                                        val handle = scoreHandle
-                                        if (handle != null) {
-                                            val snapshot = eraseWorkingAtBegin
-                                            val path = erasePath
-                                            val radius = toolState.eraserWidth
-                                            annotationScope.launch(Dispatchers.Default) {
-                                                val outcome = AnnotationEraseController.applyErase(
-                                                    snapshot, handle, path, radius,
-                                                )
-                                                // null = native miss (e.g. nothing under the path
-                                                // yet) — leave the layer as the last successful tick
-                                                // published it rather than clobber it with nothing.
-                                                if (outcome != null) {
-                                                    withContext(Dispatchers.Main) {
-                                                        inkHandoff.releaseAll()
-                                                        readerVm.eraseInProgress(outcome.drawings)
-                                                    }
+                            // The eraser-selected check only gates BEGIN, not MOVE/END: once a gesture has
+                            // actually started (AnnotationWetOverlay's own per-gesture latch already
+                            // confirmed eraser mode at ACTION_DOWN), the overlay's contract guarantees
+                            // exactly one END for that BEGIN, and we must honor it even if the toolbar
+                            // switches tools mid-drag (e.g. a stylus erasing while the other hand taps a
+                            // pen swatch) — re-checking toolState at END would silently skip the persist
+                            // that drag is owed, stranding its result in memory only.
+                            when (phase) {
+                                ErasePhase.BEGIN -> if (toolState.selected is AnnotationTool.Eraser) {
+                                    // One undo entry covers the whole drag, not one per throttle
+                                    // tick — mirrors a whole pen stroke, which also gets one entry.
+                                    readerVm.beginDrawingGesture()
+                                    eraseWorkingAtBegin = drawings
+                                    erasePath = pathMm
+                                }
+                                ErasePhase.MOVE -> {
+                                    erasePath = erasePath + pathMm
+                                    val handle = scoreHandle
+                                    if (handle != null) {
+                                        val snapshot = eraseWorkingAtBegin
+                                        val path = erasePath
+                                        val radius = toolState.eraserWidth
+                                        annotationScope.launch(Dispatchers.Default) {
+                                            val outcome = AnnotationEraseController.applyErase(
+                                                snapshot, handle, path, radius,
+                                            )
+                                            // null = native miss (e.g. nothing under the path
+                                            // yet) — leave the layer as the last successful tick
+                                            // published it rather than clobber it with nothing.
+                                            if (outcome != null) {
+                                                withContext(Dispatchers.Main) {
+                                                    inkHandoff.releaseAll()
+                                                    readerVm.eraseInProgress(outcome.drawings)
                                                 }
                                             }
                                         }
                                     }
-                                    ErasePhase.END -> {
-                                        erasePath = erasePath + pathMm
-                                        val handle = scoreHandle
-                                        if (handle != null) {
-                                            val snapshot = eraseWorkingAtBegin
-                                            val path = erasePath
-                                            val radius = toolState.eraserWidth
-                                            annotationScope.launch(Dispatchers.Default) {
-                                                val outcome = AnnotationEraseController.applyErase(
-                                                    snapshot, handle, path, radius,
+                                }
+                                ErasePhase.END -> {
+                                    erasePath = erasePath + pathMm
+                                    val handle = scoreHandle
+                                    if (handle != null) {
+                                        val snapshot = eraseWorkingAtBegin
+                                        val path = erasePath
+                                        val radius = toolState.eraserWidth
+                                        annotationScope.launch(Dispatchers.Default) {
+                                            val outcome = AnnotationEraseController.applyErase(
+                                                snapshot, handle, path, radius,
+                                            )
+                                            if (outcome != null) {
+                                                val reanchored = AnnotationEraseController.reanchor(
+                                                    outcome.drawings, outcome.changedIndices, handle,
                                                 )
-                                                if (outcome != null) {
-                                                    val reanchored = AnnotationEraseController.reanchor(
-                                                        outcome.drawings, outcome.changedIndices, handle,
-                                                    )
-                                                    withContext(Dispatchers.Main) {
-                                                        inkHandoff.releaseAll()
-                                                        readerVm.eraseCommitted(reanchored)
-                                                    }
+                                                withContext(Dispatchers.Main) {
+                                                    inkHandoff.releaseAll()
+                                                    readerVm.eraseCommitted(reanchored)
                                                 }
-                                                // outcome == null here too: leave the layer as the last
-                                                // MOVE tick left it (or untouched, for a tap that never
-                                                // found anything under it).
                                             }
+                                            // outcome == null here too: leave the layer as the last
+                                            // MOVE tick left it (or untouched, for a tap that never
+                                            // found anything under it).
                                         }
                                     }
                                 }
