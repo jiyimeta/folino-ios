@@ -25,8 +25,8 @@ private const val MAX_WET_RETENTION_MS = 2_000L
 
 /**
  * Minimum span of the [MotionEvent.getEventTime] input timeline between two `MOVE`-phase
- * [AnnotationWetOverlay.onEraseGesture] emissions. Batches the eraser path so downstream hit-testing
- * (Tasks 6/8) runs at a steady cadence instead of once per touch sample.
+ * [AnnotationWetOverlay.onEraseGesture] emissions. Batches the eraser path so the erase consumer runs at a
+ * steady cadence instead of once per touch sample.
  */
 private const val ERASE_THROTTLE_MS = 50L
 
@@ -57,7 +57,11 @@ private fun mapToWorldMm(matrix: Matrix, x: Float, y: Float): Offset {
  * touched path (converted to document-mm) is instead batched to [onEraseGesture] — [ErasePhase.BEGIN] with
  * the first point, throttled [ErasePhase.MOVE] batches at [ERASE_THROTTLE_MS] along the input timeline, and
  * [ErasePhase.END] with the remainder on finger-up, a second pointer touching down, or a cancel. Actually
- * erasing strokes is handled downstream by the caller — this overlay only reports the gesture.
+ * erasing strokes is handled downstream by the caller — this overlay only reports the gesture. Together the
+ * emissions form one contiguous polyline: [ErasePhase.BEGIN]'s point is not repeated in the first
+ * [ErasePhase.MOVE] batch, so the consumer must connect it to that batch's first point, and likewise connect
+ * each batch's last point to the next batch's first point. [eraserMode] is latched per gesture at
+ * `ACTION_DOWN`, so a tool switch mid-stroke takes effect on the next gesture rather than tearing this one.
  */
 @Composable
 fun AnnotationWetOverlay(
@@ -91,10 +95,14 @@ fun AnnotationWetOverlay(
             var activeStylus = false
 
             // Eraser-mode-only state: no wet stroke exists while erasing, so this is a simple point buffer
-            // rather than an androidx.ink stroke handle.
+            // rather than an androidx.ink stroke handle. `gestureIsErasing` is latched from `currentEraserMode`
+            // at ACTION_DOWN and then used for the rest of THIS gesture — see the class doc's note on why:
+            // re-reading currentEraserMode on every event would tear a gesture across branches if the tool is
+            // switched mid-stroke by a second pointer elsewhere on screen (e.g. a toolbar toggle).
             val eraseAccum = mutableListOf<Offset>()
             var eraserPointerId = MotionEvent.INVALID_POINTER_ID
             var lastEraseEmitTime = 0L
+            var gestureIsErasing = false
 
             view.addFinishedStrokesListener(object : InProgressStrokesFinishedListener {
                 override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
@@ -117,7 +125,12 @@ fun AnnotationWetOverlay(
             })
 
             view.setOnTouchListener { v, event ->
-                if (currentEraserMode) {
+                // Latch the mode for this gesture at its first pointer's DOWN only — see the class doc and
+                // the comment by `gestureIsErasing`'s declaration. Every other action below rides the latch.
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    gestureIsErasing = currentEraserMode
+                }
+                if (gestureIsErasing) {
                     // Eraser mode never starts a wet stroke and never touches the predictor — there is
                     // nothing androidx.ink-side to predict or record.
                     when (event.actionMasked) {
@@ -131,17 +144,34 @@ fun AnnotationWetOverlay(
                             true
                         }
                         MotionEvent.ACTION_POINTER_DOWN -> {
+                            if (eraserPointerId == MotionEvent.INVALID_POINTER_ID) {
+                                // Gesture already ended/handed off (e.g. a third pointer touching down
+                                // after the real handoff below) — don't emit a second END, just keep
+                                // falling through to the parent for pan/zoom.
+                                return@setOnTouchListener false
+                            }
                             // Mirrors the pen path's two-finger handoff: flush what's accumulated so far
                             // (already-erased ink stays erased) and hand the gesture to the parent for
-                            // pan/zoom. The eraser has no stylus-always-erases rule.
+                            // pan/zoom. The eraser has no stylus-always-erases rule. eraserPointerId is
+                            // cleared so the guards below on the still-live finger-1 events (Android keeps
+                            // delivering them to this view even after this arm returns false) turn into a
+                            // no-op instead of a duplicate END.
                             currentOnEraseGesture(ErasePhase.END, eraseAccum.toList())
                             eraseAccum.clear()
                             eraserPointerId = MotionEvent.INVALID_POINTER_ID
                             false
                         }
                         MotionEvent.ACTION_MOVE -> {
+                            if (eraserPointerId == MotionEvent.INVALID_POINTER_ID) return@setOnTouchListener true
                             val idx = event.findPointerIndex(eraserPointerId)
                             if (idx != -1) {
+                                // Batched historical samples first, so a fast drag doesn't coarsen the
+                                // polyline or skip gaps between MotionEvent deliveries.
+                                for (h in 0 until event.historySize) {
+                                    eraseAccum.add(
+                                        mapToWorldMm(screenToWorld, event.getHistoricalX(idx, h), event.getHistoricalY(idx, h)),
+                                    )
+                                }
                                 eraseAccum.add(mapToWorldMm(screenToWorld, event.getX(idx), event.getY(idx)))
                             }
                             if (event.eventTime - lastEraseEmitTime >= ERASE_THROTTLE_MS) {
@@ -151,13 +181,8 @@ fun AnnotationWetOverlay(
                             }
                             true
                         }
-                        MotionEvent.ACTION_UP -> {
-                            currentOnEraseGesture(ErasePhase.END, eraseAccum.toList())
-                            eraseAccum.clear()
-                            eraserPointerId = MotionEvent.INVALID_POINTER_ID
-                            true
-                        }
-                        MotionEvent.ACTION_CANCEL -> {
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            if (eraserPointerId == MotionEvent.INVALID_POINTER_ID) return@setOnTouchListener true
                             currentOnEraseGesture(ErasePhase.END, eraseAccum.toList())
                             eraseAccum.clear()
                             eraserPointerId = MotionEvent.INVALID_POINTER_ID
