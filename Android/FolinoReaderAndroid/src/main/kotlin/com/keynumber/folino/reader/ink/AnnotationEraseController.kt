@@ -14,7 +14,17 @@ import com.keynumber.folino.reader.StrokeTransformWireCodec
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 
 /** Phase-1 (`applyErase`) result: the layer after the cut, plus which indices are fragments that need Phase 2. */
-data class EraseOutcome(val drawings: List<DrawingAnchorWire>, val changedIndices: List<Int>)
+data class EraseOutcome(val drawings: List<DrawingAnchorWire>, val changedIndices: List<Int>) {
+    /**
+     * Whether applying this outcome actually changes a layer of [baseSize] (the pre-erase count).
+     * [changedIndices] flags only SPLIT/TRIMMED fragments — a fully-erased (dropped) stroke leaves nothing
+     * in it — so a gesture that only drops strokes has an empty [changedIndices] yet a genuinely shorter
+     * layer. The gesture handler must gate its publish on THIS, not on [changedIndices] alone: doing the
+     * latter silently discards a pure-drop gesture, which is what made a small remnant un-erasable no matter
+     * how hard the eraser scrubbed over it (a full cover is a drop, never a fragment).
+     */
+    fun changesLayer(baseSize: Int): Boolean = drawings.size != baseSize || changedIndices.isNotEmpty()
+}
 
 /**
  * Sequences the two-phase partial eraser. All the geometry (path-vs-stroke cut, anchor placement) lives

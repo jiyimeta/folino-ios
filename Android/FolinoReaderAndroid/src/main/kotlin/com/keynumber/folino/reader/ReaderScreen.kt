@@ -697,14 +697,15 @@ fun ReaderScreen(
                                             val outcome = AnnotationEraseController.applyErase(
                                                 snapshot, handle, path, radiusMm,
                                             )
-                                            // Publish only on an ACTUAL change: null = native miss, and an
-                                            // empty changedIndices = a real cut that hit nothing (a tick
-                                            // before the path reaches any stroke) — both are whiffs the spec
-                                            // says must leave the layer, undo history, and persistence alone.
-                                            // Once the path DOES reach a stroke, changedIndices stays
-                                            // non-empty for every later tick of the same gesture (the full
-                                            // path is re-cut against the fixed BEGIN base each time).
-                                            if (outcome != null && outcome.changedIndices.isNotEmpty()) {
+                                            // Publish only on an ACTUAL change: null = native miss, and a
+                                            // cut that hit nothing leaves the layer / undo history / save
+                                            // alone (spec whiff). "Changed" must count DROPS too, not just
+                                            // fragments — a fully-covered stroke is dropped with an empty
+                                            // changedIndices, so gating on changedIndices alone silently
+                                            // discarded pure-drop gestures and made small ink un-erasable.
+                                            // Once the path reaches any stroke, this stays true for every
+                                            // later tick (the full path is re-cut against the fixed BEGIN base).
+                                            if (outcome != null && outcome.changesLayer(snapshot.size)) {
                                                 withContext(Dispatchers.Main) {
                                                     // A newer gesture has since started (its BEGIN bumped
                                                     // eraseGeneration) — this MOVE's result is superseded and
@@ -747,27 +748,35 @@ fun ReaderScreen(
                                         val outcome = AnnotationEraseController.applyErase(
                                             snapshot, handle, path, radiusMm,
                                         )
-                                        // Same whiff rule as MOVE: reanchor only runs (and only means
-                                        // anything) when this cut actually changed the layer.
-                                        val reanchored = if (outcome != null && outcome.changedIndices.isNotEmpty()) {
-                                            AnnotationEraseController.reanchor(
-                                                outcome.drawings, outcome.changedIndices, handle,
-                                            )
+                                        // Same whiff rule as MOVE, and the same drop-aware "changed" test:
+                                        // a gesture that only DROPPED strokes has empty changedIndices but a
+                                        // shorter layer and must still commit — gating on changedIndices here
+                                        // was what left a scrubbed-out small remnant un-erased at END too.
+                                        // Re-anchoring only applies to fragments (there is nothing to re-anchor
+                                        // in a pure drop), so a drop-only cut commits outcome.drawings verbatim.
+                                        val committed = if (outcome != null && outcome.changesLayer(snapshot.size)) {
+                                            if (outcome.changedIndices.isNotEmpty()) {
+                                                AnnotationEraseController.reanchor(
+                                                    outcome.drawings, outcome.changedIndices, handle,
+                                                )
+                                            } else {
+                                                outcome.drawings
+                                            }
                                         } else {
                                             null
                                         }
                                         withContext(Dispatchers.Main) {
                                             if (gen == eraseGeneration) {
-                                                if (reanchored != null) {
+                                                if (committed != null) {
                                                     // True only if no earlier tick of THIS gesture already
                                                     // pushed — e.g. every change happened right at END, with
                                                     // no changing MOVE before it.
                                                     val push = !eraseHistoryPushed
                                                     if (push) eraseHistoryPushed = true
                                                     inkHandoff.releaseAll()
-                                                    readerVm.eraseCommitted(push, reanchored)
+                                                    readerVm.eraseCommitted(push, committed)
                                                 }
-                                                // reanchored == null: a whole-gesture whiff (native miss, or a
+                                                // committed == null: a whole-gesture whiff (native miss, or a
                                                 // cut that never touched anything) — per spec, publish
                                                 // NOTHING: no save, no undo entry, no phase 2. The layer stays
                                                 // exactly as the last changing MOVE tick left it (or untouched,

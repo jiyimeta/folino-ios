@@ -461,9 +461,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Publish the layer mid-erase-drag: the eraser gesture handler (ReaderScreen) calls this once per
-     * throttle tick that actually changed the layer (a tick whose `EraseResult.changedIndices` was
-     * non-empty — a miss publishes nothing at all, per spec: "changedIndices empty means the gesture did
-     * nothing: no save, no undo entry, no phase 2"). [pushHistory] is true only for the FIRST such
+     * throttle tick that actually changed the layer (`EraseOutcome.changesLayer` — a split/trim OR a
+     * full-cover drop; a miss publishes nothing at all, per spec: "the gesture did nothing: no save, no
+     * undo entry, no phase 2"). [pushHistory] is true only for the FIRST such
      * changing tick of the gesture: [applyDrawings] pushes `_drawings.value` as it stood before this
      * transform, which — since no changing publish preceded it — is exactly the pre-gesture base, so one
      * call yields the one undo entry the whole drag should get. Never persists (the drag isn't done yet
@@ -476,7 +476,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Publish the erase gesture's final layer at [com.keynumber.folino.reader.ink.ErasePhase.END], but
-     * ONLY when the gesture actually changed something (an empty-`changedIndices` whiff publishes
+     * ONLY when the gesture actually changed something (a whiff that changed no drawing publishes
      * nothing — same spec line as [eraseInProgress]). [pushHistory] is true iff no earlier tick of this
      * same gesture already pushed (mirrors [eraseInProgress]'s "first changing tick" rule — if every
      * change happened at END with no changing MOVE before it, END's own publish IS that first tick).
