@@ -667,14 +667,104 @@ git commit -m "feat(reader-android): collect an eraser path in the wet overlay"
 
 ---
 
-## Task 6: The two-phase erase controller
+## Task 6a: The `place` JNI entry (shared-Swift geometry for phase 2)
+
+**Why this exists:** phase-2 re-anchoring must convert a fragment's stored (anchor-relative sp)
+geometry into document-mm before the existing capture pipeline can resolve a fresh anchor for it.
+That conversion is `AnnotationAnchoringCore.place` (scales coords AND widths AND `baseWidthSp` by
+`sp`, then translates) — shared Swift. `FolinoReaderJNI` has no existing `place` entry, and doing the
+scaling in Kotlin would be the divergent reimplementation the parity rule forbids. So expose `place`
+over JNI, exactly like Task 2 exposed `erase`.
+
+**Files:**
+- Modify: `Packages/Features/Reader/Sources/FolinoReaderJNI/AnnotationJNISymbols.swift`
+- Modify: `Android/FolinoReaderAndroid/src/main/kotlin/com/keynumber/folino/reader/ReaderAnnotationJNI.kt`
+
+**Interfaces:**
+- Consumes: `AnnotationAnchoringCore.place`, `StrokeTransform`, `InkStrokeCodec` (existing);
+  `StrokeTransformWire` (existing wire type — reused as the transform arg, no new wire type needed).
+- Produces: `ReaderAnnotationJNI.place(strokeBytes: ByteArray, transformBytes: ByteArray): ByteArray`
+  where `strokeBytes` is a neutral InkStroke FINK (anchor-relative, i.e. a `DrawingAnchorWire`'s
+  `encodedDrawing`), `transformBytes` is a `StrokeTransformWire`, and the result is a document-mm
+  InkStroke FINK (or empty on any decode failure).
+
+- [ ] **Step 1: Add the Swift entry**
+
+In `AnnotationJNISymbols.swift`, mirroring the existing `public func nativeAnnotation*` marshallers
+(Data-in / Data-out, empty `Data()` on any decode failure):
+
+```swift
+/// Place a stored (anchor-relative sp) InkStroke into document-mm using its display transform, so the
+/// caller can re-resolve an anchor for it (phase-2 erase re-anchoring). `strokeBytes` = neutral
+/// InkStroke FINK; `transformBytes` = `StrokeTransformWire`. Returns document-mm FINK, empty on a decode
+/// miss. A `sp == 0` transform (unresolved this layout) also returns empty — an unplaceable stroke.
+public func nativeAnnotationPlace(strokeBytes: Data, transformBytes: Data) -> Data {
+    guard let stroke = try? InkStrokeCodec.decode(strokeBytes),
+          let t = try? StrokeTransformWire(decoding: transformBytes),
+          t.sp != 0
+    else { return Data() }
+    let placed = AnnotationAnchoringCore.place(
+        stroke, with: StrokeTransform(sp: CGFloat(t.sp), px: CGFloat(t.px), py: CGFloat(t.py)),
+    )
+    return InkStrokeCodec.encode(placed)
+}
+```
+
+- [ ] **Step 2: Add the Kotlin facade**
+
+In `ReaderAnnotationJNI.kt`, matching the existing methods exactly:
+
+```kotlin
+/** Place an anchor-relative stored stroke into document-mm via its display transform. Empty = miss. */
+fun place(strokeBytes: ByteArray, transformBytes: ByteArray): ByteArray {
+    val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+    return SwiftJavaJNI.nativeAnnotationPlace(
+        SwiftData.fromByteArray(strokeBytes, arena),
+        SwiftData.fromByteArray(transformBytes, arena),
+        arena,
+    ).toByteArray()
+}
+```
+
+- [ ] **Step 3: Rebuild the `.so` and generated bindings**
+
+```bash
+Scripts/android-build-reader-libs.sh
+```
+
+Expected: `Build of product 'FolinoReaderJNI' complete!` and the staged bindings line. (If it fails
+with `attempt to write a readonly database`, `chmod -R u+w Packages/Features/Reader/.build/checkouts/swift-wirelet`
+first. If Kotlin compile later fails on `FolinoSoundfontAndroid` wirelet codegen in a fresh worktree,
+run `swift package resolve --package-path Packages/Infrastructure` once — an environment fix, not committed.)
+
+- [ ] **Step 4: Verify the symbol and Kotlin compile**
+
+```bash
+Android/gradlew -p Android :FolinoReaderAndroid:compileDebugKotlin
+```
+
+Expected: `BUILD SUCCESSFUL`, no unresolved `nativeAnnotationPlace`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Packages/Features/Reader/Sources/FolinoReaderJNI/AnnotationJNISymbols.swift Android/FolinoReaderAndroid/src/main/kotlin/com/keynumber/folino/reader/ReaderAnnotationJNI.kt
+git commit -m "feat(reader): bridge place() over JNI for erase re-anchoring"
+```
+
+---
+
+## Task 6b: The two-phase erase controller
 
 **Files:**
 - Create: `Android/FolinoReaderAndroid/src/main/kotlin/com/keynumber/folino/reader/ink/AnnotationEraseController.kt`
 
 **Interfaces:**
-- Consumes: `ReaderAnnotationJNI.erase` (Task 2), `AnnotationCaptureController.capture` (existing),
-  `SheetMusicJNI.nativeAnchorReferencePoint` (existing), the wire codecs.
+- Consumes: `ReaderAnnotationJNI.erase` (Task 2), `ReaderAnnotationJNI.place` (Task 6a),
+  `ReaderAnnotationJNI.displayTransforms` / `decodeInkStroke` (existing),
+  `SheetMusicJNI.nativeAnchorReferencePoint` (existing), `AnnotationCaptureController.capture`
+  (existing), `InkBrushMapping.brushFor` / `InkStrokeSerialization.toStroke` /
+  `RawInkStrokeWireCodec` (existing), the wire codecs + `encodeWireArray`/`decodeWireArray`.
 - Produces:
   ```kotlin
   object AnnotationEraseController {
@@ -697,26 +787,44 @@ git commit -m "feat(reader-android): collect an eraser path in the wet overlay"
   data class EraseOutcome(val drawings: List<DrawingAnchorWire>, val changedIndices: List<Int>)
   ```
 
-- [ ] **Step 1: Implement phase 1**
+- [ ] **Step 1: Implement phase 1 (`applyErase`)**
 
-Mirror `AnnotationCaptureController`'s sequencing and its comment discipline. Steps: build
-`ResolvedAnchorWire`s for every drawing exactly as `AnnotationDryOverlay.computePlacement` does, call
-`SheetMusicJNI.nativeAnchorReferencePoint`, call `ReaderAnnotationJNI.displayTransforms`, then call
-`ReaderAnnotationJNI.erase` with the transforms and the request. Empty bytes from any step → return
-`null`.
+Mirror `AnnotationDryOverlay.computePlacement`'s first half and `AnnotationCaptureController`'s comment
+discipline. Build a `ResolvedAnchorWire` per drawing (measure/tick/part/staff + dxSp/verticalOffsetSp),
+call `SheetMusicJNI.nativeAnchorReferencePoint(scoreHandle, encodeWireArray(identities, ...))`, call
+`ReaderAnnotationJNI.displayTransforms(encodeWireArray(drawings, ...), refBytes)`, then build the
+`EraseRequestWire` (xMm/yMm from `pathMm`, `radiusMm = radiusMm.toDouble()`) and call
+`ReaderAnnotationJNI.erase(encodeWireArray(drawings, ...), transformsBytes, encode(request))`. Empty
+bytes from ANY step → return `null` (caller leaves the layer untouched). Decode the `EraseResultWire`
+into `EraseOutcome(drawings, changedIndices)`.
 
-- [ ] **Step 2: Implement phase 2**
+- [ ] **Step 2: Implement phase 2 (`reanchor`)**
 
-For each changed index: decode the drawing's stroke to raw bytes (`decodeInkStroke`), place it into
-document-mm using the transform for its **current** anchor, then run the existing four-call capture
-pipeline on that document-mm stroke. A fragment whose capture returns empty is dropped — and only that
-fragment; the rest of the layer is untouched.
+The `changedIndices` index into the post-erase `drawings` (the fragments). Fragments inherited their
+parent's anchor, so recompute display transforms for THIS layer first (same ref+displayTransforms pair
+as phase 1, on `drawings`). Then, for each `j` in `changedIndices`:
+
+1. `t = transforms[j]`; if `t.sp == 0.0` the fragment is unresolved this layout — leave it as-is
+   (keep the inherited anchor), do not attempt to re-anchor.
+2. `docFink = ReaderAnnotationJNI.place(drawings[j].encodedDrawing, encode(t))`. Empty → drop this
+   fragment (remove it from the result).
+3. Rebuild a document-mm androidx.ink `Stroke` from `docFink` exactly as `computePlacement` does:
+   `raw = decodeInkStroke(docFink)`; `rw = RawInkStrokeWireCodec.decode(raw)`;
+   `brush = InkBrushMapping.brushFor(rw.tool.toInt(), rw.colorRGBA.toLong(), rw.baseWidthSp.toFloat())`;
+   `stroke = InkStrokeSerialization.toStroke(raw, brush)`.
+4. `recaptured = AnnotationCaptureController.capture(stroke, rw.tool.toInt(), rw.colorRGBA.toLong(), rw.baseWidthSp.toFloat(), scoreHandle)`.
+   Non-null → replace `drawings[j]` with it. Null (off-staff / unresolvable) → drop ONLY this fragment.
+
+Build the result as a new list: unchanged indices pass through verbatim; changed indices are replaced
+or removed. A dropped fragment must never take the rest of the layer with it.
 
 - [ ] **Step 3: Verify it compiles**
 
 ```bash
 Android/gradlew -p Android :FolinoReaderAndroid:compileDebugKotlin
 ```
+
+Expected: `BUILD SUCCESSFUL`.
 
 - [ ] **Step 4: Commit**
 
