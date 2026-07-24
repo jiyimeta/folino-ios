@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -207,7 +206,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         loadedScoreId = scoreId
         // A different score means the undo/redo history belongs to a layer that's about to be replaced;
         // history is session-scoped per score and must not carry entries across the retarget.
-        history.clear()
+        resetHistory()
         // Suspend the layout recompute until the new score's handle is published. The recompute loop
         // skips while the handle is null, so the last Ready(program) keeps rendering unchanged — without
         // this, the incoming score's per-score display options (e.g. staff size) would briefly re-lay-out
@@ -339,6 +338,17 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     // see [onAnnotationOpened] and [load] — never persisted).
     private val history = DrawingHistory<DrawingAnchorWire>()
 
+    // Guards every read-modify-write of the annotation layer as one atomic critical section: the
+    // `_drawings` value, the `history` push/undo/redo, and the `_canUndo`/`_canRedo` publish all move
+    // together. `addDrawing` is invoked from a per-stroke `Dispatchers.Default` coroutine (off-main JNI
+    // capture) racing this VM's main-thread callers (undo/redo taps, whole-stroke erase) — without a lock
+    // spanning the whole decide-then-write, a concurrent pen commit can land between an undo/redo's read
+    // of `_drawings.value` and its write of the restored layer (TOCTOU), or a history push can observe a
+    // layer that a racing writer already moved past. `DrawingHistory` itself is NOT internally
+    // synchronized: every access to `history` in this class happens inside `synchronized(layerLock)`, so
+    // the single external lock is sufficient and double-locking would just add overhead.
+    private val layerLock = Any()
+
     private val _canUndo = MutableStateFlow(false)
     val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
 
@@ -365,35 +375,55 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
             saveController.loadedDrawings.collect { wires ->
                 // Rehydration is a fresh score's layer, not an undoable step: neither push history (there
                 // is no prior in-session layer to undo back to) nor persist (that would echo a save of
-                // exactly what was just loaded). Clear history BEFORE the apply, not after: applyDrawings
-                // reads history.canUndo/canRedo to publish _canUndo/_canRedo, and clearing afterward would
-                // leave those StateFlows reporting a stale true from the score being replaced.
-                history.clear()
+                // exactly what was just loaded). Reset history BEFORE the apply, not after: applyDrawings
+                // publishes _canUndo/_canRedo from history's state under the same lock, and resetting
+                // afterward would leave a window where those StateFlows still reflect the score being
+                // replaced.
+                resetHistory()
                 applyDrawings(pushHistory = false, persist = false) { wires }
             }
         }
     }
 
     /**
-     * All annotation-layer mutations funnel through here so history and persistence stay in lock-step
-     * with the one `_drawings` write. `updateAndGet` captures the pre-mutation layer atomically:
-     * E8 invokes [addDrawing] from a per-stroke `Dispatchers.Default` coroutine (off-main JNI capture),
-     * so a plain read-modify-write on `_drawings.value` could race a concurrent stroke and drop one.
+     * Clears the undo/redo history and republishes `_canUndo`/`_canRedo` as one atomic step under
+     * [layerLock] — used whenever the in-session history stops applying to the current layer (a
+     * rehydrate in [onAnnotationOpened], a score retarget in [load]). Does not touch `_drawings` itself;
+     * callers that also need to replace the layer do that via a following [applyDrawings] call.
+     */
+    private fun resetHistory() {
+        synchronized(layerLock) {
+            history.clear()
+            _canUndo.value = false
+            _canRedo.value = false
+        }
+    }
+
+    /**
+     * All annotation-layer mutations funnel through here so the `_drawings` write, the history
+     * push, and the `_canUndo`/`_canRedo` publish happen as one atomic critical section under
+     * [layerLock] — without it, a per-stroke `Dispatchers.Default` coroutine committing a pen stroke
+     * (E8's [addDrawing] call) could interleave with a concurrent mutation and either drop a stroke or
+     * push a history entry against a layer a racing writer already moved past. `drawingsChanged` is
+     * deliberately called OUTSIDE the lock (it decodes the whole layer across JNI — no need to hold the
+     * lock for that), using `updated` captured from inside the lock so the persisted value matches
+     * exactly the transition that was just committed.
      */
     private fun applyDrawings(
         pushHistory: Boolean,
         persist: Boolean,
         transform: (List<DrawingAnchorWire>) -> List<DrawingAnchorWire>,
     ) {
-        var previous: List<DrawingAnchorWire>? = null
-        val updated = _drawings.updateAndGet { current ->
-            previous = current
-            transform(current)
+        val updated = synchronized(layerLock) {
+            val previous = _drawings.value
+            val next = transform(previous)
+            _drawings.value = next
+            if (pushHistory) history.push(previous)
+            _canUndo.value = history.canUndo
+            _canRedo.value = history.canRedo
+            next
         }
-        if (pushHistory) previous?.let(history::push)
         if (persist) saveController.drawingsChanged(updated)
-        _canUndo.value = history.canUndo
-        _canRedo.value = history.canRedo
     }
 
     /** Append a freshly captured drawing, push an undo entry, and (re)arm the debounced save. */
@@ -410,24 +440,49 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * Snapshot the current layer as a single undo entry before a multi-step gesture (e.g. a
      * partial-erase drag) begins, so the whole gesture collapses to one undo step rather than one per
      * intermediate mutation. Callers drive the gesture's own mutations through [applyDrawings] (or a
-     * dedicated method built on it) with `pushHistory = false`.
+     * dedicated method built on it) with `pushHistory = false`. Reads `_drawings.value` and pushes it
+     * under [layerLock] so the snapshot can't race a concurrent layer write.
      */
     fun beginDrawingGesture() {
-        history.push(_drawings.value)
-        _canUndo.value = history.canUndo
-        _canRedo.value = history.canRedo
+        synchronized(layerLock) {
+            history.push(_drawings.value)
+            _canUndo.value = history.canUndo
+            _canRedo.value = history.canRedo
+        }
     }
 
-    /** Step the layer back one undo entry (a no-op when the undo stack is empty) and persist the result. */
+    /**
+     * Step the layer back one undo entry (a no-op when the undo stack is empty) and persist the result.
+     * The read of `_drawings.value`, the `history.undo` decision, and the write of the restored layer
+     * all happen inside one [layerLock] section so a concurrent pen commit can't land between "decide"
+     * and "write" (the TOCTOU a lock-free version would have).
+     */
     fun undoDrawings() {
-        val restored = history.undo(_drawings.value) ?: return
-        applyDrawings(pushHistory = false, persist = true) { restored }
+        val restored = synchronized(layerLock) {
+            val current = _drawings.value
+            val previous = history.undo(current) ?: return
+            _drawings.value = previous
+            _canUndo.value = history.canUndo
+            _canRedo.value = history.canRedo
+            previous
+        }
+        saveController.drawingsChanged(restored)
     }
 
-    /** Step the layer forward one redo entry (a no-op when the redo stack is empty) and persist the result. */
+    /**
+     * Step the layer forward one redo entry (a no-op when the redo stack is empty) and persist the
+     * result. Same single-critical-section shape as [undoDrawings].
+     */
     fun redoDrawings() {
-        val restored = history.redo(_drawings.value) ?: return
-        applyDrawings(pushHistory = false, persist = true) { restored }
+        val restored = synchronized(layerLock) {
+            val current = _drawings.value
+            val next = history.redo(current) ?: return
+            _drawings.value = next
+            _canUndo.value = history.canUndo
+            _canRedo.value = history.canRedo
+            next
+        }
+        saveController.drawingsChanged(restored)
     }
 
     /** Immediate write (call from onPause / score-swap). */
