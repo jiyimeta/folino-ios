@@ -301,6 +301,17 @@ fun ReaderScreen(
     // corrupting the layer with a mutation no undo entry covers. `eraseArmed` records whether BEGIN
     // actually processed, and MOVE/END early-out unless it did.
     var eraseArmed by remember { mutableStateOf(false) }
+    // Bumped by every BEGIN that arms. `eraseArmed` alone isn't enough to protect a gesture's OWN
+    // coroutines from a NEWER gesture: END's disarm runs inside its async `withContext(Main)` publish,
+    // which is queued behind eraseDispatcher — on a fast scrub-lift-scrub (exactly the slow-tick/large-
+    // layer window I1 targets), gesture N's END can drain AFTER N+1's BEGIN has already re-armed, so
+    // `eraseArmed = false` at N's END would disarm N+1 mid-drag (orphaning its beginDrawingGesture()
+    // history entry and freezing its in-progress erase half-applied). Each MOVE/END coroutine captures
+    // `eraseGeneration` on Main at launch time and compares it against the LIVE value in its Main-thread
+    // publish: a mismatch means a newer gesture has since started, so that coroutine's result is
+    // superseded and must not touch the layer OR the armed flag — only the CURRENT gesture's own
+    // coroutines are allowed to publish or disarm.
+    var eraseGeneration by remember { mutableStateOf(0) }
 
     // For the content Box's width report below (its `onSizeChanged` is not a composable scope).
     val readerDensity = LocalDensity.current
@@ -612,6 +623,10 @@ fun ReaderScreen(
                                     val handle = scoreHandle
                                     if (handle != null) {
                                         eraseArmed = true
+                                        // Bump so any in-flight coroutine from a PREVIOUS gesture (still
+                                        // draining eraseDispatcher, see `eraseGeneration`'s doc) is
+                                        // recognizable as superseded the moment it reaches its Main publish.
+                                        eraseGeneration++
                                         // One undo entry covers the whole drag, not one per throttle tick —
                                         // mirrors a whole pen stroke, which also gets one entry. Use the
                                         // snapshot beginDrawingGesture() itself pushed (VM truth under its
@@ -631,6 +646,9 @@ fun ReaderScreen(
                                         val path = erasePath
                                         // Presets are DIAMETERS; applyErase wants a geometric radius.
                                         val radiusMm = toolState.eraserWidth / 2f
+                                        // Captured on Main at launch — compared against the LIVE
+                                        // eraseGeneration in the Main publish below (see its declaration).
+                                        val gen = eraseGeneration
                                         annotationScope.launch(eraseDispatcher) {
                                             val outcome = AnnotationEraseController.applyErase(
                                                 snapshot, handle, path, radiusMm,
@@ -640,11 +658,10 @@ fun ReaderScreen(
                                             // published it rather than clobber it with nothing.
                                             if (outcome != null) {
                                                 withContext(Dispatchers.Main) {
-                                                    // Belt-and-suspenders: eraseDispatcher's FIFO already
-                                                    // orders this publish before END's, but drop it anyway
-                                                    // if END has since disarmed — a late MOVE must never
-                                                    // resurrect ink END already committed (or left as-is).
-                                                    if (eraseArmed) {
+                                                    // A newer gesture has since started (its BEGIN bumped
+                                                    // eraseGeneration) — this MOVE's result is superseded and
+                                                    // must not touch the layer the newer gesture now owns.
+                                                    if (gen == eraseGeneration) {
                                                         inkHandoff.releaseAll()
                                                         readerVm.eraseInProgress(outcome.drawings)
                                                     }
@@ -658,6 +675,8 @@ fun ReaderScreen(
                                     erasePath = erasePath + pathMm
                                     val handle = scoreHandle
                                     if (handle == null) {
+                                        // Synchronous, runs on Main before any launch — no generation
+                                        // race possible here, so a plain unconditional disarm is correct.
                                         eraseArmed = false
                                         return@eraseGesture
                                     }
@@ -665,6 +684,12 @@ fun ReaderScreen(
                                     val path = erasePath
                                     // Presets are DIAMETERS; applyErase wants a geometric radius.
                                     val radiusMm = toolState.eraserWidth / 2f
+                                    // Captured on Main at launch — compared against the LIVE eraseGeneration
+                                    // in the Main publish below (see eraseGeneration's declaration doc). If a
+                                    // newer gesture's BEGIN has since bumped it, THIS END is stale: it must
+                                    // not publish its now-superseded committed layer, and — critically — must
+                                    // not disarm the NEWER gesture that's currently mid-drag.
+                                    val gen = eraseGeneration
                                     annotationScope.launch(eraseDispatcher) {
                                         val outcome = AnnotationEraseController.applyErase(
                                             snapshot, handle, path, radiusMm,
@@ -673,14 +698,26 @@ fun ReaderScreen(
                                             AnnotationEraseController.reanchor(it.drawings, it.changedIndices, handle)
                                         }
                                         withContext(Dispatchers.Main) {
-                                            if (reanchored != null) {
-                                                inkHandoff.releaseAll()
-                                                readerVm.eraseCommitted(reanchored)
+                                            if (gen == eraseGeneration) {
+                                                if (reanchored != null) {
+                                                    inkHandoff.releaseAll()
+                                                    readerVm.eraseCommitted(reanchored)
+                                                }
+                                                // outcome == null: leave the layer as the last MOVE tick left
+                                                // it (or untouched, for a tap that never found anything under
+                                                // it). Disarm either way — THIS gesture is over regardless of
+                                                // outcome, and (gen == eraseGeneration) confirms no newer
+                                                // gesture has started, so it's safe to disarm.
+                                                //
+                                                // KNOWN ACCEPTED RESIDUAL — not fixed: if this END is instead
+                                                // superseded (gen != eraseGeneration), it silently no-ops: its
+                                                // erased fragments were already published in-progress by its
+                                                // own MOVE ticks (so the next gesture builds on them), but its
+                                                // reanchor is dropped — those specific fragments stay on their
+                                                // inherited anchor until re-erased. Narrow, self-healing,
+                                                // requires a sub-second scrub-lift-scrub on a large layer.
+                                                eraseArmed = false
                                             }
-                                            // outcome == null: leave the layer as the last MOVE tick left it
-                                            // (or untouched, for a tap that never found anything under it).
-                                            // Disarm either way — the gesture is over regardless of outcome.
-                                            eraseArmed = false
                                         }
                                     }
                                 }
