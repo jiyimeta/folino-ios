@@ -5,13 +5,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material3.Icon
@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -68,39 +69,38 @@ fun AnnotationToolbar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val eraserSelected = state.selected == AnnotationTool.Eraser
-            // Fixed 48dp slot (the Material minimum touch target) regardless of the eraser's own size
-            // indicator dot — kept the same shape as the pen swatches below for a uniform tap-target
-            // size across the whole toolbar, even though IconButton already reserves ≥48dp on its own.
-            Box(modifier = Modifier.size(TAP_TARGET_SIZE), contentAlignment = Alignment.Center) {
-                IconButton(
-                    onClick = {
+            // Fixed 48dp tap-target slot, identical to the pen swatches so the whole row shares one
+            // visual language. The eraser is a width swatch too — but in a neutral tone (it has no ink
+            // color) and badged with the eraser glyph at the ring's bottom-right so it still reads as
+            // "the eraser" while its dot tracks the current erase width.
+            Box(
+                modifier = Modifier
+                    .size(TAP_TARGET_SIZE)
+                    .clickable {
                         if (eraserSelected) pickerFor = AnnotationTool.Eraser else onSelect(AnnotationTool.Eraser)
                     },
+                contentAlignment = Alignment.Center,
+            ) {
+                WidthSwatch(
+                    color = null,
+                    width = state.eraserWidth,
+                    selected = eraserSelected,
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Backspace,
-                        contentDescription = "Eraser",
-                        tint = if (eraserSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-                if (eraserSelected) {
-                    // Small size indicator dot (not a full swatch — the eraser has no color), scaled off
-                    // the same preset table as the width picker so it visually tracks the active preset.
-                    val diameter = SWATCH_DIAMETERS_DP[
-                        AnnotationWidths.presetIndex(AnnotationWidths.ERASER_PRESETS, state.eraserWidth),
-                    ].dp
                     Box(
                         Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(end = 2.dp, bottom = 2.dp)
-                            .size((diameter / 3).coerceAtLeast(4.dp))
+                            .size(16.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface),
-                    )
+                            .background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            EraserIcon,
+                            contentDescription = "Eraser",
+                            modifier = Modifier.size(11.dp),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
                 if (pickerFor == AnnotationTool.Eraser) {
                     AnnotationWidthPicker(
@@ -122,37 +122,21 @@ fun AnnotationToolbar(
                 // Bounds-safe: a future restored `penWidths` shorter than `presetColors` degrades to the
                 // 1.2 default rather than throwing.
                 val penWidth = state.penWidths.getOrElse(index) { AnnotationWidths.PEN_PRESETS[1] }
-                val diameter = SWATCH_DIAMETERS_DP[
-                    AnnotationWidths.presetIndex(AnnotationWidths.PEN_PRESETS, penWidth),
-                ].dp
 
                 Box {
                     // Fixed 48dp tap-target slot (the Material minimum), independent of the swatch's own
-                    // width-driven diameter — `.clickable` sits on the slot, not the visual circle, so the
-                    // thinnest 14dp swatch still has a full-size touch target. The ring + swatch are
-                    // centered inside it, so a width change never nudges the slot's own position/size.
+                    // width-driven diameter — `.clickable` sits on the slot, not the visual circle.
                     Box(
                         modifier = Modifier
                             .size(TAP_TARGET_SIZE)
                             .clickable { if (selected) pickerFor = tool else onSelect(tool) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        // The ring lives on a slightly larger container than the swatch itself, so drawing
-                        // it never changes the swatch's own diameter (which is the width indicator).
-                        Box(
-                            modifier = Modifier
-                                .size(diameter + RING_PADDING * 2)
-                                .then(
-                                    if (selected) {
-                                        Modifier.border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(Modifier.size(diameter).clip(CircleShape).background(c))
-                        }
+                        // A constant-size ring (the "well") holds a colored dot whose diameter is
+                        // proportional to the pen's ACTUAL stroke width — so every pen sits in the same
+                        // footprint while the dot inside shows how thick that pen draws. The selected pen's
+                        // ring thickens and takes the primary color.
+                        WidthSwatch(color = c, width = penWidth, selected = selected)
                     }
                     if (pickerFor == tool) {
                         AnnotationWidthPicker(
@@ -192,24 +176,83 @@ object AnnotationToolbarDefaults {
 }
 
 /**
- * Swatch diameters (dp) indexed by preset position — shared with [AnnotationWidthPicker] so the
- * picker's circles read as the same size scale as the toolbar's. `internal` rather than private:
- * both files live in this package but are separate compilation units, and this constant is not part
- * of the module's public API.
+ * A width swatch shared by the toolbar and [AnnotationWidthPicker]. A constant-size ring (the "well",
+ * [SWATCH_CONTAINER_DP]) holding a dot whose diameter is the TRUE stroke [width] ([dotDiameter] — the
+ * same dp-per-mm scale for every tool, so a thick tool genuinely shows a bigger dot than a thin one
+ * rather than each filling its own well). [selected] thickens the ring and switches it to the primary
+ * color. [badge] draws an optional decoration (the eraser glyph) hanging at the ring's bottom-right
+ * corner — it sits outside the clipped well so it is never masked away.
+ *
+ * Two visual modes keyed off [color]:
+ * - A pen (non-null [color]): a white interior with a light [SWATCH_WASH_ALPHA] wash of the ink color
+ *   over it — so the color reads even when the dot is tiny — topped by a solid ink dot.
+ * - The eraser (null [color]): a plain white interior and a white, outlined dot (the eraser has no ink
+ *   color of its own, so its footprint reads as a ring rather than a filled disc).
  */
-internal val SWATCH_DIAMETERS_DP = listOf(14, 20, 26, 32)
+@Composable
+internal fun WidthSwatch(
+    color: Color?,
+    width: Float,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    badge: (@Composable BoxScope.() -> Unit)? = null,
+) {
+    Box(modifier.size(SWATCH_CONTAINER_DP), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .clip(CircleShape)
+                .background(Color.White)
+                .then(if (color != null) Modifier.background(color.copy(alpha = SWATCH_WASH_ALPHA)) else Modifier)
+                .border(
+                    width = if (selected) 2.5.dp else 1.dp,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant
+                    },
+                    shape = CircleShape,
+                ),
+        )
+        if (color != null) {
+            Box(Modifier.size(dotDiameter(width)).clip(CircleShape).background(color))
+        } else {
+            Box(
+                Modifier
+                    .size(dotDiameter(width))
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+            )
+        }
+        badge?.invoke(this)
+    }
+}
 
 /**
- * Extra room the selection ring occupies around a swatch, on each side. `internal` — shared with
- * [AnnotationWidthPicker], which draws the same ring around its own preset circles.
+ * True-to-width dot diameter: [width] document-mm at [DOT_DP_PER_MM] dp/mm, capped at [SWATCH_DOT_MAX_DP]
+ * so it always fits inside the well. The scale is shared across tools, so a 3.2mm pen and a 14mm eraser
+ * show honestly different dots instead of each being normalized to fill its own ring.
  */
-internal val RING_PADDING = 4.dp
+internal fun dotDiameter(width: Float): Dp = (width * DOT_DP_PER_MM).dp.coerceAtMost(SWATCH_DOT_MAX_DP)
+
+/** dp per document-mm for a width dot. Tuned so the largest eraser preset (14mm) about fills the well. */
+internal const val DOT_DP_PER_MM = 2.0f
+
+/** Opacity of the ink-color wash over a pen swatch's white interior, so the color reads at a glance. */
+private const val SWATCH_WASH_ALPHA = 0.2f
+
+/** The constant ring/well every swatch and preset circle is drawn in, regardless of its dot's size. */
+internal val SWATCH_CONTAINER_DP = 34.dp
+
+/** Largest width-dot, so even an oversized stored width can't overflow the [SWATCH_CONTAINER_DP] ring. */
+private val SWATCH_DOT_MAX_DP = 28.dp
 
 /**
  * The Material minimum touch target. Every tappable swatch/eraser slot (toolbar) and preset circle
- * (width picker) is fixed at this size regardless of its visual diameter, so the smallest 14dp swatch
- * still has a full-size tap target and a width change never nudges a neighbouring slot's position.
- * `internal` — shared with [AnnotationWidthPicker].
+ * (width picker) is fixed at this size regardless of its visual diameter, so the swatch still has a
+ * full-size tap target and a width change never nudges a neighbouring slot's position. `internal` —
+ * shared with [AnnotationWidthPicker].
  */
 internal val TAP_TARGET_SIZE = 48.dp
 

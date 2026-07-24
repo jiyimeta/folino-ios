@@ -1,20 +1,16 @@
 package com.keynumber.folino.reader.ink
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
@@ -25,8 +21,9 @@ import androidx.compose.ui.window.PopupProperties
 
 /**
  * Re-tap width picker for [AnnotationToolbar]: shown when the user taps a tool that is already
- * selected, offering that tool's fixed [presets] as a row of circles at [SWATCH_DIAMETERS_DP], the
- * preset nearest [currentWidth] ringed. Tapping a preset applies it via [onPick]; tapping outside the
+ * selected, offering that tool's fixed [presets] as a row of [WidthSwatch] circles — each a constant
+ * ring holding a dot proportional to that preset's actual width — with the preset nearest [currentWidth]
+ * ringed. Tapping a preset applies it via [onPick]; tapping outside the
  * popup (or the system back gesture) fires [onDismiss] — `PopupProperties(focusable = true)` gives it
  * its own focus scope so outside taps are observed as a dismiss rather than passing through to the
  * toolbar underneath.
@@ -34,8 +31,8 @@ import androidx.compose.ui.window.PopupProperties
  * Composed as a direct child of the anchor tool's own `Box` in [AnnotationToolbar], so the [Popup]
  * positions itself relative to that tool rather than the toolbar as a whole.
  *
- * [color] is the pen's swatch color for a [AnnotationTool.Pen]; pass `null` for [AnnotationTool.Eraser]
- * to draw the preset circles in a neutral tone instead (the eraser has no color of its own).
+ * [color] is the pen's ink color for a [AnnotationTool.Pen]; pass `null` for [AnnotationTool.Eraser] so
+ * each preset renders in the eraser's white-well / outlined-dot style (the eraser has no color of its own).
  */
 @Composable
 internal fun AnnotationWidthPicker(
@@ -47,7 +44,6 @@ internal fun AnnotationWidthPicker(
     modifier: Modifier = Modifier,
 ) {
     val currentIndex = AnnotationWidths.presetIndex(presets, currentWidth)
-    val swatchColor = color ?: MaterialTheme.colorScheme.onSurface
     val verticalGapPx = with(LocalDensity.current) { 8.dp.roundToPx() }
 
     Popup(
@@ -68,30 +64,21 @@ internal fun AnnotationWidthPicker(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 presets.forEachIndexed { index, preset ->
-                    val diameter = SWATCH_DIAMETERS_DP[index].dp
                     // Fixed 48dp tap-target slot, same shape as the toolbar's swatches: `.clickable` sits
-                    // on the slot (not the visual circle), so even the smallest 14dp preset has a
-                    // full-size touch target and its neighbours never shift when a preset is picked.
+                    // on the slot (not the visual circle), so even the smallest preset has a full-size
+                    // touch target and its neighbours never shift when a preset is picked. Each preset
+                    // renders as the same constant ring with a dot proportional to its actual width.
                     Box(
                         modifier = Modifier
                             .size(TAP_TARGET_SIZE)
                             .clickable { onPick(preset) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(diameter + RING_PADDING * 2)
-                                .then(
-                                    if (index == currentIndex) {
-                                        Modifier.border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(Modifier.size(diameter).clip(CircleShape).background(swatchColor))
-                        }
+                        WidthSwatch(
+                            color = color,
+                            width = preset,
+                            selected = index == currentIndex,
+                        )
                     }
                 }
             }
