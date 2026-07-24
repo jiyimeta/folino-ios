@@ -93,6 +93,72 @@ public func nativeAnnotationDisplayTransforms(drawingsBytes: Data, refPointsByte
     return out.encodeToData()
 }
 
+/// Cut the eraser path out of an annotation layer — the reflow-independent partial-eraser hot path.
+/// `drawingsBytes` = `[DrawingAnchorWire]` (the layer being erased); `transformsBytes` = `[StrokeTransformWire]`,
+/// positionally aligned with the drawings (what `nativeAnnotationDisplayTransforms` returns for the same layer, so
+/// the hit test runs in the display space the user actually saw); `requestBytes` = `EraseRequestWire`, the eraser's
+/// display-space polyline (document mm) plus its geometric radius. A `sp == 0` transform entry — an anchor that
+/// can't currently place — maps to `nil`, matching the display path's "unresolved this frame" convention; that
+/// drawing passes through the erase untouched. Empty `Data` if any input fails to decode, the drawings/transforms
+/// counts differ, or a surviving drawing somehow doesn't carry a `.musical` anchor (this call is score-only).
+public func nativeAnnotationErase(drawingsBytes: Data, transformsBytes: Data, requestBytes: Data) -> Data {
+    guard let drawingWires = try? [DrawingAnchorWire](decoding: drawingsBytes),
+          let transformWires = try? [StrokeTransformWire](decoding: transformsBytes),
+          let request = try? EraseRequestWire(decoding: requestBytes),
+          drawingWires.count == transformWires.count,
+          request.xMm.count == request.yMm.count
+    else { return Data() }
+
+    let drawings = drawingWires.map { wire -> DrawingAnchor in
+        let anchor = MusicalAnchor(
+            measureIndex: Int(wire.measureIndex), tickInMeasure: Int(wire.tickInMeasure),
+            partIndex: Int(wire.partIndex), staffIndexInPart: Int(wire.staffIndexInPart),
+            dxSp: wire.dxSp, verticalOffsetSp: wire.verticalOffsetSp,
+        )
+        return DrawingAnchor(kind: .musical(anchor), encodedDrawing: wire.encodedDrawing)
+    }
+    let transforms = transformWires.map { wire -> StrokeTransform? in
+        guard wire.sp != 0 else { return nil }
+        return StrokeTransform(sp: CGFloat(wire.sp), px: CGFloat(wire.px), py: CGFloat(wire.py))
+    }
+    let path = zip(request.xMm, request.yMm).map { CGPoint(x: CGFloat($0), y: CGFloat($1)) }
+
+    let result = AnnotationEraseCore.erase(
+        drawings, transforms: transforms, path: path, radiusMm: CGFloat(request.radiusMm),
+    )
+
+    var outWires: [DrawingAnchorWire] = []
+    outWires.reserveCapacity(result.drawings.count)
+    for drawing in result.drawings {
+        guard case let .musical(anchor) = drawing.kind else { return Data() }
+        outWires.append(DrawingAnchorWire(
+            measureIndex: Int32(anchor.measureIndex), tickInMeasure: Int32(anchor.tickInMeasure),
+            partIndex: Int32(anchor.partIndex), staffIndexInPart: Int32(anchor.staffIndexInPart),
+            dxSp: anchor.dxSp, verticalOffsetSp: anchor.verticalOffsetSp,
+            encodedDrawing: drawing.encodedDrawing,
+        ))
+    }
+
+    return EraseResultWire(
+        drawings: outWires, changedIndices: result.changedIndices.map { Int32($0) },
+    ).encodeToData()
+}
+
+/// Place a stored (anchor-relative sp) InkStroke into document-mm using its display transform, so the
+/// caller can re-resolve an anchor for it (phase-2 erase re-anchoring). `strokeBytes` = neutral
+/// InkStroke FINK; `transformBytes` = `StrokeTransformWire`. Returns document-mm FINK, empty on a decode
+/// miss. A `sp == 0` transform (unresolved this layout) also returns empty — an unplaceable stroke.
+public func nativeAnnotationPlace(strokeBytes: Data, transformBytes: Data) -> Data {
+    guard let stroke = try? InkStrokeCodec.decode(strokeBytes),
+          let t = try? StrokeTransformWire(decoding: transformBytes),
+          t.sp != 0
+    else { return Data() }
+    let placed = AnnotationAnchoringCore.place(
+        stroke, with: StrokeTransform(sp: CGFloat(t.sp), px: CGFloat(t.px), py: CGFloat(t.py)),
+    )
+    return InkStrokeCodec.encode(placed)
+}
+
 /// Encode a raw androidx.ink stroke (document-mm geometry) into neutral `InkStroke` FINK bytes. Kotlin builds
 /// `RawInkStrokeWire` from a finished `Stroke`; this is the ONLY encode path so the codec never duplicates into Kotlin.
 /// Empty `Data` if the wire fails to decode.

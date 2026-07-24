@@ -80,10 +80,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationDryOverlay
+import com.keynumber.folino.reader.ink.AnnotationEraseController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
+import com.keynumber.folino.reader.ink.AnnotationTool
+import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
 import com.keynumber.folino.reader.ink.AnnotationWetOverlay
+import com.keynumber.folino.reader.ink.ErasePhase
 import com.keynumber.folino.reader.ink.InkBrushMapping
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
@@ -124,19 +128,9 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
  * than passing under it. Only applied while the seek bar is off (the FAB is shown). */
 private val fabClusterReservedHeight = 72.dp
 
-/** Fixed brush size (document-mm world unit) for the pen tool — MVP has no width slider (deferred). */
-private const val ANNOTATION_BASE_WIDTH_SP = 1.2f
-
-/** 0xRRGGBBAA (our neutral annotation color model, matching [InkBrushMapping.colorInt]'s convention) -> Compose [Color]. */
-private fun rgbaLongToColor(rgba: Long): Color {
-    val r = ((rgba shr 24) and 0xFF).toInt()
-    val g = ((rgba shr 16) and 0xFF).toInt()
-    val b = ((rgba shr 8) and 0xFF).toInt()
-    val a = (rgba and 0xFF).toInt()
-    return Color(r, g, b, a)
-}
-
-/** Compose [Color] -> 0xRRGGBBAA Long. */
+/** Compose [Color] -> 0xRRGGBBAA Long (our neutral annotation color model, matching
+ * [InkBrushMapping.colorInt]'s convention) — turns a toolbar palette swatch into the wire color the
+ * capture/brush pipeline expects. */
 private fun Color.toRgbaLong(): Long {
     val r = (red * 255).toInt().coerceIn(0, 255).toLong()
     val g = (green * 255).toInt().coerceIn(0, 255).toLong()
@@ -160,6 +154,17 @@ fun ReaderScreen(
     onShare: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
+    /** Persisted annotation pen setup (four pen widths, eraser width, selected tool), sourced from the
+     * app module's DataStore (Task 9). The VM's live `toolState` is the source of truth for the UI
+     * within a session — this value flows INTO the VM via `LaunchedEffect` below, mirroring how
+     * `displayOptions` flows into `setLayoutOptions`. Undo/redo history is session-only and never
+     * flows through this prop. */
+    annotationToolState: AnnotationToolState = AnnotationToolState(),
+    /** Persists the annotation pen setup on user change (selecting a tool, changing a width). The app
+     * module owns the DataStore write; this screen also updates the VM optimistically so the toolbar's
+     * selection ring / width reflect the change instantly rather than waiting on the DataStore
+     * round-trip. */
+    onAnnotationToolStateChange: (AnnotationToolState) -> Unit = {},
     /** Global A4 reference pitch default (Hz) from SettingsPrefs. Used for the inspector's cents-offset
      * readout (the per-score live value relative to the user's global tuning) and as the inherit value
      * when this score has no per-score A4 override. */
@@ -242,15 +247,95 @@ fun ReaderScreen(
     // hit-test must reuse this exact blob (its hidden-staff set) so re-addressing stays in lockstep.
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
-    // Annotation (Sub-plan E, VERTICAL mode only for this MVP). `annotationColor`/`annotationTool`
-    // are the toolbar's live selection; `drawings` is the committed layer rendered by the dry
-    // overlay + persisted by the VM's debounced save.
+    // Annotation (Sub-plan E, VERTICAL mode only for this MVP). `toolState` is the toolbar's live
+    // selection (Task 8: held in the VM, mirroring `layoutOptions`/`setLayoutOptions`; Task 9: the
+    // `annotationToolState` prop above seeds it from DataStore on (re)compose, and the toolbar's
+    // onSelect/onWidthChange persist back through `onAnnotationToolStateChange` — see the two call
+    // sites below for the exact wiring); `drawings` is the committed layer rendered by the dry overlay
+    // and persisted by the VM's debounced save; `canUndo`/`canRedo` gate the toolbar's undo/redo
+    // buttons (undo/redo history is session-only, never persisted).
     val annotationMode by readerVm.annotationMode.collectAsStateWithLifecycle()
     val drawings by readerVm.drawings.collectAsStateWithLifecycle()
-    var annotationColor by remember { mutableStateOf(0x000000FFL) } // 0xRRGGBBAA, default opaque black
-    val annotationTool = 0 // pen (Domain InkStroke.Tool.pen). Eraser/other tools deferred.
-    // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls).
+    val toolState by readerVm.toolState.collectAsStateWithLifecycle()
+    val canUndo by readerVm.canUndo.collectAsStateWithLifecycle()
+    val canRedo by readerVm.canRedo.collectAsStateWithLifecycle()
+    // The active pen's wire color (0xRRGGBBAA), derived from the toolbar palette index — used for both
+    // the wet-stroke brush (ReadyScore) and the committed capture below. Falls back to swatch 0 if the
+    // selected tool is the eraser (the brush is unused then; see ReadyScore's `annotationWidthMm` doc)
+    // OR if the pen's colorIndex is out of range for the current palette — `getOrElse` rather than a
+    // plain index so a future persisted index (Task 9) that no longer fits `DEFAULT_COLORS` degrades to
+    // swatch 0 instead of throwing out of composition.
+    val penColorRGBA = AnnotationToolbarDefaults.DEFAULT_COLORS.getOrElse(
+        (toolState.selected as? AnnotationTool.Pen)?.colorIndex ?: 0,
+    ) { AnnotationToolbarDefaults.DEFAULT_COLORS[0] }.toRgbaLong()
+    // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls) and for
+    // AnnotationEraseController's calls in the eraser gesture handler below.
     val annotationScope = rememberCoroutineScope()
+    // Single-parallelism view of Dispatchers.Default for the erase gesture's own compute: `applyErase`
+    // runs once per MOVE tick plus once at END, each launched independently — without serializing them,
+    // a slow MOVE tick (large layer) can finish AFTER END and publish a stale, non-reanchored result on
+    // top of it, so a later persist-triggering edit would resurrect already-erased ink / drop a
+    // fragment's re-anchor. `limitedParallelism(1)` gives strict FIFO execution (not just FIFO dispatch)
+    // on the SAME underlying Default thread pool, so END always runs after every MOVE queued before it.
+    val eraseDispatcher = remember { Dispatchers.Default.limitedParallelism(1) }
+
+    // Wet→dry ink handoff (see AnnotationHandoffQueue's own doc for why retention exists at all).
+    // Hoisted here rather than local to ReadyScore: the toolbar's undo/redo buttons live in this
+    // Scaffold's bottomBar — a sibling of ReadyScore, not a descendant — and the eraser gesture handler
+    // built below needs it too. Both must release every retained wet copy before they swap the
+    // annotation layer out from under it, or a not-yet-painted wet stroke could keep rendering for up
+    // to MAX_WET_RETENTION_MS after the drawing it belongs to was undone/erased. Passed down into
+    // ReadyScore as a parameter so the whole screen shares exactly one instance.
+    val inkHandoff = remember { AnnotationHandoffQueue<DrawingAnchorWire>() }
+
+    // Local chained erase-drag state (Task 8). `eraseWorkingAtBegin` is snapshotted ONCE at
+    // ErasePhase.BEGIN and never reassigned during the drag; every MOVE/END tick re-applies the FULL
+    // accumulated `erasePath` against this same BEGIN snapshot rather than chaining tick-to-tick onto
+    // the previous tick's own output — re-cutting a fixed base with the same path is stable across a
+    // throttle's repeated ticks, whereas chaining forward would compound any per-tick geometry drift.
+    // `erasePath` accumulates the whole gesture's contiguous polyline per AnnotationWetOverlay's
+    // BEGIN/MOVE/END emission contract (see its class doc).
+    //
+    // KNOWN RACE (accepted, not solved here): an async pen-capture already in flight from a stroke
+    // drawn just before the user switches to the eraser can land (readerVm.addDrawing) mid-erase-drag.
+    // Because every erase tick re-publishes a whole-layer result derived from the BEGIN snapshot (which
+    // predates that capture), the NEXT erase publish silently overwrites the just-added stroke. The
+    // window requires a tool switch while a capture is still in flight, so it's narrow; closing it would
+    // mean threading capture completion through the same layer state the erase drag holds, which is a
+    // bigger change than this task's wiring scope — flagged here for the reviewer, not fixed.
+    var eraseWorkingAtBegin by remember { mutableStateOf<List<DrawingAnchorWire>>(emptyList()) }
+    var erasePath by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    // True from a processed BEGIN through its matching END's publish. The handler trusts
+    // AnnotationWetOverlay's own per-gesture `gestureIsErasing` latch (set from the live eraserMode at
+    // ACTION_DOWN) as the sole authority on whether a gesture is an erase — BEGIN does NOT re-check
+    // `toolState.selected` (see its branch below for why re-checking there was itself a bug). But BEGIN
+    // can still no-op for an unrelated reason (no score handle yet), and the overlay's contract still
+    // guarantees a MOVE/END will follow for that same latched gesture regardless. Without this flag,
+    // those calls would run against `eraseWorkingAtBegin`/`erasePath` LEFT OVER from a previous drag,
+    // corrupting the layer with a mutation no undo entry covers. `eraseArmed` records whether BEGIN
+    // actually processed, and MOVE/END early-out unless it did.
+    var eraseArmed by remember { mutableStateOf(false) }
+    // Bumped by every BEGIN that arms. `eraseArmed` alone isn't enough to protect a gesture's OWN
+    // coroutines from a NEWER gesture: END's disarm runs inside its async `withContext(Main)` publish,
+    // which is queued behind eraseDispatcher — on a fast scrub-lift-scrub (exactly the slow-tick/large-
+    // layer window I1 targets), gesture N's END can drain AFTER N+1's BEGIN has already re-armed, so
+    // `eraseArmed = false` at N's END would disarm N+1 mid-drag (orphaning any undo entry N+1 already
+    // pushed and freezing its in-progress erase half-applied). Each MOVE/END coroutine captures
+    // `eraseGeneration` on Main at launch time and compares it against the LIVE value in its Main-thread
+    // publish: a mismatch means a newer gesture has since started, so that coroutine's result is
+    // superseded and must not touch the layer OR the armed flag — only the CURRENT gesture's own
+    // coroutines are allowed to publish or disarm.
+    var eraseGeneration by remember { mutableStateOf(0) }
+    // Whether THIS gesture has already pushed its one undo entry. Starts false at every BEGIN — BEGIN
+    // itself does NOT push a history entry (unlike the old beginDrawingGesture()-based design): per spec
+    // ("changedIndices empty means the gesture did nothing: no save, no undo entry, no phase 2"), a
+    // stray tap on blank space or a scrub that never reaches a stroke must not push a dead undo entry OR
+    // clear the redo stack (DrawingHistory.push always clears redo). The first MOVE/END tick whose
+    // EraseResult actually changed something flips this to true and passes `pushHistory = true` to the
+    // VM; every later changing tick of the same gesture passes `pushHistory = false` — so a whole erase
+    // drag that changes anything still collapses to exactly one undo entry (mirrors addDrawing's
+    // one-entry-per-commit shape), while a drag that changes nothing pushes zero.
+    var eraseHistoryPushed by remember { mutableStateOf(false) }
 
     // For the content Box's width report below (its `onSizeChanged` is not a composable scope).
     val readerDensity = LocalDensity.current
@@ -349,6 +434,12 @@ fun ReaderScreen(
     }
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
     LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
+
+    // Push the persisted annotation pen setup into the VM (Task 9). DataStore is the source of truth
+    // across restarts; the toolbar's onSelect/onWidthChange below already write the VM optimistically,
+    // so when this later re-fires with the same value the setAnnotationToolState is idempotent — no
+    // feedback loop, because a StateFlow re-set to an equal value doesn't trigger any further collection.
+    LaunchedEffect(annotationToolState) { readerVm.setAnnotationToolState(annotationToolState) }
 
     val pipActive by ReaderPipController.isInPipMode.collectAsStateWithLifecycle()
     val playbackState by audioVm.state.collectAsStateWithLifecycle()
@@ -462,9 +553,35 @@ fun ReaderScreen(
         bottomBar = {
             if (annotationMode && layoutMode == ReaderLayoutMode.VERTICAL) {
                 AnnotationToolbar(
-                    color = rgbaLongToColor(annotationColor),
+                    state = toolState,
                     presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
-                    onColorChange = { annotationColor = it.toRgbaLong() },
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    // Optimistic VM write + persist callback (Task 9): update the VM immediately so the
+                    // toolbar's selection ring / width reflect the change on this frame — the DataStore
+                    // round-trip through onAnnotationToolStateChange -> MainActivity -> collectAsState ->
+                    // LaunchedEffect(annotationToolState) above would otherwise visibly lag by a frame or
+                    // more. That later re-set is idempotent (see the LaunchedEffect's own comment).
+                    onSelect = { tool ->
+                        val next = toolState.copy(selected = tool)
+                        readerVm.setAnnotationToolState(next)
+                        onAnnotationToolStateChange(next)
+                    },
+                    onWidthChange = { width ->
+                        val next = toolState.withWidthForSelected(width)
+                        readerVm.setAnnotationToolState(next)
+                        onAnnotationToolStateChange(next)
+                    },
+                    onUndo = {
+                        // A not-yet-painted wet stroke must not linger on the wet layer for
+                        // MAX_WET_RETENTION_MS after undo removes the drawing it belongs to.
+                        inkHandoff.releaseAll()
+                        readerVm.undoDrawings()
+                    },
+                    onRedo = {
+                        inkHandoff.releaseAll()
+                        readerVm.redoDrawings()
+                    },
                 )
             } else if (showSeekBar) {
                 TransportBar(
@@ -525,8 +642,164 @@ fun ReaderScreen(
                         annotationMode = annotationMode,
                         drawings = drawings,
                         layoutGeneration = layoutGeneration,
-                        annotationTool = annotationTool,
-                        annotationColorRGBA = annotationColor,
+                        annotationTool = 0, // pen (Domain InkStroke.Tool.pen) — the only wet-stroke tool.
+                        annotationColorRGBA = penColorRGBA,
+                        annotationWidthMm = toolState.activeWidth,
+                        eraserMode = toolState.selected is AnnotationTool.Eraser,
+                        onEraseGesture = eraseGesture@{ phase, pathMm ->
+                            // BEGIN trusts AnnotationWetOverlay as the sole authority on whether this
+                            // gesture is an erase: the overlay already latched `gestureIsErasing` from the
+                            // live eraserMode at ACTION_DOWN, so re-checking `toolState.selected` here (the
+                            // toolbar's CURRENT selection, which can differ by the time this runs) could
+                            // disagree with the overlay's latch on a sub-frame two-handed tool switch — if
+                            // BEGIN then no-ops while the overlay still emits this gesture's MOVE/END, those
+                            // would run against `eraseWorkingAtBegin`/`erasePath` left over from a PREVIOUS
+                            // drag, corrupting the layer with a mutation no undo entry covers. `eraseArmed`
+                            // records whether BEGIN actually processed, and MOVE/END early-out unless it did
+                            // — so a stray MOVE/END can never run against stale state, while a gesture whose
+                            // BEGIN DID arm is always honored through to its END (mirrors the overlay's own
+                            // "exactly one END per BEGIN" contract).
+                            when (phase) {
+                                ErasePhase.BEGIN -> {
+                                    val handle = scoreHandle
+                                    if (handle != null) {
+                                        eraseArmed = true
+                                        // Bump so any in-flight coroutine from a PREVIOUS gesture (still
+                                        // draining eraseDispatcher, see `eraseGeneration`'s doc) is
+                                        // recognizable as superseded the moment it reaches its Main publish.
+                                        eraseGeneration++
+                                        // No undo entry yet — the whole drag might turn out to be a whiff
+                                        // (spec: "changedIndices empty means the gesture did nothing: no
+                                        // save, no undo entry, no phase 2"), and pushing here unconditionally
+                                        // is exactly the bug this gating fixes (see eraseHistoryPushed's doc).
+                                        // Reset it so the FIRST tick of THIS gesture that actually changes
+                                        // something is free to push.
+                                        eraseHistoryPushed = false
+                                        // VM truth as the erase base — not the composed `drawings` state
+                                        // above, which can lag the VM by a frame.
+                                        eraseWorkingAtBegin = readerVm.currentDrawings()
+                                        erasePath = pathMm
+                                    }
+                                }
+                                ErasePhase.MOVE -> {
+                                    if (!eraseArmed) return@eraseGesture
+                                    erasePath = erasePath + pathMm
+                                    val handle = scoreHandle
+                                    if (handle != null) {
+                                        val snapshot = eraseWorkingAtBegin
+                                        val path = erasePath
+                                        // Presets are DIAMETERS; applyErase wants a geometric radius.
+                                        val radiusMm = toolState.eraserWidth / 2f
+                                        // Captured on Main at launch — compared against the LIVE
+                                        // eraseGeneration in the Main publish below (see its declaration).
+                                        val gen = eraseGeneration
+                                        annotationScope.launch(eraseDispatcher) {
+                                            val outcome = AnnotationEraseController.applyErase(
+                                                snapshot, handle, path, radiusMm,
+                                            )
+                                            // Publish only on an ACTUAL change: null = native miss, and a
+                                            // cut that hit nothing leaves the layer / undo history / save
+                                            // alone (spec whiff). "Changed" must count DROPS too, not just
+                                            // fragments — a fully-covered stroke is dropped with an empty
+                                            // changedIndices, so gating on changedIndices alone silently
+                                            // discarded pure-drop gestures and made small ink un-erasable.
+                                            // Once the path reaches any stroke, this stays true for every
+                                            // later tick (the full path is re-cut against the fixed BEGIN base).
+                                            if (outcome != null && outcome.changesLayer(snapshot.size)) {
+                                                withContext(Dispatchers.Main) {
+                                                    // A newer gesture has since started (its BEGIN bumped
+                                                    // eraseGeneration) — this MOVE's result is superseded and
+                                                    // must not touch the layer the newer gesture now owns.
+                                                    if (gen == eraseGeneration) {
+                                                        // True only for the first changing tick of THIS
+                                                        // gesture — see eraseHistoryPushed's doc for why that
+                                                        // yields exactly one undo entry per gesture.
+                                                        val push = !eraseHistoryPushed
+                                                        if (push) eraseHistoryPushed = true
+                                                        inkHandoff.releaseAll()
+                                                        readerVm.eraseInProgress(push, outcome.drawings)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                ErasePhase.END -> {
+                                    if (!eraseArmed) return@eraseGesture
+                                    erasePath = erasePath + pathMm
+                                    val handle = scoreHandle
+                                    if (handle == null) {
+                                        // Synchronous, runs on Main before any launch — no generation
+                                        // race possible here, so a plain unconditional disarm is correct.
+                                        eraseArmed = false
+                                        return@eraseGesture
+                                    }
+                                    val snapshot = eraseWorkingAtBegin
+                                    val path = erasePath
+                                    // Presets are DIAMETERS; applyErase wants a geometric radius.
+                                    val radiusMm = toolState.eraserWidth / 2f
+                                    // Captured on Main at launch — compared against the LIVE eraseGeneration
+                                    // in the Main publish below (see eraseGeneration's declaration doc). If a
+                                    // newer gesture's BEGIN has since bumped it, THIS END is stale: it must
+                                    // not publish its now-superseded committed layer, and — critically — must
+                                    // not disarm the NEWER gesture that's currently mid-drag.
+                                    val gen = eraseGeneration
+                                    annotationScope.launch(eraseDispatcher) {
+                                        val outcome = AnnotationEraseController.applyErase(
+                                            snapshot, handle, path, radiusMm,
+                                        )
+                                        // Same whiff rule as MOVE, and the same drop-aware "changed" test:
+                                        // a gesture that only DROPPED strokes has empty changedIndices but a
+                                        // shorter layer and must still commit — gating on changedIndices here
+                                        // was what left a scrubbed-out small remnant un-erased at END too.
+                                        // Re-anchoring only applies to fragments (there is nothing to re-anchor
+                                        // in a pure drop), so a drop-only cut commits outcome.drawings verbatim.
+                                        val committed = if (outcome != null && outcome.changesLayer(snapshot.size)) {
+                                            if (outcome.changedIndices.isNotEmpty()) {
+                                                AnnotationEraseController.reanchor(
+                                                    outcome.drawings, outcome.changedIndices, handle,
+                                                )
+                                            } else {
+                                                outcome.drawings
+                                            }
+                                        } else {
+                                            null
+                                        }
+                                        withContext(Dispatchers.Main) {
+                                            if (gen == eraseGeneration) {
+                                                if (committed != null) {
+                                                    // True only if no earlier tick of THIS gesture already
+                                                    // pushed — e.g. every change happened right at END, with
+                                                    // no changing MOVE before it.
+                                                    val push = !eraseHistoryPushed
+                                                    if (push) eraseHistoryPushed = true
+                                                    inkHandoff.releaseAll()
+                                                    readerVm.eraseCommitted(push, committed)
+                                                }
+                                                // committed == null: a whole-gesture whiff (native miss, or a
+                                                // cut that never touched anything) — per spec, publish
+                                                // NOTHING: no save, no undo entry, no phase 2. The layer stays
+                                                // exactly as the last changing MOVE tick left it (or untouched,
+                                                // for a gesture that never hit anything at all). Disarm either
+                                                // way — THIS gesture is over regardless of outcome, and
+                                                // (gen == eraseGeneration) confirms no newer gesture has
+                                                // started, so it's safe to disarm.
+                                                //
+                                                // KNOWN ACCEPTED RESIDUAL — not fixed: if this END is instead
+                                                // superseded (gen != eraseGeneration), it silently no-ops: its
+                                                // erased fragments were already published in-progress by its
+                                                // own MOVE ticks (so the next gesture builds on them), but its
+                                                // reanchor is dropped — those specific fragments stay on their
+                                                // inherited anchor until re-erased. Narrow, self-healing,
+                                                // requires a sub-second scrub-lift-scrub on a large layer.
+                                                eraseArmed = false
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        inkHandoff = inkHandoff,
                         onStrokeCaptured = { stroke, onCommitted ->
                             // Capture chains 5 sync native JNI calls (E5-M3) — off the main thread, then
                             // hand the result back to the VM (StateFlow.value assignment is thread-safe).
@@ -536,12 +809,23 @@ fun ReaderScreen(
                             if (handle == null) {
                                 onCommitted(null)
                             } else {
+                                // Snapshot the pen's color/width into locals HERE, on the main thread, before
+                                // launching — `penColorRGBA` is already a plain captured value, but
+                                // `toolState.activeWidth` is a live property re-read: referencing it directly
+                                // inside the coroutine below would re-evaluate it whenever that line actually
+                                // runs (after the async JNI capture chain), so a color/width change in the gap
+                                // between finger-up and the coroutine running would commit the stroke with the
+                                // NEW value while the wet layer had drawn it with the OLD one — a visible jump
+                                // at the wet→dry handoff. Locals fix the values to what was active when the
+                                // stroke actually finished.
+                                val capturedColorRGBA = penColorRGBA
+                                val capturedWidthMm = toolState.activeWidth
                                 annotationScope.launch(Dispatchers.Default) {
                                     val drawing = AnnotationCaptureController.capture(
                                         stroke = stroke,
-                                        tool = annotationTool,
-                                        colorRGBA = annotationColor,
-                                        baseWidthSp = ANNOTATION_BASE_WIDTH_SP,
+                                        tool = 0, // pen — the wet overlay never starts a stroke in eraser mode.
+                                        colorRGBA = capturedColorRGBA,
+                                        baseWidthSp = capturedWidthMm,
                                         scoreHandle = handle,
                                     )
                                     drawing?.let { readerVm.addDrawing(it) }
@@ -693,6 +977,18 @@ private fun ReadyScore(
     layoutGeneration: Int = 0,
     annotationTool: Int = 0,
     annotationColorRGBA: Long = 0x000000FFL,
+    // Document-mm brush size for the pen tool, sourced from the toolbar's AnnotationToolState
+    // (ReaderScreen's `toolState.activeWidth`, Task 8). While the eraser is selected this still reads
+    // `activeWidth` (the eraser's width, not a pen preset) — harmless because the brush built from it
+    // is never drawn with in that mode (see `eraserMode` below), just kept non-null.
+    annotationWidthMm: Float = 1.2f,
+    // True while the eraser tool is selected — swaps the wet overlay from stroke-drawing to the
+    // partial-erase gesture path (see AnnotationWetOverlay's `eraserMode`).
+    eraserMode: Boolean = false,
+    onEraseGesture: (phase: ErasePhase, pathMm: List<Offset>) -> Unit = { _, _ -> },
+    // Shared with the Scaffold's bottomBar toolbar (undo/redo) one level up — see its declaration
+    // site in ReaderScreen for why this is hoisted rather than `remember`ed locally here.
+    inkHandoff: AnnotationHandoffQueue<DrawingAnchorWire>,
     onStrokeCaptured: (stroke: Stroke, onCommitted: (DrawingAnchorWire?) -> Unit) -> Unit =
         { _, onCommitted -> onCommitted(null) },
 ) {
@@ -720,10 +1016,10 @@ private fun ReadyScore(
     // removal until the dry overlay has painted the committed stroke — otherwise the ink blinks out at
     // finger-up for the whole asynchronous commit. A retained copy is frozen at the transform captured when
     // the stroke finished, so a camera change retires it: a brief blink beats a stroke sitting at the old
-    // zoom over a rescaled score.
-    val inkHandoff = remember { AnnotationHandoffQueue<DrawingAnchorWire>() }
-    // Watched through snapshotFlow rather than as LaunchedEffect keys: `scale` changes every frame of a
-    // pinch, and keying on it would cancel and relaunch the effect just as often.
+    // zoom over a rescaled score. [inkHandoff] itself is a parameter now (hoisted to ReaderScreen — its
+    // declaration site there explains why), but this camera-retire watch stays here since it needs the
+    // local `scale` state. Watched through snapshotFlow rather than as LaunchedEffect keys: `scale`
+    // changes every frame of a pinch, and keying on it would cancel and relaunch the effect just as often.
     LaunchedEffect(Unit) {
         snapshotFlow { scale }.drop(1).collect { inkHandoff.releaseAll() }
     }
@@ -967,11 +1263,14 @@ private fun ReadyScore(
                                 setScale(fitPxPerMM * scale, fitPxPerMM * scale)
                             }
                         }
-                        val brush = remember(annotationTool, annotationColorRGBA) {
+                        // Re-keyed on color + width only (not `annotationTool`, which is fixed pen(0) for
+                        // every wet stroke — the eraser never starts one). While the eraser is selected
+                        // this still builds a valid brush from its (unused) width — see the parameter doc.
+                        val brush = remember(annotationColorRGBA, annotationWidthMm) {
                             InkBrushMapping.brushFor(
                                 annotationTool,
                                 annotationColorRGBA,
-                                widthSp = ANNOTATION_BASE_WIDTH_SP,
+                                widthSp = annotationWidthMm,
                             )
                         }
                         AnnotationWetOverlay(
@@ -986,6 +1285,8 @@ private fun ReadyScore(
                             // handles the 2-finger gesture once the wet overlay cancels its stroke and
                             // returns `false` from ACTION_POINTER_DOWN — nothing further needed here.
                             onTwoFingerGesture = {},
+                            eraserMode = eraserMode,
+                            onEraseGesture = onEraseGesture,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(vertical = with(density) { vPadPx.toDp() }),

@@ -45,6 +45,27 @@ object ReaderAnnotationJNI {
         ).toByteArray()
     }
 
+    /** Cut the layer along an eraser path. Empty result = the call failed; leave the layer alone. */
+    fun erase(drawingsBytes: ByteArray, transformsBytes: ByteArray, requestBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeAnnotationErase(
+            SwiftData.fromByteArray(drawingsBytes, arena),
+            SwiftData.fromByteArray(transformsBytes, arena),
+            SwiftData.fromByteArray(requestBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /** Place an anchor-relative stored stroke into document-mm via its display transform. Empty = miss. */
+    fun place(strokeBytes: ByteArray, transformBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeAnnotationPlace(
+            SwiftData.fromByteArray(strokeBytes, arena),
+            SwiftData.fromByteArray(transformBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
     /** Encode a raw androidx.ink stroke (RawInkStrokeWire bytes, document-mm) into neutral InkStroke FINK bytes. */
     fun encodeInkStroke(rawBytes: ByteArray): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA

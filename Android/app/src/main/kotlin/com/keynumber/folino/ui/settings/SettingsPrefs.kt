@@ -4,9 +4,13 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.keynumber.folino.reader.ink.AnnotationTool
+import com.keynumber.folino.reader.ink.AnnotationToolState
+import com.keynumber.folino.reader.ink.AnnotationWidths
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -68,6 +72,22 @@ object SettingsKeys {
      * `privacyAnalyticsEnabled`. The toggle is an opt-*out*.
      */
     val analyticsEnabled = booleanPreferencesKey("privacy.analytics.enabled")
+
+    /**
+     * Per-pen stroke widths for the annotation toolbar (index into
+     * [com.keynumber.folino.reader.ink.AnnotationToolbarDefaults.DEFAULT_COLORS]). Each palette slot
+     * remembers its own width independently, mirroring [AnnotationToolState.penWidths].
+     */
+    val annotationPenWidths = listOf(0, 1, 2, 3).map { floatPreferencesKey("annotation.penWidth$it") }
+
+    /** Stroke width (document mm) for the partial eraser, shared across all uses. */
+    val annotationEraserWidth = floatPreferencesKey("annotation.eraserWidth")
+
+    /**
+     * Encoded selected annotation tool: `"pen:<colorIndex>"` or `"eraser"`. See
+     * [decodeAnnotationTool] / [encodeAnnotationTool] for the total encode/decode pair.
+     */
+    val annotationSelectedTool = stringPreferencesKey("annotation.selectedTool")
 }
 
 class SettingsPrefs(private val context: Context) {
@@ -92,6 +112,21 @@ class SettingsPrefs(private val context: Context) {
     val analytics: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.analyticsEnabled] ?: true }
 
+    /**
+     * Combined annotation pen-setup snapshot (four pen widths, the eraser width, the selected tool).
+     * Missing/garbage-encoded keys fall back to the [AnnotationToolState] no-arg defaults field by
+     * field, so a fresh install or a partially-written prefs blob never fails to produce a value.
+     */
+    val annotationToolState: Flow<AnnotationToolState> = context.dataStore.data.map { p ->
+        AnnotationToolState(
+            selected = decodeAnnotationTool(p[SettingsKeys.annotationSelectedTool]),
+            penWidths = SettingsKeys.annotationPenWidths.mapIndexed { i, key ->
+                p[key] ?: AnnotationWidths.PEN_DEFAULTS[i]
+            },
+            eraserWidth = p[SettingsKeys.annotationEraserWidth] ?: AnnotationWidths.ERASER_PRESETS[1],
+        )
+    }
+
     suspend fun setMetronome(v: Boolean) = context.dataStore.edit { it[SettingsKeys.metronomeEnabled] = v }
     suspend fun setPip(v: Boolean) = context.dataStore.edit { it[SettingsKeys.pipEnabled] = v }
     suspend fun setCollapseRests(v: Boolean) = context.dataStore.edit { it[SettingsKeys.collapseRests] = v }
@@ -114,4 +149,49 @@ class SettingsPrefs(private val context: Context) {
 
     suspend fun setAnalytics(v: Boolean) =
         context.dataStore.edit { it[SettingsKeys.analyticsEnabled] = v }
+
+    /**
+     * Persists the whole annotation pen setup (four pen widths, eraser width, selected tool) in one
+     * edit. `s.penWidths.getOrElse` (not a bare index) because [AnnotationToolState]'s constructor
+     * doesn't constrain `penWidths.size` to 4 — a hypothetical caller passing a shorter list must not
+     * crash the write; it degrades to that slot's shipping default instead.
+     */
+    suspend fun setAnnotationToolState(s: AnnotationToolState) = context.dataStore.edit { p ->
+        SettingsKeys.annotationPenWidths.forEachIndexed { i, key ->
+            p[key] = s.penWidths.getOrElse(i) { AnnotationWidths.PEN_DEFAULTS[i] }
+        }
+        p[SettingsKeys.annotationEraserWidth] = s.eraserWidth
+        p[SettingsKeys.annotationSelectedTool] = encodeAnnotationTool(s.selected)
+    }
+}
+
+/**
+ * Encodes [AnnotationTool] as the wire string persisted under [SettingsKeys.annotationSelectedTool]:
+ * `"pen:<colorIndex>"` for [AnnotationTool.Pen], `"eraser"` for [AnnotationTool.Eraser]. Inverse of
+ * [decodeAnnotationTool]. `internal` (not `private`) so the unit test can exercise the round trip
+ * directly, matching the minimal-visibility convention used across the repo.
+ */
+internal fun encodeAnnotationTool(tool: AnnotationTool): String = when (tool) {
+    is AnnotationTool.Pen -> "pen:${tool.colorIndex}"
+    AnnotationTool.Eraser -> "eraser"
+}
+
+/**
+ * Decodes the wire string written by [encodeAnnotationTool] back into an [AnnotationTool]. TOTAL:
+ * `null`, `""`, a bare numeric string with no `"pen:"` prefix (e.g. `"2"`), any other unrecognized
+ * string, or a `"pen:<n>"` whose index falls outside the four pen-width slots (`0..3`) all degrade to
+ * `AnnotationTool.Pen(0)` rather than throwing — a persisted value from a future preset table, a
+ * corrupted prefs blob, or a first-launch absence must never crash composition. The `startsWith`
+ * guard is load-bearing: without it, `removePrefix("pen:")` is a no-op on a prefix-less string, so a
+ * bare `"2"` would silently parse as `Pen(2)` instead of falling through to the unrecognized-string
+ * case the spec requires.
+ */
+internal fun decodeAnnotationTool(raw: String?): AnnotationTool {
+    if (raw == "eraser") return AnnotationTool.Eraser
+    if (raw != null && raw.startsWith("pen:")) {
+        raw.removePrefix("pen:").toIntOrNull()
+            ?.takeIf { it in AnnotationWidths.PEN_DEFAULTS.indices }
+            ?.let { return AnnotationTool.Pen(it) }
+    }
+    return AnnotationTool.Pen(0)
 }
