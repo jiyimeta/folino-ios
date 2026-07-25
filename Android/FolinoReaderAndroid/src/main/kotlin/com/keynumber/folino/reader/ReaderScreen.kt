@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -998,7 +999,19 @@ private fun ReadyScore(
     val page = state.program.pages.first()
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-    var scale by remember { mutableFloatStateOf(1f) }
+    // Held as the state object, not just through the `by` delegate, so the score surface's
+    // `graphicsLayer` block can read it during the LAYER phase rather than capturing a composed value —
+    // see `scoreSurfaceModifier` below for why that distinction is what makes a pinch cheap.
+    val scaleState = remember { mutableFloatStateOf(1f) }
+    var scale by scaleState
+    // The zoom the score's bands were last RECORDED at, as opposed to `scale`, which is where the
+    // fingers are right now. Splitting the two is what keeps a pinch off the re-record path: `pxPerMM`
+    // feeds band geometry and glyph rasterisation, so following the live scale re-records all of the
+    // score's draw commands every frame of the gesture. Instead the bands stay recorded at
+    // `rasterScale`, a layer transform covers the difference while the fingers are down, and the one
+    // real re-raster happens when they lift.
+    val rasterScaleState = remember { mutableFloatStateOf(1f) }
+    var rasterScale by rasterScaleState
     // Drives AnnotationDryOverlay's reflow-recompute gate (skip recompute mid-stroke). MVP leaves
     // this always false and relies on the dry overlay's own recompute-on-`drawings`-change instead —
     // flipping it true for the duration of an active wet stroke (via the wet overlay's own
@@ -1162,6 +1175,15 @@ private fun ReadyScore(
                             }
                         }
                     } while (event.changes.any { it.pressed })
+                    // Fingers up: re-record the score at the zoom it is now being shown at, which also
+                    // returns the surface's layer transform to identity. Until this runs the bands are
+                    // a scaled copy of their last recording — sharp enough mid-gesture, since a layer
+                    // transform still scales vector ops rather than a bitmap, but the glyphs were
+                    // rasterised for the old size. Skipped when the scale did not move, so an ordinary
+                    // tap or scroll gesture costs nothing here.
+                    if (rasterScaleState.floatValue != scaleState.floatValue) {
+                        rasterScaleState.floatValue = scaleState.floatValue
+                    }
                 }
             },
         contentAlignment = Alignment.TopStart,
@@ -1197,6 +1219,25 @@ private fun ReadyScore(
                     height = with(density) { (contentHeightPx + vPadPx * 2 + bottomPadPx).toDp() },
                 ),
             ) {
+                // Remembered as one object rather than rebuilt per composition, and reading the two
+                // scales INSIDE the `graphicsLayer` block rather than outside it. Both matter, for the
+                // same reason: a pinch changes `scale` every frame, which recomposes this function, and
+                // a fresh modifier instance would make `BandedScorePage` un-skippable — every band would
+                // recompose, its `drawBehind` lambda would be replaced, and the whole score would
+                // re-record. Kept stable, the bands are skipped entirely and the gesture only updates
+                // this one layer's transform. `transformOrigin` is the top-left because the score is
+                // drawn from the surface's origin, matching how the content box grows.
+                val scoreSurfaceModifier = remember(vPadPx, density) {
+                    Modifier
+                        .fillMaxSize()
+                        .padding(vertical = with(density) { vPadPx.toDp() })
+                        .graphicsLayer {
+                            val zoom = scaleState.floatValue / rasterScaleState.floatValue
+                            scaleX = zoom
+                            scaleY = zoom
+                            transformOrigin = TransformOrigin(0f, 0f)
+                        }
+                }
                 // Banded, not plain `ScorePage`: the vertical layout is ONE page as tall as the whole
                 // document, so a single Canvas would put every command of the score in one display list.
                 // Scrolling does not re-record that list (a scroll container places its content with its
@@ -1217,10 +1258,10 @@ private fun ReadyScore(
                 BandedScorePage(
                     page = page,
                     fontProvider = fontProvider,
-                    pxPerMM = fitPxPerMM * scale,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(vertical = with(density) { vPadPx.toDp() }),
+                    // `rasterScale`, not `scale` — this only moves when a pinch ends, so the bands are
+                    // recorded once per gesture instead of once per frame.
+                    pxPerMM = fitPxPerMM * rasterScale,
+                    modifier = scoreSurfaceModifier,
                 )
                 val abAccent = MaterialTheme.colorScheme.primary
                 val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
