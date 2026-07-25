@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -73,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.ink.strokes.Stroke
@@ -96,6 +98,7 @@ import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import io.github.jiyimeta.sheetmusic.compose.cursor.LoopHighlightOverlay
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
+import io.github.jiyimeta.sheetmusic.compose.render.BandedScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
 import kotlinx.coroutines.Dispatchers
@@ -1168,10 +1171,21 @@ private fun ReadyScore(
         // scrolling is off entirely — the wet overlay above consumes the single-finger drag as a
         // stroke instead; a 2-finger gesture still reaches the pinch pointerInput (a separate,
         // always-installed handler) so pan/zoom keeps working mid-annotation.
-        val scrollModifier = when {
-            annotationMode -> Modifier
-            isZoomed -> Modifier.verticalScroll(vScroll).horizontalScroll(hScroll)
-            else -> Modifier.verticalScroll(vScroll)
+        //
+        // Annotation turns the gesture OFF via `enabled = false` rather than dropping to a bare
+        // `Modifier`. Dropping the modifier also drops what it brings besides the gesture: the scroll
+        // offset (the score would jump back to its top the moment the pencil is armed) and — the
+        // expensive part — the `placeRelativeWithLayer` that gives the scrolled content its own
+        // RenderNode. Without that layer every wet-ink frame invalidates all the way up to the root
+        // and re-records the whole score's display list, which is what made drawing crawl on long
+        // scores. `enabled = false` keeps both and still consumes no drags.
+        val scrollEnabled = !annotationMode
+        val scrollModifier = if (isZoomed) {
+            Modifier
+                .verticalScroll(vScroll, enabled = scrollEnabled)
+                .horizontalScroll(hScroll, enabled = scrollEnabled)
+        } else {
+            Modifier.verticalScroll(vScroll, enabled = scrollEnabled)
         }
 
         Box(scrollModifier) {
@@ -1183,12 +1197,29 @@ private fun ReadyScore(
                     height = with(density) { (contentHeightPx + vPadPx * 2 + bottomPadPx).toDp() },
                 ),
             ) {
-                ScorePage(
+                // Banded, not plain `ScorePage`: the vertical layout is ONE page as tall as the whole
+                // document, so a single Canvas would put every command of the score in one display list.
+                // Scrolling does not re-record that list (a scroll container places its content with its
+                // own layer), but the renderer still walks and rejects every op each frame — tens of
+                // thousands of them on a long score. `BandedScorePage` slices the page and gives each
+                // band its own layer, so off-screen bands are rejected once by their bounds.
+                //
+                // It also stops the overlays below from dragging the score into their re-records: while
+                // the score shared the scroll container's layer, every playback-cursor tick (~30/s),
+                // every ink frame, and every A–B marker change re-recorded all of the score's commands.
+                // Deliberately NOT wrapped in a `graphicsLayer` here — that would collapse the bands back
+                // into one layer and undo both effects.
+                //
+                // `fillMaxSize` (not `fillMaxWidth`): a Compose `Canvas` is a `Spacer`, so it only takes
+                // a dimension the constraints FIX. Under `fillMaxWidth` the score surface was the full
+                // content width but only `vPadPx * 2` tall and painted everything outside its own bounds,
+                // which leaves a layer nothing useful to cull against.
+                BandedScorePage(
                     page = page,
                     fontProvider = fontProvider,
                     pxPerMM = fitPxPerMM * scale,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .padding(vertical = with(density) { vPadPx.toDp() }),
                 )
                 val abAccent = MaterialTheme.colorScheme.primary
@@ -1251,16 +1282,29 @@ private fun ReadyScore(
                         onRendered = inkHandoff::onDryRendered,
                     )
                     if (annotationMode) {
-                        // Wet (in-progress) capture layer, on top, only while annotating. Its
-                        // `worldToScreen` camera MUST match AnnotationDryOverlay's `camera` above
-                        // (pure scale, no translate): both overlays are mounted with the identical
-                        // `.padding(vertical = vPadPx.toDp())`, which already shifts the
-                        // AndroidView/Canvas origin down by vPadPx — re-adding it here via
-                        // postTranslate would double-offset in-progress strokes relative to the
-                        // dry (persisted) render underneath them.
-                        val worldToScreen = remember(fitPxPerMM, scale) {
+                        // Wet (in-progress) capture layer, on top, only while annotating.
+                        //
+                        // Sized to the VIEWPORT, not to the document like its sibling overlays.
+                        // androidx.ink draws an in-progress stroke through a front-buffered layer sized to
+                        // this view, and a continuous layout is one page as tall as the whole score — 1080
+                        // x 72633 px on a 4-minute piece. That is past SurfaceFlinger's 65536 render-target
+                        // limit, so the buffer allocation fails outright ("Attempted to create an
+                        // ExternalTexture ... that exceeds render target size limit"), ink never appears,
+                        // and the frame the failure lands on can hang the app. Only the height needs
+                        // clamping: the width tops out at the 8x zoom ceiling, far inside the limit.
+                        //
+                        // The window is pinned to the visible area by offsetting it by the scroll position,
+                        // and `worldToScreen` folds that same offset in (plus the vPad the sibling overlays
+                        // get from their padding) so document coordinates still land exactly where the dry
+                        // layer paints them. Reading `vScroll.value` during composition is safe here
+                        // precisely because this layer only exists while annotating, and annotating
+                        // disables scrolling — the value cannot change under us mid-session.
+                        val wetWindowTopPx = vScroll.value
+                        val wetWindowHeightPx = viewportSize.height.coerceAtLeast(0)
+                        val worldToScreen = remember(fitPxPerMM, scale, wetWindowTopPx) {
                             android.graphics.Matrix().apply {
                                 setScale(fitPxPerMM * scale, fitPxPerMM * scale)
+                                postTranslate(0f, vPadPx - wetWindowTopPx)
                             }
                         }
                         // Re-keyed on color + width only (not `annotationTool`, which is fixed pen(0) for
@@ -1288,8 +1332,9 @@ private fun ReadyScore(
                             eraserMode = eraserMode,
                             onEraseGesture = onEraseGesture,
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(vertical = with(density) { vPadPx.toDp() }),
+                                .fillMaxWidth()
+                                .height(with(density) { wetWindowHeightPx.toDp() })
+                                .offset { IntOffset(0, wetWindowTopPx) },
                         )
                     }
                 }
@@ -2042,7 +2087,10 @@ internal fun HorizontalScore(
                         page = page,
                         fontProvider = fontProvider,
                         pxPerMM = fitPxPerMM * scale,
-                        modifier = Modifier.fillMaxSize(),
+                        // Own RenderNode, for the same reason as the vertical surface above: the cursor
+                        // and A–B overlays below are siblings in this Box, and without a layer here each
+                        // of their updates re-records the whole row's draw commands.
+                        modifier = Modifier.fillMaxSize().graphicsLayer(),
                     )
                     val abAccent = MaterialTheme.colorScheme.primary
                     val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
