@@ -48,6 +48,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.keynumber.folino.export.ScoreShareLauncher
+import com.keynumber.folino.library.HiddenStaffEntryWire
 import com.keynumber.folino.library.ReaderPreferencesController
 import com.keynumber.folino.library.ScoreExportFormatWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
@@ -577,6 +578,14 @@ private fun LibraryNavGraph(
                     },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
+                    // Seed the file's authored-hidden staves (<Part><show>0</show>) into this score's hidden
+                    // set once the parts load. The bridge reconciles once (retroactive back-fill for existing
+                    // rows), then leaves user reveals untouched — mirroring iOS.
+                    onAuthoredHiddenStavesReady = { authored ->
+                        prefsVm.seedAuthoredHidden(
+                            authored.map { HiddenStaffEntryWire(it.partIndex, it.staffIndexInPart) },
+                        )
+                    },
                     onDisplayOptionsChange = { o ->
                         // Reader-initiated layout switch (display-options inspector). Distinct event from the Settings
                         // `setting_changed` layout_mode key, mirroring iOS layout_mode_changed.

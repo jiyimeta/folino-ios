@@ -219,6 +219,8 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                         defaultClefRawType = staff.defaultClefRawType,
                     )
                 },
+                // MuseScore <Part><show>: 1 = shown, 0 = authored-hidden.
+                isVisibleInScore = part.isVisibleInScore.toInt() != 0,
             )
         }
     }

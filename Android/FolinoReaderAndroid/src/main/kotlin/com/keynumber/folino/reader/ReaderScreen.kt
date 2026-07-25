@@ -153,6 +153,9 @@ fun ReaderScreen(
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.VERTICAL,
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
+    /** Called once the score's parts load with the staves the file authored as hidden (`<Part><show>0</show>`).
+     * The app module seeds these into the per-score hidden set via the ReaderPreferences bridge. */
+    onAuthoredHiddenStavesReady: (Set<StaffAddress>) -> Unit = {},
     onBack: () -> Unit,
     onEditInfo: () -> Unit = {},
     /** Opens the share flow for this score (export-format picker → export → system share sheet). The
@@ -331,6 +334,11 @@ fun ReaderScreen(
     val staffAddressByIndex = remember(mixerParts) { mixerParts.staffAddressByIndex() }
     val addressToIndex = remember(staffAddressByIndex) {
         staffAddressByIndex.entries.associate { (index, addr) -> addr to index }
+    }
+    // Once the parts load, hand the file's authored-hidden staves (<Part><show>0</show>) to the app layer to
+    // seed into the per-score hidden set. Idempotent on the bridge (reconciles once), so re-firing is safe.
+    LaunchedEffect(mixerParts) {
+        if (mixerParts.isNotEmpty()) onAuthoredHiddenStavesReady(mixerParts.authoredHiddenStaffAddresses())
     }
     // Replay persisted per-staff mixer overrides after each prepare. Resolve each saved StaffAddress to
     // its current flat staffIndex via the parts map; skip any address that doesn't resolve (guards the
