@@ -15,6 +15,9 @@ extension ReaderViewModel: PlaybackMixerHost {
     var playbackController: (any PlaybackController)? {
         playbackSession.controller
     }
+
+    // `playbackScore` — the third `PlaybackMixerHost` requirement — is declared in `ReaderViewModel+PDFPlayback.swift`
+    // alongside the rest of the PDF-playback surface, and satisfies the conformance from there.
 }
 
 // MARK: - ScoreInfoEditing conformance

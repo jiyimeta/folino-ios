@@ -102,8 +102,19 @@ fun layoutOptionsFromPrefs(
 /** One staff within a part, for the inspector's Parts section. */
 data class StaffDescriptor(val address: StaffAddress, val defaultClefRawType: String)
 
-/** One part (instrument) with its staves, for the inspector's Parts section. */
-data class PartDescriptor(val name: String, val staves: List<StaffDescriptor>)
+/**
+ * One part (instrument) with its staves, for the inspector's Parts section. [isVisibleInScore] mirrors MuseScore's
+ * `<Part><show>` (false when the file authored the part as hidden), from the ssm `PartWire`.
+ */
+data class PartDescriptor(val name: String, val staves: List<StaffDescriptor>, val isVisibleInScore: Boolean)
+
+/**
+ * Staff addresses of every part the file authored as hidden (`isVisibleInScore == false`). Mirrors the shared Swift
+ * `Score.authoredHiddenStaffAddresses` — a hidden part contributes all of its staves. The app layer seeds these into
+ * the per-score hidden-staff set so an authored-hidden instrument opens hidden by default.
+ */
+fun List<PartDescriptor>.authoredHiddenStaffAddresses(): Set<StaffAddress> =
+    filter { !it.isVisibleInScore }.flatMap { part -> part.staves.map { it.address } }.toSet()
 
 /**
  * Flat `staffIndex -> StaffAddress` map for the mixer. The engine addresses mixer channels by a flat

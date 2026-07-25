@@ -48,6 +48,10 @@ struct PlaybackInspectorScreen: View {
     let playbackSession: ReaderPlaybackSession
     /// True when the Reader was opened from a playlist — gates whether the continuation row is shown.
     let isInPlaylist: Bool
+    /// Whether each staff row carries the show/hide eye. Every other control here drives the engine and so applies
+    /// verbatim to a playable PDF, but staff visibility re-derives the *rendered* score — which a fixed-layout PDF
+    /// can't do — so the PDF reader opts out.
+    var showsStaffVisibility = true
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
     @AppStorage(ReaderGlobalSettingsKey.precountEnabled) private var isPrecountEnabled = false
@@ -319,7 +323,9 @@ struct PlaybackInspectorScreen: View {
             .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isMuted))
             .accessibilityLabel(Text("reader.inspector.staffMute", bundle: .module))
 
-            StaffVisibilityButton(layoutModel: layoutModel, address: address)
+            if showsStaffVisibility {
+                StaffVisibilityButton(layoutModel: layoutModel, address: address)
+            }
         }
     }
 }

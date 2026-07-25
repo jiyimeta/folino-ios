@@ -38,35 +38,20 @@ final class ReaderPreferencesStore {
     /// revealed. Callers with no notation score (PDFs) pass the empty default.
     @discardableResult
     func loadOrSeed(authoredHiddenStaves: Set<StaffAddress> = []) async -> ReaderPreferences {
-        do {
-            if let stored = try await repository.loadReaderPreferences(for: scoreItemID) {
-                // Loading an existing row stays read-only unless there are authored-hidden staves to
-                // back-fill into a pre-feature row. A score with nothing authored-hidden (the common
-                // case) never triggers a write on open — its `hasSeededAuthoredVisibility` is
-                // irrelevant since there is nothing to re-hide.
-                guard !stored.hasSeededAuthoredVisibility, !authoredHiddenStaves.isEmpty else {
-                    preferences = stored
-                    return stored
-                }
-                var backfilled = stored
-                backfilled.hiddenStaves.formUnion(authoredHiddenStaves)
-                backfilled.hasSeededAuthoredVisibility = true
-                preferences = backfilled
-                try? await repository.saveReaderPreferences(backfilled)
-                return backfilled
-            }
-        } catch {
-            // Persistence error is non-fatal; fall through to seed defaults.
-        }
-        let seeded = ReaderPreferences(
+        // A persistence error is non-fatal — `try?` collapses "no row" and "load failed" alike into
+        // the no-stored-value seed path. `reconcilingAuthoredHidden` is the shared iOS/Android rule.
+        let stored = await (try? repository.loadReaderPreferences(for: scoreItemID))
+        let (resolved, shouldPersist) = ReaderPreferences.reconcilingAuthoredHidden(
+            stored: stored,
+            authoredHiddenStaves: authoredHiddenStaves,
             scoreItemID: scoreItemID,
-            staffSize: defaultStaffSize,
-            hiddenStaves: authoredHiddenStaves,
-            hasSeededAuthoredVisibility: true,
+            defaultStaffSize: defaultStaffSize,
         )
-        preferences = seeded
-        try? await repository.saveReaderPreferences(seeded)
-        return seeded
+        preferences = resolved
+        if shouldPersist {
+            try? await repository.saveReaderPreferences(resolved)
+        }
+        return resolved
     }
 
     /// Applies `apply` to a working copy, then re-seats through `ReaderPreferences.init` so clamping rules
