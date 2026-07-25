@@ -263,14 +263,14 @@ final class ReaderViewModel {
 
     private func wireRepeatModel() {
         // The repeat *mode* is global (persisted by `RepeatModel` itself via `RepeatModeStorage`); only the per-score
-        // A–B endpoints are saved here.
+        // A–B endpoints are saved here, and they snap against `playbackScore` (a playable PDF's parsed score too).
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
             await preferencesStore.mutate { prefs in
                 prefs.abRepeat = self.repeatModel.abRange
             }
         }
-        repeatModel.scoreProvider = { [weak self] in self?.loadState.score }
+        repeatModel.scoreProvider = { [weak self] in self?.playbackScore }
         repeatModel.cursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
         repeatModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
         // Fired only on a Reader-initiated mode change (the inspector picker or `setMode`), never on a sync from
