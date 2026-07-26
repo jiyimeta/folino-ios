@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PictureInPicture
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.Stop
@@ -69,6 +70,7 @@ fun SettingsScreen(
     val pip by prefs.pip.collectAsState(initial = false)
     val collapse by prefs.collapseRests.collectAsState(initial = false)
     val keepAwake by prefs.keepAwake.collectAsState(initial = true)
+    val precount by prefs.precount.collectAsState(initial = false)
     val layout by prefs.layoutMode.collectAsState(initial = "page")
     val a4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
     val crashReporting by prefs.crashReporting.collectAsState(initial = true)
@@ -110,6 +112,17 @@ fun SettingsScreen(
                 onChange = { v ->
                     scope.launch { prefs.setMetronome(v) }
                     AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("metronome", v))
+                },
+            )
+        }
+        item {
+            ToggleRow(
+                icon = Icons.Filled.Timer,
+                title = stringResource(R.string.settings_reader_precount),
+                checked = precount,
+                onChange = { v ->
+                    scope.launch { prefs.setPrecount(v) }
+                    AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("precount", v))
                 },
             )
         }

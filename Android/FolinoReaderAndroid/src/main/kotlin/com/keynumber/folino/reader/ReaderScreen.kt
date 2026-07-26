@@ -196,8 +196,9 @@ fun ReaderScreen(
     persistTempoMultiplier: (Double) -> Unit = {},
     /** Persists the per-score A4 reference pitch on user change. */
     persistA4ReferenceHz: (Double) -> Unit = {},
-    /** Per-score transpose value (semitones) restored when the score opens. Persist-only: nothing
-     * transposes audio or notation on Android yet — the inspector stepper only writes this value. */
+    /** Per-score transpose (semitones, −7..7). Drives BOTH halves: the caller folds it into
+     * `displayOptions` for the re-spelled layout, and the Reader pushes it to the engine for the
+     * matching tuning shift. */
     transposeSemitones: Int = 0,
     /** Persists the per-score transpose value (semitones) on user change. */
     persistTranspose: (Int) -> Unit = {},
@@ -223,6 +224,8 @@ fun ReaderScreen(
     /** When true (SettingsPrefs default), the screen is kept from dimming/locking while the Reader
      * is on screen — applied via [KeepScreenOn]. */
     keepScreenAwake: Boolean = true,
+    /** When true, play() counts a measure of clicks in before the score starts (global SettingsPrefs). */
+    countInEnabled: Boolean = false,
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
@@ -640,6 +643,16 @@ fun ReaderScreen(
     // soundfont-reload re-push keeps it, and re-push whenever the global flag changes.
     LaunchedEffect(metronomeEnabled, scoreHandle) {
         audioVm.setMetronomeEnabled(metronomeEnabled)
+    }
+    // Audible half of transpose. The notation half rides on `displayOptions` (a re-spelled layout); this
+    // retunes the melodic channels. Re-pushed on scoreHandle because a fresh synth starts at concert
+    // pitch, so a score opened while transposed would otherwise sound untransposed.
+    LaunchedEffect(transposeSemitones, scoreHandle) {
+        audioVm.setTranspose(transposeSemitones)
+    }
+    // Count-in is global (SettingsPrefs), consumed by the engine at the next play().
+    LaunchedEffect(countInEnabled, scoreHandle) {
+        audioVm.setCountInEnabled(countInEnabled)
     }
     // Parts descriptor → flat staffIndex map: the mixer addresses channels by a flat staffIndex, the
     // ReaderPreferences bridge persists overrides by positional StaffAddress. This map (built from the

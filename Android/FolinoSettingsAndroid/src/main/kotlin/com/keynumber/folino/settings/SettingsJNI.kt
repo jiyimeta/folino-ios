@@ -26,4 +26,13 @@ object SettingsJNI {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeLoadVersionHistory(SwiftData.fromByteArray(ymlBytes, arena), arena).toByteArray()
     }
+
+    /**
+     * Whether cold launch number [coldLaunchCount] (1-based) is one where the review prompt should be
+     * shown, per the shared `Domain.ReviewPromptCadence` — the same schedule iOS uses, so neither
+     * platform re-derives "how often do we ask". Counting the launches and invoking Play's review flow
+     * stay on this side.
+     */
+    fun nativeShouldPromptForReview(coldLaunchCount: Int): Boolean =
+        SwiftJavaJNI.nativeShouldPromptForReview(coldLaunchCount)
 }

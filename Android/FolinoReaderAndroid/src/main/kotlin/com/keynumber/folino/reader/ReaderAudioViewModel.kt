@@ -322,6 +322,13 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _globalA4ReferenceHz = MutableStateFlow(440.0)
     val globalA4ReferenceHz: StateFlow<Double> = _globalA4ReferenceHz.asStateFlow()
 
+    // Transpose / count-in are pushed down from the Reader (per-score and global respectively) and held
+    // here so [preparePlayback] can re-apply them: a prepare builds a fresh synth at concert pitch with
+    // the setting cleared, so without this a score opened while transposed would sound at pitch and a
+    // count-in would silently stop happening after a soundfont swap.
+    private var transposeSemitones: Int = 0
+    private var countInEnabled: Boolean = false
+
     /** Sets master output volume (0..1) and reflects it for the inspector UI. */
     fun setMasterVolume(volume: Float) {
         _masterVolume.value = volume
@@ -332,6 +339,24 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     fun setMetronomeEnabled(enabled: Boolean) {
         _metronomeEnabled.value = enabled
         engine.value?.setMetronomeEnabled(enabled)
+    }
+
+    /**
+     * Audible half of transpose: retunes the melodic channels by [semitones]. The notation half is the
+     * re-spelled layout the Reader requests through its display options — both are driven from the same
+     * per-score value, so they cannot drift apart.
+     *
+     * Held so it can be re-applied after a prepare (a fresh synth starts at concert pitch).
+     */
+    fun setTranspose(semitones: Int) {
+        transposeSemitones = semitones
+        engine.value?.setTranspose(semitones)
+    }
+
+    /** Global count-in setting, consumed by the engine at the next `play()`. */
+    fun setCountInEnabled(enabled: Boolean) {
+        countInEnabled = enabled
+        engine.value?.countInEnabled = enabled
     }
 
     /**
@@ -430,6 +455,11 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
                 // restored here so a reopened score starts at the user's saved values.
                 e.setMasterVolume(_masterVolume.value)
                 e.setRate(_tempoSeed.value)
+                // Transpose is a tuning shift on the same melodic channels the A4 calibration above
+                // uses, and prepare cleared it with the rest; count-in is a plain flag the fresh engine
+                // starts with off. Re-push both so a reopened (or soundfont-swapped) score keeps them.
+                e.setTranspose(transposeSemitones)
+                e.countInEnabled = countInEnabled
                 // Re-apply the active loop now that a player is prepared (engine loop calls are
                 // no-ops before prepare). Restores a persisted A–B range or full-score loop.
                 _repeatController.value?.reapply()

@@ -18,6 +18,12 @@ val Context.dataStore by preferencesDataStore(name = "folino_settings")
 
 object SettingsKeys {
     val metronomeEnabled = booleanPreferencesKey("reader.metronome.enabled")
+
+    /**
+     * Whether playback counts a measure of clicks in before the score starts. Same key name as iOS
+     * `ReaderGlobalSettingsKey.precountEnabled`; default off, as on iOS.
+     */
+    val precountEnabled = booleanPreferencesKey("readerPrecountEnabled")
     val pipEnabled = booleanPreferencesKey("reader.pictureInPicture.enabled")
     val collapseRests = booleanPreferencesKey("reader.collapseMultiMeasureRests")
     val keepAwake = booleanPreferencesKey("reader.keepScreenAwake.enabled")
@@ -107,6 +113,7 @@ object SettingsKeys {
 
 class SettingsPrefs(private val context: Context) {
     val metronome: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.metronomeEnabled] ?: false }
+    val precount: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.precountEnabled] ?: false }
     val pip: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pipEnabled] ?: false }
     val collapseRests: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.collapseRests] ?: false }
     val keepAwake: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.keepAwake] ?: true }
@@ -148,6 +155,7 @@ class SettingsPrefs(private val context: Context) {
     }
 
     suspend fun setMetronome(v: Boolean) = context.dataStore.edit { it[SettingsKeys.metronomeEnabled] = v }
+    suspend fun setPrecount(v: Boolean) = context.dataStore.edit { it[SettingsKeys.precountEnabled] = v }
     suspend fun setPip(v: Boolean) = context.dataStore.edit { it[SettingsKeys.pipEnabled] = v }
     suspend fun setCollapseRests(v: Boolean) = context.dataStore.edit { it[SettingsKeys.collapseRests] = v }
     suspend fun setKeepAwake(v: Boolean) = context.dataStore.edit { it[SettingsKeys.keepAwake] = v }

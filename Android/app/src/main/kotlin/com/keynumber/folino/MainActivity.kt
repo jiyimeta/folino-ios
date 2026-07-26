@@ -1,5 +1,6 @@
 package com.keynumber.folino
 
+import android.app.Activity
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
@@ -280,9 +281,6 @@ private fun LibraryNavGraph(
     val vm: LibraryAndroidStoreViewModel =
         viewModel(factory = LibraryVMFactory(context.applicationContext))
 
-    // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
-    // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
-    // after import/delete is a deferred minor (iOS emits once at launch too).
     // Restore the persisted library sort before the first snapshot: the store re-projects its lists
     // synchronously, so the very first frame of the library already shows the user's chosen order.
     // Absent (never picked) leaves the store on its own default.
@@ -290,6 +288,16 @@ private fun LibraryNavGraph(
         prefs.librarySortOrder.first()?.let { vm.setSortOrder(it) }
     }
 
+    // Count this cold launch and, on a prompting launch, hand off to Play's in-app review flow. The
+    // cadence is the shared one iOS uses; see maybePromptForReview for why there is no pre-prompt.
+    val activity = LocalContext.current as? Activity
+    LaunchedEffect(activity) {
+        activity?.let { maybePromptForReview(it) }
+    }
+
+    // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
+    // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
+    // after import/delete is a deferred minor (iOS emits once at launch too).
     LaunchedEffect(Unit) {
         AndroidAnalytics.log(vm.librarySnapshot())
         AndroidAnalytics.log(
@@ -514,6 +522,7 @@ private fun LibraryNavGraph(
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
+                val precountEnabled by prefs.precount.collectAsState(initial = false)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
                 val keepScreenAwake by prefs.keepAwake.collectAsState(initial = true)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
@@ -568,6 +577,9 @@ private fun LibraryNavGraph(
                     showInvisibleElements = showInvisible,
                     hiddenStaves = perScoreHidden,
                     clefOverrides = perScoreClefs,
+                    // Notation half of transpose: a change here re-runs the layout with the score
+                    // re-spelled. The audible half is applied to the engine inside the Reader.
+                    transposeSemitones = prefsState.transposeSemitones,
                 )
                 // Analytics baselines: the last persisted tempo / transpose, so the inspector's persist callbacks can
                 // log a direction (increase/decrease, up/down) on each committed change. Re-seeded per score.
@@ -662,8 +674,6 @@ private fun LibraryNavGraph(
                         prefsVm.setTempoMultiplier(v)
                     },
                     persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
-                    // Persist-only: the transpose audio/notation effect is not implemented on Android yet;
-                    // the inspector stepper only stores this value through the ReaderPreferences bridge.
                     transposeSemitones = prefsState.transposeSemitones,
                     persistTranspose = { v ->
                         if (v > lastTransposeForAnalytics) {
@@ -676,6 +686,7 @@ private fun LibraryNavGraph(
                     },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
+                    countInEnabled = precountEnabled,
                     // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
                     // Reader resolves address↔flat-staffIndex via its parts map for replay + persistence.
                     mixerProgramOverrides = {

@@ -6,6 +6,7 @@
     <!-- Settings – Reader section -->
     <string name="settings_section_reader">Reader</string>
     <string name="settings_reader_metronome">節拍器</string>
+    <string name="settings_reader_precount">預備拍</string>
     <string name="settings_reader_pip">畫中畫</string>
     <string name="settings_reader_pip_footer">在使用其他 App 時，迷你播放器會繼續顯示樂譜。還需要在裝置設定中啟用「自動啟動畫中畫」。</string>
     <string name="settings_reader_collapse_rests">合併多小節休止符</string>
