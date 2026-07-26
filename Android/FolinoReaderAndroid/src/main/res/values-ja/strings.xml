@@ -12,6 +12,8 @@
     <string name="reader_pref_collapse_rests">複数小節休符をまとめる</string>
     <string name="reader_pref_show_invisible">非表示要素を表示</string>
     <string name="reader_pref_show_seek_bar">シークバーを表示</string>
+    <string name="reader_pref_auto_follow">自動スクロール</string>
+    <string name="reader_pref_page_turn_buttons">ページめくりボタン</string>
     <string name="reader_display_settings">表示設定</string>
     <string name="reader_share">共有</string>
     <string name="reader_staff_hide">譜表を非表示</string>

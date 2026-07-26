@@ -1,5 +1,6 @@
 package com.keynumber.folino.reader
 
+import android.view.WindowManager
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -143,6 +144,13 @@ private fun Color.toRgbaLong(): Long {
     return (r shl 24) or (g shl 16) or (b shl 8) or a
 }
 
+/**
+ * Alpha applied to the on-screen playback cursor fill color (iOS parity: `accent.opacity(0.6)`).
+ * The PiP cursor ([ReaderPipContent]) stays fully opaque, so [HorizontalScore] only applies this
+ * when it is not rendering into the PiP window (`pipFit == false`).
+ */
+internal const val ON_SCREEN_CURSOR_ALPHA = 0.6f
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -213,9 +221,22 @@ fun ReaderScreen(
     persistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
+    /** When true (SettingsPrefs default), the screen is kept from dimming/locking while the Reader
+     * is on screen — applied via [KeepScreenOn]. */
+    keepScreenAwake: Boolean = true,
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
+    /** When true (SettingsPrefs default), continuous playback auto-scrolls / auto-page-turns the score and
+     * pausing recenters the viewport on the playhead; when false, the reader keeps full manual control of
+     * the viewport during playback. Mirrors iOS `readerAutoFollowEnabled`. */
+    autoFollowEnabled: Boolean = true,
+    onAutoFollowChange: (Boolean) -> Unit = {},
+    /** When true (SettingsPrefs default), the page-mode tap zones (edge buttons that turn the page) render;
+     * when false, only swipe-to-turn remains. Has no effect outside page mode. Mirrors iOS
+     * `readerPageTurnButtonsVisible`. */
+    pageTurnButtonsVisible: Boolean = true,
+    onPageTurnButtonsVisibleChange: (Boolean) -> Unit = {},
     /** Loads the persisted global repeat mode (suspending so the DataStore value is resolved before
      * the controller is installed). */
     initialRepeatModeLoader: suspend () -> RepeatMode = { RepeatMode.OFF },
@@ -247,6 +268,10 @@ fun ReaderScreen(
 ) {
     val context = LocalContext.current
     val fontProvider = remember(context) { bundledFontProvider(context) }
+
+    // Applies for as long as ReaderScreen is composed (including while shown in PiP), and clears the
+    // instant it isn't — either the pref flips off or the Reader is navigated away from.
+    KeepScreenOn(keepScreenAwake)
 
     val state by readerVm.state.collectAsStateWithLifecycle()
     val scoreHandle by readerVm.scoreHandle.collectAsStateWithLifecycle()
@@ -845,8 +870,12 @@ fun ReaderScreen(
                                 }
                             }
                         },
+                        autoFollowEnabled = autoFollowEnabled,
                     )
-                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(s, scoreHandle, fontProvider, audioVm, layoutOptions)
+                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
+                        s, scoreHandle, fontProvider, audioVm, layoutOptions,
+                        autoFollowEnabled = autoFollowEnabled,
+                    )
                     ReaderLayoutMode.PAGE -> PagedScore(
                         state = s,
                         scoreHandle = scoreHandle,
@@ -855,6 +884,8 @@ fun ReaderScreen(
                         readerVm = readerVm,
                         pageTapHintDismissed = pageTapHintDismissed,
                         onDismissPageTapHint = onDismissPageTapHint,
+                        autoFollowEnabled = autoFollowEnabled,
+                        pageTurnButtonsVisible = pageTurnButtonsVisible,
                     )
                 }
             }
@@ -893,9 +924,31 @@ fun ReaderScreen(
             onChange = onDisplayOptionsChange,
             showSeekBar = showSeekBar,
             onShowSeekBarChange = onShowSeekBarChange,
+            autoFollowEnabled = autoFollowEnabled,
+            onAutoFollowChange = onAutoFollowChange,
+            pageTurnButtonsVisible = pageTurnButtonsVisible,
+            onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
         )
+    }
+}
+
+/**
+ * Keeps the device screen from dimming/locking while [enabled] is true, by applying
+ * `FLAG_KEEP_SCREEN_ON` to the hosting Activity's window. Re-evaluated whenever [enabled] changes,
+ * and cleared on every disposal — a pref flip to false, or this composable leaving the composition
+ * (e.g. navigating away from the Reader) — so the flag never outlives the Reader being on screen.
+ * `findActivity()` (declared in [ReaderPipController]'s file) walks the `ContextWrapper` chain to the
+ * Activity; the flag is a no-op if that lookup ever fails to find one.
+ */
+@Composable
+private fun KeepScreenOn(enabled: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(enabled) {
+        val window = context.findActivity()?.window
+        if (enabled) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 }
 
@@ -1003,6 +1056,9 @@ private fun ReadyScore(
     inkHandoff: AnnotationHandoffQueue<DrawingAnchorWire>,
     onStrokeCaptured: (stroke: Stroke, onCommitted: (DrawingAnchorWire?) -> Unit) -> Unit =
         { _, onCommitted -> onCommitted(null) },
+    /** User opt-out for continuous-playback auto-scroll (SettingsPrefs `autoFollow` / the display
+     * inspector row). See [shouldAutoFollow]. */
+    autoFollowEnabled: Boolean = true,
 ) {
     val page = state.program.pages.first()
 
@@ -1064,13 +1120,27 @@ private fun ReadyScore(
     // Auto-scroll: keep the playback cursor in view via the shared Domain keep-in-view math (JNI).
     // Vertical: pin the playing system to the top when the lookahead anchor is set (playing), falling
     // back to gentle keep-in-view when paused / on a manual seek (anchor == null). Horizontal: always
-    // follows the real cursor when zoomed.
-    LaunchedEffect(scoreHandle, fitPxPerMM, scale) {
+    // follows the real cursor when zoomed. `autoFollowEnabled` is a key so a mid-playback toggle flip
+    // re-arms / disarms follow promptly instead of lagging until an unrelated restart.
+    LaunchedEffect(scoreHandle, fitPxPerMM, scale, autoFollowEnabled) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (fitPxPerMM <= 0f) return@LaunchedEffect
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
             .collectLatest { (real, anchor) ->
                 if (real == null) return@collectLatest
+                val isPlaying = anchor != null
+                // Auto-follow opt-out (parity: iOS `readerAutoFollowEnabled`): off means no re-pin
+                // during playback AND no recenter-on-pause — full manual viewport control.
+                if (!autoFollowEnabled) return@collectLatest
+                // Suspend just the playing re-pin while auto-follow is suspended — i.e. the reader took
+                // manual control of the viewport during playback (sticky until play/seek, Task 5). The
+                // paused/manual keep-in-view branch below still runs — a gesture there is the reader
+                // positioning the view themselves, not something to fight.
+                if (isPlaying &&
+                    !shouldAutoFollow(autoFollowEnabled, isPlaying, audioVm.isPlaybackFollowSuspended.value)
+                ) {
+                    return@collectLatest
+                }
                 val realBytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(real))
                 if (realBytes.isEmpty()) return@collectLatest
                 val realFrame = DecodedFrameCodec.decode(realBytes)
@@ -1164,6 +1234,12 @@ private fun ReadyScore(
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressed = event.changes.count { it.pressed }
                         if (pressed >= 2) {
+                            // A live two-finger contact suspends playback auto-follow (Task 5), even
+                            // before any actual zoom delta — `scrollState.isScrollInProgress` alone
+                            // would miss a pinch, since two fingers holding steady on the score never
+                            // register as a scroll gesture. Sticky: it persists past the gesture end and
+                            // is cleared only on play/seek (see `isPlaybackFollowSuspended`).
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
                             val zoom = event.calculateZoom()
                             if (zoom != 1f) {
                                 val centroid = event.calculateCentroid(useCurrent = true)
@@ -1192,6 +1268,30 @@ private fun ReadyScore(
                     if (rasterScaleState.floatValue != scaleState.floatValue) {
                         rasterScaleState.floatValue = scaleState.floatValue
                     }
+                }
+            }
+            // Sticky playback-follow suspension (Task 5) — fired ONLY by a real single-finger DRAG.
+            // Observes on the Initial pass and NEVER consumes, so the vertical/horizontal scroll
+            // modifiers below still get the gesture (native fling + overscroll). Firing on real pointer
+            // MOVEMENT — not `ScrollableState.isScrollInProgress` — is the whole fix: the auto-follow
+            // re-pin drives `animateScrollTo`, which flips `isScrollInProgress` true WITHOUT any pointer
+            // event, so the old snapshotFlow trigger mistook the auto-scroll's own re-pin for a manual
+            // gesture and latched suspension permanently OFF. A programmatic scroll emits no pointer
+            // input, so this detector never self-suspends (mirrors Page mode's `DragInteraction.Start`).
+            // A pure tap (down+up, no move) is a seek — requiring `positionChanged` skips it; two-finger
+            // contact is the pinch detector's job above. Sticky: cleared only on play/seek (see
+            // `ReaderAudioViewModel.isPlaybackFollowSuspended`); `suspend…()` is a no-op when not playing.
+            .pointerInput(audioVm) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var suspended = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (!suspended && event.changes.any { it.pressed && it.positionChanged() }) {
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
+                            suspended = true
+                        }
+                    } while (event.changes.any { it.pressed })
                 }
             },
         contentAlignment = Alignment.TopStart,
@@ -1282,7 +1382,7 @@ private fun ReadyScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,
-                        color = abAccent,
+                        color = abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
@@ -1447,7 +1547,13 @@ private fun TransportBar(
             marks = marks,
             currentFraction = liveFraction,
             enabled = isPrepared,
-            onSeek = { cursor -> if (isPrepared) engine?.seek(to = cursor) },
+            onSeek = { cursor ->
+                if (isPrepared) {
+                    // A rehearsal-mark jump is a manual cursor set → resume auto-follow (Task 5).
+                    audioVm.resumePlaybackFollow()
+                    engine?.seek(to = cursor)
+                }
+            },
             onPreview = { rehearsalPreview = it },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -1456,7 +1562,14 @@ private fun TransportBar(
         ReaderSeekBar(
             fraction = rehearsalPreview ?: liveFraction,
             enabled = isPrepared,
-            onSeek = { fraction -> if (totalSecs > 0) engine?.seek(fraction * totalSecs) },
+            onSeek = { fraction ->
+                if (totalSecs > 0) {
+                    // A seek-bar scrub is a manual cursor set → resume auto-follow so the score follows the
+                    // committed position instead of staying suspended (Task 5; iOS `endScrub`).
+                    audioVm.resumePlaybackFollow()
+                    engine?.seek(fraction * totalSecs)
+                }
+            },
             // Analytics: count one seek per deliberate scrub COMMIT (drag release), not per drag frame.
             onSeekCommit = onAnalyticsSeek,
             modifier = Modifier.fillMaxWidth(),
@@ -1494,6 +1607,8 @@ private fun TransportBar(
             IconButton(
                 onClick = {
                     if (isPrepared) {
+                        // Jump-to-start is a manual cursor set → resume auto-follow (Task 5).
+                        audioVm.resumePlaybackFollow()
                         engine?.seek(0.0)
                         onAnalyticsSeek()
                     }
@@ -1902,6 +2017,8 @@ fun PlaybackFab(
         SmallFloatingActionButton(
             onClick = {
                 if (isPrepared) {
+                    // Jump-to-start is a manual cursor set → resume auto-follow (Task 5).
+                    audioVm.resumePlaybackFollow()
                     engine?.seek(0.0)
                     onAnalyticsSeek()
                 }
@@ -1952,6 +2069,10 @@ internal fun HorizontalScore(
     audioVm: ReaderAudioViewModel,
     layoutOptions: LayoutOptions,
     pipFit: Boolean = false,
+    /** User opt-out for continuous-playback auto-scroll (SettingsPrefs `autoFollow` / the display
+     * inspector row). See [shouldAutoFollow]. Defaults true so the PiP surface (which doesn't pass
+     * this) keeps following regardless of the main Reader's toggle. */
+    autoFollowEnabled: Boolean = true,
 ) {
     val page = state.program.pages.first()
 
@@ -1983,13 +2104,26 @@ internal fun HorizontalScore(
     val needsVScroll = contentHeightPx > viewportSize.height + 0.5f
 
     // Auto-scroll: X = measure-anchored leading-edge with lookahead (measure frame + shared
-    // Domain fn); Y = keep-in-view, only meaningful when zoomed taller.
-    LaunchedEffect(scoreHandle, fitPxPerMM, scale) {
+    // Domain fn); Y = keep-in-view, only meaningful when zoomed taller. `autoFollowEnabled` is a key
+    // so a mid-playback toggle flip re-arms / disarms follow promptly (parity with ReadyScore).
+    LaunchedEffect(scoreHandle, fitPxPerMM, scale, autoFollowEnabled) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (fitPxPerMM <= 0f) return@LaunchedEffect
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
             .collectLatest { (real, anchor) ->
                 if (real == null) return@collectLatest
+                val isPlaying = anchor != null
+                // Auto-follow opt-out (parity: iOS `readerAutoFollowEnabled`): off means no re-pin
+                // during playback AND no recenter-on-pause — full manual viewport control.
+                if (!autoFollowEnabled) return@collectLatest
+                // Suspend just the playing re-pin while auto-follow is suspended (sticky — the reader took
+                // manual control of the viewport during playback, Task 5); the paused/manual keep-in-view
+                // branches below still run.
+                if (isPlaying &&
+                    !shouldAutoFollow(autoFollowEnabled, isPlaying, audioVm.isPlaybackFollowSuspended.value)
+                ) {
+                    return@collectLatest
+                }
                 val realEnc = ScoreCursorCodec.encode(real)
 
                 val realMBytes = SheetMusicJNI.nativeMeasureFrame(handle, realEnc)
@@ -2084,6 +2218,9 @@ internal fun HorizontalScore(
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressed = event.changes.count { it.pressed }
                         if (pressed >= 2) {
+                            // See [ReadyScore]'s identical comment: a live two-finger contact suspends
+                            // auto-follow (Task 5) even before any zoom delta. Sticky until play/seek.
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
                             val zoom = event.calculateZoom()
                             if (zoom != 1f) {
                                 val centroid = event.calculateCentroid(useCurrent = true)
@@ -2098,6 +2235,25 @@ internal fun HorizontalScore(
                                 }
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            // Sticky playback-follow suspension (Task 5), fired ONLY by a real single-finger DRAG — see
+            // the identical detector in [ReadyScore] for the full rationale. Observes on the Initial pass
+            // and never consumes, so the horizontal/vertical scroll modifiers below still get the gesture.
+            // A programmatic auto-follow re-pin (`animateScrollTo`) emits no pointer input, so unlike the
+            // old `isScrollInProgress` snapshotFlow this never self-suspends; a pure tap has no movement so
+            // it is skipped; two-finger contact is the pinch detector's job above.
+            .pointerInput(audioVm) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var suspended = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (!suspended && event.changes.any { it.pressed && it.positionChanged() }) {
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
+                            suspended = true
                         }
                     } while (event.changes.any { it.pressed })
                 }
@@ -2152,7 +2308,9 @@ internal fun HorizontalScore(
                             pxPerMM = fitPxPerMM,
                             scale = scale,
                             panOffset = Offset.Zero,
-                            color = abAccent,
+                            // Shared with the PiP surface (pipFit = true): only dim on-screen, PiP stays
+                            // fully opaque (iOS parity — the PiP cursor is never dimmed).
+                            color = if (pipFit) abAccent else abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
                             modifier = Modifier.fillMaxSize(),
                         )
                         // Loop region highlight only in A–B loop mode (see the vertical surface note).

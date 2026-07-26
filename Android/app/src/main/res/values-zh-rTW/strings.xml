@@ -13,6 +13,9 @@
     <string name="settings_reader_keep_awake">防止自動鎖定</string>
     <string name="settings_reader_keep_awake_footer">在開啟樂譜時，暫時防止裝置自動鎖定。</string>
     <string name="settings_reader_show_seek_bar">顯示進度列</string>
+    <string name="settings_reader_auto_follow">自動捲動</string>
+    <string name="settings_reader_page_turn_buttons">翻頁按鈕</string>
+    <string name="settings_reader_page_turn_buttons_footer">即使關閉，仍可滑動翻頁。</string>
     <string name="settings_reader_repeat">Repeat</string>
     <string name="settings_reader_display_mode">顯示模式</string>
     <string name="settings_layout_vertical">垂直捲動</string>

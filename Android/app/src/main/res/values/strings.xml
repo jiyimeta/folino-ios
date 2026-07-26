@@ -124,6 +124,9 @@
     <string name="settings_reader_keep_awake">Prevent auto-lock</string>
     <string name="settings_reader_keep_awake_footer">Pauses the device\'s auto-lock while a score is open.</string>
     <string name="settings_reader_show_seek_bar">Show seek bar</string>
+    <string name="settings_reader_auto_follow">Auto-scroll</string>
+    <string name="settings_reader_page_turn_buttons">Page-turn buttons</string>
+    <string name="settings_reader_page_turn_buttons_footer">Swipe to turn pages still works even when this is off.</string>
     <string name="settings_reader_repeat">Repeat</string>
     <string name="settings_reader_display_mode">Display mode</string>
     <string name="settings_layout_vertical">Vertical</string>

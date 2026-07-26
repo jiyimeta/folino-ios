@@ -1,6 +1,7 @@
 package com.keynumber.folino.reader
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -61,6 +62,15 @@ fun PagedScore(
     readerVm: ReaderViewModel,
     pageTapHintDismissed: Boolean,
     onDismissPageTapHint: () -> Unit,
+    /** User opt-out for continuous-playback auto-page-turn (SettingsPrefs `autoFollow` / the display
+     * inspector row). See [shouldAutoFollow]. Off ⇒ the page never turns itself during playback and never
+     * recenters on pause — full manual page control (parity with vertical/horizontal + iOS). */
+    autoFollowEnabled: Boolean = true,
+    /** User opt-out for the page-mode tap-zone overlay (SettingsPrefs `pageTurnButtonsVisible` / the
+     * display inspector row). When false, [PageTapOverlay] does not render at all — swipe-to-turn still
+     * works via the pager itself. Independent of [pageTapHintDismissed], which only gates the one-time
+     * onboarding hint drawn on top of the zones (iOS `readerPageTurnButtonsVisible` parity). */
+    pageTurnButtonsVisible: Boolean = true,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -113,6 +123,18 @@ fun PagedScore(
     // Reset zoom + pan on page turn (iOS parity: each page enters at fit-width).
     LaunchedEffect(pagerState.currentPage) { scale = 1f; panOffset = Offset.Zero }
 
+    // A user-initiated page swipe DURING playback suspends auto-page-turn (Task 5): the reader took
+    // manual control of the page, so the playhead's page must not yank them back until they play again or
+    // seek. `interactionSource` only emits DragInteraction for real finger drags — the auto-turn's own
+    // programmatic `animateScrollToPage` does NOT, so this never self-suspends. No-op when not playing.
+    LaunchedEffect(pagerState, audioVm) {
+        pagerState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                audioVm.suspendPlaybackFollowForManualViewportChange()
+            }
+        }
+    }
+
     // Auto page-turn: cursor's document-Y (mm) → its page band → animate there.
     //
     // The target page is derived from the cursor and de-duplicated BEFORE it drives the animation.
@@ -125,12 +147,16 @@ fun PagedScore(
     // `distinctUntilChanged` drops same-page emissions, so a page-turn animation runs to completion and
     // always settles on an integer page. A genuine page change still cancels-and-restarts via
     // `collectLatest`, which is correct: the new target's animation settles cleanly on its own page.
-    LaunchedEffect(scoreHandle, breaksMm.size, breaksMm.firstOrNull(), breaksMm.lastOrNull()) {
+    //
+    // The auto-follow gate is applied in `collectLatest` (NOT `mapNotNull`) so `distinctUntilChanged`
+    // still tracks the real target page while suspended; otherwise a suspend-then-resume to the same
+    // page the playhead already occupies would be deduped away and never snap back.
+    LaunchedEffect(scoreHandle, breaksMm.size, breaksMm.firstOrNull(), breaksMm.lastOrNull(), autoFollowEnabled) {
         val h = scoreHandle ?: return@LaunchedEffect
         if (breaksMm.size < 2) return@LaunchedEffect
-        combine(audioVm.currentCursor, audioVm.pageAnchorCursor) { real, anchor -> anchor ?: real }
-            .mapNotNull { cursor ->
-                if (cursor == null) return@mapNotNull null
+        combine(audioVm.currentCursor, audioVm.pageAnchorCursor) { real, anchor -> real to anchor }
+            .mapNotNull { (real, anchor) ->
+                val cursor = anchor ?: real ?: return@mapNotNull null
                 val bytes = SheetMusicJNI.nativeCursorFrame(h, ScoreCursorCodec.encode(cursor))
                 if (bytes.isEmpty()) return@mapNotNull null
                 val yMm = DecodedFrameCodec.decode(bytes).y.toDouble()
@@ -139,11 +165,25 @@ fun PagedScore(
                     if (yMm >= breaksMm[i] && yMm < breaksMm[i + 1]) { target = i; break }
                     if (i == breaksMm.size - 2) target = i
                 }
-                target
+                // Carry whether this is a playing lookahead (anchor set) so the gate below suspends only
+                // the PLAYING auto-turn, mirroring ReadyScore/HorizontalScore.
+                PageTurnTarget(target, isPlaying = anchor != null)
             }
-            .distinctUntilChanged()
-            .collectLatest { target ->
-                if (target != pagerState.currentPage) pagerState.animateScrollToPage(target)
+            .distinctUntilChanged { a, b -> a.target == b.target }
+            .collectLatest { turn ->
+                // Auto-follow opt-out (parity: iOS readerAutoFollowEnabled): off ⇒ no auto-page-turn at
+                // all (playing or paused) — full manual page control.
+                if (!autoFollowEnabled) return@collectLatest
+                // While auto-follow is suspended (the reader took manual control of the page during
+                // playback — swipe / nav / pinch), skip the playing auto-turn until playback restarts or
+                // the cursor is set manually. Mirrors the vertical/horizontal gate + iOS
+                // `isPlaybackFollowSuspended`.
+                if (turn.isPlaying &&
+                    !shouldAutoFollow(autoFollowEnabled, turn.isPlaying, audioVm.isPlaybackFollowSuspended.value)
+                ) {
+                    return@collectLatest
+                }
+                if (turn.target != pagerState.currentPage) pagerState.animateScrollToPage(turn.target)
             }
     }
 
@@ -206,6 +246,9 @@ fun PagedScore(
                                 val event = awaitPointerEvent()
                                 val activeCount = event.changes.count { it.pressed }
                                 if (activeCount >= 2) {
+                                    // A two-finger pinch is a manual viewport change → suspend
+                                    // auto-page-turn during playback (Task 5; sticky until play/seek).
+                                    audioVm.suspendPlaybackFollowForManualViewportChange()
                                     val zoom = event.calculateZoom()
                                     if (zoom != 1f) {
                                         val c = event.calculateCentroid(useCurrent = true)
@@ -285,7 +328,7 @@ fun PagedScore(
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
-                        color = abAccent,
+                        color = abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
                         modifier = Modifier.fillMaxSize(),
                     )
                     // Loop region highlight only in A–B loop mode (whole-piece repeat would tint the
@@ -316,27 +359,54 @@ fun PagedScore(
         }
 
         // The nav overlay scales + pans in lockstep with the page content so the buttons zoom with
-        // the score (iOS parity). Transform origin is the top-left to match the content box.
-        PageTapOverlay(
-            viewportSize = viewportSize,
-            currentPage = pagerState.currentPage,
-            pageCount = pageCount,
-            showsHint = !pageTapHintDismissed,
-            onAnyZoneTouchDown = onDismissPageTapHint,
-            onFirst = { scope.launch { pagerState.animateScrollToPage(0) } },
-            onPrev = { scope.launch { pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0)) } },
-            onNext = { scope.launch { pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost(pageCount - 1)) } },
-            onLast = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } },
-            modifier = Modifier.graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                translationX = panOffset.x
-                translationY = panOffset.y
-                transformOrigin = TransformOrigin(0f, 0f)
-            },
-        )
+        // the score (iOS parity). Transform origin is the top-left to match the content box. Gated on
+        // the opt-out toggle: swipe-to-turn (the pager itself, above) keeps working even when the tap
+        // zones are hidden — only this overlay (and its onboarding hint) disappears.
+        if (pageTurnButtonsVisible) {
+            PageTapOverlay(
+                viewportSize = viewportSize,
+                currentPage = pagerState.currentPage,
+                pageCount = pageCount,
+                showsHint = !pageTapHintDismissed,
+                onAnyZoneTouchDown = onDismissPageTapHint,
+                // An explicit edge-tap page navigation is a manual page turn → suspend auto-page-turn during
+                // playback so the playhead's page doesn't yank the reader back (Task 5; iOS `jumpToPage`).
+                onFirst = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage(0) }
+                },
+                onPrev = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0)) }
+                },
+                onNext = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch {
+                        pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost(pageCount - 1))
+                    }
+                },
+                onLast = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage(pageCount - 1) }
+                },
+                modifier = Modifier.graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = panOffset.x
+                    translationY = panOffset.y
+                    transformOrigin = TransformOrigin(0f, 0f)
+                },
+            )
+        }
     }
 }
 
 /** Page program + its matching document-Y boundaries, held as one value so they update atomically. */
 private class PagedData(val pages: List<EncodablePage>, val breaks: DoubleArray)
+
+/**
+ * A resolved auto-page-turn target: the destination page index plus whether it came from a playing
+ * lookahead (`pageAnchorCursor` set) vs a paused/manual cursor. `distinctUntilChanged` de-dupes on
+ * [target] only, so bursts of the same page don't cancel an in-flight turn animation.
+ */
+private data class PageTurnTarget(val target: Int, val isPlaying: Boolean)

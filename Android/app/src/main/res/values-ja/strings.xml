@@ -13,6 +13,9 @@
     <string name="settings_reader_keep_awake">自動ロックを抑止</string>
     <string name="settings_reader_keep_awake_footer">楽譜を開いている間、デバイスの自動ロックを一時的に止めます。</string>
     <string name="settings_reader_show_seek_bar">シークバー表示</string>
+    <string name="settings_reader_auto_follow">自動スクロール</string>
+    <string name="settings_reader_page_turn_buttons">ページめくりボタン</string>
+    <string name="settings_reader_page_turn_buttons_footer">オフにしてもスワイプでページをめくれます。</string>
     <string name="settings_reader_repeat">リピート</string>
     <string name="settings_reader_display_mode">表示モード</string>
     <string name="settings_layout_vertical">縦スクロール</string>

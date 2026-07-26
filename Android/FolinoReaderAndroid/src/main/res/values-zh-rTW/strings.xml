@@ -12,6 +12,8 @@
     <string name="reader_pref_collapse_rests">合併多小節休止符</string>
     <string name="reader_pref_show_invisible">顯示隱藏元素</string>
     <string name="reader_pref_show_seek_bar">顯示進度列</string>
+    <string name="reader_pref_auto_follow">自動捲動</string>
+    <string name="reader_pref_page_turn_buttons">翻頁按鈕</string>
     <string name="reader_display_settings">顯示設定</string>
     <string name="reader_share">共用</string>
     <string name="reader_staff_hide">隱藏譜表</string>

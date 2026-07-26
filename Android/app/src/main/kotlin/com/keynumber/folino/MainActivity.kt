@@ -508,7 +508,10 @@ private fun LibraryNavGraph(
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
                 val pipEnabled by prefs.pip.collectAsState(initial = false)
+                val keepScreenAwake by prefs.keepAwake.collectAsState(initial = true)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
+                val autoFollowEnabled by prefs.autoFollow.collectAsState(initial = true)
+                val pageTurnButtonsVisible by prefs.pageTurnButtonsVisible.collectAsState(initial = true)
                 val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
                 // Annotation pen setup (Task 9): global DataStore-backed, mirroring the display-options
                 // split above — persisted here in the app module, the Reader module only ever sees the
@@ -685,8 +688,19 @@ private fun LibraryNavGraph(
                         prefsVm.setStaffVolume(addr.partIndex, addr.staffIndexInPart, volume.toDouble())
                     },
                     pipEnabled = pipEnabled,
+                    keepScreenAwake = keepScreenAwake,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
+                    autoFollowEnabled = autoFollowEnabled,
+                    onAutoFollowChange = { v ->
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("autoFollow", v))
+                        scope.launch { prefs.setAutoFollow(v) }
+                    },
+                    pageTurnButtonsVisible = pageTurnButtonsVisible,
+                    onPageTurnButtonsVisibleChange = { v ->
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("pageTurnButtons", v))
+                        scope.launch { prefs.setPageTurnButtonsVisible(v) }
+                    },
                     initialRepeatModeLoader = { RepeatMode.fromWire(prefs.repeatMode.first()) },
                     loadAbRange = {
                         abRepeatStore.loadAbRepeat(currentScoreId)?.let { AbRepeatRange(it.first, it.second) }
