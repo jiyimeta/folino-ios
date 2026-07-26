@@ -56,4 +56,10 @@
     <string name="settings_about_licenses">许可证</string>
     <string name="settings_about_send_feedback">发送反馈</string>
     <string name="settings_feedback_no_email_app">未找到电子邮件应用</string>
+    <!-- Library sort menu (iOS parity: library.sort.*) -->
+    <string name="library_sort_menu">排序</string>
+    <string name="library_sort_by_date_added">添加日期</string>
+    <string name="library_sort_by_title">标题</string>
+    <string name="library_sort_by_composer">作曲家</string>
+    <string name="library_sort_by_last_opened">上次打开</string>
 </resources>

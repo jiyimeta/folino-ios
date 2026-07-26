@@ -157,4 +157,10 @@
     <string name="settings_feedback_no_email_app">No email app found</string>
 
     <string name="import_failed">Couldn\'t import this file.</string>
+    <!-- Library sort menu (iOS parity: library.sort.*) -->
+    <string name="library_sort_menu">Sort</string>
+    <string name="library_sort_by_date_added">Date Added</string>
+    <string name="library_sort_by_title">Title</string>
+    <string name="library_sort_by_composer">Composer</string>
+    <string name="library_sort_by_last_opened">Last Opened</string>
 </resources>

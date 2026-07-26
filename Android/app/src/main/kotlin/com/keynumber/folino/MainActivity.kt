@@ -283,6 +283,13 @@ private fun LibraryNavGraph(
     // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
     // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
     // after import/delete is a deferred minor (iOS emits once at launch too).
+    // Restore the persisted library sort before the first snapshot: the store re-projects its lists
+    // synchronously, so the very first frame of the library already shows the user's chosen order.
+    // Absent (never picked) leaves the store on its own default.
+    LaunchedEffect(Unit) {
+        prefs.librarySortOrder.first()?.let { vm.setSortOrder(it) }
+    }
+
     LaunchedEffect(Unit) {
         AndroidAnalytics.log(vm.librarySnapshot())
         AndroidAnalytics.log(

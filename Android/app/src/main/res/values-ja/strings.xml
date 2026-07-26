@@ -56,4 +56,10 @@
     <string name="settings_about_licenses">ライセンス</string>
     <string name="settings_about_send_feedback">フィードバックを送る</string>
     <string name="settings_feedback_no_email_app">メールアプリが見つかりません</string>
+    <!-- Library sort menu (iOS parity: library.sort.*) -->
+    <string name="library_sort_menu">並び替え</string>
+    <string name="library_sort_by_date_added">追加日</string>
+    <string name="library_sort_by_title">タイトル</string>
+    <string name="library_sort_by_composer">作曲家</string>
+    <string name="library_sort_by_last_opened">最後に開いた</string>
 </resources>

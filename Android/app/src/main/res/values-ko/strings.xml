@@ -56,4 +56,10 @@
     <string name="settings_about_licenses">라이선스</string>
     <string name="settings_about_send_feedback">피드백 보내기</string>
     <string name="settings_feedback_no_email_app">이메일 앱을 찾을 수 없습니다</string>
+    <!-- Library sort menu (iOS parity: library.sort.*) -->
+    <string name="library_sort_menu">정렬</string>
+    <string name="library_sort_by_date_added">추가한 날짜</string>
+    <string name="library_sort_by_title">제목</string>
+    <string name="library_sort_by_composer">작곡가</string>
+    <string name="library_sort_by_last_opened">마지막으로 연 날짜</string>
 </resources>

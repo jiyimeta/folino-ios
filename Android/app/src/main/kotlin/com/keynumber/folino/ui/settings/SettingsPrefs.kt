@@ -68,6 +68,13 @@ object SettingsKeys {
      */
     val playlistContinuationMode = stringPreferencesKey("playlistContinuationMode")
     /**
+     * Active library sort as a `Domain.ScoreItemSort` rawValue ("dateAddedDesc" | "titleAsc" |
+     * "composerAsc" | "lastOpenedDesc"). Same key name as iOS `LibrarySettingsKey.sortOrder`. Absent
+     * ⇒ the Swift store's own default; Kotlin never interprets the value, it only stores it.
+     */
+    val librarySortOrder = stringPreferencesKey("librarySortOrder")
+
+    /**
      * Whether Crashlytics crash-data collection is enabled. Opt-out semantics:
      * absent (first launch) is treated as `true`, mirroring iOS
      * `privacyCrashReportingEnabled`. The toggle is an opt-*out*.
@@ -118,6 +125,8 @@ class SettingsPrefs(private val context: Context) {
     val repeatMode: Flow<String> = context.dataStore.data.map { it[SettingsKeys.repeatMode] ?: "off" }
     val playlistContinuationMode: Flow<String> =
         context.dataStore.data.map { it[SettingsKeys.playlistContinuationMode] ?: "playThrough" }
+    /** Null until the user picks a sort — the caller then leaves the Swift store on its own default. */
+    val librarySortOrder: Flow<String?> = context.dataStore.data.map { it[SettingsKeys.librarySortOrder] }
     val crashReporting: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.crashReportingEnabled] ?: true }
     val analytics: Flow<Boolean> =
@@ -157,6 +166,9 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setRepeatMode(v: String) = context.dataStore.edit { it[SettingsKeys.repeatMode] = v }
     suspend fun setPlaylistContinuationMode(v: String) =
         context.dataStore.edit { it[SettingsKeys.playlistContinuationMode] = v }
+
+    suspend fun setLibrarySortOrder(v: String) =
+        context.dataStore.edit { it[SettingsKeys.librarySortOrder] = v }
 
     suspend fun setCrashReporting(v: Boolean) =
         context.dataStore.edit { it[SettingsKeys.crashReportingEnabled] = v }
