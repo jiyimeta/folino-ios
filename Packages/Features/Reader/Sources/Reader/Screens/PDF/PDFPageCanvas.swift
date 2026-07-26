@@ -10,20 +10,8 @@ struct PDFPageCanvas: View {
     var body: some View {
         let bounds = page.bounds(for: .mediaBox)
         Canvas(rendersAsynchronously: false) { ctx, size in
-            guard bounds.width > 0, bounds.height > 0 else { return }
-            let scale = min(size.width / bounds.width, size.height / bounds.height)
             ctx.withCGContext { cg in
-                cg.saveGState()
-                // Center within `size`, flip into PDF's bottom-left origin, scale points → view space.
-                let drawnW = bounds.width * scale, drawnH = bounds.height * scale
-                cg.translateBy(x: (size.width - drawnW) / 2, y: (size.height - drawnH) / 2)
-                cg.translateBy(x: 0, y: drawnH)
-                cg.scaleBy(x: scale, y: -scale)
-                cg.translateBy(x: -bounds.origin.x, y: -bounds.origin.y)
-                cg.setFillColor(UIColor.white.cgColor)
-                cg.fill(bounds)
-                page.draw(with: .mediaBox, to: cg)
-                cg.restoreGState()
+                PDFPageRasterizer.draw(page: page, in: cg, size: size)
             }
         }
         .aspectRatio(bounds.width / max(bounds.height, 1), contentMode: .fit)
