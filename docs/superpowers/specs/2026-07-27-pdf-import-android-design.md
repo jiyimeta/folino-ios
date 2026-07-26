@@ -175,7 +175,7 @@ with `canvas.concat`, exactly as page-mode score annotation already does.
 
    - `nativeLoadScoreWithGeometryFromPDF(bytes) -> handle`
    - `nativePdfCursorRect(handle, cursor) -> page index + rect`
-   - `nativePdfCursorAt(handle, page, x, y) -> cursor`
+   - `nativePdfHitTest(handle, page, x, y) -> cursor`
    - `nativePdfPageSizes(handle)`
    - `nativePdfDiagnostics(handle)` — severity / location / message
    - `nativeReleasePdfGeometry(handle)`
@@ -206,12 +206,19 @@ count-in, PiP and playlist continuation all work with no further wiring.
 Only the cursor differs: instead of `nativeCursorFrame`, the reader calls
 `nativePdfCursorRect` and projects the rect into the page's frame in content
 space. Auto-follow feeds the same rect into the existing keep-in-view JNI. A tap
-on the page resolves through `nativePdfCursorAt` and seeks.
+on the page resolves through `nativePdfHitTest` and seeks.
 
 While parsing, the transport is visible but disabled. On failure the reader stays
-display-only and silent — the document is already on screen, so a parse failure is
-never surfaced as a load error. Importer diagnostics carry the same wording iOS
-uses, presented as a Snackbar.
+display-only — the document is already on screen, so a parse failure is never
+surfaced as a load error.
+
+The OMR caveat follows iOS's `PDFPlaybackNotice` rather than being invented for
+Android: one dialog shown at most once per opened document, with body copy that
+differs between "playable, but OMR is best-effort" and "couldn't read this PDF";
+an OK action plus a "don't show again" action backed by the shared preference key
+`readerPdfPlaybackNoticeDismissed`; and permanent reachability by tapping the PDF
+marker. iOS never lists individual importer diagnostics in the UI, so neither does
+Android. Only the presentation adapts — a Material `AlertDialog`.
 
 ## 8. Verification
 
