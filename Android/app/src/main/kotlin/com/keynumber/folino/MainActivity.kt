@@ -140,6 +140,10 @@ class MainActivity : ComponentActivity(), PipHost {
         AndroidAnalytics.initialize(applicationContext)
         AndroidAnalytics.setCollectionEnabled(analyticsEnabled)
 
+        // Force-enable Picture-in-Picture once for installs that predate the opt-in → opt-out flip.
+        // Runs before setContent so the first composition already reads the migrated value.
+        runBlocking { prefs.applyPictureInPictureOptOutMigration() }
+
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
         // TEMPORARY GUARD — remove this `if` (always load) any time after 1.0.0 has shipped.
@@ -525,7 +529,7 @@ private fun LibraryNavGraph(
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
                 val precountEnabled by prefs.precount.collectAsState(initial = false)
-                val pipEnabled by prefs.pip.collectAsState(initial = false)
+                val pipEnabled by prefs.pip.collectAsState(initial = true)
                 val keepScreenAwake by prefs.keepAwake.collectAsState(initial = true)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
                 val autoFollowEnabled by prefs.autoFollow.collectAsState(initial = true)

@@ -26,6 +26,10 @@ public enum ReaderGlobalSettingsKey {
 
     /// Bool. When true, the Reader auto-presents a Picture-in-Picture window of the score whenever the app backgrounds,
     /// and tears it down on return to the foreground. When false, PiP is never shown automatically.
+    ///
+    /// Opt-*out*: defaults to `true` at each `@AppStorage` site. It shipped as opt-in and almost nobody found the
+    /// switch, so the default is inverted and existing installs are force-enabled once by
+    /// `PictureInPictureOptOutMigration` (App target; Android mirrors it in `SettingsPrefs`).
     public static let pictureInPictureEnabled = "readerPictureInPictureEnabled"
 
     /// Bool. When true, runs of two or more consecutive empty-rest measures render as a single H-bar with a count,
