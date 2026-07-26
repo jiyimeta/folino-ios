@@ -23,8 +23,9 @@ struct ReaderSettingsSection: View {
     private var isPrecountEnabled = false
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
+    /// Opt-out: on unless the user turns it off (see `ReaderGlobalSettingsKey.pictureInPictureEnabled`).
     @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
-    private var isPiPEnabled = false
+    private var isPiPEnabled = true
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
     @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)

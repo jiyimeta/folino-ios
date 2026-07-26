@@ -23,8 +23,9 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
     private var isMetronomeEnabled = false
 
+    /// Opt-out: on unless the user turns it off (see `ReaderGlobalSettingsKey.pictureInPictureEnabled`).
     @AppStorage(ReaderGlobalSettingsKey.pictureInPictureEnabled)
-    private var isPiPEnabled = false
+    private var isPiPEnabled = true
 
     @AppStorage(ReaderGlobalSettingsKey.collapseMultiMeasureRests)
     private var collapseMultiMeasureRests = false
