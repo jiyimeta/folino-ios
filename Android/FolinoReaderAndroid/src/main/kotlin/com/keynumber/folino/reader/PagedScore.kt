@@ -35,6 +35,8 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import com.keynumber.folino.reader.ink.AnnotationLayers
+import com.keynumber.folino.reader.ink.AnnotationSurfaceState
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
@@ -53,8 +55,10 @@ import kotlinx.coroutines.launch
 /** A4 page width (mm), used only as a pre-measurement fallback seed (page mode now reflows to the viewport). */
 private const val PAGE_WIDTH_MM = 210.0
 
+// `internal`, like its sibling [HorizontalScore]: only ReaderScreen (same module) composes it, and its
+// annotation bundle is module-internal.
 @Composable
-fun PagedScore(
+internal fun PagedScore(
     state: ReaderState.Ready,
     scoreHandle: Long?,
     fontProvider: FontProvider,
@@ -71,9 +75,12 @@ fun PagedScore(
      * works via the pager itself. Independent of [pageTapHintDismissed], which only gates the one-time
      * onboarding hint drawn on top of the zones (iOS `readerPageTurnButtonsVisible` parity). */
     pageTurnButtonsVisible: Boolean = true,
+    /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation here. */
+    annotation: AnnotationSurfaceState? = null,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val annotationMode = annotation?.annotationMode == true
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     // Program pages + their matching document-Y boundaries, published TOGETHER as one state so the
@@ -195,7 +202,9 @@ fun PagedScore(
 
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = scale == 1f, // only swipe at unit zoom; while zoomed the gesture pans
+            // Only swipe at unit zoom; while zoomed the gesture pans. Annotating freezes the pager too —
+            // a horizontal stroke must not turn the page out from under the finger.
+            userScrollEnabled = scale == 1f && !annotationMode,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
             val pg = pagedPages[pageIndex]
@@ -214,7 +223,9 @@ fun PagedScore(
                     // still turn pages. The page content is drawn page-local (from y=0) and translated
                     // by panOffset; the hit-test wants ABSOLUTE document mm, so fold this page's band
                     // top (pageTopPx) into the content offset — identical to the overlay's panOffset.
-                    .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, pageIndex, scale) {
+                    .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, pageIndex, scale, annotationMode) {
+                        // While annotating, a tap is the start of a stroke — never a seek.
+                        if (annotationMode) return@pointerInput
                         val handle = scoreHandle ?: return@pointerInput
                         if (fitPxPerMM <= 0f) return@pointerInput
                         val optionsBytes = layoutOptions.encode()
@@ -238,7 +249,7 @@ fun PagedScore(
                     // Pinch-zoom + pan gesture lives INSIDE the pager page (not as a sibling overlay),
                     // so HorizontalPager still receives single-finger horizontal swipes at scale == 1.
                     // At scale == 1 single-finger drags are NOT consumed here → they reach the pager.
-                    .pointerInput(fitPxPerMM, pageIndex) {
+                    .pointerInput(fitPxPerMM, pageIndex, annotationMode) {
                         if (fitPxPerMM <= 0f) return@pointerInput
                         awaitEachGesture {
                             awaitFirstDown(requireUnconsumed = false)
@@ -282,7 +293,11 @@ fun PagedScore(
                                         )
                                     }
                                     event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                } else if (activeCount == 1 && scale > 1f) {
+                                    // A single-finger drag while annotating is a stroke, not a pan — the
+                                    // wet overlay owns it. (Two-finger pinch above still applies: the wet
+                                    // layer cancels its stroke and hands the gesture back, same as the
+                                    // vertical surface.)
+                                } else if (activeCount == 1 && scale > 1f && !annotationMode) {
                                     val pan = event.calculatePan()
                                     if (pan != Offset.Zero) {
                                         val minPanX = -(size.width * (scale - 1f)).coerceAtLeast(0f)
@@ -354,6 +369,33 @@ fun PagedScore(
                         color = abAccent,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    annotation?.let { an ->
+                        // Both layers use the same page-local shift as the cursor / loop overlays above:
+                        // placements arrive in ABSOLUTE document coordinates, and this page shows the band
+                        // starting at `pageTopPx`. Strokes belonging to other pages fall outside the band
+                        // and are cut by the page Box's `clipToBounds`.
+                        //
+                        // No wet-window clamping is needed here (unlike the scrolling surfaces): a page IS
+                        // viewport-sized, so even at the 8x zoom ceiling the front buffer stays far inside
+                        // the 65536 px limit.
+                        val pageOffset = Offset(panOffset.x, panOffset.y - pageTopPx)
+                        AnnotationLayers(
+                            scoreHandle = h,
+                            annotation = an,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            isDrawing = false,
+                            dryPanOffset = pageOffset,
+                            dryModifier = Modifier.fillMaxSize(),
+                            wetWorldToScreen = remember(fitPxPerMM, scale, pageOffset) {
+                                android.graphics.Matrix().apply {
+                                    setScale(fitPxPerMM * scale, fitPxPerMM * scale)
+                                    postTranslate(pageOffset.x, pageOffset.y)
+                                }
+                            },
+                            wetModifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
             }
         }
