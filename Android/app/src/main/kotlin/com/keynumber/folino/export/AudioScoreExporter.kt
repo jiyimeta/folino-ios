@@ -3,6 +3,7 @@ package com.keynumber.folino.export
 import android.content.Context
 import android.os.ParcelFileDescriptor
 import com.keynumber.folino.library.ScoreAudioFileExporter
+import com.keynumber.folino.reader.BundledMetronomeClickProvider
 import com.keynumber.folino.reader.FolinoSoundfontResolver
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
@@ -43,6 +44,8 @@ class AudioScoreExporter(
                         .highQualityFilePath()
                 },
             ),
+            // Same click the Reader plays, so an exported file's metronome matches what was heard.
+            metronomeClickProvider = BundledMetronomeClickProvider(context.applicationContext),
         )
     },
 ) : ScoreAudioFileExporter {
