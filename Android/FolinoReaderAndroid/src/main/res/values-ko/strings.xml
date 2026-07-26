@@ -49,6 +49,7 @@
     <string name="reader_playback_pause">일시정지</string>
     <string name="reader_playback_stop">정지</string>
     <string name="reader_playback_metronome">메트로놈</string>
+    <string name="reader_inspector_precount">카운트인</string>
     <string name="reader_playback_volume">음량</string>
     <string name="reader_inspector_continuation">Playlist</string>
     <string name="reader_continuation_off">Off</string>

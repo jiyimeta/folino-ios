@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
@@ -94,6 +95,10 @@ fun PlaybackInspectorSheet(
     metronomeEnabled: Boolean = false,
     /** Writes the global metronome flag on toggle. */
     onMetronomeChange: (Boolean) -> Unit = {},
+    /** Global count-in flag (SettingsPrefs); like the metronome it is global on both platforms. */
+    countInEnabled: Boolean = false,
+    /** Writes the global count-in flag on toggle. */
+    onCountInChange: (Boolean) -> Unit = {},
     /** Persists the per-score master volume after the live engine/VM update. */
     onPersistMasterVolume: (Double) -> Unit = {},
     /** Persists the per-score tempo multiplier after the live engine update. */
@@ -130,6 +135,8 @@ fun PlaybackInspectorSheet(
             openingQuarterBpm = openingQuarterBpm,
             metronomeEnabled = metronomeEnabled,
             onMetronomeChange = onMetronomeChange,
+            countInEnabled = countInEnabled,
+            onCountInChange = onCountInChange,
             onPersistMasterVolume = onPersistMasterVolume,
             onPersistTempoMultiplier = onPersistTempoMultiplier,
             onPersistA4ReferenceHz = onPersistA4ReferenceHz,
@@ -161,6 +168,10 @@ fun PlaybackInspectorContent(
     modifier: Modifier = Modifier,
     metronomeEnabled: Boolean = false,
     onMetronomeChange: (Boolean) -> Unit = {},
+    /** Global count-in flag (SettingsPrefs); like the metronome it is global on both platforms. */
+    countInEnabled: Boolean = false,
+    /** Writes the global count-in flag on toggle. */
+    onCountInChange: (Boolean) -> Unit = {},
     onPersistMasterVolume: (Double) -> Unit = {},
     onPersistTempoMultiplier: (Double) -> Unit = {},
     onPersistA4ReferenceHz: (Double) -> Unit = {},
@@ -212,6 +223,13 @@ fun PlaybackInspectorContent(
                         // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
                         // soundfont hot-swap re-push).
                         Switch(checked = metronomeEnabled, onCheckedChange = onMetronomeChange, enabled = controlsEnabled)
+                    }
+                }
+                item {
+                    // Directly under the metronome, as on iOS — the two are the same kind of decision
+                    // ("click or not") and both are global, so they belong together in both surfaces.
+                    InspectorRow(label = stringResource(R.string.reader_inspector_precount), leadingIcon = Icons.Filled.Timer) {
+                        Switch(checked = countInEnabled, onCheckedChange = onCountInChange, enabled = controlsEnabled)
                     }
                 }
                 item {

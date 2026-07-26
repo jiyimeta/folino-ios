@@ -51,6 +51,7 @@
     <string name="reader_playback_stop">Stop</string>
     <string name="reader_edit_info">Edit info</string>
     <string name="reader_playback_metronome">Metronome</string>
+    <string name="reader_inspector_precount">Count-in</string>
     <string name="reader_playback_volume">Volume</string>
     <string name="reader_inspector_continuation">Playlist</string>
     <string name="reader_continuation_off">Off</string>

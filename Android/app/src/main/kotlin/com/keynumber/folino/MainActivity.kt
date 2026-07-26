@@ -689,6 +689,10 @@ private fun LibraryNavGraph(
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
                     countInEnabled = precountEnabled,
+                    onCountInChange = { v ->
+                        scope.launch { prefs.setPrecount(v) }
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("precount", v))
+                    },
                     // Percussion kit catalog: shared Swift owns the list, this layer is the only one that
                     // can see both the JNI accessor and the Reader. Loaded once (the accessor caches).
                     drumKits = remember {

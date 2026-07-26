@@ -231,6 +231,9 @@ fun ReaderScreen(
     keepScreenAwake: Boolean = true,
     /** When true, play() counts a measure of clicks in before the score starts (global SettingsPrefs). */
     countInEnabled: Boolean = false,
+    /** Writes the global count-in flag — the playback inspector offers the same toggle Settings does,
+     * mirroring iOS, since it is a decision you make right before pressing play. */
+    onCountInChange: (Boolean) -> Unit = {},
     /** When true, show the full-width seek bar (bottom bar); when false, the floating play FAB. */
     showSeekBar: Boolean = true,
     onShowSeekBarChange: (Boolean) -> Unit = {},
@@ -928,6 +931,8 @@ fun ReaderScreen(
             onDismiss = { showInspector = false },
             metronomeEnabled = metronomeEnabled,
             onMetronomeChange = onMetronomeChange,
+            countInEnabled = countInEnabled,
+            onCountInChange = onCountInChange,
             onPersistMasterVolume = persistMasterVolume,
             onPersistTempoMultiplier = persistTempoMultiplier,
             onPersistA4ReferenceHz = persistA4ReferenceHz,

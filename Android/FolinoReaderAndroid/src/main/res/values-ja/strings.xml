@@ -49,6 +49,7 @@
     <string name="reader_playback_pause">一時停止</string>
     <string name="reader_playback_stop">停止</string>
     <string name="reader_playback_metronome">メトロノーム</string>
+    <string name="reader_inspector_precount">カウントイン</string>
     <string name="reader_playback_volume">音量</string>
     <string name="reader_inspector_continuation">プレイリスト</string>
     <string name="reader_continuation_off">オフ</string>
