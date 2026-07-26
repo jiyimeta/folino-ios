@@ -32,6 +32,13 @@ public struct ScoreRecordWire: Equatable, Sendable {
     public var deletedAt: Double // 0 == live; >0 == soft-deleted at that Unix time
     public var lastOpenedAt: Double // 0 == never opened; >0 == Unix time of last open
     public var isFavorite: Bool // mirrors iOS ScoreItem.isFavorite
+    /// Unix time the score was imported, mirroring iOS `ScoreItem.addedAt` — the key the default
+    /// "date added, newest first" library sort orders by.
+    ///
+    /// Rows that pre-date the column carry their backfilled `rowid` (1, 2, 3…) rather than a real
+    /// instant: see the Room `MIGRATION_1_2`. Those values are tiny next to any real epoch, so an
+    /// existing library keeps its previous relative order and every later import sorts above it.
+    public var addedAt: Double
 
     public init(
         id: String,
@@ -46,6 +53,7 @@ public struct ScoreRecordWire: Equatable, Sendable {
         deletedAt: Double,
         lastOpenedAt: Double,
         isFavorite: Bool = false,
+        addedAt: Double = 0,
     ) {
         self.id = id
         self.title = title
@@ -59,5 +67,6 @@ public struct ScoreRecordWire: Equatable, Sendable {
         self.deletedAt = deletedAt
         self.lastOpenedAt = lastOpenedAt
         self.isFavorite = isFavorite
+        self.addedAt = addedAt
     }
 }

@@ -5,10 +5,12 @@ import org.junit.Test
 
 class PlaylistQueueTest {
     private fun item(pl: String, score: String, pos: Int) = PlaylistItemWire(pl, score, pos)
+    // addedAt is irrelevant to queue ordering (playlists keep their manual position order), so every
+    // fixture shares one value.
     private fun score(id: String, deletedAt: Double) = ScoreRecordWire(
         id = id, title = id, subtitle = "", composer = "",
         localFileName = "$id.mscz", contentHash = "", deletedAt = deletedAt,
-        lastOpenedAt = 0.0, isFavorite = false,
+        lastOpenedAt = 0.0, isFavorite = false, addedAt = 0.0,
     )
 
     @Test fun ordersByPosition_filtersToRequestedPlaylist_andLiveScoresOnly() {

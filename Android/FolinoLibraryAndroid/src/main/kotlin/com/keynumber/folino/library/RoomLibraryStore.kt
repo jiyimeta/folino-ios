@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
 
 /** Room row — 1:1 with the Swift `ScoreRecordWire`. */
@@ -28,6 +30,12 @@ data class ScoreRecordEntity(
     @ColumnInfo(name = "deleted_at") val deletedAt: Double,
     @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Double = 0.0, // 0 == never opened
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
+    /**
+     * Unix time of import — the key the default library sort ("date added, newest first") orders by.
+     * Rows migrated from v1 carry their backfilled `rowid` instead of a real instant; see
+     * [MIGRATION_1_2].
+     */
+    @ColumnInfo(name = "added_at") val addedAt: Double = 0.0,
 )
 
 @Dao
@@ -186,10 +194,11 @@ interface ReaderPreferencesDao {
         ReaderAbRepeatEntity::class,
         ReaderPreferencesEntity::class,
     ],
-    // Pre-release: schema is collapsed to a single canonical v1 (no migration
-    // history). Schema changes destructively reset via fallbackToDestructiveMigration
-    // (+ ...OnDowngrade for dev devices that ran a throwaway higher version).
-    version = 1,
+    // v1 was the pre-release canonical schema. From v2 on the app is SHIPPED, so schema changes
+    // carry a real migration — a destructive reset would wipe a user's library. The
+    // fallbackToDestructiveMigration on the builder stays only as the last resort for a device
+    // whose version is not reachable by the registered path (e.g. a dev build's throwaway schema).
+    version = 2,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -198,6 +207,24 @@ abstract class LibraryDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun readerAbRepeatDao(): ReaderAbRepeatDao
     abstract fun readerPreferencesDao(): ReaderPreferencesDao
+}
+
+/**
+ * v1 → v2: adds `score_records.added_at`, the import instant the default library sort ("date added,
+ * newest first") orders by. v1 never recorded it.
+ *
+ * Existing rows are backfilled with their `rowid` rather than with `now`: `rowid` is Room's implicit
+ * insertion counter, so the backfilled values preserve the order those scores were imported in (which
+ * is also the order the library displayed them in before this column existed) instead of collapsing
+ * every one of them to a single identical timestamp. They are tiny numbers next to a real Unix epoch,
+ * so every subsequent import sorts above the whole pre-migration library — the correct reading of
+ * "newest first" given v1 simply does not know when those scores were added.
+ */
+internal val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE score_records ADD COLUMN added_at REAL NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE score_records SET added_at = rowid")
+    }
 }
 
 /**
@@ -232,6 +259,7 @@ class RoomLibraryStore(context: Context) : LibraryStore, ReaderPreferencesStore 
                     LibraryDatabase::class.java,
                     "folino-library.db",
                 ).allowMainThreadQueries()
+                    .addMigrations(MIGRATION_1_2)
                     .fallbackToDestructiveMigration()
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
@@ -263,6 +291,7 @@ class RoomLibraryStore(context: Context) : LibraryStore, ReaderPreferencesStore 
                 deletedAt = it.deletedAt,
                 lastOpenedAt = it.lastOpenedAt,
                 isFavorite = it.isFavorite,
+                addedAt = it.addedAt,
             )
         }
 
@@ -281,6 +310,7 @@ class RoomLibraryStore(context: Context) : LibraryStore, ReaderPreferencesStore 
                 deletedAt = record.deletedAt,
                 lastOpenedAt = record.lastOpenedAt,
                 isFavorite = record.isFavorite,
+                addedAt = record.addedAt,
             ),
         )
     }

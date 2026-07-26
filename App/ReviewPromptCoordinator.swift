@@ -1,16 +1,14 @@
+import Domain
 import Foundation
 import Observation
 
 /// Tracks cold launches and decides when to surface the App Store review pre-prompt.
 ///
-/// Cadence: first prompt on the 10th cold launch, then every 40 cold launches after that (50, 90, 130, …). Apple
-/// rate-limits `requestReview` to 3 prompts per 365 days regardless of how often we ask, so spacing them out avoids
-/// wasting that budget on users who haven't engaged yet.
+/// The cadence itself lives in `Domain.ReviewPromptCadence` so Android prompts on the same launches; this type owns
+/// only the iOS-side counting and the pre-prompt presentation.
 @MainActor
 @Observable
 final class ReviewPromptCoordinator {
-    private let firstThreshold = 10
-    private let interval = 40
     private static let coldLaunchCountKey = "ReviewPrompt.coldLaunchCount"
 
     private let defaults: UserDefaults
@@ -34,13 +32,8 @@ final class ReviewPromptCoordinator {
 
         let count = defaults.integer(forKey: Self.coldLaunchCountKey) + 1
         defaults.set(count, forKey: Self.coldLaunchCountKey)
-        if !suppressDisplay, shouldPrompt(at: count) {
+        if !suppressDisplay, ReviewPromptCadence.shouldPrompt(coldLaunchCount: count) {
             isPrePromptPresented = true
         }
-    }
-
-    private func shouldPrompt(at count: Int) -> Bool {
-        guard count >= firstThreshold else { return false }
-        return (count - firstThreshold) % interval == 0
     }
 }

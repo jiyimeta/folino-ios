@@ -93,6 +93,9 @@ fun ScoreListScaffold(
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    // Only the sort menu needs it here; DataStore itself is a process singleton, so constructing a
+    // second accessor is free.
+    val prefs = remember(context) { com.keynumber.folino.ui.settings.SettingsPrefs(context) }
 
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<String>() }
@@ -251,6 +254,7 @@ fun ScoreListScaffold(
                             Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.nav_open_menu))
                         }
                     },
+                    actions = { SortMenuAction(viewModel = viewModel, prefs = prefs) },
                 )
             }
         },

@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.rendering.android.view.ViewStrokeRenderer
@@ -55,6 +56,16 @@ fun AnnotationDryOverlay(
     scale: Float,
     isDrawing: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * Where document (0,0) sits in this overlay View's own coordinate space, matching the sibling
+     * cursor / loop overlays' `panOffset`. Zero for the vertical and horizontal surfaces, whose
+     * overlay View is the document-sized content Box itself (the vertical surface instead gets its
+     * top inset from the `padding(vertical = vPad)` on [modifier], so document y=0 already lands at
+     * the View's y=0). Page mode passes `(pan.x, pan.y - pageTop)`: its overlay View is the
+     * viewport-sized page Box, so the absolute document coordinates the placements are computed in
+     * have to be shifted up by the page band's top edge to land page-locally.
+     */
+    panOffset: Offset = Offset.Zero,
     onRendered: (List<DrawingAnchorWire>) -> Unit = {},
 ) {
     // The drawings snapshot and the placement computed from it, kept together: a recomposition triggered by
@@ -72,7 +83,14 @@ fun AnnotationDryOverlay(
         content = DryContent(drawings, placed)
     }
 
-    val camera = remember(pxPerMM, scale) { Matrix().apply { setScale(pxPerMM * scale, pxPerMM * scale) } }
+    // `camera` maps document mm → this View's pixels: scale first, then shift by where document (0,0)
+    // sits in the View (postTranslate, so the translation is NOT scaled — it is already in px).
+    val camera = remember(pxPerMM, scale, panOffset) {
+        Matrix().apply {
+            setScale(pxPerMM * scale, pxPerMM * scale)
+            postTranslate(panOffset.x, panOffset.y)
+        }
+    }
     val currentOnRendered by rememberUpdatedState(onRendered)
 
     AndroidView(

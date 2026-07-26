@@ -2,15 +2,18 @@ package com.keynumber.folino.reader
 
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MixerGroupingTest {
-    private fun channel(staffIndex: Int, program: Int?) =
+    private fun channel(staffIndex: Int, program: Int?, isDrums: Boolean = false) =
         MixerChannel(
             staffIndex = staffIndex,
             displayName = "S$staffIndex",
             program = program,
+            isDrums = isDrums,
         )
 
     @Test
@@ -41,10 +44,30 @@ class MixerGroupingTest {
     }
 
     @Test
-    fun drumsPartHasNullProgram() {
+    fun drumsPartKeepsItsKitProgramAndIsFlagged() {
         val addresses = mapOf(0 to StaffAddress(0, 0))
-        val channels = listOf(channel(0, null))
+        // On bank 128 the program is the KIT number, so a percussion part has one like any other.
+        // `isDrums` — not a null program — is what tells the picker which catalog to offer.
+        val channels = listOf(channel(0, 8, isDrums = true))
         val groups = groupMixerByPart(channels, addresses, listOf("Drums"))
+        assertEquals(8, groups[0].partProgram)
+        assertTrue(groups[0].isDrums)
+    }
+
+    @Test
+    fun pitchedPartIsNotFlaggedAsDrums() {
+        val addresses = mapOf(0 to StaffAddress(0, 0))
+        val groups = groupMixerByPart(listOf(channel(0, 40)), addresses, listOf("Violin"))
+        assertFalse(groups[0].isDrums)
+    }
+
+    @Test
+    fun partWithNoProgramStillGroups() {
+        // A part whose program is genuinely absent (nothing selectable) — distinct from percussion,
+        // which the old null-program encoding could not express separately.
+        val addresses = mapOf(0 to StaffAddress(0, 0))
+        val groups = groupMixerByPart(listOf(channel(0, null)), addresses, listOf("Unpitched"))
         assertNull(groups[0].partProgram)
+        assertFalse(groups[0].isDrums)
     }
 }
