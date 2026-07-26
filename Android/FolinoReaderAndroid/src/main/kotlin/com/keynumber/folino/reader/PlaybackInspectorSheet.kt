@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
@@ -57,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.reader.ui.CollapsibleHeader
 import com.keynumber.folino.reader.ui.InspectorRow
+import com.keynumber.folino.reader.ui.InspectorSectionHeader
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
 import com.keynumber.folino.reader.ui.InspectorSliderRow
 import com.keynumber.folino.reader.ui.MetronomeIcon
@@ -93,6 +95,10 @@ fun PlaybackInspectorSheet(
     metronomeEnabled: Boolean = false,
     /** Writes the global metronome flag on toggle. */
     onMetronomeChange: (Boolean) -> Unit = {},
+    /** Global count-in flag (SettingsPrefs); like the metronome it is global on both platforms. */
+    countInEnabled: Boolean = false,
+    /** Writes the global count-in flag on toggle. */
+    onCountInChange: (Boolean) -> Unit = {},
     /** Persists the per-score master volume after the live engine/VM update. */
     onPersistMasterVolume: (Double) -> Unit = {},
     /** Persists the per-score tempo multiplier after the live engine update. */
@@ -107,6 +113,11 @@ fun PlaybackInspectorSheet(
     staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
     /** Persists a per-score program override (by staff address) after the live engine update. */
     onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Bank-128 kit catalog for percussion parts, supplied by the composition root (shared Swift owns
+     * the list — see [DrumKitOption]). Empty means no kit picker is offered. */
+    drumKits: List<DrumKitOption> = emptyList(),
+    /** Family display names, indexed by [DrumKitOption.familyIndex]; used as dropdown section headers. */
+    drumKitFamilyNames: List<String> = emptyList(),
     /** Persists a per-score volume override (by staff address) after the live engine update. */
     onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
     /** True when this score is part of a playlist; shows the continuation-mode row. */
@@ -124,6 +135,8 @@ fun PlaybackInspectorSheet(
             openingQuarterBpm = openingQuarterBpm,
             metronomeEnabled = metronomeEnabled,
             onMetronomeChange = onMetronomeChange,
+            countInEnabled = countInEnabled,
+            onCountInChange = onCountInChange,
             onPersistMasterVolume = onPersistMasterVolume,
             onPersistTempoMultiplier = onPersistTempoMultiplier,
             onPersistA4ReferenceHz = onPersistA4ReferenceHz,
@@ -131,6 +144,8 @@ fun PlaybackInspectorSheet(
             onTransposeChange = onTransposeChange,
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = onPersistStaffProgram,
+            drumKits = drumKits,
+            drumKitFamilyNames = drumKitFamilyNames,
             onPersistStaffVolume = onPersistStaffVolume,
             isInPlaylist = isInPlaylist,
             continuationModeWire = continuationModeWire,
@@ -153,6 +168,10 @@ fun PlaybackInspectorContent(
     modifier: Modifier = Modifier,
     metronomeEnabled: Boolean = false,
     onMetronomeChange: (Boolean) -> Unit = {},
+    /** Global count-in flag (SettingsPrefs); like the metronome it is global on both platforms. */
+    countInEnabled: Boolean = false,
+    /** Writes the global count-in flag on toggle. */
+    onCountInChange: (Boolean) -> Unit = {},
     onPersistMasterVolume: (Double) -> Unit = {},
     onPersistTempoMultiplier: (Double) -> Unit = {},
     onPersistA4ReferenceHz: (Double) -> Unit = {},
@@ -160,6 +179,11 @@ fun PlaybackInspectorContent(
     onTransposeChange: (Int) -> Unit = {},
     staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
     onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Bank-128 kit catalog for percussion parts, supplied by the composition root (shared Swift owns
+     * the list — see [DrumKitOption]). Empty means no kit picker is offered. */
+    drumKits: List<DrumKitOption> = emptyList(),
+    /** Family display names, indexed by [DrumKitOption.familyIndex]; used as dropdown section headers. */
+    drumKitFamilyNames: List<String> = emptyList(),
     onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
     isInPlaylist: Boolean = false,
     continuationModeWire: String = "playThrough",
@@ -199,6 +223,13 @@ fun PlaybackInspectorContent(
                         // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
                         // soundfont hot-swap re-push).
                         Switch(checked = metronomeEnabled, onCheckedChange = onMetronomeChange, enabled = controlsEnabled)
+                    }
+                }
+                item {
+                    // Directly under the metronome, as on iOS — the two are the same kind of decision
+                    // ("click or not") and both are global, so they belong together in both surfaces.
+                    InspectorRow(label = stringResource(R.string.reader_inspector_precount), leadingIcon = Icons.Filled.Timer) {
+                        Switch(checked = countInEnabled, onCheckedChange = onCountInChange, enabled = controlsEnabled)
                     }
                 }
                 item {
@@ -309,6 +340,8 @@ fun PlaybackInspectorContent(
                                 group = group,
                                 enabled = controlsEnabled,
                                 gmInstruments = gmInstruments,
+                                drumKits = drumKits,
+                                drumKitFamilyNames = drumKitFamilyNames,
                                 onVolume = { idx, v ->
                                     engine?.setStaffVolume(idx, v)
                                     staffAddressByIndex[idx]?.let { onPersistStaffVolume(it, v) }
@@ -609,6 +642,8 @@ private fun PartMixerSection(
     group: PartMixerGroup,
     enabled: Boolean,
     gmInstruments: List<GMInstrument>,
+    drumKits: List<DrumKitOption>,
+    drumKitFamilyNames: List<String>,
     onVolume: (Int, Float) -> Unit,
     onMute: (Int, Boolean) -> Unit,
     onSolo: (Int, Boolean) -> Unit,
@@ -618,11 +653,24 @@ private fun PartMixerSection(
         // Part header: instrument name + ONE program picker for the whole part (iOS parity).
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(group.partName, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+            // Which CATALOG the picker offers follows the part: bank-128 kits for percussion, GM Level 1
+            // patches otherwise — iOS `ProgramPicker(isDrums:)` splits the same way. A part with no
+            // program at all (nothing selectable) still falls back to the plain label.
             val program = group.partProgram
-            if (program != null) {
-                ProgramPickerButton(program = program, enabled = enabled, gmInstruments = gmInstruments, modifier = Modifier.weight(1.6f), onProgram = onProgram)
-            } else {
-                Text(stringResource(R.string.reader_mixer_drums), Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
+            when {
+                program == null ->
+                    Text(stringResource(R.string.reader_mixer_drums), Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
+                group.isDrums ->
+                    DrumKitPickerButton(
+                        program = program,
+                        enabled = enabled,
+                        kits = drumKits,
+                        familyNames = drumKitFamilyNames,
+                        modifier = Modifier.weight(1.6f),
+                        onProgram = onProgram,
+                    )
+                else ->
+                    ProgramPickerButton(program = program, enabled = enabled, gmInstruments = gmInstruments, modifier = Modifier.weight(1.6f), onProgram = onProgram)
             }
         }
         // Per-staff volume + Solo/Mute.
@@ -705,6 +753,70 @@ private fun ProgramPickerButton(
                         text = { Text(instrument.displayName) },
                         onClick = {
                             onProgram(instrument.program)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Percussion counterpart of [ProgramPickerButton]: picks a bank-128 KIT rather than a melodic patch, from
+ * the shared `Domain.GMDrumKit` catalog loaded over JNI. Kits are grouped under their family name, as iOS
+ * sections its drum-kit menu.
+ *
+ * An unrecognized stored program renders as `"Kit N"` — the same fallback iOS uses — so an override
+ * written by a future SF2-split release still shows something meaningful instead of blanking the row.
+ */
+@Composable
+private fun DrumKitPickerButton(
+    program: Int,
+    enabled: Boolean,
+    kits: List<DrumKitOption>,
+    familyNames: List<String>,
+    modifier: Modifier = Modifier,
+    onProgram: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val name = remember(program, kits) {
+        kits.firstOrNull { it.program == program }?.displayName ?: "Kit $program"
+    }
+    Column(modifier) {
+        TextButton(
+            onClick = { expanded = true },
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose drum kit")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            Column(
+                Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // The catalog already arrives grouped (program order within family order), so a header
+                // whenever the family index changes reproduces iOS's sections without re-sorting.
+                var lastFamily = -1
+                kits.forEach { kit ->
+                    if (kit.familyIndex != lastFamily) {
+                        lastFamily = kit.familyIndex
+                        familyNames.getOrNull(kit.familyIndex)?.let { InspectorSectionHeader(it) }
+                    }
+                    DropdownMenuItem(
+                        text = { Text(kit.displayName) },
+                        onClick = {
+                            onProgram(kit.program)
                             expanded = false
                         },
                     )

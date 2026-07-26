@@ -1,1 +1,2 @@
-- Minor improvements and bug fixes
+- Added display support for fall and similar symbols
+- Apply the hidden-staff setting

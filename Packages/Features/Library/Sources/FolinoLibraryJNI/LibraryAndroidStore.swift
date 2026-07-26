@@ -72,6 +72,13 @@ public final class LibraryAndroidStore {
     @ObservationIgnored private var selectedPlaylistRows: [ScoreRowWire] = []
     @ObservationIgnored private var selectedTagRows: [ScoreRowWire] = []
 
+    /// Active library sort as a `ScoreItemSort.rawValue`, applied to the All / Favorites / Tag lists (iOS parity:
+    /// playlists keep their manual order and are never re-sorted). Observable so the Kotlin picker renders the
+    /// active choice from this one source rather than a second copy of the state; the Kotlin side owns the
+    /// *persistence* of the choice (DataStore) and pushes it back in through `setSortOrder` on launch.
+    @ObservationIgnored private var sort: ScoreItemSort = .dateAddedDesc
+    public var sortOrder: String = ScoreItemSort.dateAddedDesc.rawValue
+
     public init(store: LibraryStore, pdfRenderer: ScorePdfRenderer, audioExporter: ScoreAudioFileExporter) {
         self.store = store
         self.pdfRenderer = pdfRenderer
@@ -113,6 +120,7 @@ public final class LibraryAndroidStore {
             contentHash: hash,
             deletedAt: 0,
             lastOpenedAt: 0,
+            addedAt: Date().timeIntervalSince1970,
         ))
         reload()
         // museScoreMajorVersion is nil: Android does not yet persist the MuseScore wire version (see
@@ -343,6 +351,21 @@ public final class LibraryAndroidStore {
         selectedTagItems = searchFiltered(selectedTagRows)
     }
 
+    /// Set the library sort order (a `ScoreItemSort.rawValue`) and re-project every list it governs. An
+    /// unrecognized value falls back to the shipping default rather than leaving the lists unsorted — see
+    /// `ScoreItemSort.parse`. Called on launch with the DataStore-persisted choice, and on every picker tap.
+    @WireletExpose
+    public func setSortOrder(_ raw: String) {
+        let next = ScoreItemSort.parse(raw)
+        guard next != sort else { return }
+        sort = next
+        sortOrder = next.rawValue
+        reload()
+        // The tag detail list is sorted too (iOS applies the global order to All / Favorites / Tag alike), and it
+        // is projected by the tag pass, not by `reload`.
+        reloadTags()
+    }
+
     /// Permanent purge: remove the managed file, then the record (mirrors iOS
     /// `permanentlyDeleteScoreItem`). Unknown id is a no-op.
     @WireletExpose
@@ -404,8 +427,8 @@ public final class LibraryAndroidStore {
     /// type. Pass `records` to reuse an already-loaded snapshot and avoid a second backend read.
     private func reload(using records: [ScoreRecordWire]? = nil) {
         let all = records ?? store.loadAll()
-        allScoreRows = all
-            .filter { $0.deletedAt <= 0 }
+        allScoreRows = sort
+            .apply(to: all.filter { $0.deletedAt <= 0 })
             .map(Self.row)
         scores = searchFiltered(allScoreRows)
         favorites = searchFiltered(allScoreRows.filter(\.isFavorite))
@@ -812,7 +835,8 @@ public final class LibraryAndroidStore {
         refreshEditSheet(tagRecords: tagRecords, membership: membership)
     }
 
-    /// Live scores carrying `selectedTagID`, sorted by title (tags are unordered).
+    /// Live scores carrying `selectedTagID`, in the active library sort order — iOS applies the one global order to
+    /// the All / Favorites / Tag lists alike (only playlists, which are manually ordered, opt out).
     private func recomputeSelectedTagItems(records: [ScoreRecordWire], membership: [String: Set<String>]) {
         guard let sel = selectedTagID else {
             selectedTagRows = []
@@ -820,9 +844,8 @@ public final class LibraryAndroidStore {
             return
         }
         let members = membership[sel] ?? []
-        selectedTagRows = records
-            .filter { $0.deletedAt <= 0 && members.contains($0.id) }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        selectedTagRows = sort
+            .apply(to: records.filter { $0.deletedAt <= 0 && members.contains($0.id) })
             .map(Self.row)
         selectedTagItems = searchFiltered(selectedTagRows)
     }
@@ -1025,6 +1048,7 @@ private struct AndroidShareImporter: SharedImportFileImporting, @unchecked Senda
             contentHash: hash,
             deletedAt: 0,
             lastOpenedAt: 0,
+            addedAt: Date().timeIntervalSince1970,
         ))
         return .imported(id: id)
     }

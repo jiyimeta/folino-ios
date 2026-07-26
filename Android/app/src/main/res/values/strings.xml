@@ -117,6 +117,7 @@
     <!-- Settings – Reader section -->
     <string name="settings_section_reader">Reader</string>
     <string name="settings_reader_metronome">Metronome</string>
+    <string name="settings_reader_precount">Count-in</string>
     <string name="settings_reader_pip">Picture in Picture</string>
     <string name="settings_reader_pip_footer">Keeps the score visible in a mini-player while another app is in use. Requires \"Start Picture in Picture Automatically\" to be enabled in device Settings.</string>
     <string name="settings_reader_collapse_rests">Collapse multi-measure rests</string>
@@ -124,6 +125,9 @@
     <string name="settings_reader_keep_awake">Prevent auto-lock</string>
     <string name="settings_reader_keep_awake_footer">Pauses the device\'s auto-lock while a score is open.</string>
     <string name="settings_reader_show_seek_bar">Show seek bar</string>
+    <string name="settings_reader_auto_follow">Auto-scroll</string>
+    <string name="settings_reader_page_turn_buttons">Page-turn buttons</string>
+    <string name="settings_reader_page_turn_buttons_footer">Swipe to turn pages still works even when this is off.</string>
     <string name="settings_reader_repeat">Repeat</string>
     <string name="settings_reader_display_mode">Display mode</string>
     <string name="settings_layout_vertical">Vertical</string>
@@ -154,4 +158,10 @@
     <string name="settings_feedback_no_email_app">No email app found</string>
 
     <string name="import_failed">Couldn\'t import this file.</string>
+    <!-- Library sort menu (iOS parity: library.sort.*) -->
+    <string name="library_sort_menu">Sort</string>
+    <string name="library_sort_by_date_added">Date Added</string>
+    <string name="library_sort_by_title">Title</string>
+    <string name="library_sort_by_composer">Composer</string>
+    <string name="library_sort_by_last_opened">Last Opened</string>
 </resources>

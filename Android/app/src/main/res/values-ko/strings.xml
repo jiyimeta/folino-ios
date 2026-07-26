@@ -6,6 +6,7 @@
     <!-- Settings – Reader section -->
     <string name="settings_section_reader">Reader</string>
     <string name="settings_reader_metronome">메트로놈</string>
+    <string name="settings_reader_precount">카운트인</string>
     <string name="settings_reader_pip">픽처 인 픽처</string>
     <string name="settings_reader_pip_footer">다른 앱을 사용하는 동안 미니 플레이어로 악보를 계속 표시합니다. 기기 설정에서 \'픽처 인 픽처 자동 시작\'도 켜야 합니다.</string>
     <string name="settings_reader_collapse_rests">여러 마디 쉼표 합치기</string>
@@ -13,6 +14,9 @@
     <string name="settings_reader_keep_awake">자동 잠금 방지</string>
     <string name="settings_reader_keep_awake_footer">악보를 열어 둔 동안 기기의 자동 잠금을 일시적으로 막습니다.</string>
     <string name="settings_reader_show_seek_bar">탐색 막대 표시</string>
+    <string name="settings_reader_auto_follow">자동 스크롤</string>
+    <string name="settings_reader_page_turn_buttons">페이지 넘김 버튼</string>
+    <string name="settings_reader_page_turn_buttons_footer">꺼도 스와이프로 페이지를 넘길 수 있습니다.</string>
     <string name="settings_reader_repeat">Repeat</string>
     <string name="settings_reader_display_mode">표시 모드</string>
     <string name="settings_layout_vertical">세로 스크롤</string>
@@ -53,4 +57,10 @@
     <string name="settings_about_licenses">라이선스</string>
     <string name="settings_about_send_feedback">피드백 보내기</string>
     <string name="settings_feedback_no_email_app">이메일 앱을 찾을 수 없습니다</string>
+    <!-- Library sort menu (iOS parity: library.sort.*) -->
+    <string name="library_sort_menu">정렬</string>
+    <string name="library_sort_by_date_added">추가한 날짜</string>
+    <string name="library_sort_by_title">제목</string>
+    <string name="library_sort_by_composer">작곡가</string>
+    <string name="library_sort_by_last_opened">마지막으로 연 날짜</string>
 </resources>

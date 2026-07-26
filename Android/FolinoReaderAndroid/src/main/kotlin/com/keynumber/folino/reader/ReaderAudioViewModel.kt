@@ -153,6 +153,58 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // ── Playback-follow suspension (Task 5) ──────────────────────────
+    // Runtime, session-scoped suspension of playback cursor auto-follow (auto-scroll / auto-page-turn).
+    // SET when the user takes manual control of the viewport — scroll, pinch-zoom, or page-turn — WHILE
+    // playing; CLEARED only when playback (re)starts (the pause→play transition, observed below) or the
+    // cursor is set manually (tap-seek / measure-step / seek bar / rehearsal-mark / jump-to-start).
+    // Independent of the persistent auto-follow opt-out (`SettingsPrefs.autoFollow`): this lets the reader
+    // look ahead / back during playback without the page yanking to the playhead on the next cursor tick.
+    // All three score surfaces (vertical / horizontal / page) read it to gate their auto-follow. Sticky —
+    // it does NOT clear merely because the gesture ended. Mirrors iOS
+    // `ReaderPlaybackSession.isPlaybackFollowSuspended`.
+    private val _isPlaybackFollowSuspended = MutableStateFlow(false)
+    val isPlaybackFollowSuspended: StateFlow<Boolean> = _isPlaybackFollowSuspended.asStateFlow()
+
+    init {
+        // Resuming playback re-arms auto-follow: clear any manual-viewport suspension left from the
+        // previous play run when the engine (re)enters PLAYING. `state` is a conflated/distinct StateFlow,
+        // so this fires ONLY on the transition INTO playing — a suspension set mid-playback survives until
+        // the next play or manual cursor set. Mirrors iOS `togglePlayback` clearing the flag on its play
+        // branch. Covers every play entry point uniformly (transport, FAB, media notification, PiP).
+        viewModelScope.launch {
+            state.collect { if (it == PlaybackState.PLAYING) applyFollowEvent(PlaybackFollowEvent.PlaybackStarted) }
+        }
+    }
+
+    /** Route a [PlaybackFollowEvent] through the pure [nextPlaybackFollowSuspended] transition so the
+     * set/clear rules live in one plain-JVM-testable place. */
+    private fun applyFollowEvent(event: PlaybackFollowEvent) {
+        _isPlaybackFollowSuspended.value = nextPlaybackFollowSuspended(
+            current = _isPlaybackFollowSuspended.value,
+            isPlaying = state.value == PlaybackState.PLAYING,
+            event = event,
+        )
+    }
+
+    /**
+     * The reader scrolled, pinch-zoomed, or turned the page by hand. While playback is active this
+     * suspends cursor auto-follow (auto-scroll / auto-page-turn) until playback restarts or the cursor is
+     * set manually — so the reader can look ahead / back without the page snapping back to the playhead.
+     * A no-op when not playing: there is nothing to follow while paused / stopped, and a stray gesture must
+     * not leave a suspension that survives into the next play (which re-arms follow anyway). Mirrors iOS
+     * `suspendPlaybackFollowForManualViewportChange`.
+     */
+    fun suspendPlaybackFollowForManualViewportChange() =
+        applyFollowEvent(PlaybackFollowEvent.ManualViewportChangeBegan)
+
+    /**
+     * Clear the manual-viewport suspension so playback auto-follow resumes. Called on any manual cursor
+     * set (tap-seek / measure-step / seek bar scrub / rehearsal-mark / jump-to-start); playback (re)start
+     * clears it via the `state` observer above. Mirrors iOS `resumePlaybackFollow`.
+     */
+    fun resumePlaybackFollow() = applyFollowEvent(PlaybackFollowEvent.ManualCursorSet)
+
     val currentTimeSeconds: StateFlow<Double> = _engine
         .flatMapLatest { it?.currentTimeSeconds ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
@@ -270,6 +322,13 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     private val _globalA4ReferenceHz = MutableStateFlow(440.0)
     val globalA4ReferenceHz: StateFlow<Double> = _globalA4ReferenceHz.asStateFlow()
 
+    // Transpose / count-in are pushed down from the Reader (per-score and global respectively) and held
+    // here so [preparePlayback] can re-apply them: a prepare builds a fresh synth at concert pitch with
+    // the setting cleared, so without this a score opened while transposed would sound at pitch and a
+    // count-in would silently stop happening after a soundfont swap.
+    private var transposeSemitones: Int = 0
+    private var countInEnabled: Boolean = false
+
     /** Sets master output volume (0..1) and reflects it for the inspector UI. */
     fun setMasterVolume(volume: Float) {
         _masterVolume.value = volume
@@ -280,6 +339,24 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     fun setMetronomeEnabled(enabled: Boolean) {
         _metronomeEnabled.value = enabled
         engine.value?.setMetronomeEnabled(enabled)
+    }
+
+    /**
+     * Audible half of transpose: retunes the melodic channels by [semitones]. The notation half is the
+     * re-spelled layout the Reader requests through its display options — both are driven from the same
+     * per-score value, so they cannot drift apart.
+     *
+     * Held so it can be re-applied after a prepare (a fresh synth starts at concert pitch).
+     */
+    fun setTranspose(semitones: Int) {
+        transposeSemitones = semitones
+        engine.value?.setTranspose(semitones)
+    }
+
+    /** Global count-in setting, consumed by the engine at the next `play()`. */
+    fun setCountInEnabled(enabled: Boolean) {
+        countInEnabled = enabled
+        engine.value?.countInEnabled = enabled
     }
 
     /**
@@ -343,6 +420,9 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
      */
     fun handleTap(cursor: ScoreCursor) {
         val e = engine.value ?: return
+        // A tap-to-place-cursor is an explicit manual set → resume follow (clears any suspension from the
+        // reader having scrolled away during playback) so the view re-centers this target and keeps up.
+        resumePlaybackFollow()
         e.seek(to = cursor)
         if (state.value == PlaybackState.PLAYING) return
         val item = (cursor as? ScoreCursor.Item)?.arg0 ?: return
@@ -375,6 +455,11 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
                 // restored here so a reopened score starts at the user's saved values.
                 e.setMasterVolume(_masterVolume.value)
                 e.setRate(_tempoSeed.value)
+                // Transpose is a tuning shift on the same melodic channels the A4 calibration above
+                // uses, and prepare cleared it with the rest; count-in is a plain flag the fresh engine
+                // starts with off. Re-push both so a reopened (or soundfont-swapped) score keeps them.
+                e.setTranspose(transposeSemitones)
+                e.countInEnabled = countInEnabled
                 // Re-apply the active loop now that a player is prepared (engine loop calls are
                 // no-ops before prepare). Restores a persisted A–B range or full-score loop.
                 _repeatController.value?.reapply()
@@ -413,6 +498,8 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     private fun stepMeasure(direction: Int) {
         val handle = scoreHandle ?: return
         val e = engine.value ?: return
+        // A measure step is an explicit manual cursor set → resume follow (iOS `seek(toMeasureStart:)`).
+        resumePlaybackFollow()
         val from = e.currentCursor.value ?: ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
         val fromBytes = ScoreCursorCodec.encode(from)
         val targetBytes = SheetMusicJNI.nativeStepMeasureCursor(handle, fromBytes, direction)

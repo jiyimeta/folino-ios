@@ -3,6 +3,7 @@ package com.keynumber.folino.reader
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.keynumber.folino.reader.ink.AnnotationToolState
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
 import io.github.jiyimeta.sheetmusic.ScoreHandle
@@ -11,6 +12,7 @@ import io.github.jiyimeta.sheetmusic.compose.draw.DrawProgramReader
 import io.github.jiyimeta.sheetmusic.compose.draw.model.DrawProgram
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +34,49 @@ private const val PAGE_HEIGHT_MM = 297.0
 // Debounce window for recomputing the layout after a display-setting change,
 // so rapid inspector edits (e.g. dragging staff size) coalesce into one compute.
 private const val RECOMPUTE_DEBOUNCE_MS = 120L
+
+/**
+ * Two-stack undo/redo history over whole annotation-layer snapshots (`List<T>`), generic over the
+ * element type so it is unit-testable with plain `List<String>` layers, without pulling in
+ * `DrawingAnchorWire`. Session-scoped: the owning [ReaderViewModel] clears it on rehydrate and on a
+ * score retarget, never persisted.
+ *
+ * [push] records the layer *before* a mutation and always clears the redo stack — a new edit
+ * invalidates any previously undone future. Depth is capped at [maxDepth]: once the undo stack
+ * exceeds it, the oldest entry is dropped rather than refusing the push.
+ */
+internal class DrawingHistory<T>(private val maxDepth: Int = 30) {
+    private val undoStack = ArrayDeque<List<T>>()
+    private val redoStack = ArrayDeque<List<T>>()
+
+    val canUndo: Boolean get() = undoStack.isNotEmpty()
+    val canRedo: Boolean get() = redoStack.isNotEmpty()
+
+    fun push(previous: List<T>) {
+        undoStack.addLast(previous)
+        if (undoStack.size > maxDepth) undoStack.removeFirst()
+        redoStack.clear()
+    }
+
+    fun undo(current: List<T>): List<T>? {
+        if (undoStack.isEmpty()) return null
+        val previous = undoStack.removeLast()
+        redoStack.addLast(current)
+        return previous
+    }
+
+    fun redo(current: List<T>): List<T>? {
+        if (redoStack.isEmpty()) return null
+        val next = redoStack.removeLast()
+        undoStack.addLast(current)
+        return next
+    }
+
+    fun clear() {
+        undoStack.clear()
+        redoStack.clear()
+    }
+}
 
 class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -58,10 +103,21 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     private val _layoutOptions = MutableStateFlow(LayoutOptions.DEFAULT)
     val layoutOptions: StateFlow<LayoutOptions> = _layoutOptions.asStateFlow()
 
-    // Viewport-derived layout width (mm) for the wrapping (VERTICAL) layout. Seeded to A4 width until
-    // the render surface reports its viewport; pushed via [setLayoutWidthMm]. Drives the recompute.
-    private val _layoutWidthMm = MutableStateFlow(PAGE_WIDTH_MM)
-    val layoutWidthMm: StateFlow<Double> = _layoutWidthMm.asStateFlow()
+    // Viewport-derived layout width (mm) for the wrapping (VERTICAL) layout, pushed via
+    // [setLayoutWidthMm] by the Reader's content area. NULL until that viewport has been measured, and
+    // the recompute loop WAITS for it rather than laying out at a default: seeding A4 width meant the
+    // first layout ran at the wrong width and the score visibly stretched sideways a few hundred ms
+    // later when the real width arrived (the right-hand margin collapsing as it reflowed). Waiting
+    // costs nothing — a viewport that has no width yet has nothing to show either.
+    private val _layoutWidthMm = MutableStateFlow<Double?>(null)
+    val layoutWidthMm: StateFlow<Double?> = _layoutWidthMm.asStateFlow()
+
+    // Bumped once per successful layout recompute. Anything positioned against the layout rather than
+    // against the score model — the annotation overlay's stroke placement — keys off this: a reflow
+    // moves every note within the SAME score handle, so without a signal the placement silently stays
+    // where the previous layout put it.
+    private val _layoutGeneration = MutableStateFlow(0)
+    val layoutGeneration: StateFlow<Int> = _layoutGeneration.asStateFlow()
 
     private var handle: ScoreHandle? = null
 
@@ -109,7 +165,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 Triple(h, opts, widthMm)
             }
                 .mapLatest { (h, opts, widthMm) ->
-                    if (h == null) return@mapLatest
+                    if (h == null || widthMm == null) return@mapLatest
                     delay(RECOMPUTE_DEBOUNCE_MS)
                     val programBytes = layoutMutex.withLock {
                         withContext(Dispatchers.Default) {
@@ -127,6 +183,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                         return@mapLatest
                     }
                     _state.value = ReaderState.Ready(program)
+                    _layoutGeneration.value += 1
                 }
                 .collect { }
         }
@@ -148,6 +205,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // is published — which re-drives the layout recompute and the playback prepare.
         if (scoreId == loadedScoreId) return
         loadedScoreId = scoreId
+        // A different score means the undo/redo history belongs to a layer that's about to be replaced;
+        // history is session-scoped per score and must not carry entries across the retarget.
+        resetHistory()
         // Suspend the layout recompute until the new score's handle is published. The recompute loop
         // skips while the handle is null, so the last Ready(program) keeps rendering unchanged — without
         // this, the incoming score's per-score display options (e.g. staff size) would briefly re-lay-out
@@ -205,6 +265,8 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                         defaultClefRawType = staff.defaultClefRawType,
                     )
                 },
+                // MuseScore <Part><show>: 1 = shown, 0 = authored-hidden.
+                isVisibleInScore = part.isVisibleInScore.toInt() != 0,
             )
         }
     }
@@ -267,7 +329,215 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // --- Annotation (Sub-plan E) ---
+    private val _annotationMode = MutableStateFlow(false)
+    val annotationMode: StateFlow<Boolean> = _annotationMode.asStateFlow()
+
+    // Committed drawings for the active score (the render + save currency; DrawingAnchorWire objects).
+    private val _drawings = MutableStateFlow<List<DrawingAnchorWire>>(emptyList())
+    val drawings: StateFlow<List<DrawingAnchorWire>> = _drawings.asStateFlow()
+
+    // Session-scoped undo/redo over the annotation layer (cleared on rehydrate and on score retarget —
+    // see [onAnnotationOpened] and [load] — never persisted).
+    private val history = DrawingHistory<DrawingAnchorWire>()
+
+    // Guards every read-modify-write of the annotation layer as one atomic critical section: the
+    // `_drawings` value, the `history` push/undo/redo, and the `_canUndo`/`_canRedo` publish all move
+    // together. `addDrawing` is invoked from a per-stroke `Dispatchers.Default` coroutine (off-main JNI
+    // capture) racing this VM's main-thread callers (undo/redo taps, whole-stroke erase) — without a lock
+    // spanning the whole decide-then-write, a concurrent pen commit can land between an undo/redo's read
+    // of `_drawings.value` and its write of the restored layer (TOCTOU), or a history push can observe a
+    // layer that a racing writer already moved past. `DrawingHistory` itself is NOT internally
+    // synchronized: every access to `history` in this class happens inside `synchronized(layerLock)`, so
+    // the single external lock is sufficient and double-locking would just add overhead.
+    private val layerLock = Any()
+
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
+
+    private val saveController = AnnotationSaveController.build(getApplication<Application>())
+
+    // Tracks the long-lived `loadedDrawings` collector started by [onAnnotationOpened] so a
+    // score retarget (playlist auto-advance, mirroring [load]'s loadedScoreId handling) cancels
+    // the prior collector instead of stacking a second one on the same ViewModel.
+    private var annotationDrawingsJob: Job? = null
+
+    fun toggleAnnotationMode() { _annotationMode.value = !_annotationMode.value }
+    fun setAnnotationMode(on: Boolean) { _annotationMode.value = on }
+
+    // Toolbar tool-state selection (pen color/width, eraser width). Plain MutableStateFlow + setter,
+    // the same shape as [layoutOptions]/[setLayoutOptions] — no persistence here; Task 9 adds a
+    // DataStore-backed restore on top. Held in the VM (not the app layer) so it survives recomposition
+    // but resets on process death, which is acceptable for this task.
+    private val _toolState = MutableStateFlow(AnnotationToolState())
+    val toolState: StateFlow<AnnotationToolState> = _toolState.asStateFlow()
+
+    /** Push a new tool-state selection in from the toolbar. No persistence (Task 9). */
+    fun setAnnotationToolState(state: AnnotationToolState) {
+        _toolState.value = state
+    }
+
+    /** Prime persistence for the score and rehydrate stored drawings into the dry overlay. */
+    fun onAnnotationOpened(scoreId: String) {
+        annotationDrawingsJob?.cancel()
+        annotationDrawingsJob = viewModelScope.launch {
+            // `open()` loads synchronously (a DispatchSemaphore bridges the actor coordinator — see
+            // AnnotationSaveBridge.open); run it off the main thread so that brief block never touches the UI thread.
+            withContext(Dispatchers.IO) { saveController.open(scoreId) }
+            saveController.loadedDrawings.collect { wires ->
+                // Rehydration is a fresh score's layer, not an undoable step: neither push history (there
+                // is no prior in-session layer to undo back to) nor persist (that would echo a save of
+                // exactly what was just loaded). Reset history BEFORE the apply, not after: applyDrawings
+                // publishes _canUndo/_canRedo from history's state under the same lock, and resetting
+                // afterward would leave a window where those StateFlows still reflect the score being
+                // replaced.
+                resetHistory()
+                applyDrawings(pushHistory = false, persist = false) { wires }
+            }
+        }
+    }
+
+    /**
+     * Clears the undo/redo history and republishes `_canUndo`/`_canRedo` as one atomic step under
+     * [layerLock] — used whenever the in-session history stops applying to the current layer (a
+     * rehydrate in [onAnnotationOpened], a score retarget in [load]). Does not touch `_drawings` itself;
+     * callers that also need to replace the layer do that via a following [applyDrawings] call.
+     */
+    private fun resetHistory() {
+        synchronized(layerLock) {
+            history.clear()
+            _canUndo.value = false
+            _canRedo.value = false
+        }
+    }
+
+    /**
+     * All annotation-layer mutations funnel through here so the `_drawings` write, the history
+     * push, and the `_canUndo`/`_canRedo` publish happen as one atomic critical section under
+     * [layerLock] — without it, a per-stroke `Dispatchers.Default` coroutine committing a pen stroke
+     * (E8's [addDrawing] call) could interleave with a concurrent mutation and either drop a stroke or
+     * push a history entry against a layer a racing writer already moved past. `drawingsChanged` is
+     * deliberately called OUTSIDE the lock (it decodes the whole layer across JNI — no need to hold the
+     * lock for that), using `updated` captured from inside the lock so the persisted value matches
+     * exactly the transition that was just committed.
+     */
+    private fun applyDrawings(
+        pushHistory: Boolean,
+        persist: Boolean,
+        transform: (List<DrawingAnchorWire>) -> List<DrawingAnchorWire>,
+    ) {
+        val updated = synchronized(layerLock) {
+            val previous = _drawings.value
+            val next = transform(previous)
+            _drawings.value = next
+            if (pushHistory) history.push(previous)
+            _canUndo.value = history.canUndo
+            _canRedo.value = history.canRedo
+            next
+        }
+        if (persist) saveController.drawingsChanged(updated)
+    }
+
+    /** Append a freshly captured drawing, push an undo entry, and (re)arm the debounced save. */
+    fun addDrawing(drawing: DrawingAnchorWire) {
+        applyDrawings(pushHistory = true, persist = true) { it + drawing }
+    }
+
+    /** Remove a drawing (whole-stroke eraser), push an undo entry, and re-arm save. */
+    fun removeDrawing(index: Int) {
+        applyDrawings(pushHistory = true, persist = true) { l -> l.filterIndexed { i, _ -> i != index } }
+    }
+
+    /**
+     * Read-only snapshot of the current layer (VM truth), for a caller that needs a stable base to
+     * mutate against without triggering any of [applyDrawings]'s side effects — the eraser gesture's
+     * BEGIN uses this instead of a separately-collected `drawings` composable state (which can lag the
+     * VM by a frame) and instead of pushing a history entry up front (see [eraseInProgress]/
+     * [eraseCommitted] for why the push is now deferred to the first ACTUAL change). Reads under
+     * [layerLock] so the snapshot can't race a concurrent layer write.
+     */
+    fun currentDrawings(): List<DrawingAnchorWire> = synchronized(layerLock) { _drawings.value }
+
+    /**
+     * Publish the layer mid-erase-drag: the eraser gesture handler (ReaderScreen) calls this once per
+     * throttle tick that actually changed the layer (`EraseOutcome.changesLayer` — a split/trim OR a
+     * full-cover drop; a miss publishes nothing at all, per spec: "the gesture did nothing: no save, no
+     * undo entry, no phase 2"). [pushHistory] is true only for the FIRST such
+     * changing tick of the gesture: [applyDrawings] pushes `_drawings.value` as it stood before this
+     * transform, which — since no changing publish preceded it — is exactly the pre-gesture base, so one
+     * call yields the one undo entry the whole drag should get. Never persists (the drag isn't done yet
+     * — [eraseCommitted] persists the final state); a plain pass-through to the shared [applyDrawings]
+     * choke point either way.
+     */
+    fun eraseInProgress(pushHistory: Boolean, layer: List<DrawingAnchorWire>) {
+        applyDrawings(pushHistory = pushHistory, persist = false) { layer }
+    }
+
+    /**
+     * Publish the erase gesture's final layer at [com.keynumber.folino.reader.ink.ErasePhase.END], but
+     * ONLY when the gesture actually changed something (a whiff that changed no drawing publishes
+     * nothing — same spec line as [eraseInProgress]). [pushHistory] is true iff no earlier tick of this
+     * same gesture already pushed (mirrors [eraseInProgress]'s "first changing tick" rule — if every
+     * change happened at END with no changing MOVE before it, END's own publish IS that first tick).
+     * Always persists since this is the drag's terminal state — mirrors [addDrawing]/[removeDrawing]'s
+     * persist-on-commit, just with the history push made conditional instead of unconditional.
+     */
+    fun eraseCommitted(pushHistory: Boolean, layer: List<DrawingAnchorWire>) {
+        applyDrawings(pushHistory = pushHistory, persist = true) { layer }
+    }
+
+    /**
+     * Step the layer back one undo entry (a no-op when the undo stack is empty) and persist the result.
+     * The read of `_drawings.value`, the `history.undo` decision, and the write of the restored layer
+     * all happen inside one [layerLock] section so a concurrent pen commit can't land between "decide"
+     * and "write" (the TOCTOU a lock-free version would have).
+     */
+    fun undoDrawings() {
+        val restored = synchronized(layerLock) {
+            val current = _drawings.value
+            val previous = history.undo(current) ?: return
+            _drawings.value = previous
+            _canUndo.value = history.canUndo
+            _canRedo.value = history.canRedo
+            previous
+        }
+        saveController.drawingsChanged(restored)
+    }
+
+    /**
+     * Step the layer forward one redo entry (a no-op when the redo stack is empty) and persist the
+     * result. Same single-critical-section shape as [undoDrawings].
+     */
+    fun redoDrawings() {
+        val restored = synchronized(layerLock) {
+            val current = _drawings.value
+            val next = history.redo(current) ?: return
+            _drawings.value = next
+            _canUndo.value = history.canUndo
+            _canRedo.value = history.canRedo
+            next
+        }
+        saveController.drawingsChanged(restored)
+    }
+
+    /** Immediate write (call from onPause / score-swap). */
+    fun flushAnnotations() { saveController.flush() }
+
     override fun onCleared() {
+        // Best-effort final flush of any pending annotation write (the Reader route's DisposableEffect
+        // also flushes on exit; this is belt-and-suspenders).
+        saveController.flush()
+        // KNOWN FOLLOW-UP — bounded native leak: the annotation save-bridge VM (`saveController`) is held
+        // as a plain field, NOT scoped to a ViewModelStore, so its own onCleared -> nativeRelease never
+        // fires and the native Swift AnnotationSaveBridge + coordinator + store adapter leak once per
+        // Reader entry. `ViewModel.clear()` is internal in androidx.lifecycle, so release can't be
+        // triggered from here; the fix is to scope the bridge VM via `AnnotationSaveController.factory()`
+        // in the Reader nav route (mirroring `ReaderPreferencesController`). Small per-instance size;
+        // deferred as a tracked follow-up (final whole-branch review finding #1).
+        //
         // Do NOT close `handle`: the same raw Long is used by the playback
         // engine (which outlives this ViewModel via the bound service).
         // Mirrors the example ScoreViewModel.onCleared rationale.

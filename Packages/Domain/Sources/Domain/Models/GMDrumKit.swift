@@ -1,21 +1,30 @@
 import Foundation
 
 /// One percussion-bank (bank 128) drum kit, with the canonical preset name and family grouping. Drives the drum-kit
-/// branch of the `ProgramPicker` for parts whose instrument reports `useDrumset == true`.
+/// branch of each platform's program picker for parts whose instrument reports `useDrumset == true`.
+///
+/// Lives in Domain rather than in the iOS Reader so Android reads the SAME catalog over JNI instead of carrying a
+/// second, drifting copy of the kit list.
 ///
 /// Programs and names match the kits actually shipped in the `jiyimeta/musescore-general-sf2-split` 1.0.0 release —
 /// that resolver is the only source of percussion soundfonts, so kits outside this list would resolve to the Standard
 /// fallback and silently lie to the user. When the SF2 split publishes additional kits, mirror the new `128_PPP.sf2`
 /// filenames here.
-struct GMDrumKit: Equatable, Identifiable {
-    let program: UInt8
-    let name: String
-    let family: Family
-    var id: UInt8 {
+public struct GMDrumKit: Equatable, Identifiable, Sendable {
+    public let program: UInt8
+    public let name: String
+    public let family: Family
+    public var id: UInt8 {
         program
     }
 
-    enum Family: String, CaseIterable {
+    public init(program: UInt8, name: String, family: Family) {
+        self.program = program
+        self.name = name
+        self.family = family
+    }
+
+    public enum Family: String, CaseIterable, Sendable {
         case standard = "Standard"
         case room = "Room"
         case power = "Power"
@@ -26,12 +35,12 @@ struct GMDrumKit: Equatable, Identifiable {
         case orchestra = "Orchestra"
         case marching = "Marching"
 
-        var kits: [GMDrumKit] {
+        public var kits: [GMDrumKit] {
             GMDrumKit.all.filter { $0.family == self }
         }
     }
 
-    static let all: [GMDrumKit] = [
+    public static let all: [GMDrumKit] = [
         GMDrumKit(program: 0, name: "Standard", family: .standard),
         GMDrumKit(program: 1, name: "Standard 1", family: .standard),
         GMDrumKit(program: 2, name: "Standard 2", family: .standard),
@@ -74,7 +83,7 @@ struct GMDrumKit: Equatable, Identifiable {
     /// Returns the catalog entry for a stored program byte, or `nil` if the program isn't a known drum kit. Callers
     /// fall back to a synthesized `"Kit \(program)"` label so an unknown override (e.g., from a future SF2 split
     /// release) still renders.
-    static func kit(for program: UInt8) -> GMDrumKit? {
+    public static func kit(for program: UInt8) -> GMDrumKit? {
         all.first { $0.program == program }
     }
 }

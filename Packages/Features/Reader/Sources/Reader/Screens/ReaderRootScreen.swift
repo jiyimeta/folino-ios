@@ -160,15 +160,7 @@ public struct ReaderRootScreen: View {
 
     public var body: some View {
         ZStack {
-            Group {
-                if let scoreContentOverride {
-                    scoreContentOverride // screenshot capture stands in for the live score; chrome + transport live
-                } else {
-                    content
-                }
-            }
-            .safeAreaPadding(.top, isCaptureMode ? 0 : ReaderTopOverlay.height)
-            .safeAreaPadding(.bottom, isCaptureMode ? 0 : bottomControlInset)
+            scoreLayer
             if ReaderPiPSession.isSupported {
                 ScorePiPHostView(coordinator: viewModel.pipSession.coordinator)
                     .frame(width: 1, height: 1)
@@ -345,108 +337,51 @@ public struct ReaderRootScreen: View {
         }
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if let host = editingHost, host.isEditing, let editScore = host.editedScore {
-            // Forced-vertical editing presentation (spec §11): raw score (no transpose / hidden staves / collapsed
-            // multi-measure rests) so positional IDs the Editor VM tracks stay valid, and no playback cursor / auto-
-            // follow since the transport is hidden for the duration.
-            VerticalScoreContainer(
-                score: editScore,
-                staffSize: viewModel.layoutModel.staffSize,
-                honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                collapseMultiMeasureRests: false,
-                showInvisibleElements: showInvisibleElements,
-                playbackCursor: nil,
-                scrollAnchorCursor: nil,
-                autoFollowEnabled: false,
-                transposeSemitones: 0,
-                bottomControlClearance: bottomControlContentHeight,
-                viewModel: viewModel,
-                editingHost: host,
-            )
-        } else {
-            switch viewModel.loadState {
-            case .loading:
-                ProgressView().controlSize(.large)
-            case .loaded:
-                // `visibleScore` is the clef-applied / transposed / hidden-filtered score, cached on the view model and
-                // recomputed only when its inputs change — so this body no longer rebuilds the score on every re-eval.
-                if let visible = viewModel.visibleScore {
-                    switch layoutMode {
-                    case .vertical:
-                        VerticalScoreContainer(
-                            score: visible,
-                            staffSize: viewModel.layoutModel.staffSize,
-                            honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                            collapseMultiMeasureRests: collapseMultiMeasureRests,
-                            showInvisibleElements: showInvisibleElements,
-                            playbackCursor: viewModel.playbackSession.displayCursor,
-                            scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
-                            autoFollowEnabled: autoFollowEnabled,
-                            transposeSemitones: viewModel.transposeModel.semitones,
-                            bottomControlClearance: bottomControlContentHeight,
-                            viewModel: viewModel,
-                        )
-                    case .horizontal:
-                        HorizontalScoreContainer(
-                            score: visible,
-                            staffSize: viewModel.layoutModel.staffSize,
-                            honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                            collapseMultiMeasureRests: collapseMultiMeasureRests,
-                            showInvisibleElements: showInvisibleElements,
-                            playbackCursor: viewModel.playbackSession.displayCursor,
-                            scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
-                            autoFollowEnabled: autoFollowEnabled,
-                            transposeSemitones: viewModel.transposeModel.semitones,
-                            viewModel: viewModel,
-                        )
-                    case .page:
-                        PagedScoreContainer(
-                            score: visible,
-                            staffSize: viewModel.layoutModel.staffSize,
-                            honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                            collapseMultiMeasureRests: collapseMultiMeasureRests,
-                            showInvisibleElements: showInvisibleElements,
-                            playbackCursor: viewModel.playbackSession.displayCursor,
-                            pageAnchorCursor: viewModel.playbackSession.pageAnchorCursor,
-                            autoFollowEnabled: autoFollowEnabled,
-                            showsPageTurnButtons: pageTurnButtonsVisible,
-                            transposeSemitones: viewModel.transposeModel.semitones,
-                            viewModel: viewModel,
-                        )
-                    }
-                } else {
-                    ProgressView().controlSize(.large)
-                }
-            case let .loadedPDF(document):
-                switch pdfLayoutMode {
-                case .vertical:
-                    VerticalPDFContainer(document: document, viewModel: viewModel)
-                case .page, .horizontal:
-                    PagedPDFContainer(
-                        document: document,
-                        showsPageTurnButtons: pageTurnButtonsVisible,
-                        viewModel: viewModel,
-                    )
-                }
-            case let .failed(error):
-                ContentUnavailableView {
-                    Label {
-                        Text("reader.error.cannotOpen.title", bundle: .module)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle")
-                    }
-                } description: {
-                    Text(describeReaderError(error))
-                } actions: {
-                    Button { Task { await viewModel.load() } } label: {
-                        Text("reader.error.retry", bundle: .module)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
+    /// The score / PDF layer (or the editing presentation / screenshot override), inset for the top overlay + bottom
+    /// transport. Extracted from `body` to keep the `ZStack` closure within SwiftLint's body-length budget;
+    /// constructing `ScoreContentView` reads no per-tick playback state, so this stays off the auto-follow re-render
+    /// path.
+    private var scoreLayer: some View {
+        Group {
+            if let host = editingHost, host.isEditing, let editScore = host.editedScore {
+                // Forced-vertical editing presentation (spec §11): raw score (no transpose / hidden staves / collapsed
+                // multi-measure rests) so positional IDs the Editor VM tracks stay valid, and no playback cursor /
+                // auto-follow since the transport is hidden for the duration. Kept out of `ScoreContentView` for the
+                // same reason that view exists: it reads no per-tick cursor state at all.
+                VerticalScoreContainer(
+                    score: editScore,
+                    staffSize: viewModel.layoutModel.staffSize,
+                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                    collapseMultiMeasureRests: false,
+                    showInvisibleElements: showInvisibleElements,
+                    playbackCursor: nil,
+                    scrollAnchorCursor: nil,
+                    autoFollowEnabled: false,
+                    transposeSemitones: 0,
+                    bottomControlClearance: bottomControlContentHeight,
+                    viewModel: viewModel,
+                    editingHost: host,
+                )
+            } else if let scoreContentOverride {
+                scoreContentOverride // screenshot capture stands in for the live score; chrome + transport live
+            } else {
+                // Extracted into its own view so the per-tick auto-follow cursor reads don't re-render this root body
+                // (which would rebuild the top overlay and regenerate its inspector popover every tick — see
+                // `ScoreContentView`).
+                ScoreContentView(
+                    viewModel: viewModel,
+                    layoutMode: layoutMode,
+                    pdfLayoutMode: pdfLayoutMode,
+                    collapseMultiMeasureRests: collapseMultiMeasureRests,
+                    showInvisibleElements: showInvisibleElements,
+                    autoFollowEnabled: autoFollowEnabled,
+                    pageTurnButtonsVisible: pageTurnButtonsVisible,
+                    bottomControlContentHeight: bottomControlContentHeight,
+                )
             }
         }
+        .safeAreaPadding(.top, isCaptureMode ? 0 : ReaderTopOverlay.height)
+        .safeAreaPadding(.bottom, isCaptureMode ? 0 : bottomControlInset)
     }
 }
 

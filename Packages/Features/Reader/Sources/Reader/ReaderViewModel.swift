@@ -268,14 +268,14 @@ final class ReaderViewModel {
 
     private func wireRepeatModel() {
         // The repeat *mode* is global (persisted by `RepeatModel` itself via `RepeatModeStorage`); only the per-score
-        // A–B endpoints are saved here.
+        // A–B endpoints are saved here, and they snap against `playbackScore` (a playable PDF's parsed score too).
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
             await preferencesStore.mutate { prefs in
                 prefs.abRepeat = self.repeatModel.abRange
             }
         }
-        repeatModel.scoreProvider = { [weak self] in self?.loadState.score }
+        repeatModel.scoreProvider = { [weak self] in self?.playbackScore }
         repeatModel.cursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
         repeatModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
         // Fired only on a Reader-initiated mode change (the inspector picker or `setMode`), never on a sync from
@@ -389,9 +389,9 @@ final class ReaderViewModel {
         visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
     }
 
-    /// Internal so both load paths in `ReaderViewModel+Load.swift` can reach the preference / last-opened helpers.
-    func loadOrSeedPreferences() async {
-        let prefs = await preferencesStore.loadOrSeed()
+    /// Reachable from both load paths; `authoredHiddenStaves` (empty for PDFs) are seeded in `loadOrSeed`.
+    func loadOrSeedPreferences(authoredHiddenStaves: Set<StaffAddress> = []) async {
+        let prefs = await preferencesStore.loadOrSeed(authoredHiddenStaves: authoredHiddenStaves)
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
         masterVolumeModel.sync(from: prefs)

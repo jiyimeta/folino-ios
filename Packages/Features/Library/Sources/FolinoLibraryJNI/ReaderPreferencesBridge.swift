@@ -61,6 +61,28 @@ public final class ReaderPreferencesBridge {
         }
     }
 
+    /// Reconciles the score's authored-hidden staves (`<Part><show>0</show>`, from the ssm `PartWire`) into the loaded
+    /// preferences once. Kotlin calls this after the parsed score's parts arrive — the point where authored visibility
+    /// becomes known — since `open` fires before the score parses. Uses the shared
+    /// `ReaderPreferences.reconcilingAuthoredHidden` so it matches iOS exactly: a not-yet-seeded row gets the authored-
+    /// hidden staves unioned in and is marked seeded; an already-seeded row (or one with nothing authored-hidden) is
+    /// left untouched, so staves the user reveals stay revealed on reopen.
+    @WireletExpose
+    public func seedAuthoredHidden(staves: [HiddenStaffEntryWire]) {
+        let authored = Set(staves.map {
+            StaffAddress(partIndex: Int($0.partIndex), staffIndexInPart: Int($0.staffIndexInPart))
+        })
+        let (resolved, shouldPersist) = ReaderPreferences.reconcilingAuthoredHidden(
+            stored: prefs,
+            authoredHiddenStaves: authored,
+            scoreItemID: prefs.scoreItemID,
+            defaultStaffSize: prefs.staffSize,
+        )
+        guard shouldPersist else { return }
+        prefs = resolved
+        store.saveJSON(scoreId: scoreId, json: ReaderPreferencesReducer.encode(resolved))
+    }
+
     // MARK: - Scalar mutators (Kotlin -> Swift)
 
     @WireletExpose

@@ -71,6 +71,11 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// Per-score A4 reference override in Hz. `nil` = inherit the global default. Clamped to
     /// `[A4Reference.minHz, A4Reference.maxHz]` when set.
     public var a4ReferenceHz: Double?
+    /// Whether the Reader has already reconciled this row with the score's authored `<Part><show>` hidden staves. Rows
+    /// created before that feature (and non-notation formats, which have no authored visibility) carry `false`; on open
+    /// the Reader seeds/back-fills the authored-hidden staves once, sets this `true`, and thereafter returns the user's
+    /// value untouched so staves the user revealed are never re-hidden. Defaults to `false`.
+    public var hasSeededAuthoredVisibility: Bool
 
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
@@ -87,6 +92,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         masterVolume: Double = 1.0,
         transposeSemitones: Int = 0,
         a4ReferenceHz: Double? = nil,
+        hasSeededAuthoredVisibility: Bool = false,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
@@ -106,6 +112,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.masterVolume = min(max(masterVolume, Self.minMasterVolume), Self.maxMasterVolume)
         self.transposeSemitones = min(max(transposeSemitones, -7), 7)
         self.a4ReferenceHz = a4ReferenceHz.map(A4Reference.clamp)
+        self.hasSeededAuthoredVisibility = hasSeededAuthoredVisibility
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -114,6 +121,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         case repeatMode, abRepeat, masterVolume, a4ReferenceHz
         case staffClefOverrides
         case transposeSemitones
+        case hasSeededAuthoredVisibility
     }
 
     public init(from decoder: Decoder) throws {
@@ -138,6 +146,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let master = try c.decodeIfPresent(Double.self, forKey: .masterVolume) ?? 1.0
         let transpose = try c.decodeIfPresent(Int.self, forKey: .transposeSemitones) ?? 0
         let a4 = try c.decodeIfPresent(Double.self, forKey: .a4ReferenceHz)
+        let hasSeeded = try c.decodeIfPresent(
+            Bool.self, forKey: .hasSeededAuthoredVisibility,
+        ) ?? false
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
             hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
@@ -148,6 +159,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             masterVolume: master,
             transposeSemitones: transpose,
             a4ReferenceHz: a4,
+            hasSeededAuthoredVisibility: hasSeeded,
         )
     }
 }

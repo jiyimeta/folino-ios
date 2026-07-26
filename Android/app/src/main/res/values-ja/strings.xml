@@ -6,6 +6,7 @@
     <!-- Settings – Reader section -->
     <string name="settings_section_reader">Reader</string>
     <string name="settings_reader_metronome">メトロノーム</string>
+    <string name="settings_reader_precount">カウントイン</string>
     <string name="settings_reader_pip">ピクチャインピクチャ</string>
     <string name="settings_reader_pip_footer">他のアプリを使っている間、ミニプレーヤーで楽譜の表示を継続します。デバイスの設定で「ピクチャインピクチャを自動的に開始」もオンにする必要があります。</string>
     <string name="settings_reader_collapse_rests">複数小節休符をまとめる</string>
@@ -13,6 +14,9 @@
     <string name="settings_reader_keep_awake">自動ロックを抑止</string>
     <string name="settings_reader_keep_awake_footer">楽譜を開いている間、デバイスの自動ロックを一時的に止めます。</string>
     <string name="settings_reader_show_seek_bar">シークバー表示</string>
+    <string name="settings_reader_auto_follow">自動スクロール</string>
+    <string name="settings_reader_page_turn_buttons">ページめくりボタン</string>
+    <string name="settings_reader_page_turn_buttons_footer">オフにしてもスワイプでページをめくれます。</string>
     <string name="settings_reader_repeat">リピート</string>
     <string name="settings_reader_display_mode">表示モード</string>
     <string name="settings_layout_vertical">縦スクロール</string>
@@ -53,4 +57,10 @@
     <string name="settings_about_licenses">ライセンス</string>
     <string name="settings_about_send_feedback">フィードバックを送る</string>
     <string name="settings_feedback_no_email_app">メールアプリが見つかりません</string>
+    <!-- Library sort menu (iOS parity: library.sort.*) -->
+    <string name="library_sort_menu">並び替え</string>
+    <string name="library_sort_by_date_added">追加日</string>
+    <string name="library_sort_by_title">タイトル</string>
+    <string name="library_sort_by_composer">作曲家</string>
+    <string name="library_sort_by_last_opened">最後に開いた</string>
 </resources>

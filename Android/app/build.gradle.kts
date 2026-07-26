@@ -178,6 +178,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.navigation:navigation-compose:2.8.0")
+    // Play In-App Review (Apache-2.0) — the Android counterpart of iOS's SKStoreReviewController
+    // prompt. Play decides whether to actually show the sheet; we only ask on the shared cadence.
+    implementation("com.google.android.play:review:2.0.2")
+    implementation("com.google.android.play:review-ktx:2.0.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
