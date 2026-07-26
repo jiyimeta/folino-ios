@@ -64,10 +64,12 @@ import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
+import com.keynumber.folino.reader.DrumKitOption
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
+import com.keynumber.folino.settings.DrumKitCatalog
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.theme.FolinoTheme
 import com.keynumber.folino.ui.library.ExportFormatSheet
@@ -687,6 +689,12 @@ private fun LibraryNavGraph(
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
                     countInEnabled = precountEnabled,
+                    // Percussion kit catalog: shared Swift owns the list, this layer is the only one that
+                    // can see both the JNI accessor and the Reader. Loaded once (the accessor caches).
+                    drumKits = remember {
+                        DrumKitCatalog.entries.map { DrumKitOption(it.program, it.displayName, it.familyIndex) }
+                    },
+                    drumKitFamilyNames = remember { DrumKitCatalog.familyNames },
                     // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
                     // Reader resolves address↔flat-staffIndex via its parts map for replay + persistence.
                     mixerProgramOverrides = {

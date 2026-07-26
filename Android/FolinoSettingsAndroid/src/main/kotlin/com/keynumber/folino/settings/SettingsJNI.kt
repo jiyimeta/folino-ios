@@ -35,4 +35,13 @@ object SettingsJNI {
      */
     fun nativeShouldPromptForReview(coldLaunchCount: Int): Boolean =
         SwiftJavaJNI.nativeShouldPromptForReview(coldLaunchCount)
+
+    /**
+     * The bank-128 drum-kit catalog (`Domain.GMDrumKit`) as an encoded `GMDrumKitCatalogWire`. Decode via
+     * [GMDrumKitCatalogWireCodec]; [DrumKitCatalog] wraps this with the load-once cache hosts should use.
+     */
+    fun nativeGMDrumKitCatalog(): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeGMDrumKitCatalog(arena).toByteArray()
+    }
 }

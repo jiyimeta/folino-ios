@@ -217,6 +217,11 @@ fun ReaderScreen(
     mixerVolumeOverrides: () -> List<Pair<StaffAddress, Float>> = { emptyList() },
     /** Persists a per-score program override after the live engine update. */
     persistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Bank-128 drum kits for the mixer's percussion picker. Owned by shared Swift and injected by the
+     * composition root, which is the only layer that sees both the JNI catalog and this screen. */
+    drumKits: List<DrumKitOption> = emptyList(),
+    /** Kit family display names, indexed by [DrumKitOption.familyIndex]. */
+    drumKitFamilyNames: List<String> = emptyList(),
     /** Persists a per-score volume override after the live engine update. */
     persistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
@@ -930,6 +935,8 @@ fun ReaderScreen(
             onTransposeChange = persistTranspose,
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = persistStaffProgram,
+            drumKits = drumKits,
+            drumKitFamilyNames = drumKitFamilyNames,
             onPersistStaffVolume = persistStaffVolume,
             partNames = mixerParts.map { it.name },
             isInPlaylist = playlistId != null,

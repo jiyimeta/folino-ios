@@ -4,12 +4,17 @@ import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 
 /**
  * One part's slice of the flat mixer: its display name, the staff channels that belong to it (in
- * staff-in-part order), and the part-level program (the first channel's program; null = drums).
+ * staff-in-part order), and the part-level program (the first channel's program).
+ *
+ * [isDrums] — not a null [partProgram] — is what marks a percussion part. On bank 128 the program is the
+ * KIT number, so drum parts have one too; conflating "percussion" with "no program" is what previously
+ * left them with no picker at all.
  */
 data class PartMixerGroup(
     val partIndex: Int,
     val partName: String,
     val partProgram: Int?,
+    val isDrums: Boolean,
     val channels: List<MixerChannel>,
 )
 
@@ -37,6 +42,7 @@ fun groupMixerByPart(
             partName = partNames.getOrNull(partIndex)?.takeIf { it.isNotEmpty() }
                 ?: "Part ${partIndex + 1}",
             partProgram = ordered.firstOrNull()?.program,
+            isDrums = ordered.firstOrNull()?.isDrums == true,
             channels = ordered,
         )
     }

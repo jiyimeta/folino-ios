@@ -16,3 +16,11 @@ public func nativeLoadVersionHistory(ymlBytes: Data) -> Data {
 public func nativeShouldPromptForReview(coldLaunchCount: Int32) -> Bool {
     ReviewPromptCadence.shouldPrompt(coldLaunchCount: Int(coldLaunchCount))
 }
+
+/// swift-java entry point for Kotlin `SettingsJNI.nativeGMDrumKitCatalog`.
+///
+/// The bank-128 kit catalog (`Domain.GMDrumKit`), so the Android mixer's percussion picker offers exactly the kits
+/// the SF2 split actually ships — the same list iOS's picker shows — instead of a Kotlin copy that would drift.
+public func nativeGMDrumKitCatalog() -> Data {
+    gmDrumKitCatalogPayload()
+}
