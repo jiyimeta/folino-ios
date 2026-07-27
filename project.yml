@@ -272,10 +272,13 @@ schemes:
     build:
       targets:
         Folino: all
+        FolinoTests: [test]
     run:
       config: Debug
     test:
       config: Debug
+      targets:
+        - FolinoTests
     profile:
       config: Release
     analyze:

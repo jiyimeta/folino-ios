@@ -17,8 +17,6 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
-import io.github.jiyimeta.sheetmusic.audio.MetronomeClickProvider
-import io.github.jiyimeta.sheetmusic.audio.MetronomeClickSource
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import kotlinx.coroutines.CoroutineScope
@@ -115,8 +113,8 @@ class ReaderPlaybackService : MediaSessionService() {
                 // by the next prepare/re-prepare. Empty string → fall back to the bundled GM SF2.
                 highQualityPath = { soundfontVM.highQualityFilePath() },
             ),
-            // MVP: no bundled click samples → GM drum-kit metronome.
-            metronomeClickProvider = MetronomeClickProvider { MetronomeClickSource.DefaultGm },
+            // folino's own click samples, the same pair iOS plays — see [BundledMetronomeClickProvider].
+            metronomeClickProvider = BundledMetronomeClickProvider(applicationContext),
         )
         focusController = PlaybackFocusController(
             context = applicationContext,
