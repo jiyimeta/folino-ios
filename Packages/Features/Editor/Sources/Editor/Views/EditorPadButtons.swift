@@ -7,10 +7,15 @@ import SwiftUI
 /// of press state — so the armed duration reads at a glance.
 struct PadKeyStyle: ButtonStyle {
     var isArmed = false
+    /// Compact rows pack ten keys across (C–B, ▴▾, delete). A fixed 40 pt minimum made that row wider than any
+    /// iPhone, so those keys instead share the row's width — `maxWidth: .infinity` can't overflow, and the 44 pt
+    /// height keeps each key comfortably tappable. The iPad row has the room, so it keeps the fixed minimum.
+    var isFlexible = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .frame(minWidth: 40, minHeight: 44)
+            .frame(maxWidth: isFlexible ? .infinity : nil)
+            .frame(minWidth: isFlexible ? nil : 40, minHeight: 44)
             .contentShape(Rectangle())
             .background {
                 if isArmed {
@@ -25,13 +30,20 @@ struct PadKeyStyle: ButtonStyle {
 
 /// Glyph builders shared by the pad's keys, kept in one place so every key group's font/weight stays in sync.
 enum PadKeyGlyph {
-    /// Duration key glyph — Unicode musical note symbols (U+1D15D…U+1D164 family) rendered through the system's font
-    /// fallback. Acceptable v1 stand-ins for the spec's "crisp custom glyphs"; a custom SF Symbol pass is a follow-up
-    /// listed in the final checklist.
+    /// Duration key glyph — a SMuFL note drawn with the score's own Bravura font (see `PadDurationGlyph`, which owns
+    /// the codepoints and the family name). Bravura's note glyphs sit on the baseline with the stem rising above it,
+    /// so the whole row lines up on its noteheads; 20 pt keeps the tallest (64th, stem + four flags) inside the
+    /// 44 pt key.
     static func duration(_ symbol: String) -> some View {
         Text(verbatim: symbol)
-            .font(.system(size: 22))
+            .font(PadDurationGlyph.swiftUIFont(size: durationSize))
+            // Cut the music font's enormous ascent/descent off the line box — see `PadDurationGlyph.lineTrim`.
+            .padding(.top, -durationTrim.top)
+            .padding(.bottom, -durationTrim.bottom)
     }
+
+    private static let durationSize: CGFloat = 20
+    private static let durationTrim = PadDurationGlyph.lineTrim(size: durationSize)
 
     /// Pitch-letter key glyph (C…B).
     static func pitchLetter(_ letter: Character) -> some View {
