@@ -1,6 +1,7 @@
 package com.keynumber.folino.reader.pdf
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -39,12 +40,23 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import com.keynumber.folino.reader.DrawingAnchorWire
+import com.keynumber.folino.reader.DrawingAnchorWireCodec
+import com.keynumber.folino.reader.PageFrameWire
+import com.keynumber.folino.reader.PageFramesWire
+import com.keynumber.folino.reader.PageFramesWireCodec
 import com.keynumber.folino.reader.PageTapOverlay
+import com.keynumber.folino.reader.ReaderAnnotationJNI
 import com.keynumber.folino.reader.ReaderAudioViewModel
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderViewModel
+import com.keynumber.folino.reader.ink.AnnotationLayers
 import com.keynumber.folino.reader.ink.AnnotationSurfaceState
+import com.keynumber.folino.reader.ink.PdfAnnotationCaptureController
+import com.keynumber.folino.reader.ink.encodeWireArray
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -132,6 +144,32 @@ internal object PagedPdfLayout {
         val boundY = panBoundPx(liveHeightPx.toFloat(), viewportHeightPx)
         return panXPx.coerceIn(-boundX, boundX) to panYPx.coerceIn(-boundY, boundY)
     }
+
+    /**
+     * Local (screen-relative-to-viewport) scale-then-translate camera for the annotation dry/wet overlays,
+     * which — unlike the page bitmap — cannot ride the bitmap's own `graphicsLayer` (androidx.ink's stroke
+     * API takes a flat matrix, not a Compose layer chain, and the wet overlay in particular must never be
+     * wrapped in a transform that could grow its own measured size — see the class doc's front-buffer
+     * note). Derived from the SAME `transformOrigin = (0.5, 0.5)` pivot the bitmap's own `graphicsLayer`
+     * scales around: a "world" point at the raster content's own center ([rasterWidthPx] / 2,
+     * [rasterHeightPx] / 2) maps to the viewport's center plus [panXPx]/[panYPx]; everything else scales
+     * by [zoom] (= live `scale` / `rasterScale`) around that. Returns `(translateX, translateY)` to feed a
+     * `Matrix.setScale(zoom, zoom); postTranslate(tx, ty)` (or `AnnotationDryOverlay`'s equivalent
+     * `pxPerMM = 1f, scale = zoom, panOffset = Offset(tx, ty)`).
+     */
+    fun annotationCameraTranslate(
+        zoom: Float,
+        rasterWidthPx: Int,
+        rasterHeightPx: Int,
+        viewportWidthPx: Int,
+        viewportHeightPx: Int,
+        panXPx: Float,
+        panYPx: Float,
+    ): Pair<Float, Float> {
+        val tx = viewportWidthPx / 2f + panXPx - zoom * rasterWidthPx / 2f
+        val ty = viewportHeightPx / 2f + panYPx - zoom * rasterHeightPx / 2f
+        return tx to ty
+    }
 }
 
 /**
@@ -184,10 +222,18 @@ internal object PagedPdfLayout {
  * physical edges) at every zoom level.
  *
  * There is no `scoreHandle` for a PDF yet (Task 12), so — like [PdfVerticalScore] — this surface has none of
- * `PagedScore`'s cursor overlay, tap-to-seek, or playback-auto-follow wiring. [audioVm], [readerVm], and
- * [autoFollowEnabled] are accepted for that future wiring; [annotation] is accepted for Task 11, per the
- * same convention [PdfVerticalScore]/`PagedScore` use for their own `annotation` parameter — none of the
- * four are read here.
+ * `PagedScore`'s cursor overlay, tap-to-seek, or playback-auto-follow wiring. [audioVm] and
+ * [autoFollowEnabled] are accepted for that future wiring and unused here; [readerVm] IS used, for
+ * [annotation]'s capture path.
+ *
+ * [annotation] (Task 11) anchors ink to a PAGE, not a musical position — see [PdfVerticalScore]'s own class
+ * doc for the shared `PageAnchoringCore` rationale. Only one page is ever visible here, so capture always
+ * knows its page already (no centroid resolve, unlike the scrolling surface) and display only ever shows
+ * strokes anchored to the CURRENT page (`PagedPdfPage` builds a whole-document-length page-frame array with
+ * every OTHER page's slot a zero-width placeholder, which the native side already treats as "not placeable
+ * this frame"). The dry/wet overlays mount OUTSIDE the bitmap's own `graphicsLayer` (they cannot ride it —
+ * see `PagedPdfPage`'s own mounting comment) using an explicit camera derived from the SAME center-anchored
+ * placement (`PagedPdfLayout.annotationCameraTranslate`).
  */
 @Composable
 internal fun PagedPdfScore(
@@ -202,7 +248,7 @@ internal fun PagedPdfScore(
     /** User opt-out for the page-mode tap-zone overlay (`PagedScore` parity). Independent of
      * [pageTapHintDismissed], which only gates the one-time onboarding hint drawn on top of the zones. */
     pageTurnButtonsVisible: Boolean = true,
-    /** Annotation layers + capture pipeline, owned by ReaderScreen. Wired in Task 11; unused here. */
+    /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation on this surface. */
     annotation: AnnotationSurfaceState? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -243,20 +289,27 @@ internal fun PagedPdfScore(
     // body would recompose this whole function ~60x/second for the life of a pinch gesture, even though
     // the result is a `Boolean` that only actually flips twice per gesture (zoom past 1x, and back).
     // `derivedStateOf` re-runs the same per-frame read but only PUBLISHES — and so only recomposes readers
-    // on — an actual change to that `Boolean` (lesson from Task 7's zoom-path fix rounds).
-    val swipeEnabled by remember { derivedStateOf { scaleState.floatValue == 1f } }
+    // on — an actual change to that `Boolean` (lesson from Task 7's zoom-path fix rounds). `annotationMode`
+    // is a `remember` key (not read directly inside the block): it changes rarely (an explicit tool
+    // toggle), so rebuilding the wrapper on it costs nothing, but the block itself must close over a LIVE
+    // value — `PagedScore.kt:207`'s own `scale == 1f && !annotationMode` is the reference this mirrors:
+    // annotating freezes the pager too, or a horizontal stroke would turn the page under the finger.
+    val annotationMode = annotation?.annotationMode == true
+    val swipeEnabled by remember(annotationMode) { derivedStateOf { scaleState.floatValue == 1f && !annotationMode } }
 
     Box(Modifier.fillMaxSize().onSizeChanged { viewportSize = it }) {
         if (pageCount == 0) return@Box
 
         HorizontalPager(
             state = pagerState,
-            // Only swipe at unit zoom; while zoomed the gesture pans instead (`PagedScore` parity).
+            // Only swipe at unit zoom AND not annotating; while zoomed OR annotating, the gesture pans / draws
+            // instead (`PagedScore` parity).
             userScrollEnabled = swipeEnabled,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
             PagedPdfPage(
                 index = pageIndex,
+                pageCount = pageCount,
                 pageWidthPt = state.pageWidthsPt[pageIndex],
                 pageHeightPt = state.pageHeightsPt[pageIndex],
                 viewportSize = viewportSize,
@@ -264,6 +317,8 @@ internal fun PagedPdfScore(
                 scaleState = scaleState,
                 rasterScaleState = rasterScaleState,
                 panOffsetState = panOffsetState,
+                readerVm = readerVm,
+                annotation = annotation,
             )
         }
 
@@ -302,6 +357,9 @@ internal fun PagedPdfScore(
 @Composable
 private fun PagedPdfPage(
     index: Int,
+    /** Whole document's page count — sizes the [PageFramesWire] array [pdfAnnotation]'s display/capture
+     * paths pass to the native PDF annotation entry points (positionally indexed by page). */
+    pageCount: Int,
     pageWidthPt: Double,
     pageHeightPt: Double,
     viewportSize: IntSize,
@@ -309,10 +367,15 @@ private fun PagedPdfPage(
     scaleState: MutableFloatState,
     rasterScaleState: MutableFloatState,
     panOffsetState: MutableState<Offset>,
+    readerVm: ReaderViewModel,
+    /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation on this surface. */
+    annotation: AnnotationSurfaceState?,
 ) {
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
     var scale by scaleState
     var panOffset by panOffsetState
+    val annotationMode = annotation?.annotationMode == true
 
     val viewportKnown = viewportSize.width > 0 && viewportSize.height > 0
     val fitWidthPx = if (viewportKnown) {
@@ -339,6 +402,64 @@ private fun PagedPdfPage(
         bitmap = source.bitmap(index, rasterWidthPx)
     }
 
+    // This page's own raster frame (origin at its own top-left — the SAME "world" space the annotation
+    // camera below places at the viewport center) — null until the raster geometry is known. Only THIS
+    // page's slot is populated in the whole-document-length array `nativePdfAnnotationDisplayTransforms`
+    // wants (positionally indexed by page): every other page is off-screen in paged mode, so its slot
+    // stays a zero-width placeholder, which the native side already treats as "not placeable this frame"
+    // (`PageAnchoringCore.displayTransform`'s own `width > 0` guard) — exactly right, since only strokes on
+    // THIS page should render while it's the one visible.
+    val pageFrame = if (rasterWidthPx > 0 && rasterHeightPx > 0) {
+        PageFrameWire(x = 0.0, y = 0.0, width = rasterWidthPx.toDouble(), height = rasterHeightPx.toDouble())
+    } else {
+        null
+    }
+    val pageFrames = remember(pageCount, index, pageFrame) {
+        List(pageCount) { i -> if (i == index && pageFrame != null) pageFrame else PageFrameWire(0.0, 0.0, 0.0, 0.0) }
+    }
+    val resolveDisplayTransforms = remember(pageFrames) {
+        { drawings: List<DrawingAnchorWire> ->
+            ReaderAnnotationJNI.pdfDisplayTransforms(
+                encodeWireArray(drawings, DrawingAnchorWireCodec::encodePayload),
+                PageFramesWireCodec.encode(PageFramesWire(pageFrames)),
+            )
+        }
+    }
+    // Local copy of the shared `annotation` bundle with a page-known capture (see `PdfVerticalScore`'s own
+    // equivalent for the fuller rationale — same reasoning, just "this page IS the visible one" instead of
+    // resolving from a centroid). Rebuilt fresh every recomposition; see that same doc for why that's fine.
+    val pdfAnnotation = annotation?.let { base ->
+        AnnotationSurfaceState(
+            annotationMode = base.annotationMode,
+            drawings = base.drawings,
+            layoutGeneration = base.layoutGeneration,
+            colorRGBA = base.colorRGBA,
+            widthMm = base.widthMm,
+            eraserMode = base.eraserMode,
+            onEraseGesture = base.onEraseGesture,
+            inkHandoff = base.inkHandoff,
+            onStrokeCaptured = { stroke, onCommitted ->
+                val capturedColorRGBA = base.colorRGBA
+                val capturedWidthMm = base.widthMm
+                val frame = pageFrame
+                scope.launch(Dispatchers.Default) {
+                    val drawing = frame?.let {
+                        PdfAnnotationCaptureController.capture(
+                            stroke = stroke,
+                            tool = AnnotationSurfaceState.WET_STROKE_TOOL,
+                            colorRGBA = capturedColorRGBA,
+                            baseWidthSp = capturedWidthMm,
+                            pageIndex = index,
+                            pageFrame = it,
+                        )
+                    }
+                    drawing?.let { readerVm.addDrawing(it) }
+                    withContext(Dispatchers.Main) { onCommitted(drawing) }
+                }
+            },
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -347,7 +468,7 @@ private fun PagedPdfPage(
             // Pinch-zoom + pan. Lives INSIDE the pager page (not a sibling overlay of the whole pager), so
             // at scale == 1 a single-finger drag is left unconsumed and reaches `HorizontalPager` itself —
             // `PagedScore`'s exact same trick, see its own comment.
-            .pointerInput(index, fitWidthPx) {
+            .pointerInput(index, fitWidthPx, annotationMode) {
                 if (fitWidthPx <= 0) return@pointerInput
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
@@ -394,7 +515,10 @@ private fun PagedPdfPage(
                                 panOffset = clamp(panOffset + pan, scale)
                             }
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
-                        } else if (activeCount == 1 && scale > 1f) {
+                            // A single-finger drag while annotating is a stroke, not a pan — the wet
+                            // overlay owns it (`PagedScore` parity; two-finger pinch above still applies:
+                            // the wet layer cancels its stroke and hands the gesture back).
+                        } else if (activeCount == 1 && scale > 1f && !annotationMode) {
                             val pan = event.calculatePan()
                             if (pan != Offset.Zero) {
                                 panOffset = clamp(panOffset + pan, scale)
@@ -450,6 +574,45 @@ private fun PagedPdfPage(
                     }
                 }
             }
+        }
+
+        if (pdfAnnotation != null && rasterWidthPx > 0 && rasterHeightPx > 0) {
+            // Own camera, OUTSIDE the bitmap's own `graphicsLayer` — androidx.ink's stroke API takes a flat
+            // matrix, not a Compose layer chain, and the wet overlay in particular must never be wrapped in
+            // a transform that could grow its own measured size (see `AnnotationLayers`' front-buffer
+            // note). `annotationCameraTranslate` derives the SAME center-anchored placement the bitmap's
+            // own `graphicsLayer` above gets (matching `transformOrigin = (0.5, 0.5)` + `panOffset`), just
+            // expressed as an explicit scale-then-translate a `Matrix`/`AnnotationDryOverlay` can consume —
+            // see that function's own doc. Sized to this OUTER viewport-sized Box (unlike the bitmap
+            // escape-hatch Box above), matching `PagedScore`'s own page-mode overlays: "a page IS
+            // viewport-sized, so even at the 8x zoom ceiling the front buffer stays far inside the 65536 px
+            // limit" — no wet-window clamping is needed here (unlike the scrolling PDF surface).
+            val zoom = scaleState.floatValue / rasterScaleState.floatValue
+            val (tx, ty) = PagedPdfLayout.annotationCameraTranslate(
+                zoom = zoom,
+                rasterWidthPx = rasterWidthPx,
+                rasterHeightPx = rasterHeightPx,
+                viewportWidthPx = viewportSize.width,
+                viewportHeightPx = viewportSize.height,
+                panXPx = panOffset.x,
+                panYPx = panOffset.y,
+            )
+            AnnotationLayers(
+                resolveDisplayTransforms = resolveDisplayTransforms,
+                annotation = pdfAnnotation,
+                pxPerMM = 1f,
+                scale = zoom,
+                isDrawing = false,
+                dryPanOffset = Offset(tx, ty),
+                dryModifier = Modifier.fillMaxSize(),
+                wetWorldToScreen = remember(zoom, tx, ty) {
+                    Matrix().apply {
+                        setScale(zoom, zoom)
+                        postTranslate(tx, ty)
+                    }
+                },
+                wetModifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

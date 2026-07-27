@@ -156,4 +156,70 @@ class PagedPdfLayoutTest {
         assertEquals(0f, x, 0.001f)
         assertEquals(100f, y, 0.001f)
     }
+
+    // -- annotationCameraTranslate (Task 11: PDF page-anchored annotation) -------------------------
+
+    @Test fun annotationCameraIsIdentityAtRestWithNoPan() {
+        // Raster content already matches the viewport 1:1, zoom 1x, no pan — the raster page's own
+        // top-left (0, 0) must map straight to the viewport's top-left (0, 0), matching where the
+        // bitmap's own `graphicsLayer` (transformOrigin 0.5/0.5, scale 1, translate 0) paints it.
+        val (tx, ty) = PagedPdfLayout.annotationCameraTranslate(
+            zoom = 1f,
+            rasterWidthPx = 1000,
+            rasterHeightPx = 2000,
+            viewportWidthPx = 1000,
+            viewportHeightPx = 2000,
+            panXPx = 0f,
+            panYPx = 0f,
+        )
+        assertEquals(0f, tx, 0.001f)
+        assertEquals(0f, ty, 0.001f)
+    }
+
+    @Test fun annotationCameraLetterboxesALandscapePageInATallerViewport() {
+        // A raster page narrower than the viewport (letterboxed at rest, zoom 1x, no pan): the page is
+        // centered, so its own left edge sits half the leftover width in from the viewport's own edge.
+        val (tx, ty) = PagedPdfLayout.annotationCameraTranslate(
+            zoom = 1f,
+            rasterWidthPx = 600,
+            rasterHeightPx = 800,
+            viewportWidthPx = 1000,
+            viewportHeightPx = 800,
+            panXPx = 0f,
+            panYPx = 0f,
+        )
+        assertEquals(200f, tx, 0.001f) // (1000 - 600) / 2
+        assertEquals(0f, ty, 0.001f)
+    }
+
+    @Test fun annotationCameraScalesAboutTheRasterContentsOwnCenter() {
+        // Zoomed 2x about the center: the raster content's own center (500, 500) must still map to the
+        // viewport's center (500, 500) — only the translate needed to keep that fixed point changes.
+        val (tx, ty) = PagedPdfLayout.annotationCameraTranslate(
+            zoom = 2f,
+            rasterWidthPx = 1000,
+            rasterHeightPx = 1000,
+            viewportWidthPx = 1000,
+            viewportHeightPx = 1000,
+            panXPx = 0f,
+            panYPx = 0f,
+        )
+        // worldCenter (500, 500) -> screen: zoom*worldCenter + t = viewportCenter (500, 500).
+        assertEquals(500f, 2f * 500f + tx, 0.001f)
+        assertEquals(500f, 2f * 500f + ty, 0.001f)
+    }
+
+    @Test fun annotationCameraFoldsInUserPanOnTopOfCentering() {
+        val (tx, ty) = PagedPdfLayout.annotationCameraTranslate(
+            zoom = 1f,
+            rasterWidthPx = 1000,
+            rasterHeightPx = 1000,
+            viewportWidthPx = 1000,
+            viewportHeightPx = 1000,
+            panXPx = 30f,
+            panYPx = -20f,
+        )
+        assertEquals(30f, tx, 0.001f)
+        assertEquals(-20f, ty, 0.001f)
+    }
 }

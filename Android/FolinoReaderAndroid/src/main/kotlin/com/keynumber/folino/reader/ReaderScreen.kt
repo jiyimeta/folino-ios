@@ -92,6 +92,7 @@ import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
 import com.keynumber.folino.reader.ink.ErasePhase
+import com.keynumber.folino.reader.ink.encodeWireArray
 import com.keynumber.folino.reader.pdf.PagedPdfScore
 import com.keynumber.folino.reader.pdf.PdfVerticalScore
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
@@ -1513,7 +1514,7 @@ private fun ReadyScore(
                         val wetWindowTopPx = vScroll.value
                         val wetWindowHeightPx = viewportSize.height.coerceAtLeast(0)
                         AnnotationLayers(
-                            scoreHandle = handle,
+                            resolveDisplayTransforms = remember(handle) { musicalDisplayTransformsResolver(handle) },
                             annotation = an,
                             pxPerMM = fitPxPerMM,
                             scale = scale,
@@ -1558,6 +1559,37 @@ private fun focalAdjustedOffset(
     ratio: Float,
     pad: Float = 0f,
 ): Float = pad + ratio * (currentScroll - pad + centroid) - centroid
+
+/**
+ * Builds the musical [AnnotationDryOverlay]/[AnnotationLayers] `resolveDisplayTransforms` lambda for
+ * [scoreHandle]: the ssm ref-point round trip (`SheetMusicJNI.nativeAnchorReferencePoint`) followed by
+ * `ReaderAnnotationJNI.displayTransforms`, exactly what this composable's own `computePlacement` did
+ * inline before Task 11 generalized the seam to also serve a PDF page-anchor resolver (see
+ * [AnnotationDryOverlay]'s parameter doc). Shared by `ReadyScore` and `PagedScore` — both `remember` the
+ * result keyed on their own `scoreHandle`, so the lambda's identity (and so the dry overlay's
+ * `LaunchedEffect`) only changes when the handle itself does, never on a live pinch frame.
+ */
+internal fun musicalDisplayTransformsResolver(
+    scoreHandle: Long,
+): (List<DrawingAnchorWire>) -> ByteArray = { drawings ->
+    val identities = drawings.map {
+        ResolvedAnchorWire(
+            it.measureIndex, it.tickInMeasure, it.partIndex, it.staffIndexInPart, it.dxSp, it.verticalOffsetSp,
+        )
+    }
+    val refBytes = SheetMusicJNI.nativeAnchorReferencePoint(
+        scoreHandle,
+        encodeWireArray(identities, ResolvedAnchorWireCodec::encodePayload),
+    )
+    if (refBytes.isEmpty()) {
+        ByteArray(0)
+    } else {
+        ReaderAnnotationJNI.displayTransforms(
+            encodeWireArray(drawings, DrawingAnchorWireCodec::encodePayload),
+            refBytes,
+        )
+    }
+}
 
 @Composable
 private fun TransportBar(
@@ -2417,7 +2449,9 @@ internal fun HorizontalScore(
                             val wetWindowHeightPx =
                                 if (needsVScroll) viewportSize.height.coerceAtLeast(0) else contentHeightPx.toInt()
                             AnnotationLayers(
-                                scoreHandle = handle,
+                                resolveDisplayTransforms = remember(handle) {
+                                    musicalDisplayTransformsResolver(handle)
+                                },
                                 annotation = an,
                                 pxPerMM = fitPxPerMM,
                                 scale = scale,

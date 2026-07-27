@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import com.keynumber.folino.reader.DrawingAnchorWire
 
 /**
  * Mounts the two annotation layers for one score surface: the DRY layer (committed strokes, always
@@ -27,7 +28,8 @@ import androidx.compose.ui.geometry.Offset
  */
 @Composable
 internal fun AnnotationLayers(
-    scoreHandle: Long,
+    /** See [AnnotationDryOverlay]'s own parameter doc — forwarded straight through. */
+    resolveDisplayTransforms: (List<DrawingAnchorWire>) -> ByteArray,
     annotation: AnnotationSurfaceState,
     pxPerMM: Float,
     scale: Float,
@@ -38,7 +40,7 @@ internal fun AnnotationLayers(
     wetModifier: Modifier,
 ) {
     AnnotationDryOverlay(
-        scoreHandle = scoreHandle,
+        resolveDisplayTransforms = resolveDisplayTransforms,
         drawings = annotation.drawings,
         layoutGeneration = annotation.layoutGeneration,
         pxPerMM = pxPerMM,

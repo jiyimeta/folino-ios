@@ -380,7 +380,7 @@ internal fun PagedScore(
                         // the 65536 px limit.
                         val pageOffset = Offset(panOffset.x, panOffset.y - pageTopPx)
                         AnnotationLayers(
-                            scoreHandle = h,
+                            resolveDisplayTransforms = remember(h) { musicalDisplayTransformsResolver(h) },
                             annotation = an,
                             pxPerMM = fitPxPerMM,
                             scale = scale,

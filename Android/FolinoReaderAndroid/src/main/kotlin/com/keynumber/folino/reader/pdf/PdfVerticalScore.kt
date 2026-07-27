@@ -1,6 +1,7 @@
 package com.keynumber.folino.reader.pdf
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -12,6 +13,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
@@ -29,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -40,13 +45,25 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.keynumber.folino.reader.DrawingAnchorWire
+import com.keynumber.folino.reader.DrawingAnchorWireCodec
+import com.keynumber.folino.reader.PageFrameWire
+import com.keynumber.folino.reader.PageFramesWire
+import com.keynumber.folino.reader.PageFramesWireCodec
+import com.keynumber.folino.reader.ReaderAnnotationJNI
 import com.keynumber.folino.reader.ReaderAudioViewModel
 import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderViewModel
+import com.keynumber.folino.reader.ink.AnnotationLayers
 import com.keynumber.folino.reader.ink.AnnotationSurfaceState
+import com.keynumber.folino.reader.ink.PdfAnnotationCaptureController
+import com.keynumber.folino.reader.ink.encodeWireArray
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -155,6 +172,50 @@ internal object PdfVerticalLayout {
         }
         return pageHeightsPx.lastIndex
     }
+
+    /**
+     * Column-local (no top padding) Y origin of each page's top edge, given the same [pageHeightsPx] /
+     * [gapPx] this layout already threads through [totalContentHeightPx] / [currentPageIndex] — the
+     * page-anchored annotation pipeline needs each page's own frame both to resolve which page a wet
+     * stroke's centroid landed on ([pageIndexForY]) and to project stored ink back onto the page it
+     * currently occupies (the raster page-frame list `PdfVerticalScore` feeds
+     * `ReaderAnnotationJNI.pdfDisplayTransforms`).
+     */
+    fun pageOriginsPx(pageHeightsPx: FloatArray, gapPx: Float): FloatArray {
+        val origins = FloatArray(pageHeightsPx.size)
+        var y = 0f
+        for (i in pageHeightsPx.indices) {
+            origins[i] = y
+            y += pageHeightsPx[i] + gapPx
+        }
+        return origins
+    }
+
+    /**
+     * The page whose band contains Column-local [y] (matching [pageOriginsPx]), else the page whose
+     * vertical extent is nearest — covers a centroid landing in the inter-page gap. Mirrors shared Swift
+     * `PageAnchoringCore.pageIndex(forCentroid:pageFrames:)`'s own vertical fallback: distance is measured
+     * to a page's nearest edge (zero while [y] is inside its band), and a tie resolves to the earlier page
+     * (`<`, not `<=`, keeps the first minimum found). Returns 0 for an empty document; real call sites
+     * never resolve a stroke's page with `pageCount == 0` (there is nothing to draw on).
+     */
+    fun pageIndexForY(y: Float, pageHeightsPx: FloatArray, gapPx: Float): Int {
+        if (pageHeightsPx.isEmpty()) return 0
+        val origins = pageOriginsPx(pageHeightsPx, gapPx)
+        var best = 0
+        var bestDist = Float.MAX_VALUE
+        for (i in pageHeightsPx.indices) {
+            val top = origins[i]
+            val bottom = top + pageHeightsPx[i]
+            val clampedY = y.coerceIn(top, bottom)
+            val d = abs(clampedY - y)
+            if (d < bestDist) {
+                bestDist = d
+                best = i
+            }
+        }
+        return best
+    }
 }
 
 /**
@@ -175,10 +236,19 @@ internal object PdfVerticalLayout {
  *
  * Unlike [ReadyScore], there is no `scoreHandle` yet for a PDF (the parsed score arrives in Task 12), so
  * this surface has none of [ReadyScore]'s cursor overlay, tap-to-seek, or playback-auto-follow gestures —
- * there is nothing yet for them to follow. [audioVm], [readerVm], and [autoFollowEnabled] are accepted for
- * that future wiring; [annotation] is accepted and threaded through the signature for Task 11 to wire up,
- * per the same convention [ReadyScore]/`PagedScore` use for their own `annotation` parameter — none of the
- * three are read here.
+ * there is nothing yet for them to follow. [audioVm] and [autoFollowEnabled] are accepted for that future
+ * wiring and unused here; [readerVm] IS used, for [annotation]'s capture path (`readerVm.addDrawing`).
+ *
+ * [annotation] (Task 11) anchors ink to a PAGE, not a musical position: page index plus geometry
+ * normalized to a fraction of that page's own width, so the same stroke re-renders correctly at any zoom
+ * (the zoom factor cancels — see `ReaderAnnotationCore.PageAnchoringCore`, the shared Swift this and iOS's
+ * PDF surfaces both call through). The dry/wet overlays mount OUTSIDE the page `Column`'s own
+ * `graphicsLayer` (mirroring [ReadyScore]'s own ink overlays, never the score's live-record path) and use
+ * their OWN camera: `pxPerMM = 1f` (raster page frames are already in px, no mm conversion) and
+ * `scale = zoom` (the SAME `scaleState / rasterScaleState` ratio the Column's `graphicsLayer` reads), so
+ * moving the ink overlays exactly tracks the zoomed Column without re-deriving page geometry on a live
+ * pinch frame — the actual `pdfDisplayTransforms`/capture JNI calls key off [pageFramesRaster], which only
+ * changes at a raster-scale settle (window move or pinch end), never per frame.
  */
 @Composable
 internal fun PdfVerticalScore(
@@ -187,7 +257,7 @@ internal fun PdfVerticalScore(
     audioVm: ReaderAudioViewModel,
     readerVm: ReaderViewModel,
     bottomContentPad: Dp = 0.dp,
-    /** Annotation layers + capture pipeline, owned by ReaderScreen. Wired in Task 11; unused here. */
+    /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation on this surface. */
     annotation: AnnotationSurfaceState? = null,
     /** Reserved for Task 12's playback auto-follow, once a PDF has a parsed score to follow. Unused here. */
     autoFollowEnabled: Boolean = true,
@@ -234,6 +304,34 @@ internal fun PdfVerticalScore(
     // what makes every `PdfPageItem` call below receive the SAME `widthDp`/`heightDp` on every pinch frame.
     val pageHeightsPxRaster = remember(state, rasterWidthPx) {
         PdfVerticalLayout.pageHeightsPx(state.pageWidthsPt, state.pageHeightsPt, rasterWidthPx)
+    }
+
+    // Every page's Column-local (no top padding) frame at raster scale — annotation geometry, NOT the
+    // outer live-scaled content box. Recomputed only alongside `pageHeightsPxRaster` (a raster-scale
+    // settle or window move), never on a live pinch frame — the ink overlays' own camera folds in the
+    // live/raster zoom ratio separately (see the class doc), so this stays cheap to recompute.
+    val pageFramesRaster = remember(pageHeightsPxRaster, gapPx) {
+        val origins = PdfVerticalLayout.pageOriginsPx(pageHeightsPxRaster, gapPx)
+        List(pageCount) { i ->
+            PageFrameWire(
+                x = 0.0,
+                y = origins[i].toDouble(),
+                width = rasterWidthPx.toDouble(),
+                height = pageHeightsPxRaster[i].toDouble(),
+            )
+        }
+    }
+    // Injected into `AnnotationDryOverlay` (via `AnnotationLayers`) as its `resolveDisplayTransforms` —
+    // remembered on `pageFramesRaster`'s own identity so the native round trip only re-runs when the
+    // raster geometry actually changes, not on every recomposition (this composable's whole body
+    // recomposes on every pinch/scroll frame — see `scale`'s own doc above).
+    val resolveDisplayTransforms = remember(pageFramesRaster) {
+        { drawings: List<DrawingAnchorWire> ->
+            ReaderAnnotationJNI.pdfDisplayTransforms(
+                encodeWireArray(drawings, DrawingAnchorWireCodec::encodePayload),
+                PageFramesWireCodec.encode(PageFramesWire(pageFramesRaster)),
+            )
+        }
     }
 
     // Live (per-frame during a pinch) content-box geometry: cheap arithmetic recomputed directly from
@@ -309,6 +407,49 @@ internal fun PdfVerticalScore(
         if (pageCount > 0 && viewportKnown) source.setWindow(currentPage, radius = PDF_WINDOW_RADIUS)
     }
 
+    val annotationMode = annotation?.annotationMode == true
+
+    // A local copy of the shared `annotation` bundle with a PDF-specific `onStrokeCaptured`: the shared
+    // one (built once in `ReaderScreen`) resolves a musical anchor via `scoreHandle`, which is always null
+    // for a PDF (Task 12 hasn't landed a parsed score for one yet). Every other field is forwarded
+    // unchanged — color/width/eraser state, the committed layer, the wet↔dry handoff queue all come from
+    // the SAME shared bundle every surface uses. Rebuilt fresh every recomposition (no `remember`): the
+    // base `annotation` itself is a fresh object every `ReaderScreen` recomposition already (see its own
+    // construction site), so memoizing here would buy nothing, and `onStrokeCaptured` is only ever invoked
+    // from a finished-stroke callback (not a `LaunchedEffect` key), so a fresh closure every time is fine —
+    // exactly how `AnnotationWetOverlay` already expects it (`rememberUpdatedState` there covers freshness).
+    val pdfAnnotation = annotation?.let { base ->
+        AnnotationSurfaceState(
+            annotationMode = base.annotationMode,
+            drawings = base.drawings,
+            layoutGeneration = base.layoutGeneration,
+            colorRGBA = base.colorRGBA,
+            widthMm = base.widthMm,
+            eraserMode = base.eraserMode,
+            onEraseGesture = base.onEraseGesture,
+            inkHandoff = base.inkHandoff,
+            onStrokeCaptured = { stroke, onCommitted ->
+                val capturedColorRGBA = base.colorRGBA
+                val capturedWidthMm = base.widthMm
+                val heights = pageHeightsPxRaster
+                val frames = pageFramesRaster
+                scope.launch(Dispatchers.Default) {
+                    val drawing = PdfAnnotationCaptureController.captureResolvingPage(
+                        stroke = stroke,
+                        tool = AnnotationSurfaceState.WET_STROKE_TOOL,
+                        colorRGBA = capturedColorRGBA,
+                        baseWidthSp = capturedWidthMm,
+                    ) { y ->
+                        val index = PdfVerticalLayout.pageIndexForY(y, heights, gapPx)
+                        frames.getOrNull(index)?.let { index to it }
+                    }
+                    drawing?.let { readerVm.addDrawing(it) }
+                    withContext(Dispatchers.Main) { onCommitted(drawing) }
+                }
+            },
+        )
+    }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -351,10 +492,18 @@ internal fun PdfVerticalScore(
             },
         contentAlignment = Alignment.TopStart,
     ) {
+        // While annotating, scrolling is off entirely — a single-finger drag is the wet overlay's to
+        // consume as a stroke, not a scroll. `enabled = false`, not a dropped modifier: `ReadyScore`'s own
+        // `scrollEnabled` doc explains why (preserves the scroll offset and the scrolled content's own
+        // layer instead of collapsing back to the top / losing it on every annotate toggle). A 2-finger
+        // pinch still reaches the always-installed pointerInput above regardless.
+        val scrollEnabled = !annotationMode
         val scrollModifier = if (isZoomed) {
-            Modifier.verticalScroll(vScroll).horizontalScroll(hScroll)
+            Modifier
+                .verticalScroll(vScroll, enabled = scrollEnabled)
+                .horizontalScroll(hScroll, enabled = scrollEnabled)
         } else {
-            Modifier.verticalScroll(vScroll)
+            Modifier.verticalScroll(vScroll, enabled = scrollEnabled)
         }
 
         Box(scrollModifier) {
@@ -421,6 +570,40 @@ internal fun PdfVerticalScore(
                             )
                         }
                     }
+                }
+
+                pdfAnnotation?.let { an ->
+                    // Own camera, OUTSIDE the Column's `graphicsLayer` — never wrap the wet (androidx.ink)
+                    // overlay in a Compose transform (see the class doc and `AnnotationLayers`' own front-
+                    // buffer note); `zoom` matches the Column's own live/raster ratio so both track the
+                    // same visual zoom without the ink path ever re-deriving page geometry mid-pinch.
+                    val zoom = scaleState.floatValue / rasterScaleState.floatValue
+                    AnnotationLayers(
+                        resolveDisplayTransforms = resolveDisplayTransforms,
+                        annotation = an,
+                        pxPerMM = 1f,
+                        scale = zoom,
+                        isDrawing = false,
+                        dryPanOffset = Offset.Zero,
+                        dryModifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = with(density) { vPadPx.toDp() }),
+                        // Viewport-height-clamped (constraint: androidx.ink's front buffer fails past
+                        // 65536px in a dimension — a whole scrolling column of pages can exceed that at
+                        // high zoom). Positioned at the current scroll offset, same as `ReadyScore`'s own
+                        // wet window; `wetWorldToScreen` folds the SAME offset into its translate so
+                        // document (Column-local) coordinates land exactly where the dry layer paints them.
+                        wetWorldToScreen = remember(zoom, vScroll.value, vPadPx) {
+                            Matrix().apply {
+                                setScale(zoom, zoom)
+                                postTranslate(0f, vPadPx - vScroll.value.toFloat())
+                            }
+                        },
+                        wetModifier = Modifier
+                            .fillMaxWidth()
+                            .height(with(density) { viewportSize.height.coerceAtLeast(0).toDp() })
+                            .offset { IntOffset(0, vScroll.value) },
+                    )
                 }
             }
         }

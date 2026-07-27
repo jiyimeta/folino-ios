@@ -77,4 +77,37 @@ object ReaderAnnotationJNI {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeDecodeInkStroke(SwiftData.fromByteArray(finkBytes, arena), arena).toByteArray()
     }
+
+    /**
+     * PDF page-anchor sibling of [capture]: capture one wet stroke already known to belong to [pageIndex]
+     * (Kotlin resolves which page — the centroid's page in vertical mode, simply the visible page in paged
+     * mode) into a persistable `.page` `DrawingAnchorWire`. Unlike [capture], there is no ssm round trip —
+     * `pageFrameBytes` (that page's current content-space frame, `PageFrameWire`) is display-only input
+     * Kotlin's own PDF renderer already has. Empty result = miss (undecodable input, or a non-positive
+     * page width — skip the stroke).
+     */
+    fun pdfCapture(strokeBytes: ByteArray, pageIndex: Int, pageFrameBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePdfAnnotationCapture(
+            SwiftData.fromByteArray(strokeBytes, arena),
+            pageIndex,
+            SwiftData.fromByteArray(pageFrameBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * PDF page-anchor sibling of [displayTransforms]: batched display transform for a whole layer against
+     * the PDF's current page layout (`pageFramesBytes` = `PageFramesWire`, positionally indexed by page).
+     * `sp == 0` in the result marks a drawing that isn't placeable this frame — a `.musical` wire (this
+     * path only ever draws page anchors) or a `.page` wire whose page's frame isn't known this frame.
+     */
+    fun pdfDisplayTransforms(drawingsBytes: ByteArray, pageFramesBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePdfAnnotationDisplayTransforms(
+            SwiftData.fromByteArray(drawingsBytes, arena),
+            SwiftData.fromByteArray(pageFramesBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 }
