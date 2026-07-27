@@ -92,6 +92,7 @@ import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
 import com.keynumber.folino.reader.ink.ErasePhase
+import com.keynumber.folino.reader.pdf.PdfVerticalScore
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -951,11 +952,24 @@ fun ReaderScreen(
                         annotation = annotationSurface,
                     )
                 }
-                // A PDF opens into this state with nothing drawn yet: the page-laying-out surfaces
-                // that consume pageCount/pageWidthsPt/pageHeightsPt land in Tasks 7-8, and the bitmap
-                // source lands in Task 6. Until then this branch only exists to keep the `when`
-                // exhaustive.
-                is ReaderState.ReadyPdf -> {}
+                is ReaderState.ReadyPdf -> when (layoutMode) {
+                    // Page mode for a PDF is Task 8's PagedPdfScore; nothing renders in that mode until
+                    // then. Horizontal is not reachable for a PDF (Task 5 removed it from the offered
+                    // modes for this state), so it falls to the vertical surface below along with
+                    // VERTICAL itself — the same "everything else" fallback the plan calls for.
+                    ReaderLayoutMode.PAGE -> {}
+                    else -> readerVm.pdfPageSource?.let { pdfSource ->
+                        PdfVerticalScore(
+                            state = s,
+                            source = pdfSource,
+                            audioVm = audioVm,
+                            readerVm = readerVm,
+                            bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
+                            annotation = annotationSurface,
+                            autoFollowEnabled = autoFollowEnabled,
+                        )
+                    }
+                }
             }
         }
     }

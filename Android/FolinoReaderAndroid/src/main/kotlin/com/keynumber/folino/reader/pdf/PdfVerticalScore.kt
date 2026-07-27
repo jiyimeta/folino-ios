@@ -1,0 +1,349 @@
+package com.keynumber.folino.reader.pdf
+
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import com.keynumber.folino.reader.ReaderAudioViewModel
+import com.keynumber.folino.reader.ReaderState
+import com.keynumber.folino.reader.ReaderViewModel
+import com.keynumber.folino.reader.ink.AnnotationSurfaceState
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+/** Pages kept rasterized on either side of the current one — mirrors the `radius` [PdfPageSource.setWindow] is driven with below. */
+private const val PDF_WINDOW_RADIUS = 1
+
+/** Gap between consecutive pages, and the breathing room above the first / below the last (iOS-parity feel with [ReadyScore]'s `vPadPx`). */
+private val PAGE_GAP = 12.dp
+private val TOP_BOTTOM_PAD = 16.dp
+
+/**
+ * Pure geometry for laying out a PDF's pages in a single vertically scrolling column, every page
+ * rendered at the same on-screen WIDTH ([renderWidthPx]) regardless of its own point size — height
+ * follows from that page's own aspect ratio, so a landscape page in an otherwise-portrait score isn't
+ * forced to match its neighbors' height. Split out from [PdfVerticalScore] for the same reason
+ * [PdfPageWindow]/[PdfRenderInstall] are split out of `PdfPageSource.kt`: this is plain `Int`/`Float`
+ * arithmetic, unit-testable off-device, while the composable itself needs a real Compose + `PdfRenderer`
+ * environment.
+ */
+internal object PdfVerticalLayout {
+
+    /** The pixel width every page is rendered/displayed at, for a given [viewportWidthPx] and pinch [scale]. */
+    fun renderWidthPx(viewportWidthPx: Int, scale: Float): Int =
+        (viewportWidthPx * scale).roundToInt().coerceAtLeast(1)
+
+    /**
+     * On-screen height (px) of each page, given the document's per-page point sizes ([widthsPt] /
+     * [heightsPt], as `PdfRenderer` reports them) and the width every page is rendered at
+     * ([renderWidthPx]) — height follows each page's own aspect ratio.
+     */
+    fun pageHeightsPx(widthsPt: List<Double>, heightsPt: List<Double>, renderWidthPx: Int): FloatArray =
+        FloatArray(widthsPt.size) { i -> (renderWidthPx.toDouble() * heightsPt[i] / widthsPt[i]).toFloat() }
+
+    /**
+     * Total scrollable content height (px): every page plus one [gapPx] gap between each consecutive
+     * pair, plus [topPadPx] / [bottomPadPx] breathing room at the ends. [bottomPadPx] is where a caller
+     * folds in extra clearance for a floating control (mirrors [ReadyScore]'s `bottomContentPad`).
+     */
+    fun totalContentHeightPx(pageHeightsPx: FloatArray, gapPx: Float, topPadPx: Float, bottomPadPx: Float): Float {
+        if (pageHeightsPx.isEmpty()) return topPadPx + bottomPadPx
+        return topPadPx + bottomPadPx + pageHeightsPx.sum() + gapPx * (pageHeightsPx.size - 1)
+    }
+
+    /**
+     * The page whose band contains the viewport's vertical CENTER, given the current scroll offset
+     * ([scrollPx]) and [viewportHeightPx]. This is what drives [PdfPageSource.setWindow] — deliberately
+     * scroll-position-based rather than pinch-scale-based, so a pinch alone (no scroll) never moves the
+     * window. Clamped to the document; returns 0 for an empty document (real call sites never render
+     * with `pageCount == 0`, but the function stays total rather than partial).
+     */
+    fun currentPageIndex(
+        scrollPx: Float,
+        viewportHeightPx: Float,
+        pageHeightsPx: FloatArray,
+        gapPx: Float,
+        topPadPx: Float,
+    ): Int {
+        if (pageHeightsPx.isEmpty()) return 0
+        val centerY = scrollPx + viewportHeightPx / 2f
+        var y = topPadPx
+        for (i in pageHeightsPx.indices) {
+            val bottom = y + pageHeightsPx[i]
+            if (centerY < bottom || i == pageHeightsPx.lastIndex) return i
+            y = bottom + gapPx
+        }
+        return pageHeightsPx.lastIndex
+    }
+}
+
+/**
+ * The vertical-continuous PDF reading surface: every page of [state], one below the other, scrolled as
+ * one column. Modeled on [ReadyScore]'s zoom architecture (`ReaderScreen.kt`) — read that first — because
+ * its two-stage zoom is load-bearing here too: [scale] is where the fingers are RIGHT NOW (applied as a
+ * plain layout size change, cheap — see below), while [rasterScale] is the zoom [source] last rendered
+ * bitmaps at. Only [rasterScale] feeds [PdfVerticalLayout.renderWidthPx] for the actual
+ * [PdfPageSource.bitmap] request, and it only moves once, when a pinch gesture ends — never per frame.
+ * Mid-gesture, each page keeps showing its last-rendered bitmap stretched to the live (`scale`-based) box
+ * size via `Image`'s [ContentScale.FillBounds]; that stretch is a plain draw-time scale of an existing
+ * bitmap (the same job [ReadyScore]'s `graphicsLayer` does for its vector bands), not a re-rasterization,
+ * so a pinch never touches [PdfPageSource] until the fingers lift.
+ *
+ * Unlike [ReadyScore], there is no `scoreHandle` yet for a PDF (the parsed score arrives in Task 12), so
+ * this surface has none of [ReadyScore]'s cursor overlay, tap-to-seek, or playback-auto-follow gestures —
+ * there is nothing yet for them to follow. [audioVm], [readerVm], and [autoFollowEnabled] are accepted for
+ * that future wiring; [annotation] is accepted and threaded through the signature for Task 11 to wire up,
+ * per the same convention [ReadyScore]/`PagedScore` use for their own `annotation` parameter — none of the
+ * three are read here.
+ */
+@Composable
+internal fun PdfVerticalScore(
+    state: ReaderState.ReadyPdf,
+    source: PdfPageSource,
+    audioVm: ReaderAudioViewModel,
+    readerVm: ReaderViewModel,
+    bottomContentPad: Dp = 0.dp,
+    /** Annotation layers + capture pipeline, owned by ReaderScreen. Wired in Task 11; unused here. */
+    annotation: AnnotationSurfaceState? = null,
+    /** Reserved for Task 12's playback auto-follow, once a PDF has a parsed score to follow. Unused here. */
+    autoFollowEnabled: Boolean = true,
+) {
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    // Held as the state object (not just through `by`) for the same reason `ReadyScore` does: read
+    // directly, a fresh value on every pinch frame; that is fine here because reading it only resizes
+    // simple Boxes (see `renderWidthPx`/`pageHeightsPx` below) — there is no expensive re-record to guard
+    // the way `ReadyScore` guards `BandedScorePage`.
+    val scaleState = remember { mutableFloatStateOf(1f) }
+    var scale by scaleState
+    // The zoom the currently-displayed bitmaps were actually rasterized at, as opposed to `scale`, which
+    // is where the fingers are right now. See the class doc: only THIS feeds the `PdfPageSource.bitmap`
+    // request width, and only a gesture end (fingers-up, below) moves it.
+    val rasterScaleState = remember { mutableFloatStateOf(1f) }
+    var rasterScale by rasterScaleState
+
+    val vScroll = rememberScrollState()
+    val hScroll = rememberScrollState()
+
+    val vPadPx = with(density) { TOP_BOTTOM_PAD.toPx() }
+    val gapPx = with(density) { PAGE_GAP.toPx() }
+    val bottomPadPx = with(density) { bottomContentPad.toPx() }
+
+    val pageCount = state.pageCount
+
+    // Nothing below is meaningful until the first layout pass reports a real width — before that,
+    // `viewportSize.width == 0` and every page would otherwise size/request itself at the helper's
+    // degenerate 1px floor (see `PdfVerticalLayout.renderWidthPx`). Mirrors `ReadyScore`'s own
+    // `viewportSize.width > 0` guard on `fitPxPerMM`.
+    val viewportKnown = viewportSize.width > 0
+
+    // Live layout geometry: cheap arithmetic, recomputed every pinch frame from `scale` directly — same
+    // trade-off `ReadyScore` makes for its own outer content Box, so the scrollable extent always matches
+    // what's on screen while the fingers are down.
+    val renderWidthPx = if (viewportKnown) PdfVerticalLayout.renderWidthPx(viewportSize.width, scale) else 0
+    val pageHeightsPx = remember(state, renderWidthPx) {
+        PdfVerticalLayout.pageHeightsPx(state.pageWidthsPt, state.pageHeightsPt, renderWidthPx)
+    }
+    val contentWidthPx = renderWidthPx.toFloat()
+    val contentHeightPx = PdfVerticalLayout.totalContentHeightPx(pageHeightsPx, gapPx, vPadPx, bottomPadPx)
+    val isZoomed = contentWidthPx > viewportSize.width + 0.5f
+
+    val currentPage = PdfVerticalLayout.currentPageIndex(
+        scrollPx = vScroll.value.toFloat(),
+        viewportHeightPx = viewportSize.height.toFloat(),
+        pageHeightsPx = pageHeightsPx,
+        gapPx = gapPx,
+        topPadPx = vPadPx,
+    )
+
+    // Drive the source's memory window off scroll position (via `currentPage`), not off `scale` — a
+    // pinch alone never moves it, only scrolling past a page boundary does. Re-runs only when
+    // `currentPage` actually changes value (a plain `Int` key), not on every recomposition.
+    LaunchedEffect(source, currentPage, pageCount, viewportKnown) {
+        if (pageCount > 0 && viewportKnown) source.setWindow(currentPage, radius = PDF_WINDOW_RADIUS)
+    }
+
+    // The bitmap render width to request at the NEXT settle — `rasterScale`, never the live `scale` — so
+    // a page that hasn't re-rastered yet keeps asking for its LAST-settled width, not a mid-gesture one.
+    // Zero (not the helper's 1px floor) until the viewport is known, so `PdfPageItem` below can skip
+    // requesting a throwaway bitmap for a width nobody will ever see.
+    val rasterWidthPx = if (viewportKnown) PdfVerticalLayout.renderWidthPx(viewportSize.width, rasterScale) else 0
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { viewportSize = it }
+            // Pinch zoom only: a live two-finger contact is consumed here; a single-finger drag falls
+            // through untouched to the scroll modifiers below (native fling + overscroll).
+            .pointerInput(viewportSize.width) {
+                if (viewportSize.width <= 0) return@pointerInput
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.count { it.pressed } >= 2) {
+                            val zoom = event.calculateZoom()
+                            if (zoom != 1f) {
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                val newScale = (scale * zoom).coerceIn(1f, 8f)
+                                val ratio = newScale / scale
+                                if (ratio != 1f && !centroid.x.isNaN() && !centroid.y.isNaN()) {
+                                    val newX = focalAdjustedOffset(hScroll.value.toFloat(), centroid.x, ratio)
+                                    val newY = focalAdjustedOffset(vScroll.value.toFloat(), centroid.y, ratio, vPadPx)
+                                    scale = newScale
+                                    // scrollTo is a suspend fun; PointerInputScope's coroutine scope
+                                    // doesn't allow arbitrary launches, so use the composable-level one.
+                                    scope.launch { hScroll.scrollTo(newX.toInt().coerceAtLeast(0)) }
+                                    scope.launch { vScroll.scrollTo(newY.toInt().coerceAtLeast(0)) }
+                                }
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                    // Fingers up: the ONE re-raster point for this whole gesture. Every page still
+                    // showing bitmaps from before the pinch will re-request at the new width the next
+                    // time its own effect runs (see `PdfPageItem` below) — skipped entirely if the scale
+                    // didn't move, so an ordinary tap or scroll costs nothing here.
+                    if (rasterScaleState.floatValue != scaleState.floatValue) {
+                        rasterScaleState.floatValue = scaleState.floatValue
+                    }
+                }
+            },
+        contentAlignment = Alignment.TopStart,
+    ) {
+        val scrollModifier = if (isZoomed) {
+            Modifier.verticalScroll(vScroll).horizontalScroll(hScroll)
+        } else {
+            Modifier.verticalScroll(vScroll)
+        }
+
+        Box(scrollModifier) {
+            Box(
+                Modifier.size(
+                    width = with(density) { contentWidthPx.toDp() },
+                    height = with(density) { contentHeightPx.toDp() },
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = with(density) { vPadPx.toDp() }),
+                    verticalArrangement = Arrangement.spacedBy(PAGE_GAP),
+                ) {
+                    val widthDp = with(density) { contentWidthPx.toDp() }
+                    for (i in 0 until pageCount) {
+                        key(i) {
+                            PdfPageItem(
+                                index = i,
+                                widthDp = widthDp,
+                                heightDp = with(density) { pageHeightsPx[i].toDp() },
+                                source = source,
+                                rasterWidthPx = rasterWidthPx,
+                                isNearCurrentPage = abs(i - currentPage) <= PDF_WINDOW_RADIUS,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One page slot: a plain page-colored rectangle sized from [widthDp]/[heightDp] — [state]'s point size,
+ * NOT the bitmap — so the layout never jumps when a bitmap arrives or a page falls out of the render
+ * window. Draws [PdfPageSource.bitmap] over that rectangle once [isNearCurrentPage] and a render succeeds;
+ * never a per-page spinner while waiting.
+ *
+ * [bitmap] is held as this composable's OWN local state, separate from [PdfPageSource]'s internal cache,
+ * so it must be dropped the moment [isNearCurrentPage] goes false — this `Column` is a plain (non-lazy)
+ * one, so every page's item stays composed for the life of the surface, and a bitmap [source] has already
+ * evicted (via `setWindow`, driven from the parent) would otherwise sit here forever, defeating the whole
+ * point of windowing. See [PdfPageSource.bitmap]'s ownership contract: a bitmap already handed to a caller
+ * is never force-recycled, so it is safe to keep drawing it right up until the moment this effect nulls it
+ * out — the moment `isNearCurrentPage` flips is exactly a window move, i.e. NOT something to retain across.
+ */
+@Composable
+private fun PdfPageItem(
+    index: Int,
+    widthDp: Dp,
+    heightDp: Dp,
+    source: PdfPageSource,
+    rasterWidthPx: Int,
+    isNearCurrentPage: Boolean,
+) {
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(index, rasterWidthPx, isNearCurrentPage) {
+        // Outside the window, or the viewport isn't measured yet (`rasterWidthPx <= 0`, see the
+        // caller): drop our own reference rather than requesting — or holding onto — a bitmap the
+        // source itself no longer caches. See the class doc for why dropping matters here specifically.
+        if (!isNearCurrentPage || rasterWidthPx <= 0) {
+            bitmap = null
+            return@LaunchedEffect
+        }
+        bitmap = source.bitmap(index, rasterWidthPx)
+    }
+    Box(Modifier.size(widthDp, heightDp).background(Color.White)) {
+        // `FillBounds`, not `Fit`/`Crop`: the box is already sized to the page's own aspect ratio (see
+        // `PdfVerticalLayout.pageHeightsPx`), so a stretch-to-bounds is exactly a scale-to-match — the
+        // same job `ReadyScore`'s `graphicsLayer` does for its vector bands, just performed by `Image`'s
+        // ordinary draw-time scaling of an already-rasterized bitmap instead of a manual transform.
+        bitmap?.let { bmp ->
+            Image(
+                bitmap = bmp.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
+ * New scroll offset (px) that keeps the content point under the pinch centroid fixed across a zoom step
+ * of ratio `r = newScale / oldScale`. Identical formula to `ReaderScreen.kt`'s private
+ * `focalAdjustedOffset` (duplicated rather than shared — `PagedScore` follows the same local-copy
+ * convention rather than reaching into `ReadyScore`'s file-private helper). [pad] is a constant leading
+ * offset (here, the fixed top padding, which does not itself scale with zoom) held out of the scaling.
+ */
+private fun focalAdjustedOffset(
+    currentScroll: Float,
+    centroid: Float,
+    ratio: Float,
+    pad: Float = 0f,
+): Float = pad + ratio * (currentScroll - pad + centroid) - centroid
