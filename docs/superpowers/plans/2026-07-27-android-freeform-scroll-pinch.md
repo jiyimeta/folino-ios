@@ -248,7 +248,7 @@ git -C <worktree> commit -m "feat(reader-android): pure viewport math for clampi
     - read-only state `scale: Float`, `rasterScale: Float`, `offsetX: Float`, `offsetY: Float`
     - `var geometry: ViewportGeometry`
     - `fun applyPan(pan: Offset)`, `fun applyZoom(zoomFactor: Float, centroid: Offset)`
-    - `fun setOffsetX(value: Float)`, `fun setOffsetY(value: Float)`
+    - `fun snapOffsetX(value: Float)`, `fun snapOffsetY(value: Float)`
     - `suspend fun animateOffsetXTo(target: Float)`, `suspend fun animateOffsetYTo(target: Float)`
     - `fun settleRaster()`, `fun reset()`
     - `fun cancelFling()`, `fun startFling(scope: CoroutineScope, density: Density, velocity: Velocity)`
@@ -497,9 +497,12 @@ internal class ReaderViewportState(
         underfillY,
     )
 
-    fun setOffsetX(value: Float) { offsetX = clampX(value) }
+    // Named `snap…`, not `setOffset…`: `offsetX` / `offsetY` are `private set` properties, so Kotlin already
+    // synthesises `setOffsetX(Float)` / `setOffsetY(Float)` on the JVM and an explicit function of that name
+    // is a platform declaration clash. `snap` also reads as the no-animation counterpart to `animateOffsetXTo`.
+    fun snapOffsetX(value: Float) { offsetX = clampX(value) }
 
-    fun setOffsetY(value: Float) { offsetY = clampY(value) }
+    fun snapOffsetY(value: Float) { offsetY = clampY(value) }
 
     /** Pan by a finger delta. The content follows the finger, so the offset moves the other way. */
     fun applyPan(pan: Offset) {

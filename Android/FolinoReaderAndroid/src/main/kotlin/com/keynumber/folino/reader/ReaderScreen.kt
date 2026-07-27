@@ -702,9 +702,7 @@ fun ReaderScreen(
 
     // Mutual exclusion: annotation is strictly VERTICAL + not-playing. Auto-exit whenever either
     // condition stops holding (layout mode switches away from VERTICAL, or playback starts) so
-    // annotation mode never lingers active behind a layout that has no overlay/gating support for it —
-    // without this, playing while annotating would leave the score frozen via the detached ScrollState
-    // (scrollModifier stays `Modifier` while `annotationMode` is true, regardless of `isPlaying`).
+    // annotation mode never lingers active behind a layout that has no overlay/gating support for it.
     LaunchedEffect(layoutMode, isPlaying) {
         if (layoutMode != ReaderLayoutMode.VERTICAL || isPlaying) readerVm.setAnnotationMode(false)
     }
