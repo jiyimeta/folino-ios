@@ -27,6 +27,10 @@ struct ReaderTopOverlay: View {
     /// dialog. Defaults to a no-op so previews can omit it.
     var onShowPDFNotice: () -> Void = {}
 
+    /// Invoked when the user taps the "edit notes" button. `nil` hides the button entirely — the default, so previews
+    /// and PDF readers (which never wire an `editingHost`) are unaffected.
+    var onStartEditing: (() -> Void)?
+
     /// Vertical space the overlay occupies inside the safe area (button 40 + top padding 4 + a little breathing room).
     /// Used by `ReaderRootScreen` to extend the score's safe area so the first staff is never hidden under the floating
     /// buttons. `nonisolated` so non–main-actor contexts (preview helpers, `onGeometryChange` transform closures) can
@@ -71,6 +75,14 @@ struct ReaderTopOverlay: View {
     private func loadedActions(score: Score) -> some View {
         HStack(spacing: 12) {
             scoreActionButtons()
+            if let onStartEditing {
+                overlayButton(
+                    systemImage: "square.and.pencil",
+                    label: Text("reader.toolbar.edit.start", bundle: .module),
+                    action: onStartEditing,
+                )
+                .glassEffect(.regular.interactive())
+            }
             annotationToggleButton()
                 .glassEffect(.regular.interactive())
             inspectorButtons(score: score)

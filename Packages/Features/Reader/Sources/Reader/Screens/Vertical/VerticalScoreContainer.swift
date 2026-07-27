@@ -50,6 +50,12 @@ struct VerticalScoreContainer: View {
     /// down. The control floats over this padding in a sibling overlay; vertical mode reserves no `safeAreaPadding`.
     let bottomControlClearance: CGFloat
     @Bindable var viewModel: ReaderViewModel
+    /// Drives the note-editing overlay: `nil` (or `isEditing == false`) keeps every editing seam byte-identical to
+    /// the non-editing path. While editing, taps route to `editingHost.onTap` instead of the manual-cursor seek, the
+    /// rebuilt `LayoutDocument` is published to `editingHost.document` for the App-side editing chrome, and
+    /// `editingHost.editGeneration` is folded into the layout task's identity so an edit that doesn't change the
+    /// score's structural signature (e.g. a pitch-drag on an existing note) still triggers a relayout.
+    var editingHost: ReaderEditingHost?
 
     @State private var document: LayoutDocument?
     @State private var lastWidth: CGFloat = 0
@@ -79,12 +85,24 @@ struct VerticalScoreContainer: View {
 
     /// Vertical padding inside the scaled content. Top is larger so the first system clears the nav chrome / safe
     /// area when `ignoresSafeArea()` lets the score slide underneath.
-    private let scoreTopPadding: CGFloat = 44
+    private var scoreTopPadding: CGFloat {
+        Self.baseScoreTopPadding + editingChromeInsets.top
+    }
+
+    private static let baseScoreTopPadding: CGFloat = 44
     /// Bottom padding inside the scaled content: the full clearance from the transport control's top edge to the
     /// physical screen bottom (control content height + bottom safe area). Lets the last system scroll out from under
     /// the floating control so the whole score is visible at the bottom of the scroll.
     private var scoreBottomPadding: CGFloat {
-        bottomControlClearance + safeAreaBottom
+        bottomControlClearance + safeAreaBottom + editingChromeInsets.bottom
+    }
+
+    /// Room the editing cluster occupies, added to the scroll content's padding so the first / last system can still
+    /// be brought clear of it. This is PADDING INSIDE THE SCROLL CONTENT — the engine's `availableWidth` is
+    /// untouched, so docking or moving the pad never re-engraves the score.
+    private var editingChromeInsets: (top: CGFloat, bottom: CGFloat) {
+        guard let host = editingHost, host.isEditing else { return (0, 0) }
+        return (host.editingChromeTopInset, host.editingChromeBottomInset)
     }
 
     /// Horizontal inset applied to the score on iPad (0 on iPhone) so Vertical mode matches Page mode's score width
@@ -112,6 +130,7 @@ struct VerticalScoreContainer: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     transposeSemitones: transposeSemitones,
+                    editGeneration: editingHost?.editGeneration ?? 0,
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }
@@ -178,6 +197,7 @@ struct VerticalScoreContainer: View {
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
+                editingHost: editingHost,
             )
         }
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { old, new in
@@ -222,6 +242,7 @@ struct VerticalScoreContainer: View {
             },
             state: { annotationCanvasState(viewport: viewport) },
             handle: annotationHandle,
+            isInkDimmed: editingHost?.isEditing == true,
         )
     }
 
@@ -302,7 +323,9 @@ struct VerticalScoreContainer: View {
         // settles to its final width, so the first synchronous layout may be narrower than the viewport (leaving a
         // right-side gap). Re-running on width change ensures the snapshot uses the settled width and fills the view.
         guard document == nil || width != lastWidth else { return }
-        document = LayoutEngine.layout(score: score, options: scoreOptions, availableWidth: width)
+        let newDoc = LayoutEngine.layout(score: score, options: scoreOptions, availableWidth: width)
+        document = newDoc
+        editingHost?.document = newDoc
         lastWidth = width
     }
 
@@ -316,6 +339,7 @@ struct VerticalScoreContainer: View {
         }.value
         guard !Task.isCancelled else { return }
         document = newDoc
+        editingHost?.document = newDoc
         lastWidth = width
     }
 
@@ -412,6 +436,11 @@ struct VerticalScoreContainer: View {
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
         let transposeSemitones: Int
+        /// `ReaderEditingHost.editGeneration`, bumped by the editing surface on every edit that needs a relayout.
+        /// `scoreSignature` only tracks STRUCTURAL shape (part/staff counts, division, opening clefs) — a pitch
+        /// change or other in-place note edit leaves it unchanged even though `score`'s contents differ, so without
+        /// this field the `.task(id:)` would never re-run after such an edit. `0` when not editing.
+        let editGeneration: Int
 
         init(
             score: Score,
@@ -421,6 +450,7 @@ struct VerticalScoreContainer: View {
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
             transposeSemitones: Int,
+            editGeneration: Int,
         ) {
             // `Score` is Equatable but not Hashable. Use a cheap identity proxy: structural shape + opening clefs.
             // The opening-clef hash is what makes a clef override (a field-level edit that leaves parts.count / staff
@@ -436,6 +466,7 @@ struct VerticalScoreContainer: View {
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
             self.showInvisibleElements = showInvisibleElements
             self.transposeSemitones = transposeSemitones
+            self.editGeneration = editGeneration
         }
     }
 }

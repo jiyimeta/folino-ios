@@ -53,6 +53,12 @@ public protocol PlaybackController: Sendable {
     /// velocity; only `duration` is exposed here.
     func playPreview(noteID: NoteID, duration: TimeInterval) async
 
+    /// Like `playPreview(noteID:duration:)`, but resolves the `NoteID` against the caller-supplied `score` instead
+    /// of the score loaded into the engine. Used by note editing, where the engine's loaded score is stale
+    /// mid-session: the edited score has the fresh pitches, while the engine's per-staff sampler graph is still
+    /// valid because v1 editing never adds or removes staves. No-op when the engine has no prepared graph.
+    func playPreview(noteID: NoteID, in score: Score, duration: TimeInterval) async
+
     func setLoopRange(_ range: ABRepeatRange?) async
     func setMetronomeEnabled(_ enabled: Bool) async
     func setTempoMultiplier(_ value: Double) async

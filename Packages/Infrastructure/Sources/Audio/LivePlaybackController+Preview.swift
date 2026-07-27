@@ -11,4 +11,10 @@ extension LivePlaybackController {
         guard let score = loadedScore else { return }
         engine.playPreview(noteID: noteID, in: score, duration: duration)
     }
+
+    /// Editing-mode preview: the caller's score carries the fresh pitches; the engine's sampler graph (built at
+    /// load time) is still addressable because v1 editing never changes the staff count.
+    public func playPreview(noteID: NoteID, in score: Score, duration: TimeInterval) {
+        engine.playPreview(noteID: noteID, in: score, duration: duration)
+    }
 }

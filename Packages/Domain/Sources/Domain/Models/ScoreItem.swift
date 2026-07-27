@@ -16,8 +16,9 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public var instrumentationSummary: String?
     /// Filename relative to the scores directory. Convention: `<id>.<canonical-extension>`.
     public var localFileName: String
-    /// SHA-256 hex digest of the on-disk file bytes, computed at import time. Used for duplicate detection. Never
-    /// edited after import.
+    /// SHA-256 hex digest of the on-disk file bytes, computed at import time. Used for duplicate detection.
+    /// Recomputed when note editing rewrites the file; rebuilt via the memberwise initializer because the field is
+    /// immutable per instance.
     public let contentHash: String
     public var sizeBytes: Int64
     public var lengthBeats: Int
