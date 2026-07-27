@@ -40,11 +40,20 @@ struct EditableReaderScreen: View {
         readerBuilder(editingHost) { context in
             AnyView(EditorChromeView(
                 viewModel: editorViewModel,
-                selectionAnchor: context.selectionScreenFrame,
+                bottomTransportClearance: context.bottomTransportClearance,
                 onDone: { [editingHost] in editingHost.requestExit() },
+                onClusterInsetsChange: { [editingHost] top, bottom in
+                    editingHost.editingChromeTopInset = top
+                    editingHost.editingChromeBottomInset = bottom
+                },
             ))
         }
         .onAppear { wireOnce() }
+        // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go inert
+        // while the cursor moves. Mirrored here because neither feature imports the other.
+        .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
+            editorViewModel.isPlaybackActive = isPlaying
+        }
         .onChange(of: scenePhase) { _, phase in
             // Autosave survives app backgrounding mid-edit (spec §8): flush whenever the scene leaves .active,
             // regardless of whether an edit session is currently open (flushPendingSave() is a no-op otherwise).
@@ -73,20 +82,6 @@ struct EditableReaderScreen: View {
         host.onTap = { [weak vm] point in
             guard let vm else { return }
             vm.handleTap(at: point)
-        }
-        host.onPitchDragCommit = { [weak vm] steps in
-            guard let vm else { return }
-            vm.commitPitchDrag(steps: steps)
-        }
-        host.onHover = { [weak host, weak vm] point in
-            // Task 16 review fix: `.onContinuousHover`'s `.active` branch (EditingSelectionOverlay.swift) calls
-            // this closure every frame while the Pencil hovers, even when it resolves to the same item — write
-            // only when the resolved item actually changes, so `@Observable` doesn't fan out a redundant
-            // dependent-view invalidation on every frame.
-            guard let host else { return }
-            let newItem = point.flatMap { vm?.hoverItem(at: $0) }
-            guard newItem != host.hoverItem else { return }
-            host.hoverItem = newItem
         }
         vm.documentProvider = { [weak host] in
             guard let host else { return nil }

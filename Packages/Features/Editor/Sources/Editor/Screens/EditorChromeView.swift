@@ -3,58 +3,96 @@ import SwiftUI
 
 /// Full-screen editing chrome. The App injects this into the Reader seam (Task 15) so it floats over the live score.
 /// Layout:
-///  - top-right: an undo / redo / 完了 glass cluster mirroring `ReaderTopOverlay`'s 44 pt buttons + 12 pt spacing;
-///  - bottom: the Task 13 `EditorPadView`;
-///  - compact width: `EditorCalloutView` floating near `selectionAnchor` (a global-space rect handed in by the seam);
+///  - top-right: a voice pill and an undo / redo / 完了 glass cluster, mirroring `ReaderTopOverlay`'s 44 pt buttons;
+///  - the editing cluster — the reader's transport plus the `EditorPadView` pad — docked to the top or bottom edge
+///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering;
 ///  - regular width: `EditorPaletteView` docked to the trailing edge, vertically centered.
 ///
-/// `selectionAnchor` is the selection's rect in global coordinates; the chrome converts it to local space and clamps
-/// the callout on-screen. The callout is hidden entirely when there is no selection or no anchor.
+/// The floating per-selection callout that used to hover beside the note is gone: everything it carried now lives in
+/// chrome that stays put (voice in the header pill, tuplets under the pad's ⋯ key, tie on the pad's third row), so
+/// the score is never covered by a panel that moves as the selection moves.
 public struct EditorChromeView: View {
     @Bindable private var viewModel: EditorViewModel
-    private let selectionAnchor: CGRect?
+    /// Room the reader's bottom transport occupies, so a bottom-docked pad parks above it instead of over it.
+    private let bottomTransportClearance: CGFloat
     private let onDone: () -> Void
+    private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.undoManager) private var undoManager
 
-    /// Measured size of the rendered `EditorCalloutView` capsule (Task 16 carry-over fix), captured via
-    /// `.onGeometryChange` in `callout(anchor:proxy:)`. Seeded to the OLD hardcoded estimate (2×180 / 2×30) so the
-    /// very first frame — before any measurement has landed — clamps exactly as before; every frame after that uses
-    /// the callout's real size, so the clamp no longer collapses on narrow phones.
-    @State private var calloutSize = CGSize(width: 360, height: 60)
+    /// Remembered across sessions: someone who moves the pad out of the way once means it for every score they open.
+    /// PERSISTENCE ONLY — the layout reads `placement` below.
+    ///
+    /// Driving the layout straight off `@AppStorage` is what made re-docking lurch: the value round-trips through
+    /// `UserDefaults`, so the change comes back to the view outside the `withAnimation` transaction that released the
+    /// drag offset. The offset unwound with the spring, the dock position moved separately, and the two-stage motion
+    /// read as a bounce.
+    @AppStorage("editorPadPlacement") private var storedPlacement = EditorPadPlacement.bottom.rawValue
+    /// The placement the layout actually uses: local state, so it changes inside the animation transaction.
+    @State private var placement: EditorPadPlacement = .bottom
+    /// Live finger travel while the pad is being dragged. `@GestureState`, NOT `@State`: SwiftUI resets it on its own
+    /// when the gesture ends **or is cancelled**, so an interrupted drag can never strand the pad half-way down the
+    /// screen — which is exactly what happened when this was plain state and a cancelled drag skipped `onEnded`.
+    @GestureState private var dragTranslation: CGFloat = 0
+    /// The travel captured at the moment the finger lifts, animated back to zero alongside the docking change so the
+    /// pad glides from where it was released instead of snapping to its old edge for a frame first. Only ever set
+    /// inside `onEnded`, so a cancelled gesture leaves it at zero.
+    @State private var releasedTranslation: CGFloat = 0
+    @State private var clusterHeight: CGFloat = 0
+    /// Height of the header row, so a top-docked pad can park below it.
+    @State private var headerHeight: CGFloat = 0
 
     /// One-time "saved as .mscz" notice (Task 16, spec §11-2) — shown at most once per install.
     @AppStorage("editorSiblingMSCZNoticeShown") private var siblingMSCZNoticeShown = false
     @State private var showsSiblingNotice = false
 
-    public init(viewModel: EditorViewModel, selectionAnchor: CGRect?, onDone: @escaping () -> Void) {
+    public init(
+        viewModel: EditorViewModel,
+        bottomTransportClearance: CGFloat,
+        onDone: @escaping () -> Void,
+        onClusterInsetsChange: @escaping (_ top: CGFloat, _ bottom: CGFloat) -> Void = { _, _ in },
+    ) {
         self.viewModel = viewModel
-        self.selectionAnchor = selectionAnchor
+        self.bottomTransportClearance = bottomTransportClearance
         self.onDone = onDone
+        self.onClusterInsetsChange = onClusterInsetsChange
     }
 
-    /// Vertical clearance reserved at the bottom for the pad + the Reader transport's expanded height, used both to
-    /// inset the pad and to keep the floating callout from overlapping it.
-    private static let bottomClearance: CGFloat = 130
+    /// Moves the pad, animating the dock change and the drag offset's release together, then persists the choice.
+    private func dock(to destination: EditorPadPlacement, animation: Animation) {
+        withAnimation(animation) {
+            placement = destination
+            releasedTranslation = 0
+        }
+        storedPlacement = destination.rawValue
+    }
 
     public var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .topTrailing) {
-                if horizontalSizeClass == .regular {
-                    EditorPaletteView(viewModel: viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                        .padding(.trailing)
-                } else if viewModel.selectedItem != nil, let anchor = selectionAnchor {
-                    callout(anchor: anchor, proxy: proxy)
-                }
+        ZStack(alignment: .topTrailing) {
+            if horizontalSizeClass == .regular {
+                EditorPaletteView(viewModel: viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .padding(.trailing)
+            }
 
-                topCluster
+            topCluster
+                // Measured so a top-docked pad can park BELOW the header rather than over (or above) it: 完了 and the
+                // voice picker have to stay reachable wherever the pad is.
+                //
+                // The measurement goes BEFORE the expanding frame, deliberately. Attached after it, this read the
+                // full-screen frame instead of the header — 778 pt rather than ~50 — and a top-docked pad was padded
+                // clean off the bottom of the screen, where the transport then covered what little showed.
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        headerHeight = height
+                        publishInsets(height: clusterHeight)
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
 
-                EditorPadView(viewModel: viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 8)
-            }
+            navigationPill
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .padding(.leading, 12)
+
+            editingCluster
         }
         // Task 16: bridges ScoreEditor's undo/redo stacks to the system UndoManager so three-finger swipe gestures
         // work. Triggers off `appliedEditCount` — NOT `generation` — because `generation` also bumps on undo/redo;
@@ -106,7 +144,174 @@ public struct EditorChromeView: View {
 
     // MARK: Top cluster
 
+    // MARK: The editing cluster (transport + pad)
+
+    /// The pad, docked to `placement` and draggable to the other edge by its grabber, the way `PKToolPicker` can be
+    /// moved off whatever it is covering. The reader's transport stays anchored to the bottom edge and is NOT part of
+    /// this cluster — when the pad is docked at the bottom it simply parks above it.
+    ///
+    /// The cluster floats over the score — it never re-engraves it. What it does instead is report its height, which
+    /// the scrolling layouts turn into scroll padding so the last (or first) system can still be brought into view.
+    private var editingCluster: some View {
+        GeometryReader { proxy in
+            EditorPadView(viewModel: viewModel)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    clusterHeight = height
+                    publishInsets(height: height)
+                }
+                .offset(y: dragTranslation + releasedTranslation)
+                // Anywhere on the pad moves it — no grabber to aim at. `highPriorityGesture` is what makes that
+                // possible without stealing the keys: a plain tap never travels the minimum distance, so the drag
+                // stays unrecognized and the key underneath gets it; once the finger does travel, the drag wins
+                // outright and the key it started on is cancelled rather than fired on release.
+                .highPriorityGesture(dragGesture(viewportHeight: proxy.size.height))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: placement.alignment)
+                // The chrome is already laid out inside the safe area, so the transport's content height is the whole
+                // clearance a bottom-docked pad needs.
+                .padding(.bottom, placement == .bottom ? bottomTransportClearance + 4 : 0)
+                // Docked at the top, the pad sits under the header — the same way it sits above the transport when
+                // docked at the bottom. It parks next to the fixed chrome, never on top of it.
+                .padding(.top, placement == .top ? headerHeight + 4 : 0)
+                .accessibilityAction(named: Text("editor.pad.move", bundle: .module)) {
+                    // No finger to take a velocity from, so this one is a plain, calm move.
+                    dock(to: placement == .bottom ? .top : .bottom, animation: .smooth(duration: 0.35))
+                }
+        }
+        .onAppear { placement = EditorPadPlacement(rawValue: storedPlacement) ?? .bottom }
+    }
+
+    // MARK: Selection stepping
+
+    /// ← / → as their own pill at the bottom-left, level with the reader's compact transport.
+    ///
+    /// Stepping the selection is navigation, not writing — it belongs with the transport rather than among the keys
+    /// that change the score. Keeping it out of the pad also means it stays put when the pad is re-docked, and it's
+    /// what let the pad come down to two rows.
+    private var navigationPill: some View {
+        HStack(spacing: 0) {
+            Button {
+                viewModel.selectPreviousElement()
+            } label: {
+                PadKeyGlyph.symbol("arrow.left").frame(width: 44, height: 44)
+            }
+            .accessibilityLabel(Text("editor.pad.selectPrevious", bundle: .module))
+
+            Button {
+                viewModel.selectNextElement()
+            } label: {
+                PadKeyGlyph.symbol("arrow.right").frame(width: 44, height: 44)
+            }
+            .accessibilityLabel(Text("editor.pad.selectNext", bundle: .module))
+        }
+        .tint(.primary)
+        .disabled(viewModel.isPlaybackActive)
+        .glassEffect(.regular.interactive())
+        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+    }
+
+    private func dragGesture(viewportHeight: CGFloat) -> some Gesture {
+        // GLOBAL coordinate space, deliberately. In the default `.local` space the translation is measured against
+        // the pad's own frame — which this very gesture is moving via `.offset`, so each frame's offset fed back into
+        // the next frame's translation and the pad juddered instead of tracking the finger.
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .updating($dragTranslation) { value, state, _ in state = value.translation.height }
+            .onEnded { value in
+                // Hand the finger's travel over to state for one frame so the pad doesn't blink back to its old edge
+                // as the gesture state evaporates; the animation below then unwinds it.
+                releasedTranslation = value.translation.height
+                // Re-dock by where the pad ENDED UP, not by how far the finger moved: a short flick near an edge
+                // shouldn't launch it across the screen.
+                let parkedCenter = placement == .bottom
+                    ? viewportHeight - clusterHeight / 2
+                    : clusterHeight / 2
+                let releasedCenter = parkedCenter + value.translation.height
+                let landedCenter = parkedCenter + value.predictedEndTranslation.height
+                let destination = EditorPadPlacement.nearest(toCenterY: landedCenter, in: viewportHeight)
+                let destinationCenter = destination == .bottom
+                    ? viewportHeight - clusterHeight / 2
+                    : clusterHeight / 2
+                // Dock and release the offset in ONE transaction (see `dock(to:animation:)`): unwinding the offset
+                // separately snapped the pad back to its old edge for a frame before the docking animation started.
+                dock(to: destination, animation: Self.dockAnimation(
+                    from: releasedCenter, to: destinationCenter, releaseVelocity: value.velocity.height,
+                ))
+            }
+    }
+
+    /// The settle animation for a released pad, scaled to the job it has to do.
+    ///
+    /// A single fixed spring can't serve both cases: the same curve that feels crisp nudging the pad 20 pt back to
+    /// the edge it already sat on overshoots wildly when it has to carry it the ~700 pt from one end of the screen to
+    /// the other. So the duration grows with the distance left to travel, and the finger's release velocity is handed
+    /// to the spring as its initial velocity — a flick continues at the speed it was thrown instead of stopping dead
+    /// and restarting.
+    ///
+    /// `bounce: 0` (critically damped) is deliberate: the pad is a slab of controls settling against an edge, not a
+    /// playful element, and any overshoot at all read as wobble on device.
+    private static func dockAnimation(
+        from releasedCenter: CGFloat, to destinationCenter: CGFloat, releaseVelocity: CGFloat,
+    ) -> Animation {
+        let travel = destinationCenter - releasedCenter
+        let distance = abs(travel)
+        let duration = min(0.42, max(0.18, 0.16 + distance / 2400))
+        return .interpolatingSpring(
+            duration: duration, bounce: 0,
+            initialVelocity: normalizedVelocity(releaseVelocity, travel: travel),
+        )
+    }
+
+    /// A spring's initial velocity is expressed in fractions of the REMAINING DISTANCE per second, so raw pt/s has to
+    /// be divided by that distance — which is what made a gentle release bounce: let go a few points from the target
+    /// and even a slow drift becomes a huge multiple of what little travel is left, catapulting the pad past it.
+    /// Hence the dead band (a release this slow is a release, not a throw) and the tight ceiling.
+    private static func normalizedVelocity(_ velocity: CGFloat, travel: CGFloat) -> CGFloat {
+        let deadBand: CGFloat = 80 // pt/s
+        guard abs(travel) >= 1, abs(velocity) > deadBand else { return 0 }
+        return min(3, max(-1, velocity / travel))
+    }
+
+    /// Reports the cluster's footprint to the Reader (via the App) so the scrolling layouts can pad their scroll
+    /// content by it. Only the docked edge reserves room; the other end is clear.
+    private func publishInsets(height: CGFloat) {
+        switch placement {
+        // Docked at the top the pad hangs below the header, so the score has to clear both.
+        case .top: onClusterInsetsChange(headerHeight + height + 4, 0)
+        case .bottom: onClusterInsetsChange(0, height)
+        }
+    }
+
+    /// The header row: a standalone voice pill, then the undo / redo / 完了 cluster. The voice picker used to hide
+    /// behind the callout's `⋯`; as its own pill it stays reachable with nothing selected, which is when you most
+    /// often need to switch the voice you're about to input into.
     private var topCluster: some View {
+        HStack(spacing: 8) {
+            voicePill
+            actionCluster
+        }
+        .padding(.horizontal)
+        .padding(.top, 4)
+    }
+
+    private var voicePill: some View {
+        Menu {
+            EditorVoicePicker(viewModel: viewModel)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "person.2")
+                    .font(.system(size: 15, weight: .medium))
+                Text(verbatim: "\(viewModel.activeVoice + 1)")
+                    .fontWeight(.semibold)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
+        }
+        .tint(.primary)
+        .glassEffect(.regular.interactive())
+        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+        .accessibilityLabel(Text("editor.voice.label", bundle: .module))
+    }
+
+    private var actionCluster: some View {
         HStack(spacing: 0) {
             clusterIconButton(system: "arrow.uturn.backward", label: "editor.chrome.undo", enabled: viewModel.canUndo) {
                 viewModel.undo()
@@ -126,8 +331,6 @@ public struct EditorChromeView: View {
         }
         .glassEffect(.regular.interactive())
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-        .padding(.horizontal)
-        .padding(.top, 4)
     }
 
     private func clusterIconButton(
@@ -145,93 +348,4 @@ public struct EditorChromeView: View {
         .disabled(!enabled)
         .accessibilityLabel(Text(label, bundle: .module))
     }
-
-    // MARK: Callout positioning
-
-    /// Places the callout centered horizontally over the selection and just above it, clamped so it stays at least
-    /// 8 pt inside the horizontal edges and above the bottom pad clearance. Task 16 carry-over fix: the clamp uses
-    /// the callout's ACTUAL measured size (`calloutSize`, captured below via `.onGeometryChange`) instead of a
-    /// hardcoded half-width — on phones narrower than the old ~360 pt estimate (≤376 pt), the fixed constant made
-    /// `minX > maxX` collapse to a single point, so the callout stopped tracking the selection and sat dead-center.
-    /// With the real width, `minX`/`maxX` stay correctly ordered down to any phone width the callout itself fits on.
-    private func callout(anchor: CGRect, proxy: GeometryProxy) -> some View {
-        let global = proxy.frame(in: .global)
-        let localMidX = anchor.midX - global.minX
-        let localMinY = anchor.minY - global.minY
-
-        let halfWidth = calloutSize.width / 2
-        let halfHeight = calloutSize.height / 2
-        let inset: CGFloat = 8
-
-        let minX = halfWidth + inset
-        let maxX = max(minX, proxy.size.width - halfWidth - inset)
-        let clampedX = min(max(localMidX, minX), maxX)
-
-        let topLimit = proxy.safeAreaInsets.top + halfHeight + inset
-        let bottomLimit = max(topLimit, proxy.size.height - Self.bottomClearance - halfHeight)
-        let desiredY = localMinY - halfHeight - 12
-        let clampedY = min(max(desiredY, topLimit), bottomLimit)
-
-        return EditorCalloutView(viewModel: viewModel)
-            .onGeometryChange(for: CGSize.self) { $0.size } action: { newSize in
-                calloutSize = newSize
-            }
-            .position(x: clampedX, y: clampedY)
-    }
 }
-
-#if DEBUG
-/// Preview-only: seed a session + selection on a `PreviewEditorFactory` VM so the callout / palette / readout render
-/// populated. Reuses the Task 13 factory (`EditorPadButtons.swift`) for the Infrastructure-free fakes.
-@MainActor
-private func previewChromeViewModel(select item: SheetMusicCore.ScoreItemID) -> EditorViewModel {
-    let viewModel = PreviewEditorFactory.makeViewModel(armedDuration: .quarter)
-    viewModel.beginSession(score: previewChromeScore())
-    viewModel.select(item)
-    return viewModel
-}
-
-/// One 4/4 measure: element 1 is a C4 quarter chord, elements 2…4 are quarter rests.
-private func previewChromeScore() -> Score {
-    let voice = Voice(elements: [
-        .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-        .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
-        .rest(duration: .quarter),
-        .rest(duration: .quarter),
-        .rest(duration: .quarter),
-    ])
-    let staff = Staff(measures: [Measure(voices: [voice])])
-    let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
-    return Score(division: 480, parts: [part])
-}
-
-private let previewStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-
-#Preview("chrome · compact / rest selected") {
-    let restItem = SheetMusicCore.ScoreItemID.rest(
-        RestID(staff: previewStaff, measureIndex: 0, voiceIndex: 0, elementIndex: 2),
-    )
-    return EditorChromeView(
-        viewModel: previewChromeViewModel(select: restItem),
-        selectionAnchor: CGRect(x: 120, y: 300, width: 20, height: 20),
-        onDone: {},
-    )
-    .frame(width: 390, height: 844)
-    .environment(\.horizontalSizeClass, .compact)
-    .background(Color.gray.opacity(0.15))
-}
-
-#Preview("chrome · regular / note selected") {
-    let noteItem = SheetMusicCore.ScoreItemID.note(
-        NoteID(staff: previewStaff, measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0),
-    )
-    return EditorChromeView(
-        viewModel: previewChromeViewModel(select: noteItem),
-        selectionAnchor: nil,
-        onDone: {},
-    )
-    .frame(width: 1180, height: 820)
-    .environment(\.horizontalSizeClass, .regular)
-    .background(Color.gray.opacity(0.15))
-}
-#endif

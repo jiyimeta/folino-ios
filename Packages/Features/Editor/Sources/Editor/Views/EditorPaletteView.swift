@@ -32,6 +32,9 @@ struct EditorPaletteView: View {
                 EditorVoicePicker(viewModel: viewModel)
             }
         }
+        // Same rule as the pad: nothing that mutates the score stays live while the transport runs. The readout above
+        // keeps updating, so the palette still tells you what's selected while you listen.
+        .disabled(viewModel.isPlaybackActive)
         .padding(14)
         .frame(width: Self.cardWidth)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
