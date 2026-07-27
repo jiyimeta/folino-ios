@@ -100,8 +100,9 @@ public struct DrawingAnchorWire: Equatable {
 
 extension DrawingAnchorWire {
     /// Convenience constructor for a PDF page anchor. The musical fields are meaningless zeros — `anchorKind == 1`
-    /// is what tells the reader to ignore them.
-    public static func page(pageIndex: Int32, encodedDrawing: Data) -> DrawingAnchorWire {
+    /// is what tells the reader to ignore them. Not part of the wire schema (no Kotlin counterpart needed), so this
+    /// stays `internal` — only `PdfAnnotationBridge.nativePdfAnnotationCapture` calls it.
+    static func page(pageIndex: Int32, encodedDrawing: Data) -> DrawingAnchorWire {
         DrawingAnchorWire(
             measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0,
             dxSp: 0, verticalOffsetSp: 0, encodedDrawing: encodedDrawing,

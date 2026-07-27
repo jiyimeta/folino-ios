@@ -102,10 +102,6 @@ if isAndroid {
                 .plugin(name: "WireletProvidedBridges", package: "swift-wirelet"),
             ],
         ),
-        .testTarget(
-            name: "FolinoReaderJNITests",
-            dependencies: ["FolinoReaderJNI"],
-        ),
     ]
 }
 

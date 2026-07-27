@@ -191,6 +191,21 @@ public enum PageAnchoringCore {
         }
     }
 
+    /// `displayTransforms` results projected into the `StrokeTransform` shape `AnnotationAnchoringCore.display`
+    /// already uses (scale `sp`, translate `(px, py)`) — exactly what a `displayTransform(pageFrame:)` affine
+    /// transform's `a`/`tx`/`ty` carry under its scale-then-translate composition. `nil` wherever `displayTransforms`
+    /// returns `nil` (not a `.page` anchor — including a `.musical` anchor a caller mistakenly fed in — or its page
+    /// index is out of range for `pageFrames`). Lets JNI bridges reuse the same Data-shaped output the musical path
+    /// already produces, with no `CGAffineTransform` decomposition of their own.
+    public static func displayStrokeTransforms(
+        _ drawings: [DrawingAnchor], pageFrames: [CGRect],
+    ) -> [StrokeTransform?] {
+        displayTransforms(drawings, pageFrames: pageFrames).map { transform in
+            guard let transform else { return nil }
+            return StrokeTransform(sp: transform.a, px: transform.tx, py: transform.ty)
+        }
+    }
+
     /// Bake `transform` directly into a stroke's content-space geometry (positions, and — via the transform's implied
     /// uniform scale — width). The neutral `InkStroke` has no separate transform slot (unlike `PKStroke.transform`),
     /// so normalization is always applied straight to the arrays. Uses `zip` (not indexed access) so a

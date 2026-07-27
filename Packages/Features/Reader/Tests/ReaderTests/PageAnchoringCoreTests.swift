@@ -64,6 +64,33 @@ struct PageAnchoringCoreTests {
         #expect(PageAnchoringCore.displayTransforms([drawing], pageFrames: frames) == [nil])
     }
 
+    /// Regression: a `.musical` anchor fed into the page-display path must resolve to `nil` — never to page 0.
+    /// This is the exact bug `PdfAnnotationBridge.nativePdfAnnotationDisplayTransforms` had before it started gating
+    /// on `anchorKind` (a musical wire's `pageIndex == -1` placeholder, if passed straight to `PageAnchor.init`,
+    /// clamps to `0` and would otherwise resolve to a valid, wrong transform).
+    @Test func `display transforms are nil for a musical anchor, never page 0`() {
+        let musical = DrawingAnchor(
+            kind: .musical(MusicalAnchor(
+                measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0, dxSp: 0, verticalOffsetSp: 0,
+            )),
+            encodedDrawing: Data([1]),
+        )
+        #expect(PageAnchoringCore.displayTransforms([musical], pageFrames: frames) == [nil])
+        #expect(PageAnchoringCore.displayStrokeTransforms([musical], pageFrames: frames) == [nil])
+    }
+
+    /// `displayStrokeTransforms` mirrors `displayTransforms`, projected into the `StrokeTransform` (`sp`/`px`/`py`)
+    /// shape the JNI bridge encodes — `sp` is the page's own width, `(px, py)` its origin, matching
+    /// `displayTransform(pageFrame:)`'s scale-then-translate composition.
+    @Test func `displayStrokeTransforms scales by page width and translates to the origin`() {
+        let drawing = DrawingAnchor(kind: .page(PageAnchor(pageIndex: 1)), encodedDrawing: Data([1, 2, 3]))
+        let transforms = PageAnchoringCore.displayStrokeTransforms([drawing], pageFrames: frames)
+        #expect(transforms.count == 1)
+        #expect(transforms[0]?.sp == 100)
+        #expect(transforms[0]?.px == 0)
+        #expect(transforms[0]?.py == 220)
+    }
+
     /// `capture` must resolve the SAME page a direct `pageIndex(forCentroid:pageFrames:)` call would for a centroid
     /// straddling the inter-page gap — the exact scenario where a wrong representative point would land a stroke on
     /// the wrong page.

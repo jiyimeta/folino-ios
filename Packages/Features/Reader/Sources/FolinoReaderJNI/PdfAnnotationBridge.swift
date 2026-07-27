@@ -4,9 +4,8 @@ import ReaderAnnotationCore
 import Wirelet
 
 #if !canImport(CoreGraphics)
-// Same rationale as `AnnotationJNISymbols.swift`: anchor to `ReaderAnnotationCore`'s own geometry stubs on Android so
-// this file's `CGRect` resolves to the one `PageAnchoringCore` operates on, not Foundation's CoreGraphics shim.
-private typealias CGFloat = ReaderAnnotationCore.CGFloat
+/// Same rationale as `AnnotationJNISymbols.swift`: anchor to `ReaderAnnotationCore`'s own geometry stubs on Android so
+/// this file's `CGRect` resolves to the one `PageAnchoringCore` operates on, not Foundation's CoreGraphics shim.
 private typealias CGRect = ReaderAnnotationCore.CGRect
 #endif
 
@@ -66,25 +65,35 @@ public func nativePdfAnnotationCapture(strokeBytes: Data, pageIndex: Int32, page
     return DrawingAnchorWire.page(pageIndex: pageIndex, encodedDrawing: drawing.encodedDrawing).encodeToData()
 }
 
-/// Compute the display transform for a whole `.page`-anchored layer in one call, positionally aligned with the
-/// input. `drawingsBytes` = `[DrawingAnchorWire]` (what capture produced / Room stored); `pageFramesBytes` =
-/// `PageFramesWire`, the PDF's current page layout. `sp == 0` marks a drawing whose page isn't in `pageFramesBytes`
-/// this frame (out-of-range page index) — the caller skips it, matching the musical path's "unresolved this frame"
-/// convention. Empty `Data` if either input fails to decode.
+/// Compute the display transform for a whole layer in one call, positionally aligned with the input.
+/// `drawingsBytes` = `[DrawingAnchorWire]` (what capture produced / Room stored, `.musical` and `.page` anchors
+/// possibly mixed); `pageFramesBytes` = `PageFramesWire`, the PDF's current page layout. `sp == 0` marks a drawing
+/// that isn't currently placeable this frame — a `.musical` wire (this path only ever draws page anchors; see
+/// `AnchorKindWireCoding`'s doc comment for why `anchorKind` must gate this, not just `PageAnchor`'s own
+/// negative-clamping `init`), or a `.page` wire whose page isn't in `pageFramesBytes` — matching the musical path's
+/// own "unresolved this frame" convention. Empty `Data` if either input fails to decode.
 public func nativePdfAnnotationDisplayTransforms(drawingsBytes: Data, pageFramesBytes: Data) -> Data {
     guard let wires = try? [DrawingAnchorWire](decoding: drawingsBytes),
           let pageFrames = try? PageFramesWire(decoding: pageFramesBytes)
     else { return Data() }
 
     let drawings = wires.map { wire in
-        DrawingAnchor(kind: .page(PageAnchor(pageIndex: Int(wire.pageIndex))), encodedDrawing: wire.encodedDrawing)
+        DrawingAnchor(
+            kind: AnchorKindWireCoding.kind(
+                anchorKind: wire.anchorKind, pageIndex: wire.pageIndex,
+                measureIndex: wire.measureIndex, tickInMeasure: wire.tickInMeasure,
+                partIndex: wire.partIndex, staffIndexInPart: wire.staffIndexInPart,
+                dxSp: wire.dxSp, verticalOffsetSp: wire.verticalOffsetSp,
+            ),
+            encodedDrawing: wire.encodedDrawing,
+        )
     }
     let frames = pageFrames.frames.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
-    let transforms = PageAnchoringCore.displayTransforms(drawings, pageFrames: frames)
+    let transforms = PageAnchoringCore.displayStrokeTransforms(drawings, pageFrames: frames)
 
     let out = transforms.map { transform -> StrokeTransformWire in
         guard let transform else { return StrokeTransformWire(sp: 0, px: 0, py: 0) }
-        return StrokeTransformWire(sp: Double(transform.a), px: Double(transform.tx), py: Double(transform.ty))
+        return StrokeTransformWire(sp: Double(transform.sp), px: Double(transform.px), py: Double(transform.py))
     }
     return out.encodeToData()
 }
