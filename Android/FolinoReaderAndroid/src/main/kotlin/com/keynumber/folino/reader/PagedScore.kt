@@ -253,11 +253,15 @@ internal fun PagedScore(
                             if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {
                                 return@detectTapGestures
                             }
+                            // Read through `viewport`, NOT the `panOffset` local: this lambda is captured by
+                            // `pointerInput`, which only restarts its handler when a KEY changes, and a pan
+                            // changes none of them. A captured `Offset` would go stale the moment the reader
+                            // pans, and the tap would seek to the wrong note with nothing to show for it.
                             val cursor = nearestCursorForTap(
                                 tap = offset,
-                                contentOffsetPx = Offset(panOffset.x, panOffset.y - pageTopPx),
+                                contentOffsetPx = Offset(-viewport.offsetX, -viewport.offsetY - pageTopPx),
                                 pxPerMM = fitPxPerMM,
-                                scale = scale,
+                                scale = viewport.scale,
                                 scoreHandle = handle,
                                 layoutOptionsBytes = optionsBytes,
                             ) ?: return@detectTapGestures
