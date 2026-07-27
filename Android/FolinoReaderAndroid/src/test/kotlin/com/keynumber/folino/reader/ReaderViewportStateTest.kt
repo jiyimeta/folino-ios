@@ -115,4 +115,11 @@ class ReaderViewportStateTest {
         assertEquals(0f, s.offsetX, 0.001f)
         assertEquals(0f, s.offsetY, 0.001f)
     }
+
+    @Test fun shrinkingTheContentReClampsTheOffset() {
+        val s = state()
+        s.snapOffsetY(3200f) // the maximum at scale 1: 4000 - 800
+        s.geometry = s.geometry.copy(unitContentHeightPx = 2000f)
+        assertEquals(1200f, s.offsetY, 0.01f) // the new maximum: 2000 - 800
+    }
 }

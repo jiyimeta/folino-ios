@@ -157,7 +157,24 @@ internal class ReaderViewportState(
     var offsetY by mutableFloatStateOf(0f)
         private set
 
-    var geometry by mutableStateOf(ViewportGeometry())
+    private var geometryState by mutableStateOf(ViewportGeometry())
+
+    /**
+     * Layout inputs, republished by the surface whenever they move.
+     *
+     * Assigning re-clamps both offsets, because a geometry change can shrink the content out from under a
+     * position that was legal a frame ago — a rotation, a resize, or a display-setting change that reflows
+     * the score shorter. `ScrollState` coerced its value whenever `maxValue` shrank; without this, the
+     * surface would render scrolled past the end of the score until the reader's next gesture.
+     */
+    var geometry: ViewportGeometry
+        get() = geometryState
+        set(value) {
+            if (value == geometryState) return
+            geometryState = value
+            offsetX = clampX(offsetX)
+            offsetY = clampY(offsetY)
+        }
 
     private var flingJob: Job? = null
 
@@ -294,13 +311,19 @@ internal fun rememberReaderViewportState(
  * `detectTapGestures` that would otherwise seek. Single-finger panning waits for touch slop first: a tap
  * that wobbles a pixel has to stay a tap, or seeking becomes unreliable.
  *
+ * @param scope must be composition-scoped (`rememberCoroutineScope()`), not something longer-lived like a
+ *   `viewModelScope`. [ReaderViewportState.startFling] launches into it, and a scope that outlives the
+ *   composition would let the decay animation keep running after the composable is gone, writing into a
+ *   detached [state].
  * @param key extra `pointerInput` restart key, on top of [state] and the flags below. Anything that
  *   changes the gesture's meaning and is stable across a gesture belongs here.
  * @param allowSingleFingerPan a LAMBDA, evaluated per event rather than captured. The page surface's
  *   answer depends on the live zoom (`scale > 1f`, so `HorizontalPager` keeps its swipe at fit), and a
  *   value read into the `pointerInput` key list would restart the handler mid-pinch and abort the
  *   gesture the instant the zoom crossed 1. False while annotating on every surface — a single finger
- *   is a stroke there.
+ *   is a stroke there. The lambda body must read live observable state, never a value captured from the
+ *   enclosing composition: `pointerInput` deliberately does not restart on the lambda's identity, so a
+ *   captured value goes stale and reproduces the exact mid-pinch bug this parameter exists to prevent.
  * @param allowFling false while annotating — coasting away from where the reader is writing loses their
  *   place. Safe as a plain value: it only changes when the pen is armed or put away.
  * @param onManualViewportChange fired once per gesture, on two-finger contact or on the first real
@@ -326,53 +349,61 @@ internal fun Modifier.readerViewportGestures(
         var notifiedManual = false
         var panned = false
         var pastSlop = false
-        var travelled = 0f
+        var travelled = Offset.Zero
         var event: PointerEvent
-        do {
-            event = awaitPointerEvent(PointerEventPass.Initial)
-            val pressed = event.changes.count { it.pressed }
-            if (pressed >= 2) {
-                if (!notifiedManual) {
-                    onManualViewportChange()
-                    notifiedManual = true
-                }
-                val centroid = event.calculateCentroid(useCurrent = true)
-                if (!centroid.x.isNaN() && !centroid.y.isNaN()) {
-                    val zoom = event.calculateZoom()
-                    if (zoom != 1f) state.applyZoom(zoom, centroid)
-                    val pan = event.calculatePan()
-                    if (pan != Offset.Zero) {
-                        state.applyPan(pan)
-                        panned = true
-                    }
-                }
-                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                // A pinch does not seed the fling: the two-finger centroid is a poor velocity signal and
-                // coasting out of a zoom feels like a slip rather than a throw.
-                tracker.resetTracking()
-                pastSlop = true
-            } else if (pressed == 1 && allowSingleFingerPan()) {
-                val change = event.changes.first { it.pressed }
-                val pan = event.calculatePan()
-                if (!pastSlop) {
-                    travelled += pan.getDistance()
-                    if (travelled >= slop) pastSlop = true
-                }
-                if (pastSlop && pan != Offset.Zero) {
+        try {
+            do {
+                event = awaitPointerEvent(PointerEventPass.Initial)
+                val pressed = event.changes.count { it.pressed }
+                if (pressed >= 2) {
                     if (!notifiedManual) {
                         onManualViewportChange()
                         notifiedManual = true
                     }
-                    state.applyPan(pan)
-                    panned = true
-                    tracker.addPosition(change.uptimeMillis, change.position)
-                    change.consume()
+                    // `calculateCentroid` counts only changes with `pressed && previousPressed`, so on the
+                    // frame a finger lifts it is excluded from BOTH centroids and `calculatePan` returns the
+                    // remaining finger's own delta rather than a centroid snap. Do not "fix" this by
+                    // computing the centroid over all changes — an asymmetric finger lift is exactly what
+                    // made the iOS pinch jump.
+                    val centroid = event.calculateCentroid(useCurrent = true)
+                    if (!centroid.x.isNaN() && !centroid.y.isNaN()) {
+                        val zoom = event.calculateZoom()
+                        if (zoom != 1f) state.applyZoom(zoom, centroid)
+                        val pan = event.calculatePan()
+                        if (pan != Offset.Zero) {
+                            state.applyPan(pan)
+                            panned = true
+                        }
+                    }
+                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                    // A pinch does not seed the fling: the two-finger centroid is a poor velocity signal and
+                    // coasting out of a zoom feels like a slip rather than a throw.
+                    tracker.resetTracking()
+                    pastSlop = true
+                } else if (pressed == 1 && allowSingleFingerPan()) {
+                    val change = event.changes.first { it.pressed }
+                    val pan = event.calculatePan()
+                    if (!pastSlop) {
+                        travelled += pan
+                        if (travelled.getDistance() >= slop) pastSlop = true
+                    }
+                    if (pastSlop && pan != Offset.Zero) {
+                        if (!notifiedManual) {
+                            onManualViewportChange()
+                            notifiedManual = true
+                        }
+                        state.applyPan(pan)
+                        panned = true
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                        change.consume()
+                    }
                 }
+            } while (event.changes.any { it.pressed })
+            if (allowFling && panned) {
+                state.startFling(scope, this@pointerInput, tracker.calculateVelocity())
             }
-        } while (event.changes.any { it.pressed })
-        if (allowFling && panned) {
-            state.startFling(scope, this@pointerInput, tracker.calculateVelocity())
+        } finally {
+            state.settleRaster()
         }
-        state.settleRaster()
     }
 }
