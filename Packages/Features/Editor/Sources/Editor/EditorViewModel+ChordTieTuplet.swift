@@ -65,10 +65,72 @@ extension EditorViewModel {
 
     // MARK: - Ties
 
-    /// Whether the selected note has a same-pitch successor (drives the tie button's enabled state).
+    /// Whether the selected note has a same-pitch successor (drives the tie button's enabled state — and, in the
+    /// callout, whether the key appears at all: a tie key with nothing to tie to is just a puzzle).
     public var canTie: Bool {
         guard case let .note(noteID)? = selectedItem, let score else { return false }
         return TiePlanner.tieTarget(for: noteID, in: score) != nil
+    }
+
+    /// Whether the selected note is ALREADY tied forward — what lights the callout's tie key, so one key reads as
+    /// both "tie this" and "these are tied, tap to undo".
+    public var isSelectionTied: Bool {
+        guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return false }
+        return note.tieForward != nil
+    }
+
+    /// The pad's tie ＋ key: writes a note of the ARMED length in the slot after the selected one, at the same pitch,
+    /// and ties the two together — one command, one undo step.
+    ///
+    /// This is the "hold this note longer" gesture, and a tie is how a score says that across a barline or past what
+    /// a single note value can express. As a bare toggle the key was near-useless: it needed you to have already
+    /// written the same pitch twice in a row, which nobody does by hand — you write the note, then decide to hold it.
+    /// (Toggling an existing tie off still lives in the callout's tie key, which appears exactly when there is one.)
+    public func appendTiedNote() {
+        guard let plan = tieAppendPlan() else { return }
+        applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.location))
+    }
+
+    /// Whether `appendTiedNote` has somewhere to write: a selected note, an armed length, and a rest in the next slot
+    /// to overwrite. A note already sitting there would have to be pushed aside, which is not what a tie key should
+    /// quietly do.
+    public var canAppendTiedNote: Bool {
+        tieAppendPlan() != nil
+    }
+
+    private func tieAppendPlan() -> (commands: [any EditCommand], location: VoiceElementID)? {
+        guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID],
+              let armed = armedInputDuration,
+              let next = ElementNavigator.nextTimedElement(after: VoiceElementID(noteID), in: score),
+              case let .chord(target)? = score[next], target.notes.isEmpty
+        else { return nil }
+        let restID = RestID(
+            staff: next.staff,
+            measureIndex: next.measureIndex,
+            voiceIndex: next.voiceIndex,
+            elementIndex: next.elementIndex,
+        )
+        var commands: [any EditCommand] = []
+        // Re-time the slot first when it isn't already the armed length — the same composite shape note input uses,
+        // and the reason this works at all: `SetRestDuration` re-splices what FOLLOWS the slot, leaving the slot's
+        // own index (and so the `InputNote` / `SetTie` addresses below) valid.
+        if target.duration != armed {
+            commands.append(SetRestDuration(at: next, duration: armed))
+        }
+        commands.append(InputNote(at: restID, pitch: note.pitch, tpc: note.tpc))
+        commands.append(SetTie(
+            from: noteID,
+            to: NoteID(
+                staff: next.staff,
+                measureIndex: next.measureIndex,
+                voiceIndex: next.voiceIndex,
+                elementIndex: next.elementIndex,
+                noteIndexInChord: 0,
+            ),
+            sourceTieForward: 1,
+            targetTieBack: 1,
+        ))
+        return (commands, VoiceElementID(noteID))
     }
 
     /// Adds the tie when absent (`SetTie` ... `sourceTieForward: 1, targetTieBack: 1`), removes it when present
@@ -86,49 +148,65 @@ extension EditorViewModel {
 
     // MARK: - Tuplets
 
-    /// Whether the current selection sits inside a tuplet.
-    public var isSelectionInTuplet: Bool {
-        guard let selectedItem, let score, let staff = score[selectedItem.staff],
-              staff.measures.indices.contains(selectedItem.measureIndex)
+    /// Whether the CARET sits inside a tuplet — the tuplet key rides with the duration keys, and like them it acts on
+    /// the slot the next note goes into rather than on the note last written.
+    public var isCaretInTuplet: Bool {
+        guard let caretItem else { return false }
+        return isInsideTuplet(Self.tupletTarget(caretItem))
+    }
+
+    /// Whether `location` is one of a tuplet's members.
+    ///
+    /// Input asks this before it re-times a slot: the member lengths inside a tuplet are the tuplet's to decide, and
+    /// the engine refuses `SetRestDuration` / `SetChordDuration` there outright. Since input applies the armed length
+    /// and the note in ONE composite, that refusal used to take the note down with it — which is why nothing could be
+    /// written into a triplet after its first member.
+    func isInsideTuplet(_ location: VoiceElementID) -> Bool {
+        guard let score, let staff = score[location.staff],
+              staff.measures.indices.contains(location.measureIndex)
         else { return false }
-        let voices = staff.measures[selectedItem.measureIndex].voices
-        guard voices.indices.contains(selectedItem.voiceIndex) else { return false }
-        let element = selectedItem.elementIndex
-        return voices[selectedItem.voiceIndex].tuplets.contains {
+        let voices = staff.measures[location.measureIndex].voices
+        guard voices.indices.contains(location.voiceIndex) else { return false }
+        let element = location.elementIndex
+        return voices[location.voiceIndex].tuplets.contains {
             $0.startIndex <= element && element <= $0.endIndex
         }
     }
 
-    /// One-tap triplet = `createTuplet(actualNotes: 3)`; long-press grid passes 5 / 6 / 7.
+    /// Writes a tuplet of `actualNotes` at the caret and remembers the size: the key's long-press menu passes 2 … 6,
+    /// and whatever came through last is what a plain tap writes from then on (`armedTuplet`).
     /// `normalNotes` follows MuseScore's convention — the largest power of two strictly less than `actualNotes`
-    /// (3→2, 5→4, 6→4, 7→4).
+    /// (2→1, 3→2, 5→4, 6→4).
     public func createTuplet(actualNotes: Int) {
         // Defensive lower bound: `CreateTuplet` asserts `actualNotes >= 2` (a 1:1 tuplet is meaningless), and its
-        // precondition is a hard crash. The UI only ever passes 3 / 5 / 6 / 7, but returning here closes that
-        // crash-risk for any out-of-range programmatic caller.
+        // precondition is a hard crash. The UI only ever passes 2 … 6, but returning here closes that crash-risk
+        // for any out-of-range programmatic caller.
         guard actualNotes >= 2 else { return }
-        guard let selectedItem else { return }
-        let veID = VoiceElementID(
-            staff: selectedItem.staff,
-            measureIndex: selectedItem.measureIndex,
-            voiceIndex: selectedItem.voiceIndex,
-            elementIndex: selectedItem.elementIndex,
-        )
+        // Recorded before the caret check, and whether or not the engine accepts the edit: picking a size from the
+        // menu is a statement about what you are writing, and it would be strange for the key to keep saying 3
+        // because the one slot you tried it on refused.
+        armedTuplet = actualNotes
+        guard let caretItem else { return }
         applyCommand(CreateTuplet(
-            at: veID, actualNotes: actualNotes, normalNotes: Self.normalNotes(forActualNotes: actualNotes),
+            at: Self.tupletTarget(caretItem),
+            actualNotes: actualNotes,
+            normalNotes: Self.normalNotes(forActualNotes: actualNotes),
         ))
     }
 
-    /// Collapses the tuplet containing the selection back into a single chord/rest of the same tick span.
+    /// Collapses the tuplet containing the caret back into a single chord/rest of the same tick span.
     public func removeTuplet() {
-        guard let selectedItem else { return }
-        let veID = VoiceElementID(
-            staff: selectedItem.staff,
-            measureIndex: selectedItem.measureIndex,
-            voiceIndex: selectedItem.voiceIndex,
-            elementIndex: selectedItem.elementIndex,
+        guard let caretItem else { return }
+        applyCommand(RemoveTuplet(at: Self.tupletTarget(caretItem)))
+    }
+
+    private static func tupletTarget(_ item: SheetMusicCore.ScoreItemID) -> VoiceElementID {
+        VoiceElementID(
+            staff: item.staff,
+            measureIndex: item.measureIndex,
+            voiceIndex: item.voiceIndex,
+            elementIndex: item.elementIndex,
         )
-        applyCommand(RemoveTuplet(at: veID))
     }
 
     private static func normalNotes(forActualNotes actualNotes: Int) -> Int {

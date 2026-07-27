@@ -1,3 +1,4 @@
+import Foundation
 import SheetMusicCore
 import SwiftUI
 import UtilityUI
@@ -9,14 +10,17 @@ import UtilityUI
 ///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering;
 ///  - regular width: `EditorPaletteView` docked to the trailing edge, vertically centered.
 ///
-/// The floating per-selection callout that used to hover beside the note is gone: everything it carried now lives in
-/// chrome that stays put (voice in the header pill, tuplets under the pad's ⋯ key, tie on the pad's third row), so
-/// the score is never covered by a panel that moves as the selection moves.
+/// Most of what the per-selection callout used to carry now lives in chrome that stays put (voice in the header
+/// pill, tuplets and tie on the pad), so the score isn't covered by a panel that moves as the selection moves. What
+/// remains in the callout is ♯ / ♭ — see `EditorCalloutView` for why those two belong beside the note rather than in
+/// a row of keys aimed at the caret.
 public struct EditorChromeView: View {
-    @Bindable private var viewModel: EditorViewModel
+    /// Internal, not private: the header row lives in `EditorChromeView+Header.swift`, and Swift's `private` doesn't
+    /// span files.
+    @Bindable var viewModel: EditorViewModel
     /// Room the reader's bottom transport occupies, so a bottom-docked pad parks above it instead of over it.
     private let bottomTransportClearance: CGFloat
-    private let onDone: () -> Void
+    let onDone: () -> Void
     private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.undoManager) private var undoManager
@@ -34,14 +38,22 @@ public struct EditorChromeView: View {
     /// Live finger travel while the pad is being dragged. `@GestureState`, NOT `@State`: SwiftUI resets it on its own
     /// when the gesture ends **or is cancelled**, so an interrupted drag can never strand the pad half-way down the
     /// screen — which is exactly what happened when this was plain state and a cancelled drag skipped `onEnded`.
-    @GestureState private var dragTranslation: CGFloat = 0
+    @GestureState private var dragTranslation: CGSize = .zero
     /// The travel captured at the moment the finger lifts, animated back to zero alongside the docking change so the
     /// pad glides from where it was released instead of snapping to its old edge for a frame first. Only ever set
     /// inside `onEnded`, so a cancelled gesture leaves it at zero.
-    @State private var releasedTranslation: CGFloat = 0
+    @State private var releasedTranslation: CGSize = .zero
     @State private var clusterHeight: CGFloat = 0
     /// Height of the header row, so a top-docked pad can park below it.
     @State private var headerHeight: CGFloat = 0
+
+    /// Whether the pad is on screen. Remembered across sessions the same way the pad's placement is: someone who
+    /// writes with the keyboard open wants it open next time, and someone who only ever nudges existing notes wants
+    /// their score back.
+    ///
+    /// Off by default: a score is opened to be read far more often than to be written into, and the callout alone
+    /// covers reading-with-corrections. The pad is one tap away when you do want to write.
+    @AppStorage("editorPadVisible") var isPadVisible = false
 
     /// One-time "saved as .mscz" notice (Task 16, spec §11-2) — shown at most once per install.
     @AppStorage("editorSiblingMSCZNoticeShown") private var siblingMSCZNoticeShown = false
@@ -63,7 +75,7 @@ public struct EditorChromeView: View {
     private func dock(to destination: EditorPadPlacement, animation: Animation) {
         withAnimation(animation) {
             placement = destination
-            releasedTranslation = 0
+            releasedTranslation = .zero
         }
         storedPlacement = destination.rawValue
     }
@@ -92,6 +104,12 @@ public struct EditorChromeView: View {
             navigationPill
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .padding(.leading, 12)
+
+            SelectionCalloutLayer(
+                viewModel: viewModel,
+                // Only keep clear of the pad while the pad is actually there.
+                bottomClearance: bottomTransportClearance + (isPadVisible ? clusterHeight : 0),
+            )
 
             editingCluster
         }
@@ -160,7 +178,17 @@ public struct EditorChromeView: View {
                     clusterHeight = height
                     publishInsets(height: height)
                 }
-                .offset(y: dragTranslation + releasedTranslation)
+                // The measurement only fires when the pad's own height changes, so hiding it has to re-publish too —
+                // otherwise the score keeps scroll padding for a pad that isn't there.
+                .onChange(of: isPadVisible) { _, _ in publishInsets(height: clusterHeight) }
+                .opacity(isPadVisible ? 1 : 0)
+                .allowsHitTesting(isPadVisible)
+                // Slides down out of the way rather than vanishing, so it's obvious where it went (and came from).
+                .offset(y: isPadVisible ? 0 : (placement == .bottom ? clusterHeight + 24 : -(clusterHeight + 24)))
+                .offset(
+                    x: Self.dampedSideways(dragTranslation.width + releasedTranslation.width),
+                    y: dragTranslation.height + releasedTranslation.height,
+                )
                 // Anywhere on the pad moves it — no grabber to aim at. `highPriorityGesture` is what makes that
                 // possible without stealing the keys: a plain tap never travels the minimum distance, so the drag
                 // stays unrecognized and the key underneath gets it; once the finger does travel, the drag wins
@@ -215,11 +243,11 @@ public struct EditorChromeView: View {
         // the pad's own frame — which this very gesture is moving via `.offset`, so each frame's offset fed back into
         // the next frame's translation and the pad juddered instead of tracking the finger.
         DragGesture(minimumDistance: 12, coordinateSpace: .global)
-            .updating($dragTranslation) { value, state, _ in state = value.translation.height }
+            .updating($dragTranslation) { value, state, _ in state = value.translation }
             .onEnded { value in
                 // Hand the finger's travel over to state for one frame so the pad doesn't blink back to its old edge
                 // as the gesture state evaporates; the animation below then unwinds it.
-                releasedTranslation = value.translation.height
+                releasedTranslation = value.translation
                 // Re-dock by where the pad ENDED UP, not by how far the finger moved: a short flick near an edge
                 // shouldn't launch it across the screen.
                 let parkedCenter = placement == .bottom
@@ -237,6 +265,19 @@ public struct EditorChromeView: View {
                     from: releasedCenter, to: destinationCenter, releaseVelocity: value.velocity.height,
                 ))
             }
+    }
+
+    /// Sideways give while the pad is being dragged. The pad only ever docks top or bottom, so horizontal travel has
+    /// nowhere to go — but pinning x to zero made a diagonal drag feel like the pad was fighting the finger, since
+    /// the two stopped moving together the moment the hand wandered off the vertical. Letting it lean a little,
+    /// against a rubber band, keeps the pad under the finger while still saying "this axis isn't a destination".
+    ///
+    /// `tanh` gives that for free: linear for the first few points, then flattening onto the asymptote, so the pad
+    /// can never wander more than `limit` from its column however far the finger goes. The release animation unwinds
+    /// it to zero along with the vertical travel — there is no horizontal snap position to choose.
+    private static func dampedSideways(_ translation: CGFloat) -> CGFloat {
+        let limit: CGFloat = 24
+        return limit * CGFloat(tanh(Double(translation / limit)))
     }
 
     /// The settle animation for a released pad, scaled to the job it has to do.
@@ -274,79 +315,12 @@ public struct EditorChromeView: View {
     /// Reports the cluster's footprint to the Reader (via the App) so the scrolling layouts can pad their scroll
     /// content by it. Only the docked edge reserves room; the other end is clear.
     private func publishInsets(height: CGFloat) {
+        // A hidden pad reserves nothing: that room goes back to the score.
+        let height = isPadVisible ? height : 0
         switch placement {
         // Docked at the top the pad hangs below the header, so the score has to clear both.
         case .top: onClusterInsetsChange(headerHeight + height + 4, 0)
         case .bottom: onClusterInsetsChange(0, height)
         }
-    }
-
-    /// The header row: a standalone voice pill, then the undo / redo / 完了 cluster. The voice picker used to hide
-    /// behind the callout's `⋯`; as its own pill it stays reachable with nothing selected, which is when you most
-    /// often need to switch the voice you're about to input into.
-    private var topCluster: some View {
-        HStack(spacing: 8) {
-            voicePill
-            actionCluster
-        }
-        .padding(.horizontal)
-        .padding(.top, 4)
-    }
-
-    private var voicePill: some View {
-        Menu {
-            EditorVoicePicker(viewModel: viewModel)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "person.2")
-                    .font(.system(size: 15, weight: .medium))
-                Text(verbatim: "\(viewModel.activeVoice + 1)")
-                    .fontWeight(.semibold)
-            }
-            .padding(.horizontal, 12)
-            .frame(minHeight: 44)
-        }
-        .tint(.primary)
-        .interactiveGlassCompat()
-        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-        .accessibilityLabel(Text("editor.voice.label", bundle: .module))
-    }
-
-    private var actionCluster: some View {
-        HStack(spacing: 0) {
-            clusterIconButton(system: "arrow.uturn.backward", label: "editor.chrome.undo", enabled: viewModel.canUndo) {
-                viewModel.undo()
-            }
-            clusterIconButton(system: "arrow.uturn.forward", label: "editor.chrome.redo", enabled: viewModel.canRedo) {
-                viewModel.redo()
-            }
-            Button {
-                onDone()
-            } label: {
-                Text("editor.chrome.done", bundle: .module)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 44)
-            }
-            .tint(.primary)
-        }
-        .interactiveGlassCompat()
-        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-    }
-
-    private func clusterIconButton(
-        system: String,
-        label: LocalizedStringKey,
-        enabled: Bool,
-        action: @escaping () -> Void,
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 20, weight: .medium))
-                .frame(width: 44, height: 44)
-        }
-        .tint(.primary)
-        .disabled(!enabled)
-        .accessibilityLabel(Text(label, bundle: .module))
     }
 }

@@ -43,6 +43,7 @@ struct VerticalZoomedSurface: View {
                     height: framedHeight,
                     alignment: .topLeading,
                 )
+                .background(editingDeselectCatcher(host: editingHost))
         } else {
             Color.clear
         }
@@ -82,9 +83,8 @@ struct VerticalZoomedSurface: View {
                 )
             }
 
-            // The editing caret, in the SAME document-coordinate ZStack as `ScoreView` above (no zoom conversion
-            // needed — the whole stack is scaled together by the modifiers in `body`). It draws only; taps come
-            // through `tapSeekGesture` on `ScoreView` below it.
+            // Last in the stack — over `ScoreView`, which paints itself opaque white and would hide anything beneath
+            // it. The caret gets there by blending (`EditingSelectionOverlay`), not by z-order.
             if let host = editingHost, host.isEditing {
                 EditingSelectionOverlay(host: host, score: score, document: doc)
             }
@@ -102,6 +102,7 @@ struct VerticalZoomedSurface: View {
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor
+                editingHost?.rememberTappedItem(cursor)
             }
     }
 }

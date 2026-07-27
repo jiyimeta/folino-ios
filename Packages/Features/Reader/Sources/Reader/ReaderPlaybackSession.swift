@@ -110,6 +110,9 @@ final class ReaderPlaybackSession {
     /// Providers — set by the owner (`ReaderViewModel`) right after init.
     var scoreProvider: () -> Score? = { nil }
     var hiddenStavesProvider: () -> Set<StaffAddress> = { [] }
+    /// Where a press of play should seek to first, or nil to carry on from wherever the cursor already is. Wired by
+    /// `ReaderRootScreen` to the editing selection; nothing outside edit mode supplies one.
+    var startCursorProvider: () -> ScoreCursor? = { nil }
     var preferencesProvider: () -> ReaderPreferences? = { nil }
     var scoreItemProvider: () -> ScoreItem? = { nil }
 
@@ -218,6 +221,11 @@ final class ReaderPlaybackSession {
             await controller.pause()
             setPlaying(false)
         } else {
+            // Start from whatever the editor has selected, if anything: while editing, the selected note is where the
+            // user's attention is, and hearing the passage from there is the point of playing at all mid-edit.
+            if let start = startCursorProvider() {
+                placeCursor(start)
+            }
             do {
                 try await controller.play(countIn: isPrecountEnabled())
                 // Resuming playback re-arms auto-follow: any suspension from the previous play run (the user having
@@ -348,9 +356,32 @@ final class ReaderPlaybackSession {
         Task { await controller.setCursor(to: target) }
     }
 
+    /// Takes the playhead off the score without moving the engine. Used when the editor selects a note: the selection
+    /// becomes the "you are here" mark, and a second one left over from the last listen only competes with it. The
+    /// engine's own position (`rawPlaybackCursor`, which the seek bar reads and play resumes from) is untouched, so
+    /// this is a display change only — and never while playing, where the playhead is the whole point.
+    func hideDisplayedCursor() {
+        guard !isPlaying, scrubCursor == nil else { return }
+        playbackCursor = nil
+    }
+
     func setManualCursor(_ cursor: ScoreCursor) {
-        // Tapping the score / PDF to place the cursor is an explicit manual set → resume follow (clears any suspension
-        // from the user having scrolled away during playback).
+        let engineCursor = placeCursor(cursor)
+        // Audition the tapped note while stopped / paused only — never overlay a one-shot preview on a continuous
+        // playback stream. Use the engine (full-score addressed) cursor so the NoteID resolves against the score the
+        // engine prepared; rests fall through silently.
+        if !isPlaying, case let .item(.note(noteID)) = engineCursor {
+            Task { await controller?.playPreview(noteID: noteID, duration: 0.5) }
+        }
+    }
+
+    /// The cursor move itself, without the tap's audition. Split out because pressing play with an editing selection
+    /// also seeks — and there, a 0.5 s preview of the first note would sound over the top of playback starting on
+    /// that very note. Returns the engine-addressed cursor the caller may want to inspect.
+    @discardableResult
+    private func placeCursor(_ cursor: ScoreCursor) -> ScoreCursor {
+        // Placing the cursor by hand is an explicit manual set → resume follow (clears any suspension from the user
+        // having scrolled away during playback).
         resumePlaybackFollow()
         let hidden = hiddenStavesProvider()
         let engineCursor = scoreProvider()?.engineCursorForFilteredTap(
@@ -360,15 +391,10 @@ final class ReaderPlaybackSession {
         rawPlaybackCursor = engineCursor
         playbackCursor = cursor
         onCursorChanged()
-        guard let controller else { return }
-        Task { await controller.setCursor(to: engineCursor) }
-
-        // Audition the tapped note while stopped / paused only — never overlay a one-shot preview on a continuous
-        // playback stream. Use the engine (full-score addressed) cursor so the NoteID resolves against the score the
-        // engine prepared; rests fall through silently.
-        if !isPlaying, case let .item(.note(noteID)) = engineCursor {
-            Task { await controller.playPreview(noteID: noteID, duration: 0.5) }
+        if let controller {
+            Task { await controller.setCursor(to: engineCursor) }
         }
+        return engineCursor
     }
 
     /// Begin an interactive seek-bar drag. Seeds the provisional cursor at the current real position so

@@ -21,7 +21,21 @@ public final class ReaderEditingHost {
     public var editedScore: Score?
     /// Bumped per mutation; included in the vertical container's layout task key.
     public var editGeneration = 0
-    public var selection: ScoreSelection = .none
+    public var selection: ScoreSelection = .none {
+        didSet {
+            if case .single = selection { onSelectionMade() }
+        }
+    }
+
+    /// Fired when the editor lands on something — Reader-internal, wired by `ReaderRootScreen` to put the playhead
+    /// away. Two marks on the same staff, one for "playback is here" and one for "you are editing this", read as one
+    /// confused mark; the score can only carry one "you are here" at a time.
+    var onSelectionMade: @MainActor () -> Void = {}
+    /// The last item tapped on the score OUTSIDE edit mode — where the reader put the playhead by hand. Seeded into
+    /// the editor when a session begins, so entering edit mode carries on from the note you were already looking at
+    /// rather than starting with nothing selected and the pad inert.
+    public internal(set) var pendingSelection: SheetMusicCore.ScoreItemID?
+
     /// The caret target (insertion indicator drawn by the Reader's editing overlay).
     public var caretItem: SheetMusicCore.ScoreItemID?
 
@@ -45,6 +59,18 @@ public final class ReaderEditingHost {
     public var onBeginEditing: @MainActor (Score) -> Void = { _ in }
     public var onEndEditing: @MainActor () -> Void = {}
     public var onTap: @MainActor (CGPoint) -> Void = { _ in }
+    /// A tap on the paper outside the engraved area — below the last system, in the page margins. `onTap` can't
+    /// answer for those: it is driven by a gesture on the score surface itself, whose frame stops where the engraving
+    /// does, so a tap past the bottom system never reached it and the selection stuck.
+    public var onTapOutsideScore: @MainActor () -> Void = {}
+    /// The selected item's rect in GLOBAL (screen) coordinates, or nil when nothing is selected — what the editing
+    /// chrome hangs its floating callout off.
+    ///
+    /// A callback rather than a stored property, deliberately. This fires on every scroll and zoom frame, and a
+    /// stored `@Observable` value would be read by whichever body plumbed it through to the chrome — dragging the
+    /// Reader (and its score layout) into a per-frame invalidation. Handing it straight to the Editor's view model
+    /// keeps the re-render to the one leaf view that draws the callout.
+    public var onSelectionAnchorChanged: @MainActor (CGRect?) -> Void = { _ in }
 
     /// The editing chrome's 完了 requests exit through here (the chrome is App-injected and cannot call Reader code).
     public private(set) var isExitRequested = false
@@ -54,6 +80,13 @@ public final class ReaderEditingHost {
 
     func resetExitRequest() {
         isExitRequested = false
+    }
+
+    /// Records what a tap-to-seek landed on, so a later edit session can start there. `nearestCursor` always answers
+    /// with an `.item`, but the `.beat` case exists (measure stepping, scrubbing) and names no element to select.
+    func rememberTappedItem(_ cursor: ScoreCursor) {
+        guard case let .item(id) = cursor else { return }
+        pendingSelection = id
     }
 }
 

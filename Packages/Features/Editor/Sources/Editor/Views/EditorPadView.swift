@@ -9,8 +9,11 @@ import UtilityUI
 /// over the score.
 ///
 /// iPhone (compact width), two 44 pt rows:
-///  1. the durations (whole … sixteenth), the triplet key, the tie key, and delete at the right end;
-///  2. the pitch letters C–B, with ♯ / ♭ at the right end.
+///  1. what the next note will BE — the durations (whole … sixteenth), the tuplet key, the tie key, the dot key;
+///  2. what to write, and undoing it — the pitch letters C–B, with ⌫ at the right end.
+///
+/// The split is by job, not by convenience: everything on row 1 arms or re-times, everything on row 2 acts. ♯ / ♭
+/// are on neither — they live in `EditorCalloutView`, floating beside the note they alter.
 ///
 /// Stepping the selection (← / →) lives OUTSIDE the pad, in its own pill beside the transport, so it stays put when
 /// the pad is re-docked and doesn't cost the pad a row.
@@ -42,33 +45,32 @@ public struct EditorPadView: View {
                 HStack(spacing: 6) {
                     durationKeys
                     tripletKey
+                    dotKey
                     Divider().frame(height: Self.dividerHeight)
                     pitchKeys
-                    pitchStepKeys
                     Divider().frame(height: Self.dividerHeight)
                     EditorContextOps.buttons(viewModel: viewModel)
                     deleteKey
                 }
             } else {
                 VStack(spacing: Self.rowSpacing) {
-                    // Delete anchors the right end of the first row, as far as the row allows from the pitch letters
-                    // that do the actual writing; tie sits beside it because both act on the note you just placed.
                     HStack(spacing: 4) {
                         durationKeys
                         tripletKey
                         EditorContextOps.buttons(viewModel: viewModel, isFlexible: usesFlexibleKeys)
-                        deleteKey
+                        dotKey
                     }
                     HStack(spacing: 4) {
                         pitchKeys
-                        pitchStepKeys
+                        deleteKey
                     }
                 }
             }
         }
-        // Every key goes inert while the transport is running — see `EditorViewModel.isPlaybackActive`. Disabling the
+        // Every key goes inert while the transport is running — see `EditorViewModel.isPlaybackActive` — and equally
+        // when there is neither a caret nor a selection, since then no key has anything to act on. Disabling the
         // whole card (rather than each key) also greys it, which is the cue that the pad is asleep, not broken.
-        .disabled(viewModel.isPlaybackActive)
+        .disabled(viewModel.isPlaybackActive || !viewModel.hasEditTarget)
         // Three rows of keys is already a big bite out of a phone screen, so the card's own chrome is kept thin: the
         // keys stay 44 pt tall (the touch target is the part that must not shrink) and the padding around them gives
         // way instead.
@@ -83,30 +85,19 @@ public struct EditorPadView: View {
 
     // MARK: Key groups
 
-    /// The seven duration keys. Tapping arms the duration for the next input AND, with a selection present, applies
-    /// it immediately (`EditorViewModel.setDuration(_:)`). The armed key shows a persistent accent capsule.
+    /// The duration keys. Tapping arms that length for the next input — it does NOT re-time anything already
+    /// written. The armed key shows a persistent accent capsule; picking a note or rest with nothing armed yet lights
+    /// the key matching what was picked (`EditorViewModel.armFromSelectionIfNeeded`).
     private var durationKeys: some View {
         ForEach(PadDurationGlyph.ordered, id: \.glyph) { duration, glyph in
-            Button {
+            PadDurationKey(
+                duration: duration,
+                glyph: glyph,
+                isSelected: viewModel.armedDuration == duration,
+                isFlexible: usesFlexibleKeys,
+            ) {
                 viewModel.setDuration(duration)
-            } label: {
-                PadKeyGlyph.duration(glyph)
             }
-            .buttonStyle(PadKeyStyle(isArmed: viewModel.armedDuration == duration, isFlexible: usesFlexibleKeys))
-            .accessibilityLabel(Self.durationLabel(duration))
-        }
-    }
-
-    /// Duration accessibility labels, kept as `LocalizedStringKey` literals so `xcstringstool` keeps extracting them.
-    private static func durationLabel(_ duration: NoteDuration) -> Text {
-        switch duration {
-        case .whole: Text("editor.duration.whole", bundle: .module)
-        case .half: Text("editor.duration.half", bundle: .module)
-        case .quarter: Text("editor.duration.quarter", bundle: .module)
-        case .eighth: Text("editor.duration.eighth", bundle: .module)
-        case .sixteenth: Text("editor.duration.sixteenth", bundle: .module)
-        case .thirtySecond: Text("editor.duration.thirtySecond", bundle: .module)
-        default: Text("editor.duration.sixtyFourth", bundle: .module)
         }
     }
 
@@ -123,87 +114,65 @@ public struct EditorPadView: View {
         }
     }
 
-    /// ♯/♭ semitone keys. A tap shifts by a semitone; a long-press shifts by an octave instead (spec §5.3) — the two
-    /// are mutually exclusive, never both. See `PitchStepButton` for how that exclusivity is enforced. The glyphs are
-    /// ♯ / ♭ rather than chevrons because a semitone step is what a musician reads as sharpening or flattening;
-    /// chevrons read as "scroll" on a pad full of note values.
-    private var pitchStepKeys: some View {
-        HStack(spacing: 4) {
-            PitchStepButton(
-                glyph: "♯", label: "editor.pad.pitchUp", semitones: 1, octaves: 1,
-                viewModel: viewModel, isFlexible: usesFlexibleKeys,
-            )
-            PitchStepButton(
-                glyph: "♭", label: "editor.pad.pitchDown", semitones: -1, octaves: -1,
-                viewModel: viewModel, isFlexible: usesFlexibleKeys,
-            )
-        }
-    }
-
-    /// Triplet key. A tap turns the selection into a triplet, or takes it back out of one — the armed capsule shows
-    /// which. It sits with the durations because a tuplet is a duration decision: it re-times the slots the duration
-    /// keys just set. Only triplets: they're the overwhelming majority of what these parts use, and a menu of sizes
-    /// cost a key and an extra tap to reach the one everybody wanted.
+    /// Tuplet key. A tap turns the caret's slot into a tuplet of the armed size, or takes it back out of one — the
+    /// capsule shows which. It sits with the durations because a tuplet is a duration decision: it re-times the slots
+    /// the duration keys just set.
+    ///
+    /// The sizes live behind a long press (`Menu`'s `primaryAction:` is exactly this: tap runs the action, hold opens
+    /// the menu) so the pad doesn't spend keys on ratios nobody reaches for — and the key then WEARS the last size
+    /// picked, because a piece that wants quintuplets wants them more than once and shouldn't need the menu each
+    /// time.
     private var tripletKey: some View {
-        Button {
-            if viewModel.isSelectionInTuplet {
-                viewModel.removeTuplet()
-            } else {
-                viewModel.createTuplet(actualNotes: 3)
+        Menu {
+            ForEach(Self.tupletSizes, id: \.self) { size in
+                Button {
+                    viewModel.createTuplet(actualNotes: size)
+                } label: {
+                    Text("editor.ops.tupletCount \(size)", bundle: .module)
+                }
             }
         } label: {
-            EditorContextOps.textGlyph("3")
+            EditorContextOps.textGlyph("\(viewModel.armedTuplet)")
+                .padKeyChrome(isArmed: viewModel.isCaretInTuplet, isFlexible: usesFlexibleKeys)
+        } primaryAction: {
+            if viewModel.isCaretInTuplet {
+                viewModel.removeTuplet()
+            } else {
+                viewModel.createTuplet(actualNotes: viewModel.armedTuplet)
+            }
         }
-        .buttonStyle(PadKeyStyle(isArmed: viewModel.isSelectionInTuplet, isFlexible: usesFlexibleKeys))
+        .tint(.primary)
         .accessibilityLabel(Text("editor.ops.tuplet", bundle: .module))
     }
 
+    /// Tuplet sizes the long-press menu offers. 7 and up are vanishingly rare in the parts this edits and would only
+    /// make the menu longer to read.
+    private static let tupletSizes = Array(2 ... 6)
+
+    private var dotKey: some View {
+        PadDotKey(
+            dots: viewModel.armedDots,
+            isFlexible: usesFlexibleKeys,
+            setDots: { viewModel.setArmedDots($0) },
+            toggle: { viewModel.toggleArmedDot() },
+        )
+    }
+
+    /// ⌫ edits the SELECTION, so it goes inert unless the selection is a notehead: with the caret running ahead of
+    /// the selection during input, "something is selected" no longer implies "there is a note to delete", and
+    /// deleting a rest was never anything but a no-op anyway (it replaces a rest with a rest of the same length).
+    ///
+    /// It wears a rest rather than a backspace arrow because that is literally what it leaves behind, and the rest
+    /// it draws is the armed length's — so the key shows the silence you are about to get.
     private var deleteKey: some View {
         Button {
-            viewModel.deleteSelection()
+            viewModel.writeRest()
         } label: {
-            PadKeyGlyph.symbol("delete.backward")
+            PadKeyGlyph.rest(viewModel.armedDuration)
         }
         .buttonStyle(PadKeyStyle(isFlexible: usesFlexibleKeys))
-        .tint(.primary)
+        .disabled(!viewModel.canWriteRest)
         .accessibilityLabel(Text("editor.pad.delete", bundle: .module))
-    }
-}
-
-/// A single ▴/▾ pitch-step key. Tap and long-press must be mutually exclusive — a real long-press (hold past the
-/// threshold, then lift) has to apply ONLY `shiftOctave`, never also `shiftPitch` on release.
-///
-/// `.simultaneousGesture` deliberately does not suppress the `Button`'s own tap recognizer, so without a guard a
-/// long-press would fire both: `shiftOctave` when `LongPressGesture` reaches its threshold, and `shiftPitch` when the
-/// finger lifts and the `Button` sees that as a completed tap — moving the note 13 semitones across two undo steps.
-/// `didOctaveShift` closes that gap: `LongPressGesture.onEnded` fires at the hold threshold, strictly before the
-/// tap fires on release, so by the time the `Button` action runs it can check the flag and swallow the spurious tap.
-private struct PitchStepButton: View {
-    let glyph: String
-    let label: LocalizedStringKey
-    let semitones: Int
-    let octaves: Int
-    let viewModel: EditorViewModel
-    let isFlexible: Bool
-
-    @State private var didOctaveShift = false
-
-    var body: some View {
-        Button {
-            if didOctaveShift {
-                didOctaveShift = false
-            } else {
-                viewModel.shiftPitch(bySemitones: semitones)
-            }
-        } label: {
-            EditorContextOps.textGlyph(glyph)
-        }
-        .buttonStyle(PadKeyStyle(isFlexible: isFlexible))
-        .simultaneousGesture(LongPressGesture().onEnded { _ in
-            didOctaveShift = true
-            viewModel.shiftOctave(by: octaves)
-        })
-        .accessibilityLabel(Text(label, bundle: .module))
     }
 }
 

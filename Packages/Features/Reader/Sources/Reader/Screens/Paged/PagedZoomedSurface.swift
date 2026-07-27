@@ -110,6 +110,9 @@ struct PagedZoomedSurface: View {
             // White fills the full viewport so any unused space beneath the last system reads as part of the page
             // (just like `SheetMusicUI.PagedScoreView`'s canvas) rather than the host scroll background.
             .frame(width: viewport.width, height: viewport.height, alignment: .top)
+            // Above the white page fill, below the engraving: the run-out beneath the last system on a page is still
+            // page, and tapping it while editing means "nothing here", same as the margins.
+            .background(editingDeselectCatcher(host: editingHost))
             .background(Color.white)
             // Committed ink as a static band-space layer so it slides with the page on a turn (the viewport-pinned live
             // canvas can't follow the slide). Hidden for the page being actively annotated — the live canvas owns it.
@@ -156,6 +159,8 @@ struct PagedZoomedSurface: View {
                 )
             }
 
+            // Over `ScoreView` — see `VerticalZoomedSurface`; the caret blends into the engraving rather than
+            // sitting under an opaque white background.
             if let host = editingHost, host.isEditing {
                 EditingSelectionOverlay(host: host, score: score, document: doc)
             }
@@ -186,15 +191,25 @@ struct PagedZoomedSurface: View {
                 // next page. Without this guard, `nearestCursor` would return the next-page system and the user
                 // would perceive the page advancing whenever they tap the lower screen area.
                 let pageEndY = pageStartY + pageHeight
-                guard value.location.y >= pageStartY,
-                      value.location.y <= pageEndY else { return }
+                let insidePage = value.location.y >= pageStartY && value.location.y <= pageEndY
                 if let host = editingHost, host.isEditing {
-                    host.onTap(value.location)
+                    // Same guard, different answer. The blank band under the last system on this page is still a tap
+                    // on THIS page's paper — it means "nothing here", i.e. deselect. Hit-testing it would instead
+                    // land on whatever system the next page starts with, silently selecting a note the user can't
+                    // see; dropping it outright (what the seek path below does) left the selection stuck with no way
+                    // to clear it in page mode.
+                    if insidePage {
+                        host.onTap(value.location)
+                    } else {
+                        host.onTapOutsideScore()
+                    }
                     return
                 }
+                guard insidePage else { return }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor
+                editingHost?.rememberTappedItem(cursor)
             }
     }
 

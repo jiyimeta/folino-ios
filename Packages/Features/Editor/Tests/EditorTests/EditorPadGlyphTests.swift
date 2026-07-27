@@ -32,6 +32,50 @@ struct EditorPadGlyphTests {
         }
     }
 
+    /// Same guarantee for the glyphs the ⌫ and tie keys wear. The tie one especially: SMuFL has no tie character, so
+    /// this is `articLaissezVibrerAbove` standing in for one, and a codepoint typo there would draw tofu on a key
+    /// nothing else covers.
+    @Test func `every rest glyph and the tie glyph resolve in the font the pad renders with`() {
+        #expect(BravuraFont.register, "the bundled music font failed to register")
+        let font = PadDurationGlyph.ctFont(size: 24)
+        let cases: [(label: String, glyph: String)] =
+            PadDurationGlyph.rests.map { ("\($0.duration) rest", $0.glyph) } + [("tie", PadDurationGlyph.tie)]
+        for entry in cases {
+            var utf16 = Array(entry.glyph.utf16)
+            var glyphs = [CGGlyph](repeating: 0, count: utf16.count)
+            #expect(entry.glyph.unicodeScalars.count == 1, "\(entry.label) is more than one scalar")
+            #expect(CTFontGetGlyphsForCharacters(font, &utf16, &glyphs, utf16.count), "\(entry.label) has no glyph")
+            #expect(glyphs.allSatisfy { $0 != 0 }, "\(entry.label) resolved to .notdef")
+        }
+    }
+
+    /// The ⌫ key shows the armed length's rest, so every duration a key can arm has to map to one — including the
+    /// full-measure marker a freshly-opened empty measure arms.
+    @Test func `every armable duration maps to a rest glyph`() {
+        let armable: [NoteDuration?] = PadDurationGlyph.ordered.map(\.duration) + [.measure, .thirtySecond, nil]
+        for duration in armable {
+            #expect(PadDurationGlyph.rest(for: duration).unicodeScalars.count == 1)
+        }
+    }
+
+    /// The callout writes its length readout as text — a metronome-mark note plus N `metAugmentationDot`s — so those
+    /// glyphs have to resolve too, and the dot count has to be exactly what was asked for. A missing one here is a
+    /// tofu box on the one key that says what you are about to write.
+    @Test func `the text note readout resolves, and carries one dot glyph per dot`() {
+        #expect(BravuraFont.register, "the bundled music font failed to register")
+        let font = PadDurationGlyph.ctFont(size: 24)
+        for duration in PadDurationGlyph.ordered.map(\.duration) {
+            for dots in 0 ... 3 {
+                let glyphs = PadDurationGlyph.textNote(for: duration, dots: dots)
+                #expect(glyphs.unicodeScalars.count == 1 + dots, "\(duration) with \(dots) dots")
+                var utf16 = Array(glyphs.utf16)
+                var resolved = [CGGlyph](repeating: 0, count: utf16.count)
+                #expect(CTFontGetGlyphsForCharacters(font, &utf16, &resolved, utf16.count))
+                #expect(resolved.allSatisfy { $0 != 0 }, "\(duration) with \(dots) dots resolved to .notdef")
+            }
+        }
+    }
+
     /// Each key must be ONE scalar: a decomposed sequence draws as two glyphs side by side, which is both wrong and
     /// twice as wide as the layout budgets for.
     @Test func `every duration glyph is a single Unicode scalar`() {

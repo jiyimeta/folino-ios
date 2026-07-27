@@ -138,7 +138,63 @@ struct EditorViewModelChordTests {
         #expect(vm.generation == 0)
     }
 
-    // MARK: - createTuplet / removeTuplet / isSelectionInTuplet
+    // MARK: - appendTiedNote (the pad's tie ＋ key)
+
+    @Test func `the tie key writes the armed length after the note and ties them, in one undo step`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.chordAtIndex1())
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+        vm.setDuration(.eighth)
+
+        #expect(vm.canAppendTiedNote)
+        vm.appendTiedNote()
+
+        let source = try #require(vm.score?[EditorFixtures.noteID(element: 1)])
+        let appended = try #require(vm.score?[EditorFixtures.noteID(element: 2)])
+        #expect(appended.pitch == source.pitch)
+        #expect(source.tieForward == 1)
+        #expect(appended.tieBack == 1)
+        guard case let .chord(chord)? =
+            vm.score?[VoiceElementID(EditorFixtures.noteID(element: 2))]
+        else {
+            Issue.record("expected a chord at element 2")
+            return
+        }
+        #expect(chord.duration == .eighth)
+
+        vm.undo()
+        #expect(vm.score == EditorFixtures.chordAtIndex1())
+    }
+
+    @Test func `the tie key has nowhere to write when the next slot is already a note`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.c4ThenD4Chords())
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+        vm.setDuration(.quarter)
+
+        #expect(!vm.canAppendTiedNote)
+
+        vm.appendTiedNote()
+
+        #expect(vm.generation == 0)
+    }
+
+    @Test func `the tuplet key remembers the last size picked, and a plain tap reuses it`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        #expect(vm.armedTuplet == 3) // triplets until told otherwise
+
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+        vm.createTuplet(actualNotes: 5)
+
+        #expect(vm.armedTuplet == 5)
+
+        // A new session is a new score, not a new way of writing: the choice survives.
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        #expect(vm.armedTuplet == 5)
+    }
+
+    // MARK: - createTuplet / removeTuplet / isCaretInTuplet
 
     @Test func `createTuplet builds a triplet and removeTuplet collapses it back; undo redo round-trip the data`(
     ) throws {
@@ -157,11 +213,11 @@ struct EditorViewModelChordTests {
             return
         }
         #expect(firstMember.notes.map(\.pitch) == [60])
-        #expect(vm.isSelectionInTuplet)
+        #expect(vm.isCaretInTuplet)
 
         vm.removeTuplet()
 
-        #expect(!vm.isSelectionInTuplet)
+        #expect(!vm.isCaretInTuplet)
         let collapsedVoice = try #require(vm.score?[EditorFixtures.staff0]?.measures[0].voices[0])
         #expect(collapsedVoice.tuplets.isEmpty)
         guard case let .chord(collapsed)? =
