@@ -18,10 +18,6 @@ if [[ -d "$TOOLCHAIN_BIN" ]]; then
     export PATH="$TOOLCHAIN_BIN:$PATH"
 fi
 export FOLINO_ANDROID=1
-# swift-sheet-music switches to its reduced, Apple-free target set on this flag (its manifest reads
-# SWIFT_SHEET_MUSIC_ANDROID, not FOLINO_ANDROID). Without it a Folino target that depends on SheetMusicPDF
-# drags in SheetMusicLayoutApple / SheetMusicUI and the cross-compile fails on `no such module CoreGraphics`.
-export SWIFT_SHEET_MUSIC_ANDROID=1
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 PKG_PATH="$ROOT/Packages/Features/Reader"
