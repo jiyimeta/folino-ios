@@ -5,7 +5,6 @@ import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.keynumber.folino.library.RoomLibraryStore
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
@@ -193,16 +192,16 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Resolve the Library's on-disk score file via the record's `localFileName` (Room
-     * `local_file_name`), so a PDF import (stored as `<id>.pdf`) opens under its real name. Falls
-     * back to the legacy `<id>.mscz` naming when no record is found — an unknown id then still
-     * fails with "Score file not found" in [load] below, rather than crashing on a missing record.
+     * Resolve the Library's on-disk score file from [localFileName] — the record's real file name
+     * (Room `local_file_name`, e.g. a PDF import's `<id>.pdf`), threaded down from the App layer
+     * (the nav route / retarget call site), which already holds the Library row. The Reader module
+     * does no lookup of its own: it has no dependency on the Library module. A blank name (an
+     * unknown or since-deleted record) resolves to null so [load] reports "Score file not found"
+     * rather than guessing a legacy naming convention that may not match reality.
      */
-    private fun scoreFile(scoreId: String): File {
-        val app = getApplication<Application>()
-        val record = RoomLibraryStore(app).loadAll().firstOrNull { it.id == scoreId }
-        val fileName = record?.localFileName ?: "$scoreId.mscz"
-        return File(File(app.filesDir, "Scores"), fileName)
+    private fun scoreFile(localFileName: String): File? {
+        if (localFileName.isBlank()) return null
+        return File(File(getApplication<Application>().filesDir, "Scores"), localFileName)
     }
 
     /**
@@ -245,8 +244,13 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * `ScoreHandle.load` — `_scoreHandle` stays null so the layout recompute loop (which only
      * drives the DrawProgram-based `Ready` state) stays idle. The parsed score arrives later
      * (Task 12).
+     *
+     * [localFileName] is the record's real on-disk file name, supplied by the caller (the App
+     * layer, via the nav route or a playlist retarget) rather than looked up here — see
+     * [scoreFile]. A blank name (or a name whose file is missing) fails with "Score file not
+     * found" instead of crashing.
      */
-    fun load(scoreId: String) {
+    fun load(scoreId: String, localFileName: String) {
         // Skip only a redundant reload of the SAME score (recomposition); a different scoreId means the
         // Reader was retargeted in place (playlist auto-advance) and must load the new score so its handle
         // is published — which re-drives the layout recompute and the playback prepare.
@@ -263,11 +267,11 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val app = getApplication<Application>()
 
-            val file = withContext(Dispatchers.IO) { scoreFile(scoreId) }
-            val bytes = withContext(Dispatchers.IO) {
-                if (file.exists()) file.readBytes() else null
+            val file = scoreFile(localFileName)
+            val bytes = file?.let { f ->
+                withContext(Dispatchers.IO) { if (f.exists()) f.readBytes() else null }
             }
-            if (bytes == null) {
+            if (file == null || bytes == null) {
                 _state.value = ReaderState.Error("Score file not found")
                 return@launch
             }

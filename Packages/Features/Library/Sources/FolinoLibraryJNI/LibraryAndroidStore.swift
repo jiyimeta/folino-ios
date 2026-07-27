@@ -505,6 +505,7 @@ public final class LibraryAndroidStore {
             composer: record.composer,
             isFavorite: record.isFavorite,
             isPdf: ScoreFormat.detect(filename: record.localFileName) == .pdf,
+            localFileName: record.localFileName,
         )
     }
 

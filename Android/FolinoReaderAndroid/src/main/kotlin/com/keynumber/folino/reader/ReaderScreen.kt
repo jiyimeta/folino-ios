@@ -154,6 +154,10 @@ internal const val ON_SCREEN_CURSOR_ALPHA = 0.6f
 @Composable
 fun ReaderScreen(
     scoreId: String,
+    /** The record's real on-disk file name (e.g. a PDF import's `<id>.pdf`), supplied by the App
+     * layer rather than looked up here — the Reader module has no dependency on the Library module.
+     * A blank value (or a name whose file is missing) fails cleanly via [ReaderViewModel.load]. */
+    localFileName: String,
     title: String,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.VERTICAL,
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
@@ -258,12 +262,15 @@ fun ReaderScreen(
     persistRepeatMode: (RepeatMode) -> Unit = {},
     /** Non-null only when the Reader was opened from a playlist; enables the continuation control + auto-advance. */
     playlistId: String? = null,
-    /** Live, position-ordered score ids of the current playlist (re-derived each call; never a frozen snapshot). */
-    playlistQueueProvider: suspend () -> List<String> = { emptyList() },
+    /** Live, position-ordered (score id, localFileName) pairs of the current playlist (re-derived
+     * each call; never a frozen snapshot). localFileName rides alongside the id the same way it
+     * does everywhere else in this screen — the host resolves it, the Reader is only ever told it. */
+    playlistQueueProvider: suspend () -> List<Pair<String, String>> = { emptyList() },
     /** The global sticky continuation mode (re-read each end-of-score so a Settings change is picked up). */
     continuationModeProvider: suspend () -> PlaylistContinuationMode = { PlaylistContinuationMode.PLAY_THROUGH },
-    /** Asks the host to retarget the Reader to [scoreId] in place (host sets its currentScoreId). */
-    onRetargetScore: (String) -> Unit = {},
+    /** Asks the host to retarget the Reader to (scoreId, localFileName) in place (host sets its
+     * currentScoreId / currentLocalFileName). */
+    onRetargetScore: (String, String) -> Unit = { _, _ -> },
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
     // Analytics seams. The Reader module cannot import the analytics library, so the app layer passes
@@ -586,7 +593,7 @@ fun ReaderScreen(
     )
 
     LaunchedEffect(scoreId) {
-        readerVm.load(scoreId)
+        readerVm.load(scoreId, localFileName)
         // Re-fires once per scoreId (same effect as `load`), so this primes persistence + rehydrates
         // the dry overlay's drawings exactly once per score open, not on every recomposition.
         readerVm.onAnnotationOpened(scoreId)
@@ -619,7 +626,7 @@ fun ReaderScreen(
 
             if (playlistId == null) return@collect
             val queue = playlistQueueProvider()
-            val index = queue.indexOf(scoreId)
+            val index = queue.indexOfFirst { it.first == scoreId }
             if (index < 0) return@collect
             val next = com.keynumber.folino.reader.swiftjava.FolinoReaderJNI.nativePlaylistNextAction(
                 index.toLong(),
@@ -629,7 +636,7 @@ fun ReaderScreen(
             ).toInt()
             if (next in queue.indices) {
                 pendingAutoplay = true
-                onRetargetScore(queue[next])
+                onRetargetScore(queue[next].first, queue[next].second)
             }
         }
     }

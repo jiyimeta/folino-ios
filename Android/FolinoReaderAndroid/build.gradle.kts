@@ -72,11 +72,6 @@ dependencies {
     // and hot-swaps the engine onto it via SoundfontController + the generated store view model.
     implementation(project(":FolinoSoundfontAndroid"))
 
-    // RoomLibraryStore.loadAll() resolves the record's real `localFileName` (e.g. a PDF import's
-    // `<id>.pdf`) so the Reader opens the file the Library actually wrote, not the legacy
-    // `<id>.mscz` convention. FolinoLibraryAndroid does not depend back on this module.
-    implementation(project(":FolinoLibraryAndroid"))
-
     // Runtime support for the swift-java-generated bindings under java-generated/
     // (FolinoReaderJNI → shared Domain scroll-follow logic). Locally published to
     // mavenLocal from Packages/Features/Settings/.build/checkouts/swift-java.

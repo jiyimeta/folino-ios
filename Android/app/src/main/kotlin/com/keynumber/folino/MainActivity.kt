@@ -356,12 +356,16 @@ private fun LibraryNavGraph(
         }
     }
 
-    // Library row tap → push the Reader, addressed by score id (Reader resolves
-    // filesDir/Scores/<id>.mscz); title rides along for the app bar.
+    // Library row tap → push the Reader, addressed by score id; title rides along for the app bar
+    // and localFileName rides along so the Reader is TOLD which file to open (its real on-disk
+    // name, e.g. a PDF import's <id>.pdf) rather than looking it up itself — the Reader module has
+    // no dependency on the Library module, so the App layer (which already holds the whole row)
+    // composes this instead.
     val openReader: (com.keynumber.folino.library.ScoreRowWire) -> Unit = { row ->
         vm.markOpened(row.id)
         val t = URLEncoder.encode(row.title, "UTF-8")
-        nav.navigate("reader/${row.id}/$t")
+        val f = URLEncoder.encode(row.localFileName, "UTF-8")
+        nav.navigate("reader/${row.id}/$t?localFileName=$f")
     }
 
     ModalNavigationDrawer(
@@ -448,7 +452,8 @@ private fun LibraryNavGraph(
                     onOpenScore = { row ->
                         vm.markOpened(row.id)
                         val t = URLEncoder.encode(row.title, "UTF-8")
-                        nav.navigate("reader/${row.id}/$t?playlistId=$id")
+                        val f = URLEncoder.encode(row.localFileName, "UTF-8")
+                        nav.navigate("reader/${row.id}/$t?playlistId=$id&localFileName=$f")
                     },
                     onBack = { nav.popBackStackIfResumed() },
                 )
@@ -496,7 +501,7 @@ private fun LibraryNavGraph(
                 )
             }
             composable(
-                "reader/{id}/{title}?playlistId={playlistId}",
+                "reader/{id}/{title}?playlistId={playlistId}&localFileName={localFileName}",
                 arguments = listOf(
                     navArgument("id") { type = NavType.StringType },
                     navArgument("title") { type = NavType.StringType },
@@ -505,14 +510,29 @@ private fun LibraryNavGraph(
                         nullable = true
                         defaultValue = null
                     },
+                    // The record's real on-disk file name (Room `local_file_name`), threaded from the
+                    // Library row / the share-import lookup below — a query arg (not a required path
+                    // segment) so a missing/empty value still matches the route instead of failing nav
+                    // resolution, and simply surfaces as "Score file not found" in the Reader.
+                    navArgument("localFileName") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
                 ),
             ) { entry ->
                 val navId = entry.arguments?.getString("id") ?: ""
                 val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+                val navLocalFileName =
+                    URLDecoder.decode(entry.arguments?.getString("localFileName").orEmpty(), "UTF-8")
                 val playlistId = entry.arguments?.getString("playlistId")
                 // In-place retarget anchor: seeded from the nav arg, advanced by the Reader's auto-advance.
                 // Keyed on navId so opening a different score from the library resets it.
                 var currentScoreId by rememberSaveable(navId) { mutableStateOf(navId) }
+                // Rides alongside currentScoreId (same retarget event sets both), telling the Reader
+                // which file to open. Seeded from the nav arg; the auto-advance path below re-seeds it
+                // from a Room lookup rather than a Reader-side one (see onRetargetScore).
+                var currentLocalFileName by rememberSaveable(navId) { mutableStateOf(navLocalFileName) }
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
@@ -598,6 +618,7 @@ private fun LibraryNavGraph(
                 ScreenViewEffect("reader")
                 ReaderScreen(
                     scoreId = currentScoreId,
+                    localFileName = currentLocalFileName,
                     title = title,
                     onEditInfo = {
                         AndroidAnalytics.log(AndroidAnalytics.bridge.scoreInfoOpened("readerOverlay"))
@@ -752,15 +773,25 @@ private fun LibraryNavGraph(
                     // inside ReaderScreen). The continuation-mode wire value is shown in the inspector;
                     // the auto-advance handler re-reads it fresh from DataStore at each end-of-score.
                     playlistId = playlistId,
+                    // Pairs each queue entry's score id with its real on-disk file name so a playlist
+                    // auto-advance can retarget the Reader (below) the same way the initial open does —
+                    // via a value it's handed, not a lookup the Reader module performs itself.
                     playlistQueueProvider = {
-                        playlistId?.let {
-                            withContext(Dispatchers.IO) { abRepeatStore.orderedLivePlaylistScoreIds(it) }
+                        playlistId?.let { pid ->
+                            withContext(Dispatchers.IO) {
+                                val ids = abRepeatStore.orderedLivePlaylistScoreIds(pid)
+                                val byId = abRepeatStore.loadAll().associateBy { it.id }
+                                ids.map { id -> id to (byId[id]?.localFileName.orEmpty()) }
+                            }
                         } ?: emptyList()
                     },
                     continuationModeProvider = {
                         PlaylistContinuationMode.fromWire(prefs.playlistContinuationMode.first())
                     },
-                    onRetargetScore = { next -> currentScoreId = next },
+                    onRetargetScore = { next, nextLocalFileName ->
+                        currentScoreId = next
+                        currentLocalFileName = nextLocalFileName
+                    },
                     continuationModeWire = continuationModeWire,
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
                     // Playback analytics (the Reader module can't import the analytics library, so it raises these
@@ -816,7 +847,19 @@ private fun LibraryNavGraph(
             pendingOpenScoreId?.let { id ->
                 onPendingOpenConsumed()
                 val t = URLEncoder.encode(pendingOpenScoreTitle.orEmpty(), "UTF-8")
-                nav.navigate("reader/$id/$t")
+                // The share-import flow only hands MainActivity a bare id + title (Intent extras), not
+                // the whole ScoreRowWire — look its real file name up here (App layer) the same way
+                // `abRepeatStore` does elsewhere in this file, then thread it through the nav query arg
+                // like every other open-score path.
+                val fileName = withContext(Dispatchers.IO) {
+                    com.keynumber.folino.library.RoomLibraryStore(context)
+                        .loadAll()
+                        .firstOrNull { it.id == id }
+                        ?.localFileName
+                        .orEmpty()
+                }
+                val f = URLEncoder.encode(fileName, "UTF-8")
+                nav.navigate("reader/$id/$t?localFileName=$f")
             }
         }
     }

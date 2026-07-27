@@ -100,7 +100,7 @@ fun rememberReaderSceneState(optionsFor: (List<PartDescriptor>?) -> LayoutOption
         ReaderViewModel(appContext).also {
             it.setLayoutWidthMm(seedLayoutWidthMm)
             it.setLayoutOptions(optionsFor(null))
-            it.load(READER_SCORE_ID)
+            it.load(READER_SCORE_ID, "$READER_SCORE_ID.mscz")
         }
     }
 
