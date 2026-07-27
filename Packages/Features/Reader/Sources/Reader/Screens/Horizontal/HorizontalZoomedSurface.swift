@@ -37,6 +37,7 @@ struct HorizontalZoomedSurface: View {
                     height: framedHeight,
                     alignment: .topLeading,
                 )
+                .background(editingDeselectCatcher(host: editingHost))
         } else {
             Color.clear
         }
@@ -62,6 +63,8 @@ struct HorizontalZoomedSurface: View {
                 )
             }
 
+            // Over `ScoreView` — see `VerticalZoomedSurface`; the caret blends into the engraving rather than
+            // sitting under an opaque white background.
             if let host = editingHost, host.isEditing {
                 EditingSelectionOverlay(host: host, score: score, document: doc)
             }
@@ -79,6 +82,7 @@ struct HorizontalZoomedSurface: View {
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor
+                editingHost?.rememberTappedItem(cursor)
             }
     }
 }

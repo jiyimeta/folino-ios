@@ -198,6 +198,18 @@ public struct ReaderRootScreen: View {
             viewModel.currentLayoutMode = layoutMode
             viewModel.playbackSession.startObservingCursor()
             viewModel.playbackSession.startObservingSoundfontDownload()
+            // Press play while editing and playback starts at the selected note. Wired here because this is where the
+            // editing host and the playback session are both in scope; outside edit mode the closure returns nil and
+            // the transport behaves exactly as it did.
+            editingHost?.onSelectionMade = { [weak viewModel] in
+                viewModel?.playbackSession.hideDisplayedCursor()
+            }
+            viewModel.playbackSession.startCursorProvider = { [weak editingHost] in
+                guard let host = editingHost, host.isEditing,
+                      case let .single(item) = host.selection
+                else { return nil }
+                return .item(item)
+            }
             viewModel.pipSession.setEnabled(isPiPEnabled)
             viewModel.pipSession.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
             viewModel.pipSession.setShowInvisibleElements(showInvisibleElements)

@@ -71,9 +71,12 @@ struct EditableReaderScreen: View {
         isWired = true
         let host = editingHost
         let vm = editorViewModel
-        host.onBeginEditing = { [weak vm] score in
+        host.onBeginEditing = { [weak vm, weak host] score in
             guard let vm else { return }
             vm.beginSession(score: score)
+            // Carry the reader's last tap into the session: the note under the playhead is almost always the one the
+            // user came here to change.
+            vm.selectItem(host?.pendingSelection)
         }
         host.onEndEditing = { [weak vm] in
             guard let vm else { return }
@@ -82,6 +85,14 @@ struct EditableReaderScreen: View {
         host.onTap = { [weak vm] point in
             guard let vm else { return }
             vm.handleTap(at: point)
+        }
+        host.onTapOutsideScore = { [weak vm] in
+            vm?.deselect()
+        }
+        // Straight from the Reader's overlay into the view model, with no SwiftUI body in between: this fires on every
+        // scroll and zoom frame, and anything that read it in a body would re-render the score at that rate.
+        host.onSelectionAnchorChanged = { [weak vm] anchor in
+            vm?.selectionAnchor = anchor
         }
         vm.documentProvider = { [weak host] in
             guard let host else { return nil }
@@ -92,10 +103,12 @@ struct EditableReaderScreen: View {
             host.editedScore = score
             host.editGeneration += 1
         }
-        vm.onSelectionChanged = { [weak host] selection, item in
+        // Two markers, not one: `selection` tints the item the editing keys act on, `caret` draws the insertion bar
+        // where the next note lands. They coincide until a run of input pulls the caret ahead of the selection.
+        vm.onSelectionChanged = { [weak host] selection, caret in
             guard let host else { return }
             host.selection = selection
-            host.caretItem = item
+            host.caretItem = caret
         }
     }
 }
