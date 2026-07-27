@@ -63,7 +63,12 @@ public struct PointMmWire: Equatable {
 
 /// A captured, persistable annotation stroke — output of `nativeAnnotationCapture` and the per-stroke element of
 /// `nativeAnnotationDisplayTransforms`'s input. Carries the six `MusicalAnchor` fields plus the normalized `InkStroke`
-/// FINK bytes (`Domain.InkStrokeCodec`). This is the payload shape Sub-plan D persists in Room.
+/// FINK bytes (`Domain.InkStrokeCodec`). This is the payload shape Sub-plan D persists in Room. `anchorKind` /
+/// `pageIndex` extend the same wire struct to carry PDF page anchors too (Task 10): `anchorKind` is `0` for a musical
+/// anchor (the original shape; the six `MusicalAnchor` fields are meaningful) or `1` for a page anchor (`pageIndex` is
+/// meaningful, the musical fields are zero). Both new fields default in the memberwise init so every pre-existing
+/// musical call site keeps compiling unchanged. Use the `.page(pageIndex:encodedDrawing:)` convenience for the PDF
+/// case instead of setting `anchorKind` by hand.
 @WireFormat
 public struct DrawingAnchorWire: Equatable {
     public let measureIndex: Int32
@@ -73,10 +78,13 @@ public struct DrawingAnchorWire: Equatable {
     public let dxSp: Double
     public let verticalOffsetSp: Double
     public let encodedDrawing: Data
+    public let anchorKind: Int32
+    public let pageIndex: Int32
 
     public init(
         measureIndex: Int32, tickInMeasure: Int32, partIndex: Int32,
         staffIndexInPart: Int32, dxSp: Double, verticalOffsetSp: Double, encodedDrawing: Data,
+        anchorKind: Int32 = 0, pageIndex: Int32 = -1,
     ) {
         self.measureIndex = measureIndex
         self.tickInMeasure = tickInMeasure
@@ -85,6 +93,20 @@ public struct DrawingAnchorWire: Equatable {
         self.dxSp = dxSp
         self.verticalOffsetSp = verticalOffsetSp
         self.encodedDrawing = encodedDrawing
+        self.anchorKind = anchorKind
+        self.pageIndex = pageIndex
+    }
+}
+
+extension DrawingAnchorWire {
+    /// Convenience constructor for a PDF page anchor. The musical fields are meaningless zeros — `anchorKind == 1`
+    /// is what tells the reader to ignore them.
+    public static func page(pageIndex: Int32, encodedDrawing: Data) -> DrawingAnchorWire {
+        DrawingAnchorWire(
+            measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0,
+            dxSp: 0, verticalOffsetSp: 0, encodedDrawing: encodedDrawing,
+            anchorKind: 1, pageIndex: pageIndex,
+        )
     }
 }
 
