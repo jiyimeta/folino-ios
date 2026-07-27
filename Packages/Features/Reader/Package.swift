@@ -18,7 +18,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(path: "../../Utility"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "1.2.4",
+        exact: "1.4.0",
     ),
 ]
 
@@ -87,6 +87,8 @@ if isAndroid {
                 "ReaderAnnotationCore",
                 .product(name: "SwiftJava", package: "swift-java"),
                 .product(name: "Wirelet", package: "swift-wirelet"),
+                .product(name: "WireletObservable", package: "swift-wirelet"),
+                .product(name: "WireletProvided", package: "swift-wirelet"),
             ],
             exclude: [
                 "swift-java.config",
@@ -96,6 +98,8 @@ if isAndroid {
             ],
             plugins: [
                 .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
+                .plugin(name: "WireletObservableBridges", package: "swift-wirelet"),
+                .plugin(name: "WireletProvidedBridges", package: "swift-wirelet"),
             ],
         ),
     ]

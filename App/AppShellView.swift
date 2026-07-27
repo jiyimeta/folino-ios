@@ -381,26 +381,37 @@ private struct ReadyShell: View {
         hidesBackButton: Bool = false,
         leadingIsSidebarToggle: Bool = false,
     ) -> some View {
-        ReaderRootScreen(
-            scoreItem: item,
-            repository: repository,
-            gateway: gateway,
-            shareService: shareService,
-            metadataReader: metadataReader,
-            annotationCoordinator: annotationCoordinator,
+        EditableReaderScreen(
+            item: item,
             scoresDirectory: scoresDirectory,
+            gateway: gateway,
+            repository: repository,
             playbackController: bootstrap.playbackController,
-            pdfPlaybackParser: bootstrap.pdfPlaybackParser,
-            museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
-            playlistID: playlistID,
-            analytics: bootstrap.analytics ?? NoopAnalytics(),
-            // Best-effort origin from what this funnel knows: a playlist context vs. the general library. Finer-grained
-            // sources (favorites/tag/recents/search) would require threading the source through the navigation values.
-            openedFrom: playlistID != nil ? .playlist : .libraryAll,
-            onBack: onBack,
-            hidesBackButton: hidesBackButton,
-            leadingIsSidebarToggle: leadingIsSidebarToggle,
-        )
+        ) { host, chrome in
+            ReaderRootScreen(
+                scoreItem: item,
+                repository: repository,
+                gateway: gateway,
+                shareService: shareService,
+                metadataReader: metadataReader,
+                annotationCoordinator: annotationCoordinator,
+                scoresDirectory: scoresDirectory,
+                playbackController: bootstrap.playbackController,
+                pdfPlaybackParser: bootstrap.pdfPlaybackParser,
+                museScoreGeneralProvider: bootstrap.museScoreGeneralProvider,
+                playlistID: playlistID,
+                analytics: bootstrap.analytics ?? NoopAnalytics(),
+                // Best-effort origin from what this funnel knows: a playlist context vs. the general library.
+                // Finer-grained sources (favorites/tag/recents/search) would require threading the source through
+                // the navigation values.
+                openedFrom: playlistID != nil ? .playlist : .libraryAll,
+                onBack: onBack,
+                hidesBackButton: hidesBackButton,
+                leadingIsSidebarToggle: leadingIsSidebarToggle,
+                editingHost: host,
+                editingChrome: chrome,
+            )
+        }
     }
 
     @ViewBuilder

@@ -22,6 +22,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     var masterVolume: Double
     var transposeSemitones: Int
     var a4ReferenceHz: Double?
+    var hasSeededAuthoredVisibility: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -38,6 +39,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         case masterVolume = "master_volume"
         case transposeSemitones = "transpose_semitones"
         case a4ReferenceHz = "a4_reference_hz"
+        case hasSeededAuthoredVisibility = "has_seeded_authored_visibility"
     }
 
     init(domain prefs: ReaderPreferences) {
@@ -74,6 +76,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         masterVolume = prefs.masterVolume
         transposeSemitones = prefs.transposeSemitones
         a4ReferenceHz = prefs.a4ReferenceHz
+        hasSeededAuthoredVisibility = prefs.hasSeededAuthoredVisibility
         if let range = prefs.abRepeat,
            let data = try? JSONEncoder().encode(range)
         {
@@ -115,6 +118,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             masterVolume: masterVolume,
             transposeSemitones: transposeSemitones,
             a4ReferenceHz: a4ReferenceHz,
+            hasSeededAuthoredVisibility: hasSeededAuthoredVisibility,
         )
     }
 

@@ -1,5 +1,6 @@
 package com.keynumber.folino
 
+import android.app.Activity
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
@@ -48,6 +49,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.keynumber.folino.export.ScoreShareLauncher
+import com.keynumber.folino.library.HiddenStaffEntryWire
 import com.keynumber.folino.library.ReaderPreferencesController
 import com.keynumber.folino.library.ScoreExportFormatWire
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
@@ -60,11 +62,14 @@ import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.ReaderPipController
+import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
+import com.keynumber.folino.reader.DrumKitOption
 import com.keynumber.folino.reader.ReaderScreen
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
+import com.keynumber.folino.settings.DrumKitCatalog
 import com.keynumber.folino.settings.VersionHistoryBridge
 import com.keynumber.folino.ui.theme.FolinoTheme
 import com.keynumber.folino.ui.library.ExportFormatSheet
@@ -134,6 +139,10 @@ class MainActivity : ComponentActivity(), PipHost {
         val analyticsEnabled = runBlocking { prefs.analytics.first() }
         AndroidAnalytics.initialize(applicationContext)
         AndroidAnalytics.setCollectionEnabled(analyticsEnabled)
+
+        // Force-enable Picture-in-Picture once for installs that predate the opt-in → opt-out flip.
+        // Runs before setContent so the first composition already reads the migrated value.
+        runBlocking { prefs.applyPictureInPictureOptOutMigration() }
 
         // Version History is hidden on the very first Android release (1.0.0): a 1.0.0 user has no prior version,
         // so a "what's new" list has nothing meaningful to show. It appears from the next version onward.
@@ -277,6 +286,20 @@ private fun LibraryNavGraph(
     val context = LocalContext.current
     val vm: LibraryAndroidStoreViewModel =
         viewModel(factory = LibraryVMFactory(context.applicationContext))
+
+    // Restore the persisted library sort before the first snapshot: the store re-projects its lists
+    // synchronously, so the very first frame of the library already shows the user's chosen order.
+    // Absent (never picked) leaves the store on its own default.
+    LaunchedEffect(Unit) {
+        prefs.librarySortOrder.first()?.let { vm.setSortOrder(it) }
+    }
+
+    // Count this cold launch and, on a prompting launch, hand off to Play's in-app review flow. The
+    // cadence is the shared one iOS uses; see maybePromptForReview for why there is no pre-prompt.
+    val activity = LocalContext.current as? Activity
+    LaunchedEffect(activity) {
+        activity?.let { maybePromptForReview(it) }
+    }
 
     // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
     // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
@@ -505,9 +528,17 @@ private fun LibraryNavGraph(
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
-                val pipEnabled by prefs.pip.collectAsState(initial = false)
+                val precountEnabled by prefs.precount.collectAsState(initial = false)
+                val pipEnabled by prefs.pip.collectAsState(initial = true)
+                val keepScreenAwake by prefs.keepAwake.collectAsState(initial = true)
                 val showSeekBar by prefs.showSeekBar.collectAsState(initial = true)
+                val autoFollowEnabled by prefs.autoFollow.collectAsState(initial = true)
+                val pageTurnButtonsVisible by prefs.pageTurnButtonsVisible.collectAsState(initial = true)
                 val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
+                // Annotation pen setup (Task 9): global DataStore-backed, mirroring the display-options
+                // split above — persisted here in the app module, the Reader module only ever sees the
+                // resolved AnnotationToolState via the prop/callback pair below.
+                val annotationToolState by prefs.annotationToolState.collectAsState(initial = AnnotationToolState())
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
                 // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
@@ -552,6 +583,9 @@ private fun LibraryNavGraph(
                     showInvisibleElements = showInvisible,
                     hiddenStaves = perScoreHidden,
                     clefOverrides = perScoreClefs,
+                    // Notation half of transpose: a change here re-runs the layout with the score
+                    // re-spelled. The audible half is applied to the engine inside the Reader.
+                    transposeSemitones = prefsState.transposeSemitones,
                 )
                 // Analytics baselines: the last persisted tempo / transpose, so the inspector's persist callbacks can
                 // log a direction (increase/decrease, up/down) on each committed change. Re-seeded per score.
@@ -577,6 +611,14 @@ private fun LibraryNavGraph(
                     },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
+                    // Seed the file's authored-hidden staves (<Part><show>0</show>) into this score's hidden
+                    // set once the parts load. The bridge reconciles once (retroactive back-fill for existing
+                    // rows), then leaves user reveals untouched — mirroring iOS.
+                    onAuthoredHiddenStavesReady = { authored ->
+                        prefsVm.seedAuthoredHidden(
+                            authored.map { HiddenStaffEntryWire(it.partIndex, it.staffIndexInPart) },
+                        )
+                    },
                     onDisplayOptionsChange = { o ->
                         // Reader-initiated layout switch (display-options inspector). Distinct event from the Settings
                         // `setting_changed` layout_mode key, mirroring iOS layout_mode_changed.
@@ -616,6 +658,8 @@ private fun LibraryNavGraph(
                     },
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
+                    annotationToolState = annotationToolState,
+                    onAnnotationToolStateChange = { s -> scope.launch { prefs.setAnnotationToolState(s) } },
                     globalA4ReferenceHz = globalA4Hz,
                     // Per-score playback scalars seeded from the bridge. tempoMultiplier == 0.0 ("none")
                     // and a4ReferenceHz == 0.0 ("inherit") are sentinels resolved to the engine default
@@ -636,8 +680,6 @@ private fun LibraryNavGraph(
                         prefsVm.setTempoMultiplier(v)
                     },
                     persistA4ReferenceHz = { v -> prefsVm.setA4ReferenceHz(v) },
-                    // Persist-only: the transpose audio/notation effect is not implemented on Android yet;
-                    // the inspector stepper only stores this value through the ReaderPreferences bridge.
                     transposeSemitones = prefsState.transposeSemitones,
                     persistTranspose = { v ->
                         if (v > lastTransposeForAnalytics) {
@@ -650,6 +692,17 @@ private fun LibraryNavGraph(
                     },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },
+                    countInEnabled = precountEnabled,
+                    onCountInChange = { v ->
+                        scope.launch { prefs.setPrecount(v) }
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("precount", v))
+                    },
+                    // Percussion kit catalog: shared Swift owns the list, this layer is the only one that
+                    // can see both the JNI accessor and the Reader. Loaded once (the accessor caches).
+                    drumKits = remember {
+                        DrumKitCatalog.entries.map { DrumKitOption(it.program, it.displayName, it.familyIndex) }
+                    },
+                    drumKitFamilyNames = remember { DrumKitCatalog.familyNames },
                     // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
                     // Reader resolves address↔flat-staffIndex via its parts map for replay + persistence.
                     mixerProgramOverrides = {
@@ -669,8 +722,19 @@ private fun LibraryNavGraph(
                         prefsVm.setStaffVolume(addr.partIndex, addr.staffIndexInPart, volume.toDouble())
                     },
                     pipEnabled = pipEnabled,
+                    keepScreenAwake = keepScreenAwake,
                     showSeekBar = showSeekBar,
                     onShowSeekBarChange = { v -> scope.launch { prefs.setShowSeekBar(v) } },
+                    autoFollowEnabled = autoFollowEnabled,
+                    onAutoFollowChange = { v ->
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("autoFollow", v))
+                        scope.launch { prefs.setAutoFollow(v) }
+                    },
+                    pageTurnButtonsVisible = pageTurnButtonsVisible,
+                    onPageTurnButtonsVisibleChange = { v ->
+                        AndroidAnalytics.log(AndroidAnalytics.bridge.settingChangedToggle("pageTurnButtons", v))
+                        scope.launch { prefs.setPageTurnButtonsVisible(v) }
+                    },
                     initialRepeatModeLoader = { RepeatMode.fromWire(prefs.repeatMode.first()) },
                     loadAbRange = {
                         abRepeatStore.loadAbRepeat(currentScoreId)?.let { AbRepeatRange(it.first, it.second) }

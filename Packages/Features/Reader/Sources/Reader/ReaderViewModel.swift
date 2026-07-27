@@ -1,3 +1,8 @@
+// swiftlint:disable file_length
+// ReaderViewModel owns the whole Reader session: load state, every sub-model (repeat/tempo/volume/transpose/layout/
+// mixer), playback + PiP session wiring, playlist advance, and now the note-editing score-adoption reload path
+// (`adoptEditedScore`); that breadth keeps it just over the file_length budget.
+
 import CoreGraphics
 import Domain
 import Foundation
@@ -263,14 +268,14 @@ final class ReaderViewModel {
 
     private func wireRepeatModel() {
         // The repeat *mode* is global (persisted by `RepeatModel` itself via `RepeatModeStorage`); only the per-score
-        // A–B endpoints are saved here.
+        // A–B endpoints are saved here, and they snap against `playbackScore` (a playable PDF's parsed score too).
         repeatModel.onChange = { [weak self] in
             guard let self else { return }
             await preferencesStore.mutate { prefs in
                 prefs.abRepeat = self.repeatModel.abRange
             }
         }
-        repeatModel.scoreProvider = { [weak self] in self?.loadState.score }
+        repeatModel.scoreProvider = { [weak self] in self?.playbackScore }
         repeatModel.cursorProvider = { [weak self] in self?.playbackSession.playbackCursor }
         repeatModel.controllerProvider = { [weak self] in self?.playbackSession.controller }
         // Fired only on a Reader-initiated mode change (the inspector picker or `setMode`), never on a sync from
@@ -359,6 +364,17 @@ final class ReaderViewModel {
         }
     }
 
+    /// Adopt the edited score as the loaded score and re-prepare the audio engine against it (the engine's sequencer
+    /// still holds the pre-edit score). Mirrors the `advance(to:)` reload sequence without swapping the item — the
+    /// score item, preferences store, and playlist context are all unchanged; only the note content is new.
+    func adoptEditedScore(_ score: Score) async {
+        loadState = .loaded(score)
+        recomputeVisibleScore()
+        await playbackSession.releaseEngine()
+        await playbackSession.prepareForPlayback()
+        pipSession.armIfReady()
+    }
+
     /// Rebuild `visibleScore` from the loaded score and the current layout / transpose inputs. Cheap no-op when nothing
     /// is loaded. Called on load and from the layout / transpose change hooks, never from a view body.
     func recomputeVisibleScore() {
@@ -373,9 +389,9 @@ final class ReaderViewModel {
         visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
     }
 
-    /// Internal so both load paths in `ReaderViewModel+Load.swift` can reach the preference / last-opened helpers.
-    func loadOrSeedPreferences() async {
-        let prefs = await preferencesStore.loadOrSeed()
+    /// Reachable from both load paths; `authoredHiddenStaves` (empty for PDFs) are seeded in `loadOrSeed`.
+    func loadOrSeedPreferences(authoredHiddenStaves: Set<StaffAddress> = []) async {
+        let prefs = await preferencesStore.loadOrSeed(authoredHiddenStaves: authoredHiddenStaves)
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
         masterVolumeModel.sync(from: prefs)

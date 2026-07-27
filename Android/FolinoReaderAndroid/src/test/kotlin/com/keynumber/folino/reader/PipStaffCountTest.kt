@@ -14,6 +14,9 @@ class PipStaffCountTest {
                     defaultClefRawType = "treble",
                 )
             },
+            // Authored visibility is a separate axis from the hidden-staff SELECTION these tests cover,
+            // so every part here is authored-visible and the count is driven only by `hiddenStaves`.
+            isVisibleInScore = true,
         )
 
     @Test fun allVisibleTwoParts() {

@@ -67,6 +67,8 @@ final class AppBootstrap {
             .object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true
         crashReporter = FirebaseCrashReporter.configure(collectionEnabled: crashEnabled)
         configureAnalytics()
+        // Before any Reader / Settings view reads the key, so the first launch after the update already sees PiP on.
+        PictureInPictureOptOutMigration.apply(to: .standard)
         do {
             try prepareDirectories()
             cleanupLegacySoundfontCacheIfNeeded()
@@ -172,7 +174,7 @@ final class AppBootstrap {
 
         analytics.log(.settingsSnapshot(
             metronome: boolSetting(ReaderGlobalSettingsKey.metronomeEnabled, default: false),
-            pictureInPicture: boolSetting(ReaderGlobalSettingsKey.pictureInPictureEnabled, default: false),
+            pictureInPicture: boolSetting(ReaderGlobalSettingsKey.pictureInPictureEnabled, default: true),
             collapseMultiMeasureRests: boolSetting(ReaderGlobalSettingsKey.collapseMultiMeasureRests, default: false),
             showInvisibles: boolSetting(ReaderGlobalSettingsKey.showInvisibleElements, default: false),
             keepScreenAwake: boolSetting(ReaderGlobalSettingsKey.keepScreenAwakeEnabled, default: true),

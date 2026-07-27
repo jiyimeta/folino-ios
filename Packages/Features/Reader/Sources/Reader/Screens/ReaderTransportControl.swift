@@ -92,7 +92,9 @@ struct ReaderTransportControl: View {
                     transportPill
                 }
             } else if viewModel.isPDFPlaybackReady {
-                // No AB-loop endpoints for PDFs — the PDF reader has no inspector to set them.
+                // A playable PDF gets the full playback inspector, so AB-loop is selectable there and its endpoints
+                // belong here too — they snap against the parsed score like any other transport action.
+                endpointButtons(flat: false)
                 transportPill
             }
         }

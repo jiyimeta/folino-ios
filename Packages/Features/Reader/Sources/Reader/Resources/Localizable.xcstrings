@@ -1796,31 +1796,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Display adjustments like transpose and staff size aren't available for PDF scores."
+            "value" : "Display adjustments like staff size and hiding staves aren't available for PDF scores. Playback settings are."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 楽譜では移調や譜表サイズなどの表示調整は利用できません。"
+            "value" : "PDF 楽譜では譜表サイズや譜表の非表示などの表示調整は利用できませんが、再生設定は利用できます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 악보에서는 조옮김이나 보표 크기 같은 표시 조정을 사용할 수 없습니다."
+            "value" : "PDF 악보에서는 보표 크기나 보표 숨기기 같은 표시 조정을 사용할 수 없지만 재생 설정은 사용할 수 있습니다."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 乐谱不支持移调、谱表大小等显示调整。"
+            "value" : "PDF 乐谱不支持谱表大小、隐藏谱表等显示调整，但可以使用播放设置。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF 樂譜不支援移調、譜表大小等顯示調整。"
+            "value" : "PDF 樂譜不支援譜表大小、隱藏譜表等顯示調整，但可以使用播放設定。"
           }
         }
       }
@@ -2196,6 +2196,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回"
+          }
+        }
+      }
+    },
+    "reader.toolbar.edit.start" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit notes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符を編集"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음표 편집"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑音符"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯音符"
           }
         }
       }

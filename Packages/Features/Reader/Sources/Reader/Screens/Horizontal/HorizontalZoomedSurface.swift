@@ -15,6 +15,9 @@ struct HorizontalZoomedSurface: View {
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
+    /// `nil` (or `isEditing == false`) keeps taps on the manual-cursor seek path. While editing, taps route to
+    /// `editingHost.onTap` and the caret overlay is drawn on top — same seam the vertical surface uses.
+    var editingHost: ReaderEditingHost?
 
     var body: some View {
         if let doc = document {
@@ -43,9 +46,10 @@ struct HorizontalZoomedSurface: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
+                selection: editingHost?.isEditing == true ? (editingHost?.selection ?? .none) : .none,
+                voiceColors: ReaderEditingPresentation.voiceColors,
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
-            .coordinateSpace(name: "scoreSurface")
             .gesture(tapSeekGesture(document: doc))
             .sensoryFeedback(.impact(weight: .medium), trigger: lastManualCursor)
 
@@ -57,12 +61,21 @@ struct HorizontalZoomedSurface: View {
                     end: viewModel.repeatModel.pendingRepeatB,
                 )
             }
+
+            if let host = editingHost, host.isEditing {
+                EditingSelectionOverlay(host: host, score: score, document: doc)
+            }
         }
+        .coordinateSpace(name: "scoreSurface")
     }
 
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named("scoreSurface"))
             .onEnded { value in
+                if let host = editingHost, host.isEditing {
+                    host.onTap(value.location)
+                    return
+                }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor

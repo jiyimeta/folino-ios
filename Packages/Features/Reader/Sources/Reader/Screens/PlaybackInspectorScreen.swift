@@ -40,11 +40,18 @@ struct PlaybackInspectorScreen: View {
     @Bindable var repeatModel: RepeatModel
     let transposeModel: TransposeModel
     let score: Score
-    /// Live playback cursor. The tempo readout reads the score's effective tempo here so it tracks mid-score tempo
-    /// changes; `nil` (no cursor yet) resolves to the opening tempo.
-    let playbackCursor: ScoreCursor?
+    /// The live playback session. Only the tempo readout observes its `playbackCursor`, and it does so from the
+    /// isolated `TempoReadoutLine` leaf — NOT from this screen's `body`. Reading the high-frequency cursor here would
+    /// rebuild the whole inspector `List` every note during playback, which interrupted scrolling of the per-part
+    /// program `Menu`. Passing the session as a plain reference (never reading `.playbackCursor` in `body`) keeps the
+    /// per-tick invalidation confined to the leaf.
+    let playbackSession: ReaderPlaybackSession
     /// True when the Reader was opened from a playlist — gates whether the continuation row is shown.
     let isInPlaylist: Bool
+    /// Whether each staff row carries the show/hide eye. Every other control here drives the engine and so applies
+    /// verbatim to a playable PDF, but staff visibility re-derives the *rendered* score — which a fixed-layout PDF
+    /// can't do — so the PDF reader opts out.
+    var showsStaffVisibility = true
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled) private var isMetronomeEnabled = false
     @AppStorage(ReaderGlobalSettingsKey.precountEnabled) private var isPrecountEnabled = false
@@ -202,47 +209,15 @@ struct PlaybackInspectorScreen: View {
             // `spacing: 8` (not 4) keeps the slider's thumb on the lower line clear of the `−`/`+` stepper above it —
             // at the tighter spacing the thumb's circle visually grazed the stepper when the value sat near the top.
             VStack(alignment: .leading, spacing: 8) {
-                tempoReadoutLine(referenceBpm: referenceBpm, minBpm: minBpm, maxBpm: maxBpm)
+                TempoReadoutLine(
+                    tempoModel: tempoModel,
+                    session: playbackSession,
+                    score: score,
+                    referenceBpm: referenceBpm,
+                    minBpm: minBpm,
+                    maxBpm: maxBpm,
+                )
                 tempoSliderLine(referenceBpm: referenceBpm, minBpm: minBpm, maxBpm: maxBpm)
-            }
-        }
-    }
-
-    /// Top line of the tempo row: the engraved beat marking (glyph + value, tap to reset) and the ± stepper.
-    /// The marking governing the cursor supplies the beat note + printed value; `cursorTempoKey` (the section's quarter
-    /// bps) keys the roll animation — it changes only on a score-origin tempo change, not a slider / stepper edit.
-    @ViewBuilder
-    private func tempoReadoutLine(referenceBpm: Double, minBpm: Double, maxBpm: Double) -> some View {
-        // Stepper bumps the reference BPM by 1 and commits — one notch == one whole BPM at the opening tempo.
-        let stepperBpm = Binding<Double>(
-            get: { (tempoModel.displayMultiplier * referenceBpm).rounded() },
-            set: { newValue in
-                let clamped = min(max(newValue.rounded(), minBpm), maxBpm)
-                Task { await tempoModel.commitMultiplier(clamped / referenceBpm) }
-            },
-        )
-        let governing = score.governingTempo(at: playbackCursor)
-        let beatGlyph = governing?.beatGlyph ?? "\u{E1D5}"
-        let beatValue = Int(((governing?.beatsPerMinute ?? 120) * tempoModel.displayMultiplier).rounded())
-        let cursorTempoKey = governing?.beatsPerSecond ?? 2.0
-        // The readout/reset Button rides in the Stepper's own label so the List treats this as a labeled form row and
-        // gives the `−`/`+` the light `tertiarySystemFill`, matching the staff-size / transpose steppers. A bare
-        // `.labelsHidden()` Stepper renders as a standalone control with a darker fill that read as inconsistent.
-        Stepper(value: stepperBpm, in: minBpm ... maxBpm, step: 1) {
-            HStack(spacing: 8) {
-                Button {
-                    Task { await tempoModel.resetMultiplier() }
-                } label: {
-                    HStack(spacing: 4) {
-                        TempoBeatGlyph(glyph: beatGlyph, fontSize: 18)
-                        Text(verbatim: "= \(beatValue)")
-                            .font(.callout.monospacedDigit())
-                            .foregroundStyle(.primary)
-                            .contentTransition(.numericText(value: Double(beatValue)))
-                    }
-                    .animation(.default, value: cursorTempoKey)
-                }
-                Spacer()
             }
         }
     }
@@ -348,7 +323,9 @@ struct PlaybackInspectorScreen: View {
             .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isMuted))
             .accessibilityLabel(Text("reader.inspector.staffMute", bundle: .module))
 
-            StaffVisibilityButton(layoutModel: layoutModel, address: address)
+            if showsStaffVisibility {
+                StaffVisibilityButton(layoutModel: layoutModel, address: address)
+            }
         }
     }
 }
@@ -389,7 +366,7 @@ struct PlaybackInspectorScreen: View {
                 repeatModel: vm.repeatModel,
                 transposeModel: vm.transposeModel,
                 score: score,
-                playbackCursor: vm.playbackSession.playbackCursor,
+                playbackSession: vm.playbackSession,
                 isInPlaylist: true,
             )
         }

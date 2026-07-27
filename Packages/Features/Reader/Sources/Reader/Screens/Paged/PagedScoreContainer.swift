@@ -41,6 +41,10 @@ struct PagedScoreContainer: View {
     /// task never re-runs.
     let transposeSemitones: Int
     @Bindable var viewModel: ReaderViewModel
+    /// Note-editing seam, mirroring `VerticalScoreContainer`: while editing, taps select instead of seeking, the
+    /// rebuilt document is published to the host, and `editGeneration` joins the layout task's identity. Page turns
+    /// (swipe + tap zones) are unaffected — the editing overlay never takes touches.
+    var editingHost: ReaderEditingHost?
 
     @State var document: LayoutDocument?
     @State var pages: [Range<Int>] = []
@@ -125,6 +129,7 @@ struct PagedScoreContainer: View {
                         showInvisibleElements: showInvisibleElements,
                         pageHeight: viewportHeight,
                         transposeSemitones: transposeSemitones,
+                        editGeneration: editingHost?.editGeneration ?? 0,
                     )) {
                         await rebuildLayout(
                             width: contentWidth,
@@ -228,6 +233,7 @@ struct PagedScoreContainer: View {
                 showsHint: !pageTapHintDismissed && !viewModel.isAnnotating,
                 onAnyZoneTouchDown: { pageTapHintDismissed = true },
                 showsTapZones: showsPageTurnButtons,
+                editingHost: editingHost,
             )
         }
         // Full-bleed so pinch zoom can stretch the page band beyond the safe area; the hosted surface re-applies
@@ -434,6 +440,7 @@ struct PagedScoreContainer: View {
             policy: policy,
         )
         document = newDoc
+        editingHost?.document = newDoc
         pages = newPages
         if pageState.pageIndex >= newPages.count {
             pageState.pageIndex = max(0, newPages.count - 1)
@@ -449,6 +456,7 @@ struct PagedScoreContainer: View {
         let showInvisibleElements: Bool
         let pageHeight: CGFloat
         let transposeSemitones: Int
+        let editGeneration: Int
 
         init(
             score: Score,
@@ -459,7 +467,9 @@ struct PagedScoreContainer: View {
             showInvisibleElements: Bool,
             pageHeight: CGFloat,
             transposeSemitones: Int,
+            editGeneration: Int,
         ) {
+            self.editGeneration = editGeneration
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)

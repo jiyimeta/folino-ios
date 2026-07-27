@@ -65,8 +65,8 @@ public protocol ScoreFileGateway: Sendable {
 
     /// Write a `Score` to disk in the requested format.
     ///
-    /// v1 throws `DomainError.unsupportedFormat` for every format — `swift-sheet-music` does not yet expose a Score →
-    /// MSCX/MSCZ/MusicXML serializer. The method exists on the protocol so Editor can fill it in without touching
-    /// consumers.
+    /// Writes `.mscx`/`.mscz` via the engine's encoder — semantic round-trip guaranteed; throws
+    /// `DomainError.unsupportedFormat` for formats with no encoder (MusicXML/MXL/MIDI/PDF) and
+    /// `DomainError.scoreWriteFailed` on I/O or encode failure.
     func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) async throws
 }

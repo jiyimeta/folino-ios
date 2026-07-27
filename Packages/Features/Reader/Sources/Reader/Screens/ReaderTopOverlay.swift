@@ -27,6 +27,10 @@ struct ReaderTopOverlay: View {
     /// dialog. Defaults to a no-op so previews can omit it.
     var onShowPDFNotice: () -> Void = {}
 
+    /// Invoked when the user taps the "edit notes" button. `nil` hides the button entirely — the default, so previews
+    /// and PDF readers (which never wire an `editingHost`) are unaffected.
+    var onStartEditing: (() -> Void)?
+
     /// Vertical space the overlay occupies inside the safe area (button 40 + top padding 4 + a little breathing room).
     /// Used by `ReaderRootScreen` to extend the score's safe area so the first staff is never hidden under the floating
     /// buttons. `nonisolated` so non–main-actor contexts (preview helpers, `onGeometryChange` transform closures) can
@@ -56,12 +60,7 @@ struct ReaderTopOverlay: View {
             if case let .loaded(score) = viewModel.loadState {
                 loadedActions(score: score)
             } else if case .loadedPDF = viewModel.loadState {
-                HStack(spacing: 12) {
-                    annotationToggleButton()
-                        .interactiveGlassCompat()
-                    pdfLayoutButton
-                        .interactiveGlassCompat()
-                }
+                pdfActions
             }
         }
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
@@ -76,6 +75,14 @@ struct ReaderTopOverlay: View {
     private func loadedActions(score: Score) -> some View {
         HStack(spacing: 12) {
             scoreActionButtons()
+            if let onStartEditing {
+                overlayButton(
+                    systemImage: "square.and.pencil",
+                    label: Text("reader.toolbar.edit.start", bundle: .module),
+                    action: onStartEditing,
+                )
+                .interactiveGlassCompat()
+            }
             annotationToggleButton()
                 .interactiveGlassCompat()
             inspectorButtons(score: score)
@@ -164,29 +171,7 @@ struct ReaderTopOverlay: View {
     /// popover anchored to itself so the popover arrow points at the tapped icon.
     private func inspectorButtons(score: Score) -> some View {
         HStack(spacing: 0) {
-            overlayButton(
-                systemImage: "slider.vertical.3",
-                label: Text("reader.toolbar.showPlaybackSettings", bundle: .module),
-            ) {
-                viewModel.isPlaybackInspectorPresented.toggle()
-            }
-            .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
-                PlaybackInspectorScreen(
-                    mixerModel: viewModel.mixerModel,
-                    layoutModel: viewModel.layoutModel,
-                    tempoModel: viewModel.tempoModel,
-                    masterVolumeModel: viewModel.masterVolumeModel,
-                    a4ReferenceModel: viewModel.a4ReferenceModel,
-                    repeatModel: viewModel.repeatModel,
-                    transposeModel: viewModel.transposeModel,
-                    score: score,
-                    playbackCursor: viewModel.playbackSession.playbackCursor,
-                    isInPlaylist: viewModel.isInPlaylist,
-                )
-                .frame(idealWidth: 380, idealHeight: 600)
-                .presentationDetents([.large])
-                .presentationCompactAdaptation(.sheet)
-            }
+            playbackInspectorButton(score: score)
 
             overlayButton(
                 systemImage: "text.page",
@@ -207,8 +192,56 @@ struct ReaderTopOverlay: View {
         }
     }
 
-    /// The single inspector affordance for PDFs: a page/vertical layout toggle plus the "settings unavailable" note.
-    /// Replaces the score reader's playback + visual inspector pills, which require a parsed `Score`.
+    /// The playback-settings button and its popover. Shared by the score reader and — once a PDF's background OMR parse
+    /// succeeds — the PDF reader, which passes its parsed score and drops the render-derived staff-visibility eye.
+    private func playbackInspectorButton(score: Score, showsStaffVisibility: Bool = true) -> some View {
+        overlayButton(
+            systemImage: "slider.vertical.3",
+            label: Text("reader.toolbar.showPlaybackSettings", bundle: .module),
+        ) {
+            viewModel.isPlaybackInspectorPresented.toggle()
+        }
+        .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
+            PlaybackInspectorScreen(
+                mixerModel: viewModel.mixerModel,
+                layoutModel: viewModel.layoutModel,
+                tempoModel: viewModel.tempoModel,
+                masterVolumeModel: viewModel.masterVolumeModel,
+                a4ReferenceModel: viewModel.a4ReferenceModel,
+                repeatModel: viewModel.repeatModel,
+                transposeModel: viewModel.transposeModel,
+                score: score,
+                playbackSession: viewModel.playbackSession,
+                isInPlaylist: viewModel.isInPlaylist,
+                showsStaffVisibility: showsStaffVisibility,
+            )
+            .frame(idealWidth: 380, idealHeight: 600)
+            .presentationDetents([.large])
+            .presentationCompactAdaptation(.sheet)
+        }
+    }
+
+    /// Right-side buttons for a PDF: the annotation toggle, then an inspector pill pairing the playback inspector with
+    /// the PDF layout inspector. Playback settings all act on the engine, which plays a parsed PDF exactly as it plays
+    /// a native score, so the whole inspector applies — it just needs the parse to have landed (before that there is no
+    /// score to address, and the transport is withheld too).
+    private var pdfActions: some View {
+        HStack(spacing: 12) {
+            annotationToggleButton()
+                .interactiveGlassCompat()
+            HStack(spacing: 0) {
+                if viewModel.isPDFPlaybackReady, let score = viewModel.playbackScore {
+                    playbackInspectorButton(score: score, showsStaffVisibility: false)
+                }
+                pdfLayoutButton
+            }
+            .interactiveGlassCompat()
+        }
+    }
+
+    /// The PDF reader's display inspector: a page/vertical layout toggle plus the note about which display adjustments
+    /// a fixed-layout PDF can't offer. Stands in for the score reader's visual inspector, which derives its controls
+    /// from a rendered `Score`.
     private var pdfLayoutButton: some View {
         overlayButton(
             systemImage: "text.page",

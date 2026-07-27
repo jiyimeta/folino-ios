@@ -8,7 +8,10 @@ import SheetMusicCore
 protocol PlaybackMixerHost: AnyObject {
     var isPlaying: Bool { get }
     var playbackController: (any PlaybackController)? { get }
-    var loadState: ReaderViewModel.LoadState { get }
+    /// The score the engine is actually playing — the natively loaded score, or a PDF's parsed-for-playback score once
+    /// its background OMR parse succeeds. Reading this (rather than the load state's score) is what lets the mixer
+    /// address the staves of a playable PDF.
+    var playbackScore: Score? { get }
 }
 
 /// Owns the Reader's playback-mixer surface: per-staff mute / solo / volume, plus per-staff and per-part GM program
@@ -40,21 +43,21 @@ final class PlaybackMixerModel {
     func volume(for address: StaffAddress) -> Double {
         liveStaffVolumes[address]
             ?? staffVolumeOverrides[address]
-            ?? host?.loadState.score?.initialStaffVolume(at: address)
+            ?? host?.playbackScore?.initialStaffVolume(at: address)
             ?? Self.defaultVolume
     }
 
     /// Per-staff baseline used as the slider's reset target and tick position — the score's authored initial volume
     /// when present, otherwise the global default. Independent of any user override.
     func defaultVolume(for address: StaffAddress) -> Double {
-        host?.loadState.score?.initialStaffVolume(at: address)
+        host?.playbackScore?.initialStaffVolume(at: address)
             ?? Self.defaultVolume
     }
 
     func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
         liveStaffVolumes[address] = clamped
-        guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
         else { return }
         Task { [weak self] in
             await self?.host?.playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
@@ -68,7 +71,7 @@ final class PlaybackMixerModel {
         staffVolumeOverrides[address] = clamped
         liveStaffVolumes[address] = nil
         await onChange?()
-        guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
         else { return }
         await host?.playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
     }
@@ -79,7 +82,7 @@ final class PlaybackMixerModel {
         } else {
             mutedStaves.insert(address)
         }
-        guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
         else { return }
         let isMuted = mutedStaves.contains(address)
         Task { [weak self] in
@@ -93,7 +96,7 @@ final class PlaybackMixerModel {
         } else {
             soloStaves.insert(address)
         }
-        guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
         else { return }
         let isSolo = soloStaves.contains(address)
         Task { [weak self] in
@@ -109,7 +112,7 @@ final class PlaybackMixerModel {
         if let override = staffProgramOverrides[address] {
             return override
         }
-        return host?.loadState.score?.gmProgram(at: address) ?? 0
+        return host?.playbackScore?.gmProgram(at: address) ?? 0
     }
 
     func hasProgramOverride(for address: StaffAddress) -> Bool {
@@ -119,11 +122,11 @@ final class PlaybackMixerModel {
     func setStaffProgram(_ program: Int, for address: StaffAddress) async {
         staffProgramOverrides[address] = program
         await onChange?()
-        guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
         else { return }
         await host?.playbackController?.setStaffInstrument(
             staff: flatIndex,
-            bank: host?.loadState.score?.gmBank(at: address) ?? 0,
+            bank: host?.playbackScore?.gmBank(at: address) ?? 0,
             program: program,
         )
     }
@@ -131,12 +134,12 @@ final class PlaybackMixerModel {
     func clearStaffProgramOverride(for address: StaffAddress) async {
         staffProgramOverrides.removeValue(forKey: address)
         await onChange?()
-        guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
         else { return }
         await host?.playbackController?.setStaffInstrument(
             staff: flatIndex,
-            bank: host?.loadState.score?.gmBank(at: address) ?? 0,
-            program: host?.loadState.score?.gmProgram(at: address) ?? 0,
+            bank: host?.playbackScore?.gmBank(at: address) ?? 0,
+            program: host?.playbackScore?.gmProgram(at: address) ?? 0,
         )
     }
 
@@ -161,7 +164,7 @@ final class PlaybackMixerModel {
     func setPartProgram(_ program: Int, forPartIndex partIndex: Int) async {
         let addresses = partStaffAddresses(forPartIndex: partIndex)
         guard !addresses.isEmpty,
-              let score = host?.loadState.score,
+              let score = host?.playbackScore,
               score.parts.indices.contains(partIndex)
         else { return }
 
@@ -170,11 +173,11 @@ final class PlaybackMixerModel {
         }
         await onChange?()
         for address in addresses {
-            guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+            guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
             else { continue }
             await host?.playbackController?.setStaffInstrument(
                 staff: flatIndex,
-                bank: host?.loadState.score?.gmBank(at: address) ?? 0,
+                bank: host?.playbackScore?.gmBank(at: address) ?? 0,
                 program: program,
             )
         }
@@ -188,18 +191,18 @@ final class PlaybackMixerModel {
         }
         await onChange?()
         for address in addresses {
-            guard let flatIndex = host?.loadState.score?.flattenedStaffIndex(of: address)
+            guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
             else { continue }
             await host?.playbackController?.setStaffInstrument(
                 staff: flatIndex,
-                bank: host?.loadState.score?.gmBank(at: address) ?? 0,
-                program: host?.loadState.score?.gmProgram(at: address) ?? 0,
+                bank: host?.playbackScore?.gmBank(at: address) ?? 0,
+                program: host?.playbackScore?.gmProgram(at: address) ?? 0,
             )
         }
     }
 
     private func partStaffAddresses(forPartIndex partIndex: Int) -> [StaffAddress] {
-        guard let score = host?.loadState.score,
+        guard let score = host?.playbackScore,
               score.parts.indices.contains(partIndex)
         else { return [] }
         return score.parts[partIndex].staves.indices.map { staffIndex in

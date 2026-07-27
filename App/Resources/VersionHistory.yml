@@ -1,3 +1,29 @@
+- version: 1.8.7
+  descriptions:
+    - en: Added display support for fall and similar symbols
+      ja: フォール記号等の表示対応
+      ko: 폴(Fall) 기호 등의 표시 지원 추가
+      zh-Hans: 新增坠音等记号的显示支持
+      zh-Hant: 新增墜音等記號的顯示支援
+    - en: Apply the hidden-staff setting
+      ja: 譜表非表示設定を反映
+      ko: 보표 숨김 설정 반영
+      zh-Hans: 应用谱表隐藏设置
+      zh-Hant: 套用譜表隱藏設定
+- version: 1.8.6
+  descriptions:
+    - en: Minor improvements and bug fixes
+      ja: 細かな改善と不具合の修正
+      ko: 사소한 개선 및 버그 수정
+      zh-Hans: 细节改进与问题修复
+      zh-Hant: 細節改進與問題修復
+- version: 1.8.5
+  descriptions:
+    - en: Minor improvements and bug fixes
+      ja: 細かな改善と不具合の修正
+      ko: 사소한 개선 및 버그 수정
+      zh-Hans: 细节改进与问题修复
+      zh-Hant: 細節改進與問題修復
 - version: 1.8.4
   descriptions:
     - en: Minor improvements and bug fixes

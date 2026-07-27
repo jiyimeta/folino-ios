@@ -77,6 +77,8 @@ if isAndroid {
         .target(
             name: "FolinoSettingsJNI",
             dependencies: [
+                // For the shared review-prompt cadence, so Android prompts on the same launches as iOS.
+                "Domain",
                 "SettingsLogic",
                 .product(name: "Wirelet", package: "swift-wirelet"),
                 .product(name: "SwiftJava", package: "swift-java"),

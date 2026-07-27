@@ -9,7 +9,7 @@ extension ReaderViewModel {
     func loadScoreFile(url: URL) async {
         do {
             let (score, _) = try await gateway.loadScore(fileURL: url)
-            await loadOrSeedPreferences()
+            await loadOrSeedPreferences(authoredHiddenStaves: score.authoredHiddenStaffAddresses)
             loadState = .loaded(score)
             recomputeVisibleScore()
             pipSession.armIfReady()

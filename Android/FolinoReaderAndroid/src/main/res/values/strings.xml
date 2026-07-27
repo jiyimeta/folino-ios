@@ -12,6 +12,8 @@
     <string name="reader_pref_collapse_rests">Collapse multi-measure rests</string>
     <string name="reader_pref_show_invisible">Show hidden elements</string>
     <string name="reader_pref_show_seek_bar">Show seek bar</string>
+    <string name="reader_pref_auto_follow">Auto-scroll</string>
+    <string name="reader_pref_page_turn_buttons">Page-turn buttons</string>
     <string name="reader_display_settings">Display settings</string>
     <string name="reader_share">Share</string>
     <string name="reader_staff_hide">Hide staff</string>
@@ -49,6 +51,7 @@
     <string name="reader_playback_stop">Stop</string>
     <string name="reader_edit_info">Edit info</string>
     <string name="reader_playback_metronome">Metronome</string>
+    <string name="reader_inspector_precount">Count-in</string>
     <string name="reader_playback_volume">Volume</string>
     <string name="reader_inspector_continuation">Playlist</string>
     <string name="reader_continuation_off">Off</string>

@@ -30,24 +30,28 @@ final class ReaderPreferencesStore {
 
     /// Loads the persisted preferences if any, otherwise seeds defaults and writes them through. Either way
     /// the resolved value lands in `preferences` and is returned for the caller to distribute into sub-models.
+    ///
+    /// `authoredHiddenStaves` are the staves the score file authored as hidden (MuseScore `<Part><show>0</show>`, via
+    /// `Score.authoredHiddenStaffAddresses`). They open hidden by default: a brand-new row seeds them directly, and a
+    /// row created before this feature is back-filled with them ONCE (unioned with anything the user already hid) and
+    /// then marked seeded. On every subsequent open the stored row wins untouched, so a staff the user reveals stays
+    /// revealed. Callers with no notation score (PDFs) pass the empty default.
     @discardableResult
-    func loadOrSeed() async -> ReaderPreferences {
-        do {
-            if let stored = try await repository.loadReaderPreferences(for: scoreItemID) {
-                preferences = stored
-                return stored
-            }
-        } catch {
-            // Persistence error is non-fatal; fall through to seed defaults.
-        }
-        let seeded = ReaderPreferences(
+    func loadOrSeed(authoredHiddenStaves: Set<StaffAddress> = []) async -> ReaderPreferences {
+        // A persistence error is non-fatal — `try?` collapses "no row" and "load failed" alike into
+        // the no-stored-value seed path. `reconcilingAuthoredHidden` is the shared iOS/Android rule.
+        let stored = await (try? repository.loadReaderPreferences(for: scoreItemID))
+        let (resolved, shouldPersist) = ReaderPreferences.reconcilingAuthoredHidden(
+            stored: stored,
+            authoredHiddenStaves: authoredHiddenStaves,
             scoreItemID: scoreItemID,
-            staffSize: defaultStaffSize,
-            hiddenStaves: [],
+            defaultStaffSize: defaultStaffSize,
         )
-        preferences = seeded
-        try? await repository.saveReaderPreferences(seeded)
-        return seeded
+        preferences = resolved
+        if shouldPersist {
+            try? await repository.saveReaderPreferences(resolved)
+        }
+        return resolved
     }
 
     /// Applies `apply` to a working copy, then re-seats through `ReaderPreferences.init` so clamping rules
@@ -70,6 +74,7 @@ final class ReaderPreferencesStore {
             masterVolume: copy.masterVolume,
             transposeSemitones: copy.transposeSemitones,
             a4ReferenceHz: copy.a4ReferenceHz,
+            hasSeededAuthoredVisibility: copy.hasSeededAuthoredVisibility,
         )
         preferences = normalized
         try? await repository.saveReaderPreferences(normalized)

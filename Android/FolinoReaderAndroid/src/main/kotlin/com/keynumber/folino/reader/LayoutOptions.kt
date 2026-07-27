@@ -27,6 +27,16 @@ data class LayoutOptions(
     val showInvisibleElements: Boolean,
     val hiddenStaves: Set<StaffAddress>,
     val clefOverrides: Map<StaffAddress, String>,
+    /**
+     * Whole-score notation transposition in semitones (−7..7; 0 = concert pitch). Per-score, unlike the
+     * rest of these, but it rides here because it is another re-spelling applied before layout — the
+     * engine re-lays out on any change to this holder, which is exactly what a transpose needs.
+     *
+     * This is the NOTATION half. The audible half is a tuning shift on the engine
+     * (`AndroidPlaybackEngine.setTranspose`); both have to be driven or the score looks transposed
+     * while sounding at pitch.
+     */
+    val transposeSemitones: Int = 0,
 ) {
     fun encode(): ByteArray = LayoutOptionsWireCodec.encode(
         LayoutOptionsWire(
@@ -44,6 +54,7 @@ data class LayoutOptions(
             showsInvisibleElements = if (showInvisibleElements) 1u else 0u,
             hiddenStaves = hiddenStaves.map { HiddenStaffWire(it.partIndex, it.staffIndexInPart) },
             clefOverrides = clefOverrides.map { (a, raw) -> ClefOverrideWire(a.partIndex, a.staffIndexInPart, raw) },
+            transposeSemitones = transposeSemitones,
         ),
     )
 
@@ -84,6 +95,8 @@ fun layoutOptionsFromPrefs(
     showInvisible: Boolean,
     hiddenStaves: Set<String>,
     clefOverrides: Set<String>,
+    /** Per-score, from the ReaderPreferences bridge rather than SettingsPrefs — see [LayoutOptions]. */
+    transposeSemitones: Int = 0,
 ): LayoutOptions = LayoutOptions(
     mode = ReaderLayoutMode.fromPref(layoutMode),
     staffSize = staffSize,
@@ -97,13 +110,25 @@ fun layoutOptionsFromPrefs(
         val addr = StaffAddress.parse(entry.substring(0, eq)) ?: return@mapNotNull null
         addr to entry.substring(eq + 1)
     }.toMap(),
+    transposeSemitones = transposeSemitones,
 )
 
 /** One staff within a part, for the inspector's Parts section. */
 data class StaffDescriptor(val address: StaffAddress, val defaultClefRawType: String)
 
-/** One part (instrument) with its staves, for the inspector's Parts section. */
-data class PartDescriptor(val name: String, val staves: List<StaffDescriptor>)
+/**
+ * One part (instrument) with its staves, for the inspector's Parts section. [isVisibleInScore] mirrors MuseScore's
+ * `<Part><show>` (false when the file authored the part as hidden), from the ssm `PartWire`.
+ */
+data class PartDescriptor(val name: String, val staves: List<StaffDescriptor>, val isVisibleInScore: Boolean)
+
+/**
+ * Staff addresses of every part the file authored as hidden (`isVisibleInScore == false`). Mirrors the shared Swift
+ * `Score.authoredHiddenStaffAddresses` — a hidden part contributes all of its staves. The app layer seeds these into
+ * the per-score hidden-staff set so an authored-hidden instrument opens hidden by default.
+ */
+fun List<PartDescriptor>.authoredHiddenStaffAddresses(): Set<StaffAddress> =
+    filter { !it.isVisibleInScore }.flatMap { part -> part.staves.map { it.address } }.toSet()
 
 /**
  * Flat `staffIndex -> StaffAddress` map for the mixer. The engine addresses mixer channels by a flat
