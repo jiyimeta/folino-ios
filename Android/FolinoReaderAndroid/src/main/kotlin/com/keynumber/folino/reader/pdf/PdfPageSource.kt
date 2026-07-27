@@ -33,24 +33,55 @@ internal object PdfPageWindow {
 }
 
 /**
+ * Whether a just-finished render for ([generation], [widthPx]) may still be installed into the cache
+ * slot it was launched for, given that slot's CURRENT state ([cachedGeneration], [cachedWidthPx]) and
+ * whether the source has since been [closed]. False in every case means: discard the render (and
+ * recycle it — it was never handed to any caller) instead of writing it into the cache.
+ *
+ * This is the exact predicate [PdfPageSource.renderAndCache] guards its cache write with, pulled out
+ * as pure `Int`/`Boolean` logic (no `PdfRenderer`, `Bitmap`, or coroutine involved) specifically so the
+ * race it closes — a stale render from an evicted-then-recreated slot installing over, or racing to
+ * overwrite, a newer render for the same page index — is unit-testable off-device. The one case this
+ * function does NOT cover is an evicted slot (removed from the cache entirely, not just recreated):
+ * callers are expected to treat `cache[index] == null` as an immediate "don't install" on their own,
+ * since there is no cached state left to compare against.
+ */
+internal object PdfRenderInstall {
+    fun canInstall(generation: Int, widthPx: Int, cachedGeneration: Int, cachedWidthPx: Int, closed: Boolean): Boolean {
+        if (closed) return false
+        if (cachedGeneration != generation) return false
+        if (cachedWidthPx != widthPx) return false
+        return true
+    }
+}
+
+/**
  * Rasterizes pages of [file] on demand and caches only a window of them, so a 20+ page score
  * doesn't hold every page's bitmap in memory at once (a full-page bitmap at high zoom is many
  * megabytes). Callers drive the window with [setWindow] as the visible page changes; the render
  * surfaces (Tasks 7/8) fetch bitmaps with [bitmap].
  *
+ * **Construction is blocking.** The constructor opens the file, creates the `PdfRenderer`, and walks
+ * every page once to precompute [pageSizesPt] (see below) — unbounded work proportional to the page
+ * count, run synchronously on whatever thread constructs this. Tasks 7/8 must build a `PdfPageSource`
+ * off the main thread (e.g. `Dispatchers.IO`, as `ReaderViewModel.openPdf` already does), never inline
+ * in a `@Composable` or a main-thread call site. A throw partway through construction (a corrupt page)
+ * closes whatever of the descriptor/renderer was already opened before propagating, so a failed
+ * construction never leaks — see the `try`/`catch` around [renderer] and [pageSizesPt] below.
+ *
  * `PdfRenderer` permits only one open `Page` at a time process-wide for a given renderer instance —
  * concurrent access is a documented crash, not just a performance concern. Every touch of [renderer]
- * or a `Page` it opens happens inside [rendererLock] — that includes [renderAndCache]'s render call
- * (which runs on [dispatcher], a dedicated single-thread executor, so a render never blocks the
- * caller's thread — typically the main thread for Compose call sites) and [close]'s teardown.
+ * or a `Page` it opens happens inside [rendererLock] — that includes the constructor's page-size
+ * sweep, [renderAndCache]'s render call (which runs on [dispatcher], a dedicated single-thread
+ * executor, so a render never blocks the caller's thread — typically the main thread for Compose call
+ * sites), and [close]'s teardown.
  *
- * [pageSizePt] does NOT take [rendererLock]: every page's size is read once, up front, in the
- * constructor — under the lock, before any render can be enqueued — into [pageSizesPt], so the hot
- * path is a plain array lookup. That matters because [pageSizePt] is not `suspend`: routing it
- * through [dispatcher] would mean blocking the caller (`runBlocking`), which risks deadlock if ever
- * called from a coroutine already running on [dispatcher], and taking [rendererLock] synchronously
- * would block the caller behind an in-flight render (150-400ms for a large page) — the exact
- * main-thread stall [dispatcher] exists to avoid.
+ * [pageSizePt] does NOT take [rendererLock] on the hot path: every page's size is read once, up front,
+ * in the constructor into [pageSizesPt], so normal lookups are a plain array read. That matters because
+ * [pageSizePt] is not `suspend`: routing it through [dispatcher] would mean blocking the caller
+ * (`runBlocking`), which risks deadlock if ever called from a coroutine already running on [dispatcher],
+ * and taking [rendererLock] synchronously would block the caller behind an in-flight render (150-400ms
+ * for a large page) — the exact main-thread stall [dispatcher] exists to avoid.
  *
  * A second, short lock, [cacheLock], separately guards [cache] and [closed]: [ensureRenderJob],
  * [renderAndCache]'s cache update, [setWindow], and the bookkeeping half of [close] all take it.
@@ -68,7 +99,7 @@ internal class PdfPageSource(file: File) : AutoCloseable {
 
     // Guards every access to `renderer`/its pages (the constructor's page-size sweep, `renderAndCache`'s
     // render call, and `close`'s renderer/descriptor teardown). See the class doc for why `pageSizePt`
-    // deliberately does NOT take this lock.
+    // deliberately does NOT take this lock on its hot path.
     private val rendererLock = Any()
 
     // Guards `cache`, `closed`, and `nextGeneration` — everything that decides what's cached and
@@ -76,14 +107,32 @@ internal class PdfPageSource(file: File) : AutoCloseable {
     private val cacheLock = Any()
 
     private val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-    private val renderer = PdfRenderer(descriptor)
+
+    // If `PdfRenderer(descriptor)` throws (e.g. a corrupt file), nobody will ever hold a reference to
+    // this half-constructed instance to call `close()` on — the throw propagates straight out of `<init>`
+    // to the caller (`ReaderViewModel.openPdf`'s `catch`). Close the descriptor ourselves before
+    // rethrowing, or its fd survives to finalization instead of being released promptly.
+    private val renderer = try {
+        PdfRenderer(descriptor)
+    } catch (t: Throwable) {
+        descriptor.close()
+        throw t
+    }
 
     val pageCount: Int = renderer.pageCount
 
     // Read once, up front, under `rendererLock` (before the object is published to any other thread,
     // so the lock here is belt-and-suspenders rather than load-bearing) — see the class doc for why.
-    private val pageSizesPt: Array<Size> = synchronized(rendererLock) {
-        Array(pageCount) { i -> renderer.openPage(i).use { page -> Size(page.width, page.height) } }
+    // Same leak hazard as `renderer` above: a throw mid-sweep (a corrupt page) must close both the
+    // renderer and the descriptor before propagating, since — again — nothing else can reach them yet.
+    private val pageSizesPt: Array<Size> = try {
+        synchronized(rendererLock) {
+            Array(pageCount) { i -> renderer.openPage(i).use { page -> Size(page.width, page.height) } }
+        }
+    } catch (t: Throwable) {
+        renderer.close()
+        descriptor.close()
+        throw t
     }
 
     private val cache = HashMap<Int, CachedPage>()
@@ -100,8 +149,18 @@ internal class PdfPageSource(file: File) : AutoCloseable {
     /**
      * [PdfRenderer.Page.getWidth]/[getHeight] for [index], in PDF points (1/72 inch). Precomputed at
      * construction (see [pageSizesPt]): a plain array lookup, no lock, never touches [renderer].
+     *
+     * Unlike [bitmap], which treats an out-of-range index as a soft "nothing to show" (returns null —
+     * a render surface's index can legitimately be stale for a tick), an out-of-range index here is a
+     * caller bug: every real call site (`ReaderViewModel.openPdf`'s page-size sweep) iterates
+     * `0 until pageCount` itself, so there's no legitimate reason to ask for a size outside that range.
+     * [require] makes that an explicit, documented contract instead of an incidental
+     * `ArrayIndexOutOfBoundsException` from [pageSizesPt].
      */
-    fun pageSizePt(index: Int): Size = pageSizesPt[index]
+    fun pageSizePt(index: Int): Size {
+        require(index in 0 until pageCount) { "index $index out of range [0, $pageCount)" }
+        return pageSizesPt[index]
+    }
 
     /**
      * The rasterized bitmap for [index] at [widthPx] wide (height follows the page's aspect ratio),
@@ -151,10 +210,14 @@ internal class PdfPageSource(file: File) : AutoCloseable {
                 return@synchronized inFlight
             }
             // A different width superseded whatever this page was rendering (or caching) before. The
-            // entry (and so its generation) is reused — only its width/job are replaced.
+            // entry (and so its generation) is reused — only its bitmap/width/job are replaced. Clearing
+            // `bitmap` HERE, in lockstep with `widthPx`, is what keeps the cache-hit check above honest:
+            // without it, a request for the new width could match `widthPx == widthPx` while `bitmap`
+            // still held the OLD width's pixels, handing out a wrong-resolution bitmap.
             inFlight?.cancel()
             val job = scope.async { renderAndCache(index, widthPx, cached.generation) }
             cached.job = job
+            cached.bitmap = null
             cached.widthPx = widthPx
             job
         }
@@ -165,7 +228,10 @@ internal class PdfPageSource(file: File) : AutoCloseable {
      * [generation] pins this render to the specific cache-slot instance [ensureRenderJob] launched it
      * for: if [setWindow] evicted that slot and a later call recreated it (getting a NEW generation)
      * before this render finished, [generation] no longer matches and the result is discarded instead
-     * of being installed over — or racing to overwrite — the newer slot's own in-flight render.
+     * of being installed over — or racing to overwrite — the newer slot's own in-flight render. The
+     * eviction case (the slot is gone entirely) and the generation/width-mismatch cases (the slot
+     * exists but moved on) are checked separately below; see [PdfRenderInstall.canInstall] for the
+     * latter, extracted specifically so that part is unit-testable without a real `PdfRenderer`.
      */
     private fun renderAndCache(index: Int, widthPx: Int, generation: Int): Bitmap? {
         val rendered = try {
@@ -188,11 +254,11 @@ internal class PdfPageSource(file: File) : AutoCloseable {
         }
         synchronized(cacheLock) {
             val cached = cache[index]
-            // The slot was dropped by `setWindow`, recreated (a different generation), replaced by a
-            // newer width, or the source was closed — all while this render was in flight. `rendered`
-            // was never handed to any caller at this point, so recycling it here is safe (nothing else
-            // can hold a reference to it).
-            if (closed || cached == null || cached.generation != generation || cached.widthPx != widthPx) {
+            // `rendered` was never handed to any caller at this point (a discarded render here is
+            // recycled, never installed), so recycling it in either branch below is always safe.
+            if (cached == null ||
+                !PdfRenderInstall.canInstall(generation, widthPx, cached.generation, cached.widthPx, closed)
+            ) {
                 rendered?.recycle()
                 return null
             }
