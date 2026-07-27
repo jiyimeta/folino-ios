@@ -92,6 +92,7 @@ import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
 import com.keynumber.folino.reader.ink.ErasePhase
+import com.keynumber.folino.reader.pdf.PagedPdfScore
 import com.keynumber.folino.reader.pdf.PdfVerticalScore
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
@@ -953,11 +954,22 @@ fun ReaderScreen(
                     )
                 }
                 is ReaderState.ReadyPdf -> when (layoutMode) {
-                    // Page mode for a PDF is Task 8's PagedPdfScore; nothing renders in that mode until
-                    // then. Horizontal is not reachable for a PDF (Task 5 removed it from the offered
-                    // modes for this state), so it falls to the vertical surface below along with
-                    // VERTICAL itself — the same "everything else" fallback the plan calls for.
-                    ReaderLayoutMode.PAGE -> {}
+                    // Horizontal is not reachable for a PDF (Task 5 removed it from the offered modes for
+                    // this state), so it falls to the vertical surface below along with VERTICAL itself —
+                    // the same "everything else" fallback the plan calls for.
+                    ReaderLayoutMode.PAGE -> readerVm.pdfPageSource?.let { pdfSource ->
+                        PagedPdfScore(
+                            state = s,
+                            source = pdfSource,
+                            audioVm = audioVm,
+                            readerVm = readerVm,
+                            pageTapHintDismissed = pageTapHintDismissed,
+                            onDismissPageTapHint = onDismissPageTapHint,
+                            autoFollowEnabled = autoFollowEnabled,
+                            pageTurnButtonsVisible = pageTurnButtonsVisible,
+                            annotation = annotationSurface,
+                        )
+                    }
                     else -> readerVm.pdfPageSource?.let { pdfSource ->
                         PdfVerticalScore(
                             state = s,
