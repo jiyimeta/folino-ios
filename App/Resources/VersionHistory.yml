@@ -1,3 +1,10 @@
+- version: 1.9.0
+  descriptions:
+    - en: Added a score editing mode
+      ja: 楽譜編集モードを追加
+      ko: 악보 편집 모드 추가
+      zh-Hans: 新增乐谱编辑模式
+      zh-Hant: 新增樂譜編輯模式
 - version: 1.8.7
   descriptions:
     - en: Added display support for fall and similar symbols
