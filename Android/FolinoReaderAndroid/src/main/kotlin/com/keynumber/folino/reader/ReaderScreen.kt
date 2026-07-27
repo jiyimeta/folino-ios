@@ -73,10 +73,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -1115,15 +1117,16 @@ private fun ReadyScore(
     // finger-up for the whole asynchronous commit. A retained copy is frozen at the transform captured when
     // the stroke finished, so a camera change retires it: a brief blink beats a stroke sitting at the old
     // zoom over a rescaled score. [inkHandoff] itself is a parameter now (hoisted to ReaderScreen — its
-    // declaration site there explains why), but this camera-retire watch stays here since it needs the
-    // local `scale` state. Watched through snapshotFlow rather than as LaunchedEffect keys: `scale`
-    // changes every frame of a pinch, and keying on it would cancel and relaunch the effect just as often.
+    // declaration site there explains why), but this camera-retire watch stays here since it needs this
+    // surface's `viewport.scale`. Watched through snapshotFlow rather than as LaunchedEffect keys: the
+    // scale changes every frame of a pinch, and keying on it would cancel and relaunch the effect just as
+    // often.
     LaunchedEffect(Unit) {
         snapshotFlow { viewport.scale }.drop(1).collect { annotation?.inkHandoff?.releaseAll() }
     }
 
     // The layout width is reported by ReaderScreen's content Box (composed for every state), so the
-    // engine has it before the first layout — `viewportSize` here is only for scroll / zoom / tap math.
+    // engine has it before the first layout — `viewportSize` here is only for pan / zoom / tap math.
     val contentWidthPx = (page.widthMM.toFloat() * fitPxPerMM * scale)
     val contentHeightPx = (page.heightMM.toFloat() * fitPxPerMM * scale)
     val isZoomed = contentWidthPx > viewportSize.width + 0.5f
@@ -1266,6 +1269,11 @@ private fun ReadyScore(
                 scope = scope,
                 key = fitPxPerMM,
                 enabled = fitPxPerMM > 0f,
+                // `annotationMode` is a plain composition value, not observable state, so this lambda is only
+                // correct because `allowFling` below carries the same value INTO the `pointerInput` key list:
+                // arming the pen restarts the handler and rebuilds this lambda with the new answer. Do not
+                // decouple the two — leaving `allowFling` out of the keys would strand single-finger pan on a
+                // stale `false`/`true` and let it steal pen strokes.
                 allowSingleFingerPan = { !annotationMode },
                 allowFling = !annotationMode,
                 onManualViewportChange = audioVm::suspendPlaybackFollowForManualViewportChange,
@@ -1285,13 +1293,23 @@ private fun ReadyScore(
                 .graphicsLayer {
                     translationX = -viewport.offsetX
                     translationY = -viewport.offsetY
+                }
+                // Measure the content UNBOUNDED and report the viewport's size upward. `verticalScroll` did
+                // exactly this (an infinite max on its axis) and it was the only thing letting the content box
+                // be taller than the screen: `Modifier.size` enforces the constraints it is handed, so under
+                // the viewport's bounded constraints a document-tall box is silently coerced to a screenful,
+                // taking every band, every fillMaxSize overlay, and the document-sized ink View down with it.
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(Constraints())
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
                 },
         ) {
             Box(
                 Modifier.size(
                     width = with(density) { contentWidthPx.toDp() },
-                    // `bottomPadPx` extends the scrollable extent below the page (top-anchored content),
-                    // so scrolling to the end reveals empty space tall enough to clear the floating FAB.
+                    // `bottomPadPx` adds run-out below the page (top-anchored content), so panning to the end
+                    // reveals empty space tall enough to clear the floating FAB. The pannable extent itself
+                    // comes from `ViewportGeometry.fixedPadYPx`, which folds in this same value.
                     height = with(density) { (contentHeightPx + vPadPx * 2 + bottomPadPx).toDp() },
                 ),
             ) {
@@ -1316,14 +1334,15 @@ private fun ReadyScore(
                 }
                 // Banded, not plain `ScorePage`: the vertical layout is ONE page as tall as the whole
                 // document, so a single Canvas would put every command of the score in one display list.
-                // Scrolling does not re-record that list (a scroll container places its content with its
-                // own layer), but the renderer still walks and rejects every op each frame — tens of
-                // thousands of them on a long score. `BandedScorePage` slices the page and gives each
-                // band its own layer, so off-screen bands are rejected once by their bounds.
+                // Panning does not re-record that list (the panning Box above owns a `graphicsLayer`, so
+                // the whole content is placed into its own RenderNode), but the renderer still walks and
+                // rejects every op each frame — tens of thousands of them on a long score.
+                // `BandedScorePage` slices the page and gives each band its own layer, so off-screen bands
+                // are rejected once by their bounds.
                 //
                 // It also stops the overlays below from dragging the score into their re-records: while
-                // the score shared the scroll container's layer, every playback-cursor tick (~30/s),
-                // every ink frame, and every A–B marker change re-recorded all of the score's commands.
+                // the score shared the pan layer, every playback-cursor tick (~30/s), every ink frame, and
+                // every A–B marker change re-recorded all of the score's commands.
                 // Deliberately NOT wrapped in a `graphicsLayer` here — that would collapse the bands back
                 // into one layer and undo both effects.
                 //

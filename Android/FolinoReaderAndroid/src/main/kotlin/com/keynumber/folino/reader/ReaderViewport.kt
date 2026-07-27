@@ -178,6 +178,23 @@ internal class ReaderViewportState(
 
     private var flingJob: Job? = null
 
+    // Whoever moved the viewport most recently owns it. A programmatic animation captures the generation it
+    // started at and abandons its trajectory the moment something else claims the axis, instead of writing
+    // over it every frame. `ScrollState` got this from `ScrollableState`'s `MutatorMutex`, which cancelled a
+    // running `animateScrollTo` when a drag arrived at user-input priority; nothing here would otherwise stop
+    // an auto-follow re-pin from fighting the reader's finger for the rest of its spring. Per axis, because
+    // the vertical surface's auto-follow animates Y and X from one coroutine and a shared counter would have
+    // the X call cancel the Y animation.
+    private var motionGenerationX = 0
+    private var motionGenerationY = 0
+
+    /** Claim both axes for the reader — called when a finger lands, so any programmatic motion stands down. */
+    fun interruptMotion() {
+        cancelFling()
+        motionGenerationX++
+        motionGenerationY++
+    }
+
     private fun clampX(value: Float, atScale: Float = scale): Float = clampAxisOffset(
         value,
         axisContentPx(geometry.unitContentWidthPx, geometry.fixedPadXPx, atScale),
@@ -234,13 +251,23 @@ internal class ReaderViewportState(
     }
 
     suspend fun animateOffsetXTo(target: Float) {
+        val generation = ++motionGenerationX
         AnimationState(initialValue = offsetX).animateTo(clampX(target), AUTO_FOLLOW_SPEC) {
+            if (generation != motionGenerationX) {
+                cancelAnimation()
+                return@animateTo
+            }
             offsetX = clampX(value)
         }
     }
 
     suspend fun animateOffsetYTo(target: Float) {
+        val generation = ++motionGenerationY
         AnimationState(initialValue = offsetY).animateTo(clampY(target), AUTO_FOLLOW_SPEC) {
+            if (generation != motionGenerationY) {
+                cancelAnimation()
+                return@animateTo
+            }
             offsetY = clampY(value)
         }
     }
@@ -258,12 +285,20 @@ internal class ReaderViewportState(
     fun startFling(scope: CoroutineScope, density: Density, velocity: Velocity) {
         cancelFling()
         if (abs(velocity.x) < 1f && abs(velocity.y) < 1f) return
+        // The coast drives both axes, so it claims both. An auto-follow re-pin arriving mid-coast bumps the
+        // axis it animates and takes it cleanly, instead of the decay and the spring writing alternate frames.
+        val generationX = ++motionGenerationX
+        val generationY = ++motionGenerationY
         flingJob = scope.launch {
             val decay = splineBasedDecay<Float>(density)
             coroutineScope {
                 launch {
                     AnimationState(initialValue = offsetX, initialVelocity = -velocity.x)
                         .animateDecay(decay) {
+                            if (generationX != motionGenerationX) {
+                                cancelAnimation()
+                                return@animateDecay
+                            }
                             val clamped = clampX(value)
                             offsetX = clamped
                             if (clamped != value) cancelAnimation()
@@ -272,6 +307,10 @@ internal class ReaderViewportState(
                 launch {
                     AnimationState(initialValue = offsetY, initialVelocity = -velocity.y)
                         .animateDecay(decay) {
+                            if (generationY != motionGenerationY) {
+                                cancelAnimation()
+                                return@animateDecay
+                            }
                             val clamped = clampY(value)
                             offsetY = clamped
                             if (clamped != value) cancelAnimation()
@@ -344,7 +383,7 @@ internal fun Modifier.readerViewportGestures(
     val slop = viewConfiguration.touchSlop
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
-        state.cancelFling()
+        state.interruptMotion()
         val tracker = VelocityTracker()
         var notifiedManual = false
         var panned = false
