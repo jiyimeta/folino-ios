@@ -38,6 +38,33 @@ struct ReaderTopOverlay: View {
     nonisolated static let height: CGFloat = 52
 
     var body: some View {
+        // Two candidate rows, widest first: `ViewThatFits` falls back to the collapsed one only when the full row of
+        // discrete buttons would not fit the screen. On a loaded score with the edit affordance the wide row needs
+        // ~400pt including the horizontal padding, so 375pt-wide phones (12/13 mini, SE) — and any device narrower
+        // than the row — fold score-info and share into a single overflow menu instead of overflowing.
+        ViewThatFits(in: .horizontal) {
+            row(collapsesScoreActions: false)
+            row(collapsesScoreActions: true)
+        }
+        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+        .padding(.horizontal)
+        .padding(.top, 4)
+        // Presentation lives outside `ViewThatFits` so the sheets are attached once, independent of which candidate
+        // row is rendered — a candidate swap (rotation, split-view resize) must not tear down an open sheet.
+        .sheet(isPresented: $viewModel.isScoreInfoPresented) {
+            EditScoreInfoSheet(model: viewModel, item: viewModel.scoreItem)
+                .onAppear { viewModel.analytics.logScreen(.scoreInfo) }
+        }
+        .sheet(item: $viewModel.shareTarget) { target in
+            ActivityViewControllerRepresentable(items: target.urls)
+        }
+    }
+
+    /// One candidate row for `ViewThatFits`. `collapsesScoreActions` picks between the two score-action presentations;
+    /// everything else is identical, so the fallback differs from the preferred row by exactly one 44pt button.
+    /// The spacer takes `minLength: 0` because the enclosing `HStack`'s own 12pt spacing already guarantees a 24pt gap
+    /// — measuring against a larger minimum would collapse the row on devices where it genuinely still fits.
+    private func row(collapsesScoreActions: Bool) -> some View {
         HStack(spacing: 12) {
             if let onBack {
                 overlayButton(
@@ -55,26 +82,27 @@ struct ReaderTopOverlay: View {
                 Button { onShowPDFNotice() } label: { PDFBadge() }
                     .buttonStyle(.plain)
             }
-            Spacer()
+            Spacer(minLength: 0)
 
             if case let .loaded(score) = viewModel.loadState {
-                loadedActions(score: score)
+                loadedActions(score: score, collapsesScoreActions: collapsesScoreActions)
             } else if case .loadedPDF = viewModel.loadState {
                 pdfActions
             }
         }
-        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-        .padding(.horizontal)
-        .padding(.top, 4)
     }
 
     /// Right-side buttons that depend on a loaded score: the "this score" pill (info + share) left of the annotation
     /// toggle, left of the paired inspector pill. Play/pause moved to the bottom transport control
     /// (`ReaderTransportControl`) so the primary transport controls sit within thumb reach. Extracted from `body` to
     /// keep the outer HStack closure under SwiftLint's body-length limit.
-    private func loadedActions(score: Score) -> some View {
+    private func loadedActions(score: Score, collapsesScoreActions: Bool) -> some View {
         HStack(spacing: 12) {
-            scoreActionButtons()
+            if collapsesScoreActions {
+                scoreOverflowMenu()
+            } else {
+                scoreActionButtons()
+            }
             if let onStartEditing {
                 overlayButton(
                     systemImage: "square.and.pencil",
@@ -87,13 +115,6 @@ struct ReaderTopOverlay: View {
                 .interactiveGlassCompat()
             inspectorButtons(score: score)
                 .interactiveGlassCompat()
-        }
-        .sheet(isPresented: $viewModel.isScoreInfoPresented) {
-            EditScoreInfoSheet(model: viewModel, item: viewModel.scoreItem)
-                .onAppear { viewModel.analytics.logScreen(.scoreInfo) }
-        }
-        .sheet(item: $viewModel.shareTarget) { target in
-            ActivityViewControllerRepresentable(items: target.urls)
         }
     }
 
@@ -121,6 +142,35 @@ struct ReaderTopOverlay: View {
             .tint(.primary)
             .accessibilityLabel(Text("reader.toolbar.share", bundle: .module))
         }
+        .interactiveGlassCompat()
+    }
+
+    /// Narrow-width stand-in for `scoreActionButtons()`: score-info and share folded into one ellipsis pill, saving the
+    /// 44pt that pushes the row off a 375pt screen. Share stays a nested menu (`ShareSubmenu`) so its format list is
+    /// still loaded lazily, only when the user opens it.
+    private func scoreOverflowMenu() -> some View {
+        Menu {
+            Button {
+                viewModel.presentScoreInfo()
+            } label: {
+                Label {
+                    Text("reader.toolbar.showInfo", bundle: .module)
+                } icon: {
+                    Image(systemName: "info.circle")
+                }
+            }
+
+            ShareSubmenu(
+                loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
+                onShare: { format in
+                    Task { await viewModel.requestShare(format: format) }
+                },
+            )
+        } label: {
+            overlayIcon("ellipsis")
+        }
+        .tint(.primary)
+        .accessibilityLabel(Text("reader.toolbar.more", bundle: .module))
         .interactiveGlassCompat()
     }
 
@@ -292,16 +342,40 @@ struct PDFBadge: View {
 }
 
 #if DEBUG
-#Preview {
-    let vm = ReaderViewModel(
+@MainActor
+private func previewViewModel() -> ReaderViewModel {
+    ReaderViewModel(
         scoreItem: PreviewFakeRepository.sampleItem,
         repository: PreviewFakeRepository(),
         gateway: PreviewFakeGateway(),
         scoresDirectory: URL(filePath: "/tmp"),
     )
+}
+
+#Preview {
+    let vm = previewViewModel()
     ReaderTopOverlay(viewModel: vm, onBack: {})
         .task {
             await vm.load()
         }
+}
+
+// Both `ViewThatFits` candidates side by side at the widths that select them: 375pt (iPhone 12/13 mini, SE) collapses
+// score-info + share into the ellipsis pill; 440pt (iPhone 17 Pro Max) keeps every action a discrete button.
+#Preview("Widths") {
+    let narrow = previewViewModel()
+    let wide = previewViewModel()
+    return VStack(spacing: 32) {
+        ReaderTopOverlay(viewModel: narrow, onBack: {}, onStartEditing: {})
+            .frame(width: 375)
+            .border(.red)
+            .task { await narrow.load() }
+
+        ReaderTopOverlay(viewModel: wide, onBack: {}, onStartEditing: {})
+            .frame(width: 440)
+            .border(.red)
+            .task { await wide.load() }
+    }
+    .padding(.vertical, 40)
 }
 #endif
