@@ -89,9 +89,15 @@ internal object PdfVerticalLayout {
      * Same computation as [pageHeightsPx], writing into a caller-provided [dest] instead of allocating a
      * new array. [PdfVerticalScore]'s `derivedStateOf` block re-derives this on every relevant snapshot
      * read (every scroll AND pinch frame) purely to compute an `Int` page index that is thrown away
-     * immediately after — a fresh `FloatArray` there would be per-frame garbage for no benefit. [dest]
-     * must be sized exactly [widthsPt]`.size` (that's what every entry from `0 until widthsPt.size` gets
-     * written into; the caller is expected to `remember` one `FloatArray(pageCount)` and reuse it).
+     * immediately after — a fresh `FloatArray` there would be per-frame garbage for no benefit.
+     *
+     * **[dest] must be sized EXACTLY [widthsPt]`.size` — not merely "at least."** This is a strict
+     * contract, not a convenience minimum: only indices `0 until widthsPt.size` are written, so a
+     * LARGER [dest] left over from a previous, longer document would keep stale trailing entries that
+     * [currentPageIndex] (which walks `pageHeightsPx.indices`) would then read back as phantom pages
+     * past the real end of the document. [PdfVerticalScore] satisfies this by `remember`ing the scratch
+     * array keyed on `state` (`remember(state) { FloatArray(pageCount) }`), so a page-count change (a
+     * different PDF) always reallocates a correctly-sized buffer rather than reusing a stale one.
      */
     fun pageHeightsPxInto(dest: FloatArray, widthsPt: List<Double>, heightsPt: List<Double>, renderWidthPx: Int) {
         for (i in widthsPt.indices) {
@@ -269,6 +275,12 @@ internal fun PdfVerticalScore(
     // boundaries consistent with whatever extent the scroll container was actually given.
     val currentPage by remember(state, gapPx, vPadPx) {
         derivedStateOf {
+            // NOT a pure function of its inputs: it mutates `liveHeightsScratch` (a `remember`ed, shared
+            // buffer) as a side effect on every re-derivation. That is safe ONLY because `derivedStateOf`
+            // blocks, like the rest of Compose's snapshot system, are read/run on the composition thread
+            // (the main thread here) — there is no concurrent writer this could race with. If a future
+            // change ever moved this computation off that thread (e.g. into a background-dispatched
+            // effect), this mutation would need its own synchronization.
             val liveWidth = if (viewportSize.width > 0) {
                 PdfVerticalLayout.renderWidthPx(viewportSize.width, scaleState.floatValue)
             } else {

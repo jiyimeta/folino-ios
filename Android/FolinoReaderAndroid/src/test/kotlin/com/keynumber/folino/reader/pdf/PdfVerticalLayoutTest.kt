@@ -97,10 +97,11 @@ class PdfVerticalLayoutTest {
         assertArrayEquals(expected, dest, 0.01f)
     }
 
-    @Test fun pageHeightsPxIntoOnlyWritesAsManyEntriesAsThereArePages() {
-        // A caller-provided scratch buffer may be larger than the current document (reused across a
-        // retarget to a shorter one); only the first `widthsPt.size` entries are the caller's business.
-        val dest = FloatArray(3)
+    @Test fun pageHeightsPxIntoWritesExactlyOneEntryPerPage() {
+        // The contract is strict — `dest` must be sized EXACTLY `widthsPt.size` (see the KDoc: a larger
+        // buffer would leave stale trailing entries `currentPageIndex` would read as phantom pages). This
+        // just confirms a correctly-sized `dest` gets every entry written, matching `pageHeightsPx`.
+        val dest = FloatArray(1)
         PdfVerticalLayout.pageHeightsPxInto(dest, listOf(500.0), listOf(1000.0), renderWidthPx = 200)
         assertEquals(400f, dest[0], 0.01f)
     }
@@ -119,45 +120,92 @@ class PdfVerticalLayoutTest {
         assertEquals(6f, PdfVerticalLayout.liveGapPx(gapPx = 12f, scale = 0.5f, rasterScale = 1f), 0.001f)
     }
 
-    // -- Regression: the live/raster split is where both review-round-2 defects lived -------------
-    // Pins the exact numbers from task-7-report.md's arithmetic verification: a 3-page square-aspect
-    // document, 1000px viewport, rasterScale settled at 1, pinched to scale=2 (zoom in) and scale=0.5
-    // (zoom out). `PdfVerticalScore`'s `wrapContentSize` fix guarantees the on-screen page width always
-    // equals `viewportW * scale` on the Compose side (untestable off-device); what IS pure and tested
-    // here is the geometry that guarantee depends on, and the `liveGapPx` correction the outer content
-    // box's declared height (and `currentPageIndex`'s page-boundary walk) must apply to stay consistent
-    // with it.
+    // -- Regression: `totalContentHeightPx`/`currentPageIndex`, fed the SAME `liveGapPx`-corrected gap --
+    // -- `PdfVerticalScore.kt` feeds them, on a 3-page square-aspect document (100x100pt each, so aspect --
+    // -- ratio is the only thing that matters — not the absolute pt values), 1000px viewport, gapPx=12f, --
+    // -- topPadPx=bottomPadPx=16f. Unlike the private-helper version these replace, every assertion here --
+    // -- calls the REAL `PdfVerticalLayout` functions `PdfVerticalScore.kt` calls — not a second,
+    // -- independent re-derivation of the same formula — so a bug in either function's own arithmetic
+    // -- would be caught here. (A JUnit test in this module cannot invoke the `@Composable` surface
+    // -- itself — no Compose UI test runtime is set up here — so this is the closest achievable proxy;
+    // -- see task-7-report.md's round-3 fix notes for the honest limit of what this does and doesn't
+    // -- cover.) `scale` is clamped to `[1f, 8f]` in the real pinch gesture (`PdfVerticalScore.kt`'s
+    // -- `coerceIn(1f, 8f)`), so "zoomed out" is only reachable as `scale < rasterScale` with BOTH >= 1 —
+    // -- the zoomed-out case below uses a settle at `rasterScale=4f` pinched back to `scale=1.5f`, a state
+    // -- the real surface can actually be in (not the `scale=0.5f` used in the prior round, which the
+    // -- clamp makes unreachable regardless of `rasterScale`).
 
-    private fun lastPageTopOffset(viewportW: Int, scale: Float, rasterScale: Float): Float {
-        val widthsPt = List(3) { 100.0 }
-        val heightsPt = List(3) { 100.0 } // square pages
-        val gapPx = 12f
-        val topPadPx = 16f
-        val liveWidthPx = PdfVerticalLayout.renderWidthPx(viewportW, scale)
-        val liveHeights = PdfVerticalLayout.pageHeightsPx(widthsPt, heightsPt, liveWidthPx)
-        val liveGap = PdfVerticalLayout.liveGapPx(gapPx, scale, rasterScale)
-        // First page's top offset is always the fixed, unscaled topPadPx (`focalAdjustedOffset`'s "held
-        // out of the scaling" pad) — asserted directly by callers below rather than duplicated here.
-        return topPadPx + liveHeights[0] + liveHeights[1] + liveGap * 2
-    }
+    private val threeSquarePagesWidthsPt = List(3) { 100.0 }
+    private val threeSquarePagesHeightsPt = List(3) { 100.0 }
+    private val testGapPx = 12f
+    private val testPadPx = 16f
 
-    @Test fun liveGeometryMatchesOnScreenPositionsWhenZoomedInPastTheRasterSettle() {
-        val viewportW = 1000
+    @Test fun contentHeightUsesTheLiveGapWhenZoomedInPastTheRasterSettle() {
         val scale = 2f
         val rasterScale = 1f
-        val liveWidthPx = PdfVerticalLayout.renderWidthPx(viewportW, scale)
-        // On-screen page width must equal viewportW * scale regardless of zoom direction.
-        assertEquals(viewportW * scale, liveWidthPx.toFloat(), 0.5f)
-        // First page's on-screen top offset stays the fixed, unscaled 16f pad.
-        assertEquals(4064f, lastPageTopOffset(viewportW, scale, rasterScale), 0.5f)
+        val liveWidthPx = PdfVerticalLayout.renderWidthPx(1000, scale)
+        val liveHeights =
+            PdfVerticalLayout.pageHeightsPx(threeSquarePagesWidthsPt, threeSquarePagesHeightsPt, liveWidthPx)
+        val liveGap = PdfVerticalLayout.liveGapPx(testGapPx, scale, rasterScale)
+
+        val contentHeightPx = PdfVerticalLayout.totalContentHeightPx(liveHeights, liveGap, testPadPx, testPadPx)
+        assertEquals(6080f, contentHeightPx, 0.5f)
     }
 
-    @Test fun liveGeometryMatchesOnScreenPositionsWhenZoomedOutBelowTheRasterSettle() {
-        val viewportW = 1000
-        val scale = 0.5f
+    @Test fun contentHeightUsesTheLiveGapWhenZoomedOutBelowTheRasterSettle() {
+        val scale = 1.5f
+        val rasterScale = 4f
+        val liveWidthPx = PdfVerticalLayout.renderWidthPx(1000, scale)
+        val liveHeights =
+            PdfVerticalLayout.pageHeightsPx(threeSquarePagesWidthsPt, threeSquarePagesHeightsPt, liveWidthPx)
+        val liveGap = PdfVerticalLayout.liveGapPx(testGapPx, scale, rasterScale)
+
+        val contentHeightPx = PdfVerticalLayout.totalContentHeightPx(liveHeights, liveGap, testPadPx, testPadPx)
+        assertEquals(4541f, contentHeightPx, 0.5f)
+    }
+
+    @Test fun currentPageBoundaryShiftsWithTheLiveGapWhenZoomedInPastTheRasterSettle() {
+        val scale = 2f
         val rasterScale = 1f
-        val liveWidthPx = PdfVerticalLayout.renderWidthPx(viewportW, scale)
-        assertEquals(viewportW * scale, liveWidthPx.toFloat(), 0.5f)
-        assertEquals(1028f, lastPageTopOffset(viewportW, scale, rasterScale), 0.5f)
+        val liveWidthPx = PdfVerticalLayout.renderWidthPx(1000, scale)
+        val liveHeights =
+            PdfVerticalLayout.pageHeightsPx(threeSquarePagesWidthsPt, threeSquarePagesHeightsPt, liveWidthPx)
+        val liveGap = PdfVerticalLayout.liveGapPx(testGapPx, scale, rasterScale)
+
+        // Page 1 (NOT the last page, so its bound check is genuinely gap-sensitive — the last page always
+        // wins past its own start regardless of gap, per `currentPageIndex`'s `i == lastIndex` clause)
+        // spans y=[2040, 4040) using the correct, SCALED gap (24). y=4035 lands just inside it. With the
+        // raw, unscaled gap (12) that band would instead be y=[2028, 4028), which does NOT contain 4035 —
+        // so this assertion would flip to `2` if `liveGap` here were replaced by the raw `testGapPx`.
+        val page = PdfVerticalLayout.currentPageIndex(
+            scrollPx = 4035f,
+            viewportHeightPx = 0f,
+            pageHeightsPx = liveHeights,
+            gapPx = liveGap,
+            topPadPx = testPadPx,
+        )
+        assertEquals(1, page)
+    }
+
+    @Test fun currentPageBoundaryShiftsWithTheLiveGapWhenZoomedOutBelowTheRasterSettle() {
+        val scale = 1.5f
+        val rasterScale = 4f
+        val liveWidthPx = PdfVerticalLayout.renderWidthPx(1000, scale)
+        val liveHeights =
+            PdfVerticalLayout.pageHeightsPx(threeSquarePagesWidthsPt, threeSquarePagesHeightsPt, liveWidthPx)
+        val liveGap = PdfVerticalLayout.liveGapPx(testGapPx, scale, rasterScale)
+
+        // Page 1 spans y=[1520.5, 3020.5) using the correct, SCALED gap (4.5). y=3024 lands just PAST it,
+        // in page 2. With the raw, unscaled gap (12) that band would instead be y=[1528, 3028), which DOES
+        // contain 3024 — so this assertion would flip to `1` if `liveGap` here were replaced by the raw
+        // `testGapPx`.
+        val page = PdfVerticalLayout.currentPageIndex(
+            scrollPx = 3024f,
+            viewportHeightPx = 0f,
+            pageHeightsPx = liveHeights,
+            gapPx = liveGap,
+            topPadPx = testPadPx,
+        )
+        assertEquals(2, page)
     }
 }
