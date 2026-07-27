@@ -1,11 +1,10 @@
 package com.keynumber.folino.reader
 
 import android.app.Application
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.keynumber.folino.reader.ink.AnnotationToolState
+import com.keynumber.folino.reader.pdf.PdfPageSource
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
 import io.github.jiyimeta.sheetmusic.ScoreHandle
@@ -136,6 +135,14 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     // different score in place — playlist auto-advance swaps the rendered scoreId on this same view model.
     private var loadedScoreId: String? = null
 
+    // The active PDF's page source (Task 6), populated by [openPdf] on a `.pdf` load and closed by
+    // [closePdfPageSource] whenever the Reader is retargeted to a different score (see [load]) or this
+    // ViewModel is cleared. Null for a non-PDF score. Tasks 7/8's render surfaces read this to fetch
+    // and window bitmaps; internal (like [PdfPageSource] itself) and read-only since it is created and
+    // torn down only from within this VM.
+    internal var pdfPageSource: PdfPageSource? = null
+        private set
+
     init {
         startRecomputeLoop()
     }
@@ -205,32 +212,42 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Bare [PdfRenderer] pass over [file]: page count and per-page size in PDF points, nothing
-     * else. `PdfRenderer` only exposes one open page at a time, so each page is opened, measured,
-     * and closed before the next. Deliberately minimal — no cache, no bitmap decoding — Task 6's
-     * `PdfPageSource` replaces this with the cache-backed version the render surfaces use.
+     * Opens [file] as a [PdfPageSource] and publishes its page count and per-page sizes (PDF points)
+     * as [ReaderState.ReadyPdf] — the pixels come later, from [pdfPageSource] itself, via Tasks 7/8's
+     * render surfaces. The caller ([load]) has already closed any previously held source, so this
+     * only needs to clean up the source it just created if building the state fails partway through.
      * Returns null on any failure (e.g. a corrupt or unreadable PDF).
      */
-    private fun readPdfPageSizes(file: File): ReaderState.ReadyPdf? = try {
-        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
-            PdfRenderer(pfd).use { renderer ->
-                val widthsPt = mutableListOf<Double>()
-                val heightsPt = mutableListOf<Double>()
-                for (i in 0 until renderer.pageCount) {
-                    renderer.openPage(i).use { page ->
-                        widthsPt += page.width.toDouble()
-                        heightsPt += page.height.toDouble()
-                    }
-                }
-                ReaderState.ReadyPdf(
-                    pageCount = renderer.pageCount,
-                    pageWidthsPt = widthsPt,
-                    pageHeightsPt = heightsPt,
-                )
-            }
+    private fun openPdf(file: File): ReaderState.ReadyPdf? {
+        val source = try {
+            PdfPageSource(file)
+        } catch (e: Exception) {
+            return null
         }
-    } catch (e: Exception) {
-        null
+        return try {
+            val widthsPt = mutableListOf<Double>()
+            val heightsPt = mutableListOf<Double>()
+            for (i in 0 until source.pageCount) {
+                val sizePt = source.pageSizePt(i)
+                widthsPt += sizePt.width.toDouble()
+                heightsPt += sizePt.height.toDouble()
+            }
+            pdfPageSource = source
+            ReaderState.ReadyPdf(
+                pageCount = source.pageCount,
+                pageWidthsPt = widthsPt,
+                pageHeightsPt = heightsPt,
+            )
+        } catch (e: Exception) {
+            source.close()
+            null
+        }
+    }
+
+    /** Closes and forgets the active [pdfPageSource], if any. Safe to call when there isn't one. */
+    private fun closePdfPageSource() {
+        pdfPageSource?.close()
+        pdfPageSource = null
     }
 
     /**
@@ -239,11 +256,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * `_state` to Ready once `_scoreHandle` is non-null. Keeps file-not-found
      * and parse-failure error handling here.
      *
-     * A `.pdf` file takes a separate branch: it publishes [ReaderState.ReadyPdf] straight from a
-     * bare `PdfRenderer` pass and returns WITHOUT installing SMuFL metrics or calling
-     * `ScoreHandle.load` — `_scoreHandle` stays null so the layout recompute loop (which only
-     * drives the DrawProgram-based `Ready` state) stays idle. The parsed score arrives later
-     * (Task 12).
+     * A `.pdf` file takes a separate branch: it publishes [ReaderState.ReadyPdf] via [openPdf] and
+     * returns WITHOUT installing SMuFL metrics or calling `ScoreHandle.load` — `_scoreHandle` stays
+     * null so the layout recompute loop (which only drives the DrawProgram-based `Ready` state) stays
+     * idle. The parsed score arrives later (Task 12).
      *
      * [localFileName] is the record's real on-disk file name, supplied by the caller (the App
      * layer, via the nav route or a playlist retarget) rather than looked up here — see
@@ -264,6 +280,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // this, the incoming score's per-score display options (e.g. staff size) would briefly re-lay-out
         // the OLD handle (a visible "shrink" flash during the playlist auto-advance swap).
         _scoreHandle.value = null
+        // A retarget may be leaving a PDF score behind; release its PdfPageSource (and the underlying
+        // PdfRenderer + file descriptor) now rather than waiting for onCleared, so a playlist
+        // auto-advance through several PDFs in a row doesn't accumulate open descriptors.
+        closePdfPageSource()
         viewModelScope.launch {
             val app = getApplication<Application>()
 
@@ -277,7 +297,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             if (file.extension.equals("pdf", ignoreCase = true)) {
-                val pdfState = withContext(Dispatchers.IO) { readPdfPageSizes(file) }
+                val pdfState = withContext(Dispatchers.IO) { openPdf(file) }
                 if (pdfState == null) {
                     _state.value = ReaderState.Error("Could not open score")
                     return@launch
@@ -591,6 +611,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // Best-effort final flush of any pending annotation write (the Reader route's DisposableEffect
         // also flushes on exit; this is belt-and-suspenders).
         saveController.flush()
+        closePdfPageSource()
         // KNOWN FOLLOW-UP — bounded native leak: the annotation save-bridge VM (`saveController`) is held
         // as a plain field, NOT scoped to a ViewModelStore, so its own onCleared -> nativeRelease never
         // fires and the native Swift AnnotationSaveBridge + coordinator + store adapter leak once per
