@@ -85,12 +85,24 @@ struct VerticalScoreContainer: View {
 
     /// Vertical padding inside the scaled content. Top is larger so the first system clears the nav chrome / safe
     /// area when `ignoresSafeArea()` lets the score slide underneath.
-    private let scoreTopPadding: CGFloat = 44
+    private var scoreTopPadding: CGFloat {
+        Self.baseScoreTopPadding + editingChromeInsets.top
+    }
+
+    private static let baseScoreTopPadding: CGFloat = 44
     /// Bottom padding inside the scaled content: the full clearance from the transport control's top edge to the
     /// physical screen bottom (control content height + bottom safe area). Lets the last system scroll out from under
     /// the floating control so the whole score is visible at the bottom of the scroll.
     private var scoreBottomPadding: CGFloat {
-        bottomControlClearance + safeAreaBottom
+        bottomControlClearance + safeAreaBottom + editingChromeInsets.bottom
+    }
+
+    /// Room the editing cluster occupies, added to the scroll content's padding so the first / last system can still
+    /// be brought clear of it. This is PADDING INSIDE THE SCROLL CONTENT — the engine's `availableWidth` is
+    /// untouched, so docking or moving the pad never re-engraves the score.
+    private var editingChromeInsets: (top: CGFloat, bottom: CGFloat) {
+        guard let host = editingHost, host.isEditing else { return (0, 0) }
+        return (host.editingChromeTopInset, host.editingChromeBottomInset)
     }
 
     /// Horizontal inset applied to the score on iPad (0 on iPhone) so Vertical mode matches Page mode's score width

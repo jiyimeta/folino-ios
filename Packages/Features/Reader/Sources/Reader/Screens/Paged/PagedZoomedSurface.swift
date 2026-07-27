@@ -39,6 +39,10 @@ struct PagedZoomedSurface: View {
     let showsHint: Bool
     let onAnyZoneTouchDown: () -> Void
     let showsTapZones: Bool
+    /// `nil` (or `isEditing == false`) keeps taps on the manual-cursor seek path. While editing, taps route to
+    /// `editingHost.onTap` and the caret overlay is drawn on top — same seam the vertical surface uses. Page turns
+    /// (swipe + tap zones) keep working, since the overlay never takes touches.
+    var editingHost: ReaderEditingHost?
 
     var body: some View {
         PagedReaderSurface(
@@ -134,9 +138,10 @@ struct PagedZoomedSurface: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
+                selection: editingHost?.isEditing == true ? (editingHost?.selection ?? .none) : .none,
+                voiceColors: ReaderEditingPresentation.voiceColors,
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
-            .coordinateSpace(name: "scoreSurface")
             .gesture(tapSeekGesture(
                 document: doc, pageStartY: pageStartY, pageHeight: pageHeight,
             ))
@@ -150,7 +155,12 @@ struct PagedZoomedSurface: View {
                     end: viewModel.repeatModel.pendingRepeatB,
                 )
             }
+
+            if let host = editingHost, host.isEditing {
+                EditingSelectionOverlay(host: host, score: score, document: doc)
+            }
         }
+        .coordinateSpace(name: "scoreSurface")
         .frame(height: doc.size.height, alignment: .topLeading)
         .offset(y: -pageStartY)
         // `.topLeading` (not `.top`) prevents the default `.center` horizontal alignment from drifting the doc when
@@ -178,6 +188,10 @@ struct PagedZoomedSurface: View {
                 let pageEndY = pageStartY + pageHeight
                 guard value.location.y >= pageStartY,
                       value.location.y <= pageEndY else { return }
+                if let host = editingHost, host.isEditing {
+                    host.onTap(value.location)
+                    return
+                }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
                 lastManualCursor = cursor

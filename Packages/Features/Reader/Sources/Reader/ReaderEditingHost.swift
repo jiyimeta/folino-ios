@@ -24,25 +24,27 @@ public final class ReaderEditingHost {
     public var selection: ScoreSelection = .none
     /// The caret target (insertion indicator drawn by the Reader's editing overlay).
     public var caretItem: SheetMusicCore.ScoreItemID?
-    /// Written by the App (mirroring `EditorViewModel.hoverItem(at:)`), read by the Reader: the item under an Apple
-    /// Pencil hover, drawn as a soft pre-highlight by the editing overlay. `nil` when nothing is hovered.
-    public var hoverItem: SheetMusicCore.ScoreItemID?
 
     /// Written by the Reader, read by the App/Editor:
-    /// Latest LayoutDocument of the editing surface (published by VerticalScoreContainer).
+    /// Latest LayoutDocument of the editing surface (published by the score container).
     public internal(set) var document: LayoutDocument?
-    /// Screen-space (global) frame of the current selection anchor, for positioning the iPhone callout.
-    public internal(set) var selectionScreenFrame: CGRect?
+    /// Whether the transport is currently playing. Editing and playback coexist — you can audition the passage you
+    /// are working on without leaving edit mode — but every key that would mutate the score has to go inert while
+    /// the cursor is running, since an edit mid-playback would reflow the score out from under it.
+    public internal(set) var isPlaying = false
+
+    /// Written by the App (measured from the editing chrome), read by the Reader: how much vertical room the editing
+    /// cluster occupies at the top and bottom of the screen. The score containers turn these into SCROLL PADDING, not
+    /// layout width — so the last system can be scrolled clear of the pad without the score being re-engraved. Page
+    /// mode deliberately ignores them: its bottom reserve feeds `LayoutPaginator`, so honoring them there would move
+    /// the page breaks the moment you started editing.
+    public var editingChromeTopInset: CGFloat = 0
+    public var editingChromeBottomInset: CGFloat = 0
 
     // App-wired callbacks:
     public var onBeginEditing: @MainActor (Score) -> Void = { _ in }
     public var onEndEditing: @MainActor () -> Void = {}
     public var onTap: @MainActor (CGPoint) -> Void = { _ in }
-    /// Staff-step drag commit from the pitch-drag handle; positive steps = up.
-    public var onPitchDragCommit: @MainActor (Int) -> Void = { _ in }
-    /// Apple Pencil hover position (score-surface coordinates), or `nil` when the hover ends. `nil` by default so
-    /// the Reader's `.onContinuousHover` is a no-op until the App wires it up.
-    public var onHover: (@MainActor (CGPoint?) -> Void)?
 
     /// The editing chrome's 完了 requests exit through here (the chrome is App-injected and cannot call Reader code).
     public private(set) var isExitRequested = false
@@ -55,7 +57,23 @@ public final class ReaderEditingHost {
     }
 }
 
+/// Presentation constants every score surface shares while editing, so vertical / horizontal / paged all tint the
+/// selection identically.
+enum ReaderEditingPresentation {
+    /// `SelectionRenderState.color(for:voiceIndex:)` only tints items present in `ScoreSelection`, so a flat
+    /// accent-color map for every voice index is safe — non-selected items render unaffected regardless of voice.
+    static let voiceColors: [Int: Color] = [
+        0: .accentColor, 1: .accentColor, 2: .accentColor, 3: .accentColor,
+    ]
+}
+
 /// Context handed to the App's chrome builder each body pass.
 public struct ReaderEditingChromeContext {
-    public let selectionScreenFrame: CGRect?
+    /// Room the reader's own transport occupies at the bottom of the screen, so a bottom-docked pad can sit clear of
+    /// it. The transport stays anchored to the bottom edge and stays the Reader's to draw; only the pad moves.
+    public let bottomTransportClearance: CGFloat
+
+    public init(bottomTransportClearance: CGFloat) {
+        self.bottomTransportClearance = bottomTransportClearance
+    }
 }

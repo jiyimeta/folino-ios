@@ -30,6 +30,10 @@ struct HorizontalScoreContainer: View {
     /// task never re-runs.
     let transposeSemitones: Int
     @Bindable var viewModel: ReaderViewModel
+    /// Note-editing seam, mirroring `VerticalScoreContainer`: while editing, taps select instead of seeking, the
+    /// rebuilt document is published to the host, and `editGeneration` joins the layout task's identity so an edit
+    /// that doesn't change the score's hash still relays out.
+    var editingHost: ReaderEditingHost?
 
     @State private var document: LayoutDocument?
     @State private var liveScrollOffset: CGPoint = .zero
@@ -67,6 +71,7 @@ struct HorizontalScoreContainer: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     transposeSemitones: transposeSemitones,
+                    editGeneration: editingHost?.editGeneration ?? 0,
                 )) {
                     await rebuildLayout()
                 }
@@ -130,6 +135,7 @@ struct HorizontalScoreContainer: View {
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
+                editingHost: editingHost,
             )
         }
         // Let the score reach the screen edges and slide under the translucent overlays — the `UIViewRepresentable`'s
@@ -286,6 +292,7 @@ struct HorizontalScoreContainer: View {
         }.value
         guard !Task.isCancelled else { return }
         document = newDoc
+        editingHost?.document = newDoc
     }
 
     private func autoScroll(
@@ -394,6 +401,7 @@ struct HorizontalScoreContainer: View {
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
         let transposeSemitones: Int
+        let editGeneration: Int
 
         init(
             score: Score,
@@ -402,7 +410,9 @@ struct HorizontalScoreContainer: View {
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
             transposeSemitones: Int,
+            editGeneration: Int,
         ) {
+            self.editGeneration = editGeneration
             scoreSignature = score.parts.count
                 ^ (score.totalStaffCount << 8)
                 ^ (score.division << 16)

@@ -25,13 +25,6 @@ struct VerticalZoomedSurface: View {
     /// selection, and `EditingSelectionOverlay` draws the caret / rest tint / pitch-drag chrome on top.
     let editingHost: ReaderEditingHost?
 
-    /// Voice colors passed to `ScoreView` while editing: `SelectionRenderState.color(for:voiceIndex:)` only tints
-    /// items present in `ScoreSelection`, so a flat accent-color map for every voice index is safe — non-selected
-    /// items render unaffected regardless of their voice.
-    private static let editingVoiceColors: [Int: Color] = [
-        0: .accentColor, 1: .accentColor, 2: .accentColor, 3: .accentColor,
-    ]
-
     var body: some View {
         if let doc = document {
             let zoom = effectiveZoom(for: doc)
@@ -69,7 +62,7 @@ struct VerticalZoomedSurface: View {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
                 selection: editingHost?.isEditing == true ? (editingHost?.selection ?? .none) : .none,
-                voiceColors: Self.editingVoiceColors,
+                voiceColors: ReaderEditingPresentation.voiceColors,
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
             .gesture(tapSeekGesture(document: doc))
@@ -89,15 +82,13 @@ struct VerticalZoomedSurface: View {
                 )
             }
 
-            // Caret / rest-tint / pitch-drag chrome, in the SAME document-coordinate ZStack as `ScoreView` above (no
-            // zoom conversion needed — the whole stack is scaled together by the modifiers in `body`).
+            // The editing caret, in the SAME document-coordinate ZStack as `ScoreView` above (no zoom conversion
+            // needed — the whole stack is scaled together by the modifiers in `body`). It draws only; taps come
+            // through `tapSeekGesture` on `ScoreView` below it.
             if let host = editingHost, host.isEditing {
                 EditingSelectionOverlay(host: host, score: score, document: doc)
             }
         }
-        // Named on the ZStack (the common ancestor of `ScoreView` and `EditingSelectionOverlay`), not on `ScoreView`
-        // alone — a SwiftUI named coordinate space is visible only to descendants of the tagged view, and the
-        // pitch-drag gesture in `EditingSelectionOverlay` (a ZStack sibling of `ScoreView`) needs to resolve it too.
         .coordinateSpace(name: "scoreSurface")
     }
 

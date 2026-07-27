@@ -103,9 +103,17 @@ public struct ReaderRootScreen: View {
     /// pad its bottom by the control's full screen-edge clearance (this height plus the safe area), letting the last
     /// system clear the control once scrolled all the way down.
     private var bottomControlContentHeight: CGFloat {
-        showSeekBar
+        showsSeekBarNow
             ? ReaderTransportControl.expandedContentHeight
             : ReaderTransportControl.collapsedContentHeight
+    }
+
+    /// Whether the seek card is showing right now. The user's `showSeekBar` preference is overridden to `false` while
+    /// editing: the pad already owns most of the bottom of the screen, and the expanded card would push it up over
+    /// the music. Note this shrinks the bottom reserve (114 → 44) on entering edit mode, so a PAGE-mode score with
+    /// the seek bar enabled re-paginates for the edit session — the trade the compact transport buys.
+    private var showsSeekBarNow: Bool {
+        showSeekBar && editingHost?.isEditing != true
     }
 
     public init(
@@ -252,6 +260,11 @@ public struct ReaderRootScreen: View {
                 viewModel.pipSession.dismissIfActive()
             }
         }
+        // Mirror playback state into the seam so the App can put the editing pad to sleep while the cursor runs. This
+        // reads `isPlaying`, not the cursor, so it re-renders on play/pause only — never per tick.
+        .onChange(of: viewModel.playbackSession.isPlaying, initial: true) { _, isPlaying in
+            editingHost?.isPlaying = isPlaying
+        }
         .onChange(of: editingHost?.isExitRequested ?? false) { _, requested in
             // The editing chrome's 完了 button lives in App-injected code and can't call `finishEditing()` directly
             // (the Reader never exposes it), so it signals exit through the host instead.
@@ -281,17 +294,20 @@ public struct ReaderRootScreen: View {
                     .animation(.easeOut(duration: 0.2), value: editingHost?.isEditing)
             }
             Spacer()
-            // Fade the transport control out while annotating (or editing) so it doesn't sit over the drawing /
-            // editing surface. It stays mounted (opacity only) and stops taking touches, so a partial seek / playback
-            // state survives the session. Layout is deliberately left untouched: `bottomControlInset` /
-            // `bottomControlContentHeight` don't depend on `isAnnotating` / editing, so page breaks (and the vertical
-            // bottom clearance) stay identical whether the card is shown or hidden — it just fades in place.
+            // Fade the transport control out while annotating so it doesn't sit over the drawing surface. It stays
+            // mounted (opacity only) and stops taking touches, so a partial seek / playback state survives the
+            // session. Layout is deliberately left untouched: `bottomControlInset` / `bottomControlContentHeight`
+            // don't depend on `isAnnotating`, so page breaks (and the vertical bottom clearance) stay identical
+            // whether the card is shown or hidden — it just fades in place.
+            //
+            // Editing does NOT hide it: you can play the passage you're editing to hear what you just wrote. It stays
+            // anchored to the bottom edge — only the pad moves — and drops to its compact pill for the duration (see
+            // `showsSeekBarNow`), because the editing pad already claims most of the bottom of the screen.
             if !isCaptureMode {
-                ReaderTransportControl(viewModel: viewModel, showSeekBar: showSeekBar)
-                    .opacity(viewModel.isAnnotating || editingHost?.isEditing == true ? 0 : 1)
-                    .allowsHitTesting(!viewModel.isAnnotating && editingHost?.isEditing != true)
+                ReaderTransportControl(viewModel: viewModel, showSeekBar: showsSeekBarNow)
+                    .opacity(viewModel.isAnnotating ? 0 : 1)
+                    .allowsHitTesting(!viewModel.isAnnotating)
                     .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
-                    .animation(.easeOut(duration: 0.2), value: editingHost?.isEditing)
             }
         }
     }
@@ -302,8 +318,10 @@ public struct ReaderRootScreen: View {
     @ViewBuilder
     private var editingChromeOverlay: some View {
         if let host = editingHost, host.isEditing, let editingChrome {
-            editingChrome(ReaderEditingChromeContext(selectionScreenFrame: host.selectionScreenFrame))
-                .transition(.opacity)
+            editingChrome(ReaderEditingChromeContext(
+                bottomTransportClearance: bottomControlContentHeight,
+            ))
+            .transition(.opacity)
         }
     }
 
@@ -313,7 +331,8 @@ public struct ReaderRootScreen: View {
     private func startEditing() {
         guard case let .loaded(score) = viewModel.loadState, let host = editingHost else { return }
         Task {
-            if viewModel.playbackSession.isPlaying { await viewModel.playbackSession.togglePlayback() }
+            // Playback is NOT stopped: editing and listening coexist. Annotation still is — ink and note editing are
+            // mutually exclusive surfaces.
             viewModel.endAnnotationSessionIfNeeded()
             host.editedScore = score
             host.editGeneration += 1
@@ -337,37 +356,32 @@ public struct ReaderRootScreen: View {
         }
     }
 
-    /// The score / PDF layer (or the editing presentation / screenshot override), inset for the top overlay + bottom
-    /// transport. Extracted from `body` to keep the `ZStack` closure within SwiftLint's body-length budget;
-    /// constructing `ScoreContentView` reads no per-tick playback state, so this stays off the auto-follow re-render
-    /// path.
+    /// The score being edited, or `nil` when not editing.
+    ///
+    /// Raw apart from ONE display transform: clef overrides survive, because `applying(clefOverrides:)` only
+    /// REPLACES a staff's opening clef element (or sets `defaultClefType`) — it never inserts or removes elements, so
+    /// every index the editor holds still points at the same note. Dropping it made a staff the user had re-clefed
+    /// jump back to its authored clef the moment they started editing it. Transpose, hidden staves and
+    /// multi-measure-rest collapse stay off, since those DO renumber elements.
+    ///
+    /// Computed here rather than in `ScoreContentView` so it's rebuilt per edit, not per playback tick.
+    private var editingScore: Score? {
+        guard let host = editingHost, host.isEditing, let editScore = host.editedScore else { return nil }
+        return editScore.applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
+    }
+
+    /// The score / PDF layer (or the screenshot override), inset for the top overlay + bottom transport. Extracted
+    /// from `body` to keep the `ZStack` closure within SwiftLint's body-length budget; constructing
+    /// `ScoreContentView` reads no per-tick playback state, so this stays off the auto-follow re-render path.
     private var scoreLayer: some View {
         Group {
-            if let host = editingHost, host.isEditing, let editScore = host.editedScore {
-                // Forced-vertical editing presentation (spec §11): raw score (no transpose / hidden staves / collapsed
-                // multi-measure rests) so positional IDs the Editor VM tracks stay valid, and no playback cursor /
-                // auto-follow since the transport is hidden for the duration. Kept out of `ScoreContentView` for the
-                // same reason that view exists: it reads no per-tick cursor state at all.
-                VerticalScoreContainer(
-                    score: editScore,
-                    staffSize: viewModel.layoutModel.staffSize,
-                    honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
-                    collapseMultiMeasureRests: false,
-                    showInvisibleElements: showInvisibleElements,
-                    playbackCursor: nil,
-                    scrollAnchorCursor: nil,
-                    autoFollowEnabled: false,
-                    transposeSemitones: 0,
-                    bottomControlClearance: bottomControlContentHeight,
-                    viewModel: viewModel,
-                    editingHost: host,
-                )
-            } else if let scoreContentOverride {
+            if let scoreContentOverride {
                 scoreContentOverride // screenshot capture stands in for the live score; chrome + transport live
             } else {
                 // Extracted into its own view so the per-tick auto-follow cursor reads don't re-render this root body
                 // (which would rebuild the top overlay and regenerate its inspector popover every tick — see
-                // `ScoreContentView`).
+                // `ScoreContentView`). Editing goes through the SAME view, so entering and leaving edit mode doesn't
+                // remount the container and blank the score while it re-lays out.
                 ScoreContentView(
                     viewModel: viewModel,
                     layoutMode: layoutMode,
@@ -377,11 +391,25 @@ public struct ReaderRootScreen: View {
                     autoFollowEnabled: autoFollowEnabled,
                     pageTurnButtonsVisible: pageTurnButtonsVisible,
                     bottomControlContentHeight: bottomControlContentHeight,
+                    editingScore: editingScore,
+                    editingHost: editingHost,
                 )
             }
         }
-        .safeAreaPadding(.top, isCaptureMode ? 0 : ReaderTopOverlay.height)
-        .safeAreaPadding(.bottom, isCaptureMode ? 0 : bottomControlInset)
+        .safeAreaPadding(.top, isCaptureMode ? 0 : ReaderTopOverlay.height + horizontalEditingInsets.top)
+        .safeAreaPadding(.bottom, isCaptureMode ? 0 : bottomControlInset + horizontalEditingInsets.bottom)
+    }
+
+    /// Extra room for the editing cluster, applied to HORIZONTAL mode only.
+    ///
+    /// Horizontal lays out at its natural content width, so insetting the viewport just shows less of the score — no
+    /// re-engraving. Page mode is deliberately excluded: its bottom inset feeds `pageHeight` into `LayoutPaginator`,
+    /// so reserving room for the pad there would re-paginate the score the moment editing began, and the page breaks
+    /// would differ between reading and editing the same file. Vertical handles its own insets as scroll-content
+    /// padding inside `VerticalScoreContainer`.
+    private var horizontalEditingInsets: (top: CGFloat, bottom: CGFloat) {
+        guard layoutMode == .horizontal, let host = editingHost, host.isEditing else { return (0, 0) }
+        return (host.editingChromeTopInset, host.editingChromeBottomInset)
     }
 }
 
