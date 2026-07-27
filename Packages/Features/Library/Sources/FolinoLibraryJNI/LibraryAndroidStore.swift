@@ -130,6 +130,14 @@ public final class LibraryAndroidStore {
         ))
     }
 
+    /// Whether `name`'s extension is an importable score format. The one gate for the Library picker and the
+    /// share/open-with transport — Kotlin previously kept a duplicate of `ShareImportPolicy`'s set and had to be
+    /// hand-synced; this crosses the real Domain rule instead.
+    @WireletExpose
+    public func isAcceptedScoreFilename(_ name: String) -> Bool {
+        ShareImportPolicy.isAccepted(filename: name)
+    }
+
     /// Share import (iOS Share Extension parity). `paths`/`originalNames` are parallel arrays of staged files the
     /// Kotlin transport copied into the app cache dir. `playlistMode`: 0 library-only, 1 existing (`playlistId`),
     /// 2 new (`newPlaylistName`). Runs the shared `SharedImportCoordinator`; returns counts + the id to open (if
