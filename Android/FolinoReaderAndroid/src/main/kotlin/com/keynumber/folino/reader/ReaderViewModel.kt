@@ -5,8 +5,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.pdf.PdfPageSource
+import com.keynumber.folino.reader.pdf.PdfPlaybackState
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
+import io.github.jiyimeta.sheetmusic.PdfScoreHandle
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.compose.draw.DrawProgramReader
@@ -35,6 +37,21 @@ private const val PAGE_HEIGHT_MM = 297.0
 // Debounce window for recomputing the layout after a display-setting change,
 // so rapid inspector edits (e.g. dragging staff size) coalesce into one compute.
 private const val RECOMPUTE_DEBOUNCE_MS = 120L
+
+/**
+ * Inputs to the layout recompute loop, bundled so a single `combine(...)` can carry all four without a
+ * generic `Quad`. [isPdfPlayback] is true exactly while [scoreHandle] is a PDF's background-parsed
+ * score (Task 12): the recompute loop reads it to skip computing (and, crucially, publishing) a
+ * DrawProgram for that handle — a PDF's own page pixels stay on screen; the parsed score's only job is
+ * to drive playback via the same [scoreHandle], never to replace the PDF's display with reconstructed
+ * notation.
+ */
+private data class RecomputeInputs(
+    val scoreHandle: Long?,
+    val options: LayoutOptions,
+    val widthMm: Double?,
+    val isPdfPlayback: Boolean,
+)
 
 /**
  * Two-stack undo/redo history over whole annotation-layer snapshots (`List<T>`), generic over the
@@ -86,6 +103,16 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _scoreHandle = MutableStateFlow<Long?>(null)
     val scoreHandle: StateFlow<Long?> = _scoreHandle.asStateFlow()
+
+    // True exactly while `_scoreHandle` holds a PDF's background-parsed score rather than a natively
+    // loaded `.mscz` one — see [RecomputeInputs]'s doc for why the recompute loop needs this.
+    private val _scoreHandleIsPdfPlayback = MutableStateFlow(false)
+
+    // Background OMR-playback readiness of the current PDF (Task 12); `Idle` for a non-PDF score. See
+    // [PdfPlaybackState]'s own doc. The Reader's transport reads this (via `nativeCanPlayNow`) to
+    // decide whether it may enable, and Task 13's cursor reads a `Ready` handle's geometry.
+    private val _pdfPlayback = MutableStateFlow<PdfPlaybackState>(PdfPlaybackState.Idle)
+    internal val pdfPlayback: StateFlow<PdfPlaybackState> = _pdfPlayback.asStateFlow()
 
     // Opening quarter-note BPM (shared Swift `Score.openingQuarterBpm` via JNI), used by
     // the inspector's tempo readout: "♩ = round(bpm × rate)". Defaults to 120.
@@ -145,12 +172,27 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     internal var pdfPageSource: PdfPageSource? = null
         private set
 
+    // The active PDF's background-parsed playback handle (Task 12; mirrors [pdfPageSource]'s shape),
+    // set by [parsePdfForPlayback] once `_pdfPlayback` reaches `Ready` and released by
+    // [closePdfPlaybackHandle] whenever the Reader is retargeted (see [load]) or this ViewModel is
+    // cleared. `@Volatile` for the same reason as [pdfPageSource]: [parsePdfForPlayback] writes it from
+    // a `Dispatchers.Default` coroutine. `private`, not exposed like [pdfPageSource]: nothing outside
+    // this class needs the handle itself, only the `pdfPlayback` StateFlow built from it.
+    @Volatile
+    private var pdfPlaybackHandle: PdfScoreHandle? = null
+
     // The coroutine [load] is currently running, cancelled at the top of the NEXT [load] call so a
     // retarget mid-flight (e.g. a playlist auto-advance through several scores in quick succession)
     // can't keep running after it's been superseded. See [load]'s and [openPdf]'s comments for why this
     // alone isn't sufficient to prevent a superseded PDF source from leaking — [openPdf] also re-checks
     // [loadedScoreId] immediately before publishing.
     private var loadJob: Job? = null
+
+    // The background OMR-parse coroutine started by [parsePdfForPlayback], cancelled at the top of the
+    // NEXT [load] call for the same reason [loadJob] is: a fast retarget must not let a stale parse for
+    // the OLD PDF keep running (and, if it finishes anyway, [parsePdfForPlayback] re-checks
+    // [loadedScoreId] immediately before publishing — mirrors [openPdf]'s own supersession guard).
+    private var pdfParseJob: Job? = null
 
     init {
         startRecomputeLoop()
@@ -175,15 +217,24 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * The layout mode (VERTICAL/HORIZONTAL/PAGE) is carried in the options blob
      * as-is; the horizontal/page RENDER surfaces are owned by parallel sessions.
      * This VM only produces the mode-appropriate layout program.
+     *
+     * Skips entirely while [RecomputeInputs.isPdfPlayback] is true (Task 12): a PDF's background-parsed
+     * score is published through this same `_scoreHandle` so the existing playback wiring (prepare,
+     * mixer, metronome...) picks it up unchanged, but its layout must NOT be computed here — that would
+     * overwrite `_state`'s `ReaderState.ReadyPdf` with a `Ready(program)`, swapping the PDF's own page
+     * pixels for reconstructed notation the user never asked to see.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun startRecomputeLoop() {
         viewModelScope.launch {
-            combine(_scoreHandle, _layoutOptions, _layoutWidthMm) { h, opts, widthMm ->
-                Triple(h, opts, widthMm)
-            }
-                .mapLatest { (h, opts, widthMm) ->
-                    if (h == null || widthMm == null) return@mapLatest
+            combine(
+                _scoreHandle,
+                _layoutOptions,
+                _layoutWidthMm,
+                _scoreHandleIsPdfPlayback,
+            ) { h, opts, widthMm, isPdfPlayback -> RecomputeInputs(h, opts, widthMm, isPdfPlayback) }
+                .mapLatest { (h, opts, widthMm, isPdfPlayback) ->
+                    if (h == null || widthMm == null || isPdfPlayback) return@mapLatest
                     delay(RECOMPUTE_DEBOUNCE_MS)
                     val programBytes = layoutMutex.withLock {
                         withContext(Dispatchers.Default) {
@@ -274,6 +325,79 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Releases the PDF-specific geometry side-car of the currently held [pdfPlaybackHandle], if any,
+     * and forgets it. Deliberately does NOT close [PdfScoreHandle.score]: once published, its raw handle
+     * is the SAME kind of value the `.mscz` path's [handle] field leaves alone in [onCleared] —
+     * `ReaderPlaybackService` (a real bound `MediaSessionService`) may still be holding it for
+     * background/PiP playback after this ViewModel is retargeted or cleared, so closing the score here
+     * would risk invalidating a still-live native engine out from under it. The geometry handle, in
+     * contrast, is used only by this Reader's own on-screen cursor lookups (Task 13) and its native side
+     * documents unknown/already-released handles as a no-op, so releasing it unconditionally here is
+     * safe. This does mean the score itself is leaked exactly like [handle] already is — an accepted,
+     * bounded native leak in this codebase (see [onCleared]'s own comment), not a new one.
+     */
+    private fun closePdfPlaybackHandle() {
+        pdfPlaybackHandle?.let { SheetMusicJNI.nativeReleasePdfGeometry(it.geometryHandle) }
+        pdfPlaybackHandle = null
+    }
+
+    /**
+     * Parses [file] for playback off the main thread (Task 12): installs the SMuFL metrics table the
+     * reconstructed score needs before playback prepares (the `.pdf` branch of [load] deliberately skips
+     * this — see its own doc — so it happens here instead), then calls [PdfScoreHandle.load]. On
+     * success, publishes the parsed score's raw handle into [_scoreHandle] so the existing
+     * playback-prepare path (the recompute loop guards against it — see [RecomputeInputs] — but
+     * [ReaderAudioViewModel.preparePlayback], the mixer, metronome, count-in, etc. all key off this same
+     * flow) runs exactly as it does for a `.mscz` score, with no further wiring, and loads parts for the
+     * mixer the same way [load] does. A parse failure or an empty result publishes
+     * [PdfPlaybackState.Unavailable] — never [ReaderState.Error]: the document is already on screen, and
+     * an unparseable (e.g. scanned/raster) PDF staying display-only is an acceptable outcome, not a bug.
+     *
+     * [scoreId] is re-checked against [loadedScoreId] immediately before publishing, mirroring
+     * [openPdf]'s own supersession guard: the parse can finish after the Reader has already moved on to
+     * a different score (a fast playlist retarget beat it to [load]'s next call), in which case the
+     * freshly parsed handle was never installed anywhere else and is fully closed here — geometry AND
+     * score — rather than published or leaked, since nothing else could possibly be using it yet.
+     */
+    private fun parsePdfForPlayback(file: File, scoreId: String) {
+        _pdfPlayback.value = PdfPlaybackState.Parsing
+        pdfParseJob = viewModelScope.launch(Dispatchers.Default) {
+            val app = getApplication<Application>()
+            val bytes = try {
+                withContext(Dispatchers.IO) { file.readBytes() }
+            } catch (_: Exception) {
+                null
+            }
+            val parsed = bytes?.let {
+                val table = BravuraMetricsBuilder.buildTable(app.assets)
+                SheetMusicJNI.nativeInstallSMuFLMetrics(table)
+                try {
+                    PdfScoreHandle.load(it)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            if (parsed == null) {
+                _pdfPlayback.value = PdfPlaybackState.Unavailable
+                return@launch
+            }
+            if (scoreId != loadedScoreId) {
+                parsed.close()
+                return@launch
+            }
+            pdfPlaybackHandle = parsed
+            _openingQuarterBpm.value = SheetMusicJNI.nativeOpeningQuarterBpm(parsed.score.raw)
+            _parts.value = loadParts(parsed.score.raw)
+            _pdfPlayback.value = PdfPlaybackState.Ready(parsed)
+            // Tell the recompute loop this handle is a PDF's parsed score BEFORE publishing it, so the
+            // very first `combine` emission it triggers already sees `isPdfPlayback = true` and never
+            // computes a DrawProgram for it (see [RecomputeInputs]'s doc).
+            _scoreHandleIsPdfPlayback.value = true
+            _scoreHandle.value = parsed.score.raw
+        }
+    }
+
+    /**
      * Parse the score + install metrics + publish the score handle. Does NOT
      * compute the layout itself: the recompute loop (started in init) drives
      * `_state` to Ready once `_scoreHandle` is non-null. Keeps file-not-found
@@ -282,7 +406,8 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * A `.pdf` file takes a separate branch: it publishes [ReaderState.ReadyPdf] via [openPdf] and
      * returns WITHOUT installing SMuFL metrics or calling `ScoreHandle.load` — `_scoreHandle` stays
      * null so the layout recompute loop (which only drives the DrawProgram-based `Ready` state) stays
-     * idle. The parsed score arrives later (Task 12).
+     * idle. Once the document is on screen, [parsePdfForPlayback] takes over in the background
+     * (Task 12) and publishes the parsed score into `_scoreHandle` once ready.
      *
      * [localFileName] is the record's real on-disk file name, supplied by the caller (the App
      * layer, via the nav route or a playlist retarget) rather than looked up here — see
@@ -307,6 +432,13 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // PdfRenderer + file descriptor) now rather than waiting for onCleared, so a playlist
         // auto-advance through several PDFs in a row doesn't accumulate open descriptors.
         closePdfPageSource()
+        // Same idea for a PDF's background-parsed playback (Task 12): reset readiness to Idle so the
+        // transport doesn't briefly report the OLD PDF's Ready state under the new score, cancel a still-
+        // running parse for the score being left behind, and release the geometry side-car it held.
+        _pdfPlayback.value = PdfPlaybackState.Idle
+        _scoreHandleIsPdfPlayback.value = false
+        pdfParseJob?.cancel()
+        closePdfPlaybackHandle()
         // Cancel whatever the PREVIOUS load() call is still doing: without this, a fast retarget (e.g.
         // playlist auto-advance through several scores) can leave the old coroutine running concurrently
         // with the new one. This alone doesn't close the whole race for a PDF retarget — see [openPdf]'s
@@ -331,6 +463,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 _state.value = pdfState
+                // The document is already on screen; parse it for playback in the background (Task 12).
+                // Not awaited here: [load]'s own coroutine (this one) is done once the pixels are up, and
+                // the parse runs on its own tracked job so a later retarget can cancel it independently.
+                parsePdfForPlayback(file, scoreId)
                 return@launch
             }
 
@@ -642,6 +778,8 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // also flushes on exit; this is belt-and-suspenders).
         saveController.flush()
         closePdfPageSource()
+        pdfParseJob?.cancel()
+        closePdfPlaybackHandle()
         // KNOWN FOLLOW-UP — bounded native leak: the annotation save-bridge VM (`saveController`) is held
         // as a plain field, NOT scoped to a ViewModelStore, so its own onCleared -> nativeRelease never
         // fires and the native Swift AnnotationSaveBridge + coordinator + store adapter leak once per
@@ -652,7 +790,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         //
         // Do NOT close `handle`: the same raw Long is used by the playback
         // engine (which outlives this ViewModel via the bound service).
-        // Mirrors the example ScoreViewModel.onCleared rationale.
+        // Mirrors the example ScoreViewModel.onCleared rationale. [closePdfPlaybackHandle] above follows
+        // the identical rule for a PDF's parsed score — see its own doc for why it releases only the
+        // geometry side-car, not the score.
         super.onCleared()
     }
 }

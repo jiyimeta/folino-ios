@@ -94,6 +94,7 @@ import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.ErasePhase
 import com.keynumber.folino.reader.ink.encodeWireArray
 import com.keynumber.folino.reader.pdf.PagedPdfScore
+import com.keynumber.folino.reader.pdf.PdfPlaybackState
 import com.keynumber.folino.reader.pdf.PdfVerticalScore
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
@@ -313,10 +314,11 @@ fun ReaderScreen(
     val isPdf = state is ReaderState.ReadyPdf
     val capabilities = remember(isPdf) { fetchReaderCapabilities(isPdf) }
     // Whether transport should be enabled right now: scores always, PDFs only once their background OMR
-    // parse succeeds. Android has no PDF playback parse yet (Task 12), so `isPdfPlaybackReady` is always
-    // false for now — delegated to the shared rule rather than inlining `canPlay || isPdfPlaybackReady`.
-    val canPlayNow = remember(capabilities) {
-        FolinoReaderJNI.nativeCanPlayNow(capabilities.canPlay, false)
+    // parse (Task 12) succeeds. Delegated to the shared rule rather than inlining
+    // `canPlay || isPdfPlaybackReady` — Android must not re-derive that policy in Kotlin.
+    val pdfPlayback by readerVm.pdfPlayback.collectAsStateWithLifecycle()
+    val canPlayNow = remember(capabilities, pdfPlayback) {
+        FolinoReaderJNI.nativeCanPlayNow(capabilities.canPlay, pdfPlayback is PdfPlaybackState.Ready)
     }
     val scoreHandle by readerVm.scoreHandle.collectAsStateWithLifecycle()
     // The live layout-options snapshot the recompute loop feeds nativeComputeLayout; the tap
