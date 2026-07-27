@@ -189,9 +189,12 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     // The active PDF's background-parsed playback handle (Task 12; mirrors [pdfPageSource]'s shape),
     // set by [parsePdfForPlayback] once `_pdfPlayback` reaches `Ready` and released by
     // [closePdfPlaybackHandle] whenever the Reader is retargeted (see [load]) or this ViewModel is
-    // cleared. `@Volatile` for the same reason as [pdfPageSource]: [parsePdfForPlayback] writes it from
-    // a `Dispatchers.Default` coroutine. `private`, not exposed like [pdfPageSource]: nothing outside
-    // this class needs the handle itself, only the `pdfPlayback` StateFlow built from it.
+    // cleared. Both the write (inside [parsePdfForPlayback]'s `Dispatchers.Main.immediate` hop) and every
+    // read/clear (`load`, [onCleared]) happen on Main, so `@Volatile` is not load-bearing for THIS field
+    // the way it is for [pdfPageSource] (which Compose call sites read from Main while [openPdf] writes
+    // it from `Dispatchers.IO`) — kept anyway as cheap insurance against a future caller reading it off
+    // Main. `private`, not exposed like [pdfPageSource]: nothing outside this class needs the handle
+    // itself, only the `pdfPlayback` StateFlow built from it.
     @Volatile
     private var pdfPlaybackHandle: PdfScoreHandle? = null
 
@@ -379,18 +382,21 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * [PdfPlaybackState.Unavailable] — never [ReaderState.Error]: the document is already on screen, and
      * an unparseable (e.g. scanned/raster) PDF staying display-only is an acceptable outcome, not a bug.
      *
-     * The heavy work (file read, metrics install, `PdfScoreHandle.load`) runs on [Dispatchers.Default].
-     * Everything from there on — checking [scoreId] against [loadedScoreId] and publishing the result —
-     * runs on [Dispatchers.Main.immediate], the SAME dispatcher [load]'s retarget-cleanup block runs on.
-     * That is not incidental: [scoreId] is re-checked immediately before EVERY publish here (including
+     * The heavy work — file read, metrics install, `PdfScoreHandle.load`, AND the two JNI calls that read
+     * the parsed score (opening BPM, parts/staves) — all stay on [Dispatchers.Default]/[Dispatchers.IO],
+     * exactly like the `.mscz` branch of [load] keeps its own identical pair of calls off Main. Only the
+     * [scoreId]-vs-[loadedScoreId] check and the plain StateFlow writes hop to
+     * [Dispatchers.Main.immediate] — the SAME dispatcher [load]'s retarget-cleanup block runs on. That
+     * hop is not incidental: [scoreId] is re-checked immediately before EVERY publish here (including
      * the `Unavailable` one), mirroring [openPdf]'s own supersession guard, but a `Default`-thread check
      * can still race a `Main`-thread [load] call landing between the check and the write — e.g. a parse
      * that reads as "still current" the instant before `load()` resets [loadedScoreId] and [_pdfPlayback]
      * for the NEXT score, whose write would then land right after and clobber that reset. Running the
-     * check-and-publish block on `Main.immediate` closes that window outright: it can only ever interleave
-     * with [load]'s reset at a suspension point, and there isn't one between them. A superseded parse is
-     * fully closed — geometry AND score — since nothing else could possibly be using a handle that was
-     * never published anywhere.
+     * check-and-publish step on `Main.immediate` closes that window outright: `load()`'s reset runs to
+     * completion on Main without yielding, this hop genuinely dispatches (the parse coroutine is on
+     * `Default`, not already on Main), and neither block has a suspension point of its own — so the two
+     * cannot tear on Android's single-threaded main looper. A superseded parse is fully closed — geometry
+     * AND score — since nothing else could possibly be using a handle that was never published anywhere.
      */
     private fun parsePdfForPlayback(file: File, scoreId: String) {
         _pdfPlayback.value = PdfPlaybackState.Parsing
@@ -410,22 +416,30 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                     null
                 }
             }
-            withContext(Dispatchers.Main.immediate) {
-                if (parsed == null) {
+            if (parsed == null) {
+                withContext(Dispatchers.Main.immediate) {
                     // Only report Unavailable for the score this parse was actually FOR — a retarget may
                     // already have reset `_pdfPlayback` to `Idle` for a different score, and this must not
                     // clobber that with a stale failure that would leave the NEW score's transport
                     // permanently disabled with no path back.
                     if (scoreId == loadedScoreId) _pdfPlayback.value = PdfPlaybackState.Unavailable
-                    return@withContext
                 }
+                return@launch
+            }
+            // Still on Default: read the two values the `.mscz` branch of [load] also computes off Main
+            // (`ReaderViewModel.kt`'s own `nativeOpeningQuarterBpm` / `loadParts` calls), so this JNI work
+            // never runs on the frame where the transport enables. Safe regardless of supersession: the
+            // score handle is still open here — only the Main-side check below can close it.
+            val bpm = SheetMusicJNI.nativeOpeningQuarterBpm(parsed.score.raw)
+            val parts = loadParts(parsed.score.raw)
+            withContext(Dispatchers.Main.immediate) {
                 if (scoreId != loadedScoreId) {
                     parsed.close()
                     return@withContext
                 }
                 pdfPlaybackHandle = parsed
-                _openingQuarterBpm.value = SheetMusicJNI.nativeOpeningQuarterBpm(parsed.score.raw)
-                _parts.value = loadParts(parsed.score.raw)
+                _openingQuarterBpm.value = bpm
+                _parts.value = parts
                 // Publish Ready before the raw handle: the recompute loop's `combine` reads BOTH from the
                 // same emission once `_scoreHandle` changes, but publishing this first means even a
                 // hypothetical intermediate read sees them consistent (see [shouldSkipLayoutRecompute]).
