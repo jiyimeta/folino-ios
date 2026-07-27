@@ -52,6 +52,7 @@ import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderViewModel
 import com.keynumber.folino.reader.ink.AnnotationLayers
 import com.keynumber.folino.reader.ink.AnnotationSurfaceState
+import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.PdfAnnotationCaptureController
 import com.keynumber.folino.reader.ink.encodeWireArray
 import kotlinx.coroutines.Dispatchers
@@ -425,6 +426,12 @@ private fun PagedPdfPage(
             )
         }
     }
+    // Owns this page's BEGIN/MOVE/END erase-drag state machine — see `PdfVerticalScore`'s equivalent for
+    // the fuller rationale (an in-flight drag has no reason to survive a layout-mode switch, or here, a
+    // page turn — swipe is frozen while annotating anyway, so a drag can't outlive this composable's own
+    // page slot).
+    val eraseController = remember { EraseGestureController() }
+
     // Local copy of the shared `annotation` bundle with a page-known capture (see `PdfVerticalScore`'s own
     // equivalent for the fuller rationale — same reasoning, just "this page IS the visible one" instead of
     // resolving from a centroid). Rebuilt fresh every recomposition; see that same doc for why that's fine.
@@ -436,7 +443,25 @@ private fun PagedPdfPage(
             colorRGBA = base.colorRGBA,
             widthMm = base.widthMm,
             eraserMode = base.eraserMode,
-            onEraseGesture = base.onEraseGesture,
+            eraserWidthMm = base.eraserWidthMm,
+            onEraseGesture = { phase, pathMm ->
+                // Presets are DIAMETERS; `applyErase` (via `EraseGestureController`) wants a radius.
+                val radiusMm = base.eraserWidthMm / 2f
+                eraseController.handle(
+                    scope = scope,
+                    phase = phase,
+                    pathMm = pathMm,
+                    radiusMm = radiusMm,
+                    // No ssm score for a PDF — see `PdfVerticalScore`'s identical comment.
+                    scoreHandle = null,
+                    currentDrawings = readerVm::currentDrawings,
+                    // The SAME resolver the dry overlay uses, not a second implementation.
+                    resolveDisplayTransforms = resolveDisplayTransforms,
+                    releaseWetRetention = base.inkHandoff::releaseAll,
+                    onInProgress = readerVm::eraseInProgress,
+                    onCommitted = readerVm::eraseCommitted,
+                )
+            },
             inkHandoff = base.inkHandoff,
             onStrokeCaptured = { stroke, onCommitted ->
                 val capturedColorRGBA = base.colorRGBA

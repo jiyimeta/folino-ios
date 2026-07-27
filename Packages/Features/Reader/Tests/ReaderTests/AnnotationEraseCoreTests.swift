@@ -26,6 +26,20 @@ struct AnnotationEraseCoreTests {
         )
     }
 
+    /// Same shape as `drawing(_:baseWidth:)` but PAGE-anchored (Task 11) — used to confirm
+    /// `AnnotationEraseCore.erase` is anchor-kind-agnostic: a page fragment must keep the SAME page
+    /// index as its parent, never migrate to another page or degrade to a musical anchor.
+    private func pageDrawing(_ points: [(Float, Float)], pageIndex: Int, baseWidth: Float = 0.5) -> DrawingAnchor {
+        let stroke = InkStroke(
+            tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: baseWidth, opacity: 1,
+            x: points.map(\.0), y: points.map(\.1), width: points.map { _ in 0 },
+            force: [], azimuth: [], altitude: [], timeMillis: [],
+        )
+        return DrawingAnchor(
+            kind: .page(PageAnchor(pageIndex: pageIndex)), encodedDrawing: InkStrokeCodec.encode(stroke),
+        )
+    }
+
     private let identity = StrokeTransform(sp: 1, px: 0, py: 0)
 
     /// `InkStrokeCodec.decode` is throwing (see `InkStrokeCodecTests`), not the optional-returning API the brief's
@@ -130,6 +144,64 @@ struct AnnotationEraseCoreTests {
             radiusMm: 10,
         )
         #expect(out.drawings.count == 1)
+        #expect(out.changedIndices.isEmpty)
+    }
+
+    // MARK: - Anchor-kind preservation (Task 11: PDF page-anchored erase)
+
+    @Test
+    func `erasing the middle of a page anchored stroke preserves its page index on both fragments`() {
+        let layer = [pageDrawing([(0, 0), (2, 0), (4, 0), (6, 0), (8, 0), (10, 0)], pageIndex: 3)]
+        let out = AnnotationEraseCore.erase(
+            layer,
+            transforms: [identity],
+            path: [CGPoint(x: 5, y: 0)],
+            radiusMm: 1.2,
+        )
+        #expect(out.drawings.count == 2)
+        for fragment in out.drawings {
+            guard case let .page(anchor) = fragment.kind else {
+                Issue.record("fragment degraded to a non-page anchor: \(fragment.kind)")
+                continue
+            }
+            #expect(anchor.pageIndex == 3)
+        }
+    }
+
+    @Test
+    func `erasing a page anchored stroke at a different display zoom still preserves its page index`() {
+        // A page-anchored stroke's stored geometry is a page-width FRACTION — the same fragment must keep
+        // the same page index (and cut at the same fractional point) regardless of what zoom (`sp`) the
+        // page happened to be displayed at when the erase ran.
+        let zoomed = StrokeTransform(sp: 2, px: 100, py: 50)
+        let layer = [pageDrawing([(0, 0), (2, 0), (4, 0), (6, 0), (8, 0), (10, 0)], pageIndex: 7)]
+        let out = AnnotationEraseCore.erase(
+            layer,
+            transforms: [zoomed],
+            // Display-space path: the stroke's stored x=5 sample sits at display x = 100 + 5*2 = 110.
+            path: [CGPoint(x: 110, y: 50)],
+            radiusMm: 2.4, // 1.2mm stored radius * zoom 2
+        )
+        #expect(out.drawings.count == 2)
+        for fragment in out.drawings {
+            guard case let .page(anchor) = fragment.kind else {
+                Issue.record("fragment degraded to a non-page anchor: \(fragment.kind)")
+                continue
+            }
+            #expect(anchor.pageIndex == 7)
+        }
+    }
+
+    @Test
+    func `a fully covered page anchored stroke drops without leaving a musical anchor behind`() {
+        let layer = [pageDrawing([(0, 0), (1, 0), (2, 0)], pageIndex: 4)]
+        let out = AnnotationEraseCore.erase(
+            layer,
+            transforms: [identity],
+            path: [CGPoint(x: 1, y: 0)],
+            radiusMm: 10,
+        )
+        #expect(out.drawings.isEmpty)
         #expect(out.changedIndices.isEmpty)
     }
 

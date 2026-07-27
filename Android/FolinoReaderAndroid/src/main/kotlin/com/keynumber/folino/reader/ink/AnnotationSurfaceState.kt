@@ -6,13 +6,18 @@ import androidx.ink.strokes.Stroke
 import com.keynumber.folino.reader.DrawingAnchorWire
 
 /**
- * Everything a score surface needs to mount the annotation layers, bundled so the three surfaces
+ * Everything a score surface needs to mount the annotation layers, bundled so the three musical surfaces
  * (vertical / horizontal / page) take one parameter instead of ten identical ones each.
  *
- * All of it is owned by `ReaderScreen` — the erase state machine, the capture pipeline and the
- * wet→dry handoff queue live there because they outlive any single surface (a layout-mode switch
- * swaps the surface but must not restart an in-flight commit). A surface only reads this to decide
- * *where* to draw; it never mutates it.
+ * The toolbar state (color/width/eraser-mode) is owned by `ReaderScreen`, shared verbatim by every surface
+ * — a layout-mode switch must not reset the armed tool. `onEraseGesture` / `onStrokeCaptured` are ALSO
+ * built once in `ReaderScreen` for the three musical surfaces, sequencing calls against a musical
+ * `scoreHandle`. A PDF surface (Task 11) instead builds its OWN local copy of this whole object — same
+ * toolbar fields (color, width, eraser-mode, `inkHandoff`), but its OWN `onEraseGesture`/`onStrokeCaptured`
+ * closures routed through the page-anchor JNI path instead — see `PdfVerticalScore`/`PagedPdfScore`'s own
+ * `pdfAnnotation` construction. Either way, a surface never MUTATES the instance it's handed; it either
+ * reads it as-is (the three musical surfaces) or copies it into a new instance with different closures (the
+ * PDF surfaces).
  *
  * Passed as `null` by surfaces that must not annotate at all — the PiP rendition of
  * [com.keynumber.folino.reader.HorizontalScore], which is a passive mirror with no input.
@@ -31,6 +36,12 @@ internal class AnnotationSurfaceState(
     val widthMm: Float,
     /** True while the eraser is selected — swaps the wet layer to the partial-erase gesture path. */
     val eraserMode: Boolean,
+    /** Active eraser DIAMETER in document mm (a preset, not a radius — every caller of
+     * `EraseGestureController.handle` halves this itself, matching the existing "presets are diameters,
+     * `applyErase` wants a radius" convention). Threaded through here (Task 11) so a PDF surface — which has
+     * no `toolState` of its own — can build its own eraser gesture handler without a second source of truth
+     * for this value. */
+    val eraserWidthMm: Float,
     val onEraseGesture: (phase: ErasePhase, pathMm: List<Offset>) -> Unit,
     val inkHandoff: AnnotationHandoffQueue<DrawingAnchorWire>,
     val onStrokeCaptured: (stroke: Stroke, onCommitted: (DrawingAnchorWire?) -> Unit) -> Unit,

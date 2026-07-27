@@ -59,6 +59,7 @@ import com.keynumber.folino.reader.ReaderState
 import com.keynumber.folino.reader.ReaderViewModel
 import com.keynumber.folino.reader.ink.AnnotationLayers
 import com.keynumber.folino.reader.ink.AnnotationSurfaceState
+import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.PdfAnnotationCaptureController
 import com.keynumber.folino.reader.ink.encodeWireArray
 import kotlinx.coroutines.Dispatchers
@@ -409,15 +410,21 @@ internal fun PdfVerticalScore(
 
     val annotationMode = annotation?.annotationMode == true
 
-    // A local copy of the shared `annotation` bundle with a PDF-specific `onStrokeCaptured`: the shared
-    // one (built once in `ReaderScreen`) resolves a musical anchor via `scoreHandle`, which is always null
-    // for a PDF (Task 12 hasn't landed a parsed score for one yet). Every other field is forwarded
-    // unchanged — color/width/eraser state, the committed layer, the wet↔dry handoff queue all come from
-    // the SAME shared bundle every surface uses. Rebuilt fresh every recomposition (no `remember`): the
-    // base `annotation` itself is a fresh object every `ReaderScreen` recomposition already (see its own
-    // construction site), so memoizing here would buy nothing, and `onStrokeCaptured` is only ever invoked
-    // from a finished-stroke callback (not a `LaunchedEffect` key), so a fresh closure every time is fine —
-    // exactly how `AnnotationWetOverlay` already expects it (`rememberUpdatedState` there covers freshness).
+    // Owns this surface's BEGIN/MOVE/END erase-drag state machine — its own instance, not shared with
+    // ReaderScreen's musical one (an in-flight drag has no reason to survive a layout-mode switch; see
+    // the class doc). `remember`ed so a drag survives a recomposition mid-gesture.
+    val eraseController = remember { EraseGestureController() }
+
+    // A local copy of the shared `annotation` bundle with PDF-specific `onStrokeCaptured`/`onEraseGesture`:
+    // the shared ones (built once in `ReaderScreen`) resolve a musical anchor via `scoreHandle`, which is
+    // always null for a PDF (Task 12 hasn't landed a parsed score for one yet). Every other field is
+    // forwarded unchanged — color/width/eraser state, the committed layer, the wet↔dry handoff queue all
+    // come from the SAME shared bundle every surface uses. Rebuilt fresh every recomposition (no
+    // `remember`): the base `annotation` itself is a fresh object every `ReaderScreen` recomposition
+    // already (see its own construction site), so memoizing here would buy nothing, and neither closure is
+    // ever used as a `LaunchedEffect` key — only invoked from a gesture callback — so a fresh instance every
+    // time is fine, exactly how `AnnotationWetOverlay` already expects it (`rememberUpdatedState` there
+    // covers freshness).
     val pdfAnnotation = annotation?.let { base ->
         AnnotationSurfaceState(
             annotationMode = base.annotationMode,
@@ -426,7 +433,28 @@ internal fun PdfVerticalScore(
             colorRGBA = base.colorRGBA,
             widthMm = base.widthMm,
             eraserMode = base.eraserMode,
-            onEraseGesture = base.onEraseGesture,
+            eraserWidthMm = base.eraserWidthMm,
+            onEraseGesture = { phase, pathMm ->
+                // Presets are DIAMETERS; `applyErase` (via `EraseGestureController`) wants a radius.
+                val radiusMm = base.eraserWidthMm / 2f
+                eraseController.handle(
+                    scope = scope,
+                    phase = phase,
+                    pathMm = pathMm,
+                    radiusMm = radiusMm,
+                    // No ssm score for a PDF — `reanchor`'s musical recapture branch never runs; a page
+                    // fragment's Phase 1 slice is already correctly re-anchored (see that function's doc).
+                    scoreHandle = null,
+                    currentDrawings = readerVm::currentDrawings,
+                    // The SAME resolver the dry overlay uses (built once above, keyed on the raster page
+                    // geometry) — not a second implementation of "how to get display transforms for this
+                    // layer."
+                    resolveDisplayTransforms = resolveDisplayTransforms,
+                    releaseWetRetention = base.inkHandoff::releaseAll,
+                    onInProgress = readerVm::eraseInProgress,
+                    onCommitted = readerVm::eraseCommitted,
+                )
+            },
             inkHandoff = base.inkHandoff,
             onStrokeCaptured = { stroke, onCommitted ->
                 val capturedColorRGBA = base.colorRGBA
