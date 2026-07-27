@@ -16,19 +16,12 @@ extension EditorViewModel {
         step { ElementNavigator.nextTimedElement(after: $0, in: $1) }
     }
 
+    /// Steps from the CARET — the position marker, and the one thing on screen that says where you are — and lands
+    /// selection and caret together: stepping is an explicit pick, so it re-syncs the two the same way a tap does.
+    /// Falls back to the selection's slot when the caret has run off the end of the staff, so ← can still walk back.
     private func step(_ walk: (VoiceElementID, Score) -> VoiceElementID?) {
-        guard let score, let location = Self.voiceElement(of: selectedItem) else { return }
+        guard let score, let location = Self.slot(of: caretItem) ?? Self.slot(of: selectedItem) else { return }
         guard let destination = walk(location, score) else { return }
         select(SelectionRederivation.item(at: destination, in: score, preferringNoteIndex: nil))
-    }
-
-    /// The voice slot a selected item occupies. Tuplet brackets (and clefs, which never reach the selection) don't
-    /// name a single slot, so stepping from one is a no-op rather than a guess.
-    private static func voiceElement(of item: SheetMusicCore.ScoreItemID?) -> VoiceElementID? {
-        switch item {
-        case let .note(id): VoiceElementID(id)
-        case let .rest(id): VoiceElementID(id)
-        case .tuplet, .clef, .none: nil
-        }
     }
 }

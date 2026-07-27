@@ -29,22 +29,22 @@ enum EditorContextOps {
     }
 }
 
-/// Tie key. Disabled unless the selected note has a same-pitch successor (`canTie`); toggles the tie otherwise.
+/// The pad's tie ＋ key: extends the selected note by writing the armed length after it and tying the two. Disabled
+/// when there's nowhere to write (`canAppendTiedNote`). Removing a tie is the callout key's job, not this one's.
 private struct TieButton: View {
     let viewModel: EditorViewModel
     var isFlexible = false
 
     var body: some View {
         Button {
-            viewModel.toggleTie()
+            viewModel.appendTiedNote()
         } label: {
-            // FLAG (Task 17 visual review): this SF Symbol is the more tie-like of the two candidates in the brief
-            // (an arced slur/tie curve) vs. `link` (a chain). Confirm it reads as a musical tie at 20 pt; fall back
-            // to `link` if not.
-            EditorContextOps.symbolGlyph("point.topleft.down.curvedto.point.bottomright.up")
+            // The SF Symbol stand-in (`point.topleft.down.curvedto.point.bottomright.up`) read as a generic curve
+            // next to a row of real music glyphs; this is the music font's own tie stroke with a `+` for "add".
+            PadKeyGlyph.tie()
         }
         .buttonStyle(PadKeyStyle(isFlexible: isFlexible))
-        .disabled(!viewModel.canTie)
+        .disabled(!viewModel.canAppendTiedNote)
         .accessibilityLabel(Text("editor.ops.tie", bundle: .module))
     }
 }

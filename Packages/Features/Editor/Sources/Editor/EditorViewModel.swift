@@ -13,8 +13,16 @@ import SheetMusicUI
 public final class EditorViewModel {
     public private(set) var editor: ScoreEditor?
     /// The editor's live score, or nil outside a session. Views and the Reader seam render THIS score while editing.
+    ///
+    /// The `generation` read is load-bearing, not decoration. `ScoreEditor` is a plain class, so mutating the score
+    /// inside it changes nothing Observation can see — the `editor` reference is the same object it was. Anything a
+    /// view derives from the score (the callout's length readout and its highlighted key, `canTie`, `isCaretInTuplet`)
+    /// would then be computed once and never again: change a note's length with the tray open and the tray kept
+    /// showing the old one. Touching `generation` — a stored property this type bumps on every applied edit, undo and
+    /// redo — registers the dependency that makes those views recompute.
     public var score: Score? {
-        editor?.score
+        _ = generation
+        return editor?.score
     }
 
     /// Bumped on every applied / undone / redone command. The Reader includes it in its layout task key so the
@@ -31,21 +39,78 @@ public final class EditorViewModel {
         editor != nil
     }
 
-    // Selection (rendered by the Reader through the seam).
+    // Selection and caret (both rendered by the Reader through the seam — the selection as a tint on the item, the
+    // caret as an insertion bar in front of a slot).
+    //
+    // They are two different things and only coincide when you pick a target explicitly (tap, ← / →). The caret is
+    // where the NEXT note lands; the selection is the note the editing keys act on. Writing a run of notes moves the
+    // caret on after each one while the selection stays on the note just written — so ♯ / ♭ / ⌫ keep addressing what
+    // you just played rather than the empty slot ahead of it.
     public private(set) var selection: ScoreSelection = .none
     public private(set) var selectedItem: SheetMusicCore.ScoreItemID?
+    public private(set) var caretItem: SheetMusicCore.ScoreItemID?
+
+    /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
+    /// into and no item to edit, so every key is inert (there is nothing for one to mean).
+    public var hasEditTarget: Bool {
+        caretItem != nil || selectedItem != nil
+    }
+
+    /// Whether the SELECTION names a notehead — the shape ⌫ / ♯ / ♭ need. False for a rest, a tuplet bracket, or an
+    /// empty selection, which is what gates those three keys: with the caret running ahead of the selection, "there
+    /// is a caret" no longer implies "there is a note to sharpen".
+    public var isNoteSelected: Bool {
+        if case .note = selectedItem { true } else { false }
+    }
 
     // Arming state (Tasks 5/7). internal(set), not private(set): the ops live in same-type extensions in OTHER
     // files (`EditorViewModel+Input.swift` etc.), and Swift's `private` does not span files.
+    //
+    // The armed duration describes what the NEXT note or rest will be — it never reaches back and re-times what is
+    // already written. Base value and augmentation dots are held apart (rather than as one dotted `.fraction`) so
+    // the two keys can light independently: a dot rides on whichever length is armed.
     public internal(set) var armedDuration: NoteDuration?
+    public internal(set) var armedDots = 0
     public internal(set) var isAddToChordArmed = false
+
+    /// The tuplet the key writes on a plain tap, and the number it wears. Triplets to begin with, since that is what
+    /// these parts are full of — but a piece that wants quintuplets wants them repeatedly, so the last size chosen
+    /// from the long-press menu becomes the tap. Deliberately NOT reset by `beginSession`: it is a preference about
+    /// how you are writing, not state about one score.
+    public internal(set) var armedTuplet = 3
+
+    /// The duration input actually writes: the armed length with its dots applied. `nil` until a length is armed —
+    /// which, thanks to `armFromSelectionIfNeeded`, means only before the first thing is picked in a session.
+    var armedInputDuration: NoteDuration? {
+        guard let armedDuration else { return nil }
+        return armedDots > 0 ? armedDuration.dotted(armedDots) : armedDuration
+    }
+
     public var activeVoice = 0
+
+    /// Where the selected item currently sits on screen, in global coordinates — mirrored in by the composition root
+    /// from the Reader's editing overlay, which is the only place that knows the document→screen transform. Drives
+    /// the floating ♯ / ♭ callout's position; nil whenever nothing is selected.
+    ///
+    /// Republished on every scroll and zoom frame, so read it ONLY from the leaf view that draws the callout (see
+    /// `SelectionCalloutLayer`) — reading it from a container's body re-renders that container at frame rate.
+    public var selectionAnchor: CGRect?
 
     /// Mirrored from the reader's transport by the composition root. Editing and playback coexist — you can hear the
     /// passage you're writing without leaving edit mode — but the pad's keys go inert while the cursor runs: applying
     /// an edit mid-playback reflows the score out from under the cursor, and the audition preview would fight the
     /// playing engine for the same notes.
-    public var isPlaybackActive = false
+    ///
+    /// Starting playback also drops the selection. The transport seeks to the selected note before it starts (see
+    /// `ReaderRootScreen`'s `startCursorProvider`), and from that moment the playhead — not the selection — is where
+    /// the music is; leaving a stale highlight on the note you started from just competes with it. It also means the
+    /// pad and callout fold away on their own rather than sitting there inert for the length of the piece.
+    public var isPlaybackActive = false {
+        didSet {
+            guard isPlaybackActive, isPlaybackActive != oldValue else { return }
+            select(nil)
+        }
+    }
 
     /// Stored audition state (Task 9) — declared HERE (extensions cannot add stored properties). Set synchronously
     /// by `audition(_:)` (`EditorViewModel+Audition.swift`) so tests can deterministically `await
@@ -72,7 +137,8 @@ public final class EditorViewModel {
     public var documentProvider: @MainActor () -> LayoutDocument? = { nil }
     /// Fired after every score mutation with the fresh score (App mirrors it into the Reader seam).
     public var onScoreChanged: @MainActor (Score) -> Void = { _ in }
-    /// Fired whenever selection changes (App mirrors it into the Reader seam).
+    /// Fired whenever the selection or the caret changes (App mirrors both into the Reader seam: the first argument
+    /// tints the selected item, the second draws the insertion caret).
     public var onSelectionChanged: @MainActor (ScoreSelection, SheetMusicCore.ScoreItemID?) -> Void = { _, _ in }
 
     @ObservationIgnored let gateway: any ScoreFileGateway
@@ -102,7 +168,9 @@ public final class EditorViewModel {
         appliedEditCount = 0
         selection = .none
         selectedItem = nil
+        caretItem = nil
         armedDuration = nil
+        armedDots = 0
         isAddToChordArmed = false
     }
 
@@ -168,19 +236,49 @@ public final class EditorViewModel {
         scheduleAutosave()
     }
 
-    /// Re-derives the selection from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
-    /// positional, so a stored selection can drift after any mutation — after every apply/undo/redo the
-    /// selection is recomputed against the current score. When no slot was touched
-    /// (`lastAffectedLocation == nil`) the current selection is preserved rather than cleared.
+    /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
+    /// positional, so a stored selection can drift after any mutation — after every apply/undo/redo both are
+    /// recomputed against the current score. When no slot was touched (`lastAffectedLocation == nil`) they are
+    /// preserved rather than cleared.
+    ///
+    /// Which of the two followed the command depends on which one it was aimed at. The keys are split between them
+    /// (duration / tuplet write at the caret, ⌫ / ♯ / ♭ / tie edit the selection), so re-deriving both from the
+    /// affected slot would collapse the lead the caret holds during a run of input: a duration key would drag the
+    /// selection off the note just written, and ♯ would drag the caret back onto it, making the next letter overwrite
+    /// what was just sharpened. Whichever one wasn't aimed at keeps its own slot; when the two already share a slot —
+    /// the ordinary case, and every case before the first note of a run — both follow.
     private func rederiveSelection() {
         guard let editor, let location = editor.lastAffectedLocation else { return }
-        select(
-            SelectionRederivation.item(
-                at: location,
-                in: editor.score,
-                preferringNoteIndex: previousNoteIndex(at: location),
-            ),
+        let score = editor.score
+        let affected = SelectionRederivation.item(
+            at: location, in: score, preferringNoteIndex: previousNoteIndex(at: location),
         )
+        let selectionSlot = Self.slot(of: selectedItem)
+        let caretSlot = Self.slot(of: caretItem)
+        if caretSlot == location, selectionSlot != location {
+            place(selection: rederived(selectionSlot, in: score) ?? affected, caret: affected)
+        } else if selectionSlot == location, caretSlot != location {
+            place(selection: affected, caret: rederived(caretSlot, in: score) ?? affected)
+        } else {
+            select(affected)
+        }
+    }
+
+    /// Re-resolves a slot that the command did NOT target against the mutated score. `nil` when the slot was spliced
+    /// away (the caller then falls back to the affected location, so neither marker is left dangling).
+    private func rederived(_ slot: VoiceElementID?, in score: Score) -> SheetMusicCore.ScoreItemID? {
+        guard let slot else { return nil }
+        return SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
+    }
+
+    /// The voice slot an item occupies. Tuplet brackets (and clefs, which never reach the selection) don't name a
+    /// single slot, so they resolve to `nil`.
+    static func slot(of item: SheetMusicCore.ScoreItemID?) -> VoiceElementID? {
+        switch item {
+        case let .note(id): VoiceElementID(id)
+        case let .rest(id): VoiceElementID(id)
+        case .tuplet, .clef, .none: nil
+        }
     }
 
     /// The `noteIndexInChord` of the current selection when it is a `.note` anchored at exactly `location`,
@@ -195,11 +293,35 @@ public final class EditorViewModel {
         return noteID.noteIndexInChord
     }
 
-    /// Sets `selection` / `selectedItem` and notifies. Internal (not private) so Tasks 5-10's ops
-    /// extensions in sibling files can drive selection directly (e.g. after a hit-test tap).
+    /// Picks `item` explicitly — caret and selection land together. Every path that names a target directly (tap,
+    /// ← / →, post-command re-derivation) goes through here; only note input deliberately splits the two, via
+    /// `place(selection:caret:)`. Internal (not private) so the ops extensions in sibling files can drive selection.
     func select(_ item: SheetMusicCore.ScoreItemID?) {
+        place(selection: item, caret: item)
+    }
+
+    /// Sets selection and caret independently and notifies. The only caller that passes different values is note
+    /// input, which leaves the selection on the note it just wrote and moves the caret to the next slot.
+    func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
         selection = item.map(ScoreSelection.single) ?? .none
         selectedItem = item
-        onSelectionChanged(selection, selectedItem)
+        caretItem = caret
+        armFromSelectionIfNeeded()
+        onSelectionChanged(selection, caret)
+    }
+
+    /// Arms the length keys from whatever was just picked, but ONLY while nothing is armed yet — which in practice
+    /// means the first note or rest touched in a session. A pad that opens with no length lit has no answer to "what
+    /// will the next note be", and making the first pick supply it beats making the user state it twice; after that
+    /// the armed length is the user's own choice and selecting other notes must not quietly overwrite it.
+    private func armFromSelectionIfNeeded() {
+        guard armedDuration == nil, let score, let slot = Self.slot(of: selectedItem),
+              case let .chord(chord)? = score[slot]
+        else { return }
+        // `.fraction` durations carry their dots (and any tuplet scaling) baked in; split them back into the base
+        // value a key can light plus the dot count the dot key can light.
+        let split = DurationInterpretation.split(chord.duration)
+        armedDuration = split.base
+        armedDots = split.dots
     }
 }
