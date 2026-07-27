@@ -1476,25 +1476,6 @@ private fun ReadyScore(
     }
 }
 
-/**
- * New scroll offset (px) that keeps the content point under the pinch centroid
- * fixed across a zoom step of ratio `r = newScale / oldScale`. Only the page
- * content scales by `r`; a constant leading [pad] (the fixed vertical padding
- * above the page, which does NOT scale with zoom) is held out of the scaling.
- * In scroll space the content point under the centroid is at
- * `scroll + centroid`; the scaling page part is `scroll + centroid - pad`, so
- * after scaling by `r` the new offset is
- * `pad + r * (scroll - pad + centroid) - centroid`. With `pad = 0` this reduces
- * to the simple `r * (scroll + centroid) - centroid`. The scroll state clamps
- * the result to `[0, maxValue]`, so no clamp is needed here.
- */
-private fun focalAdjustedOffset(
-    currentScroll: Float,
-    centroid: Float,
-    ratio: Float,
-    pad: Float = 0f,
-): Float = pad + ratio * (currentScroll - pad + centroid) - centroid
-
 @Composable
 private fun TransportBar(
     audioVm: ReaderAudioViewModel,
