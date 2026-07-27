@@ -14,6 +14,7 @@ import UtilityCore // AnalyticsEvent (shared catalog type, for the analytics eve
 // `@_exported import`s SheetMusicCore and would make `ScoreItemID` ambiguous with Domain's.
 import SheetMusicMIDI // MidiRenderer.render(score:), MidiWriter.write(_:)
 import SheetMusicMSCX // MSCZReader.parse(contentsOf:), MSCZWriter, MSCXEncoderOptions
+import SheetMusicPDF // PDFImporter.summaryUsingSwiftReader(pdfData:) -> PDFDocumentSummary?
 import Wirelet
 import WireletObservable
 import WireletProvided
@@ -88,27 +89,49 @@ public final class LibraryAndroidStore {
         reloadTags()
     }
 
-    /// Parse the `.mscz` at `path` (the Kotlin side copies the picked document
-    /// into the app cache dir and passes its absolute path), derive the display
-    /// fields, copy the file into managed storage as `<id>.mscz`, and persist a
-    /// live record. Foundation-only (zlib + XMLParser); unreadable/unparseable
-    /// input is ignored (no crash, no row).
+    /// Parse the picked file at `path` (the Kotlin side copies it into the app
+    /// cache dir and passes its absolute path), derive the display fields,
+    /// copy the file into managed storage as `<id>.<canonicalExtension>`, and
+    /// persist a live record. Unreadable/unparseable input is ignored (no
+    /// crash, no row).
+    ///
+    /// A PDF is stored as a fixed-layout document with no notation decoded here (iOS parity: the playable score is
+    /// produced later, in the Reader, by the background OMR parse) — only page count + `/Title` are read, via the
+    /// same Foundation-only `PDFImporter.summaryUsingSwiftReader` entry point Android's OMR path will reuse. Every
+    /// other pickable format still goes through the full `MSCZReader.parse`.
     @WireletExpose
     public func importScore(_ path: String) -> AnalyticsEventWire {
         let url = URL(fileURLWithPath: path)
-        // Format the user picked, derived from the original filename (iOS parity: log the imported format). Android's
-        // manual import only parses MuseScore containers, so a non-mscz pick fails to parse below → import_failed.
+        // Format the user picked, derived from the original filename (iOS parity: log the imported format).
         let pickedFormat = ScoreFormat.detect(filename: url.lastPathComponent)
-        guard let score = try? MSCZReader.parse(contentsOf: url) else {
-            return AnalyticsBridge.encode(
-                .scoreImportFailed(format: pickedFormat?.analyticsValue ?? "unknown", reason: "parse_failed"),
-            )
+        let fields: ScoreDisplayFields
+        let format: ScoreFormat
+        if pickedFormat == .pdf {
+            // Title rule matches iOS (`LiveScoreFileGateway.pdfSummary`) via the SHARED
+            // `ScorePresentation.title(fromFilename:pdfTitle:)`: the document `/Title` when present, else the
+            // filename. `summaryUsingSwiftReader` returns nil for unreadable bytes or a pageless PDF.
+            guard let data = try? Data(contentsOf: url),
+                  let summary = PDFImporter.summaryUsingSwiftReader(pdfData: data)
+            else {
+                return AnalyticsBridge.encode(.scoreImportFailed(format: "pdf", reason: "parse_failed"))
+            }
+            fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, pdfTitle: summary.title)
+            format = .pdf
+        } else {
+            // Android's manual import otherwise only parses MuseScore containers, so a non-mscz pick fails to parse
+            // below → import_failed.
+            guard let score = try? MSCZReader.parse(contentsOf: url) else {
+                return AnalyticsBridge.encode(
+                    .scoreImportFailed(format: pickedFormat?.analyticsValue ?? "unknown", reason: "parse_failed"),
+                )
+            }
+            // Shared Domain presenter — identical title/subtitle/composer rules as iOS.
+            fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, score: score)
+            format = .mscz
         }
-        // Shared Domain presenter — identical title/subtitle/composer rules as iOS.
-        let fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, score: score)
         let id = UUID().uuidString
         // Shared iOS naming convention: "<id>.<canonicalExtension>".
-        let localFileName = "\(id).\(ScoreFormat.mscz.canonicalExtension)"
+        let localFileName = "\(id).\(format.canonicalExtension)"
         let hash = store.sha256(path: path)
         store.copyImportedFile(fromPath: path, localFileName: localFileName)
         store.upsert(ScoreRecordWire(

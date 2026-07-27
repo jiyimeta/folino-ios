@@ -57,4 +57,24 @@ public enum ScorePresentation {
             composer: composer(from: score),
         )
     }
+
+    /// The library title for a PDF import: the document's own `/Title` attribute when present, else the
+    /// filename-derived title. A PDF is imported as a fixed-layout document with no notation decoded yet (that
+    /// happens later, in the Reader, via OMR), so `/Title` is the only metadata signal available at import time.
+    /// Shared by the iOS importer (`ScoreFileGateway.pdfSummary`'s `summary.title`) and the Android PDF import
+    /// path (`PDFImporter.summaryUsingSwiftReader(pdfData:)`'s `PDFDocumentSummary.title`) so neither platform
+    /// keeps its own copy of the rule.
+    public static func title(fromFilename filename: String, pdfTitle: String?) -> String {
+        nonEmpty(pdfTitle) ?? title(fromFilename: filename)
+    }
+
+    /// PDF counterpart of `displayFields(sourceFilename:score:)`. No musical metadata exists at import time, so
+    /// only the title rule applies; subtitle/composer are left nil.
+    public static func displayFields(sourceFilename: String, pdfTitle: String?) -> ScoreDisplayFields {
+        ScoreDisplayFields(
+            title: title(fromFilename: sourceFilename, pdfTitle: pdfTitle),
+            subtitle: nil,
+            composer: nil,
+        )
+    }
 }
