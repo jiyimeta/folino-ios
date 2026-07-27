@@ -51,16 +51,18 @@ object AnnotationEraseController {
     private const val PAGE_ANCHOR_KIND = 1
 
     /**
-     * Phase 1: cut the layer along `pathMm` (document-mm polyline, `radiusMm` geometric radius). Fragments
-     * inherit the parent drawing's anchor — they render correctly immediately but haven't been re-anchored
-     * yet (that's [reanchor]). Returns null when any native step fails to decode; the caller must leave
-     * the layer untouched rather than risk applying a partial cut.
+     * Phase 1: cut the layer along [pathWorld] (a polyline in the caller's own annotation world units —
+     * mm for a musical caller, raster px for a PDF one; [resolveDisplayTransforms] must already agree, see
+     * that parameter's own doc) with [radiusWorld] geometric radius in the same units. Fragments inherit
+     * the parent drawing's anchor — they render correctly immediately but haven't been re-anchored yet
+     * (that's [reanchor]). Returns null when any native step fails to decode; the caller must leave the
+     * layer untouched rather than risk applying a partial cut.
      */
     fun applyErase(
         drawings: List<DrawingAnchorWire>,
         resolveDisplayTransforms: (List<DrawingAnchorWire>) -> ByteArray,
-        pathMm: List<Offset>,
-        radiusMm: Float,
+        pathWorld: List<Offset>,
+        radiusWorld: Float,
     ): EraseOutcome? {
         // Nothing to erase — return null (not an empty outcome) so the caller leaves the layer untouched.
         if (drawings.isEmpty()) return null
@@ -74,10 +76,14 @@ object AnnotationEraseController {
         val transformsBytes = resolveDisplayTransforms(drawings)
         if (transformsBytes.isEmpty()) return null
 
+        // `EraseRequestWire`'s own field names (xMm/yMm/radiusMm) are the wire contract, unchanged — the
+        // VALUES here are whatever world unit `pathWorld`/`radiusWorld` are in, matching what
+        // `nativeAnnotationErase`'s own display-space hit test expects (the SAME space `resolveDisplayTransforms`
+        // just produced).
         val request = EraseRequestWire(
-            xMm = pathMm.map { it.x.toDouble() },
-            yMm = pathMm.map { it.y.toDouble() },
-            radiusMm = radiusMm.toDouble(),
+            xMm = pathWorld.map { it.x.toDouble() },
+            yMm = pathWorld.map { it.y.toDouble() },
+            radiusMm = radiusWorld.toDouble(),
         )
         val resultBytes = ReaderAnnotationJNI.erase(
             encodedDrawings, transformsBytes, EraseRequestWireCodec.encode(request),

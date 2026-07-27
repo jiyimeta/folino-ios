@@ -171,6 +171,24 @@ internal object PagedPdfLayout {
         val ty = viewportHeightPx / 2f + panYPx - zoom * rasterHeightPx / 2f
         return tx to ty
     }
+
+    /** 72 points == 1 inch == 25.4mm. */
+    private const val POINTS_TO_MM = 25.4 / 72.0
+
+    /**
+     * Raster px per document millimetre for a page whose own width is [pageWidthPt] points, rendered
+     * [rasterWidthPx] px wide. This surface's annotation "world" space is raster px, NOT mm (`pxPerMM = 1f`
+     * — see this file's class doc), but the toolbar's brush/eraser size preference is a physical-mm value
+     * shared with the musical surfaces (`AnnotationSurfaceState.brushWidthWorld`/`eraserWidthWorld` — see
+     * that type's own doc). This is the conversion factor a caller multiplies that mm preference by to get
+     * the correct on-screen px thickness. Returns `1f` (identity — inert, not "correct") for a non-positive
+     * [pageWidthPt]; real call sites already gate page geometry elsewhere.
+     */
+    fun pxPerPageMm(rasterWidthPx: Int, pageWidthPt: Double): Float {
+        val pageWidthMm = pageWidthPt * POINTS_TO_MM
+        if (pageWidthMm <= 0.0) return 1f
+        return (rasterWidthPx / pageWidthMm).toFloat()
+    }
 }
 
 /**
@@ -432,26 +450,43 @@ private fun PagedPdfPage(
     // page slot).
     val eraseController = remember { EraseGestureController() }
 
+    // This page's own annotation "world" space is raster px (`pxPerMM = 1f` below — see the class doc), but
+    // the toolbar's brush/eraser size is a physical-mm preference shared with the musical surfaces.
+    // Multiplying by this converts that mm preference into the correct on-screen px thickness for THIS
+    // page. Recomputed only alongside `rasterWidthPx` (a raster-scale settle), never on a live pinch frame.
+    val pxPerPageMm = remember(rasterWidthPx, pageWidthPt) {
+        PagedPdfLayout.pxPerPageMm(rasterWidthPx, pageWidthPt)
+    }
+
     // Local copy of the shared `annotation` bundle with a page-known capture (see `PdfVerticalScore`'s own
     // equivalent for the fuller rationale — same reasoning, just "this page IS the visible one" instead of
-    // resolving from a centroid). Rebuilt fresh every recomposition; see that same doc for why that's fine.
+    // resolving from a centroid). `brushWidthWorld`/`eraserWidthWorld` are converted from the shared
+    // bundle's mm value into THIS surface's px world space (see `pxPerPageMm`'s doc above — also why these
+    // fields aren't named `widthMm`/`eraserWidthMm`). Rebuilt fresh every recomposition; see
+    // `PdfVerticalScore`'s doc for why that's fine.
     val pdfAnnotation = annotation?.let { base ->
+        val brushWidthWorld = base.brushWidthWorld * pxPerPageMm
+        val eraserWidthWorld = base.eraserWidthWorld * pxPerPageMm
         AnnotationSurfaceState(
             annotationMode = base.annotationMode,
             drawings = base.drawings,
             layoutGeneration = base.layoutGeneration,
             colorRGBA = base.colorRGBA,
-            widthMm = base.widthMm,
+            brushWidthWorld = brushWidthWorld,
             eraserMode = base.eraserMode,
-            eraserWidthMm = base.eraserWidthMm,
-            onEraseGesture = { phase, pathMm ->
-                // Presets are DIAMETERS; `applyErase` (via `EraseGestureController`) wants a radius.
-                val radiusMm = base.eraserWidthMm / 2f
+            eraserWidthWorld = eraserWidthWorld,
+            onEraseGesture = { phase, pathWorld ->
+                // Presets are DIAMETERS; `applyErase` (via `EraseGestureController`) wants a radius —
+                // already in raster px, per `eraserWidthWorld`'s own conversion above.
+                val radiusWorld = eraserWidthWorld / 2f
                 eraseController.handle(
                     scope = scope,
                     phase = phase,
-                    pathMm = pathMm,
-                    radiusMm = radiusMm,
+                    pathWorld = pathWorld,
+                    radiusWorld = radiusWorld,
+                    // Always "ready": a PDF page-anchor erase needs no ssm score to arm — see
+                    // `ReaderScreen`'s call site for the musical-only gate this mirrors.
+                    ready = true,
                     // No ssm score for a PDF — see `PdfVerticalScore`'s identical comment.
                     scoreHandle = null,
                     currentDrawings = readerVm::currentDrawings,
@@ -465,7 +500,7 @@ private fun PagedPdfPage(
             inkHandoff = base.inkHandoff,
             onStrokeCaptured = { stroke, onCommitted ->
                 val capturedColorRGBA = base.colorRGBA
-                val capturedWidthMm = base.widthMm
+                val capturedWidthWorld = brushWidthWorld
                 val frame = pageFrame
                 scope.launch(Dispatchers.Default) {
                     val drawing = frame?.let {
@@ -473,7 +508,7 @@ private fun PagedPdfPage(
                             stroke = stroke,
                             tool = AnnotationSurfaceState.WET_STROKE_TOOL,
                             colorRGBA = capturedColorRGBA,
-                            baseWidthSp = capturedWidthMm,
+                            baseWidthSp = capturedWidthWorld,
                             pageIndex = index,
                             pageFrame = it,
                         )

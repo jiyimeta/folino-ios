@@ -65,6 +65,31 @@ public func nativePdfAnnotationCapture(strokeBytes: Data, pageIndex: Int32, page
     return DrawingAnchorWire.page(pageIndex: pageIndex, encodedDrawing: drawing.encodedDrawing).encodeToData()
 }
 
+/// Capture one wet stroke, resolving which page it belongs to from its own representative point (bbox center)
+/// against `pageFramesBytes` — the vertical-surface sibling of `nativePdfAnnotationCapture`, which takes an
+/// already-known page instead (paged mode, where only one page is ever visible). Delegates the whole
+/// centroid → page → normalize decision to `PageAnchoringCore.capture(strokes:pageFrames:)` in one call, so
+/// Kotlin carries no page-resolution geometry of its own — mirrors `PageAnchoringCore.pageIndex
+/// (forCentroid:pageFrames:)`'s own inter-page-gap fallback (nearest page wins a centroid that lands between
+/// two page bands; see that function's doc). `strokeBytes` is neutral `InkStroke` FINK bytes (from
+/// `nativeEncodeInkStroke`); `pageFramesBytes` is `PageFramesWire`, the SAME whole-document page layout
+/// `nativePdfAnnotationDisplayTransforms` takes. Empty `Data` when an input doesn't decode or the stroke's
+/// centroid doesn't resolve to any page (an empty `pageFramesBytes`).
+public func nativePdfAnnotationCaptureResolvingPage(strokeBytes: Data, pageFramesBytes: Data) -> Data {
+    guard let stroke = try? InkStrokeCodec.decode(strokeBytes),
+          let pageFramesWire = try? PageFramesWire(decoding: pageFramesBytes)
+    else { return Data() }
+
+    let frames = pageFramesWire.frames.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
+    guard let drawing = PageAnchoringCore.capture(strokes: [stroke], pageFrames: frames).first,
+          case let .page(anchor) = drawing.kind
+    else { return Data() }
+
+    return DrawingAnchorWire.page(
+        pageIndex: Int32(anchor.pageIndex), encodedDrawing: drawing.encodedDrawing,
+    ).encodeToData()
+}
+
 /// Compute the display transform for a whole layer in one call, positionally aligned with the input.
 /// `drawingsBytes` = `[DrawingAnchorWire]` (what capture produced / Room stored, `.musical` and `.page` anchors
 /// possibly mixed); `pageFramesBytes` = `PageFramesWire`, the PDF's current page layout. `sp == 0` marks a drawing

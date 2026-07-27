@@ -63,6 +63,15 @@ internal class EraseGestureController {
     /**
      * Handle one phase of the gesture.
      *
+     * @param pathWorld / @param radiusWorld In THIS surface's annotation "world" units — mm for a musical
+     *   surface, raster px for a PDF surface (see [AnnotationSurfaceState.brushWidthWorld]'s doc for why
+     *   these aren't `pathMm`/`radiusMm`). Whatever unit they're in, [resolveDisplayTransforms] must
+     *   produce transforms in the SAME unit, which is the caller's job, not this class's.
+     * @param ready Whether this gesture may even be attempted right now — `false` makes BEGIN a no-op
+     *   (never arms), makes an already-armed MOVE skip its compute for this tick, and makes an
+     *   already-armed END disarm without publishing (mirrors BEGIN never having armed). The musical
+     *   surfaces pass `scoreHandle != null` (an unloaded score has nothing to erase against); a PDF surface
+     *   passes a constant `true` (a page-anchor erase needs no ssm score to arm at all).
      * @param scoreHandle Passed straight through to [AnnotationEraseController.reanchor]'s musical
      *   recapture branch; `null` for a PDF surface (page-anchor fragments never need it — see that
      *   function's own doc for why a page anchor's Phase 2 is a no-op).
@@ -80,8 +89,9 @@ internal class EraseGestureController {
     fun handle(
         scope: CoroutineScope,
         phase: ErasePhase,
-        pathMm: List<Offset>,
-        radiusMm: Float,
+        pathWorld: List<Offset>,
+        radiusWorld: Float,
+        ready: Boolean,
         scoreHandle: Long?,
         currentDrawings: () -> List<DrawingAnchorWire>,
         resolveDisplayTransforms: (List<DrawingAnchorWire>) -> ByteArray,
@@ -91,6 +101,7 @@ internal class EraseGestureController {
     ) {
         when (phase) {
             ErasePhase.BEGIN -> {
+                if (!ready) return
                 eraseArmed = true
                 // Bump so any in-flight coroutine from a PREVIOUS gesture (still draining
                 // `eraseDispatcher`, see `eraseGeneration`'s doc) is recognizable as superseded the
@@ -98,11 +109,12 @@ internal class EraseGestureController {
                 eraseGeneration++
                 eraseHistoryPushed = false
                 eraseWorkingAtBegin = currentDrawings()
-                erasePath = pathMm
+                erasePath = pathWorld
             }
             ErasePhase.MOVE -> {
                 if (!eraseArmed) return
-                erasePath = erasePath + pathMm
+                erasePath = erasePath + pathWorld
+                if (!ready) return
                 val snapshot = eraseWorkingAtBegin
                 val path = erasePath
                 // Captured on Main at launch — compared against the LIVE `eraseGeneration` in the Main
@@ -110,7 +122,7 @@ internal class EraseGestureController {
                 val gen = eraseGeneration
                 scope.launch(eraseDispatcher) {
                     val outcome = AnnotationEraseController.applyErase(
-                        snapshot, resolveDisplayTransforms, path, radiusMm,
+                        snapshot, resolveDisplayTransforms, path, radiusWorld,
                     )
                     // Publish only on an ACTUAL change: null = native miss, and a cut that hit nothing
                     // leaves the layer / undo history / save alone. "Changed" must count DROPS too, not
@@ -130,13 +142,20 @@ internal class EraseGestureController {
             }
             ErasePhase.END -> {
                 if (!eraseArmed) return
-                erasePath = erasePath + pathMm
+                erasePath = erasePath + pathWorld
+                if (!ready) {
+                    // Synchronous, runs on Main before any launch — no generation race possible here, so
+                    // an unconditional disarm is correct (mirrors BEGIN never having armed in the first
+                    // place for an unready gesture).
+                    eraseArmed = false
+                    return
+                }
                 val snapshot = eraseWorkingAtBegin
                 val path = erasePath
                 val gen = eraseGeneration
                 scope.launch(eraseDispatcher) {
                     val outcome = AnnotationEraseController.applyErase(
-                        snapshot, resolveDisplayTransforms, path, radiusMm,
+                        snapshot, resolveDisplayTransforms, path, radiusWorld,
                     )
                     // Same whiff rule as MOVE. Re-anchoring only applies to fragments (there is nothing to
                     // re-anchor in a pure drop), so a drop-only cut commits `outcome.drawings` verbatim.

@@ -177,10 +177,12 @@ internal object PdfVerticalLayout {
     /**
      * Column-local (no top padding) Y origin of each page's top edge, given the same [pageHeightsPx] /
      * [gapPx] this layout already threads through [totalContentHeightPx] / [currentPageIndex] — the
-     * page-anchored annotation pipeline needs each page's own frame both to resolve which page a wet
-     * stroke's centroid landed on ([pageIndexForY]) and to project stored ink back onto the page it
-     * currently occupies (the raster page-frame list `PdfVerticalScore` feeds
-     * `ReaderAnnotationJNI.pdfDisplayTransforms`).
+     * page-anchored annotation pipeline needs each page's own frame to project stored ink back onto the
+     * page it currently occupies (the raster page-frame list `PdfVerticalScore` feeds
+     * `ReaderAnnotationJNI.pdfDisplayTransforms`). Which page a NEW stroke's centroid belongs to is NOT
+     * decided here — that decision (and its inter-page-gap fallback) lives in shared Swift
+     * (`PageAnchoringCore.pageIndex(forCentroid:pageFrames:)`, reached via
+     * `nativePdfAnnotationCaptureResolvingPage`) so Kotlin carries none of that geometry itself.
      */
     fun pageOriginsPx(pageHeightsPx: FloatArray, gapPx: Float): FloatArray {
         val origins = FloatArray(pageHeightsPx.size)
@@ -192,30 +194,22 @@ internal object PdfVerticalLayout {
         return origins
     }
 
+    /** 72 points == 1 inch == 25.4mm. */
+    private const val POINTS_TO_MM = 25.4 / 72.0
+
     /**
-     * The page whose band contains Column-local [y] (matching [pageOriginsPx]), else the page whose
-     * vertical extent is nearest — covers a centroid landing in the inter-page gap. Mirrors shared Swift
-     * `PageAnchoringCore.pageIndex(forCentroid:pageFrames:)`'s own vertical fallback: distance is measured
-     * to a page's nearest edge (zero while [y] is inside its band), and a tie resolves to the earlier page
-     * (`<`, not `<=`, keeps the first minimum found). Returns 0 for an empty document; real call sites
-     * never resolve a stroke's page with `pageCount == 0` (there is nothing to draw on).
+     * Raster px per document millimetre for a page whose own width is [pageWidthPt] points, rendered
+     * [rasterWidthPx] px wide. This surface's annotation "world" space is raster px, NOT mm (`pxPerMM = 1f`
+     * — see this file's class doc), but the toolbar's brush/eraser size preference is a physical-mm value
+     * shared with the musical surfaces (`AnnotationSurfaceState.brushWidthWorld`/`eraserWidthWorld` — see
+     * that type's own doc). This is the conversion factor a caller multiplies that mm preference by to get
+     * the correct on-screen px thickness for a page of this width. Returns `1f` (identity — inert, not
+     * "correct") for a non-positive [pageWidthPt]; real call sites already gate page geometry elsewhere.
      */
-    fun pageIndexForY(y: Float, pageHeightsPx: FloatArray, gapPx: Float): Int {
-        if (pageHeightsPx.isEmpty()) return 0
-        val origins = pageOriginsPx(pageHeightsPx, gapPx)
-        var best = 0
-        var bestDist = Float.MAX_VALUE
-        for (i in pageHeightsPx.indices) {
-            val top = origins[i]
-            val bottom = top + pageHeightsPx[i]
-            val clampedY = y.coerceIn(top, bottom)
-            val d = abs(clampedY - y)
-            if (d < bestDist) {
-                bestDist = d
-                best = i
-            }
-        }
-        return best
+    fun pxPerPageMm(rasterWidthPx: Int, pageWidthPt: Double): Float {
+        val pageWidthMm = pageWidthPt * POINTS_TO_MM
+        if (pageWidthMm <= 0.0) return 1f
+        return (rasterWidthPx / pageWidthMm).toFloat()
     }
 }
 
@@ -415,33 +409,51 @@ internal fun PdfVerticalScore(
     // the class doc). `remember`ed so a drag survives a recomposition mid-gesture.
     val eraseController = remember { EraseGestureController() }
 
+    // This surface's annotation "world" space is raster px (`pxPerMM = 1f` below — see the class doc), but
+    // the toolbar's brush/eraser size is a physical-mm preference shared with the musical surfaces (whose
+    // world space genuinely is mm). Multiplying by this converts that mm preference into the correct
+    // on-screen px thickness for the CURRENT page. Recomputed only when the raster geometry or the current
+    // page changes (a mixed-page-size document can have a different points-per-width per page), never on a
+    // live pinch frame.
+    val pxPerPageMm = remember(rasterWidthPx, state, currentPage) {
+        val pageWidthPt = state.pageWidthsPt.getOrElse(currentPage) { state.pageWidthsPt.firstOrNull() ?: 1.0 }
+        PdfVerticalLayout.pxPerPageMm(rasterWidthPx, pageWidthPt)
+    }
+
     // A local copy of the shared `annotation` bundle with PDF-specific `onStrokeCaptured`/`onEraseGesture`:
     // the shared ones (built once in `ReaderScreen`) resolve a musical anchor via `scoreHandle`, which is
     // always null for a PDF (Task 12 hasn't landed a parsed score for one yet). Every other field is
-    // forwarded unchanged — color/width/eraser state, the committed layer, the wet↔dry handoff queue all
-    // come from the SAME shared bundle every surface uses. Rebuilt fresh every recomposition (no
-    // `remember`): the base `annotation` itself is a fresh object every `ReaderScreen` recomposition
-    // already (see its own construction site), so memoizing here would buy nothing, and neither closure is
-    // ever used as a `LaunchedEffect` key — only invoked from a gesture callback — so a fresh instance every
-    // time is fine, exactly how `AnnotationWetOverlay` already expects it (`rememberUpdatedState` there
-    // covers freshness).
+    // forwarded unchanged EXCEPT `brushWidthWorld`/`eraserWidthWorld`, which get converted from the shared
+    // bundle's mm value into THIS surface's px world space (see `pxPerPageMm`'s doc — this is also why the
+    // fields aren't named `widthMm`/`eraserWidthMm`: on this surface they hold px, not mm). Rebuilt fresh
+    // every recomposition (no `remember`): the base `annotation` itself is a fresh object every
+    // `ReaderScreen` recomposition already (see its own construction site), so memoizing here would buy
+    // nothing, and neither closure is ever used as a `LaunchedEffect` key — only invoked from a gesture
+    // callback — so a fresh instance every time is fine, exactly how `AnnotationWetOverlay` already expects
+    // it (`rememberUpdatedState` there covers freshness).
     val pdfAnnotation = annotation?.let { base ->
+        val brushWidthWorld = base.brushWidthWorld * pxPerPageMm
+        val eraserWidthWorld = base.eraserWidthWorld * pxPerPageMm
         AnnotationSurfaceState(
             annotationMode = base.annotationMode,
             drawings = base.drawings,
             layoutGeneration = base.layoutGeneration,
             colorRGBA = base.colorRGBA,
-            widthMm = base.widthMm,
+            brushWidthWorld = brushWidthWorld,
             eraserMode = base.eraserMode,
-            eraserWidthMm = base.eraserWidthMm,
-            onEraseGesture = { phase, pathMm ->
-                // Presets are DIAMETERS; `applyErase` (via `EraseGestureController`) wants a radius.
-                val radiusMm = base.eraserWidthMm / 2f
+            eraserWidthWorld = eraserWidthWorld,
+            onEraseGesture = { phase, pathWorld ->
+                // Presets are DIAMETERS; `applyErase` (via `EraseGestureController`) wants a radius —
+                // already in raster px, per `eraserWidthWorld`'s own conversion above.
+                val radiusWorld = eraserWidthWorld / 2f
                 eraseController.handle(
                     scope = scope,
                     phase = phase,
-                    pathMm = pathMm,
-                    radiusMm = radiusMm,
+                    pathWorld = pathWorld,
+                    radiusWorld = radiusWorld,
+                    // Always "ready": a PDF page-anchor erase needs no ssm score to arm (unlike the
+                    // musical surfaces' own gate — see `ReaderScreen`'s call site).
+                    ready = true,
                     // No ssm score for a PDF — `reanchor`'s musical recapture branch never runs; a page
                     // fragment's Phase 1 slice is already correctly re-anchored (see that function's doc).
                     scoreHandle = null,
@@ -458,19 +470,19 @@ internal fun PdfVerticalScore(
             inkHandoff = base.inkHandoff,
             onStrokeCaptured = { stroke, onCommitted ->
                 val capturedColorRGBA = base.colorRGBA
-                val capturedWidthMm = base.widthMm
-                val heights = pageHeightsPxRaster
+                val capturedWidthWorld = brushWidthWorld
                 val frames = pageFramesRaster
                 scope.launch(Dispatchers.Default) {
+                    // Page resolution (centroid → page, including the inter-page-gap fallback) happens
+                    // entirely in shared Swift via `PageAnchoringCore.capture(strokes:pageFrames:)` — no
+                    // Kotlin reimplementation of that geometry (see `PdfVerticalLayout.pageOriginsPx`'s doc).
                     val drawing = PdfAnnotationCaptureController.captureResolvingPage(
                         stroke = stroke,
                         tool = AnnotationSurfaceState.WET_STROKE_TOOL,
                         colorRGBA = capturedColorRGBA,
-                        baseWidthSp = capturedWidthMm,
-                    ) { y ->
-                        val index = PdfVerticalLayout.pageIndexForY(y, heights, gapPx)
-                        frames.getOrNull(index)?.let { index to it }
-                    }
+                        baseWidthSp = capturedWidthWorld,
+                        pageFrames = frames,
+                    )
                     drawing?.let { readerVm.addDrawing(it) }
                     withContext(Dispatchers.Main) { onCommitted(drawing) }
                 }
@@ -606,6 +618,8 @@ internal fun PdfVerticalScore(
                     // buffer note); `zoom` matches the Column's own live/raster ratio so both track the
                     // same visual zoom without the ink path ever re-deriving page geometry mid-pinch.
                     val zoom = scaleState.floatValue / rasterScaleState.floatValue
+                    // See the `wetWorldToScreen`/`wetModifier` comment below for why this read is gated.
+                    val wetWindowTopPx = if (an.annotationMode) vScroll.value else 0
                     AnnotationLayers(
                         resolveDisplayTransforms = resolveDisplayTransforms,
                         annotation = an,
@@ -621,16 +635,25 @@ internal fun PdfVerticalScore(
                         // high zoom). Positioned at the current scroll offset, same as `ReadyScore`'s own
                         // wet window; `wetWorldToScreen` folds the SAME offset into its translate so
                         // document (Column-local) coordinates land exactly where the dry layer paints them.
-                        wetWorldToScreen = remember(zoom, vScroll.value, vPadPx) {
+                        //
+                        // `vScroll.value` is read ONLY inside the `annotationMode` branch: scrolling is
+                        // disabled while annotating (`scrollEnabled` above), so the value can't actually
+                        // change during that branch's lifetime, but reading it UNCONDITIONALLY here would
+                        // subscribe this composable's whole body to every scroll tick even while merely
+                        // scrolling with annotation OFF — the `wetWorldToScreen`/`wetModifier` this feeds
+                        // aren't even mounted then (`AnnotationLayers` only mounts the wet overlay under
+                        // `annotation.annotationMode`), so `0` is an inert placeholder for that case. A read
+                        // inside a branch that isn't taken doesn't register with the snapshot system.
+                        wetWorldToScreen = remember(zoom, wetWindowTopPx, vPadPx) {
                             Matrix().apply {
                                 setScale(zoom, zoom)
-                                postTranslate(0f, vPadPx - vScroll.value.toFloat())
+                                postTranslate(0f, vPadPx - wetWindowTopPx.toFloat())
                             }
                         },
                         wetModifier = Modifier
                             .fillMaxWidth()
                             .height(with(density) { viewportSize.height.coerceAtLeast(0).toDp() })
-                            .offset { IntOffset(0, vScroll.value) },
+                            .offset { IntOffset(0, wetWindowTopPx) },
                     )
                 }
             }

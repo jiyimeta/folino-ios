@@ -54,11 +54,11 @@ internal fun AnnotationLayers(
         // Re-keyed on color + width only — the wet tool is fixed pen (see WET_STROKE_TOOL). While the
         // eraser is selected this still builds a valid brush from its (unused) width, which is never
         // drawn with because the overlay takes the erase-gesture path instead.
-        val brush = remember(annotation.colorRGBA, annotation.widthMm) {
+        val brush = remember(annotation.colorRGBA, annotation.brushWidthWorld) {
             InkBrushMapping.brushFor(
                 AnnotationSurfaceState.WET_STROKE_TOOL,
                 annotation.colorRGBA,
-                widthSp = annotation.widthMm,
+                widthSp = annotation.brushWidthWorld,
             )
         }
         AnnotationWetOverlay(

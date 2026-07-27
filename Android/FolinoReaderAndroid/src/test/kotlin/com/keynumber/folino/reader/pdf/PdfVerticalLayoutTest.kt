@@ -209,7 +209,7 @@ class PdfVerticalLayoutTest {
         assertEquals(2, page)
     }
 
-    // -- pageOriginsPx / pageIndexForY (Task 11: PDF page-anchored annotation) --------------------
+    // -- pageOriginsPx (Task 11: PDF page-anchored annotation) -------------------------------------
 
     @Test fun pageOriginsAreColumnLocalWithNoTopPadding() {
         val heights = floatArrayOf(100f, 200f, 300f)
@@ -221,38 +221,23 @@ class PdfVerticalLayoutTest {
         assertEquals(0, PdfVerticalLayout.pageOriginsPx(FloatArray(0), gapPx = 10f).size)
     }
 
-    @Test fun pageIndexForYInsideABandReturnsThatPage() {
-        val heights = floatArrayOf(100f, 100f, 100f)
-        // Bands (gap 10): [0,100) [110,210) [220,320).
-        assertEquals(0, PdfVerticalLayout.pageIndexForY(50f, heights, gapPx = 10f))
-        assertEquals(1, PdfVerticalLayout.pageIndexForY(150f, heights, gapPx = 10f))
-        assertEquals(2, PdfVerticalLayout.pageIndexForY(300f, heights, gapPx = 10f))
+    // -- pxPerPageMm (Task 11 fix-report: PDF pen/eraser were ~5x too thin) ------------------------
+
+    @Test fun pxPerPageMmMatchesTheKnownA4PortraitRatio() {
+        // A4 portrait is 595 x 842 pt ~= 209.9 x 297.2mm (595pt * 25.4/72). Rendered 1000px wide:
+        // 1000 / 209.9028 ~= 4.7641 px/mm.
+        val result = PdfVerticalLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = 595.0)
+        assertEquals(4.7641f, result, 0.001f)
     }
 
-    @Test fun pageIndexForYInTheGapResolvesToTheNearerPage() {
-        val heights = floatArrayOf(100f, 100f)
-        // Band 0: [0,100), band 1: [110,210) — gap is (100,110).
-        assertEquals(0, PdfVerticalLayout.pageIndexForY(102f, heights, gapPx = 10f))
-        assertEquals(1, PdfVerticalLayout.pageIndexForY(108f, heights, gapPx = 10f))
+    @Test fun pxPerPageMmScalesWithRasterWidth() {
+        val at1000 = PdfVerticalLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = 595.0)
+        val at2000 = PdfVerticalLayout.pxPerPageMm(rasterWidthPx = 2000, pageWidthPt = 595.0)
+        assertEquals(at1000 * 2f, at2000, 0.001f)
     }
 
-    @Test fun pageIndexForYAtTheExactGapMidpointTiesToTheEarlierPage() {
-        val heights = floatArrayOf(100f, 100f)
-        // Gap midpoint is 105 — equidistant from both bands; `<` (not `<=`) keeps the first minimum found.
-        assertEquals(0, PdfVerticalLayout.pageIndexForY(105f, heights, gapPx = 10f))
-    }
-
-    @Test fun pageIndexForYPastTheLastPageClampsToIt() {
-        val heights = floatArrayOf(100f, 100f)
-        assertEquals(1, PdfVerticalLayout.pageIndexForY(10_000f, heights, gapPx = 10f))
-    }
-
-    @Test fun pageIndexForYBeforeTheFirstPageClampsToIt() {
-        val heights = floatArrayOf(100f, 100f)
-        assertEquals(0, PdfVerticalLayout.pageIndexForY(-50f, heights, gapPx = 10f))
-    }
-
-    @Test fun pageIndexForYOfAnEmptyDocumentIsZero() {
-        assertEquals(0, PdfVerticalLayout.pageIndexForY(0f, FloatArray(0), gapPx = 10f))
+    @Test fun pxPerPageMmIsIdentityForANonPositivePageWidth() {
+        assertEquals(1f, PdfVerticalLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = 0.0), 0.0001f)
+        assertEquals(1f, PdfVerticalLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = -5.0), 0.0001f)
     }
 }

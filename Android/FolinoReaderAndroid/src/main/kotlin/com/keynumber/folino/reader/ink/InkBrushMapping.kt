@@ -20,7 +20,15 @@ object InkBrushMapping {
         return ((a shl 24) or (r shl 16) or (g shl 8) or b).toInt()
     }
 
-    /** widthSp = document-mm brush size (world unit = document mm); epsilon ~0.1mm keeps strokes crisp to 8x. */
+    /**
+     * [widthSp] is a brush size in the CALLER's own annotation world units — document mm for a musical
+     * surface, raster px for a PDF surface (see `AnnotationSurfaceState.brushWidthWorld`'s doc for the full
+     * convention; a caller must already have converted a real mm preference into its own world units
+     * before reaching here — this function has no way to know which unit it was handed). `epsilon` (a
+     * stroke-simplification tolerance in the SAME units as [widthSp]) is left at a flat `0.1` regardless of
+     * that unit, which keeps strokes crisp to 8x zoom for the mm-scale musical case; not re-derived per
+     * world unit here, since androidx.ink's own simplification is forgiving of a looser-than-ideal epsilon.
+     */
     fun brushFor(tool: Int, colorRGBA: Long, widthSp: Float): Brush =
         Brush.createWithColorIntArgb(
             family = family(tool),

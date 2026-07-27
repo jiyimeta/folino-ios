@@ -80,11 +80,11 @@ object ReaderAnnotationJNI {
 
     /**
      * PDF page-anchor sibling of [capture]: capture one wet stroke already known to belong to [pageIndex]
-     * (Kotlin resolves which page — the centroid's page in vertical mode, simply the visible page in paged
-     * mode) into a persistable `.page` `DrawingAnchorWire`. Unlike [capture], there is no ssm round trip —
-     * `pageFrameBytes` (that page's current content-space frame, `PageFrameWire`) is display-only input
-     * Kotlin's own PDF renderer already has. Empty result = miss (undecodable input, or a non-positive
-     * page width — skip the stroke).
+     * (paged mode: the single visible page) into a persistable `.page` `DrawingAnchorWire`. Unlike
+     * [capture], there is no ssm round trip — `pageFrameBytes` (that page's current content-space frame,
+     * `PageFrameWire`) is display-only input Kotlin's own PDF renderer already has. Empty result = miss
+     * (undecodable input, or a non-positive page width — skip the stroke). See [pdfCaptureResolvingPage]
+     * for the vertical-surface sibling, which resolves the page itself instead of taking it as an input.
      */
     fun pdfCapture(strokeBytes: ByteArray, pageIndex: Int, pageFrameBytes: ByteArray): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
@@ -92,6 +92,24 @@ object ReaderAnnotationJNI {
             SwiftData.fromByteArray(strokeBytes, arena),
             pageIndex,
             SwiftData.fromByteArray(pageFrameBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * PDF page-anchor sibling of [pdfCapture] for the vertical surface: capture one wet stroke, resolving
+     * which page it belongs to from its own representative point (bbox center) against `pageFramesBytes`
+     * (a `PageFramesWire`, the whole document's current page layout — the SAME one `pdfDisplayTransforms`
+     * takes). The centroid → page decision (including its inter-page-gap fallback) happens entirely in
+     * shared Swift (`PageAnchoringCore.pageIndex(forCentroid:pageFrames:)`), so Kotlin carries none of that
+     * geometry itself. Empty result = miss (undecodable input, or the centroid doesn't resolve to any page
+     * — an empty `pageFramesBytes`).
+     */
+    fun pdfCaptureResolvingPage(strokeBytes: ByteArray, pageFramesBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePdfAnnotationCaptureResolvingPage(
+            SwiftData.fromByteArray(strokeBytes, arena),
+            SwiftData.fromByteArray(pageFramesBytes, arena),
             arena,
         ).toByteArray()
     }

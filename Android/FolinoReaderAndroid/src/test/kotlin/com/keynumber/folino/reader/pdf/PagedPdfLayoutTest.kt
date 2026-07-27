@@ -222,4 +222,24 @@ class PagedPdfLayoutTest {
         assertEquals(30f, tx, 0.001f)
         assertEquals(-20f, ty, 0.001f)
     }
+
+    // -- pxPerPageMm (Task 11 fix-report: PDF pen/eraser were ~5x too thin) ------------------------
+
+    @Test fun pxPerPageMmMatchesTheKnownA4PortraitRatio() {
+        // A4 portrait is 595 x 842 pt ~= 209.9 x 297.2mm (595pt * 25.4/72). Rendered 1000px wide:
+        // 1000 / 209.9028 ~= 4.7641 px/mm.
+        val result = PagedPdfLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = 595.0)
+        assertEquals(4.7641f, result, 0.001f)
+    }
+
+    @Test fun pxPerPageMmScalesWithRasterWidth() {
+        val at1000 = PagedPdfLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = 595.0)
+        val at2000 = PagedPdfLayout.pxPerPageMm(rasterWidthPx = 2000, pageWidthPt = 595.0)
+        assertEquals(at1000 * 2f, at2000, 0.001f)
+    }
+
+    @Test fun pxPerPageMmIsIdentityForANonPositivePageWidth() {
+        assertEquals(1f, PagedPdfLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = 0.0), 0.0001f)
+        assertEquals(1f, PagedPdfLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = -5.0), 0.0001f)
+    }
 }

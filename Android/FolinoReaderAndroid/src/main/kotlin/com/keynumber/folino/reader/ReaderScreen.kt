@@ -381,17 +381,21 @@ fun ReaderScreen(
         drawings = drawings,
         layoutGeneration = layoutGeneration,
         colorRGBA = penColorRGBA,
-        widthMm = toolState.activeWidth,
+        brushWidthWorld = toolState.activeWidth,
         eraserMode = toolState.selected is AnnotationTool.Eraser,
-        eraserWidthMm = toolState.eraserWidth,
-        onEraseGesture = { phase, pathMm ->
+        eraserWidthWorld = toolState.eraserWidth,
+        onEraseGesture = { phase, pathWorld ->
             // Presets are DIAMETERS; applyErase wants a geometric radius.
-            val radiusMm = toolState.eraserWidth / 2f
+            val radiusWorld = toolState.eraserWidth / 2f
             eraseController.handle(
                 scope = annotationScope,
                 phase = phase,
-                pathMm = pathMm,
-                radiusMm = radiusMm,
+                pathWorld = pathWorld,
+                radiusWorld = radiusWorld,
+                // An unloaded score has nothing to erase against — mirrors the original per-phase
+                // `scoreHandle != null` gate this class used to inline before it became shared with the
+                // PDF surfaces (which always pass `ready = true`, having no scoreHandle concept at all).
+                ready = scoreHandle != null,
                 scoreHandle = scoreHandle,
                 currentDrawings = readerVm::currentDrawings,
                 resolveDisplayTransforms = { pending ->
