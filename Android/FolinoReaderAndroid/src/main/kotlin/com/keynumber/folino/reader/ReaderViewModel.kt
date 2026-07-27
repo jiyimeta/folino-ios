@@ -1,8 +1,11 @@
 package com.keynumber.folino.reader
 
 import android.app.Application
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.keynumber.folino.library.RoomLibraryStore
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
@@ -189,15 +192,59 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Resolve the Library's on-disk score file: filesDir/Scores/<id>.mscz */
-    private fun scoreFile(scoreId: String): File =
-        File(File(getApplication<Application>().filesDir, "Scores"), "$scoreId.mscz")
+    /**
+     * Resolve the Library's on-disk score file via the record's `localFileName` (Room
+     * `local_file_name`), so a PDF import (stored as `<id>.pdf`) opens under its real name. Falls
+     * back to the legacy `<id>.mscz` naming when no record is found — an unknown id then still
+     * fails with "Score file not found" in [load] below, rather than crashing on a missing record.
+     */
+    private fun scoreFile(scoreId: String): File {
+        val app = getApplication<Application>()
+        val record = RoomLibraryStore(app).loadAll().firstOrNull { it.id == scoreId }
+        val fileName = record?.localFileName ?: "$scoreId.mscz"
+        return File(File(app.filesDir, "Scores"), fileName)
+    }
+
+    /**
+     * Bare [PdfRenderer] pass over [file]: page count and per-page size in PDF points, nothing
+     * else. `PdfRenderer` only exposes one open page at a time, so each page is opened, measured,
+     * and closed before the next. Deliberately minimal — no cache, no bitmap decoding — Task 6's
+     * `PdfPageSource` replaces this with the cache-backed version the render surfaces use.
+     * Returns null on any failure (e.g. a corrupt or unreadable PDF).
+     */
+    private fun readPdfPageSizes(file: File): ReaderState.ReadyPdf? = try {
+        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+            PdfRenderer(pfd).use { renderer ->
+                val widthsPt = mutableListOf<Double>()
+                val heightsPt = mutableListOf<Double>()
+                for (i in 0 until renderer.pageCount) {
+                    renderer.openPage(i).use { page ->
+                        widthsPt += page.width.toDouble()
+                        heightsPt += page.height.toDouble()
+                    }
+                }
+                ReaderState.ReadyPdf(
+                    pageCount = renderer.pageCount,
+                    pageWidthsPt = widthsPt,
+                    pageHeightsPt = heightsPt,
+                )
+            }
+        }
+    } catch (e: Exception) {
+        null
+    }
 
     /**
      * Parse the score + install metrics + publish the score handle. Does NOT
      * compute the layout itself: the recompute loop (started in init) drives
      * `_state` to Ready once `_scoreHandle` is non-null. Keeps file-not-found
      * and parse-failure error handling here.
+     *
+     * A `.pdf` file takes a separate branch: it publishes [ReaderState.ReadyPdf] straight from a
+     * bare `PdfRenderer` pass and returns WITHOUT installing SMuFL metrics or calling
+     * `ScoreHandle.load` — `_scoreHandle` stays null so the layout recompute loop (which only
+     * drives the DrawProgram-based `Ready` state) stays idle. The parsed score arrives later
+     * (Task 12).
      */
     fun load(scoreId: String) {
         // Skip only a redundant reload of the SAME score (recomposition); a different scoreId means the
@@ -216,18 +263,28 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val app = getApplication<Application>()
 
-            withContext(Dispatchers.Default) {
-                val table = BravuraMetricsBuilder.buildTable(app.assets)
-                SheetMusicJNI.nativeInstallSMuFLMetrics(table)
-            }
-
-            val file = scoreFile(scoreId)
+            val file = withContext(Dispatchers.IO) { scoreFile(scoreId) }
             val bytes = withContext(Dispatchers.IO) {
                 if (file.exists()) file.readBytes() else null
             }
             if (bytes == null) {
                 _state.value = ReaderState.Error("Score file not found")
                 return@launch
+            }
+
+            if (file.extension.equals("pdf", ignoreCase = true)) {
+                val pdfState = withContext(Dispatchers.IO) { readPdfPageSizes(file) }
+                if (pdfState == null) {
+                    _state.value = ReaderState.Error("Could not open score")
+                    return@launch
+                }
+                _state.value = pdfState
+                return@launch
+            }
+
+            withContext(Dispatchers.Default) {
+                val table = BravuraMetricsBuilder.buildTable(app.assets)
+                SheetMusicJNI.nativeInstallSMuFLMetrics(table)
             }
 
             val h = withContext(Dispatchers.Default) { ScoreHandle.load(bytes) }

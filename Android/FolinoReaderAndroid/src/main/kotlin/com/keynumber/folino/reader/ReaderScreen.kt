@@ -919,6 +919,11 @@ fun ReaderScreen(
                         annotation = annotationSurface,
                     )
                 }
+                // A PDF opens into this state with nothing drawn yet: the page-laying-out surfaces
+                // that consume pageCount/pageWidthsPt/pageHeightsPt land in Tasks 7-8, and the bitmap
+                // source lands in Task 6. Until then this branch only exists to keep the `when`
+                // exhaustive.
+                is ReaderState.ReadyPdf -> {}
             }
         }
     }
