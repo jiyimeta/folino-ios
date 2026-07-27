@@ -28,15 +28,32 @@ extension EditorViewModel {
     private func resolvedItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {
         guard let document = documentProvider() else { return nil }
         let tester = ScoreHitTester(document: document)
-        guard let hit = tester.hitTest(at: point), let item = Self.selectableItem(from: hit) else { return nil }
+        let slop = Self.slopRect(around: point)
+
+        guard let hit = tester.hitTest(at: point), let item = Self.selectableItem(from: hit) else {
+            // The engine's ladder only answers for points inside an element's own geometry, which makes noteheads a
+            // fingertip-sized target at best and a hairline one on a dense system. Fall back to anything within the
+            // slop box so a near miss still lands, preferring the active voice the same way an on-target hit does.
+            let nearby = tester.itemIDs(in: slop)
+            return nearby.first { $0.voiceIndex == activeVoice } ?? nearby.first
+        }
 
         if item.voiceIndex != activeVoice {
-            let slop = CGRect(x: point.x - 22, y: point.y - 22, width: 44, height: 44)
             if let preferred = tester.itemIDs(in: slop).first(where: { $0.voiceIndex == activeVoice }) {
                 return preferred
             }
         }
         return item
+    }
+
+    /// Touch slop around a tap, in layout-document points. Used both to prefer the active voice on an on-target hit
+    /// and to rescue a near miss — one constant so the two can't disagree about how close "close" is.
+    private static func slopRect(around point: CGPoint) -> CGRect {
+        let halfExtent: CGFloat = 22
+        return CGRect(
+            x: point.x - halfExtent, y: point.y - halfExtent,
+            width: halfExtent * 2, height: halfExtent * 2,
+        )
     }
 
     /// Reduces a raw hit-test target to the `ScoreItemID` that tapping it selects. `.stem`/`.flag`/`.beam` all

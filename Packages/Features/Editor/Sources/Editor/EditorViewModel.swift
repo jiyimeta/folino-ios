@@ -41,6 +41,12 @@ public final class EditorViewModel {
     public internal(set) var isAddToChordArmed = false
     public var activeVoice = 0
 
+    /// Mirrored from the reader's transport by the composition root. Editing and playback coexist — you can hear the
+    /// passage you're writing without leaving edit mode — but the pad's keys go inert while the cursor runs: applying
+    /// an edit mid-playback reflows the score out from under the cursor, and the audition preview would fight the
+    /// playing engine for the same notes.
+    public var isPlaybackActive = false
+
     /// Stored audition state (Task 9) — declared HERE (extensions cannot add stored properties). Set synchronously
     /// by `audition(_:)` (`EditorViewModel+Audition.swift`) so tests can deterministically `await
     /// vm.auditionTask?.value` instead of racing a fire-and-forget preview.

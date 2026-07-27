@@ -62,22 +62,6 @@ struct EditorViewModelPitchTests {
         #expect(note.accidental == nil)
     }
 
-    // MARK: - commitPitchDrag
-
-    @Test func `commitPitchDrag two staff steps up lands in-key with no accidental and no auto-advance`() throws {
-        let vm = makeViewModel()
-        vm.beginSession(score: EditorFixtures.chordAtIndex1())
-        vm.select(.note(EditorFixtures.noteID(element: 1)))
-
-        vm.commitPitchDrag(steps: 2)
-
-        let note = try #require(vm.score?[EditorFixtures.noteID(element: 1)])
-        #expect(note.pitch == 64)
-        #expect(note.tpc == 18)
-        #expect(note.accidental == nil)
-        #expect(vm.selectedItem == .note(EditorFixtures.noteID(element: 1)))
-    }
-
     // MARK: - setAccidental
 
     @Test func `setAccidental sharp respells and clearing it afterwards leaves pitch and tpc alone`() throws {
@@ -115,12 +99,6 @@ struct EditorViewModelPitchTests {
         #expect(vm.score == EditorFixtures.chordAtIndex1())
 
         vm.shiftOctave(by: 1)
-        #expect(vm.canUndo)
-        vm.undo()
-        #expect(!vm.canUndo)
-        #expect(vm.score == EditorFixtures.chordAtIndex1())
-
-        vm.commitPitchDrag(steps: 2)
         #expect(vm.canUndo)
         vm.undo()
         #expect(!vm.canUndo)

@@ -28,18 +28,6 @@ extension EditorViewModel {
         auditionSelectedNote(unlessStillAt: generationBeforeShift)
     }
 
-    /// Drag-commit from the Reader overlay (staff steps, positive = up). Applies `SetNotePitch` with the in-key
-    /// spelling + `displayedAccidental`. No auto-advance (spec §11-5: off after drag).
-    public func commitPitchDrag(steps: Int) {
-        guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
-        let keySig = score.activeKey(at: noteID)
-        guard let shifted = StaffStepPitch.diatonicShift(from: note, bySteps: steps, keySig: keySig) else { return }
-        let accidental = PitchSpelling.displayedAccidental(forTpc: shifted.tpc, in: keySig)
-        let generationBeforeDrag = generation
-        applyCommand(SetNotePitch(at: noteID, pitch: shifted.pitch, tpc: shifted.tpc, accidental: accidental))
-        auditionSelectedNote(unlessStillAt: generationBeforeDrag)
-    }
-
     /// ♭ ♮ ♯ (long-press 𝄫 𝄪) → `SetAccidental`. `nil` clears the glyph.
     public func setAccidental(_ accidental: Accidental?) {
         guard case let .note(noteID)? = selectedItem else { return }

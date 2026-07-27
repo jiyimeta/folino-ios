@@ -49,6 +49,44 @@ struct EditorViewModelHitTestTests {
         #expect(vm.selection == .single(target))
     }
 
+    /// Aiming a fingertip at a notehead is hard, and the engine's hit ladder only answers for points actually inside
+    /// an element's geometry. A near miss should still select the note the user was clearly going for.
+    @Test func `a near miss still selects the nearby note`() throws {
+        let score = EditorFixtures.chordAtIndex1()
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        let doc = LayoutTestSupport.document(for: score)
+        vm.documentProvider = { doc }
+
+        let target = SheetMusicCore.ScoreItemID.note(EditorFixtures.noteID(element: 1))
+        let anchor = try #require(LayoutTestSupport.anchorPoint(of: target, in: doc))
+        // Off the notehead itself, but well inside the slop box the pad-sized target should cover.
+        let missed = CGPoint(x: anchor.x + 12, y: anchor.y + 12)
+        #expect(ScoreHitTester(document: doc).hitTest(at: missed) == nil, "point must miss the engine's own ladder")
+
+        vm.handleTap(at: missed)
+
+        #expect(vm.selectedItem == target)
+    }
+
+    /// The widened target must not become a magnet: a tap nowhere near any element still deselects.
+    @Test func `a tap far from every element still deselects`() throws {
+        let score = EditorFixtures.chordAtIndex1()
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        let doc = LayoutTestSupport.document(for: score)
+        vm.documentProvider = { doc }
+
+        let target = SheetMusicCore.ScoreItemID.note(EditorFixtures.noteID(element: 1))
+        let anchor = try #require(LayoutTestSupport.anchorPoint(of: target, in: doc))
+        vm.handleTap(at: anchor)
+        #expect(vm.selectedItem == target)
+
+        vm.handleTap(at: CGPoint(x: anchor.x, y: anchor.y + 200))
+
+        #expect(vm.selectedItem == nil)
+    }
+
     @Test func `tap on empty staff space deselects`() throws {
         let score = EditorFixtures.chordAtIndex1()
         let vm = makeViewModel()

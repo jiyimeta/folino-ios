@@ -33,6 +33,38 @@ enum ElementNavigator {
         return nil
     }
 
+    /// The mirror of `nextTimedElement(after:)`, walking backwards through the same voice and into the previous
+    /// measure. Drives the pad's ← key (spec §5: step the selection along the voice without aiming a tap). `nil` at
+    /// the start of the staff.
+    static func previousTimedElement(before location: VoiceElementID, in score: Score) -> VoiceElementID? {
+        guard let staff = score[location.staff] else { return nil }
+        var measureIndex = location.measureIndex
+        var elementIndex = location.elementIndex - 1
+        while measureIndex >= 0, staff.measures.indices.contains(measureIndex) {
+            let voices = staff.measures[measureIndex].voices
+            guard voices.indices.contains(location.voiceIndex) else { return nil }
+            let elements = voices[location.voiceIndex].elements
+            while elementIndex >= 0, elements.indices.contains(elementIndex) {
+                if isTimedSlot(elements[elementIndex]) {
+                    return VoiceElementID(
+                        staff: location.staff,
+                        measureIndex: measureIndex,
+                        voiceIndex: location.voiceIndex,
+                        elementIndex: elementIndex,
+                    )
+                }
+                elementIndex -= 1
+            }
+            measureIndex -= 1
+            // Resume from the last element of the measure we just stepped back into.
+            guard measureIndex >= 0, staff.measures.indices.contains(measureIndex),
+                  staff.measures[measureIndex].voices.indices.contains(location.voiceIndex)
+            else { return nil }
+            elementIndex = staff.measures[measureIndex].voices[location.voiceIndex].elements.count - 1
+        }
+        return nil
+    }
+
     /// A chord or rest slot — the only elements a voice-order walk should stop on. Deliberately NOT
     /// `VoiceElement.tickCount(division:) != nil`: `NoteDuration.ticks(division:)` traps on `.measure`
     /// until `resolved(in:)` runs against the containing measure's duration, and an unresolved
