@@ -60,9 +60,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -110,6 +112,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.roundToInt
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -1084,27 +1087,21 @@ private fun ReadyScore(
     val annotationMode = annotation?.annotationMode == true
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-    // Held as the state object, not just through the `by` delegate, so the score surface's
-    // `graphicsLayer` block can read it during the LAYER phase rather than capturing a composed value —
-    // see `scoreSurfaceModifier` below for why that distinction is what makes a pinch cheap.
-    val scaleState = remember { mutableFloatStateOf(1f) }
-    var scale by scaleState
-    // The zoom the score's bands were last RECORDED at, as opposed to `scale`, which is where the
-    // fingers are right now. Splitting the two is what keeps a pinch off the re-record path: `pxPerMM`
-    // feeds band geometry and glyph rasterisation, so following the live scale re-records all of the
-    // score's draw commands every frame of the gesture. Instead the bands stay recorded at
-    // `rasterScale`, a layer transform covers the difference while the fingers are down, and the one
-    // real re-raster happens when they lift.
-    val rasterScaleState = remember { mutableFloatStateOf(1f) }
-    var rasterScale by rasterScaleState
-    // Drives AnnotationDryOverlay's reflow-recompute gate (skip recompute mid-stroke). MVP leaves
-    // this always false and relies on the dry overlay's own recompute-on-`drawings`-change instead —
-    // flipping it true for the duration of an active wet stroke (via the wet overlay's own
-    // start/finish callbacks, which aren't exposed yet) is a future refinement, not required for MVP.
+    // `deferRaster = true`: this surface's score is ONE page as tall as the whole document, so following
+    // the live scale would re-record every draw command in it on each frame of a pinch. The bands stay
+    // recorded at `rasterScale`, a layer transform covers the difference while the fingers are down, and
+    // the one real re-raster happens when they lift.
+    val viewport = rememberReaderViewportState(
+        deferRaster = true,
+        underfillX = ViewportUnderfill.START,
+        underfillY = ViewportUnderfill.START,
+    )
+    val scale = viewport.scale
+    val rasterScale = viewport.rasterScale
+    // Drives AnnotationDryOverlay's reflow-recompute gate (skip recompute mid-stroke). MVP leaves this
+    // always false and relies on the dry overlay's own recompute-on-`drawings`-change instead.
     val isDrawing = false
 
-    val vScroll = rememberScrollState()
-    val hScroll = rememberScrollState()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
@@ -1122,7 +1119,7 @@ private fun ReadyScore(
     // local `scale` state. Watched through snapshotFlow rather than as LaunchedEffect keys: `scale`
     // changes every frame of a pinch, and keying on it would cancel and relaunch the effect just as often.
     LaunchedEffect(Unit) {
-        snapshotFlow { scale }.drop(1).collect { annotation?.inkHandoff?.releaseAll() }
+        snapshotFlow { viewport.scale }.drop(1).collect { annotation?.inkHandoff?.releaseAll() }
     }
 
     // The layout width is reported by ReaderScreen's content Box (composed for every state), so the
@@ -1137,6 +1134,23 @@ private fun ReadyScore(
     // Extra bottom padding (added below `vPadPx`) so the last system can scroll out from under the
     // floating play FAB when the seek bar is off. Top stays `vPadPx`, so cursor / tap math is unchanged.
     val bottomPadPx = with(density) { bottomContentPad.toPx() }
+
+    // Republished whenever the layout inputs move. The pads are the non-scaling part: `vPadPx` above and
+    // below the page plus `bottomPadPx` of extra run-out under it, and `leadingPadYPx` is the top one,
+    // which the focal correction holds out of the scaling.
+    //
+    // In a SideEffect, not inline: this writes snapshot state, and the only readers are the gesture loop
+    // and the auto-follow effect, both of which run after the composition commits.
+    SideEffect {
+        viewport.geometry = ViewportGeometry(
+            viewportWidthPx = viewportSize.width.toFloat(),
+            viewportHeightPx = viewportSize.height.toFloat(),
+            unitContentWidthPx = page.widthMM.toFloat() * fitPxPerMM,
+            unitContentHeightPx = page.heightMM.toFloat() * fitPxPerMM,
+            fixedPadYPx = vPadPx * 2 + bottomPadPx,
+            leadingPadYPx = vPadPx,
+        )
+    }
 
     // Auto-scroll: keep the playback cursor in view via the shared Domain keep-in-view math (JNI).
     // Vertical: pin the playing system to the top when the lookahead anchor is set (playing), falling
@@ -1179,7 +1193,7 @@ private fun ReadyScore(
                         realYMax
                     }
                     FolinoReaderJNI.nativeScrollOffsetPinningSystemTop(
-                        vScroll.value.toDouble(),
+                        viewport.offsetY.toDouble(),
                         realYMin,
                         realYMax,
                         lookaheadYMax,
@@ -1189,29 +1203,29 @@ private fun ReadyScore(
                 } else {
                     // Paused / manual seek: gentle keep-in-view (existing behavior).
                     FolinoReaderJNI.nativeScrollOffsetKeepingInView(
-                        vScroll.value.toDouble(),
+                        viewport.offsetY.toDouble(),
                         realYMin,
                         realYMax,
                         viewportSize.height.toDouble(),
                         padPx.toDouble(),
                     ).toFloat()
                 }
-                if (abs(newY - vScroll.value) >= 0.5f) {
-                    vScroll.animateScrollTo(newY.toInt().coerceAtLeast(0))
+                if (abs(newY - viewport.offsetY) >= 0.5f) {
+                    viewport.animateOffsetYTo(newY)
                 }
 
                 if (isZoomed) {
                     val xMin = (realFrame.x * fitPxPerMM * scale)
                     val xMax = ((realFrame.x + realFrame.width) * fitPxPerMM * scale)
                     val newX = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
-                        hScroll.value.toDouble(),
+                        viewport.offsetX.toDouble(),
                         xMin,
                         xMax,
                         viewportSize.width.toDouble(),
                         padPx.toDouble(),
                     ).toFloat()
-                    if (abs(newX - hScroll.value) >= 0.5f) {
-                        hScroll.animateScrollTo(newX.toInt().coerceAtLeast(0))
+                    if (abs(newX - viewport.offsetX) >= 0.5f) {
+                        viewport.animateOffsetXTo(newX)
                     }
                 }
             }
@@ -1221,13 +1235,12 @@ private fun ReadyScore(
         Modifier
             .fillMaxSize()
             .onSizeChanged { viewportSize = it }
-            // Tap-to-seek + audition. Lives in its own pointerInput so it coexists with the pinch
-            // detector below: detectTapGestures only fires on a tap (a down+up with no drag), while
-            // the pinch loop consumes two-finger moves — neither steals the other's events. The tap
-            // point is in this outer (viewport) px space; fold the scroll offsets and the fixed
-            // vertical padding into the content offset so the helper's divide yields document-mm.
-            // Disabled while annotating: a single-finger tap there is the wet overlay's to consume
-            // (a stroke or an annotation dot), not a seek.
+            // Tap-to-seek + audition. Lives in its own pointerInput so it coexists with the viewport
+            // gestures below: `detectTapGestures` only fires on a tap, while the viewport loop consumes
+            // moves past touch slop — neither steals the other's events. The tap point is in this outer
+            // (viewport) px space; fold the offsets and the fixed vertical padding into the content offset
+            // so the helper's divide yields document-mm. Disabled while annotating: a single-finger tap
+            // there is the wet overlay's to consume, not a seek.
             .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, annotationMode) {
                 if (annotationMode) return@pointerInput
                 val handle = scoreHandle ?: return@pointerInput
@@ -1236,110 +1249,44 @@ private fun ReadyScore(
                 detectTapGestures { offset ->
                     val cursor = nearestCursorForTap(
                         tap = offset,
-                        contentOffsetPx = Offset(-hScroll.value.toFloat(), vPadPx - vScroll.value.toFloat()),
+                        contentOffsetPx = Offset(-viewport.offsetX, vPadPx - viewport.offsetY),
                         pxPerMM = fitPxPerMM,
-                        scale = scale,
+                        scale = viewport.scale,
                         scoreHandle = handle,
                         layoutOptionsBytes = optionsBytes,
                     ) ?: return@detectTapGestures
                     audioVm.handleTap(cursor)
                 }
             }
-            // Pinch zoom: only two-finger gestures are consumed here; single-finger
-            // drags fall through to the scroll modifiers (native fling + overscroll).
-            .pointerInput(fitPxPerMM) {
-                if (fitPxPerMM <= 0f) return@pointerInput
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        val pressed = event.changes.count { it.pressed }
-                        if (pressed >= 2) {
-                            // A live two-finger contact suspends playback auto-follow (Task 5), even
-                            // before any actual zoom delta — `scrollState.isScrollInProgress` alone
-                            // would miss a pinch, since two fingers holding steady on the score never
-                            // register as a scroll gesture. Sticky: it persists past the gesture end and
-                            // is cleared only on play/seek (see `isPlaybackFollowSuspended`).
-                            audioVm.suspendPlaybackFollowForManualViewportChange()
-                            val zoom = event.calculateZoom()
-                            if (zoom != 1f) {
-                                val centroid = event.calculateCentroid(useCurrent = true)
-                                val newScale = (scale * zoom).coerceIn(1f, 8f)
-                                val ratio = newScale / scale
-                                if (ratio != 1f && !centroid.x.isNaN() && !centroid.y.isNaN()) {
-                                    val newX = focalAdjustedOffset(hScroll.value.toFloat(), centroid.x, ratio)
-                                    val newY = focalAdjustedOffset(vScroll.value.toFloat(), centroid.y, ratio, vPadPx)
-                                    scale = newScale
-                                    // scrollTo is a suspend fun; PointerInputScope is a restricted
-                                    // coroutine scope that doesn't allow arbitrary launches. Use the
-                                    // composable-level scope (from rememberCoroutineScope) instead.
-                                    scope.launch { hScroll.scrollTo(newX.toInt().coerceAtLeast(0)) }
-                                    scope.launch { vScroll.scrollTo(newY.toInt().coerceAtLeast(0)) }
-                                }
-                                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                            }
-                        }
-                    } while (event.changes.any { it.pressed })
-                    // Fingers up: re-record the score at the zoom it is now being shown at, which also
-                    // returns the surface's layer transform to identity. Until this runs the bands are
-                    // a scaled copy of their last recording — sharp enough mid-gesture, since a layer
-                    // transform still scales vector ops rather than a bitmap, but the glyphs were
-                    // rasterised for the old size. Skipped when the scale did not move, so an ordinary
-                    // tap or scroll gesture costs nothing here.
-                    if (rasterScaleState.floatValue != scaleState.floatValue) {
-                        rasterScaleState.floatValue = scaleState.floatValue
-                    }
-                }
-            }
-            // Sticky playback-follow suspension (Task 5) — fired ONLY by a real single-finger DRAG.
-            // Observes on the Initial pass and NEVER consumes, so the vertical/horizontal scroll
-            // modifiers below still get the gesture (native fling + overscroll). Firing on real pointer
-            // MOVEMENT — not `ScrollableState.isScrollInProgress` — is the whole fix: the auto-follow
-            // re-pin drives `animateScrollTo`, which flips `isScrollInProgress` true WITHOUT any pointer
-            // event, so the old snapshotFlow trigger mistook the auto-scroll's own re-pin for a manual
-            // gesture and latched suspension permanently OFF. A programmatic scroll emits no pointer
-            // input, so this detector never self-suspends (mirrors Page mode's `DragInteraction.Start`).
-            // A pure tap (down+up, no move) is a seek — requiring `positionChanged` skips it; two-finger
-            // contact is the pinch detector's job above. Sticky: cleared only on play/seek (see
-            // `ReaderAudioViewModel.isPlaybackFollowSuspended`); `suspend…()` is a no-op when not playing.
-            .pointerInput(audioVm) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    var suspended = false
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (!suspended && event.changes.any { it.pressed && it.positionChanged() }) {
-                            audioVm.suspendPlaybackFollowForManualViewportChange()
-                            suspended = true
-                        }
-                    } while (event.changes.any { it.pressed })
-                }
-            },
+            // Pan, pinch, and fling. While annotating only two-finger gestures are taken — a single finger
+            // is a stroke — and momentum is off so the score does not coast away from where the reader is
+            // writing.
+            .readerViewportGestures(
+                state = viewport,
+                scope = scope,
+                key = fitPxPerMM,
+                enabled = fitPxPerMM > 0f,
+                allowSingleFingerPan = { !annotationMode },
+                allowFling = !annotationMode,
+                onManualViewportChange = audioVm::suspendPlaybackFollowForManualViewportChange,
+            ),
         contentAlignment = Alignment.TopStart,
     ) {
-        // Scroll modifiers: vertical always; horizontal only when zoomed so that
-        // at fit-width there is zero horizontal interaction (no horizontal stretch). While annotating,
-        // scrolling is off entirely — the wet overlay above consumes the single-finger drag as a
-        // stroke instead; a 2-finger gesture still reaches the pinch pointerInput (a separate,
-        // always-installed handler) so pan/zoom keeps working mid-annotation.
+        // Panning is a layer translation now, not a scroll container's placement. The clip and the
+        // `graphicsLayer` MUST stay on this one node: the layer is what gives the content its own
+        // RenderNode, and without it every wet-ink frame invalidates to the root and re-records the whole
+        // score's display list, which is what made drawing crawl on long scores.
         //
-        // Annotation turns the gesture OFF via `enabled = false` rather than dropping to a bare
-        // `Modifier`. Dropping the modifier also drops what it brings besides the gesture: the scroll
-        // offset (the score would jump back to its top the moment the pencil is armed) and — the
-        // expensive part — the `placeRelativeWithLayer` that gives the scrolled content its own
-        // RenderNode. Without that layer every wet-ink frame invalidates all the way up to the root
-        // and re-records the whole score's display list, which is what made drawing crawl on long
-        // scores. `enabled = false` keeps both and still consumes no drags.
-        val scrollEnabled = !annotationMode
-        val scrollModifier = if (isZoomed) {
+        // Read inside the layer block, not captured outside it, so a pan or a pinch updates this one
+        // transform during the LAYER phase instead of recomposing the score.
+        Box(
             Modifier
-                .verticalScroll(vScroll, enabled = scrollEnabled)
-                .horizontalScroll(hScroll, enabled = scrollEnabled)
-        } else {
-            Modifier.verticalScroll(vScroll, enabled = scrollEnabled)
-        }
-
-        Box(scrollModifier) {
+                .clipToBounds()
+                .graphicsLayer {
+                    translationX = -viewport.offsetX
+                    translationY = -viewport.offsetY
+                },
+        ) {
             Box(
                 Modifier.size(
                     width = with(density) { contentWidthPx.toDp() },
@@ -1356,12 +1303,12 @@ private fun ReadyScore(
                 // re-record. Kept stable, the bands are skipped entirely and the gesture only updates
                 // this one layer's transform. `transformOrigin` is the top-left because the score is
                 // drawn from the surface's origin, matching how the content box grows.
-                val scoreSurfaceModifier = remember(vPadPx, density) {
+                val scoreSurfaceModifier = remember(vPadPx, density, viewport) {
                     Modifier
                         .fillMaxSize()
                         .padding(vertical = with(density) { vPadPx.toDp() })
                         .graphicsLayer {
-                            val zoom = scaleState.floatValue / rasterScaleState.floatValue
+                            val zoom = viewport.scale / viewport.rasterScale
                             scaleX = zoom
                             scaleY = zoom
                             transformOrigin = TransformOrigin(0f, 0f)
@@ -1440,13 +1387,16 @@ private fun ReadyScore(
                         // The dry layer keeps the same padding as the sibling overlays above, so
                         // document y=0 already lands at the View's y=0 and its pan offset is zero.
                         //
-                        // The wet window is pinned to the visible band by offsetting it by the scroll
-                        // position, and `worldToScreen` folds that same offset in (plus the vPad the
+                        // The wet window is pinned to the visible band by offsetting it by the viewport
+                        // offset, and `worldToScreen` folds that same offset in (plus the vPad the
                         // siblings get from their padding) so document coordinates land exactly where the
-                        // dry layer paints them. Reading `vScroll.value` during composition is safe here
-                        // precisely because this layer only exists while annotating, and annotating
-                        // disables scrolling — the value cannot change under us mid-session.
-                        val wetWindowTopPx = vScroll.value
+                        // dry layer paints them.
+                        //
+                        // Unlike before, this offset CAN move mid-annotation: a two-finger pan is allowed
+                        // while the pen is out. That is sound because the two are mutually exclusive in
+                        // time — the wet layer cancels its stroke when a second finger lands — and the
+                        // recomposition it costs per pan frame is the same cost a pinch already paid here.
+                        val wetWindowTopPx = viewport.offsetY.roundToInt()
                         val wetWindowHeightPx = viewportSize.height.coerceAtLeast(0)
                         AnnotationLayers(
                             scoreHandle = handle,
