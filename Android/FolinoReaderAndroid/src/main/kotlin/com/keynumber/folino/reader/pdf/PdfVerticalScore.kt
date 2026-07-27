@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -85,9 +86,37 @@ internal object PdfVerticalLayout {
         FloatArray(widthsPt.size) { i -> (renderWidthPx.toDouble() * heightsPt[i] / widthsPt[i]).toFloat() }
 
     /**
+     * Same computation as [pageHeightsPx], writing into a caller-provided [dest] instead of allocating a
+     * new array. [PdfVerticalScore]'s `derivedStateOf` block re-derives this on every relevant snapshot
+     * read (every scroll AND pinch frame) purely to compute an `Int` page index that is thrown away
+     * immediately after — a fresh `FloatArray` there would be per-frame garbage for no benefit. [dest]
+     * must be sized exactly [widthsPt]`.size` (that's what every entry from `0 until widthsPt.size` gets
+     * written into; the caller is expected to `remember` one `FloatArray(pageCount)` and reuse it).
+     */
+    fun pageHeightsPxInto(dest: FloatArray, widthsPt: List<Double>, heightsPt: List<Double>, renderWidthPx: Int) {
+        for (i in widthsPt.indices) {
+            dest[i] = (renderWidthPx.toDouble() * heightsPt[i] / widthsPt[i]).toFloat()
+        }
+    }
+
+    /**
+     * The live, on-screen inter-page gap (px), given the page `Column`'s raw [gapPx] and the pinch/raster
+     * zoom ratio ([scale] / [rasterScale]) that [PdfVerticalScore]'s `graphicsLayer` bridge applies (see
+     * its class doc). `Arrangement.spacedBy` — and so every on-screen gap — lives INSIDE that layer, so
+     * anything computing scroll-extent or scroll-position math in the OUTER, live-sized coordinate space
+     * must use THIS value in place of the raw [gapPx], or the two drift apart by exactly
+     * `(scale/rasterScale - 1) * gapPx` per gap during a pinch (self-corrects once `rasterScale` catches
+     * up to `scale` at gesture end). Top/bottom padding does NOT need this correction — see
+     * `focalAdjustedOffset`'s doc for why that one is a fixed, unscaled leading offset instead.
+     */
+    fun liveGapPx(gapPx: Float, scale: Float, rasterScale: Float): Float = gapPx * (scale / rasterScale)
+
+    /**
      * Total scrollable content height (px): every page plus one [gapPx] gap between each consecutive
      * pair, plus [topPadPx] / [bottomPadPx] breathing room at the ends. [bottomPadPx] is where a caller
-     * folds in extra clearance for a floating control (mirrors [ReadyScore]'s `bottomContentPad`).
+     * folds in extra clearance for a floating control (mirrors [ReadyScore]'s `bottomContentPad`). A
+     * caller passing a live-scale-based `pageHeightsPx` array (e.g. `PdfVerticalScore`'s `liveHeightsPx`)
+     * should pass [liveGapPx]'s result as [gapPx], not the raw gap — see that function's doc for why.
      */
     fun totalContentHeightPx(pageHeightsPx: FloatArray, gapPx: Float, topPadPx: Float, bottomPadPx: Float): Float {
         if (pageHeightsPx.isEmpty()) return topPadPx + bottomPadPx
@@ -99,7 +128,9 @@ internal object PdfVerticalLayout {
      * ([scrollPx]) and [viewportHeightPx]. This is what drives [PdfPageSource.setWindow] — deliberately
      * scroll-position-based rather than pinch-scale-based, so a pinch alone (no scroll) never moves the
      * window. Clamped to the document; returns 0 for an empty document (real call sites never render
-     * with `pageCount == 0`, but the function stays total rather than partial).
+     * with `pageCount == 0`, but the function stays total rather than partial). Same [gapPx] caveat as
+     * [totalContentHeightPx]: pass [liveGapPx]'s result when [pageHeightsPx] is live-scale-based, so this
+     * walks the SAME page boundaries the scroll extent was declared with.
      */
     fun currentPageIndex(
         scrollPx: Float,
@@ -208,9 +239,22 @@ internal fun PdfVerticalScore(
         PdfVerticalLayout.pageHeightsPx(state.pageWidthsPt, state.pageHeightsPt, liveWidthPx)
     }
     val contentWidthPx = liveWidthPx.toFloat()
-    val contentHeightPx =
-        PdfVerticalLayout.totalContentHeightPx(liveHeightsPx, gapPx, vPadPx, vPadPx + extraBottomPadPx)
+    // The on-screen gap is `Arrangement.spacedBy(PAGE_GAP)` INSIDE the page `Column`'s `graphicsLayer`
+    // (see the class doc and `PdfVerticalLayout.liveGapPx`'s doc), so the declared scroll extent must use
+    // the LIVE gap, not the raw one, or it drifts from what's actually on screen mid-pinch. `vPadPx` does
+    // NOT get the same treatment — it's the fixed leading offset `focalAdjustedOffset` already treats as
+    // constant (padding sits OUTSIDE the graphicsLayer in the modifier chain below, so it never scales).
+    val contentHeightPx = PdfVerticalLayout.totalContentHeightPx(
+        liveHeightsPx,
+        gapPx = PdfVerticalLayout.liveGapPx(gapPx, scale, rasterScale),
+        topPadPx = vPadPx,
+        bottomPadPx = vPadPx + extraBottomPadPx,
+    )
     val isZoomed = contentWidthPx > viewportSize.width + 0.5f
+
+    // Reused every re-derivation below instead of allocating a fresh `FloatArray` per scroll/pinch frame
+    // — see `PdfVerticalLayout.pageHeightsPxInto`'s doc.
+    val liveHeightsScratch = remember(state) { FloatArray(pageCount) }
 
     // `currentPage` must be read from `vScroll.value` (a per-scroll-frame snapshot value) WITHOUT making
     // the whole surface recompose on every scroll tick — wrapped in `derivedStateOf` so a reader (the
@@ -218,9 +262,11 @@ internal fun PdfVerticalScore(
     // index actually changes. The live-`scale`-based geometry is recomputed INSIDE the lambda (not
     // captured from `contentWidthPx`/`liveWidthPx` above) so this stays correct across pinch frames without
     // re-deriving the state itself: `derivedStateOf`'s block reruns on every relevant snapshot read
-    // (`vScroll.value`, `viewportSize`, `scaleState.floatValue`), it just only PUBLISHES a change when the
-    // resulting `Int` differs. This mirrors `ReadyScore`, which never reads `vScroll.value`/`hScroll.value`
-    // directly in its body either — only inside gesture callbacks and effects.
+    // (`vScroll.value`, `viewportSize`, `scaleState.floatValue`, `rasterScaleState.floatValue`), it just
+    // only PUBLISHES a change when the resulting `Int` differs. This mirrors `ReadyScore`, which never
+    // reads `vScroll.value`/`hScroll.value` directly in its body either — only inside gesture callbacks
+    // and effects. Uses the SAME `liveGapPx` correction as `contentHeightPx` above, so this walks page
+    // boundaries consistent with whatever extent the scroll container was actually given.
     val currentPage by remember(state, gapPx, vPadPx) {
         derivedStateOf {
             val liveWidth = if (viewportSize.width > 0) {
@@ -228,12 +274,17 @@ internal fun PdfVerticalScore(
             } else {
                 0
             }
-            val liveHeights = PdfVerticalLayout.pageHeightsPx(state.pageWidthsPt, state.pageHeightsPt, liveWidth)
+            PdfVerticalLayout.pageHeightsPxInto(
+                liveHeightsScratch,
+                state.pageWidthsPt,
+                state.pageHeightsPt,
+                liveWidth,
+            )
             PdfVerticalLayout.currentPageIndex(
                 scrollPx = vScroll.value.toFloat(),
                 viewportHeightPx = viewportSize.height.toFloat(),
-                pageHeightsPx = liveHeights,
-                gapPx = gapPx,
+                pageHeightsPx = liveHeightsScratch,
+                gapPx = PdfVerticalLayout.liveGapPx(gapPx, scaleState.floatValue, rasterScaleState.floatValue),
                 topPadPx = vPadPx,
             )
         }
@@ -311,8 +362,28 @@ internal fun PdfVerticalScore(
                 // avoids it for `BandedScorePage`. The whole `Column` (already sized/positioned at
                 // `rasterScale`, via `pageHeightsPxRaster`) is stretched by `zoom` to match the live-`scale`
                 // box above; identity once `rasterScale` catches up to `scale` at gesture end.
+                //
+                // `wrapContentSize(unbounded = true, …)` is NOT part of `ReadyScore`'s own shape — it has
+                // no equivalent there and is required for a different reason than anything above. The
+                // enclosing Box just above is fixed at the LIVE `contentWidthPx`/`contentHeightPx`; without
+                // `unbounded = true`, THIS Column (measured at `rasterScale`) would be constrained to fit
+                // inside that live-sized parent by plain `Modifier.size` semantics — fine while zooming IN
+                // (there's slack, since raster < live), but on a zoom OUT after a settle (raster > live),
+                // every page would be squeezed to the smaller live width and then the `graphicsLayer` would
+                // scale that ALREADY-squeezed size a second time, and the Column's own measured height,
+                // now exceeding the parent's finite `maxHeight`, would clamp — collapsing trailing pages to
+                // zero height. `unbounded = true` measures the Column (and everything below it in this
+                // chain, including the padding) with infinite constraints, so it always reaches its true
+                // raster-based natural size regardless of what the live-sized parent declares; `align =
+                // Alignment.TopStart` places that (possibly larger) real content flush at (0, 0), matching
+                // `transformOrigin`. The reported size back to the parent stays coerced to the parent's own
+                // bounds (harmless — nothing reads it) while the ACTUAL child is free to overflow visually,
+                // which is exactly what the `graphicsLayer` then needs to scale correctly. See
+                // `PdfVerticalLayoutTest` / the fix report in `task-7-report.md` for the arithmetic this
+                // was verified against.
                 val columnModifier = remember(vPadPx, density) {
                     Modifier
+                        .wrapContentSize(align = Alignment.TopStart, unbounded = true)
                         .padding(top = with(density) { vPadPx.toDp() })
                         .graphicsLayer {
                             val zoom = scaleState.floatValue / rasterScaleState.floatValue
