@@ -243,7 +243,7 @@ internal class ReaderViewportState(
     fun settleRaster() { if (rasterScale != scale) rasterScale = scale }
 
     fun reset() {
-        cancelFling()
+        interruptMotion()
         scale = 1f
         rasterScale = 1f
         offsetX = clampX(0f, 1f)
