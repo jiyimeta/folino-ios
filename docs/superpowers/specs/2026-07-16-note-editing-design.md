@@ -7,7 +7,9 @@
 
 ## 1. Summary
 
-Add the ability to **edit the musical content** of a score the user is viewing: input / delete notes and rests, change a note's duration, change its pitch — plus chords, ties, tuplets, and accidentals. The interaction model is **"Caret & Pad" (select-then-act)**: tap a note or rest to place a caret on it, then act on the selection via a compact on-screen pad and a contextual callout. One responsive feature — **simpler presentation on iPhone, richer on iPad** — with identical capability on both.
+Add the ability to **edit the musical content** of a score the user is viewing: input / delete notes and rests, change a note's duration, change its pitch — plus ties and tuplets. The interaction model is **"Caret & Pad" (select-then-act)**: tap a note or rest to place a caret on it, then act on the selection via a compact on-screen pad. One responsive feature — **simpler presentation on iPhone, richer on iPad** — with identical capability on both.
+
+> **Status:** shipped and merged. §5 and §6 describe the interaction as BUILT, which differs from the original proposal on several points the device forced (no floating callout, no pitch-drag, no rest tint, the reader's layout mode preserved, playback available while editing). Each departure is called out where it applies. §§7–14 are the original engine / architecture analysis and still hold.
 
 The underlying engine (`swift-sheet-music`, already pinned at `be336454`) ships the entire editing command set, selection model, hit-testing, and MSCX/MSCZ serialization. **No upstream engine work is required for the core feature.** folino's work is: build the touch editing UI in the reserved `Editor` package, wire element-level hit-testing into the score surface, and fill in the already-declared `ScoreFileGateway.saveScore` stub.
 
@@ -43,19 +45,21 @@ The underlying engine (`swift-sheet-music`, already pinned at `be336454`) ships 
 ### 5.1 Entering / exiting edit mode
 
 - Entry: an **"編集" (edit) affordance** in the Reader top chrome (icon-button in the inspector cluster). Entering edit mode:
-  - pauses playback and hides the transport;
   - **repurposes tap-to-seek as tap-to-select** (resolves the primary gesture conflict);
   - dims any PencilKit annotation ink to ~40 % and makes it hit-test-transparent (annotation and note-editing are strictly mode-exclusive);
-  - reveals the editing chrome (pad + callout on iPhone; pad + palette on iPad).
+  - reveals the editing chrome (header + pad; plus the palette on iPad).
+- **Playback keeps running.** Editing and listening coexist — you can play the passage you are working on without leaving edit mode. The transport stays anchored at the bottom, dropping to its compact pill for the duration (the user's seek-bar preference is overridden, since the pad already claims most of the bottom). Every editing control goes inert while the cursor runs: an edit mid-playback would reflow the score out from under it.
 - Exit: **"完了"** returns to normal reading. Edits **autosave** (debounced) throughout; undo history is the safety net, so there is no discard dialog.
+- **The reader's layout mode is preserved** (vertical / horizontal / page), and the score scrolls and turns pages exactly as it does when reading. Only the score's *content* has to stay raw for the engine's positional IDs to hold — its presentation is free. The one display transform kept is the **clef override**, because `applying(clefOverrides:)` replaces a staff's opening clef element without inserting or removing anything, so every index the editor holds still points at the same note; transpose, hidden staves and multi-measure-rest collapse are suppressed, since those renumber elements.
 
 ### 5.2 Selection & caret (refined per review)
 
-- A single tap selects the nearest note / rest via `ScoreHitTester.itemID(at:)` (≈22 pt slop; tighter for Apple Pencil; Pencil hover pre-highlights the target).
+- A single tap selects the nearest note / rest via `ScoreHitTester`. The engine's hit ladder only answers for points inside an element's own geometry, which makes a notehead a fingertip-sized target at best, so a **miss falls back to a ≈22 pt slop box** around the tap and takes the nearest item, preferring the active voice. A tap far from everything still deselects, so the widened target is not a magnet.
 - The selected element is drawn with **the same highlight color the Reader already uses for the current note** (the playback-cursor / selection tint) — reusing folino's existing visual language, not a bespoke accent. A **caret** (insertion indicator) sits on the selected chord / rest, making the "input here" point explicit.
-- Tap empty staff = deselect. Long-press = loupe to disambiguate a notehead in a dense chord.
-- **Rests are first-class tap targets**; in edit mode they get a subtle tint to advertise "tap to input here."
+- **The editing overlay draws only; it never takes touches.** Selection goes through each score surface's own tap gesture. An earlier full-surface interaction layer (built to host a loupe, a Pencil hover pre-highlight and a pitch-drag handle) covered `ScoreView`, and SwiftUI delivers a touch to the topmost hit-testable view and its ancestors only — so tapping selected nothing, and the score could not be scrolled or paged while editing. Any future editing affordance that needs touches must not blanket the score.
+- **Rests are first-class tap targets.** They are not tinted: the caret already marks where input lands, and a disc over every rest was noise on a dense system.
 - Because engine IDs are **positional**, after each applied command the selection is **re-derived** from `ScoreEditor.lastAffectedLocation` (re-hit-test), which also drives keep-the-edited-note-visible scrolling.
+- **← / →** step the selection along the voice's timed slots, for when aiming a finger is the wrong tool. Navigation only: no command is applied, and the selection holds at either end rather than clearing.
 
 ### 5.3 The four core operations
 
@@ -64,22 +68,23 @@ The underlying engine (`swift-sheet-music`, already pinned at `be336454`) ships 
 | **Input a note** | tap a rest (input slot) → tap a pitch key `C–B` | `InputNote(at: RestID, …)` via `NoteInputKeyMap`, octave nearest the previous note. If the armed duration ≠ the rest's duration → `CompositeEditCommand[SetRestDuration, InputNote]` as one undo step |
 | **Delete** | select → `⌫` on the pad | `DeleteVoiceElement` (→ same-duration rest; measure length invariant). One notehead of a multi-note chord selected → `RemoveNoteFromChord` |
 | **Change duration** | select → duration key | `SetChordDuration` / `SetRestDuration` (engine rebalances neighbors). The key also **arms** the entry duration for the next input |
-| **Change pitch** | (a) drag the selected notehead vertically — ghost notehead snaps to staff steps with haptic ticks, release commits; (b) `▾▴` keys = ±semitone, long-press = ±octave | `SetNotePitch` (absolute, spelled from key signature, for drag; semitone for keys) |
+| **Change pitch** | `♯` / `♭` keys = ±semitone, long-press = ±octave | `SetNotePitch` |
 
-The staff-drag pitch gesture is the one piece adopted from the runner-up gesture-first approach; it is the only op where direct manipulation is unambiguous and delightful.
+The duration keys stop at the sixteenth. 32nds and 64ths cost two keys out of a row that has to share a phone's width with the tuplet, tie and delete keys, and they are rare in the parts this edits; `NoteDuration` still models them, so a score that already contains them renders and edits fine.
+
+**Dropped: the vertical pitch-drag gesture.** It was the one piece adopted from the runner-up gesture-first approach, but its drag handle lived on the full-surface overlay that had to go (§5.2), and `♯` / `♭` cover the same ground without competing with the scroll view for the gesture. The glyphs are `♯` / `♭` rather than chevrons because a semitone step is what a musician reads as sharpening or flattening.
 
 ### 5.4 Full-scope operations
 
-Reached via a **floating callout** anchored beside the selected note (positioned with `LayoutDocument.cursorFrame(for:)` / `chordStemOrigin(at:)`) on iPhone, and a **persistent palette** on iPad:
+**The floating callout is gone.** Anchored beside the selection, it covered the music it was describing and moved every time the selection moved. What it carried now lives in chrome that holds still — and what could not be placed there was cut rather than parked somewhere worse:
 
-- **Accidentals** ♭ ♮ ♯ (long-press → 𝄫 𝄪) → `SetAccidental`
-- **Chords**: `＋音` arms add-to-chord (next pitch key / staff drag) → `AddNoteToChord`; `－音` → `RemoveNoteFromChord`; iPad adds `+3度 / +8度` interval shortcuts (client computes pitch/tpc from the key signature)
-- **Tie** → `SetTie` (dimmed when there is no same-pitch successor)
-- **Tuplet** → one-tap triplet `CreateTuplet(3,2)`; long-press grid for 5/6/7; becomes "remove" (`RemoveTuplet`) when the selection is inside a tuplet
+- **Tie** → `SetTie` (disabled when there is no same-pitch successor) — on the pad, beside delete
+- **Tuplet** → one-tap triplet `CreateTuplet(3,2)`, becoming "remove" (`RemoveTuplet`) when the selection is inside one — on the pad, with the durations, because a tuplet is a duration decision. Only triplets: a menu of sizes cost a key and an extra tap to reach the one everybody wanted.
+- **Accidentals** ♭ ♮ ♯ and **chords** `＋音` / `－音` are **out of the UI for now**. `SetAccidental`, `AddNoteToChord` and `RemoveNoteFromChord` remain on the view model, so re-surfacing them is a view-only change once there is a home for them. iPad keeps the `+3度 / +8度` interval shortcuts in its palette.
 
 ### 5.5 Voices (v1)
 
-A **voice picker** (segmented control) selects the target voice; edits apply to that voice. iPad surfaces it in the palette; iPhone in the context bar / callout `⋯`. Multi-voice scores still render all voices; only the active voice is edited.
+A **voice picker** selects the target voice; edits apply to that voice. It sits in **its own header pill**, next to the undo / redo / 完了 cluster — reachable with nothing selected, which is when you most often need to choose the voice you are about to write into. iPad also surfaces it in the palette. Multi-voice scores still render all voices; only the active voice is edited.
 
 ### 5.6 Audition (v1)
 
@@ -91,9 +96,11 @@ On note input and pitch change, the resulting pitch sounds through the current s
 
 ### 5.8 iPhone vs iPad presentation
 
-- **iPhone (compact):** two-row bottom **pad** (durations / pitch + octave + delete) + the floating **callout** for contextual ops. The score keeps maximum vertical room. Context bar carries voice + audition indicators.
-- **iPad (regular):** one-row bottom pad + a **persistent right-edge Edit palette** (the callout made permanent) showing a live **selection readout** ("E♭4 · 四分音符 · m.12 · 声部 1") and the `+3度 / +8度` shortcuts.
-- One component set, arranged by size class (`committedSizeClass`) — identical capability.
+- **iPhone (compact):** a **header** (voice pill + undo / redo / 完了) at the top, a two-row **pad** — durations + triplet + tie + delete, then C–B + `♯` / `♭` — and a **← / → pill** level with the transport at the bottom-left. Keys are 44 pt tall and share the row's width rather than claiming a fixed minimum, so the row cannot overflow a narrow phone.
+- **The pad docks to the top or bottom edge and is dragged there from anywhere on its surface**, the way `PKToolPicker` can be moved off whatever it is covering. It parks below the header or above the transport — never over either — and the choice is remembered across sessions. This is how a pad that must not resize the score still gets out of the way of it.
+- The pad **reports its footprint** so the scrolling layouts pad their scroll content by it: the first / last system can always be brought clear. This is scroll padding, not layout width — docking or moving the pad never re-engraves the score. **Page mode deliberately does not** honor it, since its bottom reserve feeds `LayoutPaginator` and the page breaks would differ between reading and editing the same file.
+- **iPad (regular):** one-row bottom pad + a **persistent right-edge Edit palette** showing a live **selection readout** ("E♭4 · 四分音符 · m.12 · 声部 1") and the `+3度 / +8度` shortcuts.
+- One component set, arranged by size class — identical capability.
 
 ### 5.9 Coexistence with PencilKit annotation
 
@@ -101,8 +108,8 @@ Strictly **mode-exclusive**. Edit mode dims annotation ink and blocks ink input;
 
 ## 6. Visual & UI conventions
 
-- **Liquid Glass (iOS 26):** the pad, callout, and iPad palette use system glass materials (`glassEffect` / `.regularMaterial`-class surfaces per current folino Reader chrome), floating over the score.
-- **SF Symbols** for undo/redo/delete/speaker/chevron/voice etc.; note-value keys use crisp custom glyphs (accidentals use standard ♭ ♮ ♯ where they render well).
+- **Liquid Glass (iOS 26):** the pad, the header pills and the iPad palette use system glass materials (`glassEffect` / `.regularMaterial`-class surfaces per current folino Reader chrome), floating over the score.
+- **SF Symbols** for undo/redo/delete/arrows/voice etc. **Note-value keys are SMuFL glyphs drawn with Bravura** — the font the score itself is engraved with, already bundled in `SheetMusicLayoutApple` and registered at launch, so the Editor names the family without depending on the layout backend. Unicode's Musical Symbols block is NOT usable: no iOS font covers it, and U+1D15E onward are canonical decompositions that draw as two or three glyphs. A music font also reserves ~2 em of ascent and descent, so the key labels trim the line box to the glyphs' own band, computed from their union bounds so every key keeps one baseline.
 - **Follow the Reader chrome** (spacing, materials, button styling) so edit mode reads as the same app.
 - **Copy:** user-facing strings are lowercase `folino` and natural Japanese ("編集" / "完了" / "声部"), localized via the established `module.feature.thing` key scheme; mockup labels are placeholders.
 - **Selection color:** the Reader's existing highlight token (see §5.2), not a new accent.
@@ -120,7 +127,7 @@ Strictly **mode-exclusive**. Edit mode dims annotation ink and blocks ink input;
 - After a save, refresh the `ScoreItem` row (`contentHash`, `sizeBytes`, and any derived metadata) via `repository.saveScoreItem`, mirroring the metadata-edit path.
 - **Autosave:** debounced write during editing; `lastAffectedLocation` keeps the edited note on screen.
 
-## 9. Architecture & module integration (decision open — needs review)
+## 9. Architecture & module integration (Option 1 was chosen and built)
 
 Editing UI needs `SheetMusicUI` (render + hit-test), which sits **above** ScoreUI, so the editing surface **cannot** live in ScoreUI. It belongs in the reserved **`Editor`** Feature package, which — like Reader — takes the sanctioned `SheetMusicUI` carve-out. Domain re-exports the commands; Infrastructure owns serialization behind `ScoreFileGateway`. So far this is all within existing rules.
 
@@ -135,12 +142,13 @@ The open question is **how "edit in place" is realized without a Feature→Featu
 Other integration points:
 
 - **Entry points:** the Reader chrome "編集" button (edit the score you're viewing); optionally a Library `ScoreRowMenu` "編集" action later. App wires the composition (mirroring `makeReader`).
-- **Screens/Views convention:** `Editor/Screens/` (navigable + presentation state) + `Editor/Views/` (pad, callout, palette, pickers) + `EditorViewModel`, mirroring Library/Reader.
+- **Screens/Views convention:** `Editor/Screens/` (navigable + presentation state) + `Editor/Views/` (pad, palette, pickers) + `EditorViewModel`, mirroring Library/Reader.
 - **Positional-ID drift:** re-derive selection after every `apply` from `lastAffectedLocation`.
+- **As built:** the seam is `ReaderEditingHost` (Reader-owned, App-wired); Reader and Editor never import each other. Playback state crosses the same seam (`isPlaying` → `EditorViewModel.isPlaybackActive`) so the pad can go inert while the cursor runs, and the pad's measured footprint crosses back so the scrolling layouts can pad their scroll content.
 
 ## 10. Feasibility & phasing
 
-**Buildable today (v1):** every interaction in §5 fires an existing command; hit-testing, selection rendering, callout geometry, undo, and `.mscx`/`.mscz` save are all shipped. Voice editing and audition are ready.
+**Buildable today (v1):** every interaction in §5 fires an existing command; hit-testing, selection rendering, undo, and `.mscx`/`.mscz` save are all shipped. Voice editing and audition are ready.
 
 **Needs a small upstream `swift-sheet-music` addition (Phase 2):**
 - Add / remove **measure** (no ready command; `systemMeasures` alignment invariant must be maintained) → v1 edits within the existing measure count and shows no "append measure" affordance.
@@ -166,11 +174,13 @@ Both are hours-scale, not blockers.
 - **Editor unit tests (Swift Testing):** command-application logic and selection re-derivation against the engine's `Score` value tree — input, delete, duration change (with rest rebalancing), pitch change, chord build, tie, tuplet, undo/redo, positional-ID re-derivation after edits.
 - **Persistence round-trip:** edit → `saveScore` (`.mscx`/`.mscz`) → reload → assert `==`-equal `Score` (semantic round-trip contract).
 - **Hit-test wiring:** tap coordinate → expected `ScoreItemID` against a known `LayoutDocument`.
-- **Feature tests** use fakes for audio/persistence per repo convention. UI-gesture feel (pitch drag) is verified manually on device.
+- **Feature tests** use fakes for audio/persistence per repo convention.
+- **Glyph coverage is a test, not an eyeball:** `EditorPadGlyphTests` asks the very font the pad renders with whether it has a glyph for each duration key, and requires each to be a single scalar. The original stand-ins were valid Swift strings that drew as .notdef boxes on device — nothing but a font query catches that.
+- **Layout and gesture behavior are device-verified.** They are also where every late bug lived: SwiftUI's touch delivery (a full-surface overlay killing tap-to-select and scrolling), `onGeometryChange` measuring an expanded frame instead of its content, a drag offset in `@State` stranding the pad on a cancelled gesture, and `@AppStorage` splitting one animated transaction in two. When a UI bug resists reasoning, instrument and read the numbers off the device rather than guessing again.
 
 ## 13. Risks
 
-- **Finger precision** for pitch-drag on dense/small iPhone staves — mitigated by ▾▴ keys as the primary path and drag as the delight path; verify on device.
+- **Finger precision** on dense / small iPhone staves — mitigated by the slop-box fallback around a missed tap (§5.2) and by `♯` / `♭` keys instead of a drag; verify on device.
 - **Reader coupling** (Option 1 seam) — keep the injected API minimal and Domain-typed.
 - **Positional-ID drift** — centralize re-derivation so no stale `ScoreItemID` is ever applied.
 - **Autosave vs large scores** — debounce; serialize off-main.
