@@ -29,17 +29,27 @@ enum PDFAnnotationAnchoring {
         PageAnchoringCore.displayTransform(pageFrame: pageFrame)
     }
 
-    /// Capture: each stroke → one `DrawingAnchor` via the shared core. Pixel-erased strokes carry a `mask` the
-    /// neutral `InkStroke` can't represent; they stay on the legacy `PKDrawing` archive path (read-both handles the
-    /// archive permanently), same as `AnnotationAnchoring.capture`. Everything else converts to `InkStroke` and
-    /// routes through `PageAnchoringCore` so iOS and Android bake identically.
+    /// Capture: each stroke → one `DrawingAnchor` via the shared core. The page-resolving centroid is always
+    /// `AnnotationAnchorPolicy.representativePoint` (the PencilKit `renderBounds` center) — the SAME point the
+    /// pre-refactor implementation used — computed once and shared by both branches below, so a masked and an
+    /// unmasked stroke with identical geometry always resolve to the same page. (The neutral core's own
+    /// `AnnotationAnchoringCore.representativePoint(of: InkStroke)`, the bbox center of the interpolated on-curve
+    /// samples, is a DIFFERENT point for a pressure-varying stroke — `renderBounds` padding is asymmetric — so it must
+    /// not be used here to decide the page; using it silently shifted which page a gap-adjacent stroke landed on.)
+    /// Pixel-erased strokes carry a `mask` the neutral `InkStroke` can't represent; they stay on the legacy
+    /// `PKDrawing` archive path (read-both handles the archive permanently), same as `AnnotationAnchoring.capture`.
+    /// Everything else converts to `InkStroke` and routes through `PageAnchoringCore.capturePage` for the actual
+    /// normalize math, so iOS and Android bake identically.
     static func capture(strokes: [PKStroke], pageFrames: [CGRect]) -> [DrawingAnchor] {
         strokes.compactMap { stroke in
+            let centroid = AnnotationAnchorPolicy.representativePoint(of: stroke)
+            guard let index = PageAnchoringCore.pageIndex(forCentroid: centroid, pageFrames: pageFrames) else {
+                return nil
+            }
             if stroke.mask != nil {
-                let centroid = AnnotationAnchorPolicy.representativePoint(of: stroke)
-                guard let index = PageAnchoringCore.pageIndex(forCentroid: centroid, pageFrames: pageFrames),
-                      let normalize = PageAnchoringCore.normalizeTransform(pageFrame: pageFrames[index])
-                else { return nil }
+                guard let normalize = PageAnchoringCore.normalizeTransform(pageFrame: pageFrames[index]) else {
+                    return nil
+                }
                 // Bake the normalize into the points (same rationale as AnnotationAnchoring: PencilKit ignores a
                 // lingering per-stroke transform when computing renderable extent, which clamps under zoom).
                 var normalized = PKDrawing(strokes: [stroke])
@@ -49,8 +59,9 @@ enum PDFAnnotationAnchoring {
                     encodedDrawing: InkStrokePencilKitBridge.encodeStoredDrawing(normalized),
                 )
             }
-            return PageAnchoringCore.capture(
-                strokes: [InkStrokePencilKitBridge.inkStroke(from: stroke)], pageFrames: pageFrames,
+            return PageAnchoringCore.capturePage(
+                strokes: [InkStrokePencilKitBridge.inkStroke(from: stroke)], pageIndex: index,
+                pageFrame: pageFrames[index],
             ).first
         }
     }

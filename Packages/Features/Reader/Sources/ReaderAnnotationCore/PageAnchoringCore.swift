@@ -193,19 +193,20 @@ public enum PageAnchoringCore {
 
     /// Bake `transform` directly into a stroke's content-space geometry (positions, and — via the transform's implied
     /// uniform scale — width). The neutral `InkStroke` has no separate transform slot (unlike `PKStroke.transform`),
-    /// so normalization is always applied straight to the arrays.
+    /// so normalization is always applied straight to the arrays. Uses `zip` (not indexed access) so a
+    /// caller-supplied `InkStroke` with mismatched `x`/`y` counts — never true today via `InkStrokeCodec`, but not
+    /// structurally guaranteed once Task 10 builds these from JNI wire arrays — degrades instead of trapping,
+    /// mirroring `AnnotationAnchoringCore.normalized`'s independent `.map`s. `.squareRoot()` (not the free `sqrt`
+    /// function) needs no libm import, which matters on the Android cross-compile toolchain.
     private static func transformed(_ stroke: InkStroke, by transform: CGAffineTransform) -> InkStroke {
         var out = stroke
-        var newX = [Float](); newX.reserveCapacity(stroke.x.count)
-        var newY = [Float](); newY.reserveCapacity(stroke.y.count)
-        for i in stroke.x.indices {
-            let p = CGPoint(x: CGFloat(stroke.x[i]), y: CGFloat(stroke.y[i])).applying(transform)
-            newX.append(Float(p.x))
-            newY.append(Float(p.y))
+        let placed = zip(stroke.x, stroke.y).map { x, y in
+            CGPoint(x: CGFloat(x), y: CGFloat(y)).applying(transform)
         }
-        let widthScale = Float(sqrt(abs((transform.a * transform.d) - (transform.b * transform.c))))
-        out.x = newX
-        out.y = newY
+        out.x = placed.map { Float($0.x) }
+        out.y = placed.map { Float($0.y) }
+        let det = transform.a * transform.d - transform.b * transform.c
+        let widthScale = Float(abs(det).squareRoot())
         out.width = stroke.width.map { $0 * widthScale }
         out.baseWidthSp = stroke.baseWidthSp * widthScale
         return out
