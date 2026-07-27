@@ -248,7 +248,7 @@ git -C <worktree> commit -m "feat(reader-android): pure viewport math for clampi
     - read-only state `scale: Float`, `rasterScale: Float`, `offsetX: Float`, `offsetY: Float`
     - `var geometry: ViewportGeometry`
     - `fun applyPan(pan: Offset)`, `fun applyZoom(zoomFactor: Float, centroid: Offset)`
-    - `fun setOffsetX(value: Float)`, `fun setOffsetY(value: Float)`
+    - `fun snapOffsetX(value: Float)`, `fun snapOffsetY(value: Float)`
     - `suspend fun animateOffsetXTo(target: Float)`, `suspend fun animateOffsetYTo(target: Float)`
     - `fun settleRaster()`, `fun reset()`
     - `fun cancelFling()`, `fun startFling(scope: CoroutineScope, density: Density, velocity: Velocity)`
@@ -291,14 +291,14 @@ class ReaderViewportStateTest {
 
     @Test fun applyPan_movesOppositeTheFinger() {
         val s = state()
-        s.setOffsetY(500f)
+        s.snapOffsetY(500f)
         s.applyPan(Offset(0f, -120f)) // finger travels up ⇒ content scrolls down
         assertEquals(620f, s.offsetY, 0.01f)
     }
 
     @Test fun applyPan_clampsAtTheTop() {
         val s = state()
-        s.setOffsetY(40f)
+        s.snapOffsetY(40f)
         s.applyPan(Offset(0f, 400f))
         assertEquals(0f, s.offsetY, 0.01f)
     }
@@ -311,7 +311,7 @@ class ReaderViewportStateTest {
 
     @Test fun applyZoom_holdsTheCentroid() {
         val s = state()
-        s.setOffsetY(600f)
+        s.snapOffsetY(600f)
         val centroid = Offset(500f, 300f)
         val documentY = (s.offsetY + centroid.y) / s.scale
         s.applyZoom(zoomFactor = 2f, centroid = centroid)
@@ -322,7 +322,7 @@ class ReaderViewportStateTest {
     @Test fun applyZoom_doesNotCollapseToTheTopLeft() {
         // The regression: zooming in near the bottom of a long score must not snap the viewport home.
         val s = state()
-        s.setOffsetY(3000f)
+        s.snapOffsetY(3000f)
         s.applyZoom(zoomFactor = 1.5f, centroid = Offset(500f, 400f))
         assert(s.offsetY > 3000f) { "expected the offset to grow with the zoom, was ${s.offsetY}" }
     }
@@ -332,7 +332,7 @@ class ReaderViewportStateTest {
         // shrunken extent rather than sitting past its new end.
         val s = state()
         s.applyZoom(zoomFactor = 4f, centroid = Offset(500f, 400f))
-        s.setOffsetY(Float.MAX_VALUE) // clamps to the maximum at scale 4: 16000 - 800
+        s.snapOffsetY(Float.MAX_VALUE) // clamps to the maximum at scale 4: 16000 - 800
         assertEquals(15200f, s.offsetY, 0.01f)
         s.applyZoom(zoomFactor = 0.5f, centroid = Offset(500f, 400f))
         assertEquals(2f, s.scale, 0.001f)
@@ -348,7 +348,7 @@ class ReaderViewportStateTest {
                 unitContentHeightPx = 400f,
             )
         }
-        s.setOffsetY(0f)
+        s.snapOffsetY(0f)
         assertEquals(-200f, s.offsetY, 0.01f)
     }
 
@@ -369,7 +369,7 @@ class ReaderViewportStateTest {
 
     @Test fun reset_returnsToFitAndOrigin() {
         val s = state()
-        s.setOffsetY(900f)
+        s.snapOffsetY(900f)
         s.applyZoom(zoomFactor = 3f, centroid = Offset(500f, 400f))
         s.reset()
         assertEquals(1f, s.scale, 0.001f)
@@ -497,9 +497,12 @@ internal class ReaderViewportState(
         underfillY,
     )
 
-    fun setOffsetX(value: Float) { offsetX = clampX(value) }
+    // Named `snap…`, not `setOffset…`: `offsetX` / `offsetY` are `private set` properties, so Kotlin already
+    // synthesises `setOffsetX(Float)` / `setOffsetY(Float)` on the JVM and an explicit function of that name
+    // is a platform declaration clash. `snap` also reads as the no-animation counterpart to `animateOffsetXTo`.
+    fun snapOffsetX(value: Float) { offsetX = clampX(value) }
 
-    fun setOffsetY(value: Float) { offsetY = clampY(value) }
+    fun snapOffsetY(value: Float) { offsetY = clampY(value) }
 
     /** Pan by a finger delta. The content follows the finger, so the offset moves the other way. */
     fun applyPan(pan: Offset) {
@@ -938,7 +941,7 @@ Expected: the physical Pixel is listed. If no device is attached, stop and ask t
 
 ```bash
 Android/gradlew -p Android :app:installDebug --no-daemon
-adb shell am start -n com.keynumber.folino/.MainActivity
+adb shell am start -n com.harmolo.folino/com.keynumber.folino.MainActivity -f 0x10008000
 ```
 
 Open a score in vertical mode and check:
@@ -1141,7 +1144,7 @@ Expected: PASS.
 
 ```bash
 Android/gradlew -p Android :app:installDebug --no-daemon
-adb shell am start -n com.keynumber.folino/.MainActivity
+adb shell am start -n com.harmolo.folino/com.keynumber.folino.MainActivity -f 0x10008000
 ```
 
 Switch the reader to horizontal layout (Settings → Layout, or the display inspector) and check:
@@ -1272,7 +1275,7 @@ Expected: PASS.
 
 ```bash
 Android/gradlew -p Android :app:installDebug --no-daemon
-adb shell am start -n com.keynumber.folino/.MainActivity
+adb shell am start -n com.harmolo.folino/com.keynumber.folino.MainActivity -f 0x10008000
 ```
 
 Switch the reader to page layout and check:
@@ -1326,7 +1329,7 @@ Expected: PASS across all modules.
 
 ```bash
 Android/gradlew -p Android :app:installDebug --no-daemon
-adb shell am start -n com.keynumber.folino/.MainActivity
+adb shell am start -n com.harmolo.folino/com.keynumber.folino.MainActivity -f 0x10008000
 ```
 
 - [ ] **Step 5: Cross-mode verification pass**

@@ -2,11 +2,6 @@ package com.keynumber.folino.reader
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.DragInteraction
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateCentroid
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,8 +12,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
@@ -87,8 +81,20 @@ internal fun PagedScore(
     // pager never renders a page before its boundary exists (two separate states updated by two
     // sequential native calls is what crashed the page-mode switch).
     var pagedData by remember { mutableStateOf<PagedData?>(null) }
-    var scale by remember { mutableFloatStateOf(1f) }
-    var panOffset by remember { mutableStateOf(Offset.Zero) }
+
+    // `deferRaster = false`: a page is about a screenful, so re-recording it per pinch frame is fine —
+    // which is what this surface already did. Underfill is START on both axes: a page is viewport-sized
+    // at fit, so the underfill case only arises transiently and the top-left is where it belongs.
+    val viewport = rememberReaderViewportState(
+        deferRaster = false,
+        underfillX = ViewportUnderfill.START,
+        underfillY = ViewportUnderfill.START,
+    )
+    val scale = viewport.scale
+    // Content translation, derived from the viewport's scroll-space offset. Every consumer below — the
+    // cursor, loop, and A–B overlays, the annotation layers, the nav overlay — takes a translation, so
+    // convert once here rather than negating at each site.
+    val panOffset = Offset(-viewport.offsetX, -viewport.offsetY)
 
     // Fixed-density rendering: staff is the same physical size on phone and tablet, and the engine
     // reflows more music into wider viewports (iOS parity). The old fit-to-A4 approach forced a
@@ -100,6 +106,17 @@ internal fun PagedScore(
         if (fitPxPerMM > 0f) (viewportSize.width / fitPxPerMM).toDouble() else PAGE_WIDTH_MM
     val viewportHeightMm: Double =
         if (fitPxPerMM > 0f) (viewportSize.height / fitPxPerMM).toDouble() else 0.0
+
+    // A page is laid out to the viewport, so the content at scale 1 IS the viewport. No fixed padding,
+    // and no per-page variation — this belongs above the pager, not inside a page.
+    SideEffect {
+        viewport.geometry = ViewportGeometry(
+            viewportWidthPx = viewportSize.width.toFloat(),
+            viewportHeightPx = viewportSize.height.toFloat(),
+            unitContentWidthPx = viewportSize.width.toFloat(),
+            unitContentHeightPx = viewportSize.height.toFloat(),
+        )
+    }
 
     // Observe layout options so a display-setting change also triggers a re-fetch.
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
@@ -127,8 +144,9 @@ internal fun PagedScore(
     val pageCount = pagedPages.size
     val pagerState = rememberPagerState(pageCount = { pageCount })
 
-    // Reset zoom + pan on page turn (iOS parity: each page enters at fit-width).
-    LaunchedEffect(pagerState.currentPage) { scale = 1f; panOffset = Offset.Zero }
+    // Reset zoom + pan on page turn (iOS parity: each page enters at fit-width). Also stops a fling that
+    // was still coasting when the page changed under it.
+    LaunchedEffect(pagerState.currentPage) { viewport.reset() }
 
     // A user-initiated page swipe DURING playback suspends auto-page-turn (Task 5): the reader took
     // manual control of the page, so the playhead's page must not yank them back until they play again or
@@ -235,83 +253,36 @@ internal fun PagedScore(
                             if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {
                                 return@detectTapGestures
                             }
+                            // Read through `viewport`, NOT the `panOffset` local: this lambda is captured by
+                            // `pointerInput`, which only restarts its handler when a KEY changes, and a pan
+                            // changes none of them. A captured `Offset` would go stale the moment the reader
+                            // pans, and the tap would seek to the wrong note with nothing to show for it.
                             val cursor = nearestCursorForTap(
                                 tap = offset,
-                                contentOffsetPx = Offset(panOffset.x, panOffset.y - pageTopPx),
+                                contentOffsetPx = Offset(-viewport.offsetX, -viewport.offsetY - pageTopPx),
                                 pxPerMM = fitPxPerMM,
-                                scale = scale,
+                                scale = viewport.scale,
                                 scoreHandle = handle,
                                 layoutOptionsBytes = optionsBytes,
                             ) ?: return@detectTapGestures
                             audioVm.handleTap(cursor)
                         }
                     }
-                    // Pinch-zoom + pan gesture lives INSIDE the pager page (not as a sibling overlay),
-                    // so HorizontalPager still receives single-finger horizontal swipes at scale == 1.
-                    // At scale == 1 single-finger drags are NOT consumed here → they reach the pager.
-                    .pointerInput(fitPxPerMM, pageIndex, annotationMode) {
-                        if (fitPxPerMM <= 0f) return@pointerInput
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            do {
-                                val event = awaitPointerEvent()
-                                val activeCount = event.changes.count { it.pressed }
-                                if (activeCount >= 2) {
-                                    // A two-finger pinch is a manual viewport change → suspend
-                                    // auto-page-turn during playback (Task 5; sticky until play/seek).
-                                    audioVm.suspendPlaybackFollowForManualViewportChange()
-                                    val zoom = event.calculateZoom()
-                                    if (zoom != 1f) {
-                                        val c = event.calculateCentroid(useCurrent = true)
-                                        if (!c.x.isNaN() && !c.y.isNaN()) {
-                                            val newScale = (scale * zoom).coerceIn(1f, 8f)
-                                            val ratio = newScale / scale
-                                            if (ratio != 1f) {
-                                                // Anchor the zoom at the gesture centroid (iOS parity).
-                                                // The page content scales about its top-left (which sits
-                                                // at panOffset), so to keep the content point under the
-                                                // centroid `c` fixed across the scale step we move the
-                                                // offset to `c - ratio * (c - panOffset)`. Clamp with the
-                                                // NEW scale's pan bounds so the focal shift isn't undone.
-                                                val nMinPanX = -(size.width * (newScale - 1f)).coerceAtLeast(0f)
-                                                val nMinPanY = -(size.height * (newScale - 1f)).coerceAtLeast(0f)
-                                                panOffset = Offset(
-                                                    (c.x - ratio * (c.x - panOffset.x)).coerceIn(nMinPanX, 0f),
-                                                    (c.y - ratio * (c.y - panOffset.y)).coerceIn(nMinPanY, 0f),
-                                                )
-                                                scale = newScale
-                                            }
-                                        }
-                                    }
-                                    val pan = event.calculatePan()
-                                    if (pan != Offset.Zero && scale > 1f) {
-                                        val minPanX = -(size.width * (scale - 1f)).coerceAtLeast(0f)
-                                        val minPanY = -(size.height * (scale - 1f)).coerceAtLeast(0f)
-                                        panOffset = Offset(
-                                            (panOffset.x + pan.x).coerceIn(minPanX, 0f),
-                                            (panOffset.y + pan.y).coerceIn(minPanY, 0f),
-                                        )
-                                    }
-                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                    // A single-finger drag while annotating is a stroke, not a pan — the
-                                    // wet overlay owns it. (Two-finger pinch above still applies: the wet
-                                    // layer cancels its stroke and hands the gesture back, same as the
-                                    // vertical surface.)
-                                } else if (activeCount == 1 && scale > 1f && !annotationMode) {
-                                    val pan = event.calculatePan()
-                                    if (pan != Offset.Zero) {
-                                        val minPanX = -(size.width * (scale - 1f)).coerceAtLeast(0f)
-                                        val minPanY = -(size.height * (scale - 1f)).coerceAtLeast(0f)
-                                        panOffset = Offset(
-                                            (panOffset.x + pan.x).coerceIn(minPanX, 0f),
-                                            (panOffset.y + pan.y).coerceIn(minPanY, 0f),
-                                        )
-                                        event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                    }
-                                }
-                            } while (event.changes.any { it.pressed })
-                        }
-                    },
+                    // Pan, pinch, and fling live INSIDE the pager page (not as a sibling overlay), so
+                    // `HorizontalPager` still receives single-finger horizontal swipes at fit:
+                    // `allowSingleFingerPan` is false there, so nothing is consumed and the swipe reaches
+                    // the pager. Zoomed, the drag pans the page instead and does not turn it.
+                    .readerViewportGestures(
+                        state = viewport,
+                        scope = scope,
+                        key = fitPxPerMM,
+                        enabled = fitPxPerMM > 0f,
+                        // A lambda, not a value: this answer flips the instant a pinch crosses fit, and a
+                        // value in the `pointerInput` key list would restart the handler mid-gesture.
+                        allowSingleFingerPan = { viewport.scale > 1f && !annotationMode },
+                        allowFling = !annotationMode,
+                        onManualViewportChange = audioVm::suspendPlaybackFollowForManualViewportChange,
+                    ),
                 contentAlignment = Alignment.TopStart,
             ) {
                 // Page content is already page-local (drawn from y=0); only user pan translates it.
