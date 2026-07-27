@@ -139,9 +139,18 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     // [closePdfPageSource] whenever the Reader is retargeted to a different score (see [load]) or this
     // ViewModel is cleared. Null for a non-PDF score. Tasks 7/8's render surfaces read this to fetch
     // and window bitmaps; internal (like [PdfPageSource] itself) and read-only since it is created and
-    // torn down only from within this VM.
+    // torn down only from within this VM. `@Volatile` because [openPdf] writes it from a `Dispatchers.IO`
+    // coroutine while Compose call sites read it from the main thread.
+    @Volatile
     internal var pdfPageSource: PdfPageSource? = null
         private set
+
+    // The coroutine [load] is currently running, cancelled at the top of the NEXT [load] call so a
+    // retarget mid-flight (e.g. a playlist auto-advance through several scores in quick succession)
+    // can't keep running after it's been superseded. See [load]'s and [openPdf]'s comments for why this
+    // alone isn't sufficient to prevent a superseded PDF source from leaking — [openPdf] also re-checks
+    // [loadedScoreId] immediately before publishing.
+    private var loadJob: Job? = null
 
     init {
         startRecomputeLoop()
@@ -216,12 +225,22 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * as [ReaderState.ReadyPdf] — the pixels come later, from [pdfPageSource] itself, via Tasks 7/8's
      * render surfaces. The caller ([load]) has already closed any previously held source, so this
      * only needs to clean up the source it just created if building the state fails partway through.
-     * Returns null on any failure (e.g. a corrupt or unreadable PDF).
+     *
+     * [scoreId] is re-checked against [loadedScoreId] immediately before the [pdfPageSource]
+     * assignment: [load]'s `loadJob.cancel()` stops a superseded coroutine promptly at its NEXT
+     * suspension point, but everything from `PdfPageSource(file)` through the page-size loop above is
+     * synchronous with no suspension point of its own, so a retarget that lands mid-loop wouldn't
+     * otherwise be noticed until after this source was already published — leaking its file descriptor
+     * and native renderer (the newer load's `closePdfPageSource()` call already ran, before this one
+     * had anything to close) and briefly exposing the OLD PDF's page geometry under the NEW score.
+     * This check closes that window: a superseded source is closed here instead of installed.
+     *
+     * Returns null on any failure (e.g. a corrupt or unreadable PDF) or if superseded.
      */
-    private fun openPdf(file: File): ReaderState.ReadyPdf? {
+    private fun openPdf(file: File, scoreId: String): ReaderState.ReadyPdf? {
         val source = try {
             PdfPageSource(file)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return null
         }
         return try {
@@ -232,13 +251,17 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 widthsPt += sizePt.width.toDouble()
                 heightsPt += sizePt.height.toDouble()
             }
+            if (scoreId != loadedScoreId) {
+                source.close()
+                return null
+            }
             pdfPageSource = source
             ReaderState.ReadyPdf(
                 pageCount = source.pageCount,
                 pageWidthsPt = widthsPt,
                 pageHeightsPt = heightsPt,
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             source.close()
             null
         }
@@ -284,20 +307,25 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // PdfRenderer + file descriptor) now rather than waiting for onCleared, so a playlist
         // auto-advance through several PDFs in a row doesn't accumulate open descriptors.
         closePdfPageSource()
-        viewModelScope.launch {
+        // Cancel whatever the PREVIOUS load() call is still doing: without this, a fast retarget (e.g.
+        // playlist auto-advance through several scores) can leave the old coroutine running concurrently
+        // with the new one. This alone doesn't close the whole race for a PDF retarget — see [openPdf]'s
+        // doc for the second half of that fix.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             val app = getApplication<Application>()
 
             val file = scoreFile(localFileName)
-            val bytes = file?.let { f ->
-                withContext(Dispatchers.IO) { if (f.exists()) f.readBytes() else null }
-            }
-            if (file == null || bytes == null) {
+            if (file == null || !withContext(Dispatchers.IO) { file.exists() }) {
                 _state.value = ReaderState.Error("Score file not found")
                 return@launch
             }
 
             if (file.extension.equals("pdf", ignoreCase = true)) {
-                val pdfState = withContext(Dispatchers.IO) { openPdf(file) }
+                // No need to read the file into memory here: PdfPageSource (via openPdf) opens it
+                // itself and streams pages on demand, which is the whole point of a windowed PDF
+                // reader — reading the full bytes just to discard them would defeat that.
+                val pdfState = withContext(Dispatchers.IO) { openPdf(file, scoreId) }
                 if (pdfState == null) {
                     _state.value = ReaderState.Error("Could not open score")
                     return@launch
@@ -305,6 +333,8 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 _state.value = pdfState
                 return@launch
             }
+
+            val bytes = withContext(Dispatchers.IO) { file.readBytes() }
 
             withContext(Dispatchers.Default) {
                 val table = BravuraMetricsBuilder.buildTable(app.assets)
