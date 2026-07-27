@@ -67,7 +67,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val metronome by prefs.metronome.collectAsState(initial = false)
-    val pip by prefs.pip.collectAsState(initial = false)
+    val pip by prefs.pip.collectAsState(initial = true)
     val collapse by prefs.collapseRests.collectAsState(initial = false)
     val keepAwake by prefs.keepAwake.collectAsState(initial = true)
     val precount by prefs.precount.collectAsState(initial = false)

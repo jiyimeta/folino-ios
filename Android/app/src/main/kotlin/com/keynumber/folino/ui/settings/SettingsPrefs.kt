@@ -24,7 +24,17 @@ object SettingsKeys {
      * `ReaderGlobalSettingsKey.precountEnabled`; default off, as on iOS.
      */
     val precountEnabled = booleanPreferencesKey("readerPrecountEnabled")
+    /**
+     * Whether the Reader auto-enters Picture-in-Picture when the app is backgrounded during playback.
+     * Opt-*out*: absent means enabled, mirroring iOS `ReaderGlobalSettingsKey.pictureInPictureEnabled`.
+     */
     val pipEnabled = booleanPreferencesKey("reader.pictureInPicture.enabled")
+
+    /**
+     * Set once [SettingsPrefs.applyPictureInPictureOptOutMigration] has force-enabled PiP for an install
+     * that predates the opt-in → opt-out flip. Mirrors iOS `PictureInPictureOptOutMigration.appliedKey`.
+     */
+    val pipForcedOnApplied = booleanPreferencesKey("reader.pictureInPicture.forcedOn.v1")
     val collapseRests = booleanPreferencesKey("reader.collapseMultiMeasureRests")
     val keepAwake = booleanPreferencesKey("reader.keepScreenAwake.enabled")
     val layoutMode = stringPreferencesKey("reader.layoutMode") // "vertical" | "horizontal" | "page"
@@ -114,7 +124,7 @@ object SettingsKeys {
 class SettingsPrefs(private val context: Context) {
     val metronome: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.metronomeEnabled] ?: false }
     val precount: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.precountEnabled] ?: false }
-    val pip: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pipEnabled] ?: false }
+    val pip: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pipEnabled] ?: true }
     val collapseRests: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.collapseRests] ?: false }
     val keepAwake: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.keepAwake] ?: true }
     val layoutMode: Flow<String> = context.dataStore.data.map { it[SettingsKeys.layoutMode] ?: "page" }
@@ -183,6 +193,21 @@ class SettingsPrefs(private val context: Context) {
 
     suspend fun setAnalytics(v: Boolean) =
         context.dataStore.edit { it[SettingsKeys.analyticsEnabled] = v }
+
+    /**
+     * One-shot flip of Picture-in-Picture from opt-in to opt-out. PiP shipped defaulting to off and
+     * almost nobody found the switch, so the default is now on and every install that predates the
+     * flip is force-enabled once — including the few users who had explicitly turned it off. The
+     * [SettingsKeys.pipForcedOnApplied] flag makes sure it runs exactly once, so a user who turns PiP
+     * off *after* the migration keeps it off forever. Same rule as iOS
+     * `PictureInPictureOptOutMigration`, expressed against DataStore.
+     */
+    suspend fun applyPictureInPictureOptOutMigration() = context.dataStore.edit { p ->
+        if (p[SettingsKeys.pipForcedOnApplied] != true) {
+            p[SettingsKeys.pipEnabled] = true
+            p[SettingsKeys.pipForcedOnApplied] = true
+        }
+    }
 
     /**
      * Persists the whole annotation pen setup (four pen widths, eraser width, selected tool) in one
