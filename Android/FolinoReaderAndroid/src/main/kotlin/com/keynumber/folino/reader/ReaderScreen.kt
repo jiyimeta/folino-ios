@@ -1,16 +1,11 @@
 package com.keynumber.folino.reader
 
 import android.view.WindowManager
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateCentroid
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -70,9 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -2015,10 +2006,17 @@ internal fun HorizontalScore(
     val annotationMode = annotation?.annotationMode == true
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-    var scale by remember { mutableFloatStateOf(1f) }
+    // `deferRaster = false`: a single row is cheap enough to re-record per frame, which this surface
+    // already does. `underfillY = CENTER` is the short-row case — a row shorter than the viewport floats
+    // in the middle of it rather than sitting at the top, which is what the old `needsVScroll` branch and
+    // its centering Box did between them.
+    val viewport = rememberReaderViewportState(
+        deferRaster = false,
+        underfillX = ViewportUnderfill.START,
+        underfillY = ViewportUnderfill.CENTER,
+    )
+    val scale = viewport.scale
 
-    val vScroll = rememberScrollState()
-    val hScroll = rememberScrollState()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
@@ -2040,6 +2038,17 @@ internal fun HorizontalScore(
     // Vertical scroll only when the zoomed row is taller than the viewport;
     // otherwise it is centered vertically with no vertical interaction.
     val needsVScroll = contentHeightPx > viewportSize.height + 0.5f
+
+    // Republished whenever the layout inputs move — see [ReadyScore]'s identical `SideEffect`. This
+    // surface has no fixed padding on either axis, so both pad params stay at their zero default.
+    SideEffect {
+        viewport.geometry = ViewportGeometry(
+            viewportWidthPx = viewportSize.width.toFloat(),
+            viewportHeightPx = viewportSize.height.toFloat(),
+            unitContentWidthPx = page.widthMM.toFloat() * fitPxPerMM,
+            unitContentHeightPx = page.heightMM.toFloat() * fitPxPerMM,
+        )
+    }
 
     // Auto-scroll: X = measure-anchored leading-edge with lookahead (measure frame + shared
     // Domain fn); Y = keep-in-view, only meaningful when zoomed taller. `autoFollowEnabled` is a key
@@ -2082,17 +2091,17 @@ internal fun HorizontalScore(
                         // Axis-agnostic reuse: "system" params carry the playing measure's X-span;
                         // topInset = padPx (left edge inset on the horizontal axis).
                         FolinoReaderJNI.nativeScrollOffsetPinningSystemTop(
-                            hScroll.value.toDouble(), realXMin, realXMax, lookXMax,
+                            viewport.offsetX.toDouble(), realXMin, realXMax, lookXMax,
                             viewportSize.width.toDouble(), padPx.toDouble(),
                         ).toFloat()
                     } else {
                         FolinoReaderJNI.nativeHorizontalMeasureScrollOffset(
-                            hScroll.value.toDouble(), realXMin, realXMax,
+                            viewport.offsetX.toDouble(), realXMin, realXMax,
                             viewportSize.width.toDouble(), padPx.toDouble(),
                         ).toFloat()
                     }
-                    if (abs(newX - hScroll.value) >= 0.5f) {
-                        hScroll.animateScrollTo(newX.toInt().coerceAtLeast(0))
+                    if (abs(newX - viewport.offsetX) >= 0.5f) {
+                        viewport.animateOffsetXTo(newX)
                     }
                 }
 
@@ -2103,14 +2112,14 @@ internal fun HorizontalScore(
                         val yMin = f.y * fitPxPerMM * scale
                         val yMax = (f.y + f.height) * fitPxPerMM * scale
                         val newY = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
-                            vScroll.value.toDouble(),
+                            viewport.offsetY.toDouble(),
                             yMin,
                             yMax,
                             viewportSize.height.toDouble(),
                             padPx.toDouble(),
                         ).toFloat()
-                        if (abs(newY - vScroll.value) >= 0.5f) {
-                            vScroll.animateScrollTo(newY.toInt().coerceAtLeast(0))
+                        if (abs(newY - viewport.offsetY) >= 0.5f) {
+                            viewport.animateOffsetYTo(newY)
                         }
                     }
                 }
@@ -2121,204 +2130,161 @@ internal fun HorizontalScore(
         Modifier
             .fillMaxSize()
             .onSizeChanged { viewportSize = it }
-            // Tap-to-seek + audition. Separate pointerInput from the pinch loop (see ReadyScore).
-            // The single natural-width row scrolls horizontally always (fold hScroll into x) and
-            // is centered vertically when shorter than the viewport (fold that centering offset
-            // into y); when zoomed taller it scrolls vertically instead (fold vScroll into y).
-            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, needsVScroll, annotationMode) {
+            // Tap-to-seek + audition. Separate pointerInput from the viewport loop (see ReadyScore).
+            // The row's position is now one offset pair, so both axes fold into the content offset
+            // unconditionally — the short-row centering that used to need its own branch arrives as a
+            // negative offsetY from `ViewportUnderfill.CENTER`.
+            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, annotationMode) {
                 // While annotating, a tap is the start of a stroke — never a seek.
                 if (annotationMode) return@pointerInput
                 val handle = scoreHandle ?: return@pointerInput
                 if (fitPxPerMM <= 0f) return@pointerInput
                 val optionsBytes = layoutOptions.encode()
                 detectTapGestures { offset ->
-                    val yLead = if (needsVScroll) {
-                        -vScroll.value.toFloat()
-                    } else {
-                        (viewportSize.height - contentHeightPx) / 2f
-                    }
                     val cursor = nearestCursorForTap(
                         tap = offset,
-                        contentOffsetPx = Offset(-hScroll.value.toFloat(), yLead),
+                        contentOffsetPx = Offset(-viewport.offsetX, -viewport.offsetY),
                         pxPerMM = fitPxPerMM,
-                        scale = scale,
+                        scale = viewport.scale,
                         scoreHandle = handle,
                         layoutOptionsBytes = optionsBytes,
                     ) ?: return@detectTapGestures
                     audioVm.handleTap(cursor)
                 }
             }
-            // Pinch zoom: only two-finger gestures are consumed; single-finger
-            // drags fall through to the scroll modifiers (native fling).
-            .pointerInput(fitPxPerMM) {
-                if (fitPxPerMM <= 0f) return@pointerInput
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        val pressed = event.changes.count { it.pressed }
-                        if (pressed >= 2) {
-                            // See [ReadyScore]'s identical comment: a live two-finger contact suspends
-                            // auto-follow (Task 5) even before any zoom delta. Sticky until play/seek.
-                            audioVm.suspendPlaybackFollowForManualViewportChange()
-                            val zoom = event.calculateZoom()
-                            if (zoom != 1f) {
-                                val centroid = event.calculateCentroid(useCurrent = true)
-                                val newScale = (scale * zoom).coerceIn(1f, 8f)
-                                val ratio = newScale / scale
-                                if (ratio != 1f && !centroid.x.isNaN() && !centroid.y.isNaN()) {
-                                    val newX = focalAdjustedOffset(hScroll.value.toFloat(), centroid.x, ratio)
-                                    val newY = focalAdjustedOffset(vScroll.value.toFloat(), centroid.y, ratio)
-                                    scale = newScale
-                                    scope.launch { hScroll.scrollTo(newX.toInt().coerceAtLeast(0)) }
-                                    scope.launch { vScroll.scrollTo(newY.toInt().coerceAtLeast(0)) }
-                                }
-                                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                            }
-                        }
-                    } while (event.changes.any { it.pressed })
-                }
-            }
-            // Sticky playback-follow suspension (Task 5), fired ONLY by a real single-finger DRAG — see
-            // the identical detector in [ReadyScore] for the full rationale. Observes on the Initial pass
-            // and never consumes, so the horizontal/vertical scroll modifiers below still get the gesture.
-            // A programmatic auto-follow re-pin (`animateScrollTo`) emits no pointer input, so unlike the
-            // old `isScrollInProgress` snapshotFlow this never self-suspends; a pure tap has no movement so
-            // it is skipped; two-finger contact is the pinch detector's job above.
-            .pointerInput(audioVm) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    var suspended = false
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (!suspended && event.changes.any { it.pressed && it.positionChanged() }) {
-                            audioVm.suspendPlaybackFollowForManualViewportChange()
-                            suspended = true
-                        }
-                    } while (event.changes.any { it.pressed })
-                }
-            },
-        contentAlignment = Alignment.Center,
+            // Pan, pinch, and fling. While annotating only two-finger gestures are taken — a single finger
+            // is a stroke — and momentum is off so the row does not coast away from where the reader is
+            // writing.
+            .readerViewportGestures(
+                state = viewport,
+                scope = scope,
+                key = fitPxPerMM,
+                enabled = fitPxPerMM > 0f,
+                // `annotationMode` is a plain composition value, not observable state, so this lambda is
+                // only correct because `allowFling` below carries the same value INTO the `pointerInput`
+                // key list — see [ReadyScore]'s identical comment for the full rationale.
+                allowSingleFingerPan = { !annotationMode },
+                allowFling = !annotationMode,
+                onManualViewportChange = audioVm::suspendPlaybackFollowForManualViewportChange,
+            ),
+        contentAlignment = Alignment.TopStart,
     ) {
-        // Annotating freezes the viewport: a stroke has to stay put under the finger, and the wet
-        // window's world→screen matrix is built from the scroll positions read at composition time
-        // (see [AnnotationLayers]), which is only sound while they cannot change mid-stroke.
-        val scrollEnabled = !annotationMode
-        val scrollModifier = if (needsVScroll) {
+        // Panning is a layer translation now, not a scroll container's placement. The clip and the
+        // `graphicsLayer` MUST stay on this one node — see [ReadyScore]'s identical comment for why.
+        //
+        // Measure the content UNBOUNDED and report the viewport's size upward. `horizontalScroll` did
+        // exactly this (an infinite max on its axis) and it was the only thing letting the content box be
+        // wider than the screen: `Modifier.size` enforces the constraints it is handed, so under the
+        // viewport's bounded constraints a row wider than the screen is silently coerced to a screenful,
+        // taking the score, every `fillMaxSize` overlay, and the document-sized ink `AndroidView` down
+        // with it.
+        Box(
             Modifier
-                .horizontalScroll(hScroll, enabled = scrollEnabled)
-                .verticalScroll(vScroll, enabled = scrollEnabled)
-        } else {
-            Modifier.horizontalScroll(hScroll, enabled = scrollEnabled)
-        }
-
-        Box(scrollModifier, contentAlignment = Alignment.Center) {
-            // Outer box: full viewport height (when not vertically scrolling) so the
-            // short row centers vertically; inner box is the exact scaled page size.
+                .clipToBounds()
+                .graphicsLayer {
+                    translationX = -viewport.offsetX
+                    translationY = -viewport.offsetY
+                }
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(Constraints())
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+                },
+        ) {
+            // Exactly the scaled row. The outer viewport-height box that used to center a short row is
+            // gone: centering is now the clamp's `ViewportUnderfill.CENTER` result.
             Box(
                 Modifier.size(
                     width = with(density) { contentWidthPx.toDp() },
-                    height = with(density) {
-                        (if (needsVScroll) {
-                            contentHeightPx
-                        } else {
-                            maxOf(contentHeightPx, viewportSize.height.toFloat())
-                        }).toDp()
-                    },
+                    height = with(density) { contentHeightPx.toDp() },
                 ),
-                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    Modifier.size(
-                        width = with(density) { contentWidthPx.toDp() },
-                        height = with(density) { contentHeightPx.toDp() },
-                    ),
-                ) {
-                    ScorePage(
-                        page = page,
-                        fontProvider = fontProvider,
-                        pxPerMM = fitPxPerMM * scale,
-                        // Own RenderNode, for the same reason as the vertical surface above: the cursor
-                        // and A–B overlays below are siblings in this Box, and without a layer here each
-                        // of their updates re-records the whole row's draw commands.
-                        modifier = Modifier.fillMaxSize().graphicsLayer(),
+                ScorePage(
+                    page = page,
+                    fontProvider = fontProvider,
+                    pxPerMM = fitPxPerMM * scale,
+                    // Own RenderNode, for the same reason as the vertical surface above: the cursor
+                    // and A–B overlays below are siblings in this Box, and without a layer here each
+                    // of their updates re-records the whole row's draw commands.
+                    modifier = Modifier.fillMaxSize().graphicsLayer(),
+                )
+                val abAccent = MaterialTheme.colorScheme.primary
+                val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
+                val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
+                val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
+                scoreHandle?.let { handle ->
+                    PlaybackCursorOverlay(
+                        scoreHandle = handle,
+                        cursorFlow = audioVm.currentCursor,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset.Zero,
+                        // Shared with the PiP surface (pipFit = true): only dim on-screen, PiP stays
+                        // fully opaque (iOS parity — the PiP cursor is never dimmed).
+                        color = if (pipFit) abAccent else abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    val abAccent = MaterialTheme.colorScheme.primary
-                    val aPending by audioVm.repeatPendingA.collectAsStateWithLifecycle()
-                    val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
-                    val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
-                    scoreHandle?.let { handle ->
-                        PlaybackCursorOverlay(
+                    // Loop region highlight only in A–B loop mode (see the vertical surface note).
+                    if (repeatMode == RepeatMode.AB_LOOP) {
+                        LoopHighlightOverlay(
                             scoreHandle = handle,
-                            cursorFlow = audioVm.currentCursor,
+                            loopRangeFlow = audioVm.loopRange,
                             pxPerMM = fitPxPerMM,
                             scale = scale,
                             panOffset = Offset.Zero,
-                            // Shared with the PiP surface (pipFit = true): only dim on-screen, PiP stays
-                            // fully opaque (iOS parity — the PiP cursor is never dimmed).
-                            color = if (pipFit) abAccent else abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
+                            color = abAccent.copy(alpha = 0.15f),
                             modifier = Modifier.fillMaxSize(),
                         )
-                        // Loop region highlight only in A–B loop mode (see the vertical surface note).
-                        if (repeatMode == RepeatMode.AB_LOOP) {
-                            LoopHighlightOverlay(
-                                scoreHandle = handle,
-                                loopRangeFlow = audioVm.loopRange,
-                                pxPerMM = fitPxPerMM,
-                                scale = scale,
-                                panOffset = Offset.Zero,
-                                color = abAccent.copy(alpha = 0.15f),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        AbBoundaryMarkersOverlay(
+                    }
+                    AbBoundaryMarkersOverlay(
+                        scoreHandle = handle,
+                        aMeasure = aPending,
+                        bMeasure = bPending,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset.Zero,
+                        color = abAccent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    annotation?.let { an ->
+                        // This surface's content Box IS the document, so the dry layer needs no pan
+                        // offset (unlike page mode) and no vertical padding (unlike the vertical
+                        // surface, which insets its content).
+                        //
+                        // WIDTH is the clamped axis here: the horizontal layout is one natural-width
+                        // row — far past the 65536 px front-buffer limit on a long piece — while its
+                        // height is a single system. So the wet window tracks the horizontal offset,
+                        // and vertical only matters when the zoomed row is tall enough to scroll.
+                        //
+                        // A two-finger pan can move these mid-annotation now; see the vertical
+                        // surface's note on why that is sound.
+                        val wetWindowLeftPx = viewport.offsetX.roundToInt()
+                        val wetWindowTopPx = if (needsVScroll) viewport.offsetY.roundToInt() else 0
+                        val wetWindowWidthPx = viewportSize.width.coerceAtLeast(0)
+                        val wetWindowHeightPx =
+                            if (needsVScroll) viewportSize.height.coerceAtLeast(0) else contentHeightPx.toInt()
+                        AnnotationLayers(
                             scoreHandle = handle,
-                            aMeasure = aPending,
-                            bMeasure = bPending,
+                            annotation = an,
                             pxPerMM = fitPxPerMM,
                             scale = scale,
-                            panOffset = Offset.Zero,
-                            color = abAccent,
-                            modifier = Modifier.fillMaxSize(),
+                            isDrawing = false,
+                            dryPanOffset = Offset.Zero,
+                            dryModifier = Modifier.fillMaxSize(),
+                            wetWorldToScreen = remember(
+                                fitPxPerMM, scale, wetWindowLeftPx, wetWindowTopPx,
+                            ) {
+                                android.graphics.Matrix().apply {
+                                    setScale(fitPxPerMM * scale, fitPxPerMM * scale)
+                                    postTranslate(-wetWindowLeftPx.toFloat(), -wetWindowTopPx.toFloat())
+                                }
+                            },
+                            wetModifier = Modifier
+                                .size(
+                                    width = with(density) { wetWindowWidthPx.toDp() },
+                                    height = with(density) { wetWindowHeightPx.toDp() },
+                                )
+                                .offset { IntOffset(wetWindowLeftPx, wetWindowTopPx) },
                         )
-                        annotation?.let { an ->
-                            // This surface's content Box IS the document, so the dry layer needs no pan
-                            // offset (unlike page mode) and no vertical padding (unlike the vertical
-                            // surface, which insets its content).
-                            //
-                            // WIDTH is the clamped axis here: the horizontal layout is one natural-width
-                            // row — far past the 65536 px front-buffer limit on a long piece — while its
-                            // height is a single system. So the wet window tracks hScroll, and vertical
-                            // only matters when the zoomed row is tall enough to scroll.
-                            val wetWindowLeftPx = hScroll.value
-                            val wetWindowTopPx = if (needsVScroll) vScroll.value else 0
-                            val wetWindowWidthPx = viewportSize.width.coerceAtLeast(0)
-                            val wetWindowHeightPx =
-                                if (needsVScroll) viewportSize.height.coerceAtLeast(0) else contentHeightPx.toInt()
-                            AnnotationLayers(
-                                scoreHandle = handle,
-                                annotation = an,
-                                pxPerMM = fitPxPerMM,
-                                scale = scale,
-                                isDrawing = false,
-                                dryPanOffset = Offset.Zero,
-                                dryModifier = Modifier.fillMaxSize(),
-                                wetWorldToScreen = remember(
-                                    fitPxPerMM, scale, wetWindowLeftPx, wetWindowTopPx,
-                                ) {
-                                    android.graphics.Matrix().apply {
-                                        setScale(fitPxPerMM * scale, fitPxPerMM * scale)
-                                        postTranslate(-wetWindowLeftPx.toFloat(), -wetWindowTopPx.toFloat())
-                                    }
-                                },
-                                wetModifier = Modifier
-                                    .size(
-                                        width = with(density) { wetWindowWidthPx.toDp() },
-                                        height = with(density) { wetWindowHeightPx.toDp() },
-                                    )
-                                    .offset { IntOffset(wetWindowLeftPx, wetWindowTopPx) },
-                            )
-                        }
                     }
                 }
             }
