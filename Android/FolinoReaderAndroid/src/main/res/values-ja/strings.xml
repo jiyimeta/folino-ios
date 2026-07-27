@@ -14,6 +14,8 @@
     <string name="reader_pref_show_seek_bar">シークバーを表示</string>
     <string name="reader_pref_auto_follow">自動スクロール</string>
     <string name="reader_pref_page_turn_buttons">ページめくりボタン</string>
+    <!-- iOS の "reader.pdf.settingsNote" と同一訳文。 -->
+    <string name="reader_pdf_settings_note">PDF 楽譜では譜表サイズや譜表の非表示などの表示調整は利用できませんが、再生設定は利用できます。</string>
     <string name="reader_display_settings">表示設定</string>
     <string name="reader_share">共有</string>
     <string name="reader_staff_hide">譜表を非表示</string>

@@ -89,6 +89,21 @@ private fun Modifier.negativeVerticalPadding(inset: Dp) = layout { measurable, c
 }
 
 /**
+ * Default capabilities for the inspector's standalone previews/tests/screenshot harness, where no
+ * session capabilities are threaded in: every control is available (mirrors `Domain.ReaderCapabilities
+ * .forScore`). Production call sites always pass the session's real [ReaderCapabilitiesWire], fetched
+ * over JNI in [ReaderScreen] — this default only exists so unrelated callers keep compiling unchanged.
+ */
+private val ALL_READER_CAPABILITIES = ReaderCapabilitiesWire(
+    canPlay = true,
+    canChangeLayout = true,
+    canTranspose = true,
+    canEditStaves = true,
+    // Matches `ReaderCapabilities.forScore.availableLayoutModes` (`ReaderLayoutMode.rawValue` strings).
+    layoutModes = listOf("vertical", "horizontal", "page"),
+)
+
+/**
  * Display-settings panel for the Reader (Android port of the iOS display inspector).
  *
  * Pure UI over the [LayoutOptions] value type: every control edit produces a new options
@@ -116,6 +131,11 @@ fun DisplayInspectorSheet(
     onPageTurnButtonsVisibleChange: (Boolean) -> Unit = {},
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
+    /** What this session's format allows — fetched from the shared Domain decision over JNI by
+     * [ReaderScreen]. Never re-derived here from `parts`/format: this sheet only renders what the wire
+     * says (Folino's iOS/Android parity rule). Defaults to every control available for callers (previews,
+     * the screenshot harness) that don't thread a real session's capabilities through. */
+    capabilities: ReaderCapabilitiesWire = ALL_READER_CAPABILITIES,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         DisplayInspectorContent(
@@ -130,6 +150,7 @@ fun DisplayInspectorSheet(
             onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = onTransposeChange,
+            capabilities = capabilities,
         )
     }
 }
@@ -157,10 +178,19 @@ fun DisplayInspectorContent(
     initialPartsExpanded: Boolean = true,
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
+    /** See [DisplayInspectorSheet]'s parameter doc — read, never re-derived. */
+    capabilities: ReaderCapabilitiesWire = ALL_READER_CAPABILITIES,
 ) {
     var generalExpanded by rememberSaveable { mutableStateOf(initialGeneralExpanded) }
     var partsExpanded by rememberSaveable { mutableStateOf(initialPartsExpanded) }
     val typeface = rememberBravuraTypeface()
+    val availableLayoutModes = remember(capabilities.layoutModes) {
+        capabilities.layoutModes.map { ReaderLayoutMode.fromPref(it) }
+    }
+    // A PDF disables transpose and per-staff editing (staff size, clef) together — see
+    // `Domain.ReaderCapabilities.forPDF`. One explanatory line replaces every control this hides,
+    // rather than a note per hidden row.
+    val hidesTransposeOrStaffControls = !capabilities.canTranspose || !capabilities.canEditStaves
     LazyColumn(
         modifier
             .fillMaxWidth()
@@ -175,15 +205,31 @@ fun DisplayInspectorContent(
                 ) { generalExpanded = !generalExpanded }
             }
             if (generalExpanded) {
-                item { LayoutModeRow(options.mode) { onChange(options.copy(mode = it)) } }
-                item { StaffSizeRow(options.staffSize) { onChange(options.copy(staffSize = it)) } }
                 item {
-                    TransposeRow(
-                        semitones = transposeSemitones,
-                        enabled = true,
-                        onChange = onTransposeChange,
-                        showLeadingIcon = false,
-                    )
+                    LayoutModeRow(options.mode, availableLayoutModes) { onChange(options.copy(mode = it)) }
+                }
+                if (hidesTransposeOrStaffControls) {
+                    item {
+                        Text(
+                            stringResource(R.string.reader_pdf_settings_note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
+                }
+                if (capabilities.canEditStaves) {
+                    item { StaffSizeRow(options.staffSize) { onChange(options.copy(staffSize = it)) } }
+                }
+                if (capabilities.canTranspose) {
+                    item {
+                        TransposeRow(
+                            semitones = transposeSemitones,
+                            enabled = true,
+                            onChange = onTransposeChange,
+                            showLeadingIcon = false,
+                        )
+                    }
                 }
                 item {
                     SwitchRow(
@@ -228,24 +274,29 @@ fun DisplayInspectorContent(
                 }
             }
 
-            item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
+            // Per-staff clef reassignment is a re-engraving edit — unavailable for a PDF (canEditStaves ==
+            // false). The section is dropped entirely rather than shown empty/disabled: a PDF also never
+            // populates `parts` (Tasks 1-4), so this has no effect on today's screens either way.
+            if (capabilities.canEditStaves) {
+                item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
 
-            // ── Parts (per-staff clef + visibility) ──────────────────
-            item {
-                CollapsibleHeader(
-                    stringResource(R.string.reader_inspector_parts),
-                    partsExpanded,
-                ) { partsExpanded = !partsExpanded }
-            }
-            if (partsExpanded) {
-                parts.forEachIndexed { index, part ->
-                    item(key = "part-$index") {
-                        PartRow(
-                            part = part,
-                            options = options,
-                            typeface = typeface,
-                            onChange = onChange,
-                        )
+                // ── Parts (per-staff clef + visibility) ──────────────────
+                item {
+                    CollapsibleHeader(
+                        stringResource(R.string.reader_inspector_parts),
+                        partsExpanded,
+                    ) { partsExpanded = !partsExpanded }
+                }
+                if (partsExpanded) {
+                    parts.forEachIndexed { index, part ->
+                        item(key = "part-$index") {
+                            PartRow(
+                                part = part,
+                                options = options,
+                                typeface = typeface,
+                                onChange = onChange,
+                            )
+                        }
                     }
                 }
             }
@@ -253,14 +304,25 @@ fun DisplayInspectorContent(
 }
 
 @Composable
-private fun LayoutModeRow(mode: ReaderLayoutMode, onSelect: (ReaderLayoutMode) -> Unit) {
-    val modes = listOf(
+private fun LayoutModeRow(
+    mode: ReaderLayoutMode,
+    /** Modes this session's format allows (`ReaderCapabilities.availableLayoutModes`, over JNI) — the
+     * picker offers only these. Never widened/narrowed here from anything else (Kotlin renders what the
+     * wire said; see [DisplayInspectorSheet]'s `capabilities` param doc). */
+    availableModes: List<ReaderLayoutMode>,
+    onSelect: (ReaderLayoutMode) -> Unit,
+) {
+    val allModes = listOf(
         Triple(ReaderLayoutMode.VERTICAL, R.string.reader_layout_vertical, Icons.Default.SwapVert),
         Triple(ReaderLayoutMode.HORIZONTAL, R.string.reader_layout_horizontal, Icons.Default.SwapHoriz),
         Triple(ReaderLayoutMode.PAGE, R.string.reader_layout_page, Icons.Default.AutoStories),
     )
+    val modes = allModes.filter { it.first in availableModes }
     var expanded by remember { mutableStateOf(false) }
-    val current = modes.first { it.first == mode }
+    // The persisted mode can be one this format no longer allows (e.g. a score's saved "horizontal"
+    // pref, then the same session pref is read while a PDF is open) — display the first allowed mode
+    // rather than crashing; `onSelect` is only ever invoked with an entry from `modes`.
+    val current = modes.firstOrNull { it.first == mode } ?: modes.first()
     InspectorRow(label = stringResource(R.string.reader_display_mode)) {
         Box {
             // Trigger mirrors the clef picker: a plain clickable row (icon + label + chevron) that

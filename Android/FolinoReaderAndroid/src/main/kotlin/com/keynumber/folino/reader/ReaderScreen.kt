@@ -123,6 +123,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.zIndex
 import io.github.jiyimeta.sheetmusic.audio.model.RehearsalMarkEntry
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
+import org.swift.swiftkit.core.SwiftMemoryManagement
+
+/**
+ * The shared Domain decision (`ReaderCapabilities.resolve(format:)`) for this session's format, fetched
+ * over JNI — pure delegation, never re-derived here. `isPdf` mirrors what Tasks 1-4 already established
+ * via [ReaderState.ReadyPdf]: the reader's own state machine, not a second format check.
+ */
+private fun fetchReaderCapabilities(isPdf: Boolean): ReaderCapabilitiesWire {
+    val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+    val bytes = FolinoReaderJNI.nativeReaderCapabilities(isPdf, arena).toByteArray()
+    return ReaderCapabilitiesWireCodec.decode(bytes)
+}
 
 /** Bottom inset reserved for the floating playback FAB cluster, so the score content is not hidden
  * under it. Sized to exactly the FAB's occupied height — the FAB (56) plus the Scaffold's default 16
@@ -291,6 +303,18 @@ fun ReaderScreen(
     KeepScreenOn(keepScreenAwake)
 
     val state by readerVm.state.collectAsStateWithLifecycle()
+    // What this session's format allows — the shared Domain decision, read over JNI and never
+    // re-derived here. `isPdf` is the reader's own state-machine signal (Tasks 1-4), not a second format
+    // check. Gates the layout-mode picker + transpose/staff/clef controls (DisplayInspectorSheet) and
+    // whether the transport is enabled at all (below).
+    val isPdf = state is ReaderState.ReadyPdf
+    val capabilities = remember(isPdf) { fetchReaderCapabilities(isPdf) }
+    // Whether transport should be enabled right now: scores always, PDFs only once their background OMR
+    // parse succeeds. Android has no PDF playback parse yet (Task 12), so `isPdfPlaybackReady` is always
+    // false for now — delegated to the shared rule rather than inlining `canPlay || isPdfPlaybackReady`.
+    val canPlayNow = remember(capabilities) {
+        FolinoReaderJNI.nativeCanPlayNow(capabilities.canPlay, false)
+    }
     val scoreHandle by readerVm.scoreHandle.collectAsStateWithLifecycle()
     // The live layout-options snapshot the recompute loop feeds nativeComputeLayout; the tap
     // hit-test must reuse this exact blob (its hidden-staff set) so re-addressing stays in lockstep.
@@ -852,6 +876,7 @@ fun ReaderScreen(
             } else if (showSeekBar) {
                 TransportBar(
                     audioVm = audioVm,
+                    enabled = canPlayNow,
                     onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
                     onAnalyticsTransportNext = onAnalyticsTransportNext,
                     onAnalyticsSeek = onAnalyticsSeek,
@@ -859,7 +884,7 @@ fun ReaderScreen(
             }
         },
         floatingActionButton = {
-            if (!showSeekBar) PlaybackFab(audioVm, onAnalyticsSeek = onAnalyticsSeek)
+            if (!showSeekBar) PlaybackFab(audioVm, enabled = canPlayNow, onAnalyticsSeek = onAnalyticsSeek)
         },
         floatingActionButtonPosition = FabPosition.End,
     ) { padding ->
@@ -977,6 +1002,7 @@ fun ReaderScreen(
             onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
+            capabilities = capabilities,
         )
     }
 }
@@ -1510,6 +1536,11 @@ private fun focalAdjustedOffset(
 @Composable
 private fun TransportBar(
     audioVm: ReaderAudioViewModel,
+    /** Whether this session may play at all right now (`ReaderCapabilities.canPlayNow`, over JNI) — a
+     * score always, a PDF only once its background OMR parse succeeds. AND'd into [isPrepared] below so
+     * a PDF's transport never lights up ahead of a real playable score existing, even if the engine
+     * somehow reports a non-STOPPED playback state. */
+    enabled: Boolean = true,
     onAnalyticsTransportPrevious: () -> Unit = {},
     onAnalyticsTransportNext: () -> Unit = {},
     onAnalyticsSeek: () -> Unit = {},
@@ -1522,7 +1553,7 @@ private fun TransportBar(
     val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
     val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
 
-    val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
+    val isPrepared = enabled && playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
     Column(
         Modifier
@@ -1978,6 +2009,8 @@ private fun RehearsalMarkPill(
 @Composable
 fun PlaybackFab(
     audioVm: ReaderAudioViewModel,
+    /** See [TransportBar]'s matching parameter — same gate, same reason. */
+    enabled: Boolean = true,
     onAnalyticsSeek: () -> Unit = {},
 ) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
@@ -1985,7 +2018,7 @@ fun PlaybackFab(
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
     val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
     val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
-    val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
+    val isPrepared = enabled && playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
     // FABs have no `enabled` param, so we dim their colors when not prepared to mirror
     // [TransportBar]'s `enabled = isPrepared` affordance (Material disabled-color convention).

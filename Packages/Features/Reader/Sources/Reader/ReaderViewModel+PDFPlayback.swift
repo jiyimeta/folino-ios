@@ -48,9 +48,10 @@ extension ReaderViewModel {
     }
 
     /// Whether the transport + cursor should be active now: native scores always (per their
-    /// capabilities), PDFs once their background parse succeeds.
+    /// capabilities), PDFs once their background parse succeeds. Delegates to the shared
+    /// `ReaderCapabilities.canPlayNow` rule so iOS and Android apply the identical policy.
     var canPlayNow: Bool {
-        capabilities.canPlay || isPDFPlaybackReady
+        ReaderCapabilities.canPlayNow(capabilities: capabilities, isPDFPlaybackReady: isPDFPlaybackReady)
     }
 
     /// The on-PDF cursor rect (top-left mediaBox space) for the current display cursor, or `nil` when
