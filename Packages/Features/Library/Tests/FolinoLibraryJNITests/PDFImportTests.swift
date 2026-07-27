@@ -148,4 +148,26 @@ struct PDFImportTests {
         let record = try #require(backend.records.first)
         #expect(record.localFileName.hasSuffix(".mscz"))
     }
+
+    /// The list row Kotlin renders must flag PDF items so it can show the "PDF" label without re-deriving
+    /// format from the filename itself.
+    @Test func `rows flag pdf items`() throws {
+        let backend = FakePDFImportStore()
+        let store = makeStore(backend)
+        _ = try store.importScore(fixtureURL().path)
+
+        let row = try #require(store.scores.first)
+        #expect(row.isPdf)
+    }
+
+    /// The MuseScore path must not be flagged as a PDF.
+    @Test func `rows do not flag mscz items as pdf`() throws {
+        let backend = FakePDFImportStore()
+        let store = makeStore(backend)
+        let url = try #require(Bundle.module.url(forResource: "sample", withExtension: "mscz"))
+        _ = store.importScore(url.path)
+
+        let row = try #require(store.scores.first)
+        #expect(row.isPdf == false)
+    }
 }
