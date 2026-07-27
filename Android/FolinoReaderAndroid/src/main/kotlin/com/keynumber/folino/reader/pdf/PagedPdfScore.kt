@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +104,34 @@ internal object PagedPdfLayout {
      */
     fun focalAdjustedPan(panBefore: Float, centroidPx: Float, viewportSizePx: Float, ratio: Float): Float =
         ratio * panBefore + (1f - ratio) * (centroidPx - viewportSizePx / 2f)
+
+    /**
+     * A candidate pan offset ([panXPx], [panYPx]), clamped per axis to [panBoundPx] for a page rendered at
+     * [atScale] (its [fitWidthPx] scaled by [atScale], following its own [pageWidthPt] x [pageHeightPt]
+     * aspect ratio — the same [renderWidthPx]/[heightForWidthPx] pipeline the bitmap request itself uses)
+     * inside a [viewportWidthPx] x [viewportHeightPx] viewport. This is the exact math [PagedPdfScore]'s
+     * pinch/pan gesture applies on every frame to both the focal-zoom result and a plain one-/two-finger
+     * drag — pulled out here, pure, specifically because it is where the CENTERED-content assumption is
+     * baked in (via [panBoundPx]): a future regression back to top-left-anchored content would most likely
+     * surface here first, and a test against this function catches that even though nothing here can
+     * exercise the actual Compose layout tree.
+     */
+    fun clampPan(
+        panXPx: Float,
+        panYPx: Float,
+        atScale: Float,
+        fitWidthPx: Int,
+        pageWidthPt: Double,
+        pageHeightPt: Double,
+        viewportWidthPx: Float,
+        viewportHeightPx: Float,
+    ): Pair<Float, Float> {
+        val liveWidthPx = renderWidthPx(fitWidthPx, atScale)
+        val liveHeightPx = heightForWidthPx(liveWidthPx, pageWidthPt, pageHeightPt)
+        val boundX = panBoundPx(liveWidthPx.toFloat(), viewportWidthPx)
+        val boundY = panBoundPx(liveHeightPx.toFloat(), viewportHeightPx)
+        return panXPx.coerceIn(-boundX, boundX) to panYPx.coerceIn(-boundY, boundY)
+    }
 }
 
 /**
@@ -133,7 +162,16 @@ internal object PagedPdfLayout {
  * Center, unbounded = true)` and the `graphicsLayer`'s `transformOrigin` is the CENTER `(0.5f, 0.5f)`, not
  * `(0f, 0f)` — the same clamp hazard applies (the pager's page `Box` is `fillMaxSize`, so at `scale > 1` a
  * raster page wider than the viewport would otherwise be clamped down to the viewport's own bound by plain
- * `Modifier.size` constraint semantics), just escaped from the opposite corner.
+ * `Modifier.size` constraint semantics), just escaped from the opposite corner. That escape hatch alone is
+ * NOT sufficient, though: `wrapContentSize(unbounded = true)` reports its OWN measured size back to ITS
+ * parent coerced into that parent's incoming constraints, so whenever the content is smaller than the
+ * viewport (any letterboxed page at rest), the reported size equals the content's own size — leaving the
+ * wrapper's inner `align = Center` nothing to center against (there is no leftover room inside a
+ * same-size wrapper). The OUTER pager-page `Box` (below) must therefore ALSO set `contentAlignment =
+ * Center` — it, not the inner `align`, is what actually centers a page smaller than the viewport; the
+ * inner `align` only takes over once `rasterScale` grows the content past the viewport and the wrapper's
+ * reported size clamps down to match. Omitting the outer `contentAlignment` compiles and looks
+ * plausible, but silently renders every at-rest page flush to the top-left instead of centered.
  *
  * [PageTapOverlay] itself is deliberately NOT scaled/panned in lockstep with the zoomed content here, unlike
  * `PagedScore`'s own overlay. `PagedScore`'s content fills the full viewport width at rest, so scaling its
@@ -191,11 +229,22 @@ internal fun PagedPdfScore(
         panOffset = Offset.Zero
     }
 
-    // Drive the source's memory window off the settled page (Task 6's `setWindow` contract) — a pinch
-    // alone never moves it, only an actual page turn does.
+    // Drive the source's memory window off `currentPage` (the brief's own `setWindow` call) — a pinch
+    // alone never moves it, only an actual page turn does. `currentPage` is the pager's TARGET page: it
+    // flips as soon as a swipe crosses the page boundary, slightly before the fling settles on it. That
+    // only means the window is (re)primed a little early, never late — harmless prefetch, not a
+    // correctness issue — so this deliberately does NOT wait for `pagerState.settledPage`.
     LaunchedEffect(source, pagerState.currentPage, pageCount) {
         if (pageCount > 0) source.setWindow(pagerState.currentPage, radius = 1)
     }
+
+    // A plain `derivedStateOf` snapshot read, NOT `scale == 1f` inlined into the `HorizontalPager` call
+    // below: `scale` itself is written on every pinch frame, so reading it directly at this composable's
+    // body would recompose this whole function ~60x/second for the life of a pinch gesture, even though
+    // the result is a `Boolean` that only actually flips twice per gesture (zoom past 1x, and back).
+    // `derivedStateOf` re-runs the same per-frame read but only PUBLISHES — and so only recomposes readers
+    // on — an actual change to that `Boolean` (lesson from Task 7's zoom-path fix rounds).
+    val swipeEnabled by remember { derivedStateOf { scaleState.floatValue == 1f } }
 
     Box(Modifier.fillMaxSize().onSizeChanged { viewportSize = it }) {
         if (pageCount == 0) return@Box
@@ -203,7 +252,7 @@ internal fun PagedPdfScore(
         HorizontalPager(
             state = pagerState,
             // Only swipe at unit zoom; while zoomed the gesture pans instead (`PagedScore` parity).
-            userScrollEnabled = scale == 1f,
+            userScrollEnabled = swipeEnabled,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
             PagedPdfPage(
@@ -291,7 +340,7 @@ private fun PagedPdfPage(
     }
 
     Box(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
             .clipToBounds()
@@ -303,14 +352,20 @@ private fun PagedPdfPage(
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     // Clamps a candidate pan (one gesture-local helper, closing over `size`/`fitWidthPx`/
-                    // the page's own point size) to what `PagedPdfLayout.panBoundPx` allows AT `atScale` —
+                    // the page's own point size) to what `PagedPdfLayout.clampPan` allows AT `atScale` —
                     // shared by both the two-finger and one-finger branches below.
                     fun clamp(p: Offset, atScale: Float): Offset {
-                        val liveWidthPx = PagedPdfLayout.renderWidthPx(fitWidthPx, atScale)
-                        val liveHeightPx = PagedPdfLayout.heightForWidthPx(liveWidthPx, pageWidthPt, pageHeightPt)
-                        val boundX = PagedPdfLayout.panBoundPx(liveWidthPx.toFloat(), size.width.toFloat())
-                        val boundY = PagedPdfLayout.panBoundPx(liveHeightPx.toFloat(), size.height.toFloat())
-                        return Offset(p.x.coerceIn(-boundX, boundX), p.y.coerceIn(-boundY, boundY))
+                        val (x, y) = PagedPdfLayout.clampPan(
+                            panXPx = p.x,
+                            panYPx = p.y,
+                            atScale = atScale,
+                            fitWidthPx = fitWidthPx,
+                            pageWidthPt = pageWidthPt,
+                            pageHeightPt = pageHeightPt,
+                            viewportWidthPx = size.width.toFloat(),
+                            viewportHeightPx = size.height.toFloat(),
+                        )
+                        return Offset(x, y)
                     }
                     do {
                         val event = awaitPointerEvent()
@@ -354,13 +409,17 @@ private fun PagedPdfPage(
                     }
                 }
             },
+        // MUST be `Center`, not the default `TopStart` — this is what actually centers a page smaller
+        // than the viewport (the wrapper Box below only takes over once the content overflows it). See
+        // the class doc's "That escape hatch alone is NOT sufficient" paragraph for the full reasoning.
+        contentAlignment = Alignment.Center,
     ) {
         // Escapes this Box's `fillMaxSize` bound so a raster page wider/taller than the viewport (any
         // `scale > 1`) isn't clamped back down to the viewport's own size by plain `Modifier.size`
         // constraint semantics — see the class doc. `align = Center` (not `PdfVerticalScore`'s `TopStart`)
         // matches this surface's centered content.
         Box(
-            remember {
+            remember(scaleState, rasterScaleState, panOffsetState) {
                 Modifier
                     .wrapContentSize(align = Alignment.Center, unbounded = true)
                     .graphicsLayer {

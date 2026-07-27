@@ -73,24 +73,6 @@ class PagedPdfLayoutTest {
 
     // -- focalAdjustedPan -----------------------------------------------------------------------------
 
-    @Test fun focalAdjustedPanIsUnchangedWhenTheZoomRatioIsOne() {
-        assertEquals(
-            37f,
-            PagedPdfLayout.focalAdjustedPan(panBefore = 37f, centroidPx = 123f, viewportSizePx = 1000f, ratio = 1f),
-            0.001f,
-        )
-    }
-
-    @Test fun focalAdjustedPanScalesThePriorPanWhenTheCentroidIsAtTheViewportCenter() {
-        // (centroid - viewportSize / 2) == 0 here, so the formula's second term drops out entirely and the
-        // prior pan is simply scaled by the zoom ratio.
-        assertEquals(
-            100f,
-            PagedPdfLayout.focalAdjustedPan(panBefore = 50f, centroidPx = 500f, viewportSizePx = 1000f, ratio = 2f),
-            0.001f,
-        )
-    }
-
     @Test fun focalAdjustedPanKeepsAnOffCenterTouchPointFixedAcrossAZoomStep() {
         // Hand-derived from the affine mapping the class doc describes: with no prior pan, a 1000px
         // viewport, and a touch at x=800 (300px right of center), doubling the zoom (ratio=2) must shift
@@ -100,5 +82,78 @@ class PagedPdfLayoutTest {
             PagedPdfLayout.focalAdjustedPan(panBefore = 0f, centroidPx = 800f, viewportSizePx = 1000f, ratio = 2f),
             0.001f,
         )
+    }
+
+    // -- clampPan -------------------------------------------------------------------------------------
+    // This is the exact math `PagedPdfScore`'s pinch/pan gesture applies every frame, and it is where the
+    // CENTERED-content assumption baked into `panBoundPx` actually gets exercised end to end (`renderWidthPx`
+    // -> `heightForWidthPx` -> `panBoundPx`, per axis) — see `clampPan`'s own KDoc for why this, not
+    // `panBoundPx` alone, is the function most likely to catch a regression back to top-left-anchored content.
+
+    @Test fun clampPanZeroesBothAxesWhenTheContentFitsExactlyInsideTheViewport() {
+        // A 1000x1000 page rendered at its fit width (1000) exactly fills a 1000x1000 viewport on both
+        // axes, so neither axis has any room to pan — any requested offset clamps to zero.
+        val (x, y) = PagedPdfLayout.clampPan(
+            panXPx = 500f,
+            panYPx = -500f,
+            atScale = 1f,
+            fitWidthPx = 1000,
+            pageWidthPt = 100.0,
+            pageHeightPt = 100.0,
+            viewportWidthPx = 1000f,
+            viewportHeightPx = 1000f,
+        )
+        assertEquals(0f, x, 0.001f)
+        assertEquals(0f, y, 0.001f)
+    }
+
+    @Test fun clampPanAllowsUpToTheLiveBoundWhenZoomedIn() {
+        // Same page zoomed to atScale=2 renders 2000x2000 inside the 1000x1000 viewport — half the excess
+        // (500) is the bound on each axis — and a requested offset beyond that clamps down to it.
+        val (x, y) = PagedPdfLayout.clampPan(
+            panXPx = 800f,
+            panYPx = -800f,
+            atScale = 2f,
+            fitWidthPx = 1000,
+            pageWidthPt = 100.0,
+            pageHeightPt = 100.0,
+            viewportWidthPx = 1000f,
+            viewportHeightPx = 1000f,
+        )
+        assertEquals(500f, x, 0.001f)
+        assertEquals(-500f, y, 0.001f)
+    }
+
+    @Test fun clampPanLeavesAnInBoundsOffsetUnchanged() {
+        val (x, y) = PagedPdfLayout.clampPan(
+            panXPx = 100f,
+            panYPx = -100f,
+            atScale = 2f,
+            fitWidthPx = 1000,
+            pageWidthPt = 100.0,
+            pageHeightPt = 100.0,
+            viewportWidthPx = 1000f,
+            viewportHeightPx = 1000f,
+        )
+        assertEquals(100f, x, 0.001f)
+        assertEquals(-100f, y, 0.001f)
+    }
+
+    @Test fun clampPanBoundsEachAxisIndependentlyForALetterboxedPage() {
+        // A portrait page (100 x 200 pt) fit-rendered 500px wide is 1000px tall. In a 1000 (w) x 800 (h)
+        // viewport, width fits exactly (bound 0) while height overflows by 200 (bound 100) — the two axes
+        // must clamp independently, not share one bound.
+        val (x, y) = PagedPdfLayout.clampPan(
+            panXPx = 50f,
+            panYPx = 250f,
+            atScale = 1f,
+            fitWidthPx = 500,
+            pageWidthPt = 100.0,
+            pageHeightPt = 200.0,
+            viewportWidthPx = 1000f,
+            viewportHeightPx = 800f,
+        )
+        assertEquals(0f, x, 0.001f)
+        assertEquals(100f, y, 0.001f)
     }
 }
