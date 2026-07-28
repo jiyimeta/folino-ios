@@ -21,11 +21,22 @@ struct ReaderViewModelPDFPlaybackTests {
         )
     }
 
+    /// A minimal single-note score — just enough to count as playable. The default fixture for
+    /// `sampleResult`, since a "successful parse" fixture should actually have something to play.
+    private func playableScore() -> Score {
+        let element = VoiceElement.chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let measure = Measure(voices: [Voice(elements: [element])])
+        return Score(division: 480, parts: [
+            Part(id: "P0", instrument: Instrument(id: "i"), staves: [Staff(measures: [measure])]),
+        ])
+    }
+
     private func sampleResult(
-        score: Score = Score(division: 480, parts: [], systemMeasures: [], metaTags: [:]),
+        score: Score? = nil,
         cursorRect: PDFCursorRect? = PDFCursorRect(pageIndex: 0, rect: CGRect(x: 10, y: 20, width: 4, height: 90)),
     ) -> PDFPlaybackParseResult {
-        PDFPlaybackParseResult(
+        let score = score ?? playableScore()
+        return PDFPlaybackParseResult(
             score: score,
             geometry: StubPDFPlaybackGeometry(
                 pageSizes: [0: CGSize(width: 600, height: 800)],
@@ -37,13 +48,14 @@ struct ReaderViewModelPDFPlaybackTests {
     }
 
     /// Two parts (1 + 2 staves) of four measures, each measure holding two quarter chords — enough for the mixer's
-    /// flattened staff indices and for the A–B endpoints to snap to a measure head / end.
+    /// flattened staff indices and for the A–B endpoints to snap to a measure head / end. Each chord carries a
+    /// real note (not an empty rest) so this score counts as playable.
     private func parsedScore() -> Score {
         func measure() -> Measure {
             Measure(voices: [
                 Voice(elements: [
-                    .chord(Chord(duration: .quarter, notes: [])),
-                    .chord(Chord(duration: .quarter, notes: [])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
                 ]),
             ])
         }
@@ -94,6 +106,26 @@ struct ReaderViewModelPDFPlaybackTests {
 
     @Test func `a parse failure leaves the PDF display-only`() async {
         let vm = makeVM(parser: StubPDFPlaybackParser(result: nil))
+
+        await vm.parsePDFForPlayback(url: URL(filePath: "/tmp/whatever.pdf"))
+
+        #expect(!vm.isPDFPlaybackReady)
+        #expect(vm.pdfPlaybackData == nil)
+    }
+
+    /// The defect this test pins: a "print to PDF" export the OMR pipeline reads as ruled staff lines
+    /// without any noteheads reconstructs full parts/staves/measures — but every voice slot is an
+    /// empty chord (a rest). That must NOT report a playable transport, even though the parse itself
+    /// succeeded and produced a structurally complete score.
+    @Test func `a parse that succeeds but yields no notes leaves the PDF display-only`() async {
+        let restsOnlyMeasure = Measure(voices: [
+            Voice(elements: [.rest(duration: .quarter), .rest(duration: .quarter)]),
+        ])
+        let restsOnlyStaff = Staff(measures: (0 ..< 4).map { _ in restsOnlyMeasure })
+        let restsOnlyScore = Score(division: 480, parts: [
+            Part(id: "P0", instrument: Instrument(id: "i"), staves: [restsOnlyStaff]),
+        ])
+        let vm = makeVM(parser: StubPDFPlaybackParser(result: sampleResult(score: restsOnlyScore)))
 
         await vm.parsePDFForPlayback(url: URL(filePath: "/tmp/whatever.pdf"))
 

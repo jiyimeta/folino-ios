@@ -69,8 +69,13 @@ extension ReaderViewModel {
     }
 
     /// Parse the opened PDF for playback off the main actor, then prime the engine with the parsed
-    /// score. Best-effort: a missing parser or any parse failure leaves the PDF display-only via
-    /// `.unavailable` (never surfaces as a load error — the document is already shown).
+    /// score. Best-effort: a missing parser, any parse failure, or a parse that succeeds but yields
+    /// nothing playable (e.g. an OMR pass over a raster "print to PDF" that reads staff lines but
+    /// decodes no noteheads — every measure comes back full of rests) all leave the PDF display-only
+    /// via `.unavailable` (never surfaces as a load error — the document is already shown). The
+    /// "yielded nothing playable" half of this contract is `Score.hasPlayableContent`, shared with
+    /// Android so a structurally-complete-but-silent parse never reports a playable transport on
+    /// either platform.
     func parsePDFForPlayback(url: URL) async {
         guard let parser = pdfPlaybackParser else {
             pdfPlayback = .unavailable
@@ -79,6 +84,10 @@ extension ReaderViewModel {
         pdfPlayback = .parsing
         do {
             let result = try await parser.parse(pdfURL: url)
+            guard result.score.hasPlayableContent else {
+                pdfPlayback = .unavailable
+                return
+            }
             pdfPlayback = .ready(
                 PDFPlaybackData(
                     score: result.score,

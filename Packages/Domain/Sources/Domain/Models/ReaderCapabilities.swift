@@ -38,4 +38,15 @@ public struct ReaderCapabilities: Hashable, Sendable {
     public static func canPlayNow(capabilities: ReaderCapabilities, isPDFPlaybackReady: Bool) -> Bool {
         capabilities.canPlay || isPDFPlaybackReady
     }
+
+    /// Whether a PDF's background OMR parse yielded enough to call itself playable, given how many
+    /// playable elements (chords with at least one note) it reconstructed. This is the ONE place that
+    /// threshold is decided — `Score.hasPlayableContent` (iOS, which has the parsed `Score` on hand) and
+    /// Android's `nativeIsPlayableElementCount` (which only ever crosses the JNI boundary with a raw
+    /// count, computed independently by swift-sheet-music's importer) both route through this, so a
+    /// structurally-complete-but-silent parse — e.g. an OMR pass over a raster "print to PDF" export that
+    /// reads staff lines but decodes no noteheads — reports the identical verdict on both platforms.
+    public static func isPlayableElementCount(_ count: Int) -> Bool {
+        count > 0
+    }
 }

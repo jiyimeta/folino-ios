@@ -32,4 +32,13 @@ struct ReaderCapabilitiesTests {
     @Test func `pdf offers page and vertical only`() {
         #expect(ReaderCapabilities.forPDF.availableLayoutModes == [.page, .vertical])
     }
+
+    @Test func `zero playable elements is not playable`() {
+        #expect(!ReaderCapabilities.isPlayableElementCount(0))
+    }
+
+    @Test func `any positive playable element count is playable`() {
+        #expect(ReaderCapabilities.isPlayableElementCount(1))
+        #expect(ReaderCapabilities.isPlayableElementCount(4980))
+    }
 }
