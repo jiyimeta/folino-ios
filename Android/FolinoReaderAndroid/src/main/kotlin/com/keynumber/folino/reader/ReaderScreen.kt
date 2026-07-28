@@ -1149,7 +1149,12 @@ private fun ReadyScore(
     // back to gentle keep-in-view when paused / on a manual seek (anchor == null). Horizontal: always
     // follows the real cursor when zoomed. `autoFollowEnabled` is a key so a mid-playback toggle flip
     // re-arms / disarms follow promptly instead of lagging until an unrelated restart.
-    LaunchedEffect(scoreHandle, fitPxPerMM, scale, autoFollowEnabled) {
+    // Deliberately NOT keyed on the zoom. A cursor event is the only thing that should move the viewport
+    // here, and keying on `scale` made a pinch look like one: every frame of a gesture tore the collector
+    // down and rebuilt it, `combine` re-emitted the latest cursor immediately, and the re-pin fired again —
+    // up to once per frame while the reader's fingers were still on the score. The zoom is read live from
+    // the viewport at emission time instead, so it is current without being a restart trigger.
+    LaunchedEffect(scoreHandle, fitPxPerMM, autoFollowEnabled) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (fitPxPerMM <= 0f) return@LaunchedEffect
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
@@ -1168,11 +1173,14 @@ private fun ReadyScore(
                 ) {
                     return@collectLatest
                 }
+                // Read at emission time, not captured when the effect started — see the note on the keys.
+                val zoom = viewport.scale
+                val zoomedWider = page.widthMM.toFloat() * fitPxPerMM * zoom > viewportSize.width + 0.5f
                 val realBytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(real))
                 if (realBytes.isEmpty()) return@collectLatest
                 val realFrame = DecodedFrameCodec.decode(realBytes)
-                val realYMin = (vPadPx + realFrame.y * fitPxPerMM * scale).toDouble()
-                val realYMax = (vPadPx + (realFrame.y + realFrame.height) * fitPxPerMM * scale).toDouble()
+                val realYMin = (vPadPx + realFrame.y * fitPxPerMM * zoom).toDouble()
+                val realYMax = (vPadPx + (realFrame.y + realFrame.height) * fitPxPerMM * zoom).toDouble()
 
                 val newY = if (anchor != null) {
                     // Playing: pin the playing system to the top, triggered by the lookahead/playing
@@ -1180,7 +1188,7 @@ private fun ReadyScore(
                     val anchorBytes = SheetMusicJNI.nativeCursorFrame(handle, ScoreCursorCodec.encode(anchor))
                     val lookaheadYMax = if (anchorBytes.isNotEmpty()) {
                         val af = DecodedFrameCodec.decode(anchorBytes)
-                        (vPadPx + (af.y + af.height) * fitPxPerMM * scale).toDouble()
+                        (vPadPx + (af.y + af.height) * fitPxPerMM * zoom).toDouble()
                     } else {
                         realYMax
                     }
@@ -1206,9 +1214,9 @@ private fun ReadyScore(
                     viewport.animateOffsetYTo(newY)
                 }
 
-                if (isZoomed) {
-                    val xMin = (realFrame.x * fitPxPerMM * scale)
-                    val xMax = ((realFrame.x + realFrame.width) * fitPxPerMM * scale)
+                if (zoomedWider) {
+                    val xMin = (realFrame.x * fitPxPerMM * zoom)
+                    val xMax = ((realFrame.x + realFrame.width) * fitPxPerMM * zoom)
                     val newX = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
                         viewport.offsetX.toDouble(),
                         xMin,
@@ -2051,7 +2059,12 @@ internal fun HorizontalScore(
     // Auto-scroll: X = measure-anchored leading-edge with lookahead (measure frame + shared
     // Domain fn); Y = keep-in-view, only meaningful when zoomed taller. `autoFollowEnabled` is a key
     // so a mid-playback toggle flip re-arms / disarms follow promptly (parity with ReadyScore).
-    LaunchedEffect(scoreHandle, fitPxPerMM, scale, autoFollowEnabled) {
+    // Deliberately NOT keyed on the zoom — see [ReadyScore]'s identical note. This surface is where that bug
+    // was reported: its X target is a whole MEASURE, and `horizontalMeasureScrollOffset` has no
+    // "target wider than the viewport" branch, so once a zoomed measure fills the screen its visibility test
+    // can never pass again and every emission parks the measure's leading edge at the viewport's left. Keyed
+    // on `scale`, a fast pinch produced one such re-pin per frame, all of them fighting the reader's fingers.
+    LaunchedEffect(scoreHandle, fitPxPerMM, autoFollowEnabled) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (fitPxPerMM <= 0f) return@LaunchedEffect
         combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
@@ -2069,20 +2082,23 @@ internal fun HorizontalScore(
                 ) {
                     return@collectLatest
                 }
+                // Read at emission time, not captured when the effect started — see the note on the keys.
+                val zoom = viewport.scale
+                val vScrollable = page.heightMM.toFloat() * fitPxPerMM * zoom > viewportSize.height + 0.5f
                 val realEnc = ScoreCursorCodec.encode(real)
 
                 val realMBytes = SheetMusicJNI.nativeMeasureFrame(handle, realEnc)
                 if (realMBytes.isNotEmpty()) {
                     val rm = DecodedFrameCodec.decode(realMBytes)
-                    val realXMin = (rm.x * fitPxPerMM * scale).toDouble()
-                    val realXMax = ((rm.x + rm.width) * fitPxPerMM * scale).toDouble()
+                    val realXMin = (rm.x * fitPxPerMM * zoom).toDouble()
+                    val realXMax = ((rm.x + rm.width) * fitPxPerMM * zoom).toDouble()
                     val newX = if (anchor != null) {
                         val lookMBytes = SheetMusicJNI.nativeMeasureFrame(
                             handle, ScoreCursorCodec.encode(anchor),
                         )
                         val lookXMax = if (lookMBytes.isNotEmpty()) {
                             val lm = DecodedFrameCodec.decode(lookMBytes)
-                            ((lm.x + lm.width) * fitPxPerMM * scale).toDouble()
+                            ((lm.x + lm.width) * fitPxPerMM * zoom).toDouble()
                         } else {
                             realXMax
                         }
@@ -2103,12 +2119,12 @@ internal fun HorizontalScore(
                     }
                 }
 
-                if (needsVScroll) {
+                if (vScrollable) {
                     val cBytes = SheetMusicJNI.nativeCursorFrame(handle, realEnc)
                     if (cBytes.isNotEmpty()) {
                         val f = DecodedFrameCodec.decode(cBytes)
-                        val yMin = f.y * fitPxPerMM * scale
-                        val yMax = (f.y + f.height) * fitPxPerMM * scale
+                        val yMin = f.y * fitPxPerMM * zoom
+                        val yMax = (f.y + f.height) * fitPxPerMM * zoom
                         val newY = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
                             viewport.offsetY.toDouble(),
                             yMin,
