@@ -17,8 +17,8 @@ public final class IncomingShareCoordinator {
     private let appGroupContainer: URL
     private let clock: any Clock
     private let duplicateResolver: (any ImportDuplicateResolver)?
-    private let analytics: any Analytics
     private let crashReporter: any CrashReporter
+    private let outcome: ShareImportOutcome
     private let logger = Logger(
         subsystem: "com.KeyNumber.Folino",
         category: "IncomingShareCoordinator",
@@ -43,8 +43,8 @@ public final class IncomingShareCoordinator {
         self.appGroupContainer = appGroupContainer
         self.clock = clock
         self.duplicateResolver = duplicateResolver
-        self.analytics = analytics
         self.crashReporter = crashReporter
+        outcome = ShareImportOutcome(analytics: analytics, crashReporter: crashReporter)
     }
 
     /// Drains a single token (when `token != nil`) or every staged token in chronological order (when `token == nil`).
@@ -167,11 +167,11 @@ public final class IncomingShareCoordinator {
             )
         }
 
-        logImportOutcome(shared, importer: iosImporter)
+        outcome.log(shared, importer: iosImporter, source: Self.importSource)
         try? FileManager.default.removeItem(at: tokenURL)
 
         let imported = shared.importedIDs.compactMap { UUID(uuidString: $0).map(ScoreItemID.init(rawValue:)) }
-        let skipped = shared.skipped.map { Self.skip(from: $0) }
+        let skipped = shared.skipped.map(Skip.init)
         let openAfter = shared.openAfterID.flatMap { iosImporter.itemsByID[$0] }
         let createdID = shared.createdPlaylistID.flatMap { UUID(uuidString: $0).map(PlaylistID.init(rawValue:)) }
         let targetID = shared.targetPlaylistID.flatMap { UUID(uuidString: $0).map(PlaylistID.init(rawValue:)) }
@@ -187,74 +187,10 @@ public final class IncomingShareCoordinator {
         )
     }
 
-    /// Split the per-token import outcome into analytics + Crashlytics non-fatals: one `score_imported` (source
-    /// `share_ext`) per committed item, and one `score_import_failed` + non-fatal per genuinely failed file. Duplicate
-    /// skips are dedupes, not failures, so they are deliberately not logged here.
-    private func logImportOutcome(_ shared: SharedImportResult, importer: IOSShareImporter) {
-        for id in shared.importedIDs {
-            guard let item = importer.itemsByID[id],
-                  let format = ScoreFormat.detect(filename: item.localFileName) else { continue }
-            analytics.log(.scoreImported(
-                format: format,
-                source: Self.importSource,
-                isDuplicate: false,
-                museScoreMajorVersion: item.museScoreMajorVersion,
-            ))
-        }
-        for skip in shared.skipped {
-            guard let failure = Self.failure(for: skip.reason) else { continue }
-            crashReporter.record(error: failure.error)
-            let format = ScoreFormat.detect(filename: skip.originalName)?.analyticsValue ?? "unknown"
-            analytics.log(.scoreImportFailed(format: format, reason: failure.reason))
-        }
-    }
-
-    /// Maps a skip reason to a stable low-cardinality analytics `reason` (matching the Library file-picker labels) plus
-    /// the non-fatal error class. Returns `nil` for `.duplicate`, which is a dedupe rather than an import failure.
-    private static func failure(for reason: SharedImportSkipReason) -> (reason: String, error: ShareImportFailure)? {
-        switch reason {
-        case .missingFile: ("file_not_found", .fileNotFound)
-        case .parseFailed: ("parse_failed", .parseFailed)
-        case .persistenceFailed: ("persistence_failed", .persistenceFailed)
-        case .duplicate: nil
-        }
-    }
-
     private static func choice(from intent: IncomingShareIntent) -> PlaylistChoice {
         if let id = intent.playlistID { return .existing(id) }
         if let name = intent.newPlaylistName, !name.isEmpty { return .createNew(name: name) }
         return .libraryOnly
-    }
-
-    private static func skip(from s: SharedImportSkip) -> Skip {
-        let reason: SkipReason = switch s.reason {
-        case .missingFile:
-            .unreadable(NSError(
-                domain: "ImportExport",
-                code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "staged share file was missing"],
-            ))
-        case .parseFailed:
-            .parseFailed(NSError(
-                domain: "ImportExport",
-                code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "shared score file could not be parsed"],
-            ))
-        case .persistenceFailed:
-            .persistenceFailed(NSError(
-                domain: "ImportExport",
-                code: -3,
-                userInfo: [NSLocalizedDescriptionKey: "shared score could not be saved"],
-            ))
-        case let .duplicate(existingID, existingTitle):
-            // existingID is `dup.id.rawValue.uuidString` produced by IOSShareImporter, so this UUID parse cannot
-            // realistically fail; the fallback is purely defensive (a crash mid-drain would be worse).
-            .duplicate(
-                existingID: UUID(uuidString: existingID).map(ScoreItemID.init(rawValue:)) ?? ScoreItemID(),
-                existingTitle: existingTitle,
-            )
-        }
-        return Skip(originalName: s.originalName, reason: reason)
     }
 
     // MARK: - Helpers
