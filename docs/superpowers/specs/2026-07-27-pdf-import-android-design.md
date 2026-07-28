@@ -51,8 +51,9 @@ Two layers, mirroring iOS exactly:
    cursor is drawn *on the original PDF pages*; taps on the page seek.
 
 The Reader shell (top bar, transport, inspector, FAB, annotation surface,
-auto-follow, A–B repeat, mixer, PiP, playlist continuation) is shared with the
-score path. Only the content surface differs.
+auto-follow, A–B repeat, mixer, playlist continuation) is shared with the score
+path. Only the content surface differs. PiP is the one shell feature a PDF does
+not get — see §7.2.
 
 The rejected alternative was to re-engrave the OMR result and show that instead
 of the PDF. It needs almost no new plumbing, but it destroys the reason to import
@@ -201,7 +202,13 @@ Domain function that both platforms call — iOS directly, Android through
 
 On success the parsed score's handle is published through the existing
 `_scoreHandle` path, so transport, seek bar, A–B repeat, mixer, metronome,
-count-in, PiP and playlist continuation all work with no further wiring.
+count-in and playlist continuation all work with no further wiring.
+
+PiP is the exception, and deliberately so: its content view renders
+`horizontalProgram()` — notation re-engraved from the parsed score — which is
+exactly the substitution this design rejects everywhere else. A PDF therefore
+stays PiP-ineligible. Making it eligible would mean giving PiP a PDF-page
+renderer of its own, which is out of scope here.
 
 Only the cursor differs: instead of `nativeCursorFrame`, the reader calls
 `nativePdfCursorRect` and projects the rect into the page's frame in content
