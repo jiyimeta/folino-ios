@@ -175,6 +175,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     // The score id currently loaded into [handle]. Lets [load] stay idempotent across recompositions
     // (LaunchedEffect(scoreId) re-invokes it) while still RELOADING when the Reader is retargeted to a
     // different score in place — playlist auto-advance swaps the rendered scoreId on this same view model.
+    // Written only from Main (by [load]), but [openPdf]'s supersession re-check reads it from a
+    // `Dispatchers.IO` coroutine just before publishing [pdfPageSource]; `@Volatile` is what makes that read
+    // see a retarget that already happened on Main, instead of publishing a renderer + fd nobody will close.
+    @Volatile
     private var loadedScoreId: String? = null
 
     // The active PDF's page source (Task 6), populated by [openPdf] on a `.pdf` load and closed by

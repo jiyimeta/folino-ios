@@ -74,7 +74,8 @@ internal object PdfRenderInstall {
  * or a `Page` it opens happens inside [rendererLock] — that includes the constructor's page-size
  * sweep, [renderAndCache]'s render call (which runs on [dispatcher], a dedicated single-thread
  * executor, so a render never blocks the caller's thread — typically the main thread for Compose call
- * sites), and [close]'s teardown.
+ * sites), and [close]'s teardown, which is itself posted to [dispatcher] rather than run inline so that
+ * closing from the main thread never waits on an in-flight render.
  *
  * [pageSizePt] does NOT take [rendererLock] on the hot path: every page's size is read once, up front,
  * in the constructor into [pageSizesPt], so normal lookups are a plain array read. That matters because
@@ -291,7 +292,27 @@ internal class PdfPageSource(file: File) : AutoCloseable {
         }
     }
 
-    /** Closes the renderer and the descriptor and forgets the cache. Safe to call more than once. */
+    /**
+     * Closes the renderer and the descriptor and forgets the cache. Safe to call more than once.
+     *
+     * **Returns without waiting for the native teardown.** The bookkeeping half — flipping [closed] and
+     * cancelling in-flight jobs — is synchronous under [cacheLock], which is only ever held for a few
+     * `HashMap` operations. The `renderer`/`descriptor` teardown is handed to [dispatcher] instead, because
+     * every real caller is on the MAIN thread (`ReaderViewModel`'s retarget cleanup and `onCleared`) and
+     * taking [rendererLock] here would block it behind whatever page is mid-rasterization — 150-400ms for a
+     * large page, considerably more at high zoom with several windowed pages re-rastering after a pinch.
+     *
+     * Handing it to [dispatcher] is also what makes the teardown safe without a wait: [dispatcher] is a
+     * single thread, so this task is already ordered AFTER any render currently running on it, and
+     * [ensureRenderJob] refuses to launch a new one once [closed] is set (which happens above, before this
+     * is even submitted). A render that was dispatched but not yet started re-checks [closed] under
+     * [rendererLock] before `openPage`, so whichever order the two land in, no render can touch a closed
+     * renderer. [rendererLock] is kept around the teardown for that same interlock rather than for mutual
+     * exclusion against a render that, by the above, can no longer be in flight.
+     *
+     * Submitting before `shutdown()` matters: `shutdown()` lets already-queued tasks run, but rejects new
+     * ones.
+     */
     override fun close() {
         synchronized(cacheLock) {
             if (closed) return
@@ -301,9 +322,11 @@ internal class PdfPageSource(file: File) : AutoCloseable {
             }
             cache.clear()
         }
-        synchronized(rendererLock) {
-            renderer.close()
-            descriptor.close()
+        dispatcherExecutor.execute {
+            synchronized(rendererLock) {
+                renderer.close()
+                descriptor.close()
+            }
         }
         scope.cancel()
         dispatcherExecutor.shutdown()
