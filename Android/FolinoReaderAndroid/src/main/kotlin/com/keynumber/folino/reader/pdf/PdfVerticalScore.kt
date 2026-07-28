@@ -2,6 +2,7 @@ package com.keynumber.folino.reader.pdf
 
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -34,9 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -48,8 +52,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.reader.DrawingAnchorWire
 import com.keynumber.folino.reader.DrawingAnchorWireCodec
+import com.keynumber.folino.reader.ON_SCREEN_CURSOR_ALPHA
 import com.keynumber.folino.reader.PageFrameWire
 import com.keynumber.folino.reader.PageFramesWire
 import com.keynumber.folino.reader.PageFramesWireCodec
@@ -62,7 +68,11 @@ import com.keynumber.folino.reader.ink.AnnotationSurfaceState
 import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.PdfAnnotationCaptureController
 import com.keynumber.folino.reader.ink.encodeWireArray
+import com.keynumber.folino.reader.shouldAutoFollow
+import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -229,10 +239,19 @@ internal object PdfVerticalLayout {
  * [PdfPageSource.bitmap] request width, and it only moves once, when a pinch gesture ends — never per
  * frame — so a pinch never touches [PdfPageSource] at all.
  *
- * Unlike [ReadyScore], there is no `scoreHandle` yet for a PDF (the parsed score arrives in Task 12), so
- * this surface has none of [ReadyScore]'s cursor overlay, tap-to-seek, or playback-auto-follow gestures —
- * there is nothing yet for them to follow. [audioVm] and [autoFollowEnabled] are accepted for that future
- * wiring and unused here; [readerVm] IS used, for [annotation]'s capture path (`readerVm.addDrawing`).
+ * Once the background OMR parse succeeds (`ReaderViewModel.pdfPlayback` reaches `Ready`), this surface draws the
+ * playback cursor on the user's own pages and follows it, the same way [ReadyScore] does for a `.mscz` score. WHERE
+ * the cursor sits on a page is decided entirely off this surface — swift-sheet-music's geometry side-car locates it,
+ * and Folino's shared `PDFCursorProjection` (which iOS's PDF readers call directly) places it into whichever frame
+ * the page currently occupies here; see [PdfCursorProjector]. This surface only supplies [pageFramesRaster] — the
+ * SAME page geometry the annotation path already builds — and folds in its own live zoom when drawing. The follow
+ * itself reuses the shared `nativeScrollOffsetPinningSystemTop` / `…KeepingInView` rules and the same
+ * [shouldAutoFollow] gate + sticky manual-gesture suspension [ReadyScore] uses; only the world→scroll-space bridge
+ * ([PdfCursorFollow]) is this surface's own, because its layout is.
+ *
+ * The projected cursor is deliberately read ONLY inside the leaf `Canvas`'s draw lambda (and inside the follow
+ * effect's `collectLatest`) — never in this composable's body. `currentCursor` emits ~30x/second during playback, and
+ * a body-level read would recompose every page slot and every gesture modifier on every tick.
  *
  * [annotation] (Task 11) anchors ink to a PAGE, not a musical position: page index plus geometry
  * normalized to a fraction of that page's own width, so the same stroke re-renders correctly at any zoom
@@ -254,7 +273,8 @@ internal fun PdfVerticalScore(
     bottomContentPad: Dp = 0.dp,
     /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation on this surface. */
     annotation: AnnotationSurfaceState? = null,
-    /** Reserved for Task 12's playback auto-follow, once a PDF has a parsed score to follow. Unused here. */
+    /** User opt-out for continuous-playback auto-scroll (SettingsPrefs `autoFollow` / the display inspector row).
+     * See [shouldAutoFollow]. Off ⇒ no re-pin during playback and no recenter on pause; the cursor still draws. */
     autoFollowEnabled: Boolean = true,
 ) {
     val density = LocalDensity.current
@@ -278,6 +298,9 @@ internal fun PdfVerticalScore(
 
     val vPadPx = with(density) { TOP_BOTTOM_PAD.toPx() }
     val gapPx = with(density) { PAGE_GAP.toPx() }
+    // Keep-in-view breathing room for the paused / manual-seek auto-follow branch — the same 24.dp `ReadyScore`
+    // passes as `pad` to the shared `nativeScrollOffsetKeepingInView`.
+    val followPadPx = with(density) { 24.dp.toPx() }
     // Extra clearance BEYOND the ordinary bottom breathing room (`vPadPx`, folded in below), so the last
     // page can scroll out from under a floating control when the seek bar is off — mirrors `ReadyScore`'s
     // `bottomContentPad`.
@@ -327,6 +350,85 @@ internal fun PdfVerticalScore(
                 PageFramesWireCodec.encode(PageFramesWire(pageFramesRaster)),
             )
         }
+    }
+
+    // Playback cursor. `pdfPlayback` changes at most twice for a document (Parsing → Ready/Unavailable), so reading
+    // it in this body costs nothing — unlike the CURSOR itself, which is deliberately kept out of the body (see the
+    // class doc) and only ever read from the leaf `Canvas` below and the follow effect's own collector.
+    val pdfPlayback by readerVm.pdfPlayback.collectAsStateWithLifecycle()
+    val cursorProjector = rememberPdfCursorProjector(
+        geometryHandle = (pdfPlayback as? PdfPlaybackState.Ready)?.handle?.geometryHandle,
+        renderedPageWidthsPt = state.pageWidthsPt,
+    )
+    val cursorRect = rememberProjectedCursor(cursorProjector, audioVm.currentCursor, pageFramesRaster)
+
+    // Auto-scroll: keep the playing cursor in view through the SHARED follow math (JNI) — pin the playing system to
+    // the top while the lookahead anchor is set (playing), gentle keep-in-view when paused / on a manual seek.
+    // Mirrors `ReadyScore`'s effect exactly, including the two-level gate (`autoFollowEnabled`, then the sticky
+    // manual-viewport suspension for the PLAYING re-pin only). The live zoom is read from `scaleState` INSIDE the
+    // collector rather than being a key: a state read from a coroutine subscribes to nothing, so a pinch never
+    // restarts this effect (unlike `ReadyScore`, which keys on `scale` and does restart).
+    LaunchedEffect(cursorProjector, pageFramesRaster, autoFollowEnabled, viewportSize) {
+        val projector = cursorProjector ?: return@LaunchedEffect
+        if (viewportSize.height <= 0 || viewportSize.width <= 0) return@LaunchedEffect
+        if (!autoFollowEnabled) return@LaunchedEffect
+        combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
+            .collectLatest { (real, anchor) ->
+                if (real == null) return@collectLatest
+                val isPlaying = anchor != null
+                if (isPlaying &&
+                    !shouldAutoFollow(autoFollowEnabled, isPlaying, audioVm.isPlaybackFollowSuspended.value)
+                ) {
+                    return@collectLatest
+                }
+                val realRect = projector.project(real, pageFramesRaster) ?: return@collectLatest
+                val zoom = scaleState.floatValue / rasterScaleState.floatValue
+                val span = PdfCursorFollow.verticalSpan(realRect.top, realRect.height, zoom, vPadPx)
+
+                val newY = if (anchor != null) {
+                    // Playing: pin the playing page-row to the top, triggered by the lookahead leaving the viewport.
+                    // `topInset = vPadPx` clears the same fixed pad the content sits under.
+                    val lookaheadMax = projector.project(anchor, pageFramesRaster)
+                        ?.let { PdfCursorFollow.verticalSpan(it.top, it.height, zoom, vPadPx).max }
+                        ?: span.max
+                    FolinoReaderJNI.nativeScrollOffsetPinningSystemTop(
+                        vScroll.value.toDouble(),
+                        span.min.toDouble(),
+                        span.max.toDouble(),
+                        lookaheadMax.toDouble(),
+                        viewportSize.height.toDouble(),
+                        vPadPx.toDouble(),
+                    ).toFloat()
+                } else {
+                    FolinoReaderJNI.nativeScrollOffsetKeepingInView(
+                        vScroll.value.toDouble(),
+                        span.min.toDouble(),
+                        span.max.toDouble(),
+                        viewportSize.height.toDouble(),
+                        followPadPx.toDouble(),
+                    ).toFloat()
+                }
+                if (abs(newY - vScroll.value) >= 0.5f) {
+                    vScroll.animateScrollTo(newY.toInt().coerceAtLeast(0))
+                }
+
+                // Horizontal follow only while zoomed past fit-width — at fit there is no horizontal scroll range at
+                // all (see `isZoomed` / `scrollModifier` below), matching `ReadyScore`.
+                val liveWidth = PdfVerticalLayout.renderWidthPx(viewportSize.width, scaleState.floatValue)
+                if (liveWidth > viewportSize.width + 0.5f) {
+                    val hSpan = PdfCursorFollow.horizontalSpan(realRect.left, realRect.width, zoom)
+                    val newX = FolinoReaderJNI.nativeScrollOffsetKeepingInView(
+                        hScroll.value.toDouble(),
+                        hSpan.min.toDouble(),
+                        hSpan.max.toDouble(),
+                        viewportSize.width.toDouble(),
+                        followPadPx.toDouble(),
+                    ).toFloat()
+                    if (abs(newX - hScroll.value) >= 0.5f) {
+                        hScroll.animateScrollTo(newX.toInt().coerceAtLeast(0))
+                    }
+                }
+            }
     }
 
     // Live (per-frame during a pinch) content-box geometry: cheap arithmetic recomputed directly from
@@ -503,6 +605,10 @@ internal fun PdfVerticalScore(
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (event.changes.count { it.pressed } >= 2) {
+                            // A live two-finger contact is a manual viewport change → suspend playback follow, even
+                            // before any zoom delta lands (two fingers held steady never register as a scroll).
+                            // Sticky: cleared only on play/seek. Mirrors `ReadyScore`'s own pinch branch.
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
                             val zoom = event.calculateZoom()
                             if (zoom != 1f) {
                                 val centroid = event.calculateCentroid(useCurrent = true)
@@ -528,6 +634,25 @@ internal fun PdfVerticalScore(
                     if (rasterScaleState.floatValue != scaleState.floatValue) {
                         rasterScaleState.floatValue = scaleState.floatValue
                     }
+                }
+            }
+            // Sticky playback-follow suspension for a real single-finger DRAG — the scroll half of the pinch
+            // handler above. Observes on the Initial pass and NEVER consumes, so the scroll modifiers below still
+            // get the gesture (native fling + overscroll). Keyed off real pointer MOVEMENT, not
+            // `ScrollableState.isScrollInProgress`: the auto-follow's own `animateScrollTo` flips that flag with no
+            // pointer event at all, so the flag-based version would mistake the re-pin for a manual gesture and
+            // latch follow permanently off. See `ReadyScore`'s identical handler for the full history.
+            .pointerInput(audioVm) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var suspended = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (!suspended && event.changes.any { it.pressed && it.positionChanged() }) {
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
+                            suspended = true
+                        }
+                    } while (event.changes.any { it.pressed })
                 }
             },
         contentAlignment = Alignment.TopStart,
@@ -609,6 +734,31 @@ internal fun PdfVerticalScore(
                                 isNearCurrentPage = abs(i - currentPage) <= PDF_WINDOW_RADIUS,
                             )
                         }
+                    }
+                }
+
+                // Playback cursor, over the pages and UNDER the ink (a stroke the reader drew on a note should stay
+                // on top of the bar sweeping past it). Same padding as the dry ink layer, so world y = 0 lands at
+                // this Canvas's y = 0; the live/raster zoom is folded in by the draw transform instead of the
+                // Column's own `graphicsLayer`, which this Canvas is a sibling of, not a child.
+                //
+                // Every state this reads — the cursor rect and both scales — is read INSIDE the draw lambda, so a
+                // cursor tick (or a pinch frame) invalidates the draw phase alone and never recomposes the surface.
+                // Same discipline as `columnModifier`'s `graphicsLayer` block above.
+                val cursorColor = MaterialTheme.colorScheme.primary.copy(alpha = ON_SCREEN_CURSOR_ALPHA)
+                Canvas(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = with(density) { vPadPx.toDp() }),
+                ) {
+                    val rect = cursorRect.value ?: return@Canvas
+                    val zoom = scaleState.floatValue / rasterScaleState.floatValue
+                    withTransform({ scale(zoom, zoom, pivot = Offset.Zero) }) {
+                        drawRect(
+                            color = cursorColor,
+                            topLeft = Offset(rect.left, rect.top),
+                            size = Size(rect.width, rect.height),
+                        )
                     }
                 }
 

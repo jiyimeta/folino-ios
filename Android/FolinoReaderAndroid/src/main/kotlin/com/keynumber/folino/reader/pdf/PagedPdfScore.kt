@@ -2,6 +2,7 @@ package com.keynumber.folino.reader.pdf
 
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -9,12 +10,14 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
@@ -30,9 +33,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -40,8 +45,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.reader.DrawingAnchorWire
 import com.keynumber.folino.reader.DrawingAnchorWireCodec
+import com.keynumber.folino.reader.ON_SCREEN_CURSOR_ALPHA
 import com.keynumber.folino.reader.PageFrameWire
 import com.keynumber.folino.reader.PageFramesWire
 import com.keynumber.folino.reader.PageFramesWireCodec
@@ -55,7 +62,12 @@ import com.keynumber.folino.reader.ink.AnnotationSurfaceState
 import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.PdfAnnotationCaptureController
 import com.keynumber.folino.reader.ink.encodeWireArray
+import com.keynumber.folino.reader.shouldAutoFollow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.min
@@ -240,10 +252,12 @@ internal object PagedPdfLayout {
  * Leaving the overlay untransformed keeps the tap zones exactly where a user expects them (the viewport's
  * physical edges) at every zoom level.
  *
- * There is no `scoreHandle` for a PDF yet (Task 12), so — like [PdfVerticalScore] — this surface has none of
- * `PagedScore`'s cursor overlay, tap-to-seek, or playback-auto-follow wiring. [audioVm] and
- * [autoFollowEnabled] are accepted for that future wiring and unused here; [readerVm] IS used, for
- * [annotation]'s capture path.
+ * Once the background OMR parse succeeds, this surface draws the playback cursor on the visible page and turns the
+ * page to follow it, mirroring `PagedScore`. WHERE the cursor sits on a page is decided off this surface entirely
+ * (swift-sheet-music's geometry side-car + Folino's shared `PDFCursorProjection`, the same code iOS's PDF readers
+ * call — see [PdfCursorProjector]); this surface only supplies the frame its one visible page currently occupies.
+ * The auto-page-turn needs no projection at all, just the side-car's page index, and reuses `PagedScore`'s exact
+ * de-duplicated `mapNotNull` → `distinctUntilChanged` → `collectLatest` shape and [shouldAutoFollow] gate.
  *
  * [annotation] (Task 11) anchors ink to a PAGE, not a musical position — see [PdfVerticalScore]'s own class
  * doc for the shared `PageAnchoringCore` rationale. Only one page is ever visible here, so capture always
@@ -262,7 +276,8 @@ internal fun PagedPdfScore(
     readerVm: ReaderViewModel,
     pageTapHintDismissed: Boolean,
     onDismissPageTapHint: () -> Unit,
-    /** Reserved for Task 12's playback auto-follow, once a PDF has a parsed score to follow. Unused here. */
+    /** User opt-out for continuous-playback auto-page-turn (SettingsPrefs `autoFollow` / the display inspector row).
+     * See [shouldAutoFollow]. Off ⇒ the page never turns itself; the cursor still draws on the visible page. */
     autoFollowEnabled: Boolean = true,
     /** User opt-out for the page-mode tap-zone overlay (`PagedScore` parity). Independent of
      * [pageTapHintDismissed], which only gates the one-time onboarding hint drawn on top of the zones. */
@@ -303,6 +318,55 @@ internal fun PagedPdfScore(
         if (pageCount > 0) source.setWindow(pagerState.currentPage, radius = 1)
     }
 
+    // `pdfPlayback` changes at most twice per document (Parsing → Ready/Unavailable), so reading it here is free —
+    // unlike the cursor itself, which never reaches this body (`PagedPdfPage` reads it in its own leaf `Canvas`).
+    val pdfPlayback by readerVm.pdfPlayback.collectAsStateWithLifecycle()
+    val cursorProjector = rememberPdfCursorProjector(
+        geometryHandle = (pdfPlayback as? PdfPlaybackState.Ready)?.handle?.geometryHandle,
+        renderedPageWidthsPt = state.pageWidthsPt,
+    )
+
+    // A user-initiated page swipe DURING playback suspends auto-page-turn (Task 5) — `interactionSource` only emits
+    // `DragInteraction` for real finger drags, so the auto-turn's own `animateScrollToPage` never self-suspends.
+    // `PagedScore` parity, verbatim.
+    LaunchedEffect(pagerState, audioVm) {
+        pagerState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                audioVm.suspendPlaybackFollowForManualViewportChange()
+            }
+        }
+    }
+
+    // Auto page-turn: the side-car already knows which PAGE a cursor lands on, so — unlike the vertical surface —
+    // this needs no rect projection and no page frames at all, just `PdfCursorProjector.pageIndex`.
+    //
+    // The target page is de-duplicated BEFORE it drives the animation, for exactly the reason `PagedScore` documents:
+    // `currentCursor` emits many times a second, and collecting it directly would cancel the in-flight
+    // `animateScrollToPage` on every emission, stranding the pager at a fractional offset. The auto-follow gate is
+    // applied in `collectLatest` (NOT in `mapNotNull`) so `distinctUntilChanged` keeps tracking the real target page
+    // while suspended — otherwise a suspend-then-resume onto the page the playhead already occupies would be deduped
+    // away and never snap back.
+    LaunchedEffect(cursorProjector, autoFollowEnabled, pageCount) {
+        val projector = cursorProjector ?: return@LaunchedEffect
+        if (pageCount == 0) return@LaunchedEffect
+        combine(audioVm.currentCursor, audioVm.pageAnchorCursor) { real, anchor -> real to anchor }
+            .mapNotNull { (real, anchor) ->
+                val cursor = anchor ?: real ?: return@mapNotNull null
+                val page = projector.pageIndex(cursor) ?: return@mapNotNull null
+                PdfPageTurnTarget(page.coerceIn(0, pageCount - 1), isPlaying = anchor != null)
+            }
+            .distinctUntilChanged { a, b -> a.target == b.target }
+            .collectLatest { turn ->
+                if (!autoFollowEnabled) return@collectLatest
+                if (turn.isPlaying &&
+                    !shouldAutoFollow(autoFollowEnabled, turn.isPlaying, audioVm.isPlaybackFollowSuspended.value)
+                ) {
+                    return@collectLatest
+                }
+                if (turn.target != pagerState.currentPage) pagerState.animateScrollToPage(turn.target)
+            }
+    }
+
     // A plain `derivedStateOf` snapshot read, NOT `scale == 1f` inlined into the `HorizontalPager` call
     // below: `scale` itself is written on every pinch frame, so reading it directly at this composable's
     // body would recompose this whole function ~60x/second for the life of a pinch gesture, even though
@@ -336,7 +400,9 @@ internal fun PagedPdfScore(
                 scaleState = scaleState,
                 rasterScaleState = rasterScaleState,
                 panOffsetState = panOffsetState,
+                audioVm = audioVm,
                 readerVm = readerVm,
+                cursorProjector = cursorProjector,
                 annotation = annotation,
             )
         }
@@ -352,16 +418,26 @@ internal fun PagedPdfScore(
                 pageCount = pageCount,
                 showsHint = !pageTapHintDismissed,
                 onAnyZoneTouchDown = onDismissPageTapHint,
-                onFirst = { scope.launch { pagerState.animateScrollToPage(0) } },
+                // An explicit edge-tap navigation is a manual page turn → suspend auto-page-turn during playback so
+                // the playhead's page doesn't yank the reader back (Task 5; `PagedScore` parity).
+                onFirst = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage(0) }
+                },
                 onPrev = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
                     scope.launch { pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0)) }
                 },
                 onNext = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
                     scope.launch {
                         pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost(pageCount - 1))
                     }
                 },
-                onLast = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } },
+                onLast = {
+                    audioVm.suspendPlaybackFollowForManualViewportChange()
+                    scope.launch { pagerState.animateScrollToPage(pageCount - 1) }
+                },
             )
         }
     }
@@ -386,7 +462,10 @@ private fun PagedPdfPage(
     scaleState: MutableFloatState,
     rasterScaleState: MutableFloatState,
     panOffsetState: MutableState<Offset>,
+    audioVm: ReaderAudioViewModel,
     readerVm: ReaderViewModel,
+    /** Resolves the playback cursor onto this page, or null while the PDF isn't playable (no cursor is drawn). */
+    cursorProjector: PdfCursorProjector?,
     /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation on this surface. */
     annotation: AnnotationSurfaceState?,
 ) {
@@ -436,6 +515,10 @@ private fun PagedPdfPage(
     val pageFrames = remember(pageCount, index, pageFrame) {
         List(pageCount) { i -> if (i == index && pageFrame != null) pageFrame else PageFrameWire(0.0, 0.0, 0.0, 0.0) }
     }
+    // The playback cursor for THIS page, resolved against the same whole-document frame array the annotation path
+    // uses — so every other page's zero-width placeholder makes the projection decline, and only the visible page's
+    // cursor is ever produced. Read exclusively inside the leaf `Canvas` below (see `PdfVerticalScore`'s class doc).
+    val cursorRect = rememberProjectedCursor(cursorProjector, audioVm.currentCursor, pageFrames)
     val resolveDisplayTransforms = remember(pageFrames) {
         { drawings: List<DrawingAnchorWire> ->
             ReaderAnnotationJNI.pdfDisplayTransforms(
@@ -552,6 +635,9 @@ private fun PagedPdfPage(
                         val event = awaitPointerEvent()
                         val activeCount = event.changes.count { it.pressed }
                         if (activeCount >= 2) {
+                            // A two-finger pinch is a manual viewport change → suspend auto-page-turn during
+                            // playback (Task 5; sticky until play/seek). `PagedScore` parity.
+                            audioVm.suspendPlaybackFollowForManualViewportChange()
                             val zoom = event.calculateZoom()
                             if (zoom != 1f) {
                                 val centroid = event.calculateCentroid(useCurrent = true)
@@ -636,6 +722,39 @@ private fun PagedPdfPage(
             }
         }
 
+        if (rasterWidthPx > 0 && rasterHeightPx > 0) {
+            // Playback cursor, over the page bitmap and UNDER the ink. Cannot ride the bitmap's own `graphicsLayer`
+            // (it is a sibling, not a child), so it uses the SAME explicit center-anchored camera the annotation
+            // layers below derive — `annotationCameraTranslate` — recomputed inside the draw lambda. Every state
+            // read here (the cursor rect, both scales, the pan) is a DRAW-phase read, so a cursor tick or a pinch
+            // frame invalidates only the draw, never a recomposition.
+            val cursorColor = MaterialTheme.colorScheme.primary.copy(alpha = ON_SCREEN_CURSOR_ALPHA)
+            Canvas(Modifier.fillMaxSize()) {
+                val rect = cursorRect.value ?: return@Canvas
+                val zoom = scaleState.floatValue / rasterScaleState.floatValue
+                val pan = panOffsetState.value
+                val (tx, ty) = PagedPdfLayout.annotationCameraTranslate(
+                    zoom = zoom,
+                    rasterWidthPx = rasterWidthPx,
+                    rasterHeightPx = rasterHeightPx,
+                    viewportWidthPx = viewportSize.width,
+                    viewportHeightPx = viewportSize.height,
+                    panXPx = pan.x,
+                    panYPx = pan.y,
+                )
+                withTransform({
+                    translate(tx, ty)
+                    scale(zoom, zoom, pivot = Offset.Zero)
+                }) {
+                    drawRect(
+                        color = cursorColor,
+                        topLeft = Offset(rect.left, rect.top),
+                        size = Size(rect.width, rect.height),
+                    )
+                }
+            }
+        }
+
         if (pdfAnnotation != null && rasterWidthPx > 0 && rasterHeightPx > 0) {
             // Own camera, OUTSIDE the bitmap's own `graphicsLayer` — androidx.ink's stroke API takes a flat
             // matrix, not a Compose layer chain, and the wet overlay in particular must never be wrapped in
@@ -676,3 +795,10 @@ private fun PagedPdfPage(
         }
     }
 }
+
+/**
+ * A resolved auto-page-turn target: the destination page index plus whether it came from a playing lookahead
+ * (`pageAnchorCursor` set) vs a paused / manual cursor. `distinctUntilChanged` de-dupes on [target] only, so bursts
+ * of the same page do not cancel an in-flight turn animation. Mirrors `PagedScore.PageTurnTarget`.
+ */
+private data class PdfPageTurnTarget(val target: Int, val isPlaying: Boolean)
