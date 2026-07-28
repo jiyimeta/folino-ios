@@ -99,11 +99,12 @@ public final class LiveScoreFileImporter: ScoreFileImporter, Sendable {
                 }
             }
 
-            // PDFs carry a `/Title` document attribute that the gateway surfaces in `summary.title`. Prefer it so the
-            // library shows the document's own title rather than the (often opaque) filename. Parseable formats keep
-            // their existing filename-derived title — their musical metadata path is unchanged.
-            let filenameTitle = ScorePresentation.title(fromFilename: plan.sourceURL.lastPathComponent)
-            let title = plan.format == .pdf ? (plan.summary.title ?? filenameTitle) : filenameTitle
+            // Every format — PDF included — takes its title from the source file name. PDFs do carry a `/Title`
+            // document attribute (the gateway surfaces it in `summary.title`), but exporters bake their own internal
+            // project name into it: a MuseScore export of a file the user filed away as `spring-song.pdf` arrives with
+            // `/Title = "アイデア#0131"`. The file name is what the user chose, so it wins; renaming stays a separate
+            // user action.
+            let title = ScorePresentation.title(fromFilename: plan.sourceURL.lastPathComponent)
             let item = ScoreItem(
                 id: id,
                 title: title,
