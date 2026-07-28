@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -22,7 +25,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -63,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -94,6 +100,7 @@ import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.ErasePhase
 import com.keynumber.folino.reader.ink.encodeWireArray
 import com.keynumber.folino.reader.pdf.PagedPdfScore
+import com.keynumber.folino.reader.pdf.PdfPlaybackNoticeDialog
 import com.keynumber.folino.reader.pdf.PdfPlaybackState
 import com.keynumber.folino.reader.pdf.PdfVerticalScore
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
@@ -188,6 +195,13 @@ fun ReaderScreen(
     onShare: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
+    /** True once the user chose "Don't show again" on the PDF-playback caveat, so it no longer presents itself when
+     * a PDF becomes playable. Persisted by the app module under the SAME key iOS uses
+     * (`ReaderGlobalSettingsKey.pdfPlaybackNoticeDismissed`). The caveat is still reachable from the reader's PDF
+     * label regardless of this flag. */
+    pdfPlaybackNoticeDismissed: Boolean = false,
+    /** Sets [pdfPlaybackNoticeDismissed] — invoked by the caveat dialog's "Don't show again" action. */
+    onDismissPdfPlaybackNotice: () -> Unit = {},
     /** Persisted annotation pen setup (four pen widths, eraser width, selected tool), sourced from the
      * app module's DataStore (Task 9). The VM's live `toolState` is the source of truth for the UI
      * within a session — this value flows INTO the VM via `LaunchedEffect` below, mirroring how
@@ -648,6 +662,20 @@ fun ReaderScreen(
 
     var showInspector by remember { mutableStateOf(false) }
     var showDisplayInspector by remember { mutableStateOf(false) }
+
+    // The PDF-playback caveat. Presented automatically the first time an opened PDF becomes playable — unless it was
+    // dismissed for good — and on demand from the top bar's PDF label thereafter. `hasAutoShownPdfNotice` keeps the
+    // automatic presentation to once per opened document (it is keyed on `scoreId`, so retargeting the reader to
+    // another score inside a playlist re-arms it, exactly as reopening the reader does on iOS). This is the same
+    // three-part gate iOS applies in `ReaderRootScreen`: ready, not yet auto-shown, not dismissed.
+    var showPdfNotice by remember { mutableStateOf(false) }
+    var hasAutoShownPdfNotice by remember(scoreId) { mutableStateOf(false) }
+    LaunchedEffect(scoreId, pdfPlayback, pdfPlaybackNoticeDismissed) {
+        if (pdfPlayback !is PdfPlaybackState.Ready) return@LaunchedEffect
+        if (hasAutoShownPdfNotice || pdfPlaybackNoticeDismissed) return@LaunchedEffect
+        hasAutoShownPdfNotice = true
+        showPdfNotice = true
+    }
     // Open at full height so the dense inspector shows as many rows as possible at once.
     val inspectorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val displaySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -671,6 +699,8 @@ fun ReaderScreen(
                 // pinned stylus fight over the same surface, and iOS gates it the same way).
                 annotationEnabled = !isPlaying,
                 onToggleAnnotate = readerVm::toggleAnnotationMode,
+                isPdf = isPdf,
+                onShowPdfNotice = { showPdfNotice = true },
             )
         },
         bottomBar = {
@@ -816,6 +846,18 @@ fun ReaderScreen(
             }
         }
     }
+    if (showPdfNotice) {
+        // `Unavailable` is the only state that gets the "couldn't read this PDF" body; `Parsing` still gets the
+        // best-effort caveat, matching iOS's own `pdfPlaybackNoticeBodyKey`.
+        PdfPlaybackNoticeDialog(
+            unavailable = pdfPlayback is PdfPlaybackState.Unavailable,
+            onDismiss = { showPdfNotice = false },
+            onDontShowAgain = {
+                showPdfNotice = false
+                onDismissPdfPlaybackNotice()
+            },
+        )
+    }
     if (showInspector) {
         val openingQuarterBpm by readerVm.openingQuarterBpm.collectAsStateWithLifecycle()
         PlaybackInspectorSheet(
@@ -908,18 +950,32 @@ fun ReaderTopBar(
     /** Disabled while playback is active (parity w/ iOS: can't annotate while the score is playing). */
     annotationEnabled: Boolean = true,
     onToggleAnnotate: () -> Unit = {},
+    /** True while a fixed-layout PDF is open — shows the tappable "PDF" label beside the title. */
+    isPdf: Boolean = false,
+    /** Re-presents the PDF-playback caveat; invoked by the "PDF" label. */
+    onShowPdfNotice: () -> Unit = {},
 ) {
     TopAppBar(
         modifier = modifier,
         windowInsets = windowInsets,
         // Single-line title that ellipsizes when it doesn't fit, so a long score name never wraps the
-        // bar to two rows.
+        // bar to two rows. A PDF adds the brand label after the title, mirroring iOS's PDF badge: it is
+        // what keeps the playback caveat reachable once "Don't show again" has silenced the automatic
+        // presentation. Placed here rather than in `actions` so it reads as a property of THIS document
+        // rather than as another command, and so it never competes with the action icons for width.
         title = {
-            Text(
-                title.ifEmpty { "folino" },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title.ifEmpty { "folino" },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (isPdf) {
+                    Spacer(Modifier.width(8.dp))
+                    ReaderPdfLabel(onClick = onShowPdfNotice)
+                }
+            }
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
@@ -956,6 +1012,28 @@ fun ReaderTopBar(
                 Icon(Icons.Filled.Edit, contentDescription = "Annotate")
             }
         },
+    )
+}
+
+/**
+ * The reader's "PDF" marker: the same outlined-chip label the library row uses for a fixed-layout item
+ * (`ScoreListScaffold.PdfLabel`), made tappable so it re-presents the PDF-playback caveat — the Android reading of
+ * iOS's tappable `PDFBadge`. The text is a brand literal and is intentionally not localized, matching the library's.
+ *
+ * Being reachable here is what makes the dialog's "Don't show again" safe to offer: the explanation of why playback
+ * on a PDF is approximate never becomes unreachable, it just stops interrupting.
+ */
+@Composable
+private fun ReaderPdfLabel(onClick: () -> Unit) {
+    Text(
+        text = "PDF",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
     )
 }
 

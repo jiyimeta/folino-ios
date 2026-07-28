@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -253,6 +254,11 @@ internal object PdfVerticalLayout {
  * The projected cursor is deliberately read ONLY inside the leaf `Canvas`'s draw lambda (and inside the follow
  * effect's `collectLatest`) — never in this composable's body. `currentCursor` emits ~30x/second during playback, and
  * a body-level read would recompose every page slot and every gesture modifier on every tick.
+ *
+ * Tapping the PDF seeks there, the same as tapping a `.mscz` score: this surface only inverts its OWN camera (see
+ * [PdfCursorFollow.worldPointForTap]) and the rest — which page, where on that page, and what is at that spot — is
+ * decided natively by the exact inverse of the cursor's own projection plus swift-sheet-music's PDF hit-test (see
+ * [PdfCursorProjector.cursorForTap]). A tap that hits nothing playable does nothing.
  *
  * [annotation] (Task 11) anchors ink to a PAGE, not a musical position: page index plus geometry
  * normalized to a fraction of that page's own width, so the same stroke re-renders correctly at any zoom
@@ -604,6 +610,36 @@ internal fun PdfVerticalScore(
         Modifier
             .fillMaxSize()
             .onSizeChanged { viewportSize = it }
+            // Tap-to-seek on the PDF itself. Its own `pointerInput` so it coexists with the pinch detector below,
+            // exactly as `ReadyScore`'s does: `detectTapGestures` only fires on a down+up with no drag, while the
+            // pinch loop consumes two-finger moves — neither steals the other's events.
+            //
+            // The tap arrives in this outer (viewport) px space; `worldPointForTap` undoes this surface's own camera
+            // (scroll offsets, the fixed top pad, the live/raster zoom) to reach the raster-px world space
+            // `pageFramesRaster` is expressed in, and everything past that point — which page, where on it, and what
+            // is there — is decided natively (see `PdfCursorProjector.cursorForTap`). A tap that resolves to nothing
+            // does nothing at all: no toast, no flash.
+            //
+            // `handleTap` is the same entry point the musical surfaces seek through, so a seek here also RESUMES
+            // playback follow (an explicit target is exactly the signal that clears a manual-viewport suspension).
+            // Disabled while annotating: there, a single-finger tap belongs to the wet overlay.
+            .pointerInput(cursorProjector, pageFramesRaster, annotationMode, audioVm) {
+                if (annotationMode) return@pointerInput
+                val projector = cursorProjector ?: return@pointerInput
+                detectTapGestures { offset ->
+                    val world = PdfCursorFollow.worldPointForTap(
+                        tap = offset,
+                        hScrollPx = hScroll.value.toFloat(),
+                        vScrollPx = vScroll.value.toFloat(),
+                        // A gesture callback is not composition, so reading the live scale here is safe — it is
+                        // the same read the pinch handler below already makes.
+                        zoom = scaleState.floatValue / rasterScaleState.floatValue,
+                        topPadPx = vPadPx,
+                    ) ?: return@detectTapGestures
+                    val cursor = projector.cursorForTap(world, pageFramesRaster) ?: return@detectTapGestures
+                    audioVm.handleTap(cursor)
+                }
+            }
             // Pinch zoom only: a live two-finger contact is consumed here; a single-finger drag falls
             // through untouched to the scroll modifiers below (native fling + overscroll).
             .pointerInput(viewportSize.width) {

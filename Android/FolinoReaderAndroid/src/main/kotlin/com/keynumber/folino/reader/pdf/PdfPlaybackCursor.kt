@@ -6,8 +6,14 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
 import com.keynumber.folino.reader.PageFrameWire
 import com.keynumber.folino.reader.PageFrameWireCodec
+import com.keynumber.folino.reader.PageFramesWire
+import com.keynumber.folino.reader.PageFramesWireCodec
+import com.keynumber.folino.reader.PdfPageHitWireCodec
+import com.keynumber.folino.reader.PdfPageWidthsWire
+import com.keynumber.folino.reader.PdfPageWidthsWireCodec
 import com.keynumber.folino.reader.ReaderDiagnostics
 import com.keynumber.folino.reader.swiftjava.Data as SwiftData
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI as SwiftJavaJNI
@@ -105,6 +111,47 @@ internal class PdfCursorProjector(
             width = placed.width.toFloat(),
             height = placed.height.toFloat(),
         )
+    }
+
+    /**
+     * The engine cursor under a tap, or `null` when the tap hit nothing playable — in which case the caller does
+     * NOTHING (no seek, no toast, no flash). The mirror image of [project], and two native hops for the same reason:
+     * Folino's shared `PDFCursorProjection` decides which page the tap landed on and where on that page it sits
+     * (`nativePdfTapPageHit`, the exact inverse of the placement [project] uses), then swift-sheet-music's geometry
+     * side-car says what is at that spot on the original page (`nativePdfHitTest`). No arithmetic on this side.
+     *
+     * [contentPoint] is in the surface's own WORLD space — raster pixels, the same space [pageFrames] is expressed
+     * in (see [PdfCursorWorldRect]). Inverting the surface's own camera (screen → world) is the caller's job, since
+     * that camera is the one thing that genuinely differs per surface.
+     */
+    fun cursorForTap(contentPoint: Offset, pageFrames: List<PageFrameWire>): ScoreCursor? {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        val hitBytes = SwiftJavaJNI.nativePdfTapPageHit(
+            contentPoint.x.toDouble(),
+            contentPoint.y.toDouble(),
+            SwiftData.fromByteArray(
+                PdfPageWidthsWireCodec.encode(PdfPageWidthsWire(geometryPageWidthsPt.toList())), arena,
+            ),
+            SwiftData.fromByteArray(PageFramesWireCodec.encode(PageFramesWire(pageFrames)), arena),
+            arena,
+        ).toByteArray()
+        // Empty is the ordinary "tap landed on no page" answer (a gutter, a letterbox margin) — not an error.
+        if (hitBytes.isEmpty()) return null
+        val hit = try {
+            PdfPageHitWireCodec.decode(hitBytes)
+        } catch (e: Exception) {
+            // Wire skew between this Kotlin codec and the .so — same rationale as `project`'s own decode guard.
+            ReaderDiagnostics.recordNonFatal(e)
+            return null
+        }
+        val cursorBytes = SheetMusicJNI.nativePdfHitTest(geometryHandle, hit.pageIndex, hit.x, hit.y)
+        if (cursorBytes.isEmpty()) return null
+        return try {
+            ScoreCursorCodec.decode(cursorBytes)
+        } catch (e: Exception) {
+            ReaderDiagnostics.recordNonFatal(e)
+            null
+        }
     }
 
     private fun cursorRect(cursor: ScoreCursor): PdfRectWire? {
@@ -273,4 +320,25 @@ internal object PdfCursorFollow {
      */
     fun horizontalSpan(worldLeft: Float, worldWidth: Float, zoom: Float): PdfScrollSpan =
         PdfScrollSpan(worldLeft * zoom, (worldLeft + worldWidth) * zoom)
+
+    /**
+     * A tap in the surface's VIEWPORT space → its world space, for tap-to-seek. The full inverse of the camera the
+     * cursor `Canvas` draws through: the content sits at `-scroll` inside the viewport, the fixed [topPadPx] shifts
+     * it down without scaling (it is outside the page `Column`'s `graphicsLayer` — the same asymmetry
+     * [verticalSpan] encodes), and everything inside that layer is scaled by [zoom]. The horizontal axis has no pad,
+     * matching [horizontalSpan].
+     *
+     * `null` for a non-positive [zoom] — never true in practice (the live/raster ratio of two positive scales), but
+     * the division has to be total.
+     */
+    fun worldPointForTap(
+        tap: Offset,
+        hScrollPx: Float,
+        vScrollPx: Float,
+        zoom: Float,
+        topPadPx: Float,
+    ): Offset? {
+        if (zoom <= 0f) return null
+        return Offset((tap.x + hScrollPx) / zoom, (tap.y + vScrollPx - topPadPx) / zoom)
+    }
 }

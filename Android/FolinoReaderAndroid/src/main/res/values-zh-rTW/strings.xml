@@ -64,4 +64,8 @@
     <string name="reader_transpose_up">提高移調</string>
     <string name="reader_section_collapse">收起</string>
     <string name="reader_section_expand">展開</string>
+    <string name="reader_pdf_playback_notice_title">關於 PDF 播放</string>
+    <string name="reader_pdf_playback_notice_body">folino 會解析 PDF 以進行播放並用游標跟隨。解析並非總是完美，使用從 MuseScore 或 folino 匯出的 PDF 效果最佳。</string>
+    <string name="reader_pdf_playback_unavailable_body">folino 無法解析此 PDF 進行播放。播放使用從 MuseScore 或 folino 匯出的 PDF 效果最佳。</string>
+    <string name="reader_pdf_playback_notice_dismiss">不再顯示</string>
 </resources>

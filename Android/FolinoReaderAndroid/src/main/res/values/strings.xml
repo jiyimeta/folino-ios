@@ -70,4 +70,8 @@
     <string name="reader_transpose_up">Transpose up</string>
     <string name="reader_section_collapse">Collapse</string>
     <string name="reader_section_expand">Expand</string>
+    <string name="reader_pdf_playback_notice_title">About PDF playback</string>
+    <string name="reader_pdf_playback_notice_body">folino reads the PDF to play it and follow along with a cursor. The result isn\'t always perfect — it works best with PDFs exported from MuseScore or folino.</string>
+    <string name="reader_pdf_playback_unavailable_body">folino couldn\'t read this PDF for playback. Playback works best with PDFs exported from MuseScore or folino.</string>
+    <string name="reader_pdf_playback_notice_dismiss">Don\'t show again</string>
 </resources>

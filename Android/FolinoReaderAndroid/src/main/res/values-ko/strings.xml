@@ -64,4 +64,8 @@
     <string name="reader_transpose_up">이조 높이기</string>
     <string name="reader_section_collapse">접기</string>
     <string name="reader_section_expand">펼치기</string>
+    <string name="reader_pdf_playback_notice_title">PDF 재생 정보</string>
+    <string name="reader_pdf_playback_notice_body">folino는 PDF를 분석해 재생하고 커서로 따라갑니다. 분석이 항상 완벽하지는 않으며, MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다.</string>
+    <string name="reader_pdf_playback_unavailable_body">이 PDF는 재생용으로 분석할 수 없습니다. 재생은 MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다.</string>
+    <string name="reader_pdf_playback_notice_dismiss">다시 표시 안 함</string>
 </resources>

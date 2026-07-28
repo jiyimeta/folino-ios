@@ -4,8 +4,10 @@ import Wirelet
 
 #if !canImport(CoreGraphics)
 /// Same rationale as `PdfAnnotationBridge.swift`: anchor to `ReaderAnnotationCore`'s own geometry stubs on Android so
-/// this file's `CGRect` resolves to the one `PDFCursorProjection` operates on, not Foundation's CoreGraphics shim.
+/// this file's `CGRect` / `CGPoint` resolve to the ones `PDFCursorProjection` operates on, not Foundation's
+/// CoreGraphics shim.
 private typealias CGRect = ReaderAnnotationCore.CGRect
+private typealias CGPoint = ReaderAnnotationCore.CGPoint
 #endif
 
 // swift-java (jextract) entry points for the Android Reader's on-PDF playback cursor. Pure delegation to the shared
@@ -56,4 +58,65 @@ public func nativePdfPageWidthsAgree(renderedPageWidthPt: Double, geometryPageWi
         renderedPageWidthPt: renderedPageWidthPt,
         geometryPageWidthPt: geometryPageWidthPt,
     )
+}
+
+/// The OMR side-car's mediaBox widths (PDF points) positionally indexed by page, `0` for a page whose size the
+/// importer never recorded — the array form of the `geometryPageWidthPt` scalar `nativePdfCursorDisplayRect` takes,
+/// since resolving WHICH page a tap landed on needs all of them at once. Kotlin already holds exactly this array
+/// (`PdfCursorProjector`'s own `geometryPageWidthsPt`, built from `SheetMusicJNI.nativePdfPageSizes`).
+@WireFormat
+public struct PdfPageWidthsWire: Equatable {
+    public let widthsPt: [Double]
+
+    public init(widthsPt: [Double]) {
+        self.widthsPt = widthsPt
+    }
+}
+
+/// A tap resolved onto the document: the page it landed on, plus that page's own point-space location (top-left
+/// origin, y-down). Feed `pageIndex` / `x` / `y` straight to `SheetMusicJNI.nativePdfHitTest`.
+@WireFormat
+public struct PdfPageHitWire: Equatable {
+    public let pageIndex: Int32
+    public let x: Double
+    public let y: Double
+
+    public init(pageIndex: Int32, x: Double, y: Double) {
+        self.pageIndex = pageIndex
+        self.x = x
+        self.y = y
+    }
+}
+
+/// Resolve a tap at (`contentX`, `contentY`) in the calling surface's own content space — the SAME space
+/// `pageFramesBytes` (a `PageFramesWire`) is expressed in, and the same space `nativePdfCursorDisplayRect` hands the
+/// cursor back in — to the page under it plus that page's own point-space location.
+///
+/// The inverse of `nativePdfCursorDisplayRect`'s placement, delegating to the shared
+/// `PDFCursorProjection.pageHit(contentPoint:geometryPageWidthsPt:pageFrames:)` so tap-to-seek and the cursor use one
+/// implementation of the surface↔page mapping (parity — no divergent Kotlin port, in either direction). Kotlin only
+/// has to invert its OWN camera (screen → content space), which is layout the two platforms differ on by design.
+///
+/// Empty `Data` means "this tap is not on any page": an input failed to decode, or the point landed in the
+/// inter-page gutter / a letterbox margin / a page the side-car has no width for. Callers do nothing at all in that
+/// case — no seek, and no feedback.
+public func nativePdfTapPageHit(
+    contentX: Double,
+    contentY: Double,
+    pageWidthsBytes: Data,
+    pageFramesBytes: Data,
+) -> Data {
+    guard let widths = try? PdfPageWidthsWire(decoding: pageWidthsBytes),
+          let frames = try? PageFramesWire(decoding: pageFramesBytes)
+    else { return Data() }
+
+    guard let hit = PDFCursorProjection.pageHit(
+        contentPoint: CGPoint(x: contentX, y: contentY),
+        geometryPageWidthsPt: widths.widthsPt,
+        pageFrames: frames.frames.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) },
+    ) else { return Data() }
+
+    return PdfPageHitWire(
+        pageIndex: Int32(hit.pageIndex), x: Double(hit.point.x), y: Double(hit.point.y),
+    ).encodeToData()
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -184,6 +185,39 @@ internal object PagedPdfLayout {
         return tx to ty
     }
 
+    /**
+     * A tap in this surface's VIEWPORT space → the page's own WORLD (raster px) space, for tap-to-seek — the exact
+     * inverse of the camera [annotationCameraTranslate] describes and the cursor `Canvas` draws through: undo the
+     * translate, then the [zoom]. Every argument is the one that function already takes, so the two can never drift
+     * apart; that is why this lives beside it rather than being open-coded in the gesture handler.
+     *
+     * `null` for a non-positive [zoom] — never true in practice (the live/raster ratio of two positive scales), but
+     * the division has to be total.
+     */
+    fun worldPointForTap(
+        tapXPx: Float,
+        tapYPx: Float,
+        zoom: Float,
+        rasterWidthPx: Int,
+        rasterHeightPx: Int,
+        viewportWidthPx: Int,
+        viewportHeightPx: Int,
+        panXPx: Float,
+        panYPx: Float,
+    ): Pair<Float, Float>? {
+        if (zoom <= 0f) return null
+        val (tx, ty) = annotationCameraTranslate(
+            zoom = zoom,
+            rasterWidthPx = rasterWidthPx,
+            rasterHeightPx = rasterHeightPx,
+            viewportWidthPx = viewportWidthPx,
+            viewportHeightPx = viewportHeightPx,
+            panXPx = panXPx,
+            panYPx = panYPx,
+        )
+        return (tapXPx - tx) / zoom to (tapYPx - ty) / zoom
+    }
+
     /** 72 points == 1 inch == 25.4mm. */
     private const val POINTS_TO_MM = 25.4 / 72.0
 
@@ -258,6 +292,11 @@ internal object PagedPdfLayout {
  * call — see [PdfCursorProjector]); this surface only supplies the frame its one visible page currently occupies.
  * The auto-page-turn needs no projection at all, just the side-car's page index, and reuses `PagedScore`'s exact
  * de-duplicated `mapNotNull` → `distinctUntilChanged` → `collectLatest` shape and [shouldAutoFollow] gate.
+ *
+ * Tapping the visible page seeks there, exactly as on the scrolling surface — but only in the CENTER region: the
+ * outer 12 % on each side stays [PageTapOverlay]'s page-turn zone, the identical split `PagedScore` makes. This
+ * surface only inverts its own center-anchored camera ([PagedPdfLayout.worldPointForTap]); the rest is native (see
+ * [PdfCursorProjector.cursorForTap]).
  *
  * [annotation] (Task 11) anchors ink to a PAGE, not a musical position — see [PdfVerticalScore]'s own class
  * doc for the shared `PageAnchoringCore` rationale. Only one page is ever visible here, so capture always
@@ -608,6 +647,48 @@ private fun PagedPdfPage(
             .fillMaxSize()
             .background(Color.White)
             .clipToBounds()
+            // Tap-to-seek on the PDF, CENTER region only: the left/right 12 % edges belong to [PageTapOverlay]'s
+            // page-turn zones, so a center tap seeks while an edge tap still turns the page — `PagedScore`'s exact
+            // split, reproduced with the same fraction. (The exclusion is unconditional, like `PagedScore`'s, so the
+            // seekable region doesn't silently change shape when the tap zones are hidden in Settings.)
+            //
+            // `worldPointForTap` undoes this surface's own center-anchored camera to reach the raster-px world space
+            // [pageFrames] is expressed in; which page, where on it, and what is there are all decided natively (see
+            // [PdfCursorProjector.cursorForTap]). A tap that resolves to nothing does nothing — no toast, no flash.
+            // `handleTap` also RESUMES playback follow, the same way it does for the musical surfaces.
+            // `viewportSize` is a key, not just a capture: it feeds the camera inverse below, and a `pointerInput`
+            // closure is only restarted when a key changes — a rotation would otherwise leave the handler resolving
+            // taps against the previous viewport.
+            .pointerInput(
+                index, cursorProjector, pageFrames,
+                rasterWidthPx, rasterHeightPx, viewportSize, annotationMode,
+            ) {
+                // While annotating, a tap is the start of a stroke — never a seek.
+                if (annotationMode) return@pointerInput
+                val projector = cursorProjector ?: return@pointerInput
+                if (rasterWidthPx <= 0 || rasterHeightPx <= 0) return@pointerInput
+                val navZoneWidthPx = size.width * 0.12f
+                detectTapGestures { offset ->
+                    if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {
+                        return@detectTapGestures
+                    }
+                    val (worldX, worldY) = PagedPdfLayout.worldPointForTap(
+                        tapXPx = offset.x,
+                        tapYPx = offset.y,
+                        // A gesture callback is not composition, so reading the live scale/pan here is safe.
+                        zoom = scaleState.floatValue / rasterScaleState.floatValue,
+                        rasterWidthPx = rasterWidthPx,
+                        rasterHeightPx = rasterHeightPx,
+                        viewportWidthPx = viewportSize.width,
+                        viewportHeightPx = viewportSize.height,
+                        panXPx = panOffsetState.value.x,
+                        panYPx = panOffsetState.value.y,
+                    ) ?: return@detectTapGestures
+                    val cursor = projector.cursorForTap(Offset(worldX, worldY), pageFrames)
+                        ?: return@detectTapGestures
+                    audioVm.handleTap(cursor)
+                }
+            }
             // Pinch-zoom + pan. Lives INSIDE the pager page (not a sibling overlay of the whole pager), so
             // at scale == 1 a single-finger drag is left unconsumed and reaches `HorizontalPager` itself —
             // `PagedScore`'s exact same trick, see its own comment.

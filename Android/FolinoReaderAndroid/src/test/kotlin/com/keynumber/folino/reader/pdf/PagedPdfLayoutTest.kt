@@ -1,6 +1,7 @@
 package com.keynumber.folino.reader.pdf
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PagedPdfLayoutTest {
@@ -241,5 +242,73 @@ class PagedPdfLayoutTest {
     @Test fun pxPerPageMmIsIdentityForANonPositivePageWidth() {
         assertEquals(1f, PagedPdfLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = 0.0), 0.0001f)
         assertEquals(1f, PagedPdfLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = -5.0), 0.0001f)
+    }
+
+    // -- worldPointForTap (Task 14: tap-to-seek) ---------------------------------------------------
+    // The inverse of the camera above. It must agree with `annotationCameraTranslate` exactly, since the cursor and
+    // the ink are both placed by that function — a tap that resolves through a different camera would seek to a
+    // point other than the one the user is looking at.
+
+    /** A letterboxed page at rest: world (0, 0) is the page's top-left, inset by the centering margins. */
+    @Test fun worldPointForTapUndoesCenteringAtRest() {
+        val world = PagedPdfLayout.worldPointForTap(
+            tapXPx = 300f,
+            tapYPx = 250f,
+            zoom = 1f,
+            rasterWidthPx = 400,
+            rasterHeightPx = 566,
+            viewportWidthPx = 1000,
+            viewportHeightPx = 1000,
+            panXPx = 0f,
+            panYPx = 0f,
+        )!!
+        // Content is centered: its left edge is at (1000 - 400) / 2 = 300, its top at (1000 - 566) / 2 = 217.
+        assertEquals(0f, world.first, 0.001f)
+        assertEquals(33f, world.second, 0.001f)
+    }
+
+    /** Round trip against the forward camera, at a zoom AND a pan — the case a hand-rolled inverse gets wrong. */
+    @Test fun worldPointForTapRoundTripsTheForwardCamera() {
+        val zoom = 2.5f
+        val (tx, ty) = PagedPdfLayout.annotationCameraTranslate(
+            zoom = zoom,
+            rasterWidthPx = 700,
+            rasterHeightPx = 990,
+            viewportWidthPx = 1080,
+            viewportHeightPx = 2100,
+            panXPx = -140f,
+            panYPx = 260f,
+        )
+        val worldX = 321f
+        val worldY = 654f
+        val world = PagedPdfLayout.worldPointForTap(
+            tapXPx = zoom * worldX + tx,
+            tapYPx = zoom * worldY + ty,
+            zoom = zoom,
+            rasterWidthPx = 700,
+            rasterHeightPx = 990,
+            viewportWidthPx = 1080,
+            viewportHeightPx = 2100,
+            panXPx = -140f,
+            panYPx = 260f,
+        )!!
+        assertEquals(worldX, world.first, 0.01f)
+        assertEquals(worldY, world.second, 0.01f)
+    }
+
+    @Test fun worldPointForTapRefusesANonPositiveZoom() {
+        assertNull(
+            PagedPdfLayout.worldPointForTap(
+                tapXPx = 0f,
+                tapYPx = 0f,
+                zoom = 0f,
+                rasterWidthPx = 400,
+                rasterHeightPx = 566,
+                viewportWidthPx = 1000,
+                viewportHeightPx = 1000,
+                panXPx = 0f,
+                panYPx = 0f,
+            ),
+        )
     }
 }

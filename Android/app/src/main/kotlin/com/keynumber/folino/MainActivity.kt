@@ -546,6 +546,7 @@ private fun LibraryNavGraph(
                 val collapseRests by prefs.collapseRests.collectAsState(initial = false)
                 val showInvisible by prefs.showInvisible.collectAsState(initial = false)
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
+                val pdfNoticeDismissed by prefs.pdfPlaybackNoticeDismissed.collectAsState(initial = false)
                 val globalA4Hz by prefs.a4ReferenceHz.collectAsState(initial = 440.0)
                 val metronomeEnabled by prefs.metronome.collectAsState(initial = false)
                 val precountEnabled by prefs.precount.collectAsState(initial = false)
@@ -679,6 +680,8 @@ private fun LibraryNavGraph(
                     },
                     pageTapHintDismissed = hintDismissed,
                     onDismissPageTapHint = { scope.launch { prefs.setPageTapHintDismissed() } },
+                    pdfPlaybackNoticeDismissed = pdfNoticeDismissed,
+                    onDismissPdfPlaybackNotice = { scope.launch { prefs.setPdfPlaybackNoticeDismissed() } },
                     annotationToolState = annotationToolState,
                     onAnnotationToolStateChange = { s -> scope.launch { prefs.setAnnotationToolState(s) } },
                     globalA4ReferenceHz = globalA4Hz,
