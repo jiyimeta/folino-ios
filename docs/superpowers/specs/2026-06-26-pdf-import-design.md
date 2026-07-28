@@ -79,7 +79,10 @@ different from score page-turn, which is the opposite of what we want.
 - **`ScoreItem`**: unchanged shape. PDF items have `lengthBeats = 0` and
   `defaultTempoBpm = 0` (unused — playback is hidden). `contentHash` (SHA-256)
   and `sizeBytes` are computed normally and used for duplicate detection. Title
-  comes from the PDF `/Title` metadata when present, else the filename. Composer
+  comes from the filename, exactly as for parseable formats — the PDF `/Title`
+  metadata is read but deliberately not used, because exporters bake their own
+  internal project name into it (a MuseScore export arrives as
+  `/Title = "アイデア#0131"`) and the filename is what the user chose. Composer
   and other credits are left empty and remain freely user-editable as library
   labels via the existing info screen.
 - **`ScoreSourceKind.pdf`** already exists and `displayLabel` already maps it to

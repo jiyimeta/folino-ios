@@ -32,17 +32,20 @@ struct PDFImportTests {
         )
     }
 
-    @Test func `imports PDF as new item using slash Title`() async throws {
+    /// `sample.pdf` carries `/Title = "Sample Title"`, which must NOT win over the file name — exporters (MuseScore in
+    /// particular) bake an internal project name into `/Title` that has nothing to do with what the user filed away.
+    @Test func `imports PDF as new item titled after the source file name`() async throws {
         let rig = try await makeRig()
         defer { withExtendedLifetime((rig.lifetime, rig.scoresLifetime)) {} }
 
         let src = try #require(Bundle.module.url(forResource: "sample", withExtension: "pdf"))
         let plan = try await rig.importer.prepareImport(sourceURL: src)
         #expect(plan.format == .pdf)
+        #expect(plan.summary.title == "Sample Title")
 
         let item = try await rig.importer.commitImport(plan, decision: .importAsNew)
         #expect(item.localFileName == "\(item.id.rawValue.uuidString).pdf")
-        #expect(item.title == "Sample Title")
+        #expect(item.title == "sample")
         #expect(item.lengthBeats == 0)
         #expect(ScoreFormat.detect(filename: item.localFileName) == .pdf)
     }

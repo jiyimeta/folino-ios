@@ -27,9 +27,10 @@ public struct LiveScoreFileGateway: ScoreFileGateway {
         return summary
     }
 
-    /// Builds a metadata-only summary for a PDF without parsing any notation. `/Title` becomes the title when present;
-    /// musical fields are zeroed because a PDF carries no notation. Page count is intentionally not stored — the reader
-    /// reads it from the document at open time.
+    /// Builds a metadata-only summary for a PDF without parsing any notation. `/Title` is reported when present, but
+    /// the importer does not use it as the library title — see `LiveScoreFileImporter.commitImport`. Musical fields are
+    /// zeroed because a PDF carries no notation. Page count is intentionally not stored — the reader reads it from the
+    /// document at open time.
     static func pdfSummary(fileURL: URL) throws -> ScoreFileSummary {
         guard let doc = PDFDocument(url: fileURL), doc.pageCount > 0 else {
             throw DomainError.scoreParseFailed(reason: "Unreadable or empty PDF")
