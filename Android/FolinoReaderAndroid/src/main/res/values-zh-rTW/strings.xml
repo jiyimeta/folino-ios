@@ -14,6 +14,8 @@
     <string name="reader_pref_show_seek_bar">顯示進度列</string>
     <string name="reader_pref_auto_follow">自動捲動</string>
     <string name="reader_pref_page_turn_buttons">翻頁按鈕</string>
+    <!-- 與 iOS 的 "reader.pdf.settingsNote" 譯文相同。 -->
+    <string name="reader_pdf_settings_note">PDF 樂譜不支援譜表大小、隱藏譜表等顯示調整，但可以使用播放設定。</string>
     <string name="reader_display_settings">顯示設定</string>
     <string name="reader_share">共用</string>
     <string name="reader_staff_hide">隱藏譜表</string>

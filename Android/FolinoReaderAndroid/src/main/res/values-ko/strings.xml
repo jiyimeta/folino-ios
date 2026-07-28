@@ -14,6 +14,8 @@
     <string name="reader_pref_show_seek_bar">탐색 막대 표시</string>
     <string name="reader_pref_auto_follow">자동 스크롤</string>
     <string name="reader_pref_page_turn_buttons">페이지 넘김 버튼</string>
+    <!-- iOS "reader.pdf.settingsNote" 와 동일한 번역문. -->
+    <string name="reader_pdf_settings_note">PDF 악보에서는 보표 크기나 보표 숨기기 같은 표시 조정을 사용할 수 없지만 재생 설정은 사용할 수 있습니다.</string>
     <string name="reader_display_settings">표시 설정</string>
     <string name="reader_share">공유</string>
     <string name="reader_staff_hide">보표 숨기기</string>
