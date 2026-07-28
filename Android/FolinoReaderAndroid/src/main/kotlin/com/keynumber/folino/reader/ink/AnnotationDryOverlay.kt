@@ -18,13 +18,9 @@ import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.rendering.android.view.ViewStrokeRenderer
 import androidx.ink.strokes.Stroke
 import com.keynumber.folino.reader.DrawingAnchorWire
-import com.keynumber.folino.reader.DrawingAnchorWireCodec
 import com.keynumber.folino.reader.RawInkStrokeWireCodec
 import com.keynumber.folino.reader.ReaderAnnotationJNI
-import com.keynumber.folino.reader.ResolvedAnchorWire
-import com.keynumber.folino.reader.ResolvedAnchorWireCodec
 import com.keynumber.folino.reader.StrokeTransformWireCodec
-import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -49,7 +45,20 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun AnnotationDryOverlay(
-    scoreHandle: Long,
+    /**
+     * Batched anchor→display-transform resolution for a whole layer, positionally aligned with its input
+     * — the seam Task 11 (PDF page anchors) generalized this composable's original hardwired `scoreHandle:
+     * Long` / `SheetMusicJNI.nativeAnchorReferencePoint` call into: a musical caller (`ReadyScore`/
+     * `PagedScore`) closes over its `scoreHandle` and does the ssm ref-point round trip before
+     * `ReaderAnnotationJNI.displayTransforms`; a PDF caller (`PdfVerticalScore`/`PagedPdfScore`) closes
+     * over its current page frames and calls `ReaderAnnotationJNI.pdfDisplayTransforms` directly — no ssm
+     * round trip needed for a page anchor. Returns raw `[StrokeTransformWire]` wire bytes (empty ⇒ the
+     * whole batch failed to resolve, e.g. an invalid/stale handle). Callers `remember` this lambda keyed
+     * on whatever makes its OWN native call cheap to skip on a live pinch frame (`scoreHandle` for
+     * musical, the raster page-frame geometry for PDF) — see this composable's `LaunchedEffect` below,
+     * which keys on the lambda's own identity rather than on `scale`/`pxPerMM` directly.
+     */
+    resolveDisplayTransforms: (List<DrawingAnchorWire>) -> ByteArray,
     drawings: List<DrawingAnchorWire>,
     layoutGeneration: Int,
     pxPerMM: Float,
@@ -73,13 +82,17 @@ fun AnnotationDryOverlay(
     // the placement it produced — reporting `drawings` on its own would tell the caller a stroke is painted
     // a frame or two before it actually is.
     var content by remember { mutableStateOf(DryContent(emptyList(), emptyList())) }
-    // `layoutGeneration` is a key because a reflow moves every note under the SAME `scoreHandle` and
-    // leaves `drawings` untouched: the anchor reference points these placements were derived from are
-    // stale, but nothing else here would tell us. Without it committed ink stays put through a reflow
-    // and only snaps into place the next time a stroke is committed.
-    LaunchedEffect(scoreHandle, drawings, layoutGeneration, isDrawing) {
+    // `resolveDisplayTransforms` is a key (not `scoreHandle`, now that it's caller-injected) because a
+    // caller that rebuilds it on a material change (a reflow, a reparse, a raster-scale settle) needs
+    // this effect to re-run; a caller that keeps it `remember`-stable across an unrelated recomposition
+    // (a live pinch frame) must NOT retrigger the native round trip on every one of those. `layoutGeneration`
+    // is additionally a key because a reflow moves every note under the SAME musical resolver and leaves
+    // `drawings` untouched: the anchor reference points these placements were derived from are stale, but
+    // nothing else here would tell us. Without it committed ink stays put through a reflow and only snaps
+    // into place the next time a stroke is committed.
+    LaunchedEffect(resolveDisplayTransforms, drawings, layoutGeneration, isDrawing) {
         if (isDrawing) return@LaunchedEffect
-        val placed = withContext(Dispatchers.Default) { computePlacement(scoreHandle, drawings) }
+        val placed = withContext(Dispatchers.Default) { computePlacement(resolveDisplayTransforms, drawings) }
         content = DryContent(drawings, placed)
     }
 
@@ -153,25 +166,17 @@ private class InkDryView(context: Context) : View(context) {
     }
 }
 
-/** Batch anchor-ref + display-transform for the whole layer; rebuild + place each stroke. Off-main. */
-private fun computePlacement(scoreHandle: Long, drawings: List<DrawingAnchorWire>): List<Pair<Stroke, Matrix>> {
+/**
+ * Resolve display transforms via the caller-injected [resolveDisplayTransforms] (musical ssm round trip,
+ * or a PDF page-frame lookup — see that parameter's doc), then rebuild + place each stroke. Off-main.
+ */
+private fun computePlacement(
+    resolveDisplayTransforms: (List<DrawingAnchorWire>) -> ByteArray,
+    drawings: List<DrawingAnchorWire>,
+): List<Pair<Stroke, Matrix>> {
     if (drawings.isEmpty()) return emptyList()
 
-    // ssm ref points for every drawing's anchor identity (send ResolvedAnchorWire; ssm decodes
-    // AnchorIdentityWire, skips tags 5-6 — see AnnotationCaptureController for the full rationale).
-    val identities = drawings.map {
-        ResolvedAnchorWire(it.measureIndex, it.tickInMeasure, it.partIndex, it.staffIndexInPart, it.dxSp, it.verticalOffsetSp)
-    }
-    val refBytes = SheetMusicJNI.nativeAnchorReferencePoint(
-        scoreHandle,
-        encodeWireArray(identities, ResolvedAnchorWireCodec::encodePayload),
-    )
-    if (refBytes.isEmpty()) return emptyList()
-
-    val transformsBytes = ReaderAnnotationJNI.displayTransforms(
-        encodeWireArray(drawings, DrawingAnchorWireCodec::encodePayload),
-        refBytes,
-    )
+    val transformsBytes = resolveDisplayTransforms(drawings)
     if (transformsBytes.isEmpty()) return emptyList()
     val transforms = decodeWireArray(transformsBytes, StrokeTransformWireCodec::decodePayload)
 

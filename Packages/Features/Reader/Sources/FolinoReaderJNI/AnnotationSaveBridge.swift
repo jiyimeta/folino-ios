@@ -2,6 +2,7 @@ import Dispatch
 import Domain
 import Foundation
 import Observation
+import ReaderAnnotationCore
 import WireletObservable
 
 /// Android-side annotation save bridge, mirroring how iOS's `ReaderViewModel` drives the shared save policy. It owns
@@ -61,39 +62,35 @@ public final class AnnotationSaveBridge {
         loadedDrawings = box.drawings.map(Self.wire(from:))
     }
 
-    /// Maps a `Domain.DrawingAnchor` to its `DrawingAnchorWire` projection. A non-musical anchor (v1 only produces
-    /// `.musical`, but the model permits others) degrades to a zeroed identity so the encoded stroke still round-trips.
+    /// Maps a `Domain.DrawingAnchor` to its `DrawingAnchorWire` projection, `.musical` and `.page` alike, via the
+    /// shared (host-tested) `AnchorKindWireCoding.wireFields(for:)` — see its doc comment for why this mapping lives
+    /// in `ReaderAnnotationCore` rather than as an inline branch here.
     private static func wire(from drawing: DrawingAnchor) -> DrawingAnchorWire {
-        guard case let .musical(a) = drawing.kind else {
-            return DrawingAnchorWire(
-                measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0,
-                dxSp: 0, verticalOffsetSp: 0, encodedDrawing: drawing.encodedDrawing,
-            )
-        }
+        let fields = AnchorKindWireCoding.wireFields(for: drawing.kind)
         return DrawingAnchorWire(
-            measureIndex: Int32(a.measureIndex), tickInMeasure: Int32(a.tickInMeasure),
-            partIndex: Int32(a.partIndex), staffIndexInPart: Int32(a.staffIndexInPart),
-            dxSp: a.dxSp, verticalOffsetSp: a.verticalOffsetSp, encodedDrawing: drawing.encodedDrawing,
+            measureIndex: fields.measureIndex, tickInMeasure: fields.tickInMeasure,
+            partIndex: fields.partIndex, staffIndexInPart: fields.staffIndexInPart,
+            dxSp: fields.dxSp, verticalOffsetSp: fields.verticalOffsetSp, encodedDrawing: drawing.encodedDrawing,
+            anchorKind: fields.anchorKind, pageIndex: fields.pageIndex,
         )
     }
 
     // MARK: - Drawing changes (Kotlin -> Swift)
 
     /// Records the current annotation layer's drawings and (re)arms the coordinator's debounce. Rebuilds each neutral
-    /// `DrawingAnchor` from its wire fields, the same `MusicalAnchor` mapping `nativeAnnotationDisplayTransforms` uses.
+    /// `DrawingAnchor` from its wire fields via `AnchorKindWireCoding.kind(_:)` — `.musical` and `.page` alike, so a
+    /// PDF page anchor pushed down from Kotlin round-trips instead of being silently coerced to `.musical`.
     /// Fire-and-forget for the same actor reason as `open`; the debounce coalesces rapid calls.
     @WireletExpose
     public func drawingsChanged(_ wires: [DrawingAnchorWire]) {
         let drawings = wires.map { wire -> DrawingAnchor in
-            let anchor = MusicalAnchor(
-                measureIndex: Int(wire.measureIndex),
-                tickInMeasure: Int(wire.tickInMeasure),
-                partIndex: Int(wire.partIndex),
-                staffIndexInPart: Int(wire.staffIndexInPart),
-                dxSp: wire.dxSp,
-                verticalOffsetSp: wire.verticalOffsetSp,
+            let fields = AnchorKindWireCoding.WireFields(
+                anchorKind: wire.anchorKind, pageIndex: wire.pageIndex,
+                measureIndex: wire.measureIndex, tickInMeasure: wire.tickInMeasure,
+                partIndex: wire.partIndex, staffIndexInPart: wire.staffIndexInPart,
+                dxSp: wire.dxSp, verticalOffsetSp: wire.verticalOffsetSp,
             )
-            return DrawingAnchor(kind: .musical(anchor), encodedDrawing: wire.encodedDrawing)
+            return DrawingAnchor(kind: AnchorKindWireCoding.kind(fields), encodedDrawing: wire.encodedDrawing)
         }
         let coordinator = coordinator
         let id = ScoreItemID(rawValue: UUID(uuidString: scoreId) ?? UUID())

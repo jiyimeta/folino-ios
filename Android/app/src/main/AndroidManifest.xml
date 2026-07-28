@@ -33,6 +33,7 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/pdf" />
                 <data android:mimeType="application/xml" />
                 <data android:mimeType="text/xml" />
                 <data android:mimeType="audio/midi" />
@@ -42,6 +43,7 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/pdf" />
                 <data android:mimeType="application/xml" />
                 <data android:mimeType="text/xml" />
                 <data android:mimeType="audio/midi" />
@@ -54,6 +56,7 @@
                 <data android:scheme="content" />
                 <data android:scheme="file" />
                 <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/pdf" />
                 <data android:mimeType="application/xml" />
                 <data android:mimeType="text/xml" />
                 <data android:mimeType="audio/midi" />

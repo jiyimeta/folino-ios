@@ -63,7 +63,9 @@ class ShareTargetActivity : ComponentActivity() {
                 var unsupported by remember { mutableIntStateOf(0) }
 
                 LaunchedEffect(Unit) {
-                    val (files, bad) = withContext(Dispatchers.IO) { stageSharedUris(this@ShareTargetActivity, uris) }
+                    val (files, bad) = withContext(Dispatchers.IO) {
+                        stageSharedUris(this@ShareTargetActivity, uris, vm::isAcceptedScoreFilename)
+                    }
                     staged = files
                     unsupported = bad
                 }

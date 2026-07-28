@@ -2,6 +2,7 @@ package com.keynumber.folino
 
 import android.app.Application
 import com.keynumber.folino.diagnostics.CrashReporting
+import com.keynumber.folino.reader.ReaderDiagnostics
 
 /**
  * Eager-loads every Folino JNI native library at process start. Without this, only
@@ -16,6 +17,10 @@ import com.keynumber.folino.diagnostics.CrashReporting
 class FolinoApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        // The Reader module can't reach `CrashReporting` itself (`:app` depends on it, not the other way round), so
+        // the composition root hands it the sink. Installed BEFORE the native load below, so a load failure's own
+        // report is the first thing this seam carries.
+        ReaderDiagnostics.install(CrashReporting::recordNonFatal)
         loadNativeEntryClasses()
     }
 

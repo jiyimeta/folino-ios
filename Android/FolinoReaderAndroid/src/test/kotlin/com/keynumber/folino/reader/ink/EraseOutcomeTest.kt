@@ -12,7 +12,9 @@ import org.junit.Test
  * `changedIndices` alone made small remnants un-erasable no matter how hard the eraser scrubbed.
  */
 class EraseOutcomeTest {
-    private fun layer(n: Int) = List(n) { DrawingAnchorWire(0, 0, 0, 0, 0.0, 0.0, ByteArray(0)) }
+    // Trailing 0, -1 are anchorKind (musical) and pageIndex (unused for musical anchors); this test only cares about
+    // erase's list-shape bookkeeping, not anchor kind.
+    private fun layer(n: Int) = List(n) { DrawingAnchorWire(0, 0, 0, 0, 0.0, 0.0, ByteArray(0), 0, -1) }
 
     @Test fun fullyErasingAStrokeChangesTheLayerEvenWithNoFragments() {
         // Pure drop: the eraser covered a whole stroke, so it's absent from the output and nothing split.

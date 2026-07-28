@@ -93,14 +93,18 @@ public func nativeAnnotationDisplayTransforms(drawingsBytes: Data, refPointsByte
     return out.encodeToData()
 }
 
-/// Cut the eraser path out of an annotation layer — the reflow-independent partial-eraser hot path.
+/// Cut the eraser path out of an annotation layer — the reflow-independent partial-eraser hot path. Anchor-kind
+/// agnostic (Task 11): a musical AND a page anchor both decode/encode through `AnchorKindWireCoding`, and
+/// `AnnotationEraseCore.erase` itself never inspects `DrawingAnchorKind` beyond carrying it through to each surviving
+/// fragment unchanged (see that function's own `DrawingAnchor(kind: drawing.kind, ...)` — a fragment's kind, and for
+/// a page anchor its `pageIndex`, can never migrate or degrade to a different kind by construction).
 /// `drawingsBytes` = `[DrawingAnchorWire]` (the layer being erased); `transformsBytes` = `[StrokeTransformWire]`,
-/// positionally aligned with the drawings (what `nativeAnnotationDisplayTransforms` returns for the same layer, so
-/// the hit test runs in the display space the user actually saw); `requestBytes` = `EraseRequestWire`, the eraser's
-/// display-space polyline (document mm) plus its geometric radius. A `sp == 0` transform entry — an anchor that
-/// can't currently place — maps to `nil`, matching the display path's "unresolved this frame" convention; that
-/// drawing passes through the erase untouched. Empty `Data` if any input fails to decode, the drawings/transforms
-/// counts differ, or a surviving drawing somehow doesn't carry a `.musical` anchor (this call is score-only).
+/// positionally aligned with the drawings (what `nativeAnnotationDisplayTransforms` /
+/// `nativePdfAnnotationDisplayTransforms` returns for the same layer, so the hit test runs in the display space the
+/// user actually saw); `requestBytes` = `EraseRequestWire`, the eraser's display-space polyline plus its geometric
+/// radius. A `sp == 0` transform entry — an anchor that can't currently place — maps to `nil`, matching the display
+/// path's "unresolved this frame" convention; that drawing passes through the erase untouched. Empty `Data` if any
+/// input fails to decode or the drawings/transforms counts differ.
 public func nativeAnnotationErase(drawingsBytes: Data, transformsBytes: Data, requestBytes: Data) -> Data {
     guard let drawingWires = try? [DrawingAnchorWire](decoding: drawingsBytes),
           let transformWires = try? [StrokeTransformWire](decoding: transformsBytes),
@@ -109,13 +113,16 @@ public func nativeAnnotationErase(drawingsBytes: Data, transformsBytes: Data, re
           request.xMm.count == request.yMm.count
     else { return Data() }
 
-    let drawings = drawingWires.map { wire -> DrawingAnchor in
-        let anchor = MusicalAnchor(
-            measureIndex: Int(wire.measureIndex), tickInMeasure: Int(wire.tickInMeasure),
-            partIndex: Int(wire.partIndex), staffIndexInPart: Int(wire.staffIndexInPart),
-            dxSp: wire.dxSp, verticalOffsetSp: wire.verticalOffsetSp,
+    let drawings = drawingWires.map { wire in
+        DrawingAnchor(
+            kind: AnchorKindWireCoding.kind(
+                anchorKind: wire.anchorKind, pageIndex: wire.pageIndex,
+                measureIndex: wire.measureIndex, tickInMeasure: wire.tickInMeasure,
+                partIndex: wire.partIndex, staffIndexInPart: wire.staffIndexInPart,
+                dxSp: wire.dxSp, verticalOffsetSp: wire.verticalOffsetSp,
+            ),
+            encodedDrawing: wire.encodedDrawing,
         )
-        return DrawingAnchor(kind: .musical(anchor), encodedDrawing: wire.encodedDrawing)
     }
     let transforms = transformWires.map { wire -> StrokeTransform? in
         guard wire.sp != 0 else { return nil }
@@ -127,16 +134,15 @@ public func nativeAnnotationErase(drawingsBytes: Data, transformsBytes: Data, re
         drawings, transforms: transforms, path: path, radiusMm: CGFloat(request.radiusMm),
     )
 
-    var outWires: [DrawingAnchorWire] = []
-    outWires.reserveCapacity(result.drawings.count)
-    for drawing in result.drawings {
-        guard case let .musical(anchor) = drawing.kind else { return Data() }
-        outWires.append(DrawingAnchorWire(
-            measureIndex: Int32(anchor.measureIndex), tickInMeasure: Int32(anchor.tickInMeasure),
-            partIndex: Int32(anchor.partIndex), staffIndexInPart: Int32(anchor.staffIndexInPart),
-            dxSp: anchor.dxSp, verticalOffsetSp: anchor.verticalOffsetSp,
+    let outWires = result.drawings.map { drawing -> DrawingAnchorWire in
+        let fields = AnchorKindWireCoding.wireFields(for: drawing.kind)
+        return DrawingAnchorWire(
+            measureIndex: fields.measureIndex, tickInMeasure: fields.tickInMeasure,
+            partIndex: fields.partIndex, staffIndexInPart: fields.staffIndexInPart,
+            dxSp: fields.dxSp, verticalOffsetSp: fields.verticalOffsetSp,
             encodedDrawing: drawing.encodedDrawing,
-        ))
+            anchorKind: fields.anchorKind, pageIndex: fields.pageIndex,
+        )
     }
 
     return EraseResultWire(

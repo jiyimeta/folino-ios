@@ -9,7 +9,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.R
 import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.library.ScoreRowWire
-import com.keynumber.folino.share.isAcceptedScoreFilename
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 
 @Composable
@@ -28,7 +27,7 @@ fun LibraryScreen(
             val displayName = originalDisplayName(context, uri)
             // iOS parity (ShareImportPolicy): the picker is broad (Android MIME for .mscz is
             // unreliable), so gate the chosen file by its extension and reject non-scores.
-            if (!isAcceptedScoreFilename(displayName)) {
+            if (!viewModel.isAcceptedScoreFilename(displayName)) {
                 android.widget.Toast.makeText(
                     context,
                     context.getString(R.string.share_no_supported_files),

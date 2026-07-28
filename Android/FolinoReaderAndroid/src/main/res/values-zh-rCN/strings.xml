@@ -14,6 +14,8 @@
     <string name="reader_pref_show_seek_bar">显示进度条</string>
     <string name="reader_pref_auto_follow">自动滚动</string>
     <string name="reader_pref_page_turn_buttons">翻页按钮</string>
+    <!-- 与 iOS 的 "reader.pdf.settingsNote" 译文相同。 -->
+    <string name="reader_pdf_settings_note">PDF 乐谱不支持谱表大小、隐藏谱表等显示调整，但可以使用播放设置。</string>
     <string name="reader_display_settings">显示设置</string>
     <string name="reader_share">共享</string>
     <string name="reader_staff_hide">隐藏谱表</string>
@@ -64,4 +66,8 @@
     <string name="reader_transpose_up">提高移调</string>
     <string name="reader_section_collapse">收起</string>
     <string name="reader_section_expand">展开</string>
+    <string name="reader_pdf_playback_notice_title">关于 PDF 播放</string>
+    <string name="reader_pdf_playback_notice_body">folino 会解析 PDF 以进行播放并用光标跟随。解析并非总是完美，使用从 MuseScore 或 folino 导出的 PDF 效果最佳。</string>
+    <string name="reader_pdf_playback_unavailable_body">folino 无法解析此 PDF 进行播放。播放使用从 MuseScore 或 folino 导出的 PDF 效果最佳。</string>
+    <string name="reader_pdf_playback_notice_dismiss">不再显示</string>
 </resources>

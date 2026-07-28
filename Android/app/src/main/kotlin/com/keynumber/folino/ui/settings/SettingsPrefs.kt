@@ -54,6 +54,14 @@ object SettingsKeys {
     val clefOverrides = stringSetPreferencesKey("reader.clefOverrides")
     /** Set once the user has interacted with the page-mode tap-zone overlay; suppresses the onboarding hint. */
     val pageTapHintDismissed = booleanPreferencesKey("reader.pageTapHintDismissed")
+
+    /**
+     * Set once the user chose "Don't show again" on the Reader's PDF-playback caveat; suppresses its automatic
+     * presentation (the caveat stays reachable from the reader's PDF label). Same key STRING as iOS
+     * `ReaderGlobalSettingsKey.pdfPlaybackNoticeDismissed`, so the two platforms name one setting identically —
+     * note the camelCase, unlike this file's dotted `reader.*` keys, because iOS's is the canonical spelling.
+     */
+    val pdfPlaybackNoticeDismissed = booleanPreferencesKey("readerPdfPlaybackNoticeDismissed")
     /** Whether the Reader shows the full-width seek bar (true) or the floating play FAB (false).
      * Default true mirrors iOS `ReaderGlobalSettingsKey.showSeekBarEnabled`. UI-only; not part of
      * the JNI layout blob. */
@@ -134,6 +142,8 @@ class SettingsPrefs(private val context: Context) {
     val hiddenStaves: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.hiddenStaves] ?: emptySet() }
     val clefOverrides: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.clefOverrides] ?: emptySet() }
     val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
+    val pdfPlaybackNoticeDismissed: Flow<Boolean> =
+        context.dataStore.data.map { it[SettingsKeys.pdfPlaybackNoticeDismissed] ?: false }
     val showSeekBar: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showSeekBar] ?: true }
     val autoFollow: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.autoFollowEnabled] ?: true }
     val pageTurnButtonsVisible: Flow<Boolean> =
@@ -176,6 +186,8 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setHiddenStaves(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.hiddenStaves] = v }
     suspend fun setClefOverrides(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.clefOverrides] = v }
     suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
+    suspend fun setPdfPlaybackNoticeDismissed() =
+        context.dataStore.edit { it[SettingsKeys.pdfPlaybackNoticeDismissed] = true }
     suspend fun setShowSeekBar(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showSeekBar] = v }
     suspend fun setAutoFollow(v: Boolean) = context.dataStore.edit { it[SettingsKeys.autoFollowEnabled] = v }
     suspend fun setPageTurnButtonsVisible(v: Boolean) =

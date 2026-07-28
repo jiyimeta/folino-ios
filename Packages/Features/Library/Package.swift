@@ -28,7 +28,7 @@ if isAndroid {
         .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            exact: "1.4.0",
+            revision: "fbde63fd",
         ),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
@@ -47,6 +47,7 @@ if isAndroid {
                 .product(name: "WireletProvided", package: "swift-wirelet"),
                 .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
                 .product(name: "SheetMusicMIDI", package: "swift-sheet-music"),
+                .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
             ],
             plugins: [
                 .plugin(name: "WireletObservableBridges", package: "swift-wirelet"),

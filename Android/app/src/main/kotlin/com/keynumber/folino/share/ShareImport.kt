@@ -9,16 +9,6 @@ import java.util.UUID
 /** A file copied out of a content:// share into our cache, ready for the importer. */
 data class StagedShareFile(val path: String, val originalName: String)
 
-// WARNING: must be kept in sync with Domain ShareImportPolicy.acceptedExtensions (JNI-opaque, can't be read from Kotlin).
-private val ACCEPTED = setOf("mscz", "mscx", "musicxml", "mxl", "xml", "midi", "mid")
-
-/// `true` when `name`'s extension is an accepted score format (iOS ShareImportPolicy parity).
-/// Single Kotlin gate shared by the share-sheet/open-with transport and the Library "+" picker.
-fun isAcceptedScoreFilename(name: String): Boolean =
-    name.substringAfterLast('.', "").lowercase() in ACCEPTED
-
-private fun isAccepted(name: String): Boolean = isAcceptedScoreFilename(name)
-
 private fun displayName(context: Context, uri: Uri): String {
     if (uri.scheme == "file") return File(uri.path ?: "").name
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
@@ -33,9 +23,14 @@ private fun displayName(context: Context, uri: Uri): String {
 /**
  * Copy each accepted URI into cacheDir/IncomingShare/<batch>/, returning the staged files and the count of
  * unsupported/failed ones. Acceptance is decided here (after we know the display name), mirroring the iOS UTI-broad /
- * extension-gated approach.
+ * extension-gated approach. `isAccepted` is the Swift-backed gate (`LibraryAndroidStore.isAcceptedScoreFilename`) —
+ * the single source of truth for accepted extensions lives in Domain `ShareImportPolicy`, not here.
  */
-fun stageSharedUris(context: Context, uris: List<Uri>): Pair<List<StagedShareFile>, Int> {
+fun stageSharedUris(
+    context: Context,
+    uris: List<Uri>,
+    isAccepted: (String) -> Boolean,
+): Pair<List<StagedShareFile>, Int> {
     val batchDir = File(context.cacheDir, "IncomingShare/${UUID.randomUUID()}").apply { mkdirs() }
     val staged = mutableListOf<StagedShareFile>()
     var unsupported = 0

@@ -2,15 +2,19 @@ package com.keynumber.folino.ui.library
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -437,7 +441,7 @@ private fun ScoreRow(
         ListItem(
             headlineContent = { Text(headline) },
             supportingContent = {
-                if (row.isFavorite || row.composer.isNotEmpty()) {
+                if (row.isFavorite || row.composer.isNotEmpty() || row.isPdf) {
                     // Match Google Drive: star + composer share one neutral "secondary"
                     // gray (SwiftUI `.secondary` equivalent = label color at 60% alpha),
                     // not the near-black title color.
@@ -454,6 +458,10 @@ private fun ScoreRow(
                             )
                         }
                         if (row.composer.isNotEmpty()) Text(row.composer, color = secondary)
+                        if (row.isPdf) {
+                            if (row.composer.isNotEmpty()) Spacer(Modifier.width(6.dp))
+                            PdfLabel()
+                        }
                     }
                 }
             },
@@ -570,4 +578,21 @@ private fun ScoreRow(
             },
         ) { content() }
     }
+}
+
+/**
+ * Small "PDF" indicator for fixed-layout PDF items, shown inline in [ScoreRow]'s supporting
+ * line. Styled as an outlined-chip label (Material convention) rather than the pill capsule iOS
+ * uses for the same information. The text is a brand literal and is intentionally not localized.
+ */
+@Composable
+private fun PdfLabel() {
+    Text(
+        text = "PDF",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }

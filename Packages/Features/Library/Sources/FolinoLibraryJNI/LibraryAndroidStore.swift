@@ -14,6 +14,7 @@ import UtilityCore // AnalyticsEvent (shared catalog type, for the analytics eve
 // `@_exported import`s SheetMusicCore and would make `ScoreItemID` ambiguous with Domain's.
 import SheetMusicMIDI // MidiRenderer.render(score:), MidiWriter.write(_:)
 import SheetMusicMSCX // MSCZReader.parse(contentsOf:), MSCZWriter, MSCXEncoderOptions
+import SheetMusicPDF // PDFImporter.summaryUsingSwiftReader(pdfData:) -> PDFDocumentSummary?
 import Wirelet
 import WireletObservable
 import WireletProvided
@@ -88,46 +89,47 @@ public final class LibraryAndroidStore {
         reloadTags()
     }
 
-    /// Parse the `.mscz` at `path` (the Kotlin side copies the picked document
-    /// into the app cache dir and passes its absolute path), derive the display
-    /// fields, copy the file into managed storage as `<id>.mscz`, and persist a
-    /// live record. Foundation-only (zlib + XMLParser); unreadable/unparseable
-    /// input is ignored (no crash, no row).
+    /// Parse the picked file at `path` (the Kotlin side copies it into the app
+    /// cache dir and passes its absolute path), derive the display fields,
+    /// copy the file into managed storage as `<id>.<canonicalExtension>`, and
+    /// persist a live record. Unreadable/unparseable input is ignored (no
+    /// crash, no row).
+    ///
+    /// A PDF is stored as a fixed-layout document with no notation decoded here (iOS parity: the playable score is
+    /// produced later, in the Reader, by the background OMR parse) — only page count + `/Title` are read, via the
+    /// same Foundation-only `PDFImporter.summaryUsingSwiftReader` entry point Android's OMR path will reuse. Every
+    /// other pickable format still goes through the full `MSCZReader.parse`. The parse/name/persist body itself lives
+    /// in `SingleFileImport`, shared with the share / open-with path.
     @WireletExpose
     public func importScore(_ path: String) -> AnalyticsEventWire {
         let url = URL(fileURLWithPath: path)
-        // Format the user picked, derived from the original filename (iOS parity: log the imported format). Android's
-        // manual import only parses MuseScore containers, so a non-mscz pick fails to parse below → import_failed.
+        // Format the user picked, derived from the original filename (iOS parity: log the imported format).
         let pickedFormat = ScoreFormat.detect(filename: url.lastPathComponent)
-        guard let score = try? MSCZReader.parse(contentsOf: url) else {
+        let outcome = SingleFileImport.run(
+            sourcePath: path,
+            displayFilename: url.lastPathComponent,
+            contentHash: store.sha256(path: path),
+            store: store,
+        )
+        guard case .imported = outcome else {
             return AnalyticsBridge.encode(
                 .scoreImportFailed(format: pickedFormat?.analyticsValue ?? "unknown", reason: "parse_failed"),
             )
         }
-        // Shared Domain presenter — identical title/subtitle/composer rules as iOS.
-        let fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, score: score)
-        let id = UUID().uuidString
-        // Shared iOS naming convention: "<id>.<canonicalExtension>".
-        let localFileName = "\(id).\(ScoreFormat.mscz.canonicalExtension)"
-        let hash = store.sha256(path: path)
-        store.copyImportedFile(fromPath: path, localFileName: localFileName)
-        store.upsert(ScoreRecordWire(
-            id: id,
-            title: fields.title,
-            subtitle: fields.subtitle ?? "",
-            composer: fields.composer ?? "",
-            localFileName: localFileName,
-            contentHash: hash,
-            deletedAt: 0,
-            lastOpenedAt: 0,
-            addedAt: Date().timeIntervalSince1970,
-        ))
         reload()
         // museScoreMajorVersion is nil: Android does not yet persist the MuseScore wire version (see
         // librarySnapshot), so it crosses as "unknown" — the lone parity gap vs iOS's per-import version.
         return AnalyticsBridge.encode(.scoreImported(
             format: pickedFormat ?? .mscz, source: "file_picker", isDuplicate: false, museScoreMajorVersion: nil,
         ))
+    }
+
+    /// Whether `name`'s extension is an importable score format. The one gate for the Library picker and the
+    /// share/open-with transport — Kotlin previously kept a duplicate of `ShareImportPolicy`'s set and had to be
+    /// hand-synced; this crosses the real Domain rule instead.
+    @WireletExpose
+    public func isAcceptedScoreFilename(_ name: String) -> Bool {
+        ShareImportPolicy.isAccepted(filename: name)
     }
 
     /// Share import (iOS Share Extension parity). `paths`/`originalNames` are parallel arrays of staged files the
@@ -473,6 +475,8 @@ public final class LibraryAndroidStore {
             subtitle: record.subtitle,
             composer: record.composer,
             isFavorite: record.isFavorite,
+            isPdf: ScoreFormat.detect(filename: record.localFileName) == .pdf,
+            localFileName: record.localFileName,
         )
     }
 
@@ -1012,6 +1016,80 @@ extension LibraryAndroidStore {
     }
 }
 
+// MARK: - Shared single-file import body
+
+/// Outcome of `SingleFileImport.run`: the id of the newly persisted live record, or the file failing to parse.
+enum SingleFileImportOutcome: Equatable {
+    case imported(id: String)
+    case parseFailed
+}
+
+/// The ONE implementation of "read a picked or shared file, derive its display fields, copy the bytes into managed
+/// storage as `<id>.<canonicalExtension>`, and persist a live record".
+///
+/// Two entry points call it, and they differ only in what surrounds it: the Library picker
+/// (`LibraryAndroidStore.importScore`) reloads the published lists and encodes an analytics event, while the share /
+/// open-with transport (`AndroidShareImporter.importFile`) dedups on the content hash first and reports a
+/// `SharedImportFileResult`. Everything in between — the per-format branch, the naming convention, the upsert — lives
+/// here so it exists exactly once. It used to exist twice and drifted: PDF support was added to the picker only, so
+/// once `application/pdf` reached the share intent-filters every shared PDF passed the acceptance gate and then died
+/// at `MSCZReader.parse`.
+enum SingleFileImport {
+    /// - Parameters:
+    ///   - sourcePath: absolute path to the readable bytes (a cache-dir copy on both paths).
+    ///   - displayFilename: the user-facing name. Decides the format and is the title's fallback. The share path
+    ///     passes the original display name; the picker passes the picked file's own last path component.
+    ///   - contentHash: sha256 of the bytes, computed by the caller (the share path needs it before this call to
+    ///     dedup).
+    static func run(
+        sourcePath: String,
+        displayFilename: String,
+        contentHash: String,
+        store: LibraryStore,
+    ) -> SingleFileImportOutcome {
+        let url = URL(fileURLWithPath: sourcePath)
+        let fields: ScoreDisplayFields
+        let format: ScoreFormat
+        if ScoreFormat.detect(filename: displayFilename) == .pdf {
+            // Title rule matches iOS via the SHARED `ScorePresentation.displayFields(sourceFilename:)`: the file
+            // name, deliberately NOT the document's `/Title` (see that function's doc). The parse still has to
+            // run — it is what decides the bytes are a readable PDF at all; `summaryUsingSwiftReader` returns nil
+            // for unreadable bytes or a pageless PDF, which is this path's only parse check.
+            guard let data = try? Data(contentsOf: url),
+                  PDFImporter.summaryUsingSwiftReader(pdfData: data) != nil
+            else {
+                return .parseFailed
+            }
+            fields = ScorePresentation.displayFields(sourceFilename: displayFilename)
+            format = .pdf
+        } else {
+            // Android otherwise only parses MuseScore containers, so any other accepted extension fails to parse
+            // here → parse_failed.
+            guard let score = try? MSCZReader.parse(contentsOf: url) else { return .parseFailed }
+            // Shared Domain presenter — identical title/subtitle/composer rules as iOS.
+            fields = ScorePresentation.displayFields(sourceFilename: displayFilename, score: score)
+            format = .mscz
+        }
+        let id = UUID().uuidString
+        // Shared iOS naming convention: "<id>.<canonicalExtension>". The extension is what tells the Reader which
+        // loader to use, so a PDF must land as `.pdf`.
+        let localFileName = "\(id).\(format.canonicalExtension)"
+        store.copyImportedFile(fromPath: sourcePath, localFileName: localFileName)
+        store.upsert(ScoreRecordWire(
+            id: id,
+            title: fields.title,
+            subtitle: fields.subtitle ?? "",
+            composer: fields.composer ?? "",
+            localFileName: localFileName,
+            contentHash: contentHash,
+            deletedAt: 0,
+            lastOpenedAt: 0,
+            addedAt: Date().timeIntervalSince1970,
+        ))
+        return .imported(id: id)
+    }
+}
+
 // MARK: - Async-bridge helpers (file-scope, used only within one synchronous importShared call)
 
 /// Mutable result holder so the bridging `Task` can publish the coordinator result back to the synchronous caller.
@@ -1019,13 +1097,14 @@ private final class ResultBox: @unchecked Sendable {
     var value = SharedImportResult()
 }
 
-/// Android importer adapter: hash → dedup against live records → parse + copy + upsert. Mirrors `importScore` plus
-/// duplicate detection. No resolver (MVP) — duplicates are skipped silently, returned as `.duplicate`.
+/// Android importer adapter: hash → dedup against live records → the shared `SingleFileImport` body. Mirrors
+/// `importScore` plus duplicate detection. No resolver (MVP) — duplicates are skipped silently, returned as
+/// `.duplicate`.
 private struct AndroidShareImporter: SharedImportFileImporting, @unchecked Sendable {
     let store: LibraryStore
 
     // swiftlint:disable:next async_without_await
-    func importFile(_ file: SharedImportFile, isMultiFile: Bool) async -> SharedImportFileResult {
+    func importFile(_ file: SharedImportFile, isMultiFile _: Bool) async -> SharedImportFileResult {
         guard FileManager.default.fileExists(atPath: file.path) else { return .skipped(.missingFile) }
         let hash = store.sha256(path: file.path)
         if !hash.isEmpty,
@@ -1033,24 +1112,17 @@ private struct AndroidShareImporter: SharedImportFileImporting, @unchecked Senda
         {
             return .duplicate(existingID: dup.id, existingTitle: dup.title)
         }
-        let url = URL(fileURLWithPath: file.path)
-        guard let score = try? MSCZReader.parse(contentsOf: url) else { return .skipped(.parseFailed) }
-        let fields = ScorePresentation.displayFields(sourceFilename: url.lastPathComponent, score: score)
-        let id = UUID().uuidString
-        let localFileName = "\(id).\(ScoreFormat.mscz.canonicalExtension)"
-        store.copyImportedFile(fromPath: file.path, localFileName: localFileName)
-        store.upsert(ScoreRecordWire(
-            id: id,
-            title: fields.title,
-            subtitle: fields.subtitle ?? "",
-            composer: fields.composer ?? "",
-            localFileName: localFileName,
+        // The staged copy is written under the original display name, but derive format and title from
+        // `originalName` regardless — it is the name the analytics split already treats as authoritative.
+        switch SingleFileImport.run(
+            sourcePath: file.path,
+            displayFilename: file.originalName,
             contentHash: hash,
-            deletedAt: 0,
-            lastOpenedAt: 0,
-            addedAt: Date().timeIntervalSince1970,
-        ))
-        return .imported(id: id)
+            store: store,
+        ) {
+        case let .imported(id): return .imported(id: id)
+        case .parseFailed: return .skipped(.parseFailed)
+        }
     }
 }
 

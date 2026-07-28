@@ -29,7 +29,7 @@ fun LibraryScene(layout: ScreenshotLayout, tag: String) {
     val viewModel = remember {
         MockScores.stageScoreFiles(context)
         val store = RoomLibraryStore(context)
-        MockScores.all.forEach { mock ->
+        MockScores.all.forEachIndexed { index, mock ->
             store.upsert(
                 ScoreRecordWire(
                     id = mock.id,
@@ -44,6 +44,10 @@ fun LibraryScene(layout: ScreenshotLayout, tag: String) {
                     deletedAt = 0.0, // 0 == live (LibraryAndroidStore filters deletedAt <= 0)
                     lastOpenedAt = 0.0,
                     isFavorite = false,
+                    // Descending, so the default "date added, newest first" sort reproduces MockScores.all's
+                    // declared order and the screenshots stay stable. Tiny values rather than real epochs on
+                    // purpose — the same shape the Room migration backfills pre-column rows with.
+                    addedAt = (MockScores.all.size - index).toDouble(),
                 ),
             )
         }

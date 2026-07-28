@@ -5,6 +5,7 @@
 import Domain
 import PDFKit
 import PencilKit
+import ReaderAnnotationCore
 import SheetMusicCore
 import SwiftUI
 
@@ -376,21 +377,18 @@ struct PagedPDFContainer: View {
     }
 
     /// The on-PDF playback cursor for `idx`, when this page is the one the live cursor is on. Projects the cursor's
-    /// original-PDF (top-left mediaBox) rect into band space by the same fit + centering `pageFrame` uses, so it lands
-    /// exactly over the rendered page and rides the surface's zoom / pan.
+    /// original-PDF (top-left mediaBox) rect into band space through the shared `PDFCursorProjection` — the same
+    /// entry point Android's surfaces reach over JNI — against the same fitted + centered `pageFrame` the page itself
+    /// is drawn in, so it lands exactly over the rendered page and rides the surface's zoom / pan.
     @ViewBuilder
     private func pageCursorLayer(forPage idx: Int, viewport: CGSize) -> some View {
         if let cursor = viewModel.pdfDisplayCursorRect, cursor.pageIndex == idx,
            let frame = pageFrame(forPage: idx, viewport: viewport),
-           let pageSize = viewModel.pdfPlaybackData?.geometry.pageSizes[idx], pageSize.width > 0
+           let pageSize = viewModel.pdfPlaybackData?.geometry.pageSizes[idx],
+           let bandRect = PDFCursorProjection.displayRect(
+               cursorRect: cursor.rect, geometryPageWidthPt: pageSize.width, pageFrame: frame,
+           )
         {
-            let fit = frame.width / pageSize.width
-            let bandRect = CGRect(
-                x: frame.minX + cursor.rect.minX * fit,
-                y: frame.minY + cursor.rect.minY * fit,
-                width: cursor.rect.width * fit,
-                height: cursor.rect.height * fit,
-            )
             Rectangle()
                 .fill(PDFPlaybackCursor.color)
                 .frame(width: bandRect.width, height: bandRect.height)

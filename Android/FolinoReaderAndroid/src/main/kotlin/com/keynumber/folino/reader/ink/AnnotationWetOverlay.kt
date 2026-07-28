@@ -33,8 +33,12 @@ private const val ERASE_THROTTLE_MS = 50L
 /** Phase of an in-progress eraser gesture reported to [AnnotationWetOverlay.onEraseGesture]. */
 enum class ErasePhase { BEGIN, MOVE, END }
 
-/** Maps a screen-px point through [matrix] (the overlay's `screenToWorld`) to a document-mm [Offset]. */
-private fun mapToWorldMm(matrix: Matrix, x: Float, y: Float): Offset {
+/**
+ * Maps a screen-px point through [matrix] (the overlay's `screenToWorld`) to an [Offset] in the caller's own
+ * annotation world units — document mm for a musical surface, raster px for a PDF one (see
+ * `AnnotationSurfaceState.brushWidthWorld`'s doc for the full convention this mirrors).
+ */
+private fun mapToWorld(matrix: Matrix, x: Float, y: Float): Offset {
     val pts = floatArrayOf(x, y)
     matrix.mapPoints(pts)
     return Offset(pts[0], pts[1])
@@ -42,26 +46,28 @@ private fun mapToWorldMm(matrix: Matrix, x: Float, y: Float): Offset {
 
 /**
  * Wet capture overlay: an `AndroidView`-wrapped androidx.ink `InProgressStrokesView`, sibling of `ScorePage`
- * inside the sized content `Box` (its local coords == content-Box px, per the doc-mm `worldToScreen` transform
- * supplied by the caller). Routes per-pointer: the first finger or stylus draws a wet stroke. If that stroke
- * was started by a stylus, a second pointer touching down (a palm) is rejected and the stroke keeps drawing
- * (spec §6.4: stylus always draws); otherwise a second pointer cancels the in-progress stroke and hands the
- * gesture back to the parent for pan/zoom. Finished strokes are handed to [onStrokeFinished] — this composable
- * does not anchor or persist anything itself.
+ * inside the sized content `Box` (its local coords == content-Box px, per the [worldToScreen] transform
+ * supplied by the caller — mm-per-world-unit for a musical surface, raster px for a PDF one). Routes
+ * per-pointer: the first finger or stylus draws a wet stroke. If that stroke was started by a stylus, a
+ * second pointer touching down (a palm) is rejected and the stroke keeps drawing (spec §6.4: stylus always
+ * draws); otherwise a second pointer cancels the in-progress stroke and hands the gesture back to the parent
+ * for pan/zoom. Finished strokes are handed to [onStrokeFinished] — this composable does not anchor or
+ * persist anything itself.
  *
  * [onStrokeFinished] also receives a `release` callback. Until it runs, androidx.ink keeps rendering the
  * finished stroke, which is what covers the asynchronous commit (see [AnnotationHandoffQueue]); the caller
  * runs it once the dry layer has painted the committed stroke.
  *
  * When [eraserMode] is true, the touch path above is bypassed entirely: no wet stroke is started, and the
- * touched path (converted to document-mm) is instead batched to [onEraseGesture] — [ErasePhase.BEGIN] with
- * the first point, throttled [ErasePhase.MOVE] batches at [ERASE_THROTTLE_MS] along the input timeline, and
- * [ErasePhase.END] with the remainder on finger-up, a second pointer touching down, or a cancel. Actually
- * erasing strokes is handled downstream by the caller — this overlay only reports the gesture. Together the
- * emissions form one contiguous polyline: [ErasePhase.BEGIN]'s point is not repeated in the first
- * [ErasePhase.MOVE] batch, so the consumer must connect it to that batch's first point, and likewise connect
- * each batch's last point to the next batch's first point. [eraserMode] is latched per gesture at
- * `ACTION_DOWN`, so a tool switch mid-stroke takes effect on the next gesture rather than tearing this one.
+ * touched path (converted to the caller's own world units) is instead batched to [onEraseGesture] —
+ * [ErasePhase.BEGIN] with the first point, throttled [ErasePhase.MOVE] batches at [ERASE_THROTTLE_MS] along
+ * the input timeline, and [ErasePhase.END] with the remainder on finger-up, a second pointer touching down,
+ * or a cancel. Actually erasing strokes is handled downstream by the caller — this overlay only reports the
+ * gesture. Together the emissions form one contiguous polyline: [ErasePhase.BEGIN]'s point is not repeated
+ * in the first [ErasePhase.MOVE] batch, so the consumer must connect it to that batch's first point, and
+ * likewise connect each batch's last point to the next batch's first point. [eraserMode] is latched per
+ * gesture at `ACTION_DOWN`, so a tool switch mid-stroke takes effect on the next gesture rather than tearing
+ * this one.
  */
 @Composable
 fun AnnotationWetOverlay(
@@ -70,7 +76,7 @@ fun AnnotationWetOverlay(
     onStrokeFinished: (stroke: Stroke, release: () -> Unit) -> Unit,
     onTwoFingerGesture: () -> Unit,
     eraserMode: Boolean = false,
-    onEraseGesture: (phase: ErasePhase, pathMm: List<Offset>) -> Unit = { _, _ -> },
+    onEraseGesture: (phase: ErasePhase, pathWorld: List<Offset>) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val screenToWorld = remember { Matrix() }
@@ -139,7 +145,7 @@ fun AnnotationWetOverlay(
                             eraserPointerId = event.getPointerId(event.actionIndex)
                             eraseAccum.clear()
                             lastEraseEmitTime = event.eventTime
-                            val p = mapToWorldMm(screenToWorld, event.x, event.y)
+                            val p = mapToWorld(screenToWorld, event.x, event.y)
                             currentOnEraseGesture(ErasePhase.BEGIN, listOf(p))
                             true
                         }
@@ -169,10 +175,10 @@ fun AnnotationWetOverlay(
                                 // polyline or skip gaps between MotionEvent deliveries.
                                 for (h in 0 until event.historySize) {
                                     eraseAccum.add(
-                                        mapToWorldMm(screenToWorld, event.getHistoricalX(idx, h), event.getHistoricalY(idx, h)),
+                                        mapToWorld(screenToWorld, event.getHistoricalX(idx, h), event.getHistoricalY(idx, h)),
                                     )
                                 }
-                                eraseAccum.add(mapToWorldMm(screenToWorld, event.getX(idx), event.getY(idx)))
+                                eraseAccum.add(mapToWorld(screenToWorld, event.getX(idx), event.getY(idx)))
                             }
                             if (event.eventTime - lastEraseEmitTime >= ERASE_THROTTLE_MS) {
                                 currentOnEraseGesture(ErasePhase.MOVE, eraseAccum.toList())

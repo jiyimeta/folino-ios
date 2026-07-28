@@ -48,6 +48,16 @@ import androidx.compose.ui.unit.dp
 private val HighlightFill = Color(0x80808080)
 
 /**
+ * Fraction of the viewport width each edge nav column occupies (iOS `TapOverlay` parity).
+ *
+ * Shared, not repeated: [PageTapOverlay] lays its columns out with this, and BOTH page-mode surfaces'
+ * tap-to-seek handlers (`PagedScore`, `pdf.PagedPdfScore`) exclude exactly this much on each side so a
+ * center tap seeks while an edge tap turns the page. The three only behave correctly while they agree,
+ * so the agreement is expressed as one constant rather than as three literals and a comment.
+ */
+internal const val PAGE_NAV_ZONE_WIDTH_FRACTION = 0.12f
+
+/**
  * Four page-navigation tap zones at the leading / trailing edges. Mirrors the iOS `TapOverlay`:
  * 12 %-wide columns split 3:7 (top = first/last, bottom = prev/next), a press lights every zone in
  * unison, a same-colour `n / m` badge fades with the zones, and a first-touch onboarding hint shows a
@@ -70,7 +80,7 @@ fun PageTapOverlay(
     var pressedCount by remember { mutableIntStateOf(0) }
     val highlighted = pressedCount > 0
     val density = LocalDensity.current
-    val columnWidth = with(density) { (viewportSize.width * 0.12f).toDp() }
+    val columnWidth = with(density) { (viewportSize.width * PAGE_NAV_ZONE_WIDTH_FRACTION).toDp() }
 
     // Appears instantly on touch-down, then fades out over 0.3 s after a 0.35 s hold so the user can
     // see which zone fired before it disappears (iOS uses `nil` in / `easeOut(0.3).delay(0.35)` out).

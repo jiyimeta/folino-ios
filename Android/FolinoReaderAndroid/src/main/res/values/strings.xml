@@ -14,6 +14,10 @@
     <string name="reader_pref_show_seek_bar">Show seek bar</string>
     <string name="reader_pref_auto_follow">Auto-scroll</string>
     <string name="reader_pref_page_turn_buttons">Page-turn buttons</string>
+    <!-- Shown in the Display inspector in place of the transpose / staff-size / clef controls when the
+         open item is a PDF (ReaderCapabilities.canTranspose / canEditStaves == false). Translated verbatim
+         from iOS's "reader.pdf.settingsNote" (Reader/Resources/Localizable.xcstrings). -->
+    <string name="reader_pdf_settings_note">Display adjustments like staff size and hiding staves aren\'t available for PDF scores. Playback settings are.</string>
     <string name="reader_display_settings">Display settings</string>
     <string name="reader_share">Share</string>
     <string name="reader_staff_hide">Hide staff</string>
@@ -66,4 +70,8 @@
     <string name="reader_transpose_up">Transpose up</string>
     <string name="reader_section_collapse">Collapse</string>
     <string name="reader_section_expand">Expand</string>
+    <string name="reader_pdf_playback_notice_title">About PDF playback</string>
+    <string name="reader_pdf_playback_notice_body">folino reads the PDF to play it and follow along with a cursor. The result isn\'t always perfect — it works best with PDFs exported from MuseScore or folino.</string>
+    <string name="reader_pdf_playback_unavailable_body">folino couldn\'t read this PDF for playback. Playback works best with PDFs exported from MuseScore or folino.</string>
+    <string name="reader_pdf_playback_notice_dismiss">Don\'t show again</string>
 </resources>

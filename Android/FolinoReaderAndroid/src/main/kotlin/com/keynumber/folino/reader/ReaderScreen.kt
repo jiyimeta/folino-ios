@@ -4,19 +4,25 @@ import android.view.WindowManager
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -57,6 +63,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -78,7 +85,6 @@ import androidx.ink.strokes.Stroke
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
-import com.keynumber.folino.reader.ink.AnnotationEraseController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationLayers
 import com.keynumber.folino.reader.ink.AnnotationSurfaceState
@@ -86,7 +92,13 @@ import com.keynumber.folino.reader.ink.AnnotationTool
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
+import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.ErasePhase
+import com.keynumber.folino.reader.ink.encodeWireArray
+import com.keynumber.folino.reader.pdf.PagedPdfScore
+import com.keynumber.folino.reader.pdf.PdfPlaybackNoticeDialog
+import com.keynumber.folino.reader.pdf.PdfPlaybackState
+import com.keynumber.folino.reader.pdf.PdfVerticalScore
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -115,10 +127,23 @@ import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material3.Surface
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.zIndex
 import io.github.jiyimeta.sheetmusic.audio.model.RehearsalMarkEntry
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
+import org.swift.swiftkit.core.SwiftMemoryManagement
+
+/**
+ * The shared Domain decision (`ReaderCapabilities.resolve(format:)`) for this session's format, fetched
+ * over JNI — pure delegation, never re-derived here. `isPdf` mirrors what Tasks 1-4 already established
+ * via [ReaderState.ReadyPdf]: the reader's own state machine, not a second format check.
+ */
+private fun fetchReaderCapabilities(isPdf: Boolean): ReaderCapabilitiesWire {
+    val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+    val bytes = FolinoReaderJNI.nativeReaderCapabilities(isPdf, arena).toByteArray()
+    return ReaderCapabilitiesWireCodec.decode(bytes)
+}
 
 /** Bottom inset reserved for the floating playback FAB cluster, so the score content is not hidden
  * under it. Sized to exactly the FAB's occupied height — the FAB (56) plus the Scaffold's default 16
@@ -150,6 +175,10 @@ internal const val ON_SCREEN_CURSOR_ALPHA = 0.6f
 @Composable
 fun ReaderScreen(
     scoreId: String,
+    /** The record's real on-disk file name (e.g. a PDF import's `<id>.pdf`), supplied by the App
+     * layer rather than looked up here — the Reader module has no dependency on the Library module.
+     * A blank value (or a name whose file is missing) fails cleanly via [ReaderViewModel.load]. */
+    localFileName: String,
     title: String,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.VERTICAL,
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
@@ -164,6 +193,13 @@ fun ReaderScreen(
     onShare: () -> Unit = {},
     pageTapHintDismissed: Boolean = false,
     onDismissPageTapHint: () -> Unit = {},
+    /** True once the user chose "Don't show again" on the PDF-playback caveat, so it no longer presents itself when
+     * a PDF becomes playable. Persisted by the app module under the SAME key iOS uses
+     * (`ReaderGlobalSettingsKey.pdfPlaybackNoticeDismissed`). The caveat is still reachable from the reader's PDF
+     * label regardless of this flag. */
+    pdfPlaybackNoticeDismissed: Boolean = false,
+    /** Sets [pdfPlaybackNoticeDismissed] — invoked by the caveat dialog's "Don't show again" action. */
+    onDismissPdfPlaybackNotice: () -> Unit = {},
     /** Persisted annotation pen setup (four pen widths, eraser width, selected tool), sourced from the
      * app module's DataStore (Task 9). The VM's live `toolState` is the source of truth for the UI
      * within a session — this value flows INTO the VM via `LaunchedEffect` below, mirroring how
@@ -254,12 +290,15 @@ fun ReaderScreen(
     persistRepeatMode: (RepeatMode) -> Unit = {},
     /** Non-null only when the Reader was opened from a playlist; enables the continuation control + auto-advance. */
     playlistId: String? = null,
-    /** Live, position-ordered score ids of the current playlist (re-derived each call; never a frozen snapshot). */
-    playlistQueueProvider: suspend () -> List<String> = { emptyList() },
+    /** Live, position-ordered (score id, localFileName) pairs of the current playlist (re-derived
+     * each call; never a frozen snapshot). localFileName rides alongside the id the same way it
+     * does everywhere else in this screen — the host resolves it, the Reader is only ever told it. */
+    playlistQueueProvider: suspend () -> List<Pair<String, String>> = { emptyList() },
     /** The global sticky continuation mode (re-read each end-of-score so a Settings change is picked up). */
     continuationModeProvider: suspend () -> PlaylistContinuationMode = { PlaylistContinuationMode.PLAY_THROUGH },
-    /** Asks the host to retarget the Reader to [scoreId] in place (host sets its currentScoreId). */
-    onRetargetScore: (String) -> Unit = {},
+    /** Asks the host to retarget the Reader to (scoreId, localFileName) in place (host sets its
+     * currentScoreId / currentLocalFileName). */
+    onRetargetScore: (String, String) -> Unit = { _, _ -> },
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
     // Analytics seams. The Reader module cannot import the analytics library, so the app layer passes
@@ -280,6 +319,19 @@ fun ReaderScreen(
     KeepScreenOn(keepScreenAwake)
 
     val state by readerVm.state.collectAsStateWithLifecycle()
+    // What this session's format allows — the shared Domain decision, read over JNI and never
+    // re-derived here. `isPdf` is the reader's own state-machine signal (Tasks 1-4), not a second format
+    // check. Gates the layout-mode picker + transpose/staff/clef controls (DisplayInspectorSheet) and
+    // whether the transport is enabled at all (below).
+    val isPdf = state is ReaderState.ReadyPdf
+    val capabilities = remember(isPdf) { fetchReaderCapabilities(isPdf) }
+    // Whether transport should be enabled right now: scores always, PDFs only once their background OMR
+    // parse (Task 12) succeeds. Delegated to the shared rule rather than inlining
+    // `canPlay || isPdfPlaybackReady` — Android must not re-derive that policy in Kotlin.
+    val pdfPlayback by readerVm.pdfPlayback.collectAsStateWithLifecycle()
+    val canPlayNow = remember(capabilities, pdfPlayback) {
+        FolinoReaderJNI.nativeCanPlayNow(capabilities.canPlay, pdfPlayback is PdfPlaybackState.Ready)
+    }
     val scoreHandle by readerVm.scoreHandle.collectAsStateWithLifecycle()
     // The live layout-options snapshot the recompute loop feeds nativeComputeLayout; the tap
     // hit-test must reuse this exact blob (its hidden-staff set) so re-addressing stays in lockstep.
@@ -307,15 +359,8 @@ fun ReaderScreen(
         (toolState.selected as? AnnotationTool.Pen)?.colorIndex ?: 0,
     ) { AnnotationToolbarDefaults.DEFAULT_COLORS[0] }.toRgbaLong()
     // Off-main scope for AnnotationCaptureController.capture (chains 5 sync native JNI calls) and for
-    // AnnotationEraseController's calls in the eraser gesture handler below.
+    // EraseGestureController's calls (via annotationScope.launch inside its own handle()).
     val annotationScope = rememberCoroutineScope()
-    // Single-parallelism view of Dispatchers.Default for the erase gesture's own compute: `applyErase`
-    // runs once per MOVE tick plus once at END, each launched independently — without serializing them,
-    // a slow MOVE tick (large layer) can finish AFTER END and publish a stale, non-reanchored result on
-    // top of it, so a later persist-triggering edit would resurrect already-erased ink / drop a
-    // fragment's re-anchor. `limitedParallelism(1)` gives strict FIFO execution (not just FIFO dispatch)
-    // on the SAME underlying Default thread pool, so END always runs after every MOVE queued before it.
-    val eraseDispatcher = remember { Dispatchers.Default.limitedParallelism(1) }
 
     // Wet→dry ink handoff (see AnnotationHandoffQueue's own doc for why retention exists at all).
     // Hoisted here rather than local to ReadyScore: the toolbar's undo/redo buttons live in this
@@ -326,54 +371,12 @@ fun ReaderScreen(
     // ReadyScore as a parameter so the whole screen shares exactly one instance.
     val inkHandoff = remember { AnnotationHandoffQueue<DrawingAnchorWire>() }
 
-    // Local chained erase-drag state (Task 8). `eraseWorkingAtBegin` is snapshotted ONCE at
-    // ErasePhase.BEGIN and never reassigned during the drag; every MOVE/END tick re-applies the FULL
-    // accumulated `erasePath` against this same BEGIN snapshot rather than chaining tick-to-tick onto
-    // the previous tick's own output — re-cutting a fixed base with the same path is stable across a
-    // throttle's repeated ticks, whereas chaining forward would compound any per-tick geometry drift.
-    // `erasePath` accumulates the whole gesture's contiguous polyline per AnnotationWetOverlay's
-    // BEGIN/MOVE/END emission contract (see its class doc).
-    //
-    // KNOWN RACE (accepted, not solved here): an async pen-capture already in flight from a stroke
-    // drawn just before the user switches to the eraser can land (readerVm.addDrawing) mid-erase-drag.
-    // Because every erase tick re-publishes a whole-layer result derived from the BEGIN snapshot (which
-    // predates that capture), the NEXT erase publish silently overwrites the just-added stroke. The
-    // window requires a tool switch while a capture is still in flight, so it's narrow; closing it would
-    // mean threading capture completion through the same layer state the erase drag holds, which is a
-    // bigger change than this task's wiring scope — flagged here for the reviewer, not fixed.
-    var eraseWorkingAtBegin by remember { mutableStateOf<List<DrawingAnchorWire>>(emptyList()) }
-    var erasePath by remember { mutableStateOf<List<Offset>>(emptyList()) }
-    // True from a processed BEGIN through its matching END's publish. The handler trusts
-    // AnnotationWetOverlay's own per-gesture `gestureIsErasing` latch (set from the live eraserMode at
-    // ACTION_DOWN) as the sole authority on whether a gesture is an erase — BEGIN does NOT re-check
-    // `toolState.selected` (see its branch below for why re-checking there was itself a bug). But BEGIN
-    // can still no-op for an unrelated reason (no score handle yet), and the overlay's contract still
-    // guarantees a MOVE/END will follow for that same latched gesture regardless. Without this flag,
-    // those calls would run against `eraseWorkingAtBegin`/`erasePath` LEFT OVER from a previous drag,
-    // corrupting the layer with a mutation no undo entry covers. `eraseArmed` records whether BEGIN
-    // actually processed, and MOVE/END early-out unless it did.
-    var eraseArmed by remember { mutableStateOf(false) }
-    // Bumped by every BEGIN that arms. `eraseArmed` alone isn't enough to protect a gesture's OWN
-    // coroutines from a NEWER gesture: END's disarm runs inside its async `withContext(Main)` publish,
-    // which is queued behind eraseDispatcher — on a fast scrub-lift-scrub (exactly the slow-tick/large-
-    // layer window I1 targets), gesture N's END can drain AFTER N+1's BEGIN has already re-armed, so
-    // `eraseArmed = false` at N's END would disarm N+1 mid-drag (orphaning any undo entry N+1 already
-    // pushed and freezing its in-progress erase half-applied). Each MOVE/END coroutine captures
-    // `eraseGeneration` on Main at launch time and compares it against the LIVE value in its Main-thread
-    // publish: a mismatch means a newer gesture has since started, so that coroutine's result is
-    // superseded and must not touch the layer OR the armed flag — only the CURRENT gesture's own
-    // coroutines are allowed to publish or disarm.
-    var eraseGeneration by remember { mutableStateOf(0) }
-    // Whether THIS gesture has already pushed its one undo entry. Starts false at every BEGIN — BEGIN
-    // itself does NOT push a history entry (unlike the old beginDrawingGesture()-based design): per spec
-    // ("changedIndices empty means the gesture did nothing: no save, no undo entry, no phase 2"), a
-    // stray tap on blank space or a scrub that never reaches a stroke must not push a dead undo entry OR
-    // clear the redo stack (DrawingHistory.push always clears redo). The first MOVE/END tick whose
-    // EraseResult actually changed something flips this to true and passes `pushHistory = true` to the
-    // VM; every later changing tick of the same gesture passes `pushHistory = false` — so a whole erase
-    // drag that changes anything still collapses to exactly one undo entry (mirrors addDrawing's
-    // one-entry-per-commit shape), while a drag that changes nothing pushes zero.
-    var eraseHistoryPushed by remember { mutableStateOf(false) }
+    // Owns the BEGIN/MOVE/END erase-drag state machine (Task 8; extracted to `EraseGestureController` in
+    // Task 11 so a PDF surface's own page-anchored eraser drives the identical generation/history-push
+    // bookkeeping instead of re-deriving it — see that class's own field docs for the hazards it guards
+    // against). `remember`ed (not rebuilt every recomposition) so an in-flight drag survives a
+    // recomposition mid-gesture; not shared across a layout-mode switch on purpose (see its class doc).
+    val eraseController = remember { EraseGestureController() }
 
     // For the content Box's width report below (its `onSizeChanged` is not a composable scope).
     val readerDensity = LocalDensity.current
@@ -390,160 +393,37 @@ fun ReaderScreen(
         drawings = drawings,
         layoutGeneration = layoutGeneration,
         colorRGBA = penColorRGBA,
-        widthMm = toolState.activeWidth,
+        brushWidthWorld = toolState.activeWidth,
         eraserMode = toolState.selected is AnnotationTool.Eraser,
-        onEraseGesture = eraseGesture@{ phase, pathMm ->
-            // BEGIN trusts AnnotationWetOverlay as the sole authority on whether this
-            // gesture is an erase: the overlay already latched `gestureIsErasing` from the
-            // live eraserMode at ACTION_DOWN, so re-checking `toolState.selected` here (the
-            // toolbar's CURRENT selection, which can differ by the time this runs) could
-            // disagree with the overlay's latch on a sub-frame two-handed tool switch — if
-            // BEGIN then no-ops while the overlay still emits this gesture's MOVE/END, those
-            // would run against `eraseWorkingAtBegin`/`erasePath` left over from a PREVIOUS
-            // drag, corrupting the layer with a mutation no undo entry covers. `eraseArmed`
-            // records whether BEGIN actually processed, and MOVE/END early-out unless it did
-            // — so a stray MOVE/END can never run against stale state, while a gesture whose
-            // BEGIN DID arm is always honored through to its END (mirrors the overlay's own
-            // "exactly one END per BEGIN" contract).
-            when (phase) {
-                ErasePhase.BEGIN -> {
+        eraserWidthWorld = toolState.eraserWidth,
+        onEraseGesture = { phase, pathWorld ->
+            // Presets are DIAMETERS; applyErase wants a geometric radius.
+            val radiusWorld = toolState.eraserWidth / 2f
+            eraseController.handle(
+                scope = annotationScope,
+                phase = phase,
+                pathWorld = pathWorld,
+                radiusWorld = radiusWorld,
+                // An unloaded score has nothing to erase against — mirrors the original per-phase
+                // `scoreHandle != null` gate this class used to inline before it became shared with the
+                // PDF surfaces (which always pass `ready = true`, having no scoreHandle concept at all).
+                ready = scoreHandle != null,
+                scoreHandle = scoreHandle,
+                currentDrawings = readerVm::currentDrawings,
+                resolveDisplayTransforms = { pending ->
+                    // Rebuilt every call rather than `remember`ed: `scoreHandle` is a plain composed
+                    // value (not a stable holder), so a fresh closure each time is the only way to
+                    // guarantee this always resolves against the CURRENT handle — matching every other
+                    // call site's own null re-check. `EraseGestureController.handle` never uses this
+                    // as a `LaunchedEffect` key (unlike `AnnotationDryOverlay`'s own resolver), so the
+                    // fresh-instance cost here is a non-issue.
                     val handle = scoreHandle
-                    if (handle != null) {
-                        eraseArmed = true
-                        // Bump so any in-flight coroutine from a PREVIOUS gesture (still
-                        // draining eraseDispatcher, see `eraseGeneration`'s doc) is
-                        // recognizable as superseded the moment it reaches its Main publish.
-                        eraseGeneration++
-                        // No undo entry yet — the whole drag might turn out to be a whiff
-                        // (spec: "changedIndices empty means the gesture did nothing: no
-                        // save, no undo entry, no phase 2"), and pushing here unconditionally
-                        // is exactly the bug this gating fixes (see eraseHistoryPushed's doc).
-                        // Reset it so the FIRST tick of THIS gesture that actually changes
-                        // something is free to push.
-                        eraseHistoryPushed = false
-                        // VM truth as the erase base — not the composed `drawings` state
-                        // above, which can lag the VM by a frame.
-                        eraseWorkingAtBegin = readerVm.currentDrawings()
-                        erasePath = pathMm
-                    }
-                }
-                ErasePhase.MOVE -> {
-                    if (!eraseArmed) return@eraseGesture
-                    erasePath = erasePath + pathMm
-                    val handle = scoreHandle
-                    if (handle != null) {
-                        val snapshot = eraseWorkingAtBegin
-                        val path = erasePath
-                        // Presets are DIAMETERS; applyErase wants a geometric radius.
-                        val radiusMm = toolState.eraserWidth / 2f
-                        // Captured on Main at launch — compared against the LIVE
-                        // eraseGeneration in the Main publish below (see its declaration).
-                        val gen = eraseGeneration
-                        annotationScope.launch(eraseDispatcher) {
-                            val outcome = AnnotationEraseController.applyErase(
-                                snapshot, handle, path, radiusMm,
-                            )
-                            // Publish only on an ACTUAL change: null = native miss, and a
-                            // cut that hit nothing leaves the layer / undo history / save
-                            // alone (spec whiff). "Changed" must count DROPS too, not just
-                            // fragments — a fully-covered stroke is dropped with an empty
-                            // changedIndices, so gating on changedIndices alone silently
-                            // discarded pure-drop gestures and made small ink un-erasable.
-                            // Once the path reaches any stroke, this stays true for every
-                            // later tick (the full path is re-cut against the fixed BEGIN base).
-                            if (outcome != null && outcome.changesLayer(snapshot.size)) {
-                                withContext(Dispatchers.Main) {
-                                    // A newer gesture has since started (its BEGIN bumped
-                                    // eraseGeneration) — this MOVE's result is superseded and
-                                    // must not touch the layer the newer gesture now owns.
-                                    if (gen == eraseGeneration) {
-                                        // True only for the first changing tick of THIS
-                                        // gesture — see eraseHistoryPushed's doc for why that
-                                        // yields exactly one undo entry per gesture.
-                                        val push = !eraseHistoryPushed
-                                        if (push) eraseHistoryPushed = true
-                                        inkHandoff.releaseAll()
-                                        readerVm.eraseInProgress(push, outcome.drawings)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                ErasePhase.END -> {
-                    if (!eraseArmed) return@eraseGesture
-                    erasePath = erasePath + pathMm
-                    val handle = scoreHandle
-                    if (handle == null) {
-                        // Synchronous, runs on Main before any launch — no generation
-                        // race possible here, so a plain unconditional disarm is correct.
-                        eraseArmed = false
-                        return@eraseGesture
-                    }
-                    val snapshot = eraseWorkingAtBegin
-                    val path = erasePath
-                    // Presets are DIAMETERS; applyErase wants a geometric radius.
-                    val radiusMm = toolState.eraserWidth / 2f
-                    // Captured on Main at launch — compared against the LIVE eraseGeneration
-                    // in the Main publish below (see eraseGeneration's declaration doc). If a
-                    // newer gesture's BEGIN has since bumped it, THIS END is stale: it must
-                    // not publish its now-superseded committed layer, and — critically — must
-                    // not disarm the NEWER gesture that's currently mid-drag.
-                    val gen = eraseGeneration
-                    annotationScope.launch(eraseDispatcher) {
-                        val outcome = AnnotationEraseController.applyErase(
-                            snapshot, handle, path, radiusMm,
-                        )
-                        // Same whiff rule as MOVE, and the same drop-aware "changed" test:
-                        // a gesture that only DROPPED strokes has empty changedIndices but a
-                        // shorter layer and must still commit — gating on changedIndices here
-                        // was what left a scrubbed-out small remnant un-erased at END too.
-                        // Re-anchoring only applies to fragments (there is nothing to re-anchor
-                        // in a pure drop), so a drop-only cut commits outcome.drawings verbatim.
-                        val committed = if (outcome != null && outcome.changesLayer(snapshot.size)) {
-                            if (outcome.changedIndices.isNotEmpty()) {
-                                AnnotationEraseController.reanchor(
-                                    outcome.drawings, outcome.changedIndices, handle,
-                                )
-                            } else {
-                                outcome.drawings
-                            }
-                        } else {
-                            null
-                        }
-                        withContext(Dispatchers.Main) {
-                            if (gen == eraseGeneration) {
-                                if (committed != null) {
-                                    // True only if no earlier tick of THIS gesture already
-                                    // pushed — e.g. every change happened right at END, with
-                                    // no changing MOVE before it.
-                                    val push = !eraseHistoryPushed
-                                    if (push) eraseHistoryPushed = true
-                                    inkHandoff.releaseAll()
-                                    readerVm.eraseCommitted(push, committed)
-                                }
-                                // committed == null: a whole-gesture whiff (native miss, or a
-                                // cut that never touched anything) — per spec, publish
-                                // NOTHING: no save, no undo entry, no phase 2. The layer stays
-                                // exactly as the last changing MOVE tick left it (or untouched,
-                                // for a gesture that never hit anything at all). Disarm either
-                                // way — THIS gesture is over regardless of outcome, and
-                                // (gen == eraseGeneration) confirms no newer gesture has
-                                // started, so it's safe to disarm.
-                                //
-                                // KNOWN ACCEPTED RESIDUAL — not fixed: if this END is instead
-                                // superseded (gen != eraseGeneration), it silently no-ops: its
-                                // erased fragments were already published in-progress by its
-                                // own MOVE ticks (so the next gesture builds on them), but its
-                                // reanchor is dropped — those specific fragments stay on their
-                                // inherited anchor until re-erased. Narrow, self-healing,
-                                // requires a sub-second scrub-lift-scrub on a large layer.
-                                eraseArmed = false
-                            }
-                        }
-                    }
-                }
-            }
+                    if (handle == null) ByteArray(0) else musicalDisplayTransformsResolver(handle)(pending)
+                },
+                releaseWetRetention = inkHandoff::releaseAll,
+                onInProgress = readerVm::eraseInProgress,
+                onCommitted = readerVm::eraseCommitted,
+            )
         },
         inkHandoff = inkHandoff,
         onStrokeCaptured = { stroke, onCommitted ->
@@ -582,7 +462,7 @@ fun ReaderScreen(
     )
 
     LaunchedEffect(scoreId) {
-        readerVm.load(scoreId)
+        readerVm.load(scoreId, localFileName)
         // Re-fires once per scoreId (same effect as `load`), so this primes persistence + rehydrates
         // the dry overlay's drawings exactly once per score open, not on every recomposition.
         readerVm.onAnnotationOpened(scoreId)
@@ -615,7 +495,7 @@ fun ReaderScreen(
 
             if (playlistId == null) return@collect
             val queue = playlistQueueProvider()
-            val index = queue.indexOf(scoreId)
+            val index = queue.indexOfFirst { it.first == scoreId }
             if (index < 0) return@collect
             val next = com.keynumber.folino.reader.swiftjava.FolinoReaderJNI.nativePlaylistNextAction(
                 index.toLong(),
@@ -625,7 +505,7 @@ fun ReaderScreen(
             ).toInt()
             if (next in queue.indices) {
                 pendingAutoplay = true
-                onRetargetScore(queue[next])
+                onRetargetScore(queue[next].first, queue[next].second)
             }
         }
     }
@@ -778,6 +658,30 @@ fun ReaderScreen(
 
     var showInspector by remember { mutableStateOf(false) }
     var showDisplayInspector by remember { mutableStateOf(false) }
+
+    // The PDF-playback caveat. Presented automatically the first time a PDF becomes playable — unless it was
+    // dismissed for good — and on demand from the top bar's PDF label thereafter. Same three-part gate iOS applies in
+    // `ReaderRootScreen`: ready, not yet auto-shown, not dismissed.
+    //
+    // `hasAutoShownPdfNotice` is scoped to the READER OPEN, not to the document: neither the `remember` nor the
+    // effect is keyed on `scoreId`, so retargeting the reader in place — which is what a playlist advance does
+    // (`onRetargetScore`, no navigation) — does NOT re-arm it. This is iOS's behavior, where the equivalent flag is a
+    // plain `@State` on `ReaderRootScreen` and survives the same in-place retarget. Keying on `scoreId` would make a
+    // playlist of N PDFs interrupt playback with N modals, one per parse.
+    var showPdfNotice by remember { mutableStateOf(false) }
+    var hasAutoShownPdfNotice by remember { mutableStateOf(false) }
+    // The PRESENTED dialog, unlike the flag above, must not survive a retarget: it explains one specific PDF's
+    // playback, and the incoming document is a different one (it would also be re-read as `Parsing`, so an open
+    // "couldn't read this PDF" body would silently turn back into the best-effort body under the user). Declared
+    // BEFORE the auto-present effect so that if a retarget and a parse ever land in the same composition, the close
+    // runs first and cannot swallow a legitimate first presentation.
+    LaunchedEffect(scoreId) { showPdfNotice = false }
+    LaunchedEffect(pdfPlayback, pdfPlaybackNoticeDismissed) {
+        if (pdfPlayback !is PdfPlaybackState.Ready) return@LaunchedEffect
+        if (hasAutoShownPdfNotice || pdfPlaybackNoticeDismissed) return@LaunchedEffect
+        hasAutoShownPdfNotice = true
+        showPdfNotice = true
+    }
     // Open at full height so the dense inspector shows as many rows as possible at once.
     val inspectorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val displaySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -801,6 +705,8 @@ fun ReaderScreen(
                 // pinned stylus fight over the same surface, and iOS gates it the same way).
                 annotationEnabled = !isPlaying,
                 onToggleAnnotate = readerVm::toggleAnnotationMode,
+                isPdf = isPdf,
+                onShowPdfNotice = { showPdfNotice = true },
             )
         },
         bottomBar = {
@@ -839,6 +745,7 @@ fun ReaderScreen(
             } else if (showSeekBar) {
                 TransportBar(
                     audioVm = audioVm,
+                    enabled = canPlayNow,
                     onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
                     onAnalyticsTransportNext = onAnalyticsTransportNext,
                     onAnalyticsSeek = onAnalyticsSeek,
@@ -846,7 +753,7 @@ fun ReaderScreen(
             }
         },
         floatingActionButton = {
-            if (!showSeekBar) PlaybackFab(audioVm, onAnalyticsSeek = onAnalyticsSeek)
+            if (!showSeekBar) PlaybackFab(audioVm, enabled = canPlayNow, onAnalyticsSeek = onAnalyticsSeek)
         },
         floatingActionButtonPosition = FabPosition.End,
     ) { padding ->
@@ -913,8 +820,49 @@ fun ReaderScreen(
                         annotation = annotationSurface,
                     )
                 }
+                is ReaderState.ReadyPdf -> when (layoutMode) {
+                    // Horizontal is not reachable for a PDF (Task 5 removed it from the offered modes for
+                    // this state), so it falls to the vertical surface below along with VERTICAL itself —
+                    // the same "everything else" fallback the plan calls for.
+                    ReaderLayoutMode.PAGE -> readerVm.pdfPageSource?.let { pdfSource ->
+                        PagedPdfScore(
+                            state = s,
+                            source = pdfSource,
+                            audioVm = audioVm,
+                            readerVm = readerVm,
+                            pageTapHintDismissed = pageTapHintDismissed,
+                            onDismissPageTapHint = onDismissPageTapHint,
+                            autoFollowEnabled = autoFollowEnabled,
+                            pageTurnButtonsVisible = pageTurnButtonsVisible,
+                            annotation = annotationSurface,
+                        )
+                    }
+                    else -> readerVm.pdfPageSource?.let { pdfSource ->
+                        PdfVerticalScore(
+                            state = s,
+                            source = pdfSource,
+                            audioVm = audioVm,
+                            readerVm = readerVm,
+                            bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
+                            annotation = annotationSurface,
+                            autoFollowEnabled = autoFollowEnabled,
+                        )
+                    }
+                }
             }
         }
+    }
+    if (showPdfNotice) {
+        // `Unavailable` is the only state that gets the "couldn't read this PDF" body; `Parsing` still gets the
+        // best-effort caveat, matching iOS's own `pdfPlaybackNoticeBodyKey`.
+        PdfPlaybackNoticeDialog(
+            unavailable = pdfPlayback is PdfPlaybackState.Unavailable,
+            onDismiss = { showPdfNotice = false },
+            onDontShowAgain = {
+                showPdfNotice = false
+                onDismissPdfPlaybackNotice()
+            },
+        )
     }
     if (showInspector) {
         val openingQuarterBpm by readerVm.openingQuarterBpm.collectAsStateWithLifecycle()
@@ -959,6 +907,7 @@ fun ReaderScreen(
             onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
+            capabilities = capabilities,
         )
     }
 }
@@ -1007,18 +956,32 @@ fun ReaderTopBar(
     /** Disabled while playback is active (parity w/ iOS: can't annotate while the score is playing). */
     annotationEnabled: Boolean = true,
     onToggleAnnotate: () -> Unit = {},
+    /** True while a fixed-layout PDF is open — shows the tappable "PDF" label beside the title. */
+    isPdf: Boolean = false,
+    /** Re-presents the PDF-playback caveat; invoked by the "PDF" label. */
+    onShowPdfNotice: () -> Unit = {},
 ) {
     TopAppBar(
         modifier = modifier,
         windowInsets = windowInsets,
         // Single-line title that ellipsizes when it doesn't fit, so a long score name never wraps the
-        // bar to two rows.
+        // bar to two rows. A PDF adds the brand label after the title, mirroring iOS's PDF badge: it is
+        // what keeps the playback caveat reachable once "Don't show again" has silenced the automatic
+        // presentation. Placed here rather than in `actions` so it reads as a property of THIS document
+        // rather than as another command, and so it never competes with the action icons for width.
         title = {
-            Text(
-                title.ifEmpty { "folino" },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title.ifEmpty { "folino" },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (isPdf) {
+                    Spacer(Modifier.width(8.dp))
+                    ReaderPdfLabel(onClick = onShowPdfNotice)
+                }
+            }
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
@@ -1056,6 +1019,57 @@ fun ReaderTopBar(
             }
         },
     )
+}
+
+/**
+ * The reader's "PDF" marker: the same outlined-chip label the library row uses for a fixed-layout item
+ * (`ScoreListScaffold.PdfLabel`), made tappable so it re-presents the PDF-playback caveat — the Android reading of
+ * iOS's tappable `PDFBadge`. The text is a brand literal and is intentionally not localized, matching the library's.
+ *
+ * Being reachable here is what makes the dialog's "Don't show again" safe to offer: the explanation of why playback
+ * on a PDF is approximate never becomes unreachable, it just stops interrupting — which is why the touch target
+ * matters more than the chip's ~28x16 dp suggests.
+ *
+ * The target is a real 48 dp box, not a hint: `defaultMinSize` fixes THIS `Box`'s measured size at Material's
+ * minimum, and `clickable` is applied inside it, so the clickable node's own hit bounds are the 48 dp box. (An
+ * earlier revision put `Modifier.minimumInteractiveComponentSize()` first on the `Text` instead. That is a
+ * layout-only modifier — it reports `max(child, 48dp)` and centers the child, leaving the inner `clickable` still
+ * bound to the chip. `IconButton` gets a real target from that position only because it pairs it with an explicit
+ * `.size(...)` afterwards, which is the half that does the work.)
+ *
+ * The chip's own `border`/`padding` stay on the inner `Text`, so it is drawn and sized exactly as before — but the
+ * LABEL is now 48 dp wide in the title `Row`, and that is not free. It is the unweighted child, measured first, so a
+ * long score title ellipsizes about 20 dp earlier than it did, and the visible gap between title and chip grows from
+ * the 8 dp `Spacer` to roughly 18 dp as the chip centers in its box. Nothing moves vertically (48 dp fits inside
+ * `TopAppBar`'s 64 dp container) and nothing clips. That trade is deliberate: a reachable escape hatch after "Don't
+ * show again" is worth 20 dp of title. The ripple is circular and fills the target, matching the `IconButton`s
+ * beside it.
+ */
+@Composable
+private fun ReaderPdfLabel(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            // Rounded rect, not CircleShape: the box is only 48dp at the DEFAULT font scale, while the chip
+            // inside it grows with `sp`. A circle's radius stays 24dp, so past roughly fontScale 1.4 the
+            // chip's half-diagonal exceeds it and the ripple clip shaves the ends off its own border. A
+            // corner radius contains the chip at every scale.
+            .clip(RoundedCornerShape(12.dp))
+            // Without this TalkBack announces "PDF" and a click action but never that it is a button — the
+            // neighboring IconButtons all carry the role, and this label is the only way back to the caveat
+            // once "Don't show again" has been used.
+            .clickable(onClick = onClick, role = Role.Button),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "PDF",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        )
+    }
 }
 
 @Composable
@@ -1415,7 +1429,7 @@ private fun ReadyScore(
                         val wetWindowTopPx = viewport.offsetY.roundToInt()
                         val wetWindowHeightPx = viewportSize.height.coerceAtLeast(0)
                         AnnotationLayers(
-                            scoreHandle = handle,
+                            resolveDisplayTransforms = remember(handle) { musicalDisplayTransformsResolver(handle) },
                             annotation = an,
                             pxPerMM = fitPxPerMM,
                             scale = scale,
@@ -1442,9 +1456,45 @@ private fun ReadyScore(
     }
 }
 
+/**
+ * Builds the musical [AnnotationDryOverlay]/[AnnotationLayers] `resolveDisplayTransforms` lambda for
+ * [scoreHandle]: the ssm ref-point round trip (`SheetMusicJNI.nativeAnchorReferencePoint`) followed by
+ * `ReaderAnnotationJNI.displayTransforms`, exactly what this composable's own `computePlacement` did
+ * inline before Task 11 generalized the seam to also serve a PDF page-anchor resolver (see
+ * [AnnotationDryOverlay]'s parameter doc). Shared by `ReadyScore` and `PagedScore` — both `remember` the
+ * result keyed on their own `scoreHandle`, so the lambda's identity (and so the dry overlay's
+ * `LaunchedEffect`) only changes when the handle itself does, never on a live pinch frame.
+ */
+internal fun musicalDisplayTransformsResolver(
+    scoreHandle: Long,
+): (List<DrawingAnchorWire>) -> ByteArray = { drawings ->
+    val identities = drawings.map {
+        ResolvedAnchorWire(
+            it.measureIndex, it.tickInMeasure, it.partIndex, it.staffIndexInPart, it.dxSp, it.verticalOffsetSp,
+        )
+    }
+    val refBytes = SheetMusicJNI.nativeAnchorReferencePoint(
+        scoreHandle,
+        encodeWireArray(identities, ResolvedAnchorWireCodec::encodePayload),
+    )
+    if (refBytes.isEmpty()) {
+        ByteArray(0)
+    } else {
+        ReaderAnnotationJNI.displayTransforms(
+            encodeWireArray(drawings, DrawingAnchorWireCodec::encodePayload),
+            refBytes,
+        )
+    }
+}
+
 @Composable
 private fun TransportBar(
     audioVm: ReaderAudioViewModel,
+    /** Whether this session may play at all right now (`ReaderCapabilities.canPlayNow`, over JNI) — a
+     * score always, a PDF only once its background OMR parse succeeds. AND'd into [isPrepared] below so
+     * a PDF's transport never lights up ahead of a real playable score existing, even if the engine
+     * somehow reports a non-STOPPED playback state. */
+    enabled: Boolean = true,
     onAnalyticsTransportPrevious: () -> Unit = {},
     onAnalyticsTransportNext: () -> Unit = {},
     onAnalyticsSeek: () -> Unit = {},
@@ -1457,7 +1507,7 @@ private fun TransportBar(
     val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
     val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
 
-    val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
+    val isPrepared = enabled && playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
     Column(
         Modifier
@@ -1913,6 +1963,8 @@ private fun RehearsalMarkPill(
 @Composable
 fun PlaybackFab(
     audioVm: ReaderAudioViewModel,
+    /** See [TransportBar]'s matching parameter — same gate, same reason. */
+    enabled: Boolean = true,
     onAnalyticsSeek: () -> Unit = {},
 ) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
@@ -1920,7 +1972,7 @@ fun PlaybackFab(
     val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
     val aMarked by audioVm.repeatPendingA.collectAsStateWithLifecycle()
     val bMarked by audioVm.repeatPendingB.collectAsStateWithLifecycle()
-    val isPrepared = playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
+    val isPrepared = enabled && playback != PlaybackState.STOPPED && playback != PlaybackState.EXPORTING
 
     // FABs have no `enabled` param, so we dim their colors when not prepared to mirror
     // [TransportBar]'s `enabled = isPrepared` affordance (Material disabled-color convention).
@@ -2277,7 +2329,7 @@ internal fun HorizontalScore(
                         val wetWindowHeightPx =
                             if (needsVScroll) viewportSize.height.coerceAtLeast(0) else contentHeightPx.toInt()
                         AnnotationLayers(
-                            scoreHandle = handle,
+                            resolveDisplayTransforms = remember(handle) { musicalDisplayTransformsResolver(handle) },
                             annotation = an,
                             pxPerMM = fitPxPerMM,
                             scale = scale,

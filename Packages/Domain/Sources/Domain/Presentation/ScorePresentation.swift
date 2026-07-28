@@ -57,4 +57,19 @@ public enum ScorePresentation {
             composer: composer(from: score),
         )
     }
+
+    /// PDF counterpart of `displayFields(sourceFilename:score:)`. A PDF has no decoded notation at import time
+    /// (that happens later, in the Reader, via OMR), so subtitle and composer are left nil.
+    ///
+    /// The title comes from the file name, NOT the document's `/Title` attribute. `/Title` looks like the better
+    /// signal and isn't: exporters bake their own internal project name into it, so a file the user filed away as
+    /// `spring-song.pdf` arrives titled `アイデア#0131`. The file name is what the user chose. Both platforms go
+    /// through here so neither can quietly reinstate the `/Title` preference for itself.
+    public static func displayFields(sourceFilename: String) -> ScoreDisplayFields {
+        ScoreDisplayFields(
+            title: title(fromFilename: sourceFilename),
+            subtitle: nil,
+            composer: nil,
+        )
+    }
 }

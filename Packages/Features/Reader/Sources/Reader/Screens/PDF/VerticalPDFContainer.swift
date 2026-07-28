@@ -1,6 +1,7 @@
 import Domain
 import PDFKit
 import PencilKit
+import ReaderAnnotationCore
 import SheetMusicCore
 import SwiftUI
 
@@ -241,16 +242,16 @@ struct VerticalPDFContainer: View {
     }
 
     /// The cursor's rect in UNZOOMED content space — its page's stacked position plus its in-page rect — or `nil`.
+    /// Projected through the shared `PDFCursorProjection` (the same entry point Android reaches over JNI), so the
+    /// side-car's page width — not an assumed 1:1 with PDFKit's mediaBox — sets the scale.
     private func cursorContentRect(for cursor: ScoreCursor, sizes: [CGSize]) -> CGRect? {
         guard let rect = viewModel.pdfCursorRect(for: cursor) else { return nil }
         let frames = pageFrames(sizes: sizes)
-        guard frames.indices.contains(rect.pageIndex) else { return nil }
-        let pageFrame = frames[rect.pageIndex]
-        return CGRect(
-            x: pageFrame.minX + rect.rect.minX,
-            y: pageFrame.minY + rect.rect.minY,
-            width: rect.rect.width,
-            height: rect.rect.height,
+        guard frames.indices.contains(rect.pageIndex),
+              let pageWidthPt = viewModel.pdfPlaybackData?.geometry.pageSizes[rect.pageIndex]?.width
+        else { return nil }
+        return PDFCursorProjection.displayRect(
+            cursorRect: rect.rect, geometryPageWidthPt: pageWidthPt, pageFrame: frames[rect.pageIndex],
         )
     }
 }
@@ -324,13 +325,21 @@ private struct VerticalPDFSurface: View {
     }
 
     /// The cursor's rect in this surface's unzoomed content space, matching `pageStack`'s centered VStack layout.
+    /// The stacked page frame is this surface's own layout; placing the cursor INTO that frame is the shared
+    /// `PDFCursorProjection` both platforms call (Android reaches it over JNI).
     private func contentRect(for cursor: PDFCursorRect, contentWidth: CGFloat) -> CGRect? {
-        guard pageSizes.indices.contains(cursor.pageIndex) else { return nil }
+        guard pageSizes.indices.contains(cursor.pageIndex),
+              let pageWidthPt = viewModel.pdfPlaybackData?.geometry.pageSizes[cursor.pageIndex]?.width
+        else { return nil }
         var y: CGFloat = 0
         for (index, size) in pageSizes.enumerated() {
             if index == cursor.pageIndex {
-                let x = (contentWidth - size.width) / 2 + cursor.rect.minX
-                return CGRect(x: x, y: y + cursor.rect.minY, width: cursor.rect.width, height: cursor.rect.height)
+                let frame = CGRect(
+                    x: (contentWidth - size.width) / 2, y: y, width: size.width, height: size.height,
+                )
+                return PDFCursorProjection.displayRect(
+                    cursorRect: cursor.rect, geometryPageWidthPt: pageWidthPt, pageFrame: frame,
+                )
             }
             y += size.height + pageGap
         }
