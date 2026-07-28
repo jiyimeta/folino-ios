@@ -47,9 +47,7 @@ packages:
     from: 7.0.0
   swift-sheet-music:
     url: https://github.com/jiyimeta/swift-sheet-music.git
-    # Pinned by revision, not version: the PDF playable-element count this branch needs is on main and
-    # deliberately untagged until PDF import is verified end to end and released with the rest of the work.
-    revision: fbde63fd
+    exactVersion: 1.6.0
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
     exactVersion: 0.63.2
