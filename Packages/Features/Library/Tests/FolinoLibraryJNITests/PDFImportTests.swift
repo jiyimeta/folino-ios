@@ -170,4 +170,77 @@ struct PDFImportTests {
         let row = try #require(store.scores.first)
         #expect(row.isPdf == false)
     }
+
+    // MARK: Share / open-with (importShared)
+    //
+    // `importShared` goes through `AndroidShareImporter`, which used to keep its OWN copy of the import body
+    // hardcoded to `MSCZReader.parse` + a `.mscz` filename. Once `application/pdf` reached the share
+    // intent-filters and the acceptance gate became Domain's `ShareImportPolicy`, every shared PDF was accepted,
+    // staged, and then skipped as parse_failed. Both entry points now run the same `SingleFileImport` body.
+    //
+    // `importShared` blocks its caller on a semaphore while an inner `Task` runs the coordinator (its documented
+    // precondition is a Kotlin background thread); the adapters have no real suspension points, so calling it
+    // straight from a test body cannot deadlock.
+
+    @Test func `sharing a PDF lands a live pdf record`() throws {
+        let backend = FakePDFImportStore()
+        let store = makeStore(backend)
+
+        let result = try store.importShared([fixtureURL().path], ["sample.pdf"], 0, "", "", false)
+
+        #expect(result.importedCount == 1)
+        #expect(result.skippedCount == 0)
+        #expect(result.analyticsImportedFormats == ["pdf"])
+        let record = try #require(backend.records.first)
+        #expect(record.localFileName.hasSuffix(".pdf"))
+        // The document's own title, not the filename — the same rule the picker applies.
+        #expect(record.title == "Sample Title")
+        #expect(store.scores.first?.isPdf == true)
+    }
+
+    /// The MuseScore share path must be unchanged by the refactor.
+    @Test func `sharing an mscz still lands an mscz record`() throws {
+        let backend = FakePDFImportStore()
+        let store = makeStore(backend)
+        let url = try #require(Bundle.module.url(forResource: "sample", withExtension: "mscz"))
+
+        let result = store.importShared([url.path], ["sample.mscz"], 0, "", "", false)
+
+        #expect(result.importedCount == 1)
+        let record = try #require(backend.records.first)
+        #expect(record.localFileName.hasSuffix(".mscz"))
+        #expect(store.scores.first?.isPdf == false)
+    }
+
+    @Test func `sharing unreadable PDF bytes is skipped, not crashed`() throws {
+        let backend = FakePDFImportStore()
+        let store = makeStore(backend)
+        let junk = FileManager.default.temporaryDirectory.appendingPathComponent("broken-\(UUID()).pdf")
+        try Data("not a pdf".utf8).write(to: junk)
+        defer { try? FileManager.default.removeItem(at: junk) }
+
+        let result = store.importShared([junk.path], ["broken.pdf"], 0, "", "", false)
+
+        #expect(result.importedCount == 0)
+        #expect(result.skippedCount == 1)
+        #expect(result.analyticsFailedFormats == ["pdf"])
+        #expect(result.analyticsFailedReasons == ["parse_failed"])
+        #expect(backend.records.isEmpty)
+    }
+
+    /// The share path derives format and title from the ORIGINAL display name, which is also what the analytics
+    /// split already treats as authoritative — a staged copy whose own extension went missing must still import
+    /// as a PDF.
+    @Test func `sharing resolves the format from the original name`() throws {
+        let backend = FakePDFImportStore()
+        let store = makeStore(backend)
+        let staged = FileManager.default.temporaryDirectory.appendingPathComponent("staged-\(UUID())")
+        try Data(contentsOf: fixtureURL()).write(to: staged)
+        defer { try? FileManager.default.removeItem(at: staged) }
+
+        let result = store.importShared([staged.path], ["sample.pdf"], 0, "", "", false)
+
+        #expect(result.importedCount == 1)
+        #expect(backend.records.first?.localFileName.hasSuffix(".pdf") == true)
+    }
 }
