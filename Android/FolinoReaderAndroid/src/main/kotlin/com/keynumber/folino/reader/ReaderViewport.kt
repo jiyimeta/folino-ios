@@ -191,6 +191,19 @@ internal class ReaderViewportState(
     /** Claim both axes for the reader — called when a finger lands, so any programmatic motion stands down. */
     fun interruptMotion() {
         cancelFling()
+        claimAxes()
+    }
+
+    /**
+     * Take ownership of both axes, standing down whatever programmatic motion is running.
+     *
+     * EVERY user-input path calls this, not just the first down. Claiming once per gesture is not enough: an
+     * animation that STARTS mid-gesture captures a fresh generation and outranks the finger for the rest of
+     * its trajectory. Auto-follow did exactly that — its effect used to be re-keyed by the zoom, so every
+     * frame of a pinch restarted it and launched a new re-pin. `ScrollState`'s `MutatorMutex` held user-input
+     * priority for the whole gesture rather than only its first frame, and this is what stands in for that.
+     */
+    private fun claimAxes() {
         motionGenerationX++
         motionGenerationY++
     }
@@ -218,6 +231,7 @@ internal class ReaderViewportState(
 
     /** Pan by a finger delta. The content follows the finger, so the offset moves the other way. */
     fun applyPan(pan: Offset) {
+        claimAxes()
         offsetX = clampX(offsetX - pan.x)
         offsetY = clampY(offsetY - pan.y)
     }
@@ -231,6 +245,7 @@ internal class ReaderViewportState(
         val newScale = coerceReaderScale(scale * zoomFactor)
         val ratio = newScale / scale
         if (ratio == 1f) return
+        claimAxes()
         val focalX = focalAdjustedOffset(offsetX, centroid.x, ratio)
         val focalY = focalAdjustedOffset(offsetY, centroid.y, ratio, geometry.leadingPadYPx)
         scale = newScale

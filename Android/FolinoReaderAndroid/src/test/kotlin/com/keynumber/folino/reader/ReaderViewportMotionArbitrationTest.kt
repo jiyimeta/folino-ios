@@ -1,6 +1,7 @@
 package com.keynumber.folino.reader
 
 import androidx.compose.runtime.BroadcastFrameClock
+import androidx.compose.ui.geometry.Offset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -88,6 +89,47 @@ class ReaderViewportMotionArbitrationTest {
         clock.pump(frames = 10, startFrame = 6)
 
         assertEquals("the re-pin overwrote the reader's own position", 120f, s.offsetY, 0.001f)
+        job.cancel()
+    }
+
+    @Test fun aPanStandsDownAnAnimationThatStartedMidGesture() = runBlocking {
+        val s = state()
+        val clock = BroadcastFrameClock()
+        // The gesture is already under way — the loop claimed the axes when the finger landed.
+        s.interruptMotion()
+        // Auto-follow then restarts DURING the gesture and re-pins with a fresh generation. Claiming the axes
+        // once, at the first down, is not enough: whatever starts after that claim outranks the finger for the
+        // rest of its trajectory. `ScrollState`'s `MutatorMutex` held user-input priority for the whole
+        // gesture, not just its first frame.
+        val job = launch(clock + Dispatchers.Unconfined) { s.animateOffsetYTo(3000f) }
+        clock.pump(frames = 6)
+        assertUnderWay(s.offsetY, 3000f)
+
+        // The finger is still down and still moving. It must win.
+        s.applyPan(Offset(0f, -120f))
+        val whereTheFingerPutIt = s.offsetY
+        clock.pump(frames = 10, startFrame = 6)
+
+        assertEquals("the re-pin wrote over the finger", whereTheFingerPutIt, s.offsetY, 0.001f)
+        job.cancel()
+    }
+
+    @Test fun aPinchStandsDownAnAnimationThatStartedMidGesture() = runBlocking {
+        val s = state()
+        val clock = BroadcastFrameClock()
+        s.interruptMotion()
+        val job = launch(clock + Dispatchers.Unconfined) { s.animateOffsetYTo(3000f) }
+        clock.pump(frames = 6)
+        assertUnderWay(s.offsetY, 3000f)
+
+        // A pinch moves the offsets too, through the focal correction, so it has to claim the axes for the
+        // same reason a pan does. This is the horizontal surface's reported bug: the auto-follow effect was
+        // keyed on the zoom, so every frame of a fast pinch restarted it and launched a fresh re-pin.
+        s.applyZoom(zoomFactor = 1.5f, centroid = Offset(500f, 400f))
+        val whereThePinchPutIt = s.offsetY
+        clock.pump(frames = 10, startFrame = 6)
+
+        assertEquals("the re-pin wrote over the pinch", whereThePinchPutIt, s.offsetY, 0.001f)
         job.cancel()
     }
 
