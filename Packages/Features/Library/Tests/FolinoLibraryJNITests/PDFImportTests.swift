@@ -1,3 +1,4 @@
+import CryptoKit
 @testable import FolinoLibraryJNI
 import Foundation
 import Testing
@@ -38,8 +39,12 @@ private final class FakePDFImportStore: LibraryStore {
         copiedFiles.append((sourcePath, localFileName))
     }
 
-    func sha256(path _: String) -> String {
-        ""
+    /// A real content hash, not `""`. The share importer's duplicate check is guarded on `!hash.isEmpty`, so a
+    /// fake that returns nothing silently disables dedup and makes every share look like a first import — the
+    /// branch would then be untestable rather than merely untested.
+    func sha256(path: String) -> String {
+        guard let data = FileManager.default.contents(atPath: path) else { return "" }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     func removeFile(localFileName _: String) {}
@@ -242,5 +247,26 @@ struct PDFImportTests {
 
         #expect(result.importedCount == 1)
         #expect(backend.records.first?.localFileName.hasSuffix(".pdf") == true)
+    }
+
+    /// Dedup-by-content-hash runs BEFORE the extracted single-file import, so the refactor could not have broken
+    /// it — which is exactly why it needs a test: it is the one branch of the share path the cases above never
+    /// reach, and "silently skipped" and "silently failed" look identical to a user sharing the same PDF twice.
+    @Test func `sharing a PDF already in the library is skipped as a duplicate`() throws {
+        let backend = FakePDFImportStore()
+        let store = makeStore(backend)
+
+        let first = try store.importShared([fixtureURL().path], ["sample.pdf"], 0, "", "", false)
+        #expect(first.importedCount == 1)
+
+        let second = try store.importShared([fixtureURL().path], ["sample.pdf"], 0, "", "", false)
+
+        #expect(second.importedCount == 0)
+        #expect(second.skippedCount == 1)
+        // A duplicate is not a failure — iOS logs it under neither the success nor the failure event, so both
+        // analytics lists must stay empty rather than reporting a phantom import error.
+        #expect(second.analyticsFailedReasons.isEmpty)
+        #expect(second.analyticsImportedFormats.isEmpty)
+        #expect(backend.records.count == 1)
     }
 }
