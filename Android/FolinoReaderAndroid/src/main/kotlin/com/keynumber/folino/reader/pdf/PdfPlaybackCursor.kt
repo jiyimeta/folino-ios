@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import com.keynumber.folino.reader.PageFrameWire
 import com.keynumber.folino.reader.PageFrameWireCodec
@@ -16,9 +17,12 @@ import io.github.jiyimeta.sheetmusic.PdfRectWireCodec
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
 import org.swift.swiftkit.core.SwiftMemoryManagement
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 
 /**
@@ -68,6 +72,12 @@ internal class PdfCursorProjector(
     fun project(cursor: ScoreCursor, pageFrames: List<PageFrameWire>): PdfCursorWorldRect? {
         val rect = cursorRect(cursor) ?: return null
         val frame = pageFrames.getOrNull(rect.pageIndex) ?: return null
+        // A page that isn't laid out this frame — paged mode fills every off-screen page's slot with a zero-width
+        // placeholder, and in that mode EVERY composed page but one is off-screen, so without this the common case
+        // is a native round trip whose only outcome is a decline. A guard on an input that cannot produce a result,
+        // not a second copy of the projection: the placement rule itself still lives entirely in shared Swift, and
+        // `PDFCursorProjection.displayRect` keeps its own identical guard as the authority.
+        if (frame.width <= 0.0) return null
         val widthPt = geometryPageWidthsPt.getOrElse(rect.pageIndex) { 0.0 }
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         val placedBytes = SwiftJavaJNI.nativePdfCursorDisplayRect(
@@ -111,9 +121,18 @@ internal class PdfCursorProjector(
 
 /**
  * A [PdfCursorProjector] for [geometryHandle] (the `PdfScoreHandle.geometryHandle` a successful background parse
- * published), or `null` while the PDF isn't playable — the surfaces draw no cursor and run no auto-follow then.
+ * published), or `null` while the PDF isn't playable or its setup hasn't landed yet — the surfaces draw no cursor and
+ * run no auto-follow then. The value flips from `null` to a projector exactly once per document, so reading it in a
+ * surface's body costs one recomposition, like `pdfPlayback` itself.
  *
- * Also runs the one-per-document sanity check the cursor's correctness rests on: the side-car's page widths and
+ * Setup runs in a [produceState] on [Dispatchers.Default], NOT inside a `remember` calculation, for two reasons.
+ * It performs one JNI call per page (the page-width check below), which on a 200-page document is 200 synchronous
+ * native hops — not something to put on a composition pass, let alone the main thread. And it REPORTS, which a
+ * `remember` block must never do: Compose is free to run and discard a composition, and a `remember` re-runs for
+ * every surface that mounts, so a layout-mode switch or a rotation would each file another report for the same
+ * document.
+ *
+ * The check itself is the sanity check the cursor's correctness rests on: the side-car's page widths and
  * `PdfRenderer`'s ([renderedPageWidthsPt], the same values `ReaderState.ReadyPdf` lays the pages out from) are both
  * PDF points read from the same file, so they must agree. A disagreement means every cursor on that page is about to
  * be scaled by the wrong factor — reported once as a non-fatal, then drawn anyway, because a cursor a few percent off
@@ -124,21 +143,52 @@ internal class PdfCursorProjector(
 internal fun rememberPdfCursorProjector(
     geometryHandle: Long?,
     renderedPageWidthsPt: List<Double>,
-): PdfCursorProjector? = remember(geometryHandle, renderedPageWidthsPt) {
-    if (geometryHandle == null) return@remember null
+): PdfCursorProjector? {
+    val projector = produceState<PdfCursorProjector?>(null, geometryHandle, renderedPageWidthsPt) {
+        value = if (geometryHandle == null) {
+            null
+        } else {
+            withContext(Dispatchers.Default) { buildPdfCursorProjector(geometryHandle, renderedPageWidthsPt) }
+        }
+    }
+    return projector.value
+}
+
+/**
+ * The geometry handle whose page widths have already been checked-and-reported, so the report is once per DOCUMENT
+ * rather than once per surface mounting (a layout-mode switch, a rotation, or a discarded composition each build a
+ * fresh projector, and all of them share this).
+ *
+ * `getAndSet` makes the claim atomic, so two surfaces mounting at once can't both report. The one hole is a native
+ * handle value reused for a LATER document after this one was released — that document's check would be skipped. It
+ * costs a diagnostic, never correctness, and only in a case that requires the allocator to hand back the exact same
+ * `Long`; not worth a stronger identity than the handle itself.
+ */
+private val reportedPageWidthCheck = AtomicLong(0L)
+
+/**
+ * Fetch the side-car's page sizes, run the once-per-document page-width check, and build the projector. Off-main —
+ * see [rememberPdfCursorProjector]'s doc for why none of this may happen during composition. `null` when the
+ * side-car has no page sizes for this handle at all (nothing could be placed against it).
+ */
+private fun buildPdfCursorProjector(geometryHandle: Long, renderedPageWidthsPt: List<Double>): PdfCursorProjector? {
+    // Claimed once per document, up front, so BOTH reporting paths below (the decode failure and the width
+    // disagreement) are gated by the same claim — a second surface mounting for the same document reports neither.
+    val shouldReport = reportedPageWidthCheck.getAndSet(geometryHandle) != geometryHandle
+
     val sizesBytes = SheetMusicJNI.nativePdfPageSizes(geometryHandle)
-    if (sizesBytes.isEmpty()) return@remember null
+    if (sizesBytes.isEmpty()) return null
     val sizes = try {
         PdfPageSizesWireCodec.decode(sizesBytes)
     } catch (e: Exception) {
-        ReaderDiagnostics.recordNonFatal(e)
-        return@remember null
+        if (shouldReport) ReaderDiagnostics.recordNonFatal(e)
+        return null
     }
     // A trailing run of pages the importer never recorded is simply not appended, so this array is padded out to the
     // document's real page count with the side-car's own "unknown" encoding (0.0) rather than being indexed short.
     val widths = DoubleArray(renderedPageWidthsPt.size) { sizes.widths.getOrElse(it) { 0.0 } }
-    reportPageWidthDisagreement(renderedPageWidthsPt, widths)
-    PdfCursorProjector(geometryHandle, widths)
+    if (shouldReport) reportPageWidthDisagreement(renderedPageWidthsPt, widths)
+    return PdfCursorProjector(geometryHandle, widths)
 }
 
 /**

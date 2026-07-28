@@ -27,17 +27,24 @@ object ReaderDiagnostics {
         this.sink = sink
     }
 
-    /** Record a non-fatal. Never throws — a diagnostics failure must not take the reader down with it. */
+    /**
+     * Record a non-fatal. Never throws — a diagnostics failure must not take the reader down with it.
+     *
+     * The fallback path is `System.err`, not another [Log] call: `android.util.Log` is a stub in a plain JVM unit
+     * test and throws `RuntimeException("Method w in android.util.Log not mocked")`, so a `Log`-based fallback would
+     * break exactly the promise this doc makes — including for the no-sink branch, which is the one unit tests
+     * always take.
+     */
     fun recordNonFatal(throwable: Throwable) {
         val installed = sink
-        if (installed == null) {
-            Log.w(TAG, "non-fatal (no crash-reporting sink installed)", throwable)
-            return
-        }
         try {
-            installed(throwable)
+            if (installed != null) {
+                installed(throwable)
+            } else {
+                Log.w(TAG, "non-fatal (no crash-reporting sink installed)", throwable)
+            }
         } catch (t: Throwable) {
-            Log.w(TAG, "non-fatal sink failed", t)
+            System.err.println("[$TAG] non-fatal reporting failed (${t}); original: $throwable")
         }
     }
 }

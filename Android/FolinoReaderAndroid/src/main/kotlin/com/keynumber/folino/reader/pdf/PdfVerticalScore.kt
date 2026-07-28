@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -368,20 +369,27 @@ internal fun PdfVerticalScore(
     // manual-viewport suspension for the PLAYING re-pin only). The live zoom is read from `scaleState` INSIDE the
     // collector rather than being a key: a state read from a coroutine subscribes to nothing, so a pinch never
     // restarts this effect (unlike `ReadyScore`, which keys on `scale` and does restart).
+    //
+    // Driven off `cursorRect` — the SAME projection the `Canvas` below draws — rather than re-resolving
+    // `currentCursor` itself. Both wanted the identical rect for the identical tick against the identical page
+    // frames, so projecting twice was two wasted native hops per tick (~30/s) on the main dispatcher. Reusing the
+    // published `State` is reuse, not a second implementation: only the LOOKAHEAD anchor still needs its own
+    // projection, because it is a different cursor and nothing else resolves it.
     LaunchedEffect(cursorProjector, pageFramesRaster, autoFollowEnabled, viewportSize) {
         val projector = cursorProjector ?: return@LaunchedEffect
         if (viewportSize.height <= 0 || viewportSize.width <= 0) return@LaunchedEffect
         if (!autoFollowEnabled) return@LaunchedEffect
-        combine(audioVm.currentCursor, audioVm.scrollAnchorCursor) { real, anchor -> real to anchor }
-            .collectLatest { (real, anchor) ->
-                if (real == null) return@collectLatest
+        combine(snapshotFlow { cursorRect.value }, audioVm.scrollAnchorCursor) { rect, anchor -> rect to anchor }
+            .collectLatest { (realRect, anchor) ->
+                // Null covers both "no live cursor" and "the cursor can't be placed on this layout" — either way
+                // there is nothing to bring into view.
+                if (realRect == null) return@collectLatest
                 val isPlaying = anchor != null
                 if (isPlaying &&
                     !shouldAutoFollow(autoFollowEnabled, isPlaying, audioVm.isPlaybackFollowSuspended.value)
                 ) {
                     return@collectLatest
                 }
-                val realRect = projector.project(real, pageFramesRaster) ?: return@collectLatest
                 val zoom = scaleState.floatValue / rasterScaleState.floatValue
                 val span = PdfCursorFollow.verticalSpan(realRect.top, realRect.height, zoom, vPadPx)
 
