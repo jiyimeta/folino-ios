@@ -403,9 +403,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * reads as ruled staff lines with no decodable noteheads — the importer still reconstructs the full
      * measure/staff grid, just with nothing to sound). `PdfScoreHandle.load` returning non-null only means
      * the OMR pipeline produced a structurally complete `Score`, not that any of it is audible, so
-     * [PdfScoreHandle.playableElementCount] — swift-sheet-music's own count of the chord/rest elements the
-     * importer actually reconstructed, computed on the Swift side of the parse where the `Score` already
-     * is — is checked via [FolinoReaderJNI.nativeIsPlayableElementCount] BEFORE this parse is ever
+     * [PdfScoreHandle.playableElementCount] — swift-sheet-music's own count of the chords carrying at least
+     * one note that the importer actually reconstructed, computed on the Swift side of the parse where the
+     * `Score` already is — is checked via [FolinoReaderJNI.nativeIsPlayableElementCount] BEFORE this parse is ever
      * published. That native call is pure delegation to `Domain.ReaderCapabilities.isPlayableElementCount`
      * — the SAME threshold `Score.hasPlayableContent` applies to iOS's in-process `Score` — so Kotlin never
      * hardcodes its own `count > 0`; the one place that decides "worth playing" is Domain. A count that

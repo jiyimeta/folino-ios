@@ -53,12 +53,11 @@ public func nativeCanPlayNow(canPlay: Bool, isPdfPlaybackReady: Bool) -> Bool {
 }
 
 /// Whether a PDF's background OMR parse yielded enough to call itself playable, given
-/// `PdfParseResultWire.playableElementCount` — swift-sheet-music's own count of the chord/rest elements
-/// the importer reconstructed across every staff and voice, computed independently there since Android
-/// never materializes a `Score` locally. That count isn't defined identically to `Score
-/// .playableElementCount` below (which counts only chords with at least one note); the importer never
-/// synthesizes rest-only content without real notes anchoring it, so in practice both counts agree on
-/// zero-vs-nonzero for anything the importer can produce. Pure delegation to
+/// `PdfParseResultWire.playableElementCount` — swift-sheet-music's own count of the chords carrying at
+/// least one note that the importer reconstructed across every staff and voice, computed independently
+/// there since Android never materializes a `Score` locally. It applies the same predicate as
+/// `Score.playableElementCount`, so the two agree exactly rather than merely on zero-vs-nonzero. Pure
+/// delegation to
 /// `Domain.ReaderCapabilities.isPlayableElementCount(_:)` — the SAME threshold `Score.hasPlayableContent`
 /// applies on iOS — so Kotlin never hardcodes its own `count > 0`; the one place that decides "worth
 /// playing" is Domain.

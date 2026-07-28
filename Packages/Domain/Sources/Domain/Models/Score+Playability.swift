@@ -9,11 +9,10 @@ extension Score {
     /// Android's parse, as `PdfParseResultWire.playableElementCount` — Android never materializes a
     /// `Score` locally, so it crosses that raw count over the JNI boundary instead and asks
     /// `ReaderCapabilities.isPlayableElementCount(_:)` (via `nativeIsPlayableElementCount`) the same
-    /// question `hasPlayableContent` asks below. The two counts aren't defined bit-for-bit identically
-    /// (ssm's counts every chord/rest voice element reconstructed, not just non-empty ones), but the
-    /// importer never synthesizes rest-only content without real notes anchoring it, so both counts agree
-    /// on zero-vs-nonzero for anything it can actually produce — which is the only thing the shared
-    /// threshold below cares about.
+    /// question `hasPlayableContent` asks below. Both apply the same predicate — a chord carrying at
+    /// least one note — so the two counts agree exactly, not merely on zero-vs-nonzero. Keep them that
+    /// way: ssm counted voice elements wholesale at first, which made a PDF whose clefs classified but
+    /// whose noteheads did not report a non-zero count and enable a transport with nothing to sound.
     ///
     /// A full traversal, not an early-exit check — deliberately, since the count itself (not just
     /// whether it's nonzero) is the value that needs to cross to Android. Still a single pass with no

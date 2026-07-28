@@ -39,6 +39,7 @@ struct ReaderCapabilitiesTests {
 
     @Test func `any positive playable element count is playable`() {
         #expect(ReaderCapabilities.isPlayableElementCount(1))
-        #expect(ReaderCapabilities.isPlayableElementCount(4980))
+        // 3788 is the measured count for a real MuseScore-CLI PDF export through the Android decode path.
+        #expect(ReaderCapabilities.isPlayableElementCount(3788))
     }
 }
