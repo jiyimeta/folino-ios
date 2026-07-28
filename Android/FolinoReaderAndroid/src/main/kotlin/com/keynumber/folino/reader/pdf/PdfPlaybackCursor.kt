@@ -159,10 +159,13 @@ internal fun rememberPdfCursorProjector(
  * rather than once per surface mounting (a layout-mode switch, a rotation, or a discarded composition each build a
  * fresh projector, and all of them share this).
  *
- * `getAndSet` makes the claim atomic, so two surfaces mounting at once can't both report. The one hole is a native
- * handle value reused for a LATER document after this one was released — that document's check would be skipped. It
- * costs a diagnostic, never correctness, and only in a case that requires the allocator to hand back the exact same
- * `Long`; not worth a stronger identity than the handle itself.
+ * `getAndSet` makes the claim atomic, so two surfaces mounting at once can't both report — the loser reads back the
+ * handle it was about to claim and stays quiet. The handle is a sufficient identity here because ssm's `HandleTable`
+ * allocates monotonically and never recycles a released value, so a later document can never inherit a claim.
+ *
+ * This is one slot, not a set: it means "the last document checked", so alternating between two PDFs, or closing and
+ * reopening one, files a fresh report each time. That is the intended reading of "once per document" for a
+ * diagnostic — it bounds the per-open reports at one, which is what the noise this guards against was.
  */
 private val reportedPageWidthCheck = AtomicLong(0L)
 
