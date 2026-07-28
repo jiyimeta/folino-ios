@@ -521,9 +521,9 @@ private fun PagedPdfPage(
     } else {
         0
     }
-    // Sizes the page's `Modifier.size` and the actual `PdfPageSource.bitmap` request — from the raster
-    // scale only, never the live pinch scale — so a pinch frame neither re-rasterizes nor relays out this
-    // page; see the class doc.
+    // Sizes the page's `Modifier.size` and (via `bitmapWidthPx` below) the actual `PdfPageSource.bitmap`
+    // request — from the raster scale only, never the live pinch scale — so a pinch frame neither
+    // re-rasterizes nor relays out this page; see the class doc.
     val rasterWidthPx = if (fitWidthPx > 0) PagedPdfLayout.renderWidthPx(fitWidthPx, rasterScaleState.floatValue) else 0
     val rasterHeightPx = if (rasterWidthPx > 0) {
         PagedPdfLayout.heightForWidthPx(rasterWidthPx, pageWidthPt, pageHeightPt)
@@ -531,13 +531,18 @@ private fun PagedPdfPage(
         0
     }
 
+    // The width actually RASTERIZED, which past the zoom where this page's larger dimension reaches
+    // `PdfRasterBudget.MAX_RASTER_DIMENSION_PX` is smaller than `rasterWidthPx` — the layout, the annotation
+    // world, and the cursor all stay on the uncapped `rasterWidthPx`, and the `ContentScale.Fit` draw
+    // upscales the difference. See `PdfRasterBudget`'s doc for why that trade is the right one.
+    val bitmapWidthPx = PdfRasterBudget.rasterWidthPx(rasterWidthPx, pageWidthPt, pageHeightPt)
     var bitmap by remember(index) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(index, rasterWidthPx) {
-        if (rasterWidthPx <= 0) {
+    LaunchedEffect(index, bitmapWidthPx) {
+        if (bitmapWidthPx <= 0) {
             bitmap = null
             return@LaunchedEffect
         }
-        bitmap = source.bitmap(index, rasterWidthPx)
+        bitmap = source.bitmap(index, bitmapWidthPx)
     }
 
     // This page's own raster frame (origin at its own top-left — the SAME "world" space the annotation

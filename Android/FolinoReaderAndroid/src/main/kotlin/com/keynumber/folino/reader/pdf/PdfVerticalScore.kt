@@ -774,7 +774,14 @@ internal fun PdfVerticalScore(
                                 widthDp = widthDp,
                                 heightDp = with(density) { pageHeightsPxRaster[i].toDp() },
                                 source = source,
-                                rasterWidthPx = rasterWidthPx,
+                                // Per PAGE, not per document: the cap bounds the larger dimension, and a
+                                // landscape page in an otherwise-portrait score reaches it at a different
+                                // zoom than its neighbors do.
+                                bitmapWidthPx = PdfRasterBudget.rasterWidthPx(
+                                    rasterWidthPx,
+                                    state.pageWidthsPt[i],
+                                    state.pageHeightsPt[i],
+                                ),
                                 isNearCurrentPage = abs(i - currentPage) <= PDF_WINDOW_RADIUS,
                             )
                         }
@@ -860,9 +867,13 @@ internal fun PdfVerticalScore(
  * from the PDF's own point size (see [PdfVerticalLayout.pageHeightsPx]), NOT the bitmap — so the layout
  * never jumps when a bitmap arrives or a page falls out of the render window. Draws [PdfPageSource.bitmap]
  * over that rectangle once [isNearCurrentPage] and a render succeeds; never a per-page spinner while
- * waiting. [widthDp]/[heightDp]/[rasterWidthPx] are all derived from the settled `rasterScale`, so they —
+ * waiting. [widthDp]/[heightDp]/[bitmapWidthPx] are all derived from the settled `rasterScale`, so they —
  * and every other argument here — are unchanged across an entire pinch gesture, which is what lets a call
  * to this composable be skipped mid-gesture instead of relaying out on every frame.
+ *
+ * [bitmapWidthPx] is the raster width AFTER [PdfRasterBudget], so it may be smaller than the [widthDp] the
+ * box is laid out at; the `ContentScale.Fit` draw below upscales the difference. That is deliberate — see
+ * [PdfRasterBudget]'s doc.
  *
  * [bitmap] is held as this composable's OWN local state, separate from [PdfPageSource]'s internal cache,
  * so it must be dropped the moment [isNearCurrentPage] goes false — the caller's page `Column` is a plain
@@ -879,19 +890,20 @@ private fun PdfPageItem(
     widthDp: Dp,
     heightDp: Dp,
     source: PdfPageSource,
-    rasterWidthPx: Int,
+    bitmapWidthPx: Int,
     isNearCurrentPage: Boolean,
 ) {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(index, rasterWidthPx, isNearCurrentPage) {
-        // Outside the window, or the viewport isn't measured yet (`rasterWidthPx <= 0`, see the
-        // caller): drop our own reference rather than requesting — or holding onto — a bitmap the
-        // source itself no longer caches. See the class doc for why dropping matters here specifically.
-        if (!isNearCurrentPage || rasterWidthPx <= 0) {
+    LaunchedEffect(index, bitmapWidthPx, isNearCurrentPage) {
+        // Outside the window, or the viewport isn't measured yet (`bitmapWidthPx <= 0`, which
+        // `PdfRasterBudget` passes through unchanged — see the caller): drop our own reference rather than
+        // requesting — or holding onto — a bitmap the source itself no longer caches. See the class doc
+        // for why dropping matters here specifically.
+        if (!isNearCurrentPage || bitmapWidthPx <= 0) {
             bitmap = null
             return@LaunchedEffect
         }
-        bitmap = source.bitmap(index, rasterWidthPx)
+        bitmap = source.bitmap(index, bitmapWidthPx)
     }
     Box(Modifier.size(widthDp, heightDp).background(Color.White)) {
         // `Fit`, not `FillBounds`: the box is already sized to the page's own aspect ratio (see
