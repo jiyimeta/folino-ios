@@ -48,6 +48,9 @@ final class AppBootstrap {
     private(set) var shareService: LiveScoreShareService?
     private(set) var metadataReader: LiveScoreMetadataReader?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
+    /// Drains cross-app score hand-offs (`folino://open-score`) staged by a sibling app in the shared App Group.
+    /// `nil` when that container is unavailable, in which case the route degrades to doing nothing.
+    private(set) var incomingScoreCoordinator: IncomingScoreCoordinator?
     private(set) var crashReporter: (any CrashReporter)?
     private(set) var analytics: (any Analytics)?
     let shareDuplicateResolver = ShareDuplicateResolver()
@@ -59,6 +62,11 @@ final class AppBootstrap {
     /// Single-slot for an incoming share token. Last-wins.
     private(set) var pendingShareToken: UUID?
     private(set) var pendingShareOpenAfter = false
+
+    /// Single-slot for a cross-app `folino://open-score` token. Last-wins, mirroring `pendingShareToken`. The token is
+    /// a `String` because the cross-app contract only promises a string, not a `UUID`.
+    private(set) var pendingOpenScoreToken: String?
+    private(set) var pendingOpenScoreOpenAfter = false
 
     func start() {
         guard !didStart else { return }
@@ -73,6 +81,7 @@ final class AppBootstrap {
             try prepareDirectories()
             cleanupLegacySoundfontCacheIfNeeded()
             reconcileSoundfontToSharedContainerIfNeeded()
+            stampSharedCapabilities()
             let appGroupContainer = AppGroupPaths.container()
             let writer: PlaylistsIndexWriter? = appGroupContainer.map {
                 PlaylistsIndexWriter(appGroupContainer: $0)
@@ -101,6 +110,8 @@ final class AppBootstrap {
                     crashReporter: crashReporter ?? NoopCrashReporter(),
                 )
             }
+
+            incomingScoreCoordinator = makeIncomingScoreCoordinator(importer: importer)
 
             self.database = database
             annotationCoordinator = AnnotationSaveCoordinator(store: annotationStore)
@@ -327,6 +338,11 @@ final class AppBootstrap {
             pendingShareOpenAfter = parsed.openAfter
             return
         }
+        if let parsed = OpenScoreURL.parse(url) {
+            pendingOpenScoreToken = parsed.token
+            pendingOpenScoreOpenAfter = parsed.openAfter
+            return
+        }
         pendingIncomingURL = url
     }
 
@@ -352,6 +368,14 @@ final class AppBootstrap {
         let pair = (token, pendingShareOpenAfter)
         pendingShareToken = nil
         pendingShareOpenAfter = false
+        return pair
+    }
+
+    func consumePendingOpenScoreToken() -> (String, Bool)? {
+        guard let token = pendingOpenScoreToken else { return nil }
+        let pair = (token, pendingOpenScoreOpenAfter)
+        pendingOpenScoreToken = nil
+        pendingOpenScoreOpenAfter = false
         return pair
     }
 

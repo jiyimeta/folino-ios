@@ -299,6 +299,27 @@ private struct ReadyShell: View {
             resetNavigationForIncomingURL()
             Task { await runDrain(coordinator: coordinator, openAfter: openAfter) }
         }
+        .task {
+            // Cold-launch cross-app hand-off: import whatever a sibling app staged in the shared container — the
+            // token `.onOpenURL` queued, plus any leftovers from a hand-off whose URL never landed.
+            //
+            // Swept here rather than in `AppBootstrap.finishStartup` (where the Share-Extension sweep lives) because
+            // `ReadyShell` only exists once bootstrap is ready: an earlier sweep would consume the token before this
+            // view could turn it into Reader navigation, and putting the score on screen is the point of one-tap.
+            // With no token pending this still runs, so leftovers never pile up — but with `openAfter` false, since
+            // a plain launch should not yank the user into a score they asked for days ago.
+            guard let coordinator = bootstrap.incomingScoreCoordinator else { return }
+            let openAfter = bootstrap.consumePendingOpenScoreToken()?.1 ?? false
+            if openAfter { resetNavigationForIncomingURL() }
+            await runOpenScoreDrain(coordinator: coordinator, openAfter: openAfter)
+        }
+        .onChange(of: bootstrap.pendingOpenScoreToken) { _, newValue in
+            guard newValue != nil,
+                  let (_, openAfter) = bootstrap.consumePendingOpenScoreToken(),
+                  let coordinator = bootstrap.incomingScoreCoordinator else { return }
+            resetNavigationForIncomingURL()
+            Task { await runOpenScoreDrain(coordinator: coordinator, openAfter: openAfter) }
+        }
         .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
         .onChange(of: sidebarPath) { _, _ in saveNavSnapshot() }
         .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
@@ -336,7 +357,18 @@ private struct ReadyShell: View {
 
     @MainActor
     private func runDrain(coordinator: IncomingShareCoordinator, openAfter: Bool) async {
-        let result = await coordinator.drain(token: nil)
+        await applyDrain(coordinator.drain(token: nil), openAfter: openAfter)
+    }
+
+    /// Cross-app twin of `runDrain`. Drains every staged token rather than the one named in the URL so a hand-off
+    /// whose URL was lost still lands, exactly as the Share-Extension flow does.
+    @MainActor
+    private func runOpenScoreDrain(coordinator: IncomingScoreCoordinator, openAfter: Bool) async {
+        await applyDrain(coordinator.drain(token: nil), openAfter: openAfter)
+    }
+
+    @MainActor
+    private func applyDrain(_ result: DrainResult, openAfter: Bool) {
         drainBannerMessage = DrainBannerComposer.message(for: result)
 
         switch ShareDrainNavigation.decide(for: result, openAfter: openAfter) {

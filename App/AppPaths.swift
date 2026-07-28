@@ -1,4 +1,5 @@
 import Foundation
+import ImportExportAppGroup
 
 /// Resolves on-disk locations the app uses. Centralized so AppBootstrap and any future migrations agree on layout.
 enum AppPaths {
@@ -17,9 +18,15 @@ enum AppPaths {
         documentsRoot.appending(path: "Folino.sqlite")
     }
 
-    /// The cross-app shared App Group container. Soundfonts (and, later, scores) live here so Folino and VocalTuner
-    /// share one copy. See `docs/superpowers/specs/2026-06-26-shared-soundfont-app-group-design.md`.
-    static let sharedAppGroupIdentifier = "group.com.KeyNumber.shared"
+    /// The cross-app shared App Group container. Soundfonts and incoming cross-app score hand-offs live here so Folino
+    /// and VocalTuner share one copy. See `docs/superpowers/specs/2026-06-26-shared-soundfont-app-group-design.md`.
+    static let sharedAppGroupIdentifier = SharedAppGroupIDs.identifier
+
+    /// Root of the cross-app shared App Group container, or `nil` when it is unavailable (entitlement/provisioning
+    /// gap). Callers that write into it — the incoming-score drain, the capability stamp — degrade to doing nothing.
+    static var sharedContainer: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: sharedAppGroupIdentifier)
+    }
 
     /// `<shared container>/Soundfonts/`. `nil` when the container is unavailable (entitlement/provisioning gap) — the
     /// resolver and migration both degrade to `legacySoundfontsDirectory` so playback never breaks.
@@ -29,9 +36,7 @@ enum AppPaths {
     /// so on Android each app keeps its own copy — `containerURL` returns `nil` and this degrades to the per-app
     /// private directory automatically. See the spec's "Android / cross-platform parity" section.
     static var sharedSoundfontsDirectory: URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: sharedAppGroupIdentifier)?
-            .appending(path: "Soundfonts")
+        sharedContainer?.appending(path: "Soundfonts")
     }
 
     /// The pre-sharing private location (`Library/Application Support/Soundfonts/`). Migration source + degraded
