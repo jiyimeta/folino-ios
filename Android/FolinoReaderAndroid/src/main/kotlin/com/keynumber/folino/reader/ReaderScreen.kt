@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -132,6 +131,7 @@ import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material3.Surface
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.zIndex
 import io.github.jiyimeta.sheetmusic.audio.model.RehearsalMarkEntry
@@ -1056,8 +1056,15 @@ private fun ReaderPdfLabel(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
+            // Rounded rect, not CircleShape: the box is only 48dp at the DEFAULT font scale, while the chip
+            // inside it grows with `sp`. A circle's radius stays 24dp, so past roughly fontScale 1.4 the
+            // chip's half-diagonal exceeds it and the ripple clip shaves the ends off its own border. A
+            // corner radius contains the chip at every scale.
+            .clip(RoundedCornerShape(12.dp))
+            // Without this TalkBack announces "PDF" and a click action but never that it is a button — the
+            // neighboring IconButtons all carry the role, and this label is the only way back to the caveat
+            // once "Don't show again" has been used.
+            .clickable(onClick = onClick, role = Role.Button),
         contentAlignment = Alignment.Center,
     ) {
         Text(
