@@ -218,9 +218,10 @@ internal fun PagedScore(
                     .fillMaxSize()
                     .background(Color.White)
                     .clipToBounds()
-                    // Tap-to-seek + audition, CENTER region only: the left/right 12 % edges are the
+                    // Tap-to-seek + audition, CENTER region only: the left/right edges are the
                     // PageTapOverlay nav zones (page navigation), so a center tap seeks while edge taps
-                    // still turn pages. The page content is drawn page-local (from y=0) and translated
+                    // still turn pages — the split is [PAGE_NAV_ZONE_WIDTH_FRACTION], shared with the
+                    // overlay that lays those zones out. The page content is drawn page-local (from y=0) and translated
                     // by panOffset; the hit-test wants ABSOLUTE document mm, so fold this page's band
                     // top (pageTopPx) into the content offset — identical to the overlay's panOffset.
                     .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, pageIndex, scale, annotationMode) {
@@ -229,7 +230,7 @@ internal fun PagedScore(
                         val handle = scoreHandle ?: return@pointerInput
                         if (fitPxPerMM <= 0f) return@pointerInput
                         val optionsBytes = layoutOptions.encode()
-                        val navZoneWidthPx = size.width * 0.12f
+                        val navZoneWidthPx = size.width * PAGE_NAV_ZONE_WIDTH_FRACTION
                         detectTapGestures { offset ->
                             // Ignore taps inside either edge nav zone — those belong to PageTapOverlay.
                             if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {

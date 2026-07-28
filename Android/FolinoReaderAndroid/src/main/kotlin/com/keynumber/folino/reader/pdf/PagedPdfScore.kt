@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.keynumber.folino.reader.DrawingAnchorWire
 import com.keynumber.folino.reader.DrawingAnchorWireCodec
 import com.keynumber.folino.reader.ON_SCREEN_CURSOR_ALPHA
+import com.keynumber.folino.reader.PAGE_NAV_ZONE_WIDTH_FRACTION
 import com.keynumber.folino.reader.PageFrameWire
 import com.keynumber.folino.reader.PageFramesWire
 import com.keynumber.folino.reader.PageFramesWireCodec
@@ -647,10 +648,11 @@ private fun PagedPdfPage(
             .fillMaxSize()
             .background(Color.White)
             .clipToBounds()
-            // Tap-to-seek on the PDF, CENTER region only: the left/right 12 % edges belong to [PageTapOverlay]'s
-            // page-turn zones, so a center tap seeks while an edge tap still turns the page — `PagedScore`'s exact
-            // split, reproduced with the same fraction. (The exclusion is unconditional, like `PagedScore`'s, so the
-            // seekable region doesn't silently change shape when the tap zones are hidden in Settings.)
+            // Tap-to-seek on the PDF, CENTER region only: the left/right edges belong to [PageTapOverlay]'s page-turn
+            // zones, so a center tap seeks while an edge tap still turns the page — `PagedScore`'s exact split,
+            // reading the SAME [PAGE_NAV_ZONE_WIDTH_FRACTION] the overlay lays those zones out with. (The exclusion is
+            // unconditional, like `PagedScore`'s, so the seekable region doesn't silently change shape when the tap
+            // zones are hidden in Settings.)
             //
             // `worldPointForTap` undoes this surface's own center-anchored camera to reach the raster-px world space
             // [pageFrames] is expressed in; which page, where on it, and what is there are all decided natively (see
@@ -667,7 +669,7 @@ private fun PagedPdfPage(
                 if (annotationMode) return@pointerInput
                 val projector = cursorProjector ?: return@pointerInput
                 if (rasterWidthPx <= 0 || rasterHeightPx <= 0) return@pointerInput
-                val navZoneWidthPx = size.width * 0.12f
+                val navZoneWidthPx = size.width * PAGE_NAV_ZONE_WIDTH_FRACTION
                 detectTapGestures { offset ->
                     if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {
                         return@detectTapGestures

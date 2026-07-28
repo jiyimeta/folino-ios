@@ -49,6 +49,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
@@ -663,14 +664,18 @@ fun ReaderScreen(
     var showInspector by remember { mutableStateOf(false) }
     var showDisplayInspector by remember { mutableStateOf(false) }
 
-    // The PDF-playback caveat. Presented automatically the first time an opened PDF becomes playable — unless it was
-    // dismissed for good — and on demand from the top bar's PDF label thereafter. `hasAutoShownPdfNotice` keeps the
-    // automatic presentation to once per opened document (it is keyed on `scoreId`, so retargeting the reader to
-    // another score inside a playlist re-arms it, exactly as reopening the reader does on iOS). This is the same
-    // three-part gate iOS applies in `ReaderRootScreen`: ready, not yet auto-shown, not dismissed.
+    // The PDF-playback caveat. Presented automatically the first time a PDF becomes playable — unless it was
+    // dismissed for good — and on demand from the top bar's PDF label thereafter. Same three-part gate iOS applies in
+    // `ReaderRootScreen`: ready, not yet auto-shown, not dismissed.
+    //
+    // `hasAutoShownPdfNotice` is scoped to the READER OPEN, not to the document: neither the `remember` nor the
+    // effect is keyed on `scoreId`, so retargeting the reader in place — which is what a playlist advance does
+    // (`onRetargetScore`, no navigation) — does NOT re-arm it. This is iOS's behavior, where the equivalent flag is a
+    // plain `@State` on `ReaderRootScreen` and survives the same in-place retarget. Keying on `scoreId` would make a
+    // playlist of N PDFs interrupt playback with N modals, one per parse.
     var showPdfNotice by remember { mutableStateOf(false) }
-    var hasAutoShownPdfNotice by remember(scoreId) { mutableStateOf(false) }
-    LaunchedEffect(scoreId, pdfPlayback, pdfPlaybackNoticeDismissed) {
+    var hasAutoShownPdfNotice by remember { mutableStateOf(false) }
+    LaunchedEffect(pdfPlayback, pdfPlaybackNoticeDismissed) {
         if (pdfPlayback !is PdfPlaybackState.Ready) return@LaunchedEffect
         if (hasAutoShownPdfNotice || pdfPlaybackNoticeDismissed) return@LaunchedEffect
         hasAutoShownPdfNotice = true
@@ -1021,7 +1026,12 @@ fun ReaderTopBar(
  * iOS's tappable `PDFBadge`. The text is a brand literal and is intentionally not localized, matching the library's.
  *
  * Being reachable here is what makes the dialog's "Don't show again" safe to offer: the explanation of why playback
- * on a PDF is approximate never becomes unreachable, it just stops interrupting.
+ * on a PDF is approximate never becomes unreachable, it just stops interrupting — which is also why the touch target
+ * matters more than the chip's size suggests. [minimumInteractiveComponentSize] reserves Material's 48 dp minimum
+ * around the ~16 dp-tall chip WITHOUT resizing it (the same thing `IconButton` does, and in the same modifier
+ * position — first in the chain), so the visual stays at iOS's badge parity while the tap area follows the Android
+ * idiom. Placing the chip's own `clip`/`border`/`padding` after it keeps the border drawn around the TEXT, not
+ * around the enlarged target.
  */
 @Composable
 private fun ReaderPdfLabel(onClick: () -> Unit) {
@@ -1030,6 +1040,7 @@ private fun ReaderPdfLabel(onClick: () -> Unit) {
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
+            .minimumInteractiveComponentSize()
             .clip(RoundedCornerShape(4.dp))
             .clickable(onClick = onClick)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
