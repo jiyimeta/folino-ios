@@ -1,5 +1,8 @@
 package com.keynumber.folino.reader.pdf
 
+import com.keynumber.folino.reader.ViewportUnderfill
+import com.keynumber.folino.reader.clampAxisOffset
+import com.keynumber.folino.reader.focalAdjustedOffset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -61,101 +64,75 @@ class PagedPdfLayoutTest {
         assertEquals(1415, height)
     }
 
-    // -- panBoundPx -----------------------------------------------------------------------------------
+    // -- panFromViewportOffset ------------------------------------------------------------------------
+    // The one bridge between the shared `ReaderViewportState` (scroll-space offsets, `ViewportUnderfill
+    // .CENTER` on both axes) and this surface's CENTER-anchored placement. Pairing it with the viewport's
+    // OWN clamp — `clampAxisOffset`, called here exactly as `ReaderViewportState` calls it — is what makes
+    // these tests cover the CENTERED-content assumption end to end rather than a formula in isolation.
 
-    @Test fun panBoundIsZeroWhenTheContentFitsInsideTheViewport() {
-        assertEquals(0f, PagedPdfLayout.panBoundPx(contentSizePx = 800f, viewportSizePx = 1000f), 0.001f)
-        assertEquals(0f, PagedPdfLayout.panBoundPx(contentSizePx = 1000f, viewportSizePx = 1000f), 0.001f)
-    }
-
-    @Test fun panBoundIsHalfTheExcessWhenTheContentOverflowsTheViewport() {
-        assertEquals(250f, PagedPdfLayout.panBoundPx(contentSizePx = 1500f, viewportSizePx = 1000f), 0.001f)
-    }
-
-    // -- focalAdjustedPan -----------------------------------------------------------------------------
-
-    @Test fun focalAdjustedPanKeepsAnOffCenterTouchPointFixedAcrossAZoomStep() {
-        // Hand-derived from the affine mapping the class doc describes: with no prior pan, a 1000px
-        // viewport, and a touch at x=800 (300px right of center), doubling the zoom (ratio=2) must shift
-        // the pan by -300 to hold that same touch point fixed on screen.
+    @Test fun panIsZeroWhenTheContentIsSmallerThanTheViewport() {
+        // Underfilled: the clamp forces the centered offset, and the conversion turns that back into "no
+        // pan", so the page is placed by its own centering layout. This is the case that keeps a
+        // differently-sized neighbour centered while it peeks in during a swipe.
+        val offset = clampAxisOffset(
+            offset = 500f, contentPx = 800f, viewportPx = 1000f, underfill = ViewportUnderfill.CENTER,
+        )
         assertEquals(
-            -300f,
-            PagedPdfLayout.focalAdjustedPan(panBefore = 0f, centroidPx = 800f, viewportSizePx = 1000f, ratio = 2f),
+            0f,
+            PagedPdfLayout.panFromViewportOffset(offset, liveContentSizePx = 800f, viewportSizePx = 1000f),
             0.001f,
         )
     }
 
-    // -- clampPan -------------------------------------------------------------------------------------
-    // This is the exact math `PagedPdfScore`'s pinch/pan gesture applies every frame, and it is where the
-    // CENTERED-content assumption baked into `panBoundPx` actually gets exercised end to end (`renderWidthPx`
-    // -> `heightForWidthPx` -> `panBoundPx`, per axis) — see `clampPan`'s own KDoc for why this, not
-    // `panBoundPx` alone, is the function most likely to catch a regression back to top-left-anchored content.
-
-    @Test fun clampPanZeroesBothAxesWhenTheContentFitsExactlyInsideTheViewport() {
-        // A 1000x1000 page rendered at its fit width (1000) exactly fills a 1000x1000 viewport on both
-        // axes, so neither axis has any room to pan — any requested offset clamps to zero.
-        val (x, y) = PagedPdfLayout.clampPan(
-            panXPx = 500f,
-            panYPx = -500f,
-            atScale = 1f,
-            fitWidthPx = 1000,
-            pageWidthPt = 100.0,
-            pageHeightPt = 100.0,
-            viewportWidthPx = 1000f,
-            viewportHeightPx = 1000f,
+    @Test fun panIsZeroWhenTheContentExactlyFillsTheViewport() {
+        val offset = clampAxisOffset(
+            offset = 500f, contentPx = 1000f, viewportPx = 1000f, underfill = ViewportUnderfill.CENTER,
         )
-        assertEquals(0f, x, 0.001f)
-        assertEquals(0f, y, 0.001f)
+        assertEquals(
+            0f,
+            PagedPdfLayout.panFromViewportOffset(offset, liveContentSizePx = 1000f, viewportSizePx = 1000f),
+            0.001f,
+        )
     }
 
-    @Test fun clampPanAllowsUpToTheLiveBoundWhenZoomedIn() {
-        // Same page zoomed to atScale=2 renders 2000x2000 inside the 1000x1000 viewport — half the excess
-        // (500) is the bound on each axis — and a requested offset beyond that clamps down to it.
-        val (x, y) = PagedPdfLayout.clampPan(
-            panXPx = 800f,
-            panYPx = -800f,
-            atScale = 2f,
-            fitWidthPx = 1000,
-            pageWidthPt = 100.0,
-            pageHeightPt = 100.0,
-            viewportWidthPx = 1000f,
-            viewportHeightPx = 1000f,
-        )
-        assertEquals(500f, x, 0.001f)
-        assertEquals(-500f, y, 0.001f)
+    @Test fun panRunsToHalfTheExcessAtEitherEndOfTheOffsetRange() {
+        // Content 1500 in a 1000 viewport: the viewport clamps the offset to 0..500, which converts to a
+        // pan of +250..-250 — the symmetric half-the-excess bound the centered layout needs.
+        val atStart = clampAxisOffset(-999f, 1500f, 1000f, ViewportUnderfill.CENTER)
+        val atEnd = clampAxisOffset(999f, 1500f, 1000f, ViewportUnderfill.CENTER)
+        assertEquals(250f, PagedPdfLayout.panFromViewportOffset(atStart, 1500f, 1000f), 0.001f)
+        assertEquals(-250f, PagedPdfLayout.panFromViewportOffset(atEnd, 1500f, 1000f), 0.001f)
     }
 
-    @Test fun clampPanLeavesAnInBoundsOffsetUnchanged() {
-        val (x, y) = PagedPdfLayout.clampPan(
-            panXPx = 100f,
-            panYPx = -100f,
-            atScale = 2f,
-            fitWidthPx = 1000,
-            pageWidthPt = 100.0,
-            pageHeightPt = 100.0,
-            viewportWidthPx = 1000f,
-            viewportHeightPx = 1000f,
-        )
-        assertEquals(100f, x, 0.001f)
-        assertEquals(-100f, y, 0.001f)
-    }
-
-    @Test fun clampPanBoundsEachAxisIndependentlyForALetterboxedPage() {
+    @Test fun eachAxisIsBoundedIndependentlyForALetterboxedPage() {
         // A portrait page (100 x 200 pt) fit-rendered 500px wide is 1000px tall. In a 1000 (w) x 800 (h)
-        // viewport, width fits exactly (bound 0) while height overflows by 200 (bound 100) — the two axes
-        // must clamp independently, not share one bound.
-        val (x, y) = PagedPdfLayout.clampPan(
-            panXPx = 50f,
-            panYPx = 250f,
-            atScale = 1f,
-            fitWidthPx = 500,
-            pageWidthPt = 100.0,
-            pageHeightPt = 200.0,
-            viewportWidthPx = 1000f,
-            viewportHeightPx = 800f,
+        // viewport, width fits exactly (no pan at all) while height overflows by 200 (pan bound 100) — the
+        // two axes must clamp independently, not share one bound.
+        val liveWidthPx = PagedPdfLayout.renderWidthPx(fitWidthPx = 500, scale = 1f).toFloat()
+        val liveHeightPx =
+            PagedPdfLayout.heightForWidthPx(liveWidthPx.toInt(), pageWidthPt = 100.0, pageHeightPt = 200.0).toFloat()
+        val offsetX = clampAxisOffset(-50f, liveWidthPx, 1000f, ViewportUnderfill.CENTER)
+        val offsetY = clampAxisOffset(-250f, liveHeightPx, 800f, ViewportUnderfill.CENTER)
+        assertEquals(0f, PagedPdfLayout.panFromViewportOffset(offsetX, liveWidthPx, 1000f), 0.001f)
+        assertEquals(100f, PagedPdfLayout.panFromViewportOffset(offsetY, liveHeightPx, 800f), 0.001f)
+    }
+
+    @Test fun theSharedFocalZoomKeepsAnOffCenterTouchPointFixed() {
+        // The property the surface's own `focalAdjustedPan` used to assert, now expressed against the
+        // shared viewport's `focalAdjustedOffset` plus this conversion — a page that exactly fills a 1000px
+        // viewport, no prior pan, a touch 300px right of center, doubling the zoom. Holding that touch
+        // point fixed means the page must end up panned by -300.
+        val fitWidthPx = 1000
+        val offsetBefore = clampAxisOffset(0f, fitWidthPx * 1f, 1000f, ViewportUnderfill.CENTER)
+        assertEquals(0f, PagedPdfLayout.panFromViewportOffset(offsetBefore, fitWidthPx * 1f, 1000f), 0.001f)
+
+        val offsetAfter = clampAxisOffset(
+            focalAdjustedOffset(currentScroll = offsetBefore, centroid = 800f, ratio = 2f),
+            contentPx = fitWidthPx * 2f,
+            viewportPx = 1000f,
+            underfill = ViewportUnderfill.CENTER,
         )
-        assertEquals(0f, x, 0.001f)
-        assertEquals(100f, y, 0.001f)
+        assertEquals(-300f, PagedPdfLayout.panFromViewportOffset(offsetAfter, fitWidthPx * 2f, 1000f), 0.001f)
     }
 
     // -- annotationCameraTranslate (Task 11: PDF page-anchored annotation) -------------------------
