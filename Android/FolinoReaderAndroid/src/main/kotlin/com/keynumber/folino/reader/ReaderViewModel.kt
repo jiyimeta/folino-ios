@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.pdf.PdfPageSource
 import com.keynumber.folino.reader.pdf.PdfPlaybackState
+import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
 import io.github.jiyimeta.sheetmusic.PdfScoreHandle
@@ -397,6 +398,21 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * `Default`, not already on Main), and neither block has a suspension point of its own — so the two
      * cannot tear on Android's single-threaded main looper. A superseded parse is fully closed — geometry
      * AND score — since nothing else could possibly be using a handle that was never published anywhere.
+     *
+     * **Nothing-playable guard** (found on-device: a "print to PDF" export, e.g. Chrome's `Skia/PDF`,
+     * reads as ruled staff lines with no decodable noteheads — the importer still reconstructs the full
+     * measure/staff grid, just with nothing to sound). `PdfScoreHandle.load` returning non-null only means
+     * the OMR pipeline produced a structurally complete `Score`, not that any of it is audible, so
+     * [PdfScoreHandle.playableElementCount] — swift-sheet-music's own count of the chord/rest elements the
+     * importer actually reconstructed, computed on the Swift side of the parse where the `Score` already
+     * is — is checked via [FolinoReaderJNI.nativeIsPlayableElementCount] BEFORE this parse is ever
+     * published. That native call is pure delegation to `Domain.ReaderCapabilities.isPlayableElementCount`
+     * — the SAME threshold `Score.hasPlayableContent` applies to iOS's in-process `Score` — so Kotlin never
+     * hardcodes its own `count > 0`; the one place that decides "worth playing" is Domain. A count that
+     * doesn't clear the threshold takes the exact same [PdfPlaybackState.Unavailable] path as a null parse,
+     * including its `scoreId`-vs-[loadedScoreId] supersession guard, and the handle is closed in full
+     * (geometry AND score) right there — mirrors the superseded-handle close below: this handle was never
+     * published anywhere, so nothing else could possibly be using it.
      */
     private fun parsePdfForPlayback(file: File, scoreId: String) {
         _pdfPlayback.value = PdfPlaybackState.Parsing
@@ -422,6 +438,19 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                     // already have reset `_pdfPlayback` to `Idle` for a different score, and this must not
                     // clobber that with a stale failure that would leave the NEW score's transport
                     // permanently disabled with no path back.
+                    if (scoreId == loadedScoreId) _pdfPlayback.value = PdfPlaybackState.Unavailable
+                }
+                return@launch
+            }
+            if (!FolinoReaderJNI.nativeIsPlayableElementCount(parsed.playableElementCount)) {
+                // Parsed successfully but yielded nothing worth playing (see the nothing-playable guard in
+                // this function's doc). This handle was never published anywhere — unlike the success
+                // path below, which only closes on a supersession race — so it can be closed unconditionally,
+                // right here on Default: nothing else could possibly hold a reference to it yet.
+                parsed.close()
+                withContext(Dispatchers.Main.immediate) {
+                    // Same supersession guard as the null-parse branch above: don't let this stale
+                    // failure clobber a NEWER score's already-published Ready state.
                     if (scoreId == loadedScoreId) _pdfPlayback.value = PdfPlaybackState.Unavailable
                 }
                 return@launch

@@ -5,12 +5,15 @@ extension Score {
     /// have at least one note. Rests (empty chords) and non-temporal elements (clefs, key signatures,
     /// dynamics, …) don't count.
     ///
-    /// This is the SAME quantity swift-sheet-music's PDF importer computes independently, on the Swift
-    /// side of Android's parse, as `PdfParseResultWire.playableElementCount` — Android never
-    /// materializes a `Score` locally, so it crosses this raw count over the JNI boundary instead and
-    /// asks `ReaderCapabilities.isPlayableElementCount(_:)` (via `nativeIsPlayableElementCount`) the
-    /// same question `hasPlayableContent` asks below. Both counts must be defined identically: a chord
-    /// with a non-empty `notes` array, nothing else.
+    /// swift-sheet-music's PDF importer computes an analogous count independently, on the Swift side of
+    /// Android's parse, as `PdfParseResultWire.playableElementCount` — Android never materializes a
+    /// `Score` locally, so it crosses that raw count over the JNI boundary instead and asks
+    /// `ReaderCapabilities.isPlayableElementCount(_:)` (via `nativeIsPlayableElementCount`) the same
+    /// question `hasPlayableContent` asks below. The two counts aren't defined bit-for-bit identically
+    /// (ssm's counts every chord/rest voice element reconstructed, not just non-empty ones), but the
+    /// importer never synthesizes rest-only content without real notes anchoring it, so both counts agree
+    /// on zero-vs-nonzero for anything it can actually produce — which is the only thing the shared
+    /// threshold below cares about.
     ///
     /// A full traversal, not an early-exit check — deliberately, since the count itself (not just
     /// whether it's nonzero) is the value that needs to cross to Android. Still a single pass with no
