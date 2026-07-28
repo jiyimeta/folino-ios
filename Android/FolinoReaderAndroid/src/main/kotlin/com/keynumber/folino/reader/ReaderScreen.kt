@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -49,7 +51,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
@@ -675,6 +676,12 @@ fun ReaderScreen(
     // playlist of N PDFs interrupt playback with N modals, one per parse.
     var showPdfNotice by remember { mutableStateOf(false) }
     var hasAutoShownPdfNotice by remember { mutableStateOf(false) }
+    // The PRESENTED dialog, unlike the flag above, must not survive a retarget: it explains one specific PDF's
+    // playback, and the incoming document is a different one (it would also be re-read as `Parsing`, so an open
+    // "couldn't read this PDF" body would silently turn back into the best-effort body under the user). Declared
+    // BEFORE the auto-present effect so that if a retarget and a parse ever land in the same composition, the close
+    // runs first and cannot swallow a legitimate first presentation.
+    LaunchedEffect(scoreId) { showPdfNotice = false }
     LaunchedEffect(pdfPlayback, pdfPlaybackNoticeDismissed) {
         if (pdfPlayback !is PdfPlaybackState.Ready) return@LaunchedEffect
         if (hasAutoShownPdfNotice || pdfPlaybackNoticeDismissed) return@LaunchedEffect
@@ -1026,26 +1033,42 @@ fun ReaderTopBar(
  * iOS's tappable `PDFBadge`. The text is a brand literal and is intentionally not localized, matching the library's.
  *
  * Being reachable here is what makes the dialog's "Don't show again" safe to offer: the explanation of why playback
- * on a PDF is approximate never becomes unreachable, it just stops interrupting — which is also why the touch target
- * matters more than the chip's size suggests. [minimumInteractiveComponentSize] reserves Material's 48 dp minimum
- * around the ~16 dp-tall chip WITHOUT resizing it (the same thing `IconButton` does, and in the same modifier
- * position — first in the chain), so the visual stays at iOS's badge parity while the tap area follows the Android
- * idiom. Placing the chip's own `clip`/`border`/`padding` after it keeps the border drawn around the TEXT, not
- * around the enlarged target.
+ * on a PDF is approximate never becomes unreachable, it just stops interrupting — which is why the touch target
+ * matters more than the chip's ~28x16 dp suggests.
+ *
+ * The target is a real 48 dp box, not a hint: `defaultMinSize` fixes THIS `Box`'s measured size at Material's
+ * minimum, and `clickable` is applied inside it, so the clickable node's own hit bounds are the 48 dp box. (An
+ * earlier revision put `Modifier.minimumInteractiveComponentSize()` first on the `Text` instead. That is a
+ * layout-only modifier — it reports `max(child, 48dp)` and centers the child, leaving the inner `clickable` still
+ * bound to the chip. `IconButton` gets a real target from that position only because it pairs it with an explicit
+ * `.size(...)` afterwards, which is the half that does the work.)
+ *
+ * The chip's own `border`/`padding` stay on the inner `Text`, so it is drawn and sized exactly as before — but the
+ * LABEL is now 48 dp wide in the title `Row`, and that is not free. It is the unweighted child, measured first, so a
+ * long score title ellipsizes about 20 dp earlier than it did, and the visible gap between title and chip grows from
+ * the 8 dp `Spacer` to roughly 18 dp as the chip centers in its box. Nothing moves vertically (48 dp fits inside
+ * `TopAppBar`'s 64 dp container) and nothing clips. That trade is deliberate: a reachable escape hatch after "Don't
+ * show again" is worth 20 dp of title. The ripple is circular and fills the target, matching the `IconButton`s
+ * beside it.
  */
 @Composable
 private fun ReaderPdfLabel(onClick: () -> Unit) {
-    Text(
-        text = "PDF",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Box(
         modifier = Modifier
-            .minimumInteractiveComponentSize()
-            .clip(RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
-            .padding(horizontal = 6.dp, vertical = 1.dp),
-    )
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "PDF",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        )
+    }
 }
 
 @Composable

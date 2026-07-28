@@ -224,6 +224,12 @@ fun ReaderSceneContent(
             // Tap near the middle of the first measure: x a short way in from the left margin, y at
             // the first staff. These are viewport-px; fold the fixed top padding into the content
             // offset so the helper's divide yields document-mm.
+            //
+            // The two fractions are a pair of aim-at-the-first-measure heuristics for THIS scene, nothing
+            // more. In particular the 0.12 is NOT `PAGE_NAV_ZONE_WIDTH_FRACTION`: this host is a static
+            // adaptation of the VERTICAL surface (`ReadyScore`) — no pager, no `PageTapOverlay`, no edge
+            // nav zones at all — so tying it to that constant would silently move this screenshot's cursor
+            // whenever page mode's tap zones were resized. Their matching value is a coincidence.
             val tapX = viewportSize.width * 0.12f
             val tapY = viewportSize.height * 0.10f
             val cursor = nearestCursorForTap(
