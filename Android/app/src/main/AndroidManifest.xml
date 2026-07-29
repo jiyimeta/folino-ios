@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- firebase-analytics pulls in play-services-measurement-api, which merges the advertising-ID
+         permissions in for ad attribution and Google Ads audiences. folino shows no ads and uses
+         Analytics for product metrics only, so we drop them: keeping them would contradict the Play
+         Console declaration (the API rejects the upload) and would widen the data-safety disclosure
+         to "device or other IDs" for a signal the app never reads. -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_ADSERVICES_AD_ID"
+        tools:node="remove" />
+
     <application
         android:name=".FolinoApplication"
         android:label="folino"

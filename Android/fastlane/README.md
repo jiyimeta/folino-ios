@@ -1,8 +1,36 @@
-# Android Play Store screenshots
+# Android Play Store release + screenshots
 
-Automated Google Play marketing screenshots for the Folino Android app, modeled on the VocalTuner
-pipeline (scene → marketing frame → fastlane supply). Capture runs as an instrumented test on an
+Google Play automation for the Folino Android app: the `release` lane ships the binary, the rest of
+the lanes maintain the store listing. The marketing screenshots are modeled on the VocalTuner
+pipeline (scene → marketing frame → fastlane supply); capture runs as an instrumented test on an
 emulator because the Reader renders sheet music via native JNI (cannot run on the host JVM).
+
+## Shipping a release
+
+```sh
+export PLAY_PACKAGE_NAME=com.harmolo.folino
+export PLAY_JSON_KEY_PATH=~/.android-keystores/harmolo-play-publishing-<id>.json
+
+PLAY_VALIDATE_ONLY=1 bundle exec fastlane android release   # dry run — nothing reaches Play
+bundle exec fastlane android release                        # build + upload to production
+```
+
+Before running it:
+
+1. **Bump `versionName`** in `app/build.gradle.kts`. `versionCode` needs no edit — it is the git
+   commit count, so it rises on its own.
+2. **Write the release notes** as `metadata/android/<locale>/changelogs/<versionCode>.txt` for all
+   five locales. The lane refuses to build if any locale is missing that file. `<versionCode>` is
+   the commit count *after* the release commit lands — commit first, then `git rev-list --count HEAD`
+   to confirm the filename matches (amend rather than adding a commit if it drifted).
+3. **Rebuild the native libraries** — from the repo root, `Scripts/android-build-libs.sh` (Settings)
+   plus `android-build-{library,reader,soundfont}-libs.sh` — and re-`publishToMavenLocal`
+   swift-sheet-music, so the AAB carries the current engine rather than whatever `.so` was staged last.
+4. **Run the crash gate** — `Scripts/android-release-check.sh` plus the instrumented smoke tests.
+
+Knobs: `PLAY_TRACK=internal` to stage elsewhere, `PLAY_ROLLOUT=0.1` for a staged rollout,
+`PLAY_SKIP_BUILD=1` to upload the AAB already on disk. The lane never touches listing text, images,
+or screenshots — only the binary and the release notes.
 
 ## What it produces
 

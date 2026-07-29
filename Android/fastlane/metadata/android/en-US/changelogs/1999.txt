@@ -1,0 +1,4 @@
+• Added PDF file import
+• Added handwritten annotation on scores
+• Added playback aids such as count-in and transposition
+• Improved picture-in-picture
