@@ -18,7 +18,10 @@ import UtilityUI
 /// Stepping the selection (← / →) lives OUTSIDE the pad, in its own pill beside the transport, so it stays put when
 /// the pad is re-docked and doesn't cost the pad a row.
 ///
-/// iPad (regular width) keeps its single row with the same keys, since the palette carries the rest.
+/// A wide iPad puts the same keys on ONE row. That is a question about width, not about the device — an iPad mini is
+/// the same regular size class as a 13" iPad with 400 pt less to spend, and the one-row layout ran clean off both
+/// ends of the card there. So the row is offered first and the two-row stacking is the fallback, chosen by whether
+/// the row actually fits (`ViewThatFits`) rather than by what the size class calls the device.
 public struct EditorPadView: View {
     @Bindable private var viewModel: EditorViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -28,43 +31,20 @@ public struct EditorPadView: View {
     }
 
     private static let pitchLetters: [Character] = ["C", "D", "E", "F", "G", "A", "B"]
-    /// Height of the dividers separating key groups on the iPad one-row layout.
+    /// Height of the dividers separating key groups on the one-row layout.
     private static let dividerHeight: CGFloat = 28
-
-    /// Compact keys share the row's width instead of claiming a fixed minimum. The pitch row is ten keys wide (C–B,
-    /// ▴▾, delete); at the pad's old 40 pt minimum that row demanded ~488 pt and ran off the side of every iPhone.
-    /// Flexible keys can't overflow by construction — on the narrowest supported phone (375 pt) each still lands
-    /// around 29 pt wide, and the 44 pt row height keeps the touch targets tall enough to hit.
-    private var usesFlexibleKeys: Bool {
-        horizontalSizeClass != .regular
-    }
 
     public var body: some View {
         Group {
             if horizontalSizeClass == .regular {
-                HStack(spacing: 6) {
-                    durationKeys
-                    tripletKey
-                    dotKey
-                    Divider().frame(height: Self.dividerHeight)
-                    pitchKeys
-                    Divider().frame(height: Self.dividerHeight)
-                    EditorContextOps.buttons(viewModel: viewModel)
-                    deleteKey
+                // Compact width never has room for the one row, so it isn't even offered there — measuring it would
+                // only cost a layout pass to reach the same answer.
+                ViewThatFits(in: .horizontal) {
+                    singleRow
+                    stackedRows
                 }
             } else {
-                VStack(spacing: Self.rowSpacing) {
-                    HStack(spacing: 4) {
-                        durationKeys
-                        tripletKey
-                        EditorContextOps.buttons(viewModel: viewModel, isFlexible: usesFlexibleKeys)
-                        dotKey
-                    }
-                    HStack(spacing: 4) {
-                        pitchKeys
-                        deleteKey
-                    }
-                }
+                stackedRows
             }
         }
         // Every key goes inert while the transport is running — see `EditorViewModel.isPlaybackActive` — and equally
@@ -83,18 +63,56 @@ public struct EditorPadView: View {
     private static let rowSpacing: CGFloat = 3
     private static let cardVerticalPadding: CGFloat = 5
 
+    // MARK: Layouts
+
+    /// Everything on one row, keys at their natural 40 pt minimum and the groups told apart by dividers. Fixed
+    /// widths are the point: they are what makes this layout measurable, so `ViewThatFits` can tell whether it fits
+    /// before showing it.
+    private var singleRow: some View {
+        HStack(spacing: 6) {
+            durationKeys(isFlexible: false)
+            tripletKey(isFlexible: false)
+            dotKey(isFlexible: false)
+            Divider().frame(height: Self.dividerHeight)
+            pitchKeys(isFlexible: false)
+            Divider().frame(height: Self.dividerHeight)
+            EditorContextOps.buttons(viewModel: viewModel)
+            deleteKey(isFlexible: false)
+        }
+    }
+
+    /// Two 44 pt rows split by job, not by convenience: row 1 arms or re-times, row 2 writes.
+    ///
+    /// The keys share the row's width instead of claiming a fixed minimum, so this layout cannot overflow by
+    /// construction — on the narrowest supported phone (375 pt) each key still lands around 29 pt wide, and the
+    /// 44 pt row height keeps the touch targets tall enough to hit.
+    private var stackedRows: some View {
+        VStack(spacing: Self.rowSpacing) {
+            HStack(spacing: 4) {
+                durationKeys(isFlexible: true)
+                tripletKey(isFlexible: true)
+                EditorContextOps.buttons(viewModel: viewModel, isFlexible: true)
+                dotKey(isFlexible: true)
+            }
+            HStack(spacing: 4) {
+                pitchKeys(isFlexible: true)
+                deleteKey(isFlexible: true)
+            }
+        }
+    }
+
     // MARK: Key groups
 
     /// The duration keys. Tapping arms that length for the next input — it does NOT re-time anything already
     /// written. The armed key shows a persistent accent capsule; picking a note or rest with nothing armed yet lights
     /// the key matching what was picked (`EditorViewModel.armFromSelectionIfNeeded`).
-    private var durationKeys: some View {
+    private func durationKeys(isFlexible: Bool) -> some View {
         ForEach(PadDurationGlyph.ordered, id: \.glyph) { duration, glyph in
             PadDurationKey(
                 duration: duration,
                 glyph: glyph,
                 isSelected: viewModel.armedDuration == duration,
-                isFlexible: usesFlexibleKeys,
+                isFlexible: isFlexible,
             ) {
                 viewModel.setDuration(duration)
             }
@@ -102,14 +120,14 @@ public struct EditorPadView: View {
     }
 
     /// The seven pitch-letter keys (C…B). Letter names are universal and intentionally not localized.
-    private var pitchKeys: some View {
+    private func pitchKeys(isFlexible: Bool) -> some View {
         ForEach(Self.pitchLetters, id: \.self) { letter in
             Button {
                 viewModel.inputPitch(letter: Character(letter.lowercased()))
             } label: {
                 PadKeyGlyph.pitchLetter(letter)
             }
-            .buttonStyle(PadKeyStyle(isFlexible: usesFlexibleKeys))
+            .buttonStyle(PadKeyStyle(isFlexible: isFlexible))
             .accessibilityLabel(Text(verbatim: String(letter)))
         }
     }
@@ -122,7 +140,7 @@ public struct EditorPadView: View {
     /// the menu) so the pad doesn't spend keys on ratios nobody reaches for — and the key then WEARS the last size
     /// picked, because a piece that wants quintuplets wants them more than once and shouldn't need the menu each
     /// time.
-    private var tripletKey: some View {
+    private func tripletKey(isFlexible: Bool) -> some View {
         Menu {
             ForEach(Self.tupletSizes, id: \.self) { size in
                 Button {
@@ -133,7 +151,7 @@ public struct EditorPadView: View {
             }
         } label: {
             EditorContextOps.textGlyph("\(viewModel.armedTuplet)")
-                .padKeyChrome(isArmed: viewModel.isCaretInTuplet, isFlexible: usesFlexibleKeys)
+                .padKeyChrome(isArmed: viewModel.isCaretInTuplet, isFlexible: isFlexible)
         } primaryAction: {
             if viewModel.isCaretInTuplet {
                 viewModel.removeTuplet()
@@ -149,10 +167,10 @@ public struct EditorPadView: View {
     /// make the menu longer to read.
     private static let tupletSizes = Array(2 ... 6)
 
-    private var dotKey: some View {
+    private func dotKey(isFlexible: Bool) -> some View {
         PadDotKey(
             dots: viewModel.armedDots,
-            isFlexible: usesFlexibleKeys,
+            isFlexible: isFlexible,
             setDots: { viewModel.setArmedDots($0) },
             toggle: { viewModel.toggleArmedDot() },
         )
@@ -164,13 +182,13 @@ public struct EditorPadView: View {
     ///
     /// It wears a rest rather than a backspace arrow because that is literally what it leaves behind, and the rest
     /// it draws is the armed length's — so the key shows the silence you are about to get.
-    private var deleteKey: some View {
+    private func deleteKey(isFlexible: Bool) -> some View {
         Button {
             viewModel.writeRest()
         } label: {
             PadKeyGlyph.rest(viewModel.armedDuration)
         }
-        .buttonStyle(PadKeyStyle(isFlexible: usesFlexibleKeys))
+        .buttonStyle(PadKeyStyle(isFlexible: isFlexible))
         .disabled(!viewModel.canWriteRest)
         .accessibilityLabel(Text("editor.pad.delete", bundle: .module))
     }

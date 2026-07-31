@@ -7,8 +7,12 @@ import UtilityUI
 /// Layout:
 ///  - top-right: a voice pill and an undo / redo / 完了 glass cluster, mirroring `ReaderTopOverlay`'s 44 pt buttons;
 ///  - the editing cluster — the reader's transport plus the `EditorPadView` pad — docked to the top or bottom edge
-///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering;
-///  - regular width: `EditorPaletteView` docked to the trailing edge, vertically centered.
+///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering.
+///
+/// Regular width used to add a third piece: a palette card docked to the trailing edge, carrying a selection readout,
+/// the tie key and the `+3度` / `+8度` shortcuts. It is gone — it sat on the score permanently for keys the pad
+/// already has, and the readout was the only thing unique to it. The commands it drove (`addIntervalNote`) still
+/// exist on the view model, so bringing any of it back is a view-only change.
 ///
 /// Most of what the per-selection callout used to carry now lives in chrome that stays put (voice in the header
 /// pill, tuplets and tie on the pad), so the score isn't covered by a panel that moves as the selection moves. What
@@ -22,7 +26,6 @@ public struct EditorChromeView: View {
     private let bottomTransportClearance: CGFloat
     let onDone: () -> Void
     private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.undoManager) private var undoManager
 
     /// Remembered across sessions: someone who moves the pad out of the way once means it for every score they open.
@@ -82,12 +85,6 @@ public struct EditorChromeView: View {
 
     public var body: some View {
         ZStack(alignment: .topTrailing) {
-            if horizontalSizeClass == .regular {
-                EditorPaletteView(viewModel: viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .padding(.trailing)
-            }
-
             topCluster
                 // Measured so a top-docked pad can park BELOW the header rather than over (or above) it: 完了 and the
                 // voice picker have to stay reachable wherever the pad is.
