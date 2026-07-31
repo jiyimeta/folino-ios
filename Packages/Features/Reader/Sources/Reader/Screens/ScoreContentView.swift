@@ -29,6 +29,9 @@ struct ScoreContentView: View {
     /// Non-nil only while note editing. Already clef-applied by the caller; raw in every other respect (no transpose,
     /// no hidden staves, no collapsed multi-measure rests) so the element indices the Editor tracks stay valid.
     let editingScore: Score?
+    /// Which edit `editingScore` is. Travels WITH the score (see `ReaderRootScreen.editingScoreVersion`) so a
+    /// container's relayout key can never advance ahead of the score it is keyed to.
+    let editingScoreVersion: Int
     let editingHost: ReaderEditingHost?
 
     /// The score the containers render: the editing score while editing, the display-transformed one otherwise.
@@ -69,6 +72,7 @@ struct ScoreContentView: View {
                         scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                         autoFollowEnabled: autoFollowEnabled,
                         transposeSemitones: effectiveTransposeSemitones,
+                        editingScoreVersion: editingScoreVersion,
                         bottomControlClearance: bottomControlContentHeight,
                         viewModel: viewModel,
                         editingHost: editingHost,
@@ -84,6 +88,7 @@ struct ScoreContentView: View {
                         scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                         autoFollowEnabled: autoFollowEnabled,
                         transposeSemitones: effectiveTransposeSemitones,
+                        editingScoreVersion: editingScoreVersion,
                         viewModel: viewModel,
                         editingHost: editingHost,
                     )
@@ -99,6 +104,7 @@ struct ScoreContentView: View {
                         autoFollowEnabled: autoFollowEnabled,
                         showsPageTurnButtons: pageTurnButtonsVisible,
                         transposeSemitones: effectiveTransposeSemitones,
+                        editingScoreVersion: editingScoreVersion,
                         viewModel: viewModel,
                         editingHost: editingHost,
                     )

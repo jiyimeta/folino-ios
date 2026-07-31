@@ -383,6 +383,21 @@ public struct ReaderRootScreen: View {
         return editScore.applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
     }
 
+    /// Which edit `editingScore` is — the containers' relayout key, read HERE so the two always travel together.
+    ///
+    /// The containers used to read `editingHost.editGeneration` themselves. That looked equivalent and wasn't: the
+    /// bump invalidated the container directly through observation, so its body re-ran — and started the relayout —
+    /// while `score` was still the previous edit's, because this screen hadn't re-rendered to hand down the new one
+    /// yet. The layout key's `scoreSignature` is deliberately note-blind (parts / staves / division / opening clef),
+    /// so when the new score DID arrive the key was unchanged and no second relayout ran. The result was a bar that
+    /// kept its pre-edit engraving until some later edit happened to line up — measured as "the note only appears
+    /// when you type the next one", with the relayout finishing on time every time and quietly re-engraving the
+    /// score as it was BEFORE the note was written.
+    private var editingScoreVersion: Int {
+        guard let host = editingHost, host.isEditing else { return 0 }
+        return host.editGeneration
+    }
+
     /// The score / PDF layer (or the screenshot override), inset for the top overlay + bottom transport. Extracted
     /// from `body` to keep the `ZStack` closure within SwiftLint's body-length budget; constructing
     /// `ScoreContentView` reads no per-tick playback state, so this stays off the auto-follow re-render path.
@@ -405,6 +420,7 @@ public struct ReaderRootScreen: View {
                     pageTurnButtonsVisible: pageTurnButtonsVisible,
                     bottomControlContentHeight: bottomControlContentHeight,
                     editingScore: editingScore,
+                    editingScoreVersion: editingScoreVersion,
                     editingHost: editingHost,
                 )
             }

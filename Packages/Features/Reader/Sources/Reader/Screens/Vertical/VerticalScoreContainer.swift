@@ -44,6 +44,9 @@ struct VerticalScoreContainer: View {
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
     let transposeSemitones: Int
+    /// Which edit `score` is while note editing, 0 otherwise. Keyed on INSTEAD of `editingHost.editGeneration`:
+    /// read from the host here, the key advanced before the new score arrived. See `ReaderRootScreen`.
+    let editingScoreVersion: Int
     /// Content height the bottom transport control reserves above the bottom safe area (collapsed pill or expanded seek
     /// card). The scroll content pads its bottom by this plus the bottom safe-area inset — i.e. the full distance from
     /// the control's top edge to the screen's bottom edge — so the last system clears the control when scrolled fully
@@ -57,7 +60,14 @@ struct VerticalScoreContainer: View {
     /// score's structural signature (e.g. a pitch-drag on an existing note) still triggers a relayout.
     var editingHost: ReaderEditingHost?
 
-    @State private var document: LayoutDocument?
+    /// Layout output — observable, not `@State`; see `ScoreLayoutState` for why.
+    @State private var layoutState = ScoreLayoutState()
+
+    private var document: LayoutDocument? {
+        get { layoutState.document }
+        nonmutating set { layoutState.document = newValue }
+    }
+
     @State private var lastWidth: CGFloat = 0
     @State private var lastManualCursor: ScoreCursor?
     @State private var liveScrollOffset: CGPoint = .zero
@@ -130,7 +140,7 @@ struct VerticalScoreContainer: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     transposeSemitones: transposeSemitones,
-                    editGeneration: editingHost?.editGeneration ?? 0,
+                    editGeneration: editingScoreVersion,
                 )) {
                     await rebuildLayout(width: layoutWidth)
                 }

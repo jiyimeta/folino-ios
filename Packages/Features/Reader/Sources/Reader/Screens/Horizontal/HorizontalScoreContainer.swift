@@ -29,13 +29,23 @@ struct HorizontalScoreContainer: View {
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
     let transposeSemitones: Int
+    /// Which edit `score` is while note editing, 0 otherwise. Keyed on INSTEAD of `editingHost.editGeneration`:
+    /// read from the host here, the key advanced before the new score arrived. See `ReaderRootScreen`.
+    let editingScoreVersion: Int
     @Bindable var viewModel: ReaderViewModel
     /// Note-editing seam, mirroring `VerticalScoreContainer`: while editing, taps select instead of seeking, the
     /// rebuilt document is published to the host, and `editGeneration` joins the layout task's identity so an edit
     /// that doesn't change the score's hash still relays out.
     var editingHost: ReaderEditingHost?
 
-    @State private var document: LayoutDocument?
+    /// Layout output — observable, not `@State`; see `ScoreLayoutState` for why.
+    @State private var layoutState = ScoreLayoutState()
+
+    private var document: LayoutDocument? {
+        get { layoutState.document }
+        nonmutating set { layoutState.document = newValue }
+    }
+
     @State private var liveScrollOffset: CGPoint = .zero
     @State private var pinchSession: PinchSession?
     @State private var pendingScroll: ScoreScrollCommand?
@@ -71,7 +81,7 @@ struct HorizontalScoreContainer: View {
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
                     transposeSemitones: transposeSemitones,
-                    editGeneration: editingHost?.editGeneration ?? 0,
+                    editGeneration: editingScoreVersion,
                 )) {
                     await rebuildLayout()
                 }

@@ -74,12 +74,48 @@ enum EditorFixtures {
         return score
     }
 
-    static func restID(element: Int) -> RestID {
-        RestID(staff: staff0, measureIndex: 0, voiceIndex: 0, elementIndex: element)
+    /// Two measures of four quarter rests in 4/4. Measure 0 keeps the fixture's leading time signature (so its rests
+    /// start at element index 1); measure 1 carries none, so its first rest is element index 0 — the shape a real
+    /// second measure has, and what the cross-barline paths have to walk into.
+    static func twoMeasuresOfQuarterRests() -> Score {
+        var score = fourQuarterRests()
+        score.parts[0].staves[0].measures.append(Measure(voices: [
+            Voice(elements: [
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+            ]),
+        ]))
+        return score
     }
 
-    static func noteID(element: Int, noteIndex: Int = 0) -> NoteID {
-        NoteID(staff: staff0, measureIndex: 0, voiceIndex: 0, elementIndex: element, noteIndexInChord: noteIndex)
+    /// `twoMeasuresOfQuarterRests` with a third measure, for chains that run past two bars.
+    static func threeMeasuresOfQuarterRests() -> Score {
+        var score = twoMeasuresOfQuarterRests()
+        score.parts[0].staves[0].measures.append(Measure(voices: [
+            Voice(elements: [
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+            ]),
+        ]))
+        return score
+    }
+
+    static func restID(measure: Int = 0, element: Int) -> RestID {
+        RestID(staff: staff0, measureIndex: measure, voiceIndex: 0, elementIndex: element)
+    }
+
+    static func noteID(measure: Int = 0, element: Int, noteIndex: Int = 0) -> NoteID {
+        NoteID(
+            staff: staff0,
+            measureIndex: measure,
+            voiceIndex: 0,
+            elementIndex: element,
+            noteIndexInChord: noteIndex,
+        )
     }
 
     static func sampleItem() -> ScoreItem {
