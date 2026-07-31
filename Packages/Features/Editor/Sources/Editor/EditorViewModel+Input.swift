@@ -230,6 +230,9 @@ extension EditorViewModel {
         else { return }
         let veID = VoiceElementID(restID)
         let generationBeforeInput = generation
+        if writeCrossingBarline(
+            pitch: planned.pitch, tpc: planned.tpc, at: veID, in: score, from: generationBeforeInput,
+        ) { return }
         if let armed = armedInputDuration, rest.duration != armed, !isInsideTuplet(veID) {
             applyCommand(CompositeEditCommand(
                 commands: [
@@ -256,6 +259,9 @@ extension EditorViewModel {
         let veID = VoiceElementID(noteID)
         let pitch = SetNotePitch(at: noteID, pitch: target.pitch, tpc: target.tpc)
         let generationBeforeInput = generation
+        if writeCrossingBarline(
+            pitch: target.pitch, tpc: target.tpc, at: veID, in: score, from: generationBeforeInput,
+        ) { return }
         if let armed = armedInputDuration, case let .chord(chord)? = score[veID],
            chord.duration != armed, !isInsideTuplet(veID)
         {
@@ -269,14 +275,42 @@ extension EditorViewModel {
         land(after: veID, unlessStillAt: generationBeforeInput)
     }
 
+    /// The armed length doesn't fit the bar → write it as tied notes across the barline instead (spelled by
+    /// `CrossBarNoteInputPlanner`), and report that input is done. False means this isn't that case and the caller's
+    /// ordinary single-slot path should run.
+    ///
+    /// The chain is one composite, so it is one undo step; the selection lands on the note's first piece while the
+    /// caret advances past its last, which is the same "selection on what you wrote, caret on what's next" split
+    /// every other input takes — just measured across the whole chain rather than one slot.
+    private func writeCrossingBarline(
+        pitch: Int, tpc: Int, at location: VoiceElementID, in score: Score, from previousGeneration: Int,
+    ) -> Bool {
+        guard let armed = armedInputDuration,
+              let plan = CrossBarNoteInputPlanner.plan(
+                  pitch: pitch, tpc: tpc, duration: armed, at: location, in: score,
+              )
+        else { return false }
+        applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.head))
+        land(selection: plan.head, caretAfter: plan.tail, unlessStillAt: previousGeneration)
+        return true
+    }
+
     /// Where input leaves the two markers: the selection on the note just written at `location`, the caret on the
     /// next timed element in voice order (spec §11-5: advance on after pitch-key input) — nil past the end of the
     /// staff. Both are placed in one go, before the audition, so the preview sounds the note that was actually
     /// written. A refused edit (`generation` unmoved) leaves everything where it was.
     private func land(after location: VoiceElementID, unlessStillAt previousGeneration: Int) {
+        land(selection: location, caretAfter: location, unlessStillAt: previousGeneration)
+    }
+
+    /// The two-slot form of `land(after:)`, for a note written as a tied chain: the selection belongs on where the
+    /// note starts, the caret on what follows where it ends.
+    private func land(
+        selection slot: VoiceElementID, caretAfter tail: VoiceElementID, unlessStillAt previousGeneration: Int,
+    ) {
         guard generation != previousGeneration, let score else { return }
-        let written = SelectionRederivation.item(at: location, in: score, preferringNoteIndex: nil)
-        let next = ElementNavigator.nextTimedElement(after: location, in: score)
+        let written = SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
+        let next = ElementNavigator.nextTimedElement(after: tail, in: score)
             .flatMap { SelectionRederivation.item(at: $0, in: score, preferringNoteIndex: nil) }
         place(selection: written, caret: next)
         auditionSelectedNote(unlessStillAt: previousGeneration)
