@@ -40,14 +40,29 @@ struct PagedScoreContainer: View {
     /// already transposed. Without this the `TaskKey.scoreSignature` hash doesn't change on transpose and the layout
     /// task never re-runs.
     let transposeSemitones: Int
+    /// Which edit `score` is while note editing, 0 otherwise. Keyed on INSTEAD of `editingHost.editGeneration`:
+    /// read from the host here, the key advanced before the new score arrived. See `ReaderRootScreen`.
+    let editingScoreVersion: Int
     @Bindable var viewModel: ReaderViewModel
     /// Note-editing seam, mirroring `VerticalScoreContainer`: while editing, taps select instead of seeking, the
     /// rebuilt document is published to the host, and `editGeneration` joins the layout task's identity. Page turns
     /// (swipe + tap zones) are unaffected — the editing overlay never takes touches.
     var editingHost: ReaderEditingHost?
 
-    @State var document: LayoutDocument?
-    @State var pages: [Range<Int>] = []
+    /// Layout output. Held in an `@Observable` and reached through the two forwarding properties below — see
+    /// `ScoreLayoutState` for why `@State` silently failed to re-render the score after an edit.
+    @State var layoutState = ScoreLayoutState()
+
+    var document: LayoutDocument? {
+        get { layoutState.document }
+        nonmutating set { layoutState.document = newValue }
+    }
+
+    var pages: [Range<Int>] {
+        get { layoutState.pages }
+        nonmutating set { layoutState.pages = newValue }
+    }
+
     /// `pageIndex` lives on an `@Observable` so `withAnimation` transactions reach the `ScoreScrollHost`-hosted subtree
     /// via the observation system. `UIHostingController` does not forward animation transactions through `rootView`
     /// reassignment — same hazard documented on `PinchState`.
@@ -129,7 +144,7 @@ struct PagedScoreContainer: View {
                         showInvisibleElements: showInvisibleElements,
                         pageHeight: viewportHeight,
                         transposeSemitones: transposeSemitones,
-                        editGeneration: editingHost?.editGeneration ?? 0,
+                        editGeneration: editingScoreVersion,
                     )) {
                         await rebuildLayout(
                             width: contentWidth,

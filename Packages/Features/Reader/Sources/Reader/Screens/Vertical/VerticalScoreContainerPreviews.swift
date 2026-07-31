@@ -27,6 +27,7 @@ import SwiftUI
         scrollAnchorCursor: nil,
         autoFollowEnabled: true,
         transposeSemitones: 0,
+        editingScoreVersion: 0,
         bottomControlClearance: ReaderTransportControl.expandedContentHeight,
         viewModel: vm,
     )
@@ -58,6 +59,7 @@ private func abLoopPreview(prefs: ReaderPreferences) -> some View {
         scrollAnchorCursor: nil,
         autoFollowEnabled: true,
         transposeSemitones: 0,
+        editingScoreVersion: 0,
         bottomControlClearance: ReaderTransportControl.expandedContentHeight,
         viewModel: vm,
     )

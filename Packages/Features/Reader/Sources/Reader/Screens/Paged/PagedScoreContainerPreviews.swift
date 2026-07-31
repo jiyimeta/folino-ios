@@ -31,6 +31,7 @@ private func paged(
         autoFollowEnabled: true,
         showsPageTurnButtons: true,
         transposeSemitones: 0,
+        editingScoreVersion: 0,
         viewModel: vm,
     )
     .task { await vm.load() }
