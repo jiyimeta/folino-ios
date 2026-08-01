@@ -57,13 +57,13 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
     private var pageTurnButtonsVisible = true
 
-    /// `true` once the user chose "Don't show again" on the PDF-playback caveat — stops it from auto-presenting.
-    @AppStorage(ReaderGlobalSettingsKey.pdfPlaybackNoticeDismissed)
-    private var pdfPlaybackNoticeDismissed = false
+    /// `true` once the user chose "Don't show again" on the PDF-source notice — stops it from auto-presenting.
+    @AppStorage(ReaderGlobalSettingsKey.pdfSourceNoticeDismissed)
+    private var pdfSourceNoticeDismissed = false
 
-    /// Drives the PDF-playback caveat dialog: shown automatically the first time an opened PDF becomes playable
-    /// (unless permanently dismissed), and on demand from the PDF badge. `hasAutoShownPDFNotice` keeps the
-    /// auto-presentation to once per Reader open; "OK" just closes it for now, "Don't show again" sets the flag above.
+    /// Drives the PDF-source notice: shown automatically the first time a PDF-origin item is opened (unless
+    /// permanently dismissed), and on demand from the PDF badge. `hasAutoShownPDFNotice` keeps the auto-presentation
+    /// to once per Reader open; "OK" just closes it for now, "Don't show again" sets the flag above.
     @State private var isPDFNoticePresented = false
     @State private var hasAutoShownPDFNotice = false
 
@@ -187,14 +187,15 @@ public struct ReaderRootScreen: View {
         }
         .navigationTitle("")
         .toolbarVisibility(.hidden, for: .navigationBar)
-        .pdfPlaybackNoticeAlert(
-            state: viewModel.pdfPlayback,
+        .pdfSourceNoticeAlert(
+            originState: viewModel.scoreItem.pdfOriginState,
             isPresented: $isPDFNoticePresented,
-            onDontShowAgain: { pdfPlaybackNoticeDismissed = true },
+            onDontShowAgain: { pdfSourceNoticeDismissed = true },
         )
-        .onChange(of: viewModel.isPDFPlaybackReady) { _, isReady in
-            // Auto-present the caveat once per open, the first time a PDF becomes playable — unless dismissed for good.
-            guard isReady, !hasAutoShownPDFNotice, !pdfPlaybackNoticeDismissed else { return }
+        .onChange(of: viewModel.scoreItem.pdfOriginState, initial: true) { _, state in
+            // Once per open, as soon as the item's origin is settled — for an item converted on this very open that's
+            // after the conversion, not at the start of it. Never for something that didn't come from a PDF.
+            guard state != .notPDF, !hasAutoShownPDFNotice, !pdfSourceNoticeDismissed else { return }
             hasAutoShownPDFNotice = true
             isPDFNoticePresented = true
         }
