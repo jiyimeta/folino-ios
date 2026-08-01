@@ -39,6 +39,102 @@
         }
       }
     },
+    "reader.pdf.reread.action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read the PDF again"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF から読み取り直す"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.confirm.action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read again"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み取り直す"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.confirm.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your note edits and per-staff settings (clef, visibility, instrument, volume, transposition) will be lost. Annotations are kept, but they may shift."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符の編集内容と、譜表ごとの設定（音部記号・表示/非表示・音色・音量・移調）は失われます。書き込みは残りますが、位置がずれることがあります。"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.confirm.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read this PDF again?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF から読み取り直しますか？"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.failed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino couldn't read sheet music out of this PDF. Your score is unchanged."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この PDF から楽譜を読み取れませんでした。楽譜はそのままです。"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.failed.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read this PDF"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF を読み取れませんでした"
+          }
+        }
+      }
+    },
     "reader.error.cannotOpen.title" : {
       "localizations" : {
         "en" : {

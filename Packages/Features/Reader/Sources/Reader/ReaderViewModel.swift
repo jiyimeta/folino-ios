@@ -104,6 +104,12 @@ final class ReaderViewModel {
         preferencesStore.preferences
     }
 
+    /// Forwards to the preferences store for the extensions that live in other files (`preferencesStore` itself stays
+    /// private so the sub-models keep going through their own wiring).
+    func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
+        await preferencesStore.mutate(apply)
+    }
+
     /// Whether the inspector should show the playlist-continuation control. True only when opened from a playlist.
     var isInPlaylist: Bool {
         playlistID != nil

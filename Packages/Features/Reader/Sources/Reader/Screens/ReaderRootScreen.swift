@@ -67,6 +67,10 @@ public struct ReaderRootScreen: View {
     @State private var isPDFNoticePresented = false
     @State private var hasAutoShownPDFNotice = false
 
+    /// Gate for the destructive re-read. Only raised when `reReadNeedsConfirmation` — a re-read with nothing to lose
+    /// runs straight from the toolbar button.
+    @State private var isReReadConfirmPresented = false
+
     @Environment(\.scenePhase) private var scenePhase
 
     private var layoutMode: ReaderLayoutMode {
@@ -250,6 +254,7 @@ public struct ReaderRootScreen: View {
             viewModel.currentLayoutMode = newValue
             viewModel.analytics.log(.layoutModeChanged(newValue))
         }
+        .pdfReReadAlerts(viewModel: viewModel, isConfirmPresented: $isReReadConfirmPresented)
         .onChange(of: viewModel.displaySource) { _, source in
             // Horizontal has no meaning on fixed-layout pages, so switching to the original clamps it — and remembers
             // it, so coming back doesn't silently demote the user's choice. Page and vertical exist on both sides and
@@ -315,6 +320,7 @@ public struct ReaderRootScreen: View {
                     onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
                     leadingIsSidebarToggle: leadingIsSidebarToggle,
                     onShowPDFNotice: { isPDFNoticePresented = true },
+                    onConfirmReReadPDF: { isReReadConfirmPresented = true },
                     onStartEditing: editingHost == nil ? nil : { startEditing() },
                 )
                 // Fade the top overlay out while editing — its buttons (back / share / annotate / inspectors) have no

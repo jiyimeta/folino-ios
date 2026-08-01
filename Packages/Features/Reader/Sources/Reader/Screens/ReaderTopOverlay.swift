@@ -27,6 +27,10 @@ struct ReaderTopOverlay: View {
     /// dialog. Defaults to a no-op so previews can omit it.
     var onShowPDFNotice: () -> Void = {}
 
+    /// Invoked when re-reading the PDF would discard the user's work — the parent presents the confirmation. A re-read
+    /// with nothing to lose runs straight from the button and never reaches here.
+    var onConfirmReReadPDF: () -> Void = {}
+
     /// Invoked when the user taps the "edit notes" button. `nil` hides the button entirely — the default, so previews
     /// and PDF readers (which never wire an `editingHost`) are unaffected.
     var onStartEditing: (() -> Void)?
@@ -82,9 +86,16 @@ struct ReaderTopOverlay: View {
                 Button { onShowPDFNotice() } label: { PDFBadge() }
                     .buttonStyle(.plain)
             }
-            if viewModel.canShowOriginalPDF {
-                displaySourceToggle()
-                    .interactiveGlassCompat()
+            if viewModel.canShowOriginalPDF || viewModel.canReReadPDF {
+                HStack(spacing: 0) {
+                    if viewModel.canShowOriginalPDF {
+                        displaySourceToggle()
+                    }
+                    if viewModel.canReReadPDF {
+                        reReadPDFButton(onConfirm: onConfirmReReadPDF)
+                    }
+                }
+                .interactiveGlassCompat()
             }
             Spacer(minLength: 0)
 
@@ -297,26 +308,8 @@ struct ReaderTopOverlay: View {
         }
     }
 
-    /// The PDF reader's display inspector: a page/vertical layout toggle plus the note about which display adjustments
-    /// a fixed-layout PDF can't offer. Stands in for the score reader's visual inspector, which derives its controls
-    /// from a rendered `Score`.
-    private var pdfLayoutButton: some View {
-        overlayButton(
-            systemImage: "text.page",
-            label: Text("reader.toolbar.showDisplaySettings", bundle: .module),
-        ) {
-            viewModel.isVisualInspectorPresented.toggle()
-        }
-        .popover(isPresented: $viewModel.isVisualInspectorPresented) {
-            PDFLayoutInspectorScreen()
-                .frame(idealWidth: 320, idealHeight: 200)
-                .presentationDetents([.medium])
-                .presentationCompactAdaptation(.sheet)
-        }
-    }
-
-    /// Internal (not private) so the display-source toggle in `ReaderTopOverlay+DisplaySource.swift` renders in the
-    /// same chrome as its neighbors.
+    /// Internal (not private) so the PDF-side buttons in `ReaderTopOverlay+DisplaySource.swift` render in the same
+    /// chrome as their neighbors.
     func overlayButton(
         systemImage: String,
         label: Text,
