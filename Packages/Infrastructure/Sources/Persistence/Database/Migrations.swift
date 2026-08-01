@@ -20,6 +20,7 @@ enum AppMigrations {
         m.registerMigration("v12", migrate: migrateV12)
         m.registerMigration("v13", migrate: migrateV13)
         m.registerMigration("v14", migrate: migrateV14)
+        m.registerMigration("v15", migrate: migrateV15)
         return m
     }()
 
@@ -348,6 +349,23 @@ enum AppMigrations {
         try db.execute(sql: """
         ALTER TABLE reader_preferences
         ADD COLUMN has_seeded_authored_visibility INTEGER NOT NULL DEFAULT 0
+        """)
+    }
+
+    // MARK: - v15
+
+    /// Records where an item's notation came from when it was read out of a PDF: the original PDF sidecar's file name
+    /// and hash, the hash of the `.mscz` the conversion produced (drift from `content_hash` means the user edited it),
+    /// and a sticky "we tried and it wasn't readable" flag that keeps the Reader from re-running OMR on every open.
+    /// All NULL / 0 for existing rows, which reads back as `PDFOriginState.notPDF`; rows that really are PDFs
+    /// back-fill on their next open.
+    private static func migrateV15(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE score_items ADD COLUMN source_pdf_file_name TEXT")
+        try db.execute(sql: "ALTER TABLE score_items ADD COLUMN source_pdf_content_hash TEXT")
+        try db.execute(sql: "ALTER TABLE score_items ADD COLUMN pdf_derived_content_hash TEXT")
+        try db.execute(sql: """
+        ALTER TABLE score_items
+        ADD COLUMN pdf_conversion_failed INTEGER NOT NULL DEFAULT 0
         """)
     }
 }

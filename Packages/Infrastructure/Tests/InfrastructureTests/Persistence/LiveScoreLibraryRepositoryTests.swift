@@ -218,6 +218,43 @@ struct LiveScoreLibraryRepositoryTests {
         #expect(matches.first?.id == live.id)
     }
 
+    @Test func `PDF-origin fields round trip through the database`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        var item = makeBareItem(localFileName: "converted.mscz", contentHash: "mscz-hash")
+        item.sourcePDFFileName = "converted.pdf"
+        item.sourcePDFContentHash = "pdf-hash"
+        item.pdfDerivedContentHash = "mscz-hash"
+        try await repo.saveScoreItem(item)
+
+        try await waitFor { repo.scoreItems.contains { $0.id == item.id } }
+        let stored = try #require(repo.scoreItems.first { $0.id == item.id })
+        #expect(stored.sourcePDFFileName == "converted.pdf")
+        #expect(stored.sourcePDFContentHash == "pdf-hash")
+        #expect(stored.pdfDerivedContentHash == "mscz-hash")
+        #expect(!stored.pdfConversionFailed)
+        #expect(stored.pdfOriginState == .converted)
+    }
+
+    @Test func `re-importing the same PDF is a duplicate even after conversion`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        var item = makeBareItem(localFileName: "converted.mscz", contentHash: "mscz-hash")
+        item.sourcePDFFileName = "converted.pdf"
+        item.sourcePDFContentHash = "pdf-hash"
+        item.pdfDerivedContentHash = "mscz-hash"
+        try await repo.saveScoreItem(item)
+
+        let matches = try await repo.scoreItems(matchingContentHash: "pdf-hash")
+        #expect(matches.map(\.id) == [item.id])
+    }
+
     private func makeBareItem(localFileName: String, contentHash: String) -> ScoreItem {
         ScoreItem(
             title: "x", composer: nil, instrumentationSummary: nil,
