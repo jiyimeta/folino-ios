@@ -21,3 +21,11 @@ public struct PDFConversionFacts: Sendable {
         self.summary = summary
     }
 }
+
+/// Reads the PDF at `pdfURL` into notation and writes it to `destinationMSCZ`, answering the facts needed to update
+/// the library row — or `nil` when the PDF can't be read as music.
+///
+/// A closure rather than a protocol so the two callers that need it (the importer in `Persistence`, the Reader
+/// feature) can take it without either depending on the `ScoreFiles` target that owns the implementation. The App
+/// builds it from `PDFScoreConverter`.
+public typealias PDFScoreConversion = @Sendable (_ pdfURL: URL, _ destinationMSCZ: URL) async -> PDFConversionFacts?
