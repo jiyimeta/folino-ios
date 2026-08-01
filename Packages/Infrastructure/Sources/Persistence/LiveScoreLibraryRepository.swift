@@ -196,14 +196,15 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     public func permanentlyDeleteScoreItem(id: ScoreItemID) async throws {
         let pool = database.pool
         do {
-            // Capture filename for disk cleanup BEFORE the row goes away.
-            let filename: String? = try await pool.read { db in
-                try ScoreItemRecord.fetchOne(db, key: id.rawValue.uuidString)?.localFileName
+            // Capture filenames for disk cleanup BEFORE the row goes away.
+            let filenames: [String] = try await pool.read { db in
+                guard let row = try ScoreItemRecord.fetchOne(db, key: id.rawValue.uuidString) else { return [] }
+                return Self.filesBackingRow(row)
             }
             try await pool.write { db in
                 _ = try ScoreItemRecord.deleteOne(db, key: id.rawValue.uuidString)
             }
-            if let filename {
+            for filename in filenames {
                 let url = scoresDirectory.appending(path: filename)
                 // Best-effort: file may already be missing. TODO: log orphaned-file events to telemetry once logging
                 // infrastructure exists.
@@ -223,7 +224,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 let rows = try ScoreItemRecord
                     .filter(Column("deleted_at") != nil && Column("deleted_at") < stamp)
                     .fetchAll(db)
-                let names = rows.map(\.localFileName)
+                let names = rows.flatMap(Self.filesBackingRow)
                 for row in rows {
                     _ = try ScoreItemRecord.deleteOne(db, key: row.id)
                 }
@@ -236,6 +237,17 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }
+    }
+
+    /// Every file in the scores directory that belongs to a row. Usually just the score, but an item folino read out
+    /// of a PDF also owns the original sidecar — leaving that behind would silently retain the largest file of an
+    /// item the user deleted.
+    private nonisolated static func filesBackingRow(_ row: ScoreItemRecord) -> [String] {
+        var names = [row.localFileName]
+        if let sidecar = row.sourcePDFFileName, sidecar != row.localFileName {
+            names.append(sidecar)
+        }
+        return names
     }
 
     public func saveTag(_ tag: Domain.Tag) async throws {

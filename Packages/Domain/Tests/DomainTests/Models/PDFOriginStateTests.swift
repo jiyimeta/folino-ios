@@ -71,6 +71,20 @@ struct PDFOriginStateTests {
     }
 
     @Test
+    func `the PDF badge survives the conversion`() {
+        #expect(!ScorePresentation.showsPDFBadge(for: item(localFileName: "a.mscz")))
+        #expect(ScorePresentation.showsPDFBadge(for: item(
+            localFileName: "a.pdf",
+            sourcePDFFileName: "a.pdf",
+        )))
+        #expect(ScorePresentation.showsPDFBadge(for: item(
+            localFileName: "a.mscz",
+            sourcePDFFileName: "a.pdf",
+            pdfDerivedContentHash: "derived",
+        )))
+    }
+
+    @Test
     func `the score counts as edited only once its bytes differ from what the conversion wrote`() {
         let untouched = item(
             localFileName: "a.mscz",

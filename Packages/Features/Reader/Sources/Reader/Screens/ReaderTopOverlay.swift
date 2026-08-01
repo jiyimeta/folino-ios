@@ -80,9 +80,10 @@ struct ReaderTopOverlay: View {
                 )
                 .interactiveGlassCompat()
             }
-            if !viewModel.capabilities.canPlay {
-                // `canPlay == false` ⇔ PDF in this reader: a tappable brand badge that opens the PDF-playback caveat
-                // dialog — reachable any time, in place of an always-on note.
+            if ScorePresentation.showsPDFBadge(for: viewModel.scoreItem) {
+                // A tappable brand badge that opens the PDF-source notice — reachable any time, in place of an
+                // always-on note. It stays after folino reads the PDF into notation: that's exactly when "this was
+                // machine-read, check it" is worth saying.
                 Button { onShowPDFNotice() } label: { PDFBadge() }
                     .buttonStyle(.plain)
             }

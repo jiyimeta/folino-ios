@@ -255,6 +255,28 @@ struct LiveScoreLibraryRepositoryTests {
         #expect(matches.map(\.id) == [item.id])
     }
 
+    @Test func `permanently deleting a converted item takes its original PDF with it`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let scores = try TempDirectory()
+        defer { withExtendedLifetime(scores) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: scores.url)
+        try await repo.refresh()
+
+        var item = makeBareItem(localFileName: "converted.mscz", contentHash: "mscz-hash")
+        item.sourcePDFFileName = "converted.pdf"
+        item.sourcePDFContentHash = "pdf-hash"
+        item.pdfDerivedContentHash = "mscz-hash"
+        try await repo.saveScoreItem(item)
+        try Data("score".utf8).write(to: scores.url.appending(path: "converted.mscz"))
+        try Data("pdf".utf8).write(to: scores.url.appending(path: "converted.pdf"))
+
+        try await repo.permanentlyDeleteScoreItem(id: item.id)
+
+        #expect(!FileManager.default.fileExists(atPath: scores.url.appending(path: "converted.mscz").path))
+        #expect(!FileManager.default.fileExists(atPath: scores.url.appending(path: "converted.pdf").path))
+    }
+
     private func makeBareItem(localFileName: String, contentHash: String) -> ScoreItem {
         ScoreItem(
             title: "x", composer: nil, instrumentationSummary: nil,
