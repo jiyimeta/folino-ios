@@ -42,15 +42,29 @@ final class ReaderViewModel {
     /// Settable (not `private(set)`) so the load paths in `ReaderViewModel+Load.swift` can drive the state transitions.
     var loadState: LoadState = .loading
 
-    /// What this reader session is allowed to do, derived once per `load()` from the item's format (PDFs disable
-    /// playback and all layout-derivation settings; only page/vertical viewing remains).
-    private(set) var capabilities: ReaderCapabilities = .forScore
+    /// What this reader session is allowed to do, derived per `load()` from the item's format and what is currently on
+    /// screen: a fixed-layout PDF page can't be re-engraved, so it disables every layout-derivation setting.
+    /// Settable (not `private(set)`) so the display-source switch in `ReaderViewModel+DisplaySource.swift` can swap it.
+    var capabilities: ReaderCapabilities = .forScore
+
+    /// Which rendition is on screen. Only an item whose PDF has been read into notation can be on `.originalPDF` by
+    /// choice; one folino couldn't read is pinned there because there is nothing else to show.
+    /// Settable (not `private(set)`) so the load and display-source paths in the extensions can drive it.
+    var displaySource: ReaderDisplaySource = .score
 
     /// Background OMR-playback readiness for an opened PDF. The PDF is displayed immediately
     /// (`loadState == .loadedPDF`); in parallel it's parsed into a playable `Score` + on-PDF geometry.
     /// Settable (not `private(set)`) so the PDF load path in `ReaderViewModel+Load.swift` and the parse
     /// method in `ReaderViewModel+PDFPlayback.swift` can drive the transitions.
     var pdfPlayback: PDFPlaybackState = .idle
+
+    /// True while a PDF is being read into notation — either on open (an item imported before folino could read one)
+    /// or on an explicit re-read. The reader shows its loading state for the duration; OMR is slow enough to notice.
+    /// Settable (not `private(set)`) so `ReaderViewModel+PDFConversion.swift` can drive it.
+    var isConvertingPDF = false
+
+    /// Set when a re-read fails, so the root screen can say so and clear it. Nothing else changes on failure.
+    var reReadError: String?
 
     /// The score's annotation model: one `DrawingAnchor` per stroke, each pinned to a `MusicalAnchor`. Loaded on open,
     /// rewritten on every canvas change. The container projects this to the current layout for display.
@@ -115,7 +129,12 @@ final class ReaderViewModel {
     /// when present, `loadPDF` parses the opened PDF in the background to enable playback + the on-PDF
     /// cursor. Internal so the PDF load path in `ReaderViewModel+Load.swift` can reach it.
     @ObservationIgnored let pdfPlaybackParser: (any PDFPlaybackParser)?
-    @ObservationIgnored private let scoresDirectory: URL
+    /// Reads a PDF into notation and writes it as `.mscz`. Injected by the App (`nil` on builds without ssm's PDF
+    /// importer). Drives both the one-time conversion of a PDF imported before folino could read one and the explicit
+    /// re-read. Internal so the conversion extension can reach it.
+    @ObservationIgnored let pdfConversion: PDFScoreConversion?
+    /// Internal so `ReaderViewModel+PDFConversion.swift` can resolve sidecar / destination paths.
+    @ObservationIgnored let scoresDirectory: URL
     @ObservationIgnored private let defaultStaffSize: Double
     /// Internal so the transport / overlay / sharing view-layer log sites reach the same sink as the VM-owned events.
     @ObservationIgnored let analytics: any Analytics
@@ -147,6 +166,7 @@ final class ReaderViewModel {
         defaultStaffSize: Double = 14,
         playbackController: (any PlaybackController)? = nil,
         pdfPlaybackParser: (any PDFPlaybackParser)? = nil,
+        pdfConversion: PDFScoreConversion? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
         playlistID: PlaylistID? = nil,
         analytics: any Analytics = NoopAnalytics(),
@@ -160,6 +180,7 @@ final class ReaderViewModel {
         self.metadataReader = metadataReader
         self.annotationCoordinator = annotationCoordinator
         self.pdfPlaybackParser = pdfPlaybackParser
+        self.pdfConversion = pdfConversion
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
         self.analytics = analytics
@@ -290,12 +311,19 @@ final class ReaderViewModel {
         loadState = .loading
         visibleScore = nil
         let format = ScoreFormat.detect(filename: scoreItem.localFileName)
-        capabilities = ReaderCapabilities.resolve(format: format)
+        capabilities = ReaderCapabilities.resolve(format: format, displaySource: displaySource)
         let url = scoresDirectory.appending(path: scoreItem.localFileName)
-        if format == .pdf {
-            await loadPDF(url: url)
-        } else {
+        guard format == .pdf else {
             await loadScoreFile(url: url)
+            return
+        }
+        // A PDF imported before folino could read one converts here, on its first open, and lands in the normal score
+        // path from then on. One that can't be read keeps today's behavior exactly.
+        if let scoreURL = await convertPDFIfNeeded(url: url) {
+            capabilities = ReaderCapabilities.resolve(format: .mscz, displaySource: displaySource)
+            await loadScoreFile(url: scoreURL)
+        } else {
+            await loadPDF(url: url)
         }
     }
 

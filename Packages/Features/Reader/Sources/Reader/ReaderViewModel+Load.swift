@@ -32,6 +32,8 @@ extension ReaderViewModel {
         }
         await loadOrSeedPreferences()
         clampLayoutModeToCapabilities()
+        // An item folino couldn't read has no score side; the original is all there is.
+        displaySource = .originalPDF
         loadState = .loadedPDF(doc)
         await loadAnnotations()
         await updateLastOpenedAtOnce()
