@@ -115,6 +115,30 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.hasSeededAuthoredVisibility = hasSeededAuthoredVisibility
     }
 
+    /// Whether any setting addressed by staff index is set. These are exactly the settings that stop meaning what the
+    /// user chose if the staves are renumbered — which is what re-reading a PDF can do.
+    public var hasStaffBoundOverrides: Bool {
+        !hiddenStaves.isEmpty
+            || !staffProgramOverrides.isEmpty
+            || !staffVolumeOverrides.isEmpty
+            || !staffClefOverrides.isEmpty
+            || transposeSemitones != 0
+    }
+
+    /// A copy with every staff-index-addressed setting reset. Sound-only settings (tempo, A4, master volume, repeat)
+    /// and `staffSize` survive — they don't reference staves by index. `hasSeededAuthoredVisibility` goes back to
+    /// `false` so the next open re-seeds the new parse's authored hidden staves.
+    public func clearingStaffBoundOverrides() -> ReaderPreferences {
+        var copy = self
+        copy.hiddenStaves = []
+        copy.staffProgramOverrides = [:]
+        copy.staffVolumeOverrides = [:]
+        copy.staffClefOverrides = [:]
+        copy.transposeSemitones = 0
+        copy.hasSeededAuthoredVisibility = false
+        return copy
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, scoreItemID, staffSize, hiddenStaves, staffProgramOverrides
         case staffVolumeOverrides, tempoMultiplier, honorLayoutBreaks

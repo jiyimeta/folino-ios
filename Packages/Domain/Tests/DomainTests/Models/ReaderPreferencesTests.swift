@@ -21,6 +21,34 @@ struct ReaderPreferencesTests {
         #expect(inRange.staffSize == 14)
     }
 
+    @Test func `staff-bound overrides are detected and cleared, leaving sound-only settings alone`() {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [address],
+            staffClefOverrides: [address: "F"],
+            tempoMultiplier: 1.5,
+            masterVolume: 2.0,
+            transposeSemitones: 3,
+        )
+        #expect(prefs.hasStaffBoundOverrides)
+
+        let cleared = prefs.clearingStaffBoundOverrides()
+        #expect(!cleared.hasStaffBoundOverrides)
+        #expect(cleared.hiddenStaves.isEmpty)
+        #expect(cleared.staffClefOverrides.isEmpty)
+        #expect(cleared.transposeSemitones == 0)
+        #expect(cleared.staffSize == 14)
+        #expect(cleared.tempoMultiplier == 1.5)
+        #expect(cleared.masterVolume == 2.0)
+    }
+
+    @Test func `preferences with nothing staff-bound set report clean`() {
+        let prefs = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [])
+        #expect(!prefs.hasStaffBoundOverrides)
+    }
+
     @Test func `default ID is fresh`() {
         let a = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [])
         let b = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [])

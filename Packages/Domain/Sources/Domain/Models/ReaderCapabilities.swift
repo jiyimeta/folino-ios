@@ -32,6 +32,14 @@ public struct ReaderCapabilities: Hashable, Sendable {
         format == .pdf ? .forPDF : .forScore
     }
 
+    /// Capabilities for a session, given what it is showing right now. A fixed-layout PDF page can't be re-engraved,
+    /// so showing the original disables every layout-derivation setting even when the item itself is a perfectly
+    /// ordinary score. Settings that only affect sound (tempo, A4, mixer, master volume) are not on this axis and
+    /// stay available.
+    public static func resolve(format: ScoreFormat?, displaySource: ReaderDisplaySource) -> ReaderCapabilities {
+        displaySource == .originalPDF ? .forPDF : resolve(format: format)
+    }
+
     /// Whether a reader session may play right now. A score is playable from its format alone; a PDF only
     /// after the background OMR parse succeeds. iOS reads this through `ReaderViewModel.canPlayNow`; Android
     /// through `nativeCanPlayNow`. One rule, both platforms.
