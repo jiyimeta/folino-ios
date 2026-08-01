@@ -1,6 +1,8 @@
+import CoreGraphics
 import Domain
 import Foundation
 @testable import Reader
+import SheetMusicCore
 import Testing
 
 /// Shared scaffolding for the PDF-origin reader tests: a temp scores directory holding a real `sample.pdf`, a
@@ -93,8 +95,17 @@ final class PDFReaderTestRig {
             repository: repository,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: scoresDirectory,
+            pdfPlaybackParser: CountingPDFParser(rig: self),
             pdfConversion: makeConversion(),
         )
+    }
+
+    /// How many times the OMR parser has been asked for geometry. The original-PDF view should ask once per session,
+    /// not once per switch.
+    private(set) var parseCallCount = 0
+
+    fileprivate func recordParse() {
+        parseCallCount += 1
     }
 
     private func makeConversion() -> PDFScoreConversion {
@@ -125,5 +136,35 @@ final class PDFReaderTestRig {
                 ),
             )
         }
+    }
+}
+
+/// Counts how often the reader asks for an OMR parse and always answers with a one-note playable score, so the tests
+/// can assert both the readiness and the call count.
+private struct CountingPDFParser: PDFPlaybackParser {
+    let rig: PDFReaderTestRig
+
+    func parse(pdfURL _: URL) async throws -> PDFPlaybackParseResult {
+        await MainActor.run { rig.recordParse() }
+        let element = VoiceElement.chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let measure = Measure(voices: [Voice(elements: [element])])
+        let score = Score(division: 480, parts: [
+            Part(id: "P0", instrument: Instrument(id: "i"), staves: [Staff(measures: [measure])]),
+        ])
+        return PDFPlaybackParseResult(score: score, geometry: RigGeometry(), diagnostics: [])
+    }
+}
+
+private struct RigGeometry: PDFPlaybackGeometry {
+    var pageSizes: [Int: CGSize] {
+        [0: CGSize(width: 600, height: 800)]
+    }
+
+    func cursorRect(for _: ScoreCursor, in _: Score) -> PDFCursorRect? {
+        PDFCursorRect(pageIndex: 0, rect: CGRect(x: 10, y: 20, width: 4, height: 90))
+    }
+
+    func cursor(at _: CGPoint, pageIndex _: Int) -> ScoreCursor? {
+        nil
     }
 }

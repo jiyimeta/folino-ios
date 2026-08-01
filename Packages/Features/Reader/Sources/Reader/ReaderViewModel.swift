@@ -52,6 +52,15 @@ final class ReaderViewModel {
     /// Settable (not `private(set)`) so the load and display-source paths in the extensions can drive it.
     var displaySource: ReaderDisplaySource = .score
 
+    /// The original PDF, opened lazily on the first switch to `.originalPDF` — a session that never switches never
+    /// pays for it. Always `nil` for an item that never came from a PDF.
+    var originalPDFDocument: PDFDocument?
+
+    /// The layout mode the score side was on before switching to the original, so coming back doesn't silently demote
+    /// the user's choice. Only horizontal is ever remembered — page and vertical exist on both sides and round-trip
+    /// untouched. Owned here rather than in the view because the switch outlives any one body evaluation.
+    var savedScoreLayoutMode: ReaderLayoutMode?
+
     /// Background OMR-playback readiness for an opened PDF. The PDF is displayed immediately
     /// (`loadState == .loadedPDF`); in parallel it's parsed into a playable `Score` + on-PDF geometry.
     /// Settable (not `private(set)`) so the PDF load path in `ReaderViewModel+Load.swift` and the parse

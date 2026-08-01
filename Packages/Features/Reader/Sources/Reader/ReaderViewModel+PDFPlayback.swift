@@ -27,12 +27,16 @@ struct PDFPlaybackData {
 }
 
 extension ReaderViewModel {
-    /// The score that drives playback: the PDF's parsed score when ready, otherwise the natively
-    /// loaded score. The playback session reads this through its `scoreProvider`, so all transport /
-    /// cursor / seek machinery works for PDFs unchanged.
+    /// The score that drives playback: the loaded score when there is one, else the PDF's parsed score. The playback
+    /// session reads this through its `scoreProvider`, so all transport / cursor / seek machinery works for PDFs
+    /// unchanged.
+    ///
+    /// The loaded score wins because a converted item parses its PDF again only for the on-PDF cursor's geometry —
+    /// what plays is, and stays, the score on disk (which the user may have edited).
     var playbackScore: Score? {
+        if let score = loadState.score { return score }
         if case let .ready(data) = pdfPlayback { return data.score }
-        return loadState.score
+        return nil
     }
 
     /// The parsed-PDF playback payload when ready, else `nil`. The PDF reader views read this to draw
@@ -76,6 +80,20 @@ extension ReaderViewModel {
     /// "yielded nothing playable" half of this contract is `Score.hasPlayableContent`, shared with
     /// Android so a structurally-complete-but-silent parse never reports a playable transport on
     /// either platform.
+    /// The cursor drawn on an original PDF page comes from the OMR geometry side-car, which only exists as a product
+    /// of a parse. A converted item doesn't parse at open time any more, so the original view asks for it on the first
+    /// switch — once per session, in the background, with the pages already on screen.
+    ///
+    /// Gated on the notation being untouched: after an edit, the geometry describes a score that is no longer what's
+    /// playing, and a cursor drawn from it would point at the wrong bar.
+    func prepareOriginalPDFCursorIfNeeded() async {
+        guard case .idle = pdfPlayback,
+              !scoreItem.isPDFDerivedScoreEdited,
+              let name = scoreItem.sourcePDFFileName
+        else { return }
+        await parsePDFForPlayback(url: scoresDirectory.appending(path: name))
+    }
+
     func parsePDFForPlayback(url: URL) async {
         guard let parser = pdfPlaybackParser else {
             pdfPlayback = .unavailable
