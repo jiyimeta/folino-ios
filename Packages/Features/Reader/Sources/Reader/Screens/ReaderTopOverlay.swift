@@ -82,9 +82,17 @@ struct ReaderTopOverlay: View {
                 Button { onShowPDFNotice() } label: { PDFBadge() }
                     .buttonStyle(.plain)
             }
+            if viewModel.canShowOriginalPDF {
+                displaySourceToggle()
+                    .interactiveGlassCompat()
+            }
             Spacer(minLength: 0)
 
-            if case let .loaded(score) = viewModel.loadState {
+            // Showing the original pages means the PDF chrome, even for an item folino read into notation: the
+            // score-side buttons (note input, the engraving inspector) have nothing to act on over a fixed-layout page.
+            if viewModel.displaySource == .originalPDF {
+                pdfActions
+            } else if case let .loaded(score) = viewModel.loadState {
                 loadedActions(score: score, collapsesScoreActions: collapsesScoreActions)
             } else if case .loadedPDF = viewModel.loadState {
                 pdfActions
@@ -280,7 +288,7 @@ struct ReaderTopOverlay: View {
             annotationToggleButton()
                 .interactiveGlassCompat()
             HStack(spacing: 0) {
-                if viewModel.isPDFPlaybackReady, let score = viewModel.playbackScore {
+                if viewModel.canPlayNow, let score = viewModel.playbackScore {
                     playbackInspectorButton(score: score, showsStaffVisibility: false)
                 }
                 pdfLayoutButton
@@ -307,7 +315,9 @@ struct ReaderTopOverlay: View {
         }
     }
 
-    private func overlayButton(
+    /// Internal (not private) so the display-source toggle in `ReaderTopOverlay+DisplaySource.swift` renders in the
+    /// same chrome as its neighbors.
+    func overlayButton(
         systemImage: String,
         label: Text,
         action: @escaping () -> Void,

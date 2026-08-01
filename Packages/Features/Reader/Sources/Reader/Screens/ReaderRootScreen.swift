@@ -250,6 +250,23 @@ public struct ReaderRootScreen: View {
             viewModel.currentLayoutMode = newValue
             viewModel.analytics.log(.layoutModeChanged(newValue))
         }
+        .onChange(of: viewModel.displaySource) { _, source in
+            // Horizontal has no meaning on fixed-layout pages, so switching to the original clamps it — and remembers
+            // it, so coming back doesn't silently demote the user's choice. Page and vertical exist on both sides and
+            // round-trip untouched, which is the whole reason this is a source switch and not a fourth layout mode.
+            switch source {
+            case .originalPDF:
+                if layoutMode == .horizontal {
+                    viewModel.savedScoreLayoutMode = .horizontal
+                    layoutModeRaw = ReaderLayoutMode.page.rawValue
+                }
+            case .score:
+                if let saved = viewModel.savedScoreLayoutMode {
+                    layoutModeRaw = saved.rawValue
+                    viewModel.savedScoreLayoutMode = nil
+                }
+            }
+        }
         .onChange(of: keepScreenAwake) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
         }

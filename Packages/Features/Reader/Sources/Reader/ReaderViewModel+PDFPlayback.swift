@@ -55,7 +55,10 @@ extension ReaderViewModel {
     /// capabilities), PDFs once their background parse succeeds. Delegates to the shared
     /// `ReaderCapabilities.canPlayNow` rule so iOS and Android apply the identical policy.
     var canPlayNow: Bool {
-        ReaderCapabilities.canPlayNow(capabilities: capabilities, isPDFPlaybackReady: isPDFPlaybackReady)
+        // A score that is loaded is playable, full stop — including while its original PDF is the thing on screen. The
+        // fixed-layout page limits what can be re-engraved, not what can be played.
+        if loadState.score != nil { return true }
+        return ReaderCapabilities.canPlayNow(capabilities: capabilities, isPDFPlaybackReady: isPDFPlaybackReady)
     }
 
     /// The on-PDF cursor rect (top-left mediaBox space) for the current display cursor, or `nil` when

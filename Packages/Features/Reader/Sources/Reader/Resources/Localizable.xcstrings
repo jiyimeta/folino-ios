@@ -7,6 +7,38 @@
     "%lld%%" : {
       "shouldTranslate" : false
     },
+    "reader.displaySource.showOriginal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original PDF"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原本 PDF"
+          }
+        }
+      }
+    },
+    "reader.displaySource.showScore" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sheet music"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜"
+          }
+        }
+      }
+    },
     "reader.error.cannotOpen.title" : {
       "localizations" : {
         "en" : {

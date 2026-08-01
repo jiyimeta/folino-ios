@@ -55,8 +55,10 @@ struct ReaderDisplaySourceTests {
         #expect(rig.parseCallCount == 0)
 
         vm.setDisplaySource(.originalPDF)
-        try await waitUntil { rig.parseCallCount == 1 }
-        #expect(vm.isPDFPlaybackReady)
+        // Wait on the parse having LANDED, not on it having started — the counter ticks on entry, so polling it would
+        // race the state transition it is supposed to be waiting for.
+        try await waitUntil { vm.isPDFPlaybackReady }
+        #expect(rig.parseCallCount == 1)
 
         vm.setDisplaySource(.score)
         vm.setDisplaySource(.originalPDF)
