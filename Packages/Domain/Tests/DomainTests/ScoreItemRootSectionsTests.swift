@@ -48,6 +48,23 @@ struct ScoreItemRootSectionsTests {
         #expect(items.mostRecentlyOpened(limit: 2).map(\.title) == ["C", "B"])
     }
 
+    @Test func `most recently opened without a limit returns every opened item`() {
+        let items: [ScoreItem] = (0 ..< 12).map { index in
+            Self.makeItem(title: "S\(index)", addedAtOffset: 0, lastOpenedOffset: TimeInterval(index))
+        }
+        // The Library root passes no limit, so all twelve come back newest-first — not just the first page of them.
+        #expect(items.mostRecentlyOpened().map(\.title) == (0 ..< 12).reversed().map { "S\($0)" })
+    }
+
+    @Test func `most recently opened without a limit still excludes never-opened items`() {
+        let items: [ScoreItem] = [
+            Self.makeItem(title: "A", addedAtOffset: 0, lastOpenedOffset: 100),
+            Self.makeItem(title: "B", addedAtOffset: 0, lastOpenedOffset: nil),
+            Self.makeItem(title: "C", addedAtOffset: 0, lastOpenedOffset: 300),
+        ]
+        #expect(items.mostRecentlyOpened().map(\.title) == ["C", "A"])
+    }
+
     @Test func `favorites filters and sorts by added at desc`() {
         let items: [ScoreItem] = [
             Self.makeItem(title: "A", addedAtOffset: 100, lastOpenedOffset: nil, isFavorite: true),
