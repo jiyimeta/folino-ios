@@ -20,6 +20,24 @@
             "state" : "translated",
             "value" : "元のPDFを表示"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "원본 PDF 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示原始 PDF"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示原始 PDF"
+          }
         }
       }
     },
@@ -36,6 +54,24 @@
             "state" : "translated",
             "value" : "PDF上でも再生できます。オフにすると解析済みの楽譜を表示します。"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF에서도 재생할 수 있습니다. 끄면 분석된 악보를 표시합니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 PDF 上也可以播放。关闭后将显示解析后的乐谱。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 PDF 上也可以播放。關閉後將顯示解析後的樂譜。"
+          }
         }
       }
     },
@@ -51,6 +87,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "解析済みの楽譜を表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "분석된 악보 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示解析后的乐谱"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示解析後的樂譜"
           }
         }
       }
@@ -1240,6 +1294,24 @@
             "state" : "translated",
             "value" : "PDFから解析し直す"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF에서 다시 분석"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新解析 PDF"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新解析 PDF"
+          }
         }
       }
     },
@@ -1255,6 +1327,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "解析し直す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다시 분석"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新解析"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新解析"
           }
         }
       }
@@ -1272,6 +1362,24 @@
             "state" : "translated",
             "value" : "音符の編集内容と、譜表ごとの設定（音部記号・表示/非表示・音色・音量・移調）は失われます。書き込みは残りますが、位置がずれることがあります。"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음표 편집 내용과 보표별 설정(음자리표, 표시/숨김, 음색, 음량, 조옮김)이 사라집니다. 필기는 남지만 위치가 어긋날 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符的编辑内容和各谱表的设置（谱号、显示/隐藏、音色、音量、移调）将丢失。手写批注会保留，但位置可能会偏移。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符的編輯內容和各譜表的設定（譜號、顯示/隱藏、音色、音量、移調）將遺失。手寫註記會保留，但位置可能會偏移。"
+          }
         }
       }
     },
@@ -1287,6 +1395,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDFから解析し直しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF에서 다시 분석할까요?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要重新解析此 PDF 吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要重新解析此 PDF 嗎？"
           }
         }
       }
@@ -1304,6 +1430,24 @@
             "state" : "translated",
             "value" : "このPDFから楽譜を解析できませんでした。楽譜はそのままです。"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 PDF에서 악보를 분석할 수 없습니다. 악보는 그대로 유지됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法从此 PDF 解析出乐谱。乐谱保持不变。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法從此 PDF 解析出樂譜。樂譜保持不變。"
+          }
         }
       }
     },
@@ -1319,6 +1463,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDFを解析できませんでした"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF를 분석할 수 없습니다"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法解析此 PDF"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法解析此 PDF"
           }
         }
       }
@@ -1370,6 +1532,24 @@
             "state" : "translated",
             "value" : "PDF解析は高精度ですが、まれに誤りがあります。上の音符編集ボタンから、その場で修正できます。元のPDFを表示することもできます。"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 분석은 정확도가 높지만 드물게 오류가 있습니다. 위의 음표 편집 버튼에서 바로 수정할 수 있습니다. 원본 PDF를 표시할 수도 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 解析准确度很高，但偶尔会有错误。可以用上方的音符编辑按钮当场修改。也可以显示原始 PDF。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 解析準確度很高，但偶爾會有錯誤。可以用上方的音符編輯按鈕當場修改。也可以顯示原始 PDF。"
+          }
         }
       }
     },
@@ -1385,6 +1565,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今後表示しない"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다시 표시하지 않기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不再显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不再顯示"
           }
         }
       }
@@ -1402,6 +1600,24 @@
             "state" : "translated",
             "value" : "PDFを解析して表示しています"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF를 분석해 표시하고 있습니다"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在解析 PDF 并显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在解析 PDF 並顯示"
+          }
         }
       }
     },
@@ -1410,13 +1626,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "folino couldn't read sheet music out of this PDF, so it's shown as it is. You can try again any time with the refresh button above."
+            "value" : "folino couldn't parse sheet music out of this PDF, so it's shown as it is. You can try again any time from the PDF badge's menu."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この PDF からは楽譜を読み取れませんでした。PDF としてそのまま表示します。上の更新ボタンからいつでも読み取り直せます。"
+            "value" : "このPDFからは楽譜を解析できませんでした。PDFとしてそのまま表示します。PDFバッジのメニューからいつでも解析し直せます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 PDF에서는 악보를 분석할 수 없었습니다. PDF 그대로 표시합니다. PDF 배지의 메뉴에서 언제든지 다시 분석할 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法从此 PDF 解析出乐谱，因此按原样显示。可以随时从 PDF 徽章的菜单重新解析。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法從此 PDF 解析出樂譜，因此按原樣顯示。可以隨時從 PDF 標記的選單重新解析。"
           }
         }
       }
@@ -1433,6 +1667,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDF として表示しています"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF로 표시하고 있습니다"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以 PDF 形式显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以 PDF 形式顯示"
           }
         }
       }
