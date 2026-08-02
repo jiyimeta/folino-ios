@@ -1,6 +1,7 @@
 import CryptoKit
 import Domain
 import Foundation
+import UtilityCore
 
 /// The result of reading a PDF into notation.
 public enum PDFConversionOutcome: Sendable {
@@ -25,10 +26,16 @@ public enum PDFConversionOutcome: Sendable {
 public struct PDFScoreConverter: Sendable {
     private let parser: any PDFPlaybackParser
     private let gateway: any ScoreFileGateway
+    private let crashReporter: any CrashReporter
 
-    public init(parser: any PDFPlaybackParser, gateway: any ScoreFileGateway) {
+    public init(
+        parser: any PDFPlaybackParser,
+        gateway: any ScoreFileGateway,
+        crashReporter: any CrashReporter = NoopCrashReporter(),
+    ) {
         self.parser = parser
         self.gateway = gateway
+        self.crashReporter = crashReporter
     }
 
     public func convert(pdfURL: URL, destinationMSCZ: URL) async -> PDFConversionOutcome {
@@ -48,6 +55,13 @@ public struct PDFScoreConverter: Sendable {
             ))
         } catch {
             // Any failure leaves the caller exactly where it was, including no half-written destination.
+            //
+            // Reported as a non-fatal because the user-visible symptom — "folino couldn't read this PDF" — is the same
+            // whether the OMR found no music or the score it found could not be written and read back. Only the error
+            // separates them, and without it a defect in the write/read round-trip is indistinguishable from a PDF
+            // that genuinely isn't sheet music. (That is not hypothetical: a tuplet the importer scaled but never
+            // recorded produced an `.mscz` its own reader rejected, and playback worked the whole time.)
+            crashReporter.record(error: error)
             try? FileManager.default.removeItem(at: destinationMSCZ)
             return .notReadable
         }

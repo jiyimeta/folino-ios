@@ -74,8 +74,10 @@ struct VerticalScoreContainer: View {
     @State private var pinchSession: VerticalPinchSession?
     @State private var pendingScroll: ScoreScrollCommand?
     @State private var contentInsetTop: CGFloat = 0
-    /// System top safe-area inset only — parent's overlay augmentation is subtracted back out below.
-    @State private var safeAreaTop: CGFloat = 0
+    /// Total top chrome inset: the system safe area plus the navigation bar the Reader's toolbar lives in. The
+    /// continuous scroll slides underneath both, so the scroll content pads its top by exactly this much to put the
+    /// first system clear of them. Measured rather than assumed — the bar's height varies with orientation and device.
+    @State private var topChromeInset: CGFloat = 0
     /// System bottom safe-area inset (home-indicator region). Added to `bottomControlClearance` so the scroll content's
     /// bottom padding spans from the transport control's top edge all the way to the physical screen bottom.
     @State private var safeAreaBottom: CGFloat = 0
@@ -93,13 +95,12 @@ struct VerticalScoreContainer: View {
     /// `AnnotationOverlaySpec` initializer.
     @State private var annotationHandle = AnnotationCanvasHandle()
 
-    /// Vertical padding inside the scaled content. Top is larger so the first system clears the nav chrome / safe
-    /// area when `ignoresSafeArea()` lets the score slide underneath.
+    /// Vertical padding inside the scaled content, on top of `topChromeInset` — which already covers the nav chrome /
+    /// safe area the score slides underneath thanks to `ignoresSafeArea()`. Only the editing cluster adds to it.
     private var scoreTopPadding: CGFloat {
-        Self.baseScoreTopPadding + editingChromeInsets.top
+        editingChromeInsets.top
     }
 
-    private static let baseScoreTopPadding: CGFloat = 44
     /// Bottom padding inside the scaled content: the full clearance from the transport control's top edge to the
     /// physical screen bottom (control content height + bottom safe area). Lets the last system scroll out from under
     /// the floating control so the whole score is visible at the bottom of the scroll.
@@ -146,14 +147,14 @@ struct VerticalScoreContainer: View {
                 }
         }
         .background {
-            // Sibling reader extending beyond safe area (the main GR sits inside it and reports zero). Subtracts the
-            // parent overlay augmentation to leave just the system inset.
+            // Sibling reader extending beyond safe area (the main GR sits inside it and reports zero), so its reported
+            // top inset is the whole chrome the scroll slides under: status bar plus navigation bar.
             Color.clear
                 .ignoresSafeArea()
                 .onGeometryChange(for: CGFloat.self) { proxy in
-                    max(0, proxy.safeAreaInsets.top - ReaderTopOverlay.height)
+                    max(0, proxy.safeAreaInsets.top)
                 } action: { newValue in
-                    safeAreaTop = newValue
+                    topChromeInset = newValue
                 }
                 .onGeometryChange(for: CGFloat.self) { proxy in
                     max(0, proxy.safeAreaInsets.bottom)
@@ -182,7 +183,7 @@ struct VerticalScoreContainer: View {
                     ? min(1.0, viewport.width / framedContentWidth)
                     : 1.0
                 let zoom = committedZoom * fit
-                let topPad = scoreTopPadding + safeAreaTop
+                let topPad = scoreTopPadding + topChromeInset
                 return CGSize(
                     width: framedContentWidth * zoom,
                     height: (doc.size.height + topPad + scoreBottomPadding) * zoom,
@@ -203,7 +204,7 @@ struct VerticalScoreContainer: View {
                 horizontalPadding: scoreInset(viewportWidth: viewport.width),
                 scoreTopPadding: scoreTopPadding,
                 scoreBottomPadding: scoreBottomPadding,
-                safeAreaTop: safeAreaTop,
+                topChromeInset: topChromeInset,
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
                 lastManualCursor: $lastManualCursor,
@@ -265,7 +266,7 @@ struct VerticalScoreContainer: View {
         let zoomC = effectiveZoom(for: doc, viewport: viewport) // committed zoom (no live magnification)
         let m = pinch.magnification
         let z = zoomC * m
-        let topPad = scoreTopPadding + safeAreaTop
+        let topPad = scoreTopPadding + topChromeInset
         let hPad = scoreInset(viewportWidth: viewport.width)
         let paddedW = doc.size.width + hPad * 2
         let paddedH = doc.size.height + topPad + scoreBottomPadding
@@ -368,7 +369,7 @@ struct VerticalScoreContainer: View {
         // Frames in scroll-content coords: scaled from top-leading. Mirrors `VerticalZoomedSurface`'s composition —
         // vertical padding on top/bottom, and (on iPad) a horizontal inset that shifts the score's content-space x
         // rightward before scaling. `cursorFrame` spans every staff in the system, so its Y range is the system span.
-        let topPad = scoreTopPadding + safeAreaTop
+        let topPad = scoreTopPadding + topChromeInset
         let hPad = scoreInset(viewportWidth: viewport.width)
         let realMinX = (realRect.minX + hPad) * zoom
         let realMaxX = (realRect.maxX + hPad) * zoom
@@ -389,20 +390,19 @@ struct VerticalScoreContainer: View {
         if let lookaheadCursor, let lookRect = doc.cursorFrame(for: lookaheadCursor, in: score) {
             // Playback: pin the playing cursor's system to the top, re-scrolling only when that system or the
             // lookahead (a couple beats ahead) leaves the viewport — so the cursor drifts down between scrolls.
-            // The pinned system top lands `overlayClearance` points below the screen top — clear of the floating
-            // top overlay (Back / inspector buttons), which occupies `safeAreaTop + ReaderTopOverlay.height`. This is
-            // a SCREEN-space distance (not zoom-scaled): `contentOffset` shares the scaled-content point space, so
-            // the system top appears at screen-y == `overlayClearance` regardless of zoom. The 8 pt gap keeps the
-            // staff off the overlay's glass + shadow.
+            // The pinned system top lands `chromeClearance` points below the screen top — clear of the navigation bar
+            // the Reader's toolbar lives in, which `topChromeInset` measures. This is a SCREEN-space distance (not
+            // zoom-scaled): `contentOffset` shares the scaled-content point space, so the system top appears at
+            // screen-y == `chromeClearance` regardless of zoom. The 8 pt gap keeps the staff off the toolbar's glass.
             let lookMaxY = (lookRect.maxY + topPad) * zoom
-            let overlayClearance = safeAreaTop + ReaderTopOverlay.height + 8
+            let chromeClearance = topChromeInset + 8
             newY = CGFloat(scrollOffsetPinningSystemTop(
                 current: Double(curY),
                 systemMin: Double(realMinY),
                 systemMax: Double(realMaxY),
                 lookaheadMax: Double(lookMaxY),
                 viewport: Double(viewport.height),
-                topInset: Double(overlayClearance),
+                topInset: Double(chromeClearance),
             ))
         } else {
             // Paused / scrubbing / manual seek: gentle keep-in-view so a tap-to-seek doesn't jump the system to top.

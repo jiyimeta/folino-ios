@@ -98,10 +98,7 @@ final class AppBootstrap {
                 playlistsIndexPublisher: writer,
             )
             let gateway = LiveScoreFileGateway(crashReporter: crashReporter ?? NoopCrashReporter())
-            let converter = PDFScoreConverter(parser: pdfPlaybackParser, gateway: gateway)
-            pdfScoreConversion = { pdfURL, destination in
-                await converter.convert(pdfURL: pdfURL, destinationMSCZ: destination).facts
-            }
+            pdfScoreConversion = makePDFScoreConversion(gateway: gateway)
             let importer = LiveScoreFileImporter(
                 gateway: gateway,
                 repository: repository,
