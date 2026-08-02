@@ -62,6 +62,8 @@ struct VerticalScoreContainer: View {
 
     /// Layout output — observable, not `@State`; see `ScoreLayoutState` for why.
     @State private var layoutState = ScoreLayoutState()
+    /// Off-main engraver holding this surface's incremental `LayoutCache`; see `ScoreRelayoutEngine`.
+    @State private var relayoutEngine = ScoreRelayoutEngine()
 
     private var document: LayoutDocument? {
         get { layoutState.document }
@@ -341,13 +343,12 @@ struct VerticalScoreContainer: View {
     }
 
     private func rebuildLayout(width: CGFloat) async {
-        let score = score
-        let options = scoreOptions
-        let newDoc = await Task.detached(priority: .userInitiated) {
-            LayoutEngine.layout(
-                score: score, options: options, availableWidth: width,
-            )
-        }.value
+        // Runs off the main actor on `relayoutEngine`'s executor (this task is already `.userInitiated`, the default
+        // for `.task`), so the engrave keeps its old priority without a second detached hop — and, unlike the detached
+        // task it replaces, it can reuse the previous engrave's `LayoutCache`.
+        let newDoc = await relayoutEngine.layout(
+            score: score, options: scoreOptions, availableWidth: width,
+        )
         guard !Task.isCancelled else { return }
         document = newDoc
         editingHost?.document = newDoc
