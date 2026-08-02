@@ -1,28 +1,55 @@
 import Domain
 import SwiftUI
 
-/// The PDF side of the Reader's toolbar: the actions that only exist because an item came from a PDF, and the inspector
-/// group that stands in for the score reader's engraving one while fixed-layout pages are on screen.
+/// The PDF side of the Reader's toolbar: the badge shown while the original pages are up, and the inspector group that
+/// stands in for the score reader's engraving one.
 extension ReaderToolbar {
-    /// Home for the PDF actions that are deliberately not one tap away. Rendered only when there is something in it —
-    /// i.e. only for an item that came from a PDF.
+    /// The "PDF" badge, shown only while the original pages are on screen — that is the one place it says something
+    /// the user can't already see. It stays a badge, not a button: no border, no tint, nothing that reads as a
+    /// control. It is tappable all the same, and opens the two actions that belong to a PDF-derived item.
+    ///
+    /// No explanatory header: the notice's text points at the note-editing button, which isn't on screen while the
+    /// original pages are. The explanation lives in the notice itself and in the display inspector's PDF section.
+    ///
+    /// This is also why the badge doesn't need to compete for width: the note-input button is gone while a
+    /// fixed-layout page is showing, so the row has room for it.
     @ToolbarContentBuilder
-    var pdfOverflowItem: some ToolbarContent {
-        if viewModel.canReReadPDF {
-            ToolbarItem(placement: .topBarTrailing) {
+    var pdfBadgeItem: some ToolbarContent {
+        if viewModel.displaySource == .originalPDF, ScorePresentation.showsPDFBadge(for: viewModel.scoreItem) {
+            ToolbarItem(placement: .topBarLeading) {
                 Menu {
+                    showScoreMenuEntry
                     reReadMenuEntry
                 } label: {
-                    Image(systemName: "ellipsis")
+                    PDFBadge()
                 }
-                .accessibilityLabel(Text("reader.toolbar.more", bundle: .module))
+                .buttonStyle(.plain)
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
             }
         }
     }
 
-    /// Re-reads the original PDF, replacing the notation with a fresh parse. Behind a menu rather than given a button
-    /// of its own: it is rarely wanted, and on an edited score it throws work away — which is also why it takes the
-    /// destructive role and routes through a confirmation exactly when there is something to lose.
+    /// Switches back to the notation folino read out of the PDF. One-directional on purpose: this lives in a menu that
+    /// only exists while the original pages are showing, so there is no state in which it would mean the reverse.
+    @ViewBuilder
+    var showScoreMenuEntry: some View {
+        if viewModel.canShowOriginalPDF {
+            Button {
+                viewModel.setDisplaySource(.score)
+            } label: {
+                Label {
+                    Text("reader.displaySource.showScore", bundle: .module)
+                } icon: {
+                    Image(systemName: "music.note.list")
+                }
+            }
+        }
+    }
+
+    /// Re-reads the original PDF, replacing the notation with a fresh parse. It is rarely wanted, and on an edited
+    /// score it throws work away — hence the destructive role and the confirmation, taken exactly when there is
+    /// something to lose.
     @ViewBuilder
     var reReadMenuEntry: some View {
         if viewModel.canReReadPDF {
@@ -40,6 +67,28 @@ extension ReaderToolbar {
                 }
             }
         }
+    }
+
+    /// The PDF controls the display inspector carries, or `nil` for an item that never came from a PDF — which hides
+    /// the whole section. This is where the score side keeps them: with the badge gone once the notation is showing,
+    /// the inspector is the one place that still says "this came from a PDF, and here is what you can do about it".
+    var pdfOriginControls: PDFOriginControls? {
+        guard viewModel.scoreItem.pdfOriginState != .notPDF else { return nil }
+        return PDFOriginControls(
+            showsOriginalPDF: viewModel.displaySource == .originalPDF,
+            setShowsOriginalPDF: viewModel.canShowOriginalPDF
+                ? { showsOriginal in viewModel.setDisplaySource(showsOriginal ? .originalPDF : .score) }
+                : nil,
+            reParse: viewModel.canReReadPDF
+                ? {
+                    if viewModel.reReadNeedsConfirmation {
+                        onConfirmReReadPDF()
+                    } else {
+                        Task { await viewModel.reReadPDF() }
+                    }
+                }
+                : nil,
+        )
     }
 
     /// The PDF reader's inspector group: the playback inspector whenever there is something to play (a converted item
@@ -60,32 +109,10 @@ extension ReaderToolbar {
             }
             .accessibilityLabel(Text("reader.toolbar.showDisplaySettings", bundle: .module))
             .popover(isPresented: $viewModel.isVisualInspectorPresented) {
-                PDFLayoutInspectorScreen()
-                    .frame(idealWidth: 320, idealHeight: 200)
+                PDFLayoutInspectorScreen(pdfOrigin: pdfOriginControls)
+                    .frame(idealWidth: 320, idealHeight: 320)
                     .presentationDetents([.medium])
                     .presentationCompactAdaptation(.sheet)
-            }
-        }
-    }
-
-    /// Switches between the notation folino read out of the PDF and the original pages. A source switch, not a layout
-    /// mode: page and vertical stay available on both sides, so folding it into the mode picker would cost the user
-    /// that choice on the original's side. Leading, beside the badge, because it is a one-tap action used often.
-    @ToolbarContentBuilder
-    var displaySourceItem: some ToolbarContent {
-        if viewModel.canShowOriginalPDF {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    viewModel.toggleDisplaySource()
-                } label: {
-                    Image(systemName: viewModel.displaySource == .score ? "document" : "music.note.list")
-                }
-                .accessibilityLabel(Text(
-                    viewModel.displaySource == .score
-                        ? "reader.displaySource.showOriginal"
-                        : "reader.displaySource.showScore",
-                    bundle: .module,
-                ))
             }
         }
     }

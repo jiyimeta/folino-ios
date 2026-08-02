@@ -8,6 +8,9 @@ struct VisualInspectorScreen: View {
     let layoutModel: LayoutSettingsModel
     let transposeModel: TransposeModel
     let score: Score
+    /// The PDF an item was read from, when it had one. `nil` for an ordinary score, which hides the PDF section
+    /// entirely — there is nothing to switch to and nothing to re-read.
+    var pdfOrigin: PDFOriginControls?
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
@@ -36,6 +39,9 @@ struct VisualInspectorScreen: View {
 
     var body: some View {
         List {
+            if let pdfOrigin {
+                PDFOriginSection(controls: pdfOrigin)
+            }
             CollapsibleSection(isExpanded: $generalExpanded) {
                 layoutRow
                 staffSizeRow

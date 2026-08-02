@@ -12,13 +12,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Original PDF"
+            "value" : "Show the original PDF"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "原本 PDF"
+            "value" : "元のPDFを表示"
+          }
+        }
+      }
+    },
+    "reader.displaySource.showOriginal.description" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback works on the PDF too. Turn this off to show the sheet music folino parsed."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF上でも再生できます。オフにすると解析済みの楽譜を表示します。"
           }
         }
       }
@@ -28,13 +44,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sheet music"
+            "value" : "Show the parsed sheet music"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "楽譜"
+            "value" : "解析済みの楽譜を表示"
           }
         }
       }
@@ -1216,13 +1232,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Read the PDF again"
+            "value" : "Parse the PDF again"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF から読み取り直す"
+            "value" : "PDFから解析し直す"
           }
         }
       }
@@ -1232,13 +1248,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Read again"
+            "value" : "Parse again"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "読み取り直す"
+            "value" : "解析し直す"
           }
         }
       }
@@ -1264,13 +1280,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Read this PDF again?"
+            "value" : "Parse this PDF again?"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF から読み取り直しますか？"
+            "value" : "PDFから解析し直しますか？"
           }
         }
       }
@@ -1280,13 +1296,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "folino couldn't read sheet music out of this PDF. Your score is unchanged."
+            "value" : "folino couldn't parse sheet music out of this PDF. Your score is unchanged."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この PDF から楽譜を読み取れませんでした。楽譜はそのままです。"
+            "value" : "このPDFから楽譜を解析できませんでした。楽譜はそのままです。"
           }
         }
       }
@@ -1296,13 +1312,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't read this PDF"
+            "value" : "Couldn't parse this PDF"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF を読み取れませんでした"
+            "value" : "PDFを解析できませんでした"
           }
         }
       }
@@ -1346,13 +1362,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "folino read this PDF into sheet music, so playback, transposition, and display settings all work. If a note came out wrong, fix it right here with the note button above. The original PDF is always one tap away."
+            "value" : "Parsing is highly accurate, but it is occasionally wrong. Fix a note on the spot with the note-editing button above. You can also show the original PDF."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この PDF を解析して楽譜に変換しました。再生・移調・表示の調整が使えます。読み取りが間違っている音符は、上の音符ボタンからその場で直せます。元の PDF はいつでも表示を切り替えて見られます。"
+            "value" : "PDF解析は高精度ですが、まれに誤りがあります。上の音符編集ボタンから、その場で修正できます。元のPDFを表示することもできます。"
           }
         }
       }
@@ -1378,13 +1394,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Read into sheet music"
+            "value" : "Showing this PDF as sheet music"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF から楽譜を読み取りました"
+            "value" : "PDFを解析して表示しています"
           }
         }
       }

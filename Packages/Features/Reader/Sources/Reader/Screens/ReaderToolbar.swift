@@ -30,10 +30,6 @@ struct ReaderToolbar: ToolbarContent {
     /// measure itself the way the old overlay's `ViewThatFits` did.
     var collapsesScoreActions = false
 
-    /// Invoked when the user taps the PDF badge — `ReaderRootScreen` presents the PDF-playback caveat dialog. Defaults
-    /// to a no-op so previews can omit it.
-    var onShowPDFNotice: () -> Void = {}
-
     /// Invoked when re-reading the PDF would discard the user's work — `ReaderRootScreen` presents the confirmation.
     /// A re-read with nothing to lose runs straight from the menu item and never reaches here.
     var onConfirmReReadPDF: () -> Void = {}
@@ -48,7 +44,6 @@ struct ReaderToolbar: ToolbarContent {
         if viewModel.displaySource == .originalPDF {
             // Showing the original pages means the PDF chrome, even for an item folino read into notation: the
             // score-side actions (note input, the engraving inspector) have nothing to act on over a fixed-layout page.
-            pdfOverflowItem
             annotationItem
             pdfInspectorItems
         } else if case let .loaded(score) = viewModel.loadState {
@@ -58,7 +53,6 @@ struct ReaderToolbar: ToolbarContent {
             inspectorItems(score: score, showsStaffVisibility: true)
         } else if case .loadedPDF = viewModel.loadState {
             // No note-editing entry point: a fixed-layout PDF has no score to write into. Ink annotation still applies.
-            pdfOverflowItem
             annotationItem
             pdfInspectorItems
         }
@@ -80,16 +74,7 @@ struct ReaderToolbar: ToolbarContent {
                 )
             }
         }
-        if ScorePresentation.showsPDFBadge(for: viewModel.scoreItem) {
-            // A tappable brand badge that opens the PDF-source notice — reachable any time, in place of an always-on
-            // note. It stays after folino reads the PDF into notation: that is exactly when "this was machine-read,
-            // check it" is worth saying.
-            ToolbarItem(placement: .topBarLeading) {
-                Button { onShowPDFNotice() } label: { PDFBadge() }
-                    .buttonStyle(.plain)
-            }
-        }
-        displaySourceItem
+        pdfBadgeItem
     }
 
     // MARK: - Score actions
@@ -119,7 +104,6 @@ struct ReaderToolbar: ToolbarContent {
                             Task { await viewModel.requestShare(format: format) }
                         },
                     )
-                    reReadMenuEntry
                 } label: {
                     Image(systemName: "ellipsis")
                 }
@@ -147,7 +131,6 @@ struct ReaderToolbar: ToolbarContent {
                 }
                 .accessibilityLabel(Text("reader.toolbar.share", bundle: .module))
             }
-            pdfOverflowItem
         }
         groupSeparator
     }
@@ -222,6 +205,7 @@ struct ReaderToolbar: ToolbarContent {
                     layoutModel: viewModel.layoutModel,
                     transposeModel: viewModel.transposeModel,
                     score: score,
+                    pdfOrigin: pdfOriginControls,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)
                 .presentationDetents([.medium, .large])

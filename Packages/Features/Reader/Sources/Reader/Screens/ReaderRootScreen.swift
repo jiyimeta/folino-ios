@@ -387,7 +387,6 @@ public struct ReaderRootScreen: View {
                 leadingAction: customLeadingAction,
                 leadingIsSidebarToggle: leadingIsSidebarToggle,
                 collapsesScoreActions: collapsesScoreActions,
-                onShowPDFNotice: { isPDFNoticePresented = true },
                 onConfirmReReadPDF: { isReReadConfirmPresented = true },
                 onStartEditing: editingHost == nil ? nil : { startEditing() },
             )

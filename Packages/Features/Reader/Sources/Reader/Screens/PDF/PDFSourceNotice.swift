@@ -7,7 +7,9 @@ private func pdfSourceNoticeTitleKey(for state: PDFOriginState) -> String.Locali
     state == .converted ? "reader.pdf.source.notice.title" : "reader.pdf.source.unavailable.title"
 }
 
-private func pdfSourceNoticeBodyKey(for state: PDFOriginState) -> String.LocalizationValue {
+/// Internal (not private) so the PDF badge's menu can head itself with the same words the notice uses — the badge is
+/// where that explanation stays reachable once the dialog has been dismissed for good.
+func pdfSourceNoticeBodyKey(for state: PDFOriginState) -> String.LocalizationValue {
     state == .converted ? "reader.pdf.source.notice.body" : "reader.pdf.source.unavailable.body"
 }
 
