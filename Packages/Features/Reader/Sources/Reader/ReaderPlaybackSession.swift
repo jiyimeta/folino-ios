@@ -78,11 +78,16 @@ final class ReaderPlaybackSession {
     /// *different* full-score staff — at best a wrong tick, at worst a crash on a whole-measure rest.
     /// `rawPlaybackCursor` keeps the engine's original full-score address, so it resolves against the right staff.
     /// Scrubbing is handled by the seek bar's own provisional fraction and intentionally not reflected here.
+    /// Placed from the cached `ReaderSeekTimeline` rather than `Score.seconds(at:)`, which re-derives every prior
+    /// measure's governing tempo on every call — quadratic in measure count, and this runs on **every cursor tick**.
+    /// That cost is what made the transport stutter while a swipe was in progress during playback. Only the tick
+    /// within the cursor's own measure still needs the score, and resolving that walks one measure, not all of them.
     var playbackFraction: Double {
-        guard let score = scoreProvider() else { return 0 }
-        let total = score.notatedDurationSeconds
-        guard total > 0, let cursor = rawPlaybackCursor else { return 0 }
-        return min(max(score.seconds(at: cursor) / total, 0), 1)
+        guard let cursor = rawPlaybackCursor, let score = scoreProvider() else { return 0 }
+        return seekTimelineProvider().fraction(
+            measureIndex: cursor.measureIndex,
+            tickInMeasure: score.tickInMeasure(of: cursor),
+        )
     }
 
     /// Latest 0...1 fraction from `updateScrub`, used by `endScrub` to seek the audio by time on release.
@@ -109,6 +114,9 @@ final class ReaderPlaybackSession {
 
     /// Providers — set by the owner (`ReaderViewModel`) right after init.
     var scoreProvider: () -> Score? = { nil }
+    /// The owner's cached per-measure timing table, so placing the playhead never walks the score. Deliberately the
+    /// same table the seek bar draws its marks and time readout from, so the thumb can't disagree with them.
+    var seekTimelineProvider: () -> ReaderSeekTimeline = { .empty }
     var hiddenStavesProvider: () -> Set<StaffAddress> = { [] }
     /// Where a press of play should seek to first, or nil to carry on from wherever the cursor already is. Wired by
     /// `ReaderRootScreen` to the editing selection; nothing outside edit mode supplies one.

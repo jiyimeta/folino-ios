@@ -12,6 +12,7 @@ extension ReaderViewModel {
             await loadOrSeedPreferences(authoredHiddenStaves: score.authoredHiddenStaffAddresses)
             loadState = .loaded(score)
             recomputeVisibleScore()
+            recomputeSeekTimeline()
             pipSession.armIfReady()
             await loadAnnotations()
             await updateLastOpenedAtOnce()

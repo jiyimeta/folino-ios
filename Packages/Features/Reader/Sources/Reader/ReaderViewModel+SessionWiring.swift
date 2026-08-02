@@ -10,6 +10,7 @@ extension ReaderViewModel {
         // `playbackScore` is the natively loaded score, or — for a PDF — its parsed-for-playback score
         // once OMR succeeds, so the whole transport / cursor / seek path works for PDFs unchanged.
         playbackSession.scoreProvider = { [weak self] in self?.playbackScore }
+        playbackSession.seekTimelineProvider = { [weak self] in self?.seekTimeline ?? .empty }
         playbackSession.hiddenStavesProvider = { [weak self] in self?.layoutModel.hiddenStaves ?? [] }
         playbackSession.preferencesProvider = { [weak self] in self?.preferences }
         playbackSession.scoreItemProvider = { [weak self] in self?.scoreItem }
