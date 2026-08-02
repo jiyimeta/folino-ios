@@ -94,7 +94,7 @@ struct PagedScoreContainer: View {
     var pageTapHintDismissed = false
 
     /// Insets that position the page band inside the full-screen scroll host: top includes the parent's
-    /// `safeAreaPadding(.top, ReaderTopOverlay.height)` so the band clears the navigation chrome; the other edges are
+    /// navigation-bar inset so the band clears the Reader's toolbar; the other edges are
     /// the raw system insets. Sampled from a sibling reader that ignores the safe area so the values stay correct even
     /// when the scroll host itself is full-bleed.
     @State var pageInsets: EdgeInsets = .init()
@@ -121,7 +121,7 @@ struct PagedScoreContainer: View {
     }
 
     var body: some View {
-        // Outer `GeometryReader` honors parent's `safeAreaPadding(.top, ReaderTopOverlay.height)` and system insets,
+        // Outer `GeometryReader` honors the navigation bar's inset and the system insets,
         // so `proxy.size` is the visible page band at zoom 1. The scroll host itself is full-bleed; the hosted surface
         // pads by `pageInsets` so it lands inside this same rect — pinch zoom can then expand past the safe area.
         GeometryReader { proxy in
@@ -154,7 +154,7 @@ struct PagedScoreContainer: View {
         }
         .background {
             // Sibling reader extending past the safe area so its `proxy.safeAreaInsets` still reflects the chrome the
-            // main GR was inset by. Top includes `ReaderTopOverlay`'s reserve; the other edges are raw system insets.
+            // main GR was inset by. Top includes the navigation bar; the other edges are raw system insets.
             Color.clear
                 .ignoresSafeArea()
                 .onGeometryChange(for: EdgeInsets.self) { proxy in

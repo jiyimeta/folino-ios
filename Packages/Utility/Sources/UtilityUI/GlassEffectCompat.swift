@@ -48,6 +48,25 @@ extension View {
             buttonStyle(.borderedProminent)
         }
     }
+
+    #if os(iOS)
+    /// Lets a navigation bar float over the content behind it, for screens whose content — not their chrome — is the
+    /// point.
+    ///
+    /// On iOS 26+ this hides both the bar's own background and the top scroll-edge effect: every toolbar item already
+    /// carries its own Liquid Glass, so the bar chrome would only cover content that should stay visible through it.
+    /// On iOS 18 it does nothing, and the bar keeps its default background — pre-glass toolbar items are bare glyphs
+    /// and need something behind them to stay legible over arbitrary content.
+    @ViewBuilder
+    public func floatingToolbarBackgroundCompat() -> some View {
+        if #available(iOS 26, *) {
+            toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+                .scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            self
+        }
+    }
+    #endif
 }
 
 #if DEBUG

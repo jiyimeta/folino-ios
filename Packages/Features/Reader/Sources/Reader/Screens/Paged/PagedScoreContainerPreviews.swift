@@ -42,11 +42,13 @@ private func paged(
         .background(Color.gray.opacity(0.4))
 }
 
-/// Mimics what `ReaderRootScreen` does: applies `safeAreaPadding(.top, ReaderTopOverlay.height)` on top of the device's
-/// own status-bar / notch reserve. Without this the container's background reader sees only the simulated chrome and
-/// subtracts the overlay height to zero, leaving an artificially small top inset.
+/// Stands in for the navigation bar the Reader's toolbar lives in, which contributes its own top safe-area inset on
+/// top of the device's status-bar / notch reserve. Previews have no such bar, so it is simulated here at the compact
+/// portrait height.
+private let simulatedNavigationBarHeight: CGFloat = 44
+
 private func underRootScreenChrome(_ statusBarTop: CGFloat) -> CGFloat {
-    statusBarTop + ReaderTopOverlay.height
+    statusBarTop + simulatedNavigationBarHeight
 }
 
 #Preview("Portrait · simulated iPhone notch") {

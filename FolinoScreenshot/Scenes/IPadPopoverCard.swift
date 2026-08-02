@@ -9,7 +9,7 @@ import SwiftUI
 /// SwiftUI `#Preview` and the live UI-test capture, anchored within the thumbnail.
 struct IPadPopoverCard<Content: View>: View {
     /// Trailing padding applied to the arrow so its tip lines up under the tapped toolbar icon (the inspector pill sits
-    /// top-trailing in `ReaderTopOverlay`). Larger = arrow further from the card's right edge.
+    /// top-trailing in `ReaderToolbar`). Larger = arrow further from the card's right edge.
     var arrowTrailingPadding: CGFloat
     var width: CGFloat = 380
     var height: CGFloat = 600
