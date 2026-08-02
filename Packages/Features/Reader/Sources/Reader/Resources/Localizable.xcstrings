@@ -361,6 +361,310 @@
         }
       }
     },
+    "reader.hint.annotation.message.pad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write notes straight onto the score with Apple Pencil or your finger."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Pencil や指で、楽譜に直接メモを書き込めます。"
+          }
+        }
+      }
+    },
+    "reader.hint.annotation.message.phone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write notes straight onto the score with your finger."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指で楽譜に直接メモを書き込めます。"
+          }
+        }
+      }
+    },
+    "reader.hint.annotation.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write on the score"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜に書き込む"
+          }
+        }
+      }
+    },
+    "reader.hint.metronome.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn the metronome on and off from playback settings."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生設定から、メトロノームを鳴らすかどうかを切り替えられます。"
+          }
+        }
+      }
+    },
+    "reader.hint.metronome.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metronome"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メトロノーム"
+          }
+        }
+      }
+    },
+    "reader.hint.mixer.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From playback settings, balance each part's volume, or mute and solo to hear just the ones you want."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生設定から、パートごとの音量を調整したり、ミュート/ソロで聴きたいパートだけを鳴らせます。"
+          }
+        }
+      }
+    },
+    "reader.hint.mixer.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per-part volume"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パートごとの音量"
+          }
+        }
+      }
+    },
+    "reader.hint.noteEditing.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rewrite the notes in the score itself. Select a note to change its pitch, duration or accidental — and enter new notes too."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜の音符を直接書き換えられます。音符を選び、音の高さ・長さ・臨時記号などを変更できます。新しく音符を入力することも可能です。"
+          }
+        }
+      }
+    },
+    "reader.hint.noteEditing.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit the notes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符を編集"
+          }
+        }
+      }
+    },
+    "reader.hint.notePad.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter notes and rests. With a place in the score selected, pick the duration and kind to enter."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符・休符を入力できます。楽譜上の場所を選択した状態で、長さと種類を指定して入力してください。"
+          }
+        }
+      }
+    },
+    "reader.hint.notePad.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter notes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符を入力"
+          }
+        }
+      }
+    },
+    "reader.hint.repeatPlayback.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From playback settings, repeat the whole piece or loop just the passage you want to practice."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生設定から、曲全体のリピートや、練習したい範囲だけを繰り返す A–B ループを設定できます。"
+          }
+        }
+      }
+    },
+    "reader.hint.repeatPlayback.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repeat and A–B loop"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リピート・A–B ループ"
+          }
+        }
+      }
+    },
+    "reader.hint.staffVisibility.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From display settings, hide the parts you are not playing so your own shows larger."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示設定から、演奏しないパートを隠し、自分のパートだけを大きく表示できます。"
+          }
+        }
+      }
+    },
+    "reader.hint.staffVisibility.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide parts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パートを非表示"
+          }
+        }
+      }
+    },
+    "reader.hint.transportCollapse.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe the bottom of the playback controls to the right to switch to the compact view."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生コントロールの下部を右にスワイプすると、小さい表示に切り替えられます。"
+          }
+        }
+      }
+    },
+    "reader.hint.transportCollapse.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe right to shrink it"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "右にスワイプで小さく表示"
+          }
+        }
+      }
+    },
+    "reader.hint.transportExpand.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe the playback controls to the left to switch back to the larger view."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生コントロールを左にスワイプすると、大きい表示に切り替えられます。"
+          }
+        }
+      }
+    },
+    "reader.hint.transportExpand.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe left to enlarge it"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "左にスワイプで大きく表示"
+          }
+        }
+      }
+    },
     "reader.inspector.a4Reference.centsUnit" : {
       "extractionState" : "stale",
       "localizations" : {

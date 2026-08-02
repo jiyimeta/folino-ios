@@ -46,6 +46,10 @@ extension EditorChromeView {
         .accessibilityLabel(Text(
             isPadVisible ? "editor.chrome.hidePad" : "editor.chrome.showPad", bundle: .module,
         ))
+        // Relayed to the Reader (via the App) so its note-input coach mark can point here. Global coordinates: the
+        // mark is drawn by a different view tree entirely, and the window is the only space the two share.
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { onNoteInputAnchorChange($0) }
+        .onDisappear { onNoteInputAnchorChange(nil) }
     }
 
     private var voicePill: some View {

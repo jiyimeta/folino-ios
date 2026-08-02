@@ -147,6 +147,7 @@ struct ReaderToolbar: ToolbarContent {
                     Image(systemName: "square.and.pencil")
                 }
                 .accessibilityLabel(Text("reader.toolbar.edit.start", bundle: .module))
+                .readerHintAnchor(.noteEditingButton)
             }
             groupSeparator
         }
@@ -172,6 +173,7 @@ struct ReaderToolbar: ToolbarContent {
         let isPlaying = viewModel.playbackSession.isPlaying
         let isAnnotating = viewModel.isAnnotating
         return Button {
+            ReaderHintCoordinator.shared.markUsed(.annotation)
             viewModel.toggleAnnotation()
         } label: {
             Image(systemName: isAnnotating ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
@@ -180,6 +182,7 @@ struct ReaderToolbar: ToolbarContent {
             isAnnotating ? "reader.toolbar.annotate.stop" : "reader.toolbar.annotate.start",
             bundle: .module,
         ))
+        .readerHintAnchor(.annotationButton)
         .disabled(isPlaying)
         .animation(.easeOut(duration: 0.2), value: isPlaying)
     }
@@ -200,6 +203,7 @@ struct ReaderToolbar: ToolbarContent {
                 Image(systemName: "text.page")
             }
             .accessibilityLabel(Text("reader.toolbar.showDisplaySettings", bundle: .module))
+            .readerHintAnchor(.visualInspectorButton)
             .popover(isPresented: $viewModel.isVisualInspectorPresented) {
                 VisualInspectorScreen(
                     layoutModel: viewModel.layoutModel,
@@ -226,6 +230,7 @@ struct ReaderToolbar: ToolbarContent {
             Image(systemName: "slider.vertical.3")
         }
         .accessibilityLabel(Text("reader.toolbar.showPlaybackSettings", bundle: .module))
+        .readerHintAnchor(.playbackInspectorButton)
         .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
             PlaybackInspectorScreen(
                 mixerModel: viewModel.mixerModel,

@@ -55,6 +55,17 @@ public final class ReaderEditingHost {
     public var editingChromeTopInset: CGFloat = 0
     public var editingChromeBottomInset: CGFloat = 0
 
+    /// GLOBAL frame of the chrome's note-input (pad open/close) button, or `nil` when the chrome isn't up. Written by
+    /// the App from the Editor's chrome, read by the Reader's coach-mark overlay — which has to point at a control it
+    /// neither draws nor can measure. Unlike `onSelectionAnchorChanged` this is a stored property rather than a
+    /// callback: the button is fixed chrome, so it changes once per session instead of once per scroll frame.
+    public var noteInputAnchorFrame: CGRect?
+
+    /// Asks the editing chrome to reveal the note-input pad. Wired by the App to the Editor's view model; called when
+    /// the user taps the note-input coach mark, so the bubble opens the pad it is pointing at rather than just naming
+    /// it. The pad starts hidden, which is exactly why that hint exists.
+    public var onRevealNoteInputPad: @MainActor () -> Void = {}
+
     // App-wired callbacks:
     public var onBeginEditing: @MainActor (Score) -> Void = { _ in }
     public var onEndEditing: @MainActor () -> Void = {}

@@ -17,6 +17,34 @@ extension ReaderTransportControl {
             + releasedSwipeOffset
     }
 
+    /// Switches modes because the swipe coach mark was tapped, by acting out the swipe rather than just flipping the
+    /// mode: the control slides `commitDistance` in the direction the finger would have gone, the card morphs under
+    /// it, and the same release spring carries it home. Someone who has never found the gesture sees exactly what it
+    /// does — and where their finger has to go to do it again.
+    ///
+    /// Paced as a DELIBERATE swipe (`swipeSpeed: 0` floors to `deliberateSwipeSpeed`), not a flick: this is a
+    /// demonstration, and the slow curves are the legible ones.
+    func performHintedModeSwitch() {
+        let target = !rendersSeekBar
+        // Declined while editing, exactly as a real swipe would be — leave the control alone rather than half-play it.
+        guard onSetSeekBarVisible(target) else { return }
+        // Expanded collapses on a right swipe, compact expands on a left one (see `followOffset`).
+        let travel = TransportModeSwipe.commitDistance * (target ? -1 : 1)
+
+        withAnimation(.easeOut(duration: TransportModeSwipe.hintedSwipeOutDuration)) {
+            releasedSwipeOffset = travel
+        }
+        withAnimation(TransportModeSwipe.modeSwapAnimation(swipeSpeed: 0)) {
+            previewSeekBar = target
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(TransportModeSwipe.hintedSwipeOutDuration))
+            withAnimation(TransportModeSwipe.releaseAnimation(from: travel, releaseVelocity: 0)) {
+                releasedSwipeOffset = 0
+            }
+        }
+    }
+
     /// Drag that switches the transport between the expanded seek card and the compact pill.
     ///
     /// GLOBAL coordinate space, deliberately: in the default `.local` space the translation is measured against the

@@ -11,6 +11,9 @@ struct StaffVisibilityButton: View {
     var body: some View {
         let isVisible = !layoutModel.hiddenStaves.contains(address)
         Button {
+            // Retires the show/hide-parts coach mark: marked here rather than in `LayoutSettingsModel` so the model
+            // stays free of UI-discovery state (and its unit tests free of `UserDefaults`).
+            ReaderHintCoordinator.shared.markUsed(.staffVisibility)
             Task { await layoutModel.toggleStaff(address) }
         } label: {
             EyeIcon(isOpen: isVisible, lineWidth: 1.6)
