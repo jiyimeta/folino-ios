@@ -61,6 +61,17 @@ struct PDFOriginStateTests {
         #expect(subject.pdfOriginState == .unconverted)
     }
 
+    /// The regression that shipped to a device: a PDF imported before the origin columns existed carries no
+    /// `sourcePDFFileName`, and keying the state off that column classified every PDF already in a library as
+    /// "never came from a PDF" — so it never converted, showed no badge, and offered no re-read.
+    @Test
+    func `a PDF row from before the origin columns existed is still unconverted`() {
+        let legacy = item(localFileName: "a.pdf")
+        #expect(legacy.sourcePDFFileName == nil)
+        #expect(legacy.pdfOriginState == .unconverted)
+        #expect(ScorePresentation.showsPDFBadge(for: legacy))
+    }
+
     @Test
     func `defaults keep every pre-existing construction site on notPDF`() {
         let subject = item(localFileName: "a.mscz")

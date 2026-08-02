@@ -19,10 +19,10 @@ extension ReaderViewModel {
         isConvertingPDF = true
         defer { isConvertingPDF = false }
 
-        // Back-fill the sidecar identity for rows that predate the PDF-origin columns: for a row that is still a PDF,
-        // the sidecar IS the file it already points at.
-        let sidecarName = scoreItem.sourcePDFFileName ?? scoreItem.localFileName
-        let sidecarHash = scoreItem.sourcePDFContentHash ?? scoreItem.contentHash
+        // For a row that is still a PDF the sidecar IS the file it already points at — which is also how rows that
+        // predate the origin columns get their `sourcePDFFileName` back-filled.
+        guard let sidecarName = scoreItem.originalPDFFileName else { return nil }
+        let sidecarHash = scoreItem.originalPDFContentHash
         let destination = scoresDirectory.appending(
             path: "\(scoreItem.id.rawValue.uuidString).\(ScoreFormat.mscz.canonicalExtension)",
         )

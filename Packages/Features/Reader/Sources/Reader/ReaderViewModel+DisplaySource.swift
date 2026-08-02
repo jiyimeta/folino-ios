@@ -23,7 +23,7 @@ extension ReaderViewModel {
     func setDisplaySource(_ source: ReaderDisplaySource) {
         guard source != displaySource else { return }
         if source == .originalPDF, originalPDFDocument == nil {
-            guard let name = scoreItem.sourcePDFFileName,
+            guard let name = scoreItem.originalPDFFileName,
                   let doc = PDFDocument(url: scoresDirectory.appending(path: name)),
                   doc.pageCount > 0
             else { return }

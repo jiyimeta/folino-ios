@@ -7,7 +7,7 @@ extension ReaderViewModel {
     /// Any item with an original PDF can be read again — including one folino failed to read, where this doubles as
     /// the retry. Worth offering because the importer keeps getting better at reading PDFs.
     var canReReadPDF: Bool {
-        scoreItem.sourcePDFFileName != nil && pdfConversion != nil
+        scoreItem.originalPDFFileName != nil && pdfConversion != nil
     }
 
     /// Whether re-reading would discard work the user did on top of the previous read, and so has to ask first.
@@ -27,7 +27,7 @@ extension ReaderViewModel {
     /// notation is kept — it may shift, which the confirmation says, and erasing a user's annotations to spare them an
     /// offset is the worse failure.
     func reReadPDF() async {
-        guard let sidecarName = scoreItem.sourcePDFFileName, let pdfConversion else { return }
+        guard let sidecarName = scoreItem.originalPDFFileName, let pdfConversion else { return }
         reReadError = nil
         isConvertingPDF = true
         defer { isConvertingPDF = false }
@@ -56,7 +56,7 @@ extension ReaderViewModel {
         let updated = scoreItem.adoptingPDFConversion(
             rewritten,
             sourcePDFFileName: sidecarName,
-            sourcePDFContentHash: scoreItem.sourcePDFContentHash,
+            sourcePDFContentHash: scoreItem.originalPDFContentHash,
         )
         scoreItem = updated
         try? await repository.saveScoreItem(updated)

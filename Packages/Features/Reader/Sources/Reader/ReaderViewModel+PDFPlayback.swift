@@ -92,7 +92,7 @@ extension ReaderViewModel {
     func prepareOriginalPDFCursorIfNeeded() async {
         guard case .idle = pdfPlayback,
               !scoreItem.isPDFDerivedScoreEdited,
-              let name = scoreItem.sourcePDFFileName
+              let name = scoreItem.originalPDFFileName
         else { return }
         await parsePDFForPlayback(url: scoresDirectory.appending(path: name))
     }

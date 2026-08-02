@@ -14,9 +14,27 @@ public enum PDFOriginState: Hashable, Sendable {
 
 extension ScoreItem {
     public var pdfOriginState: PDFOriginState {
-        guard sourcePDFFileName != nil else { return .notPDF }
-        let isStillPDF = ScoreFormat.detect(filename: localFileName) == .pdf
-        return (!isStillPDF && pdfDerivedContentHash != nil) ? .converted : .unconverted
+        // An item whose bytes are a PDF is unconverted, full stop — `sourcePDFFileName` is deliberately NOT consulted
+        // here. Rows imported before that column existed carry `nil`, and keying off it would classify every PDF
+        // already in someone's library as "never came from a PDF": no conversion on open, no badge, no re-read, no
+        // notice. The sidecar name only distinguishes converted from not, and the conversion back-fills it.
+        if ScoreFormat.detect(filename: localFileName) == .pdf { return .unconverted }
+        guard sourcePDFFileName != nil, pdfDerivedContentHash != nil else { return .notPDF }
+        return .converted
+    }
+
+    /// The original PDF backing this item, or `nil` when there isn't one. Falls back to `localFileName` for a row that
+    /// still *is* a PDF, which is how items imported before the origin columns existed keep working: the conversion
+    /// back-fills `sourcePDFFileName` the first time it runs.
+    public var originalPDFFileName: String? {
+        if let sourcePDFFileName { return sourcePDFFileName }
+        return ScoreFormat.detect(filename: localFileName) == .pdf ? localFileName : nil
+    }
+
+    /// Hash of the original PDF's bytes, with the same back-fill as `originalPDFFileName`.
+    public var originalPDFContentHash: String? {
+        if let sourcePDFContentHash { return sourcePDFContentHash }
+        return ScoreFormat.detect(filename: localFileName) == .pdf ? contentHash : nil
     }
 
     /// Whether the user has edited the notation since the conversion wrote it. False for anything that didn't come

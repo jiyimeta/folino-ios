@@ -66,6 +66,27 @@ final class PDFReaderTestRig {
         repository.scoreItems = [item]
     }
 
+    /// Rewrites the item the way a row written before migration v15 looks: the PDF-origin columns are all empty.
+    func stripPDFOriginColumns() {
+        item = ScoreItem(
+            id: item.id,
+            title: item.title,
+            composer: nil,
+            instrumentationSummary: nil,
+            localFileName: item.localFileName,
+            contentHash: item.contentHash,
+            sizeBytes: item.sizeBytes,
+            lengthBeats: item.lengthBeats,
+            defaultTempoBpm: item.defaultTempoBpm,
+            primaryKey: nil,
+            addedAt: item.addedAt,
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+        )
+        repository.scoreItems = [item]
+    }
+
     /// A plain-score item that never came from a PDF.
     static func scoreItem() throws -> PDFReaderTestRig {
         let rig = try PDFReaderTestRig(converted: true)
