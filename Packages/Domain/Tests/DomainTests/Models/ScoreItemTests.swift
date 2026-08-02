@@ -110,6 +110,21 @@ struct ScoreItemTests {
         #expect(decoded.lyricist == nil)
         #expect(decoded.copyright == nil)
     }
+
+    @Test func `decoding legacy JSON without the PDF-origin fields yields a non-PDF item`() throws {
+        // `pdfConversionFailed` is non-optional, so a synthesized decoder would throw `keyNotFound` on any payload
+        // encoded before it existed.
+        let json =
+            """
+            {"id":{"rawValue":"00000000-0000-0000-0000-000000000000"},"title":"Old",\
+            "localFileName":"o.mscx","contentHash":"h","sizeBytes":1,"lengthBeats":0,\
+            "defaultTempoBpm":120,"addedAt":0,"tagIDs":[],"isFavorite":false}
+            """
+        let decoded = try JSONDecoder().decode(ScoreItem.self, from: Data(json.utf8))
+        #expect(decoded.sourcePDFFileName == nil)
+        #expect(!decoded.pdfConversionFailed)
+        #expect(decoded.pdfOriginState == .notPDF)
+    }
 }
 
 extension ScoreItem {

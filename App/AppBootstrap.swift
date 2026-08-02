@@ -42,6 +42,10 @@ final class AppBootstrap {
     /// Stateless PDF → playable-score parser (ssm OMR). Always available on Apple, no async setup, so
     /// it's a plain constant rather than a slot filled during `start()`.
     let pdfPlaybackParser = LivePDFPlaybackParser()
+    /// Reads a PDF into notation and writes it as `.mscz`. Built once in `start()` over `pdfPlaybackParser` and the
+    /// gateway, then handed to both the importer (convert on import) and every Reader session (convert a PDF imported
+    /// before folino could read one, and re-read on request).
+    private(set) var pdfScoreConversion: PDFScoreConversion?
     private(set) var reachability: LiveNetworkReachability?
     private(set) var museScoreGeneralProvider: LiveMuseScoreGeneralProvider?
     private(set) var soundfontResolver: GMSoundfontResolver?
@@ -94,10 +98,12 @@ final class AppBootstrap {
                 playlistsIndexPublisher: writer,
             )
             let gateway = LiveScoreFileGateway(crashReporter: crashReporter ?? NoopCrashReporter())
+            pdfScoreConversion = makePDFScoreConversion(gateway: gateway)
             let importer = LiveScoreFileImporter(
                 gateway: gateway,
                 repository: repository,
                 scoresDirectory: AppPaths.scoresDirectory,
+                pdfConversion: pdfScoreConversion,
             )
             let shareCoordinator: IncomingShareCoordinator? = appGroupContainer.map { container in
                 IncomingShareCoordinator(

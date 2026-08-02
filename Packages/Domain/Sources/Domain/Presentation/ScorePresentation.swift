@@ -23,6 +23,13 @@ public struct ScoreDisplayFields: Equatable, Sendable {
 }
 
 public enum ScorePresentation {
+    /// Whether the library row and reader header should mark this item as PDF-derived. Stays true after folino reads
+    /// the PDF into notation: the badge's job is to say "this was machine-read and may contain mistakes", which a
+    /// converted item needs more than an unconverted one, not less.
+    public static func showsPDFBadge(for item: ScoreItem) -> Bool {
+        item.pdfOriginState != .notPDF
+    }
+
     /// The library title: the source file's name without its extension.
     /// (The score's `workTitle` metaTag is deliberately not used — rename is a
     /// separate user action.)

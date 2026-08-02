@@ -143,6 +143,12 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "layout_mode_changed", parameters: ["mode": .string(mode.analyticsValue)])
     }
 
+    /// The reader switched between the notation folino read out of a PDF and the original pages. Tells us whether the
+    /// original is a curiosity or something people actually read from.
+    public static func displaySourceChanged(_ source: ReaderDisplaySource) -> AnalyticsEvent {
+        AnalyticsEvent(name: "display_source_changed", parameters: ["source": .string(source.rawValue)])
+    }
+
     public static func transposeChanged(direction: String) -> AnalyticsEvent {
         AnalyticsEvent(name: "transpose_changed", parameters: ["direction": .string(direction)])
     }

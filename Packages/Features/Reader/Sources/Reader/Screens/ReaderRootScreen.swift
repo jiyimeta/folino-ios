@@ -57,15 +57,19 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.pageTurnButtonsVisible)
     private var pageTurnButtonsVisible = true
 
-    /// `true` once the user chose "Don't show again" on the PDF-playback caveat — stops it from auto-presenting.
-    @AppStorage(ReaderGlobalSettingsKey.pdfPlaybackNoticeDismissed)
-    private var pdfPlaybackNoticeDismissed = false
+    /// `true` once the user chose "Don't show again" on the PDF-source notice — stops it from auto-presenting.
+    @AppStorage(ReaderGlobalSettingsKey.pdfSourceNoticeDismissed)
+    private var pdfSourceNoticeDismissed = false
 
-    /// Drives the PDF-playback caveat dialog: shown automatically the first time an opened PDF becomes playable
-    /// (unless permanently dismissed), and on demand from the PDF badge. `hasAutoShownPDFNotice` keeps the
-    /// auto-presentation to once per Reader open; "OK" just closes it for now, "Don't show again" sets the flag above.
+    /// Drives the PDF-source notice: shown automatically the first time a PDF-origin item is opened (unless
+    /// permanently dismissed), and on demand from the PDF badge. `hasAutoShownPDFNotice` keeps the auto-presentation
+    /// to once per Reader open; "OK" just closes it for now, "Don't show again" sets the flag above.
     @State private var isPDFNoticePresented = false
     @State private var hasAutoShownPDFNotice = false
+
+    /// Gate for the destructive re-read. Only raised when `reReadNeedsConfirmation` — a re-read with nothing to lose
+    /// runs straight from the menu item.
+    @State private var isReReadConfirmPresented = false
 
     /// The deferred `showSeekBar` write from a transport swipe (see `setSeekBarVisible` for why it is deferred at
     /// all). Kept so a swipe back within the deferral window replaces the pending write instead of racing it.
@@ -137,6 +141,7 @@ public struct ReaderRootScreen: View {
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
         pdfPlaybackParser: (any PDFPlaybackParser)? = nil,
+        pdfConversion: PDFScoreConversion? = nil,
         museScoreGeneralProvider: (any MuseScoreGeneralProvider)? = nil,
         playlistID: PlaylistID? = nil,
         analytics: any Analytics = NoopAnalytics(),
@@ -163,6 +168,7 @@ public struct ReaderRootScreen: View {
                 defaultStaffSize: initialDefault,
                 playbackController: playbackController,
                 pdfPlaybackParser: pdfPlaybackParser,
+                pdfConversion: pdfConversion,
                 museScoreGeneralProvider: museScoreGeneralProvider,
                 playlistID: playlistID,
                 analytics: analytics,
@@ -210,14 +216,16 @@ public struct ReaderRootScreen: View {
         .sheet(item: $viewModel.shareTarget) { target in
             ActivityViewControllerRepresentable(items: target.urls)
         }
-        .pdfPlaybackNoticeAlert(
-            state: viewModel.pdfPlayback,
+        .pdfSourceNoticeAlert(
+            originState: viewModel.scoreItem.pdfOriginState,
             isPresented: $isPDFNoticePresented,
-            onDontShowAgain: { pdfPlaybackNoticeDismissed = true },
+            onDontShowAgain: { pdfSourceNoticeDismissed = true },
         )
-        .onChange(of: viewModel.isPDFPlaybackReady) { _, isReady in
-            // Auto-present the caveat once per open, the first time a PDF becomes playable — unless dismissed for good.
-            guard isReady, !hasAutoShownPDFNotice, !pdfPlaybackNoticeDismissed else { return }
+        .pdfReReadAlerts(viewModel: viewModel, isConfirmPresented: $isReReadConfirmPresented)
+        .onChange(of: viewModel.scoreItem.pdfOriginState, initial: true) { _, state in
+            // Once per open, as soon as the item's origin is settled — for an item converted on this very open that's
+            // after the conversion, not at the start of it. Never for something that didn't come from a PDF.
+            guard state != .notPDF, !hasAutoShownPDFNotice, !pdfSourceNoticeDismissed else { return }
             hasAutoShownPDFNotice = true
             isPDFNoticePresented = true
         }
@@ -276,6 +284,24 @@ public struct ReaderRootScreen: View {
             // change here (the one place that owns the view model) captures every layout switch, score or PDF.
             viewModel.currentLayoutMode = newValue
             viewModel.analytics.log(.layoutModeChanged(newValue))
+        }
+        .pdfReReadAlerts(viewModel: viewModel, isConfirmPresented: $isReReadConfirmPresented)
+        .onChange(of: viewModel.displaySource) { _, source in
+            // Horizontal has no meaning on fixed-layout pages, so switching to the original clamps it — and remembers
+            // it, so coming back doesn't silently demote the user's choice. Page and vertical exist on both sides and
+            // round-trip untouched, which is the whole reason this is a source switch and not a fourth layout mode.
+            switch source {
+            case .originalPDF:
+                if layoutMode == .horizontal {
+                    viewModel.savedScoreLayoutMode = .horizontal
+                    layoutModeRaw = ReaderLayoutMode.page.rawValue
+                }
+            case .score:
+                if let saved = viewModel.savedScoreLayoutMode {
+                    layoutModeRaw = saved.rawValue
+                    viewModel.savedScoreLayoutMode = nil
+                }
+            }
         }
         .onChange(of: keepScreenAwake) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
@@ -365,7 +391,7 @@ public struct ReaderRootScreen: View {
                 leadingAction: customLeadingAction,
                 leadingIsSidebarToggle: leadingIsSidebarToggle,
                 collapsesScoreActions: collapsesScoreActions,
-                onShowPDFNotice: { isPDFNoticePresented = true },
+                onConfirmReReadPDF: { isReReadConfirmPresented = true },
                 onStartEditing: editingHost == nil ? nil : { startEditing() },
             )
         }

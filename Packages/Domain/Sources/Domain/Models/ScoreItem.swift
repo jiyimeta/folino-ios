@@ -36,6 +36,18 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     /// `nil` for non-MuseScore formats (MusicXML, MIDI, PDF) and for rows imported before this field was introduced.
     /// Analytics (Task 12) treats `nil` as v4 — the current default — so no backfill is required for existing rows.
     public var museScoreMajorVersion: Int?
+    /// The original PDF this item was read from, as `<id>.pdf` in the scores directory. Non-nil for every PDF-origin
+    /// item — both one still displayed as a PDF and one that has been read into notation.
+    public var sourcePDFFileName: String?
+    /// SHA-256 of the original PDF's bytes. Duplicate detection matches this as well as `contentHash`, so re-importing
+    /// the same PDF is still recognized after the item's own bytes became an `.mscz`.
+    public var sourcePDFContentHash: String?
+    /// `contentHash` of the `.mscz` exactly as the conversion wrote it. `contentHash` drifting away from this value is
+    /// the definition of "the user edited the score".
+    public var pdfDerivedContentHash: String?
+    /// The last conversion attempt failed, or produced nothing playable. Keeps the Reader from re-running an expensive
+    /// OMR pass on every open; an explicit re-read clears it.
+    public var pdfConversionFailed: Bool
 
     public init(
         id: ScoreItemID = ScoreItemID(),
@@ -58,6 +70,10 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         isFavorite: Bool,
         deletedAt: Date? = nil,
         museScoreMajorVersion: Int? = nil,
+        sourcePDFFileName: String? = nil,
+        sourcePDFContentHash: String? = nil,
+        pdfDerivedContentHash: String? = nil,
+        pdfConversionFailed: Bool = false,
     ) {
         self.id = id
         self.title = title
@@ -79,5 +95,42 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
         self.isFavorite = isFavorite
         self.deletedAt = deletedAt
         self.museScoreMajorVersion = museScoreMajorVersion
+        self.sourcePDFFileName = sourcePDFFileName
+        self.sourcePDFContentHash = sourcePDFContentHash
+        self.pdfDerivedContentHash = pdfDerivedContentHash
+        self.pdfConversionFailed = pdfConversionFailed
+    }
+
+    /// Hand-written so a payload encoded before the PDF-origin fields existed still decodes: `pdfConversionFailed` is
+    /// the only non-optional addition, and a synthesized decoder would throw `keyNotFound` on it. Everything else
+    /// decodes exactly as the synthesized version would.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: c.decode(ScoreItemID.self, forKey: .id),
+            title: c.decode(String.self, forKey: .title),
+            subtitle: c.decodeIfPresent(String.self, forKey: .subtitle),
+            composer: c.decodeIfPresent(String.self, forKey: .composer),
+            arranger: c.decodeIfPresent(String.self, forKey: .arranger),
+            lyricist: c.decodeIfPresent(String.self, forKey: .lyricist),
+            copyright: c.decodeIfPresent(String.self, forKey: .copyright),
+            instrumentationSummary: c.decodeIfPresent(String.self, forKey: .instrumentationSummary),
+            localFileName: c.decode(String.self, forKey: .localFileName),
+            contentHash: c.decode(String.self, forKey: .contentHash),
+            sizeBytes: c.decode(Int64.self, forKey: .sizeBytes),
+            lengthBeats: c.decode(Int.self, forKey: .lengthBeats),
+            defaultTempoBpm: c.decode(Int.self, forKey: .defaultTempoBpm),
+            primaryKey: c.decodeIfPresent(String.self, forKey: .primaryKey),
+            addedAt: c.decode(Date.self, forKey: .addedAt),
+            lastOpenedAt: c.decodeIfPresent(Date.self, forKey: .lastOpenedAt),
+            tagIDs: c.decode(Set<TagID>.self, forKey: .tagIDs),
+            isFavorite: c.decode(Bool.self, forKey: .isFavorite),
+            deletedAt: c.decodeIfPresent(Date.self, forKey: .deletedAt),
+            museScoreMajorVersion: c.decodeIfPresent(Int.self, forKey: .museScoreMajorVersion),
+            sourcePDFFileName: c.decodeIfPresent(String.self, forKey: .sourcePDFFileName),
+            sourcePDFContentHash: c.decodeIfPresent(String.self, forKey: .sourcePDFContentHash),
+            pdfDerivedContentHash: c.decodeIfPresent(String.self, forKey: .pdfDerivedContentHash),
+            pdfConversionFailed: c.decodeIfPresent(Bool.self, forKey: .pdfConversionFailed) ?? false,
+        )
     }
 }

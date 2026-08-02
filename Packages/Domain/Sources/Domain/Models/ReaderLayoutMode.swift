@@ -78,9 +78,17 @@ public enum ReaderGlobalSettingsKey {
     /// Applies to parsed PDFs too (auto-scroll / auto-page-turn over the original PDF) once OMR makes them playable.
     public static let autoFollowEnabled = "readerAutoFollowEnabled"
 
-    /// Bool. `true` once the user chose "Don't show again" on the PDF-playback caveat dialog, suppressing its
-    /// automatic presentation thereafter. Defaults to `false`; the caveat stays reachable any time via the PDF badge.
+    /// Bool. The old PDF-playback caveat's suppression flag. Kept for Android, which still shows that dialog until its
+    /// own follow-up ships; iOS no longer reads it — the message it silenced no longer exists.
     public static let pdfPlaybackNoticeDismissed = "readerPdfPlaybackNoticeDismissed"
+
+    /// Bool. `true` once the user chose "Don't show again" on the PDF-source notice, suppressing its automatic
+    /// presentation thereafter. Defaults to `false`; the explanation stays reachable any time via the PDF badge.
+    ///
+    /// Deliberately a NEW key rather than a reuse of `pdfPlaybackNoticeDismissed`: the message changed from a caveat
+    /// about imperfect playback to an explanation that folino read the PDF into editable notation and how to correct
+    /// it. That is worth showing once even to someone who dismissed the old one.
+    public static let pdfSourceNoticeDismissed = "readerPdfSourceNoticeDismissed"
 
     /// Bool. When true (the default at each `@AppStorage` site), the `.page`-mode tap-zone navigation overlay
     /// (`TapOverlay`) is shown. When false it is hidden; swipe-to-turn and auto-page-turn still work. Read by the

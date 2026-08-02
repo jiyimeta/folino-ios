@@ -1,4 +1,5 @@
 import Domain
+import PDFKit
 import SwiftUI
 
 /// The live score / PDF container selection, extracted from `ReaderRootScreen.body` so the per-tick playback-cursor
@@ -53,6 +54,32 @@ struct ScoreContentView: View {
     }
 
     var body: some View {
+        // The original PDF wins over whatever the load state holds: for an item folino read out of a PDF, both
+        // renditions exist at once and the display source picks between them. The PDF containers are the same ones an
+        // unreadable PDF uses — only where the document comes from differs.
+        if viewModel.displaySource == .originalPDF, let document = viewModel.originalPDFDocument {
+            pdfContent(document: document)
+        } else {
+            scoreContent
+        }
+    }
+
+    @ViewBuilder
+    private func pdfContent(document: PDFDocument) -> some View {
+        switch pdfLayoutMode {
+        case .vertical:
+            VerticalPDFContainer(document: document, viewModel: viewModel)
+        case .page, .horizontal:
+            PagedPDFContainer(
+                document: document,
+                showsPageTurnButtons: pageTurnButtonsVisible,
+                viewModel: viewModel,
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var scoreContent: some View {
         switch viewModel.loadState {
         case .loading:
             ProgressView().controlSize(.large)
@@ -113,16 +140,7 @@ struct ScoreContentView: View {
                 ProgressView().controlSize(.large)
             }
         case let .loadedPDF(document):
-            switch pdfLayoutMode {
-            case .vertical:
-                VerticalPDFContainer(document: document, viewModel: viewModel)
-            case .page, .horizontal:
-                PagedPDFContainer(
-                    document: document,
-                    showsPageTurnButtons: pageTurnButtonsVisible,
-                    viewModel: viewModel,
-                )
-            }
+            pdfContent(document: document)
         case let .failed(error):
             ContentUnavailableView {
                 Label {

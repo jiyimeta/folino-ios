@@ -7,6 +7,54 @@
     "%lld%%" : {
       "shouldTranslate" : false
     },
+    "reader.displaySource.showOriginal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the original PDF"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "元のPDFを表示"
+          }
+        }
+      }
+    },
+    "reader.displaySource.showOriginal.description" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback works on the PDF too. Turn this off to show the sheet music folino parsed."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF上でも再生できます。オフにすると解析済みの楽譜を表示します。"
+          }
+        }
+      }
+    },
+    "reader.displaySource.showScore" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the parsed sheet music"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解析済みの楽譜を表示"
+          }
+        }
+      }
+    },
     "reader.error.cannotOpen.title" : {
       "localizations" : {
         "en" : {
@@ -453,6 +501,74 @@
         }
       }
     },
+    "reader.inspector.autoPageTurn" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto page turn"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動ページめくり"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "자동 페이지 넘김"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动翻页"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動翻頁"
+          }
+        }
+      }
+    },
+    "reader.inspector.autoScroll" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto-scroll"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動スクロール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "자동 스크롤"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动滚动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動捲動"
+          }
+        }
+      }
+    },
     "reader.inspector.continuation" : {
       "localizations" : {
         "en" : {
@@ -733,6 +849,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "聲部"
+          }
+        }
+      }
+    },
+    "reader.inspector.showPageTurnButtons" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page-turn buttons"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ページめくりボタン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "페이지 넘김 버튼"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻页按钮"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻頁按鈕"
+          }
+        }
+      }
+    },
+    "reader.inspector.showPageTurnButtons.footer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe to turn pages still works even when this is off."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフにしてもスワイプでページをめくれます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "꺼도 스와이프로 페이지를 넘길 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即使关闭，仍可滑动翻页。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即使關閉，仍可滑動翻頁。"
           }
         }
       }
@@ -1039,6 +1223,216 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一頁"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parse the PDF again"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDFから解析し直す"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.confirm.action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parse again"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解析し直す"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.confirm.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your note edits and per-staff settings (clef, visibility, instrument, volume, transposition) will be lost. Annotations are kept, but they may shift."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符の編集内容と、譜表ごとの設定（音部記号・表示/非表示・音色・音量・移調）は失われます。書き込みは残りますが、位置がずれることがあります。"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.confirm.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parse this PDF again?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDFから解析し直しますか？"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.failed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino couldn't parse sheet music out of this PDF. Your score is unchanged."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このPDFから楽譜を解析できませんでした。楽譜はそのままです。"
+          }
+        }
+      }
+    },
+    "reader.pdf.reread.failed.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't parse this PDF"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDFを解析できませんでした"
+          }
+        }
+      }
+    },
+    "reader.pdf.settingsNote" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display adjustments like staff size and hiding staves aren't available for PDF scores. Playback settings are."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 楽譜では譜表サイズや譜表の非表示などの表示調整は利用できませんが、再生設定は利用できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 악보에서는 보표 크기나 보표 숨기기 같은 표시 조정을 사용할 수 없지만 재생 설정은 사용할 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 乐谱不支持谱表大小、隐藏谱表等显示调整，但可以使用播放设置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 樂譜不支援譜表大小、隱藏譜表等顯示調整，但可以使用播放設定。"
+          }
+        }
+      }
+    },
+    "reader.pdf.source.notice.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parsing is highly accurate, but it is occasionally wrong. Fix a note on the spot with the note-editing button above. You can also show the original PDF."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF解析は高精度ですが、まれに誤りがあります。上の音符編集ボタンから、その場で修正できます。元のPDFを表示することもできます。"
+          }
+        }
+      }
+    },
+    "reader.pdf.source.notice.dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Don't show again"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今後表示しない"
+          }
+        }
+      }
+    },
+    "reader.pdf.source.notice.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showing this PDF as sheet music"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDFを解析して表示しています"
+          }
+        }
+      }
+    },
+    "reader.pdf.source.unavailable.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino couldn't read sheet music out of this PDF, so it's shown as it is. You can try again any time with the refresh button above."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この PDF からは楽譜を読み取れませんでした。PDF としてそのまま表示します。上の更新ボタンからいつでも読み取り直せます。"
+          }
+        }
+      }
+    },
+    "reader.pdf.source.unavailable.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shown as a PDF"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF として表示しています"
           }
         }
       }
@@ -1417,74 +1811,6 @@
         }
       }
     },
-    "reader.preferences.clef.choice.treble8va" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Treble 8va"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ト音 8va"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "높은음 8va"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高音 8va"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高音 8va"
-          }
-        }
-      }
-    },
-    "reader.preferences.clef.choice.treble8vb" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Treble 8vb"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ト音 8vb"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "높은음 8vb"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高音 8vb"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高音 8vb"
-          }
-        }
-      }
-    },
     "reader.preferences.clef.choice.treble15ma" : {
       "localizations" : {
         "en" : {
@@ -1549,6 +1875,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "高音 15mb"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble8va" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 8va"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 8va"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "높은음 8va"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高音 8va"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高音 8va"
+          }
+        }
+      }
+    },
+    "reader.preferences.clef.choice.treble8vb" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treble 8vb"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ト音 8vb"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "높은음 8vb"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高音 8vb"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高音 8vb"
           }
         }
       }
@@ -1651,176 +2045,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "遵循樂譜的換行與分頁"
-          }
-        }
-      }
-    },
-    "reader.pdf.playback.notice.body" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino reads the PDF to play it and follow along with a cursor. The result isn't always perfect — it works best with PDFs exported from MuseScore or folino."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino は PDF を解析して再生し、カーソルで追従します。解析は常に完璧とは限らず、MuseScore や folino から書き出した PDF で最もうまく動作します。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino는 PDF를 분석해 재생하고 커서로 따라갑니다. 분석이 항상 완벽하지는 않으며, MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino 会解析 PDF 以进行播放并用光标跟随。解析并非总是完美，使用从 MuseScore 或 folino 导出的 PDF 效果最佳。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino 會解析 PDF 以進行播放並用游標跟隨。解析並非總是完美，使用從 MuseScore 或 folino 匯出的 PDF 效果最佳。"
-          }
-        }
-      }
-    },
-    "reader.pdf.playback.notice.dismiss" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Don't show again"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "次回から表示しない"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "다시 표시 안 함"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不再显示"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不再顯示"
-          }
-        }
-      }
-    },
-    "reader.pdf.playback.notice.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "About PDF playback"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 再生について"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 재생 정보"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关于 PDF 播放"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關於 PDF 播放"
-          }
-        }
-      }
-    },
-    "reader.pdf.playback.unavailable.body" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino couldn't read this PDF for playback. Playback works best with PDFs exported from MuseScore or folino."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この PDF は再生用に解析できませんでした。再生は MuseScore や folino から書き出した PDF で最もうまく動作します。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 PDF는 재생용으로 분석할 수 없습니다. 재생은 MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino 无法解析此 PDF 进行播放。播放使用从 MuseScore 或 folino 导出的 PDF 效果最佳。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino 無法解析此 PDF 進行播放。播放使用從 MuseScore 或 folino 匯出的 PDF 效果最佳。"
-          }
-        }
-      }
-    },
-    "reader.pdf.settingsNote" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Display adjustments like staff size and hiding staves aren't available for PDF scores. Playback settings are."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 楽譜では譜表サイズや譜表の非表示などの表示調整は利用できませんが、再生設定は利用できます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 악보에서는 보표 크기나 보표 숨기기 같은 표시 조정을 사용할 수 없지만 재생 설정은 사용할 수 있습니다."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 乐谱不支持谱表大小、隐藏谱表等显示调整，但可以使用播放设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 樂譜不支援譜表大小、隱藏譜表等顯示調整，但可以使用播放設定。"
           }
         }
       }
@@ -2742,142 +2966,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前進一小節"
-          }
-        }
-      }
-    },
-    "reader.inspector.autoScroll" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auto-scroll"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動スクロール"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "자동 스크롤"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自动滚动"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動捲動"
-          }
-        }
-      }
-    },
-    "reader.inspector.autoPageTurn" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auto page turn"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動ページめくり"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "자동 페이지 넘김"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自动翻页"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動翻頁"
-          }
-        }
-      }
-    },
-    "reader.inspector.showPageTurnButtons" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Page-turn buttons"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ページめくりボタン"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "페이지 넘김 버튼"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "翻页按钮"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "翻頁按鈕"
-          }
-        }
-      }
-    },
-    "reader.inspector.showPageTurnButtons.footer" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Swipe to turn pages still works even when this is off."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "オフにしてもスワイプでページをめくれます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "꺼도 스와이프로 페이지를 넘길 수 있습니다."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "即使关闭，仍可滑动翻页。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "即使關閉，仍可滑動翻頁。"
           }
         }
       }

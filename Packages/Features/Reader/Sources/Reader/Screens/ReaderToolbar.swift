@@ -30,9 +30,9 @@ struct ReaderToolbar: ToolbarContent {
     /// measure itself the way the old overlay's `ViewThatFits` did.
     var collapsesScoreActions = false
 
-    /// Invoked when the user taps the PDF badge — `ReaderRootScreen` presents the PDF-playback caveat dialog. Defaults
-    /// to a no-op so previews can omit it.
-    var onShowPDFNotice: () -> Void = {}
+    /// Invoked when re-reading the PDF would discard the user's work — `ReaderRootScreen` presents the confirmation.
+    /// A re-read with nothing to lose runs straight from the menu item and never reaches here.
+    var onConfirmReReadPDF: () -> Void = {}
 
     /// Invoked when the user taps the "edit notes" button. `nil` hides the button entirely — the default, so previews
     /// and PDF readers (which never wire an `editingHost`) are unaffected.
@@ -41,7 +41,12 @@ struct ReaderToolbar: ToolbarContent {
     @ToolbarContentBuilder
     var body: some ToolbarContent {
         leadingItems
-        if case let .loaded(score) = viewModel.loadState {
+        if viewModel.displaySource == .originalPDF {
+            // Showing the original pages means the PDF chrome, even for an item folino read into notation: the
+            // score-side actions (note input, the engraving inspector) have nothing to act on over a fixed-layout page.
+            annotationItem
+            pdfInspectorItems
+        } else if case let .loaded(score) = viewModel.loadState {
             scoreActionItems
             noteEditingItem
             annotationItem
@@ -69,14 +74,7 @@ struct ReaderToolbar: ToolbarContent {
                 )
             }
         }
-        if !viewModel.capabilities.canPlay {
-            // `canPlay == false` ⇔ PDF in this reader: a tappable brand badge that opens the PDF-playback caveat
-            // dialog — reachable any time, in place of an always-on note.
-            ToolbarItem(placement: .topBarLeading) {
-                Button { onShowPDFNotice() } label: { PDFBadge() }
-                    .buttonStyle(.plain)
-            }
-        }
+        pdfBadgeItem
     }
 
     // MARK: - Score actions
@@ -207,6 +205,7 @@ struct ReaderToolbar: ToolbarContent {
                     layoutModel: viewModel.layoutModel,
                     transposeModel: viewModel.transposeModel,
                     score: score,
+                    pdfOrigin: pdfOriginControls,
                 )
                 .frame(idealWidth: 380, idealHeight: 600)
                 .presentationDetents([.medium, .large])
@@ -218,32 +217,9 @@ struct ReaderToolbar: ToolbarContent {
     /// The PDF reader's inspector group: the playback inspector once the background OMR parse has landed (playback
     /// settings all act on the engine, which plays a parsed PDF exactly as it plays a native score), plus the PDF
     /// layout inspector standing in for the score reader's visual inspector.
-    @ToolbarContentBuilder
-    private var pdfInspectorItems: some ToolbarContent {
-        if viewModel.isPDFPlaybackReady, let score = viewModel.playbackScore {
-            ToolbarItem(placement: .topBarTrailing) {
-                playbackInspectorButton(score: score, showsStaffVisibility: false)
-            }
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                viewModel.isVisualInspectorPresented.toggle()
-            } label: {
-                Image(systemName: "text.page")
-            }
-            .accessibilityLabel(Text("reader.toolbar.showDisplaySettings", bundle: .module))
-            .popover(isPresented: $viewModel.isVisualInspectorPresented) {
-                PDFLayoutInspectorScreen()
-                    .frame(idealWidth: 320, idealHeight: 200)
-                    .presentationDetents([.medium])
-                    .presentationCompactAdaptation(.sheet)
-            }
-        }
-    }
-
     /// The playback-settings button and its popover. Shared by the score reader and — once a PDF's background OMR parse
     /// succeeds — the PDF reader, which passes its parsed score and drops the render-derived staff-visibility eye.
-    private func playbackInspectorButton(score: Score, showsStaffVisibility: Bool) -> some View {
+    func playbackInspectorButton(score: Score, showsStaffVisibility: Bool) -> some View {
         Button {
             viewModel.isPlaybackInspectorPresented.toggle()
         } label: {

@@ -18,6 +18,19 @@ struct ReaderCapabilitiesTests {
         #expect(c.availableLayoutModes == [.vertical, .horizontal, .page])
     }
 
+    @Test func `showing the original PDF disables every engraving-derived setting`() {
+        #expect(ReaderCapabilities.resolve(format: .mscz, displaySource: .originalPDF) == .forPDF)
+    }
+
+    @Test func `showing the score keeps full score capabilities`() {
+        #expect(ReaderCapabilities.resolve(format: .mscz, displaySource: .score) == .forScore)
+    }
+
+    @Test func `an item still stored as a PDF is PDF-capable on either axis`() {
+        #expect(ReaderCapabilities.resolve(format: .pdf, displaySource: .score) == .forPDF)
+        #expect(ReaderCapabilities.resolve(format: .pdf, displaySource: .originalPDF) == .forPDF)
+    }
+
     @Test func `pdf becomes playable only when the parse succeeds`() {
         let pdf = ReaderCapabilities.forPDF
         #expect(!ReaderCapabilities.canPlayNow(capabilities: pdf, isPDFPlaybackReady: false))

@@ -26,6 +26,10 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
     var isFavorite: Bool
     var deletedAt: Double?
     var museScoreMajorVersion: Int?
+    var sourcePDFFileName: String?
+    var sourcePDFContentHash: String?
+    var pdfDerivedContentHash: String?
+    var pdfConversionFailed: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -47,6 +51,10 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         case isFavorite = "is_favorite"
         case deletedAt = "deleted_at"
         case museScoreMajorVersion = "muse_score_major_version"
+        case sourcePDFFileName = "source_pdf_file_name"
+        case sourcePDFContentHash = "source_pdf_content_hash"
+        case pdfDerivedContentHash = "pdf_derived_content_hash"
+        case pdfConversionFailed = "pdf_conversion_failed"
     }
 
     init(domain item: ScoreItem) {
@@ -69,6 +77,10 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         isFavorite = item.isFavorite
         deletedAt = item.deletedAt?.timeIntervalSince1970
         museScoreMajorVersion = item.museScoreMajorVersion
+        sourcePDFFileName = item.sourcePDFFileName
+        sourcePDFContentHash = item.sourcePDFContentHash
+        pdfDerivedContentHash = item.pdfDerivedContentHash
+        pdfConversionFailed = item.pdfConversionFailed
     }
 
     func toDomain(tagIDs: Set<TagID>) throws -> ScoreItem {
@@ -96,6 +108,10 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
             isFavorite: isFavorite,
             deletedAt: deletedAt.map(Date.init(timeIntervalSince1970:)),
             museScoreMajorVersion: museScoreMajorVersion,
+            sourcePDFFileName: sourcePDFFileName,
+            sourcePDFContentHash: sourcePDFContentHash,
+            pdfDerivedContentHash: pdfDerivedContentHash,
+            pdfConversionFailed: pdfConversionFailed,
         )
     }
 }

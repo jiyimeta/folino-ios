@@ -5,6 +5,11 @@ import SwiftUI
 /// adjustment and playback are unavailable for PDFs. Mirrors the score Visual inspector's layout row, restricted to the
 /// two PDF-allowed modes.
 struct PDFLayoutInspectorScreen: View {
+    /// The PDF an item was read from. Present for every item that reaches this screen — the original pages are what it
+    /// is showing — so the section that switches back to the notation and re-parses belongs here just as much as it
+    /// does in the score inspector.
+    var pdfOrigin: PDFOriginControls?
+
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
 
@@ -19,14 +24,20 @@ struct PDFLayoutInspectorScreen: View {
 
     var body: some View {
         List {
+            if let pdfOrigin {
+                PDFOriginSection(controls: pdfOrigin)
+            }
             Section {
                 HStack {
                     Text("reader.preferences.layoutDirection", bundle: .module)
                     Spacer()
+                    // Same order as the score inspector (vertical, then page) minus horizontal, which a fixed-layout
+                    // page has no equivalent for — so a user switching between a score and a PDF finds the modes in
+                    // the place they already learned.
                     Picker(selection: $layoutModeRaw) {
-                        Image(systemName: "book.pages").tag(ReaderLayoutMode.page.rawValue)
                         Image(systemName: "arrow.up.and.down.text.horizontal")
                             .tag(ReaderLayoutMode.vertical.rawValue)
+                        Image(systemName: "book.pages").tag(ReaderLayoutMode.page.rawValue)
                     } label: {
                         Text("reader.preferences.layoutDirection", bundle: .module)
                     }

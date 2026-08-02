@@ -38,6 +38,19 @@ struct VerticalPDFContainer: View {
     /// Vertical gap between stacked pages, in unzoomed content points.
     private let pageGap: CGFloat = 8
 
+    /// Height of the chrome the scroll slides under — status bar plus the navigation bar the toolbar lives in — in
+    /// SCREEN points. Measured rather than assumed; it varies with orientation and device.
+    @State private var topChromeInset: CGFloat = 0
+
+    /// `topChromeInset` expressed in unzoomed content points, so the first page clears the toolbar instead of running
+    /// under it — the same courtesy the score reader's vertical mode extends.
+    ///
+    /// Divided by the fit factor because a PDF's content space is its mediaBox (a 595pt-wide page fitted into a 430pt
+    /// viewport renders at ~0.72), unlike an engraved score, whose layout is already computed at the viewport width.
+    /// Without the division the reserved gap would come out short by exactly that factor. Mirrored into state so the
+    /// annotation geometry — reprojected outside the layout pass — reads the same value the pages were laid out with.
+    @State private var topContentInset: CGFloat = 0
+
     /// User opt-out for playback follow. When on (default), the scroll keeps the playing cursor in view; when off,
     /// the cursor still draws but only manual operations recenter.
     @AppStorage(ReaderGlobalSettingsKey.autoFollowEnabled)
@@ -45,46 +58,65 @@ struct VerticalPDFContainer: View {
 
     var body: some View {
         GeometryReader { geo in
-            let viewport = geo.size
             // Snapshot the page geometry once per render; the host-time closures below capture this stable value.
-            let sizes = pageSizes()
-            VerticalReaderShell(
+            reader(viewport: geo.size, sizes: pageSizes())
+        }
+    }
+
+    private func reader(viewport: CGSize, sizes: [CGSize]) -> some View {
+        VerticalReaderShell(
+            viewModel: viewModel,
+            pinch: pinch,
+            viewport: viewport,
+            liveScrollOffset: $liveScrollOffset,
+            contentInsetTop: $contentInsetTop,
+            pendingScroll: $pendingScroll,
+            committedZoom: $committedZoom,
+            pinchSession: $pinchSession,
+            expectedContentSize: { expectedSize(viewport: viewport, sizes: sizes) },
+            annotationOverlay: annotationSpec(viewport: viewport, sizes: sizes),
+            onPinchCommitDocWidth: { contentWidth(sizes: sizes) },
+            onUserViewportInteractionBegan: {
+                viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
+            },
+        ) {
+            VerticalPDFSurface(
                 viewModel: viewModel,
                 pinch: pinch,
+                document: document,
                 viewport: viewport,
-                liveScrollOffset: $liveScrollOffset,
-                contentInsetTop: $contentInsetTop,
-                pendingScroll: $pendingScroll,
-                committedZoom: $committedZoom,
-                pinchSession: $pinchSession,
-                expectedContentSize: { expectedSize(viewport: viewport, sizes: sizes) },
-                annotationOverlay: annotationSpec(viewport: viewport, sizes: sizes),
-                onPinchCommitDocWidth: { contentWidth(sizes: sizes) },
-                onUserViewportInteractionBegan: {
-                    viewModel.playbackSession.suspendPlaybackFollowForManualViewportChange()
-                },
-            ) {
-                VerticalPDFSurface(
-                    viewModel: viewModel,
-                    pinch: pinch,
-                    document: document,
-                    viewport: viewport,
-                    pageGap: pageGap,
-                    pageSizes: sizes,
-                )
-            }
-            // Reproject from the model on load (annotationDrawings populates async after the PDF appears) — but ONLY
-            // when not annotating. While annotating, the canvas is the source of truth; reseeding from the
-            // round-tripped model bytes would wipe the in-progress stroke. Page frames are unzoomed (fixed for the
-            // document), so — unlike the old raster impl — no zoom-commit reproject is needed.
-            .onChange(of: viewModel.annotationDrawings) {
-                if !viewModel.isAnnotating { reproject(sizes: sizes) }
-            }
-            .onAppear { reproject(sizes: sizes) }
-            // Keep the playing cursor on screen, honoring the auto-follow opt-out (mirrors the score vertical reader).
-            .onChange(of: cursorFollowKey) { old, new in
-                followPlaybackScroll(old: old, new: new, viewport: viewport, sizes: sizes)
-            }
+                pageGap: pageGap,
+                pageSizes: sizes,
+                topInset: topContentInset,
+            )
+        }
+        .background {
+            // Sibling reader extending beyond the safe area (the shell's own reader sits inside it and reports
+            // zero), so its top inset is the whole chrome the scroll slides under.
+            Color.clear
+                .ignoresSafeArea()
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    max(0, proxy.safeAreaInsets.top)
+                } action: { newValue in
+                    topChromeInset = newValue
+                }
+        }
+        .onChange(of: derivedTopContentInset(viewport: viewport, sizes: sizes), initial: true) { _, newValue in
+            topContentInset = newValue
+            // The page frames just moved, so ink anchored to them has to be re-placed against the new geometry.
+            if !viewModel.isAnnotating { reproject(sizes: sizes) }
+        }
+        // Reproject from the model on load (annotationDrawings populates async after the PDF appears) — but ONLY
+        // when not annotating. While annotating, the canvas is the source of truth; reseeding from the
+        // round-tripped model bytes would wipe the in-progress stroke. Page frames are unzoomed (fixed for the
+        // document), so — unlike the old raster impl — no zoom-commit reproject is needed.
+        .onChange(of: viewModel.annotationDrawings) {
+            if !viewModel.isAnnotating { reproject(sizes: sizes) }
+        }
+        .onAppear { reproject(sizes: sizes) }
+        // Keep the playing cursor on screen, honoring the auto-follow opt-out (mirrors the score vertical reader).
+        .onChange(of: cursorFollowKey) { old, new in
+            followPlaybackScroll(old: old, new: new, viewport: viewport, sizes: sizes)
         }
     }
 
@@ -121,11 +153,18 @@ struct VerticalPDFContainer: View {
         sizes.map(\.width).max() ?? 0
     }
 
-    /// The unzoomed stack size: width = widest page, height = Σ page heights + inter-page gaps.
+    /// The unzoomed stack size: width = widest page, height = top chrome inset + Σ page heights + inter-page gaps.
     private func unzoomedStackSize(sizes: [CGSize]) -> CGSize {
         let width = sizes.map(\.width).max() ?? 0
         let height = sizes.reduce(0) { $0 + $1.height } + pageGap * CGFloat(max(0, sizes.count - 1))
-        return CGSize(width: width, height: height)
+        return CGSize(width: width, height: height + topContentInset)
+    }
+
+    /// `topChromeInset` converted into this document's content space for the given viewport. Pure; the body mirrors
+    /// the result into `topContentInset`.
+    private func derivedTopContentInset(viewport: CGSize, sizes: [CGSize]) -> CGFloat {
+        let fit = fitFactor(viewport: viewport, sizes: sizes)
+        return fit > 0 ? topChromeInset / fit : 0
     }
 
     /// Each page's frame in unzoomed content space (matching `VerticalPDFSurface`'s `VStack`: widest-page width,
@@ -134,7 +173,7 @@ struct VerticalPDFContainer: View {
     private func pageFrames(sizes: [CGSize]) -> [CGRect] {
         let cw = sizes.map(\.width).max() ?? 0
         var frames: [CGRect] = []
-        var y: CGFloat = 0
+        var y: CGFloat = topContentInset
         for size in sizes {
             frames.append(CGRect(x: (cw - size.width) / 2, y: y, width: size.width, height: size.height))
             y += size.height + pageGap
@@ -253,126 +292,5 @@ struct VerticalPDFContainer: View {
         return PDFCursorProjection.displayRect(
             cursorRect: rect.rect, geometryPageWidthPt: pageWidthPt, pageFrame: frames[rect.pageIndex],
         )
-    }
-}
-
-/// The hosted PDF page stack. A separate `View` (like `VerticalZoomedSurface`) so it reads `pinch.*` /
-/// `viewModel.viewportZoom` directly and SwiftUI observation delivers animated commit updates inside the
-/// `ScoreScrollHost`, rather than through `rootView` reassignment (which drops the animation transaction). Pages are
-/// laid out at their natural sizes; the committed zoom × fit-to-width scale is applied here via `scaleEffect`, matching
-/// `VerticalZoomedSurface` so the annotation overlay's pivot geometry is identical.
-private struct VerticalPDFSurface: View {
-    @Bindable var viewModel: ReaderViewModel
-    @Bindable var pinch: PinchState
-    let document: PDFDocument
-    let viewport: CGSize
-    let pageGap: CGFloat
-    let pageSizes: [CGSize]
-
-    var body: some View {
-        let cw = pageSizes.map(\.width).max() ?? 0
-        let stackHeight = pageSizes.reduce(0) { $0 + $1.height } + pageGap * CGFloat(max(0, pageSizes.count - 1))
-        let zoom = cw > 0 ? viewModel.viewportZoom * (viewport.width / cw) : viewModel.viewportZoom
-        return pageStack(contentWidth: cw, zoom: zoom)
-            // Cursor lives in the same unzoomed content space as the pages, so it rides both scaleEffects + offset.
-                .overlay(alignment: .topLeading) { cursorOverlay(contentWidth: cw) }
-                // Tap-to-seek in content space (the named space is declared here, before the scaleEffects).
-                .coordinateSpace(name: Self.seekSpace)
-                .gesture(seekGesture(contentWidth: cw))
-                .scaleEffect(pinch.magnification, anchor: pinch.anchor)
-                .scaleEffect(zoom, anchor: .topLeading)
-                .offset(x: pinch.offsetX, y: 0)
-                .frame(width: cw * zoom, height: stackHeight * zoom, alignment: .topLeading)
-    }
-
-    /// Named coordinate space for tap-to-seek — the unzoomed content space of the stacked pages.
-    static let seekSpace = "pdfVerticalSeek"
-
-    private func seekGesture(contentWidth: CGFloat) -> some Gesture {
-        SpatialTapGesture(coordinateSpace: .named(Self.seekSpace)).onEnded { value in
-            guard !viewModel.isAnnotating,
-                  let geometry = viewModel.pdfPlaybackData?.geometry,
-                  let (page, point) = pageAndPoint(atContent: value.location, contentWidth: contentWidth),
-                  let cursor = geometry.cursor(at: point, pageIndex: page) else { return }
-            viewModel.playbackSession.setManualCursor(cursor)
-        }
-    }
-
-    /// Resolve a content-space point to (page index, in-page top-left mediaBox point), or `nil` if it's in a gap.
-    private func pageAndPoint(atContent point: CGPoint, contentWidth: CGFloat) -> (page: Int, point: CGPoint)? {
-        var y: CGFloat = 0
-        for (index, size) in pageSizes.enumerated() {
-            let pageX = (contentWidth - size.width) / 2
-            if CGRect(x: pageX, y: y, width: size.width, height: size.height).contains(point) {
-                return (index, CGPoint(x: point.x - pageX, y: point.y - y))
-            }
-            y += size.height + pageGap
-        }
-        return nil
-    }
-
-    @ViewBuilder
-    private func cursorOverlay(contentWidth: CGFloat) -> some View {
-        if let cursor = viewModel.pdfDisplayCursorRect,
-           let rect = contentRect(for: cursor, contentWidth: contentWidth)
-        {
-            Rectangle()
-                .fill(PDFPlaybackCursor.color)
-                .frame(width: rect.width, height: rect.height)
-                .offset(x: rect.minX, y: rect.minY)
-                .allowsHitTesting(false)
-        }
-    }
-
-    /// The cursor's rect in this surface's unzoomed content space, matching `pageStack`'s centered VStack layout.
-    /// The stacked page frame is this surface's own layout; placing the cursor INTO that frame is the shared
-    /// `PDFCursorProjection` both platforms call (Android reaches it over JNI).
-    private func contentRect(for cursor: PDFCursorRect, contentWidth: CGFloat) -> CGRect? {
-        guard pageSizes.indices.contains(cursor.pageIndex),
-              let pageWidthPt = viewModel.pdfPlaybackData?.geometry.pageSizes[cursor.pageIndex]?.width
-        else { return nil }
-        var y: CGFloat = 0
-        for (index, size) in pageSizes.enumerated() {
-            if index == cursor.pageIndex {
-                let frame = CGRect(
-                    x: (contentWidth - size.width) / 2, y: y, width: size.width, height: size.height,
-                )
-                return PDFCursorProjection.displayRect(
-                    cursorRect: cursor.rect, geometryPageWidthPt: pageWidthPt, pageFrame: frame,
-                )
-            }
-            y += size.height + pageGap
-        }
-        return nil
-    }
-
-    private func pageStack(contentWidth: CGFloat, zoom: CGFloat) -> some View {
-        VStack(spacing: pageGap) {
-            ForEach(0 ..< pageSizes.count, id: \.self) { index in
-                pageView(index: index, zoom: zoom)
-            }
-        }
-        .frame(width: contentWidth, alignment: .center)
-    }
-
-    @ViewBuilder
-    private func pageView(index: Int, zoom: CGFloat) -> some View {
-        let size = pageSizes[index]
-        if let page = document.page(at: index), size.width > 0, size.height > 0 {
-            let z = max(zoom, 0.01)
-            // Rasterize the vector page at its on-screen size (natural × committed zoom), then pre-scale 1/zoom into
-            // the natural-sized layout slot so the stack's `scaleEffect(zoom)` cancels it; the page then renders 1:1
-            // with its raster — sharp at the committed zoom. A plain `scaleEffect` on a `withCGContext` Canvas
-            // upscales the bitmap and blurs (not re-rasterized under the transform); same trick `PDFPageView` uses
-            // for page mode. The live `magnification` is still a plain scaleEffect on top — transient blur during a
-            // pinch, re-sharpened on commit when `zoom` updates.
-            PDFPageCanvas(page: page)
-                .frame(width: size.width * z, height: size.height * z)
-                .scaleEffect(1 / z, anchor: .topLeading)
-                .frame(width: size.width, height: size.height, alignment: .topLeading)
-        } else {
-            Color(.secondarySystemBackground)
-                .frame(width: max(size.width, 1), height: max(size.height, 1))
-        }
     }
 }

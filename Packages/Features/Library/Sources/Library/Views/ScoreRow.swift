@@ -43,7 +43,7 @@ struct ScoreRow: View {
     }
 
     private var isPDF: Bool {
-        ScoreFormat.detect(filename: scoreItem.localFileName) == .pdf
+        ScorePresentation.showsPDFBadge(for: scoreItem)
     }
 }
 
