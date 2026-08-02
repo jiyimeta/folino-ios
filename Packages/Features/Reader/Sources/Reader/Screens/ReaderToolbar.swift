@@ -175,7 +175,12 @@ struct ReaderToolbar: ToolbarContent {
     private var noteEditingItem: some ToolbarContent {
         if collapse < .noteEditing, let onStartEditing {
             ToolbarItem(placement: .topBarTrailing) {
-                noteEditingButton(action: onStartEditing).labelStyle(.iconOnly)
+                noteEditingButton(action: onStartEditing)
+                    .labelStyle(.iconOnly)
+                    // Anchored only here, not on the overflow-menu copy: a coach mark points at something visible,
+                    // and a folded button has no frame worth pointing at (which also drops the hint — see
+                    // `ReaderHintCoordinator.offerRotationHint`).
+                    .readerHintAnchor(.noteEditingButton)
             }
             groupSeparator
         }
@@ -194,7 +199,11 @@ struct ReaderToolbar: ToolbarContent {
     @ToolbarContentBuilder
     private var annotationItem: some ToolbarContent {
         if collapse < .annotation {
-            ToolbarItem(placement: .topBarTrailing) { annotationToggleButton.labelStyle(.iconOnly) }
+            ToolbarItem(placement: .topBarTrailing) {
+                annotationToggleButton
+                    .labelStyle(.iconOnly)
+                    .readerHintAnchor(.annotationButton)
+            }
             groupSeparator
         }
     }
@@ -213,6 +222,7 @@ struct ReaderToolbar: ToolbarContent {
         let isPlaying = viewModel.playbackSession.isPlaying
         let isAnnotating = viewModel.isAnnotating
         return Button {
+            ReaderHintCoordinator.shared.markUsed(.annotation)
             viewModel.toggleAnnotation()
         } label: {
             Label {
@@ -255,6 +265,7 @@ struct ReaderToolbar: ToolbarContent {
             }
             .labelStyle(.iconOnly)
         }
+        .readerHintAnchor(.playbackInspectorButton)
         .inspectorPopover(
             isPresented: $viewModel.isPlaybackInspectorPresented,
             anchored: anchorsInspectorPopovers,
@@ -272,6 +283,7 @@ struct ReaderToolbar: ToolbarContent {
             }
             .labelStyle(.iconOnly)
         }
+        .readerHintAnchor(.visualInspectorButton)
         .inspectorPopover(
             isPresented: $viewModel.isVisualInspectorPresented,
             anchored: anchorsInspectorPopovers,

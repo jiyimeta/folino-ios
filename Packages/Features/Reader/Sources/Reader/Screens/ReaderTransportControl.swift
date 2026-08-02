@@ -85,6 +85,10 @@ struct ReaderTransportControl: View {
         .onChange(of: showSeekBar) { _, newValue in
             if previewSeekBar == newValue { previewSeekBar = nil }
         }
+        // The swipe coach mark has no button to press, so tapping it asks the transport to perform the gesture itself.
+        .onChange(of: ReaderHintCoordinator.shared.transportModeSwitchRequests) { _, _ in
+            performHintedModeSwitch()
+        }
         // The offset carries the finger frame by frame and is deliberately left un-animated: smoothing it would leave
         // the card lagging behind the finger. Horizontal only — the transport is docked to the bottom edge, so
         // vertical travel has nowhere to go.
@@ -191,6 +195,14 @@ struct ReaderTransportControl: View {
         .background { cardBackground(metrics) }
         .compositingGroup()
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+        // Attached to the card rather than to the control: the control is always mounted (it fades for annotation and
+        // stays put), but the card is only built when there is something to transport.
+        //
+        // Two mutually exclusive anchors, because each state teaches the opposite swipe and each coach mark's copy
+        // names a direction. Which one is anchored is also what decides which hint is eligible, so the pill can never
+        // be told to "swipe right to shrink it".
+        .readerHintAnchor(.transportExpanded, isActive: rendersSeekBar)
+        .readerHintAnchor(.transportCompact, isActive: !rendersSeekBar)
     }
 
     /// Transport row. The prev / play / next triad is centered as one tight group, so play/pause sits at the card's

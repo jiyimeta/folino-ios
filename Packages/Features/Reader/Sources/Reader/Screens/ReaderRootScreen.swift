@@ -75,6 +75,10 @@ public struct ReaderRootScreen: View {
     /// all). Kept so a swipe back within the deferral window replaces the pending write instead of racing it.
     @State private var seekBarCommitTask: Task<Void, Never>?
 
+    /// The one-hint-at-a-time coach-mark slot (see `ReaderHintCoordinator`). A singleton, so the "one hint per launch"
+    /// budget is spent once no matter how many scores are opened in that launch.
+    private let hints = ReaderHintCoordinator.shared
+
     /// Width of the Reader's window / detail column, measured so the toolbar can decide whether its score actions fit
     /// as discrete buttons. The old floating overlay let `ViewThatFits` answer that question for itself; `ToolbarItem`s
     /// have no such escape hatch, so the decision is made here and handed down. Starts at 0 — i.e. collapsed, which
@@ -199,6 +203,14 @@ public struct ReaderRootScreen: View {
             editingChromeOverlay
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
+        .modifier(ReaderHintWiring(
+            hints: hints,
+            viewModel: viewModel,
+            editingHost: editingHost,
+            isCaptureMode: isCaptureMode,
+            isPDFNoticePresented: $isPDFNoticePresented,
+            onStartEditing: editingHost == nil ? nil : { startEditing() },
+        ))
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         // Back button as a bare chevron: the editor role drops its label, which would otherwise carry the previous
@@ -273,6 +285,9 @@ public struct ReaderRootScreen: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake }
         .onAppear { viewModel.analytics.logScreen(.reader) }
         .onDisappear {
+            // Anchors describe controls this Reader is drawing; leaving takes them all with it (and any bubble hanging
+            // off one). The per-launch hint budget deliberately survives — it belongs to the launch, not the screen.
+            hints.clearAllAnchors()
             UIApplication.shared.isIdleTimerDisabled = false
             // `onDisappear` fires both on a genuine in-app close (back to the Library) AND when the app merely
             // backgrounds — on iPad, sending the app Home while PiP is auto-starting tears the Reader's view off the
@@ -325,6 +340,7 @@ public struct ReaderRootScreen: View {
             // in the same scene, the running engine has to be reconfigured here — the Inspector's button no longer
             // drives that side effect.
             Task { await viewModel.tempoModel.setMetronomeEnabled(newValue) }
+            hints.markUsed(.metronome)
         }
         .onChange(of: isPiPEnabled) { _, newValue in
             viewModel.pipSession.setEnabled(newValue)
@@ -470,6 +486,9 @@ public struct ReaderRootScreen: View {
     /// swipe's mode is ever persisted.
     private func setSeekBarVisible(_ visible: Bool) -> Bool {
         guard editingHost?.isEditing != true else { return false }
+        // Each direction retires on its own: someone who has found the shrink swipe still has no reason to suspect the
+        // pill can be grown back.
+        hints.markUsed(visible ? .transportExpand : .transportCollapse)
         seekBarCommitTask?.cancel()
         seekBarCommitTask = Task {
             try? await Task.sleep(for: .seconds(TransportModeSwipe.preferenceCommitDelay))
@@ -497,6 +516,7 @@ public struct ReaderRootScreen: View {
     /// can seed the Editor feature's view model.
     private func startEditing() {
         guard case let .loaded(score) = viewModel.loadState, let host = editingHost else { return }
+        hints.markUsed(.noteEditing)
         Task {
             // Playback is NOT stopped: editing and listening coexist. Annotation still is — ink and note editing are
             // mutually exclusive surfaces.

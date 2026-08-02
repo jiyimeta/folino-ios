@@ -124,6 +124,11 @@ enum TransportModeSwipe {
     /// on it landing promptly.
     static let preferenceCommitDelay = 0.45
 
+    /// How long the acted-out swipe takes to travel out to `commitDistance` before the release spring brings it back
+    /// (see `ReaderTransportControl.performHintedModeSwitch`). Short enough to read as one continuous motion with the
+    /// morph, long enough that the direction registers.
+    static let hintedSwipeOutDuration = 0.16
+
     /// Slowest swipe that still counts as deliberate, and the speed from which everything is as quick as it gets.
     static let deliberateSwipeSpeed: CGFloat = 200 // pt/s
     static let flickSwipeSpeed: CGFloat = 2000 // pt/s

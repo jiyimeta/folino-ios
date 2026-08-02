@@ -26,6 +26,9 @@ public struct EditorChromeView: View {
     private let bottomTransportClearance: CGFloat
     let onDone: () -> Void
     private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
+    /// Reports the pad toggle's GLOBAL frame (and `nil` when the chrome goes away) so the host can hang a coach mark
+    /// off it. Internal, not private: the button it is attached to lives in `EditorChromeView+Header.swift`.
+    let onNoteInputAnchorChange: (CGRect?) -> Void
     @Environment(\.undoManager) private var undoManager
 
     /// Remembered across sessions: someone who moves the pad out of the way once means it for every score they open.
@@ -67,11 +70,13 @@ public struct EditorChromeView: View {
         bottomTransportClearance: CGFloat,
         onDone: @escaping () -> Void,
         onClusterInsetsChange: @escaping (_ top: CGFloat, _ bottom: CGFloat) -> Void = { _, _ in },
+        onNoteInputAnchorChange: @escaping (CGRect?) -> Void = { _ in },
     ) {
         self.viewModel = viewModel
         self.bottomTransportClearance = bottomTransportClearance
         self.onDone = onDone
         self.onClusterInsetsChange = onClusterInsetsChange
+        self.onNoteInputAnchorChange = onNoteInputAnchorChange
     }
 
     /// Moves the pad, animating the dock change and the drag offset's release together, then persists the choice.
@@ -122,6 +127,12 @@ public struct EditorChromeView: View {
         }
         .onDisappear {
             undoManager?.removeAllActions(withTarget: viewModel)
+        }
+        // The host's note-input coach mark opens the pad it points at. Animated the same way the toggle button does it,
+        // so a tap on the bubble and a tap on the button look identical.
+        .onChange(of: viewModel.padRevealRequests) { _, _ in
+            guard !isPadVisible else { return }
+            withAnimation(.snappy(duration: 0.28)) { isPadVisible = true }
         }
         .onChange(of: viewModel.didSaveAsSiblingMSCZ) { _, saved in
             guard saved, !siblingMSCZNoticeShown else { return }

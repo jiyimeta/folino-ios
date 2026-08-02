@@ -124,6 +124,16 @@ public final class EditorViewModel {
     /// it drives the Task 16 one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
 
+    /// Bumped when something outside the Editor asks for the input pad — today, the host's note-input coach mark being
+    /// tapped. A counter rather than a `Bool` so a second request still lands after the user has closed the pad again;
+    /// the chrome owns the actual `editorPadVisible` state and watches this.
+    public private(set) var padRevealRequests = 0
+
+    /// Asks the chrome to bring the input pad up. Safe to call whether or not the pad is already showing.
+    public func requestPadReveal() {
+        padRevealRequests += 1
+    }
+
     public var canUndo: Bool {
         editor?.canUndo ?? false
     }

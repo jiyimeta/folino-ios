@@ -46,6 +46,9 @@ struct EditableReaderScreen: View {
                     editingHost.editingChromeTopInset = top
                     editingHost.editingChromeBottomInset = bottom
                 },
+                onNoteInputAnchorChange: { [editingHost] frame in
+                    editingHost.noteInputAnchorFrame = frame
+                },
             ))
         }
         .onAppear { wireOnce() }
@@ -77,6 +80,9 @@ struct EditableReaderScreen: View {
             // Carry the reader's last tap into the session: the note under the playhead is almost always the one the
             // user came here to change.
             vm.selectItem(host?.pendingSelection)
+        }
+        host.onRevealNoteInputPad = { [weak vm] in
+            vm?.requestPadReveal()
         }
         host.onEndEditing = { [weak vm] in
             guard let vm else { return }

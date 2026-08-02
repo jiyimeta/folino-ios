@@ -159,6 +159,9 @@ struct PlaybackInspectorScreen: View {
                 .layoutPriority(1)
             Spacer(minLength: 8)
             RepeatModePicker(selection: $repeatModel.mode)
+                .onChange(of: repeatModel.mode) { _, _ in
+                    ReaderHintCoordinator.shared.markUsed(.repeatPlayback)
+                }
         }
     }
 
@@ -299,10 +302,12 @@ struct PlaybackInspectorScreen: View {
                 onEditingChanged: { editing in
                     if !editing {
                         let final = volumeBinding.wrappedValue
+                        ReaderHintCoordinator.shared.markUsed(.mixer)
                         Task { await mixerModel.commitVolume(final, for: address) }
                     }
                 },
                 onReset: {
+                    ReaderHintCoordinator.shared.markUsed(.mixer)
                     Task { await mixerModel.commitVolume(defaultVolume, for: address) }
                 },
             )
@@ -310,6 +315,7 @@ struct PlaybackInspectorScreen: View {
             .disabled(isDisabled)
 
             Button(String("S")) {
+                ReaderHintCoordinator.shared.markUsed(.mixer)
                 mixerModel.toggleStaffSolo(address)
             }
             .fontWeight(.medium)
@@ -317,6 +323,7 @@ struct PlaybackInspectorScreen: View {
             .accessibilityLabel(Text("reader.inspector.staffSolo", bundle: .module))
 
             Button(String("M")) {
+                ReaderHintCoordinator.shared.markUsed(.mixer)
                 mixerModel.toggleStaffMute(address)
             }
             .fontWeight(.medium)
