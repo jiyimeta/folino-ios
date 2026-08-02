@@ -1,3 +1,20 @@
+- version: 1.10.0
+  descriptions:
+    - en: Improved PDF handling so a PDF works like any other score
+      ja: PDFを他の楽譜と同等に扱えるよう機能強化
+      ko: PDF를 다른 악보와 동일하게 다룰 수 있도록 기능 강화
+      zh-Hans: 增强 PDF 功能，使其与其他乐谱一样使用
+      zh-Hant: 強化 PDF 功能，使其與其他樂譜一樣使用
+    - en: Removed the item limit on Recently Opened
+      ja: 「最近開いた楽譜」の表示を無制限に
+      ko: '''최근에 연 악보'' 표시 개수 제한 해제'
+      zh-Hans: 取消“最近打开的乐谱”的显示数量限制
+      zh-Hant: 取消「最近開啟的樂譜」的顯示數量限制
+    - en: Added swiping the playback controls left or right to shrink or expand them
+      ja: 再生コントロールを左右にスワイプして縮小/拡大表示する機能を追加
+      ko: 재생 컨트롤을 좌우로 스와이프해 축소/확대하는 기능 추가
+      zh-Hans: 新增左右滑动播放控件以缩小/放大的功能
+      zh-Hant: 新增左右滑動播放控制項以縮小/放大的功能
 - version: 1.9.0
   descriptions:
     - en: Added a score editing mode
