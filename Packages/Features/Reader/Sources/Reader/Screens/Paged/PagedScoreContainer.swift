@@ -369,6 +369,10 @@ struct PagedScoreContainer: View {
                 let captured = AnnotationAnchoring.capturePaged(
                     strokes: drawing.strokes, in: doc, pageStartY: band.startY, contentPadding: band.contentPadding,
                 )
+                // `offPage` carries everything this canvas didn't describe — other pages AND the other rendition's
+                // page-anchored ink, which `partitionByPage` never claims as on-page. That is what keeps a PDF-derived
+                // item's two ink layers from deleting each other here; the vertical readers state it explicitly with
+                // `AnnotationLayers.replacing`.
                 viewModel.annotationDrawingsDidChange(offPage + captured)
             },
             state: { annotationCanvasState(viewport: viewport) },
