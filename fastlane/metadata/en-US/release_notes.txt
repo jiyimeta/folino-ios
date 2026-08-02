@@ -1,1 +1,3 @@
-- Added a score editing mode
+- Improved PDF handling so a PDF works like any other score
+- Removed the item limit on Recently Opened
+- Added swiping the playback controls left or right to shrink or expand them

@@ -1,1 +1,1 @@
-為演奏者打造的樂譜檢視與播放器。可匯入 PDF、.mscz、MusicXML、MIDI，支援播放與游標跟隨，還能用 Apple Pencil 或手指在樂譜上手寫註記，協助讀譜與練習。
+為演奏者打造的樂譜檢視與播放器。PDF 會解析並轉換為樂譜資料，可像 .mscz、MusicXML、MIDI 一樣播放、移調與編輯。還能用 Apple Pencil 或手指手寫註記。

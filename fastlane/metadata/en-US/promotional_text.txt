@@ -1,1 +1,1 @@
-Score viewer & player for performers. Import PDFs, .mscz, MusicXML, and MIDI with playback and a follow cursor, plus annotation with Apple Pencil or your finger.
+Score viewer & player for performers. PDFs become real notation — play, transpose, and edit them like .mscz, MusicXML, or MIDI. Annotate with Apple Pencil.
