@@ -40,6 +40,8 @@ struct HorizontalScoreContainer: View {
 
     /// Layout output — observable, not `@State`; see `ScoreLayoutState` for why.
     @State private var layoutState = ScoreLayoutState()
+    /// Off-main engraver holding this surface's incremental `LayoutCache`; see `ScoreRelayoutEngine`.
+    @State private var relayoutEngine = ScoreRelayoutEngine()
 
     private var document: LayoutDocument? {
         get { layoutState.document }
@@ -294,12 +296,9 @@ struct HorizontalScoreContainer: View {
     }
 
     private func rebuildLayout() async {
-        let score = score
-        let opts = scoreOptions
-        let newDoc = await Task.detached(priority: .userInitiated) {
-            let natural = LayoutEngine.naturalContentWidth(score: score, options: opts)
-            return LayoutEngine.layout(score: score, options: opts, availableWidth: natural)
-        }.value
+        // Off-main on `relayoutEngine`'s executor, reusing the previous engrave's `LayoutCache` — see
+        // `ScoreRelayoutEngine` and `VerticalScoreContainer.rebuildLayout`.
+        let newDoc = await relayoutEngine.layoutAtNaturalWidth(score: score, options: scoreOptions)
         guard !Task.isCancelled else { return }
         document = newDoc
         editingHost?.document = newDoc

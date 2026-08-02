@@ -52,6 +52,8 @@ struct PagedScoreContainer: View {
     /// Layout output. Held in an `@Observable` and reached through the two forwarding properties below — see
     /// `ScoreLayoutState` for why `@State` silently failed to re-render the score after an edit.
     @State var layoutState = ScoreLayoutState()
+    /// Off-main engraver holding this surface's incremental `LayoutCache`; see `ScoreRelayoutEngine`.
+    @State private var relayoutEngine = ScoreRelayoutEngine()
 
     var document: LayoutDocument? {
         get { layoutState.document }
@@ -440,14 +442,12 @@ struct PagedScoreContainer: View {
     }
 
     private func rebuildLayout(width: CGFloat, pageHeight: CGFloat) async {
-        let score = score
-        let options = scoreOptions
         let policy: LayoutBreakPolicy = honorLayoutBreaks ? .honor : .ignoreAll
-        let newDoc = await Task.detached(priority: .userInitiated) {
-            LayoutEngine.layout(
-                score: score, options: options, availableWidth: width,
-            )
-        }.value
+        // Off-main on `relayoutEngine`'s executor, reusing the previous engrave's `LayoutCache` — see
+        // `ScoreRelayoutEngine` and `VerticalScoreContainer.rebuildLayout`.
+        let newDoc = await relayoutEngine.layout(
+            score: score, options: scoreOptions, availableWidth: width,
+        )
         guard !Task.isCancelled else { return }
         let newPages = LayoutPaginator.paginate(
             systems: newDoc.systems,
