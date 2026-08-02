@@ -428,6 +428,24 @@
             "state" : "translated",
             "value" : "Apple Pencil や指で、楽譜に直接メモを書き込めます。"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Pencil이나 손가락으로 악보에 바로 메모할 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用 Apple Pencil 或手指直接在乐谱上做笔记。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用 Apple Pencil 或手指直接在樂譜上做筆記。"
+          }
         }
       }
     },
@@ -443,6 +461,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "指で楽譜に直接メモを書き込めます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "손가락으로 악보에 바로 메모할 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用手指直接在乐谱上做笔记。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用手指直接在樂譜上做筆記。"
           }
         }
       }
@@ -460,6 +496,24 @@
             "state" : "translated",
             "value" : "楽譜に書き込む"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보에 필기하기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在乐谱上书写"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在樂譜上書寫"
+          }
         }
       }
     },
@@ -475,6 +529,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生設定から、メトロノームを鳴らすかどうかを切り替えられます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생 설정에서 메트로놈 소리를 켜고 끌 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在播放设置中可切换是否播放节拍器。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在播放設定中可切換是否播放節拍器。"
           }
         }
       }
@@ -492,6 +564,24 @@
             "state" : "translated",
             "value" : "メトロノーム"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메트로놈"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "节拍器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "節拍器"
+          }
         }
       }
     },
@@ -507,6 +597,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生設定から、パートごとの音量を調整したり、ミュート/ソロで聴きたいパートだけを鳴らせます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생 설정에서 파트별 음량을 조절하거나, 음소거/솔로로 듣고 싶은 파트만 들을 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在播放设置中可调整各声部的音量，或用静音/独奏只听想听的声部。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在播放設定中可調整各聲部的音量，或用靜音/獨奏只聽想聽的聲部。"
           }
         }
       }
@@ -524,6 +632,24 @@
             "state" : "translated",
             "value" : "パートごとの音量"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "파트별 음량"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各声部音量"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各聲部音量"
+          }
         }
       }
     },
@@ -539,6 +665,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "楽譜の音符を直接書き換えられます。音符を選び、音の高さ・長さ・臨時記号などを変更できます。新しく音符を入力することも可能です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보의 음표를 직접 고칠 수 있습니다. 음표를 선택해 음높이·길이·임시표 등을 변경하고, 새로운 음표를 입력할 수도 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可直接改写乐谱中的音符。选中音符即可更改音高、时值、临时记号等，也可以输入新的音符。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可直接改寫樂譜中的音符。選取音符即可更改音高、時值、臨時記號等，也可以輸入新的音符。"
           }
         }
       }
@@ -556,6 +700,24 @@
             "state" : "translated",
             "value" : "音符を編集"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음표 편집"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑音符"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯音符"
+          }
         }
       }
     },
@@ -571,6 +733,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "音符・休符を入力できます。楽譜上の場所を選択した状態で、長さと種類を指定して入力してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음표와 쉼표를 입력할 수 있습니다. 악보에서 위치를 선택한 상태로 길이와 종류를 지정해 입력하세요."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以输入音符和休止符。请先在乐谱上选择位置，再指定时值和类型进行输入。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以輸入音符和休止符。請先在樂譜上選擇位置，再指定時值和類型進行輸入。"
           }
         }
       }
@@ -588,6 +768,24 @@
             "state" : "translated",
             "value" : "音符を入力"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음표 입력"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入音符"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輸入音符"
+          }
         }
       }
     },
@@ -603,6 +801,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生設定から、曲全体のリピートや、練習したい範囲だけを繰り返す A–B ループを設定できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생 설정에서 곡 전체 반복이나, 연습하고 싶은 구간만 반복하는 A–B 루프를 설정할 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在播放设置中可设置整首重复，或只循环想要练习的片段的 A–B 循环。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在播放設定中可設定整首重複，或只循環想要練習的片段的 A–B 循環。"
           }
         }
       }
@@ -620,6 +836,24 @@
             "state" : "translated",
             "value" : "リピート・A–B ループ"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "반복·A–B 루프"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重复与 A–B 循环"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重複與 A–B 循環"
+          }
         }
       }
     },
@@ -635,6 +869,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "表示設定から、演奏しないパートを隠し、自分のパートだけを大きく表示できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "표시 설정에서 연주하지 않는 파트를 숨겨, 자신의 파트만 크게 표시할 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在显示设置中隐藏不演奏的声部，让自己的声部显示得更大。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在顯示設定中隱藏不演奏的聲部，讓自己的聲部顯示得更大。"
           }
         }
       }
@@ -652,6 +904,24 @@
             "state" : "translated",
             "value" : "パートを非表示"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "파트 숨기기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏声部"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏聲部"
+          }
         }
       }
     },
@@ -667,6 +937,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生コントロールの下部を右にスワイプすると、小さい表示に切り替えられます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생 컨트롤 아래쪽을 오른쪽으로 스와이프하면 작은 표시로 전환됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将播放控件下方向右滑动，即可切换为小尺寸显示。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將播放控制項下方向右滑動，即可切換為小尺寸顯示。"
           }
         }
       }
@@ -684,6 +972,24 @@
             "state" : "translated",
             "value" : "右にスワイプで小さく表示"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "오른쪽으로 스와이프해 작게 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向右滑动可缩小显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向右滑動可縮小顯示"
+          }
         }
       }
     },
@@ -700,6 +1006,24 @@
             "state" : "translated",
             "value" : "再生コントロールを左にスワイプすると、大きい表示に切り替えられます。"
           }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생 컨트롤을 왼쪽으로 스와이프하면 큰 표시로 전환됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将播放控件向左滑动，即可切换为大尺寸显示。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將播放控制項向左滑動，即可切換為大尺寸顯示。"
+          }
         }
       }
     },
@@ -715,6 +1039,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "左にスワイプで大きく表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "왼쪽으로 스와이프해 크게 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向左滑动可放大显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向左滑動可放大顯示"
           }
         }
       }
