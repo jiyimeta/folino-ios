@@ -67,6 +67,10 @@ public struct ReaderRootScreen: View {
     @State private var isPDFNoticePresented = false
     @State private var hasAutoShownPDFNotice = false
 
+    /// The deferred `showSeekBar` write from a transport swipe (see `setSeekBarVisible` for why it is deferred at
+    /// all). Kept so a swipe back within the deferral window replaces the pending write instead of racing it.
+    @State private var seekBarCommitTask: Task<Void, Never>?
+
     /// Width of the Reader's window / detail column, measured so the toolbar can decide whether its score actions fit
     /// as discrete buttons. The old floating overlay let `ViewThatFits` answer that question for itself; `ToolbarItem`s
     /// have no such escape hatch, so the decision is made here and handed down. Starts at 0 — i.e. collapsed, which
@@ -383,12 +387,41 @@ public struct ReaderRootScreen: View {
             // anchored to the bottom edge — only the pad moves — and drops to its compact pill for the duration (see
             // `showsSeekBarNow`), because the editing pad already claims most of the bottom of the screen.
             if !isCaptureMode {
-                ReaderTransportControl(viewModel: viewModel, showSeekBar: showsSeekBarNow)
-                    .opacity(viewModel.isAnnotating ? 0 : 1)
-                    .allowsHitTesting(!viewModel.isAnnotating)
-                    .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
+                ReaderTransportControl(
+                    viewModel: viewModel,
+                    showSeekBar: showsSeekBarNow,
+                    onSetSeekBarVisible: setSeekBarVisible,
+                )
+                .opacity(viewModel.isAnnotating ? 0 : 1)
+                .allowsHitTesting(!viewModel.isAnnotating)
+                .animation(.easeOut(duration: 0.2), value: viewModel.isAnnotating)
             }
         }
+    }
+
+    /// Applies a swipe on the transport to the persisted `showSeekBar` preference — the same store the Settings sheet
+    /// and the visual inspector toggle, so the swipe is just a faster way to flip it and the choice sticks. Returns
+    /// whether the change was taken, so the transport knows whether to hold the new mode or animate back to this one.
+    ///
+    /// Declined while editing: `showsSeekBarNow` forces the compact pill for the edit session, so writing the
+    /// preference here would either do nothing visible or silently re-expand the card when editing ends.
+    ///
+    /// The write itself is DEFERRED until the transport's release animations are over. It flips
+    /// `bottomControlContentHeight` (114 ⇄ 44), and in page mode that re-paginates the score — synchronous work heavy
+    /// enough to stall the very frames the settle spring and the card morph start on, which read as the control
+    /// snagging at the moment the finger lifts. The transport holds the committed mode locally (`previewSeekBar`)
+    /// until the preference catches up, so deferring changes nothing the user can see — the reflow just lands on a
+    /// scene that has stopped moving. A swipe back inside the window cancels the pending write so only the last
+    /// swipe's mode is ever persisted.
+    private func setSeekBarVisible(_ visible: Bool) -> Bool {
+        guard editingHost?.isEditing != true else { return false }
+        seekBarCommitTask?.cancel()
+        seekBarCommitTask = Task {
+            try? await Task.sleep(for: .seconds(TransportModeSwipe.preferenceCommitDelay))
+            guard !Task.isCancelled else { return }
+            showSeekBar = visible
+        }
+        return true
     }
 
     /// The App-injected editing chrome (score-info bar, keyboard, 完了), shown only while `editingHost.isEditing` and
