@@ -83,6 +83,9 @@ public struct ReaderRootScreen: View {
 
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Decides where the inspectors are presented from: their own toolbar button (regular) or this screen (compact).
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     private var layoutMode: ReaderLayoutMode {
         ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
     }
@@ -216,6 +219,17 @@ public struct ReaderRootScreen: View {
         .sheet(item: $viewModel.shareTarget) { target in
             ActivityViewControllerRepresentable(items: target.urls)
         }
+        // The compact-width half of the inspectors: at this width a popover adapts to a sheet anyway, so nothing is
+        // lost by presenting it from here — and the toolbar buttons stay bare `Button`s, which is what lets them
+        // survive being moved into a menu.
+        .inspectorSheet(
+            isPresented: $viewModel.isPlaybackInspectorPresented,
+            enabled: !anchorsInspectorPopovers,
+        ) { inspectors.playbackInspector }
+        .inspectorSheet(
+            isPresented: $viewModel.isVisualInspectorPresented,
+            enabled: !anchorsInspectorPopovers,
+        ) { inspectors.displayInspector }
         .pdfSourceNoticeAlert(
             originState: viewModel.scoreItem.pdfOriginState,
             isPresented: $isPDFNoticePresented,
@@ -360,27 +374,41 @@ public struct ReaderRootScreen: View {
         hidesBackButton || isEditing || customLeadingAction != nil
     }
 
-    /// Whether score-info and share have to fold into one overflow menu at the current width.
+    /// How much of the trailing row has to fold into one overflow menu at the current width — the least aggressive
+    /// level whose row still fits.
     ///
-    /// Score-info and share are what gives way first, by design: the inspectors are what a player reaches for
-    /// mid-practice, so they stay discrete for as long as the row allows. The row has to be kept inside the bar's own
-    /// budget too — on iOS 26 a navigation bar that runs out of room starts moving items into an overflow menu of its
-    /// OWN, whose contents and priority we cannot influence (and which took the inspectors first). Folding one button
-    /// early keeps that from ever engaging, so our menu stays the only overflow.
+    /// Score-info and share are what gives way first, by design, then the note-editing entry point, then annotation;
+    /// the inspectors are what a player reaches for mid-practice, so they never fold. The row has to be kept inside
+    /// the bar's own budget too — on iOS 26 a navigation bar that runs out of room starts moving items into an
+    /// overflow menu of its OWN, whose contents and priority we cannot influence (it takes the inspectors first) and
+    /// which does not reliably open when tapped. Folding early keeps that from ever engaging, so our menu stays the
+    /// only overflow.
     ///
     /// Only the score reader is ever at risk: a PDF's toolbar carries half as many buttons and fits everywhere, and a
     /// reader that hasn't loaded yet shows none at all. See `ReaderToolbar.Metrics` for why a width breakpoint is the
-    /// right mechanism, and why it is derived from the item count instead of hardcoded.
-    private var collapsesScoreActions: Bool {
-        guard case .loaded = viewModel.loadState else { return false }
-        // The discrete layout: score-info, share, (edit notes), annotate, playback inspector, visual inspector —
-        // separated into three or four glass groups.
-        let itemCount = editingHost == nil ? 5 : 6
-        let groupGaps = editingHost == nil ? 2 : 3
-        let widthNeeded = (hidesBackButton ? 0 : ReaderToolbar.Metrics.leading)
-            + CGFloat(itemCount) * ReaderToolbar.Metrics.item
-            + CGFloat(groupGaps) * ReaderToolbar.Metrics.groupGap
-        return availableWidth < widthNeeded
+    /// right mechanism, why it is derived from the item count instead of hardcoded, and why the numbers lean wide.
+    private var collapse: ReaderToolbar.Collapse {
+        guard case .loaded = viewModel.loadState, viewModel.displaySource != .originalPDF else { return .expanded }
+        return ReaderToolbar.collapse(
+            availableWidth: availableWidth,
+            hasLeadingAffordance: !hidesBackButton,
+            hasNoteEditing: editingHost != nil,
+        )
+    }
+
+    /// Whether the inspector buttons carry their own popovers. Only at regular width, where the anchor arrow is worth
+    /// having and the bar has room to spare; at compact width this screen presents the same content as a sheet (see
+    /// `ReaderInspectorDestinations`), which leaves every toolbar button free of a presentation modifier.
+    private var anchorsInspectorPopovers: Bool {
+        horizontalSizeClass != .compact
+    }
+
+    /// What the inspector buttons open. Built here as well as in the toolbar so both present identical content.
+    private var inspectors: ReaderInspectorDestinations {
+        ReaderInspectorDestinations(
+            viewModel: viewModel,
+            onConfirmReReadPDF: { isReReadConfirmPresented = true },
+        )
     }
 
     @ToolbarContentBuilder
@@ -390,7 +418,8 @@ public struct ReaderRootScreen: View {
                 viewModel: viewModel,
                 leadingAction: customLeadingAction,
                 leadingIsSidebarToggle: leadingIsSidebarToggle,
-                collapsesScoreActions: collapsesScoreActions,
+                collapse: collapse,
+                anchorsInspectorPopovers: anchorsInspectorPopovers,
                 onConfirmReReadPDF: { isReReadConfirmPresented = true },
                 onStartEditing: editingHost == nil ? nil : { startEditing() },
             )

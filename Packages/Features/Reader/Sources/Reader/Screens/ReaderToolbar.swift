@@ -25,10 +25,14 @@ struct ReaderToolbar: ToolbarContent {
     /// label) rather than a back chevron. Has no effect when `leadingAction` is `nil`.
     var leadingIsSidebarToggle = false
 
-    /// Folds score-info and share into a single overflow menu, saving the one button that pushes the row off a narrow
-    /// screen. Decided by `ReaderRootScreen` from the measured window width and `Metrics` below — a toolbar can't
-    /// measure itself the way the old overlay's `ViewThatFits` did.
-    var collapsesScoreActions = false
+    /// How much of the trailing row has to fold into a single overflow menu at the current width. Decided by
+    /// `ReaderRootScreen` from the measured window width and `Metrics` below — a toolbar can't measure itself the way
+    /// the old overlay's `ViewThatFits` did.
+    var collapse: Collapse = .expanded
+
+    /// Whether the inspector buttons anchor their own popovers. False at compact width, where the screen presents the
+    /// same content as a sheet instead — see `ReaderInspectorDestinations` for why the difference matters.
+    var anchorsInspectorPopovers = true
 
     /// Invoked when re-reading the PDF would discard the user's work — `ReaderRootScreen` presents the confirmation.
     /// A re-read with nothing to lose runs straight from the menu item and never reaches here.
@@ -38,6 +42,12 @@ struct ReaderToolbar: ToolbarContent {
     /// and PDF readers (which never wire an `editingHost`) are unaffected.
     var onStartEditing: (() -> Void)?
 
+    /// What the inspector buttons open, resolved from the view model's current state. The screen builds the same value
+    /// to present the same content as a sheet at compact width.
+    var inspectors: ReaderInspectorDestinations {
+        ReaderInspectorDestinations(viewModel: viewModel, onConfirmReReadPDF: onConfirmReReadPDF)
+    }
+
     @ToolbarContentBuilder
     var body: some ToolbarContent {
         leadingItems
@@ -45,16 +55,16 @@ struct ReaderToolbar: ToolbarContent {
             // Showing the original pages means the PDF chrome, even for an item folino read into notation: the
             // score-side actions (note input, the engraving inspector) have nothing to act on over a fixed-layout page.
             annotationItem
-            pdfInspectorItems
-        } else if case let .loaded(score) = viewModel.loadState {
+            inspectorItems
+        } else if case .loaded = viewModel.loadState {
             scoreActionItems
             noteEditingItem
             annotationItem
-            inspectorItems(score: score, showsStaffVisibility: true)
+            inspectorItems
         } else if case .loadedPDF = viewModel.loadState {
             // No note-editing entry point: a fixed-layout PDF has no score to write into. Ink annotation still applies.
             annotationItem
-            pdfInspectorItems
+            inspectorItems
         }
     }
 
@@ -65,13 +75,15 @@ struct ReaderToolbar: ToolbarContent {
         if let leadingAction {
             ToolbarItem(placement: .topBarLeading) {
                 Button(action: leadingAction) {
-                    Image(systemName: leadingIsSidebarToggle ? "sidebar.leading" : "chevron.backward")
+                    Label {
+                        leadingIsSidebarToggle
+                            ? Text("reader.toolbar.showSidebar", bundle: .module)
+                            : Text("reader.toolbar.back", bundle: .module)
+                    } icon: {
+                        Image(systemName: leadingIsSidebarToggle ? "sidebar.leading" : "chevron.backward")
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .accessibilityLabel(
-                    leadingIsSidebarToggle
-                        ? Text("reader.toolbar.showSidebar", bundle: .module)
-                        : Text("reader.toolbar.back", bundle: .module),
-                )
             }
         }
         pdfBadgeItem
@@ -80,23 +92,15 @@ struct ReaderToolbar: ToolbarContent {
     // MARK: - Score actions
 
     /// The "this score" group: score-info (opens the edit-info sheet) + share (lazy format menu), or — when the window
-    /// is too narrow — both folded into one ellipsis menu. Sits left of the inspector group so document actions stay
-    /// grouped apart from playback/display settings.
+    /// is too narrow — an ellipsis menu that swallows those two first and, on a narrower window still, the note-editing
+    /// and annotation entry points after them (see `Collapse`). Sits left of the inspector group so document actions
+    /// stay grouped apart from playback/display settings.
     @ToolbarContentBuilder
     private var scoreActionItems: some ToolbarContent {
-        if collapsesScoreActions {
+        if collapse >= .scoreActions {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button {
-                        viewModel.presentScoreInfo()
-                    } label: {
-                        Label {
-                            Text("reader.toolbar.showInfo", bundle: .module)
-                        } icon: {
-                            Image(systemName: "info.circle")
-                        }
-                    }
-
+                    scoreInfoButton
                     // Share stays a nested menu so its format list is still loaded lazily, only when opened.
                     ShareSubmenu(
                         loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
@@ -104,20 +108,26 @@ struct ReaderToolbar: ToolbarContent {
                             Task { await viewModel.requestShare(format: format) }
                         },
                     )
+                    if collapse >= .noteEditing, let onStartEditing {
+                        Divider()
+                        noteEditingButton(action: onStartEditing)
+                    }
+                    if collapse >= .annotation {
+                        annotationToggleButton
+                    }
                 } label: {
-                    Image(systemName: "ellipsis")
+                    // `.labelStyle` on the Menu itself would reach its CONTENT too and strip the titles off every row
+                    // inside the menu. It belongs on the label view, here and everywhere else in this file.
+                    Label {
+                        Text("reader.toolbar.more", bundle: .module)
+                    } icon: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .accessibilityLabel(Text("reader.toolbar.more", bundle: .module))
             }
         } else {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    viewModel.presentScoreInfo()
-                } label: {
-                    Image(systemName: "info.circle")
-                }
-                .accessibilityLabel(Text("reader.toolbar.showInfo", bundle: .module))
-            }
+            ToolbarItem(placement: .topBarTrailing) { scoreInfoButton.labelStyle(.iconOnly) }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ShareFormatMenuItems(
@@ -127,35 +137,66 @@ struct ReaderToolbar: ToolbarContent {
                         },
                     )
                 } label: {
-                    Image(systemName: "square.and.arrow.up")
+                    Label {
+                        Text("reader.toolbar.share", bundle: .module)
+                    } icon: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .accessibilityLabel(Text("reader.toolbar.share", bundle: .module))
             }
         }
         groupSeparator
+    }
+
+    /// Opens the edit-info sheet.
+    ///
+    /// Every button in this file is built from a `Label` rather than a bare `Image`, and left UNSTYLED: the bar's own
+    /// items apply `.iconOnly` at the `ToolbarItem` (rendering the same glyph as before), while the same button placed
+    /// inside the overflow menu keeps its title, which is what a menu row needs.
+    private var scoreInfoButton: some View {
+        Button {
+            viewModel.presentScoreInfo()
+        } label: {
+            Label {
+                Text("reader.toolbar.showInfo", bundle: .module)
+            } icon: {
+                Image(systemName: "info.circle")
+            }
+        }
     }
 
     // MARK: - Editing / annotation
 
     /// The note-editing entry point. In its own group, so it is never mistaken for the annotation toggle beside it —
-    /// they write to different things (the score itself vs. ink laid over it).
+    /// they write to different things (the score itself vs. ink laid over it). Folds into the overflow menu one step
+    /// after the score actions do.
     @ToolbarContentBuilder
     private var noteEditingItem: some ToolbarContent {
-        if let onStartEditing {
+        if collapse < .noteEditing, let onStartEditing {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(action: onStartEditing) {
-                    Image(systemName: "square.and.pencil")
-                }
-                .accessibilityLabel(Text("reader.toolbar.edit.start", bundle: .module))
+                noteEditingButton(action: onStartEditing).labelStyle(.iconOnly)
             }
             groupSeparator
         }
     }
 
+    private func noteEditingButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label {
+                Text("reader.toolbar.edit.start", bundle: .module)
+            } icon: {
+                Image(systemName: "square.and.pencil")
+            }
+        }
+    }
+
     @ToolbarContentBuilder
     private var annotationItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) { annotationToggleButton }
-        groupSeparator
+        if collapse < .annotation {
+            ToolbarItem(placement: .topBarTrailing) { annotationToggleButton.labelStyle(.iconOnly) }
+            groupSeparator
+        }
     }
 
     /// Toggles annotation mode. When active, the canvas accepts Pencil/finger input; when inactive, all touches reach
@@ -166,84 +207,75 @@ struct ReaderToolbar: ToolbarContent {
     /// different colour and not as a selected background. `.toggleStyle(.button)` was tried and rejected: its bordered
     /// metrics stack on top of the toolbar's own item padding, making this one item visibly wider than its neighbours
     /// and pushing the row over the width at which iOS 26 starts moving items into its own overflow menu. Every item in
-    /// the bar is now the same width, so the row fits and our own collapse (see `collapsesScoreActions`) stays the only
-    /// one that ever runs.
+    /// the bar is the same width now, so what fits is purely a function of how many items there are — which is what
+    /// `Metrics` counts.
     private var annotationToggleButton: some View {
         let isPlaying = viewModel.playbackSession.isPlaying
         let isAnnotating = viewModel.isAnnotating
         return Button {
             viewModel.toggleAnnotation()
         } label: {
-            Image(systemName: isAnnotating ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+            Label {
+                Text(
+                    isAnnotating ? "reader.toolbar.annotate.stop" : "reader.toolbar.annotate.start",
+                    bundle: .module,
+                )
+            } icon: {
+                Image(systemName: isAnnotating ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+            }
         }
-        .accessibilityLabel(Text(
-            isAnnotating ? "reader.toolbar.annotate.stop" : "reader.toolbar.annotate.start",
-            bundle: .module,
-        ))
         .disabled(isPlaying)
         .animation(.easeOut(duration: 0.2), value: isPlaying)
     }
 
     // MARK: - Inspectors
 
-    /// Paired playback / visual inspector buttons — adjacent, so iOS 26 renders them as one glass group. Each owns its
-    /// own popover anchored to itself, so the popover arrow points at the tapped icon.
+    /// Paired playback / visual inspector buttons — adjacent, so iOS 26 renders them as one glass group. They are the
+    /// one thing the row never gives up: they are what a player reaches for mid-practice, and keeping them on the bar
+    /// is the whole reason anything else folds.
+    ///
+    /// The playback button is present whenever there is something to play: always for a score — including while its
+    /// original pages are showing — and for an unconverted PDF once its background OMR parse lands.
     @ToolbarContentBuilder
-    private func inspectorItems(score: Score, showsStaffVisibility: Bool) -> some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            playbackInspectorButton(score: score, showsStaffVisibility: showsStaffVisibility)
+    private var inspectorItems: some ToolbarContent {
+        if inspectors.playbackScore != nil {
+            ToolbarItem(placement: .topBarTrailing) { playbackInspectorButton }
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                viewModel.isVisualInspectorPresented.toggle()
-            } label: {
-                Image(systemName: "text.page")
-            }
-            .accessibilityLabel(Text("reader.toolbar.showDisplaySettings", bundle: .module))
-            .popover(isPresented: $viewModel.isVisualInspectorPresented) {
-                VisualInspectorScreen(
-                    layoutModel: viewModel.layoutModel,
-                    transposeModel: viewModel.transposeModel,
-                    score: score,
-                    pdfOrigin: pdfOriginControls,
-                )
-                .frame(idealWidth: 380, idealHeight: 600)
-                .presentationDetents([.medium, .large])
-                .presentationCompactAdaptation(.sheet)
-            }
-        }
+        ToolbarItem(placement: .topBarTrailing) { displayInspectorButton }
     }
 
-    /// The PDF reader's inspector group: the playback inspector once the background OMR parse has landed (playback
-    /// settings all act on the engine, which plays a parsed PDF exactly as it plays a native score), plus the PDF
-    /// layout inspector standing in for the score reader's visual inspector.
-    /// The playback-settings button and its popover. Shared by the score reader and — once a PDF's background OMR parse
-    /// succeeds — the PDF reader, which passes its parsed score and drops the render-derived staff-visibility eye.
-    func playbackInspectorButton(score: Score, showsStaffVisibility: Bool) -> some View {
+    private var playbackInspectorButton: some View {
         Button {
             viewModel.isPlaybackInspectorPresented.toggle()
         } label: {
-            Image(systemName: "slider.vertical.3")
+            Label {
+                Text("reader.toolbar.showPlaybackSettings", bundle: .module)
+            } icon: {
+                Image(systemName: "slider.vertical.3")
+            }
+            .labelStyle(.iconOnly)
         }
-        .accessibilityLabel(Text("reader.toolbar.showPlaybackSettings", bundle: .module))
-        .popover(isPresented: $viewModel.isPlaybackInspectorPresented) {
-            PlaybackInspectorScreen(
-                mixerModel: viewModel.mixerModel,
-                layoutModel: viewModel.layoutModel,
-                tempoModel: viewModel.tempoModel,
-                masterVolumeModel: viewModel.masterVolumeModel,
-                a4ReferenceModel: viewModel.a4ReferenceModel,
-                repeatModel: viewModel.repeatModel,
-                transposeModel: viewModel.transposeModel,
-                score: score,
-                playbackSession: viewModel.playbackSession,
-                isInPlaylist: viewModel.isInPlaylist,
-                showsStaffVisibility: showsStaffVisibility,
-            )
-            .frame(idealWidth: 380, idealHeight: 600)
-            .presentationDetents([.large])
-            .presentationCompactAdaptation(.sheet)
+        .inspectorPopover(
+            isPresented: $viewModel.isPlaybackInspectorPresented,
+            anchored: anchorsInspectorPopovers,
+        ) { inspectors.playbackInspector }
+    }
+
+    private var displayInspectorButton: some View {
+        Button {
+            viewModel.isVisualInspectorPresented.toggle()
+        } label: {
+            Label {
+                Text("reader.toolbar.showDisplaySettings", bundle: .module)
+            } icon: {
+                Image(systemName: "text.page")
+            }
+            .labelStyle(.iconOnly)
         }
+        .inspectorPopover(
+            isPresented: $viewModel.isVisualInspectorPresented,
+            anchored: anchorsInspectorPopovers,
+        ) { inspectors.displayInspector }
     }
 
     /// Breaks the shared glass container between two neighbouring trailing groups, reproducing the gaps the old
@@ -253,29 +285,6 @@ struct ReaderToolbar: ToolbarContent {
         if #available(iOS 26, *) {
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
         }
-    }
-}
-
-extension ReaderToolbar {
-    /// What one row of this toolbar costs in width, used by `ReaderRootScreen` to decide whether the score actions fit
-    /// as discrete buttons.
-    ///
-    /// A width breakpoint is the right mechanism here precisely because every trailing item is icon-only: there is no
-    /// text to localize and nothing that grows with Dynamic Type, so what the row needs is a function of HOW MANY
-    /// items it has and nothing else. What it must not be is a single number for every state — the score reader's six
-    /// actions need roughly 160pt more than a PDF's three, and one constant tuned for either is wrong for the other.
-    ///
-    /// SwiftUI exposes no metric for a toolbar item, so these are measured values, taken from the iOS 26 glass bar
-    /// (the wider of the two renderings — iOS 18's bare glyphs are narrower, so deciding on the 26 numbers is the
-    /// conservative direction). **Re-measure whenever a button is added to the bar or its item spacing changes.**
-    enum Metrics {
-        /// One icon-only button, including the spacing the bar puts between items inside a group.
-        static let item: CGFloat = 52
-        /// The gap a `ToolbarSpacer(.fixed)` opens between two groups.
-        static let groupGap: CGFloat = 12
-        /// The leading affordance — a bare chevron or the sidebar toggle. Label-less thanks to
-        /// `.toolbarRole(.editor)`, so its width is fixed rather than following the previous screen's title.
-        static let leading: CGFloat = 44
     }
 }
 
@@ -307,7 +316,7 @@ private func previewViewModel() -> ReaderViewModel {
 /// Hosts the toolbar the way `ReaderRootScreen` does — over content, with the bar background left to the OS — so the
 /// preview shows what the buttons actually look like floating on a score-coloured backdrop.
 private struct ReaderToolbarPreviewHost: View {
-    let collapsesScoreActions: Bool
+    let collapse: ReaderToolbar.Collapse
     @State private var viewModel = previewViewModel()
 
     var body: some View {
@@ -321,7 +330,7 @@ private struct ReaderToolbarPreviewHost: View {
                     ReaderToolbar(
                         viewModel: viewModel,
                         leadingAction: nil,
-                        collapsesScoreActions: collapsesScoreActions,
+                        collapse: collapse,
                         onStartEditing: {},
                     )
                 }
@@ -331,11 +340,15 @@ private struct ReaderToolbarPreviewHost: View {
 }
 
 #Preview("Wide · discrete buttons") {
-    ReaderToolbarPreviewHost(collapsesScoreActions: false)
+    ReaderToolbarPreviewHost(collapse: .expanded)
 }
 
 #Preview("Narrow · collapsed score actions") {
-    ReaderToolbarPreviewHost(collapsesScoreActions: true)
+    ReaderToolbarPreviewHost(collapse: .scoreActions)
+}
+
+#Preview("Narrower · note editing folded too") {
+    ReaderToolbarPreviewHost(collapse: .noteEditing)
 }
 
 #Preview("iPad detail · sidebar toggle") {
