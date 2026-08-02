@@ -207,9 +207,14 @@ struct VerticalPDFContainer: View {
                 // so the next render's `applyDrawing` is a no-op (mirrors `VerticalScoreContainer`). The model is still
                 // captured for persistence; load reprojects from the model via `reproject`.
                 projectedAnnotations = drawing
-                viewModel.annotationDrawingsDidChange(
-                    PDFAnnotationAnchoring.capture(strokes: drawing.strokes, pageFrames: frames),
-                )
+                // Only the PDF layer is re-captured; ink anchored to the notation stays as it is. See the mirror of
+                // this comment in `VerticalScoreContainer` — committing a bare capture from either side deletes the
+                // other side's drawings.
+                viewModel.annotationDrawingsDidChange(AnnotationLayers.replacing(
+                    .originalPDF,
+                    in: viewModel.annotationDrawings,
+                    with: PDFAnnotationAnchoring.capture(strokes: drawing.strokes, pageFrames: frames),
+                ))
             },
             state: { annotationCanvasState(viewport: viewport, sizes: sizes) },
             handle: annotationHandle,

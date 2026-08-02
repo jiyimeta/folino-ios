@@ -249,9 +249,14 @@ struct VerticalScoreContainer: View {
                 // round-trips/wipes the just-committed stroke. The model is still captured for persistence + reflow;
                 // reflow/load reproject from the model via `reprojectAnnotations()` (on `document` change / appear).
                 projectedAnnotations = drawing
-                viewModel.annotationDrawingsDidChange(
-                    AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc),
-                )
+                // Only the score layer is re-captured. An item read out of a PDF also carries page-anchored ink, which
+                // this canvas can neither show nor describe — committing the capture verbatim would delete it, and the
+                // save coordinator would make that permanent.
+                viewModel.annotationDrawingsDidChange(AnnotationLayers.replacing(
+                    .score,
+                    in: viewModel.annotationDrawings,
+                    with: AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc),
+                ))
             },
             state: { annotationCanvasState(viewport: viewport) },
             handle: annotationHandle,
