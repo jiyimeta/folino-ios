@@ -70,8 +70,8 @@ struct ABRepeatScene: View {
             ),
             layout: FolinoScreenshotLayout.layout(for: idiom),
         ) {
-            // ReaderRootScreen uses `.navigationTitle` / `.toolbar(.hidden,...)`, so it needs an ancestor nav container
-            // but renders no visible bar of its own — the outer NavigationStack adds no doubled chrome.
+            // ReaderRootScreen puts its controls in a real `.toolbar`, so it needs an ancestor nav container to host
+            // them. The bar's own background is hidden, so the outer NavigationStack adds no doubled chrome.
             NavigationStack {
                 ReaderRootScreen(
                     scoreItem: Fixture.items[0],

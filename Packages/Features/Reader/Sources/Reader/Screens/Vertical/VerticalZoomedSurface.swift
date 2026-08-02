@@ -16,7 +16,9 @@ struct VerticalZoomedSurface: View {
     let horizontalPadding: CGFloat
     let scoreTopPadding: CGFloat
     let scoreBottomPadding: CGFloat
-    let safeAreaTop: CGFloat
+    /// Total top chrome inset — status bar plus the navigation bar the Reader's toolbar lives in. See
+    /// `VerticalScoreContainer.topChromeInset`.
+    let topChromeInset: CGFloat
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
@@ -28,7 +30,7 @@ struct VerticalZoomedSurface: View {
     var body: some View {
         if let doc = document {
             let zoom = effectiveZoom(for: doc)
-            let topPad = scoreTopPadding + safeAreaTop
+            let topPad = scoreTopPadding + topChromeInset
             let framedWidth = (doc.size.width + horizontalPadding * 2) * zoom
             let framedHeight = (doc.size.height + topPad + scoreBottomPadding) * zoom
             scoreSurface(document: doc)

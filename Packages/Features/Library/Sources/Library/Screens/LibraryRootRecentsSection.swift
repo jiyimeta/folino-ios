@@ -7,6 +7,10 @@ import UtilityUI
 /// overflow menu, swipe actions, context menu) forms its own invalidation boundary instead of inflating
 /// `LibraryRootScreen.body`. The sheet-presentation targets are passed in as bindings so the rows can drive the
 /// screen's sheets without reaching back into it.
+///
+/// `recents` is uncapped — every score that has ever been opened lands here. `List` builds only the rows it can show,
+/// and collapsing the section skips the content closure entirely, so a library with hundreds of opened scores costs
+/// nothing beyond what is on screen.
 @MainActor
 struct LibraryRootRecentsSection: View {
     let recents: [ScoreItem]
@@ -16,11 +20,15 @@ struct LibraryRootRecentsSection: View {
     @Binding var editTagsTarget: ScoreItem?
     @Binding var addToPlaylistTarget: ScoreItem?
 
+    @AppStorage("library.section.recents.expanded") private var expanded = true
+
     var body: some View {
         if !recents.isEmpty {
-            Section {
-                ForEach(recents) { item in
-                    sectionRow(for: item)
+            CollapsibleSection(isExpanded: $expanded, count: recents.count) {
+                if expanded {
+                    ForEach(recents) { item in
+                        sectionRow(for: item)
+                    }
                 }
             } header: {
                 Text("library.recentlyOpened", bundle: .module)

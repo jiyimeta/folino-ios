@@ -5,7 +5,7 @@ import UtilityUI
 
 /// Full-screen editing chrome. The App injects this into the Reader seam (Task 15) so it floats over the live score.
 /// Layout:
-///  - top-right: a voice pill and an undo / redo / 完了 glass cluster, mirroring `ReaderTopOverlay`'s 44 pt buttons;
+///  - top-right: a voice pill and an undo / redo / 完了 glass cluster, mirroring the Reader toolbar's 44 pt buttons;
 ///  - the editing cluster — the reader's transport plus the `EditorPadView` pad — docked to the top or bottom edge
 ///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering.
 ///

@@ -52,7 +52,7 @@ struct VisualInspectorScene: View {
             case .iPad:
                 // iPad: the inspector is a popover over the Reader — show the Reader behind, with the panel as a
                 // floating popover card anchored under the display-settings toolbar button (the right icon of the
-                // inspector pill in `ReaderTopOverlay`).
+                // inspector group in `ReaderToolbar`).
                 ZStack(alignment: .topTrailing) {
                     readerBackground
                     IPadPopoverCard(arrowTrailingPadding: 10) {

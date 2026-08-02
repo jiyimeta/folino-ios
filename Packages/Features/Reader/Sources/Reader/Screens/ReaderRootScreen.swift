@@ -1,8 +1,9 @@
 // swiftlint:disable file_length
-// ReaderRootScreen composes the score/PDF content, top overlay, transport control, and the note-editing chrome/
+// ReaderRootScreen composes the score/PDF content, navigation toolbar, transport control, and the note-editing chrome/
 // lifecycle seam (`ReaderEditingHost`, spec §9); that breadth keeps it just over the file_length budget.
 
 import Domain
+import ScoreUI
 import SheetMusicCore
 import SwiftUI
 import UIKit
@@ -12,7 +13,6 @@ import UtilityUI
 @MainActor
 public struct ReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
-    @Environment(\.dismiss) private var dismiss
     private let onBack: (() -> Void)?
     private let hidesBackButton: Bool
     private let leadingIsSidebarToggle: Bool
@@ -21,7 +21,7 @@ public struct ReaderRootScreen: View {
     /// simulator can't reproduce (PencilKit ink doesn't composite in the simulator; note spacing is OS/device-bound).
     private let scoreContentOverride: AnyView?
     /// The note-editing injection seam (design spec §9, Option 1). `nil` means this Reader instance never enters edit
-    /// mode — the edit button in `ReaderTopOverlay` stays hidden and `startEditing()`/`finishEditing()` are no-ops.
+    /// mode — the edit button in `ReaderToolbar` stays hidden and `startEditing()`/`finishEditing()` are no-ops.
     /// The App composition root (Task 15) is the only caller that supplies a non-nil host; the Reader never imports or
     /// references the Editor feature that owns the other end of the seam.
     private let editingHost: ReaderEditingHost?
@@ -66,6 +66,12 @@ public struct ReaderRootScreen: View {
     /// auto-presentation to once per Reader open; "OK" just closes it for now, "Don't show again" sets the flag above.
     @State private var isPDFNoticePresented = false
     @State private var hasAutoShownPDFNotice = false
+
+    /// Width of the Reader's window / detail column, measured so the toolbar can decide whether its score actions fit
+    /// as discrete buttons. The old floating overlay let `ViewThatFits` answer that question for itself; `ToolbarItem`s
+    /// have no such escape hatch, so the decision is made here and handed down. Starts at 0 — i.e. collapsed, which
+    /// always fits — so the first frame can never overflow.
+    @State private var availableWidth: CGFloat = 0
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -176,11 +182,30 @@ public struct ReaderRootScreen: View {
                     .opacity(0)
                     .allowsHitTesting(false)
             }
-            topAndBottomChrome
+            bottomChrome
             editingChromeOverlay
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
         .navigationTitle("")
-        .toolbarVisibility(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        // Back button as a bare chevron: the editor role drops its label, which would otherwise carry the previous
+        // screen's title ("ライブラリ", a playlist name) and spend leading width the score actions need.
+        .toolbarRole(.editor)
+        .navigationBarBackButtonHidden(hidesSystemBackButton)
+        // Capture mode strips the bar entirely; editing keeps it mounted but empty (see `readerToolbar`), so the
+        // score's top inset — and with it a paged score's page breaks — doesn't shift when an edit session starts.
+        .toolbarVisibility(isCaptureMode ? .hidden : .visible, for: .navigationBar)
+        .floatingToolbarBackgroundCompat()
+        .toolbar { readerToolbar }
+        // Attached to the screen, not to the toolbar: a sheet anchored inside `ToolbarContent` would be torn down
+        // whenever the toolbar's own content changes (a collapse threshold crossing, entering edit mode).
+        .sheet(isPresented: $viewModel.isScoreInfoPresented) {
+            EditScoreInfoSheet(model: viewModel, item: viewModel.scoreItem)
+                .onAppear { viewModel.analytics.logScreen(.scoreInfo) }
+        }
+        .sheet(item: $viewModel.shareTarget) { target in
+            ActivityViewControllerRepresentable(items: target.urls)
+        }
         .pdfPlaybackNoticeAlert(
             state: viewModel.pdfPlayback,
             isPresented: $isPDFNoticePresented,
@@ -285,27 +310,68 @@ public struct ReaderRootScreen: View {
         }
     }
 
-    /// The floating top overlay + bottom transport, both faded out (opacity + `allowsHitTesting`) while editing so the
-    /// App-injected chrome reads as the foreground without losing the reader's mounted playback / sheet state.
-    /// Extracted from `body` to keep the outer `ZStack` closure under SwiftLint's body-length limit.
-    private var topAndBottomChrome: some View {
+    /// Whether an edit session is running. The toolbar empties out for the duration — its buttons (back / share /
+    /// annotate / inspectors) have no meaning over the editing surface, and the App-injected chrome takes over that
+    /// space instead.
+    private var isEditing: Bool {
+        editingHost?.isEditing == true
+    }
+
+    /// The leading affordance the Reader draws itself, or `nil` to leave the leading edge to the system's own back
+    /// button. Non-nil only in the iPad split-view detail, whose leading control reveals the library column rather
+    /// than popping a stack — the compact `NavigationStack` path passes no `onBack`, so it simply gets the standard
+    /// back button (with its label, and with the edge-swipe that comes with it).
+    private var customLeadingAction: (() -> Void)? {
+        guard !hidesBackButton, !isEditing, let onBack else { return nil }
+        return onBack
+    }
+
+    private var hidesSystemBackButton: Bool {
+        hidesBackButton || isEditing || customLeadingAction != nil
+    }
+
+    /// Whether score-info and share have to fold into one overflow menu at the current width.
+    ///
+    /// Score-info and share are what gives way first, by design: the inspectors are what a player reaches for
+    /// mid-practice, so they stay discrete for as long as the row allows. The row has to be kept inside the bar's own
+    /// budget too — on iOS 26 a navigation bar that runs out of room starts moving items into an overflow menu of its
+    /// OWN, whose contents and priority we cannot influence (and which took the inspectors first). Folding one button
+    /// early keeps that from ever engaging, so our menu stays the only overflow.
+    ///
+    /// Only the score reader is ever at risk: a PDF's toolbar carries half as many buttons and fits everywhere, and a
+    /// reader that hasn't loaded yet shows none at all. See `ReaderToolbar.Metrics` for why a width breakpoint is the
+    /// right mechanism, and why it is derived from the item count instead of hardcoded.
+    private var collapsesScoreActions: Bool {
+        guard case .loaded = viewModel.loadState else { return false }
+        // The discrete layout: score-info, share, (edit notes), annotate, playback inspector, visual inspector —
+        // separated into three or four glass groups.
+        let itemCount = editingHost == nil ? 5 : 6
+        let groupGaps = editingHost == nil ? 2 : 3
+        let widthNeeded = (hidesBackButton ? 0 : ReaderToolbar.Metrics.leading)
+            + CGFloat(itemCount) * ReaderToolbar.Metrics.item
+            + CGFloat(groupGaps) * ReaderToolbar.Metrics.groupGap
+        return availableWidth < widthNeeded
+    }
+
+    @ToolbarContentBuilder
+    private var readerToolbar: some ToolbarContent {
+        if !isCaptureMode, !isEditing {
+            ReaderToolbar(
+                viewModel: viewModel,
+                leadingAction: customLeadingAction,
+                leadingIsSidebarToggle: leadingIsSidebarToggle,
+                collapsesScoreActions: collapsesScoreActions,
+                onShowPDFNotice: { isPDFNoticePresented = true },
+                onStartEditing: editingHost == nil ? nil : { startEditing() },
+            )
+        }
+    }
+
+    /// The bottom transport, faded out (opacity + `allowsHitTesting`) while annotating so the reader's mounted playback
+    /// state survives the session. Extracted from `body` to keep the outer `ZStack` closure under SwiftLint's
+    /// body-length limit.
+    private var bottomChrome: some View {
         VStack(spacing: 0) {
-            if !isCaptureMode {
-                ReaderTopOverlay(
-                    viewModel: viewModel,
-                    onBack: hidesBackButton ? nil : (onBack ?? { dismiss() }),
-                    leadingIsSidebarToggle: leadingIsSidebarToggle,
-                    onShowPDFNotice: { isPDFNoticePresented = true },
-                    onStartEditing: editingHost == nil ? nil : { startEditing() },
-                )
-                // Fade the top overlay out while editing — its buttons (back / share / annotate / inspectors) have no
-                // meaning over the editing surface, and the App-injected chrome takes over that space instead. Same
-                // opacity-only + `allowsHitTesting(false)` treatment as the transport's `isAnnotating` fade below, so
-                // the mounted state (popovers, sheets) survives an edit session.
-                .opacity(editingHost?.isEditing == true ? 0 : 1)
-                    .allowsHitTesting(editingHost?.isEditing != true)
-                    .animation(.easeOut(duration: 0.2), value: editingHost?.isEditing)
-            }
             Spacer()
             // Fade the transport control out while annotating so it doesn't sit over the drawing surface. It stays
             // mounted (opacity only) and stops taking touches, so a partial seek / playback state survives the
@@ -425,7 +491,9 @@ public struct ReaderRootScreen: View {
                 )
             }
         }
-        .safeAreaPadding(.top, isCaptureMode ? 0 : ReaderTopOverlay.height + horizontalEditingInsets.top)
+        // No top reserve for the chrome any more: the navigation bar contributes its own safe-area inset, so only the
+        // editing cluster's extra room is added here.
+        .safeAreaPadding(.top, isCaptureMode ? 0 : horizontalEditingInsets.top)
         .safeAreaPadding(.bottom, isCaptureMode ? 0 : bottomControlInset + horizontalEditingInsets.bottom)
     }
 
