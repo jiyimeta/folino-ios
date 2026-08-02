@@ -65,6 +65,12 @@ final class ReaderViewModel {
     /// (not `private(set)`) so the load paths in `ReaderViewModel+Load.swift` can clear it on failure.
     var visibleScore: Score?
 
+    /// The seek card's cached score-derived inputs (rehearsal marks + notated duration), the same recompute-at-the-
+    /// choke-points pattern as `visibleScore`. Rebuilt by `recomputeSeekTimeline()` on load, edited-score adoption,
+    /// and a PDF parse landing — never from a view body, because both derivations walk the entire score (see
+    /// `ReaderSeekTimeline`) and the transport card's body runs every frame during the mode-swipe morph.
+    private(set) var seekTimeline: ReaderSeekTimeline = .empty
+
     /// Internal (not private-set) so the ScoreInfoEditing conformance in a separate file can update it.
     var scoreItem: ScoreItem
     /// The playlist this Reader is traversing, or `nil` when opened standalone. Drives the inspector's continuation
@@ -370,6 +376,7 @@ final class ReaderViewModel {
     func adoptEditedScore(_ score: Score) async {
         loadState = .loaded(score)
         recomputeVisibleScore()
+        recomputeSeekTimeline()
         await playbackSession.releaseEngine()
         await playbackSession.prepareForPlayback()
         pipSession.armIfReady()
@@ -387,6 +394,20 @@ final class ReaderViewModel {
         // playback cursor translation downstream is unaffected.
         let transposed = withClefs.transposed(bySemitones: transposeModel.semitones)
         visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
+    }
+
+    /// Rebuild `seekTimeline` from the score the transport drives — the loaded score, or a playable PDF's parsed
+    /// score (the same precedence as the transport control's `transportScore`). Called from `loadScoreFile` and
+    /// `adoptEditedScore` (which cover every `.loaded` transition, including playlist advance) and from the PDF
+    /// parse landing in `parsePDFForPlayback`. Marks and duration only depend on measure structure and tempo, so
+    /// the layout / transpose hooks that rebuild `visibleScore` don't need to touch this.
+    func recomputeSeekTimeline() {
+        let score = loadState.score ?? (isPDFPlaybackReady ? playbackScore : nil)
+        guard let score else {
+            seekTimeline = .empty
+            return
+        }
+        seekTimeline = ReaderSeekTimeline(score: score)
     }
 
     /// Reachable from both load paths; `authoredHiddenStaves` (empty for PDFs) are seeded in `loadOrSeed`.

@@ -95,6 +95,9 @@ extension ReaderViewModel {
                     diagnostics: result.diagnostics,
                 ),
             )
+            // The parsed score is what the transport's seek card reads through `seekTimeline`; derive its marks and
+            // duration once here rather than per frame in the card.
+            recomputeSeekTimeline()
             // The parsed score is now reachable via `playbackScore`; prime the engine. Idempotent —
             // the session guards re-entry — and a no-op earlier in `.task` when the parse wasn't ready.
             await playbackSession.prepareForPlayback()
