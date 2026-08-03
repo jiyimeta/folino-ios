@@ -5,7 +5,9 @@ import UtilityUI
 
 /// Full-screen editing chrome. The App injects this into the Reader seam (Task 15) so it floats over the live score.
 /// Layout:
-///  - top-right: a voice pill and an undo / redo / 完了 glass cluster, mirroring the Reader toolbar's 44 pt buttons;
+///  - the navigation bar: voice, the pad toggle, undo / redo / 完了 — see `EditorChromeView+Toolbar.swift`. The Reader
+///    empties its own toolbar for the session and this fills it, so the fixed controls sit IN the bar rather than in a
+///    second strip of chrome underneath it;
 ///  - the editing cluster — the reader's transport plus the `EditorPadView` pad — docked to the top or bottom edge
 ///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering.
 ///
@@ -19,15 +21,15 @@ import UtilityUI
 /// remains in the callout is ♯ / ♭ — see `EditorCalloutView` for why those two belong beside the note rather than in
 /// a row of keys aimed at the caret.
 public struct EditorChromeView: View {
-    /// Internal, not private: the header row lives in `EditorChromeView+Header.swift`, and Swift's `private` doesn't
-    /// span files.
+    /// Internal, not private: the toolbar items live in `EditorChromeView+Toolbar.swift`, and Swift's `private`
+    /// doesn't span files.
     @Bindable var viewModel: EditorViewModel
     /// Room the reader's bottom transport occupies, so a bottom-docked pad parks above it instead of over it.
     private let bottomTransportClearance: CGFloat
     let onDone: () -> Void
     private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
     /// Reports the pad toggle's GLOBAL frame (and `nil` when the chrome goes away) so the host can hang a coach mark
-    /// off it. Internal, not private: the button it is attached to lives in `EditorChromeView+Header.swift`.
+    /// off it. Internal, not private: the button it is attached to lives in `EditorChromeView+Toolbar.swift`.
     let onNoteInputAnchorChange: (CGRect?) -> Void
     @Environment(\.undoManager) private var undoManager
 
@@ -50,8 +52,6 @@ public struct EditorChromeView: View {
     /// inside `onEnded`, so a cancelled gesture leaves it at zero.
     @State private var releasedTranslation: CGSize = .zero
     @State private var clusterHeight: CGFloat = 0
-    /// Height of the header row, so a top-docked pad can park below it.
-    @State private var headerHeight: CGFloat = 0
 
     /// Whether the pad is on screen. Remembered across sessions the same way the pad's placement is: someone who
     /// writes with the keyboard open wants it open next time, and someone who only ever nudges existing notes wants
@@ -90,19 +90,6 @@ public struct EditorChromeView: View {
 
     public var body: some View {
         ZStack(alignment: .topTrailing) {
-            topCluster
-                // Measured so a top-docked pad can park BELOW the header rather than over (or above) it: 完了 and the
-                // voice picker have to stay reachable wherever the pad is.
-                //
-                // The measurement goes BEFORE the expanding frame, deliberately. Attached after it, this read the
-                // full-screen frame instead of the header — 778 pt rather than ~50 — and a top-docked pad was padded
-                // clean off the bottom of the screen, where the transport then covered what little showed.
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                        headerHeight = height
-                        publishInsets(height: clusterHeight)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-
             navigationPill
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .padding(.leading, 12)
@@ -115,6 +102,10 @@ public struct EditorChromeView: View {
 
             editingCluster
         }
+        // The fixed controls go INTO the Reader's navigation bar, which it leaves mounted and empty for the session.
+        // `.toolbar` resolves against the enclosing navigation container, not the immediate parent, so attaching it
+        // from inside the injected overlay is enough — the Reader never has to expose a `ToolbarContent` seam.
+        .toolbar { editingToolbar }
         // Task 16: bridges ScoreEditor's undo/redo stacks to the system UndoManager so three-finger swipe gestures
         // work. Triggers off `appliedEditCount` — NOT `generation` — because `generation` also bumps on undo/redo;
         // re-registering here on every undo/redo would double up with `registerSystemUndo`'s own symmetric
@@ -169,8 +160,6 @@ public struct EditorChromeView: View {
             .transition(.move(edge: .top).combined(with: .opacity))
     }
 
-    // MARK: Top cluster
-
     // MARK: The editing cluster (transport + pad)
 
     /// The pad, docked to `placement` and draggable to the other edge by its grabber, the way `PKToolPicker` can be
@@ -206,9 +195,10 @@ public struct EditorChromeView: View {
                 // The chrome is already laid out inside the safe area, so the transport's content height is the whole
                 // clearance a bottom-docked pad needs.
                 .padding(.bottom, placement == .bottom ? bottomTransportClearance + 4 : 0)
-                // Docked at the top, the pad sits under the header — the same way it sits above the transport when
-                // docked at the bottom. It parks next to the fixed chrome, never on top of it.
-                .padding(.top, placement == .top ? headerHeight + 4 : 0)
+                // Docked at the top, the pad hangs just under the navigation bar — the same way it sits above the
+                // transport when docked at the bottom. The chrome is laid out inside the safe area and the bar
+                // contributes its own inset, so there is no header height left to subtract here.
+                .padding(.top, placement == .top ? 4 : 0)
                 .accessibilityAction(named: Text("editor.pad.move", bundle: .module)) {
                     // No finger to take a velocity from, so this one is a plain, calm move.
                     dock(to: placement == .bottom ? .top : .bottom, animation: .smooth(duration: 0.35))
@@ -326,8 +316,7 @@ public struct EditorChromeView: View {
         // A hidden pad reserves nothing: that room goes back to the score.
         let height = isPadVisible ? height : 0
         switch placement {
-        // Docked at the top the pad hangs below the header, so the score has to clear both.
-        case .top: onClusterInsetsChange(headerHeight + height + 4, 0)
+        case .top: onClusterInsetsChange(height > 0 ? height + 4 : 0, 0)
         case .bottom: onClusterInsetsChange(0, height)
         }
     }
