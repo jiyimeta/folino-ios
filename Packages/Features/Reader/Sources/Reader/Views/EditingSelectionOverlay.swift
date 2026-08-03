@@ -71,8 +71,10 @@ struct EditingSelectionOverlay: View {
 
     /// The selected item's column, narrowed to its own staff band — the same geometry the caret uses, since the
     /// engine's cursor frame spans the entire system vertically.
+    /// Reads `displaySelection`, not `selection`: the editor addresses the unfiltered score while `document` and
+    /// `score` here are the staff-filtered rendition. See `ReaderEditingHost.displayItem(for:)`.
     private var selectionRect: CGRect? {
-        guard case let .single(item) = host.selection,
+        guard case let .single(item) = host.displaySelection,
               let frame = document.cursorFrame(for: .item(item), in: score),
               let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
         else { return nil }
@@ -106,7 +108,7 @@ struct EditingSelectionOverlay: View {
     /// happens in one staff at a time. `nil` when `caretItem` is unset, doesn't resolve to a laid-out frame (e.g. a
     /// stale ID right after an edit reflows the document), or names a staff/measure this document doesn't contain.
     private var caretRect: CGRect? {
-        guard let item = host.caretItem,
+        guard let item = host.displayCaretItem,
               let frame = document.cursorFrame(for: .item(item), in: score),
               let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
         else { return nil }
