@@ -50,6 +50,44 @@ If you have unrelated edits in the same file, use `git stash`, edit again, and c
 
 `swift test` does **not** work in this repo: the SwiftLint build-tool plugin (applied to every package target) requires a macOS host context that the SwiftPM CLI can't satisfy, so package tests must go through `xcodebuild test` on an iOS Simulator destination. Use **iPhone 17 Pro Max** as the destination — it is the 6.9" device App Store Connect requires for screenshots, so standardizing on it keeps build/test and screenshot runs on one booted simulator (iPhone 16 is not installed). For feature-isolated iteration (SwiftUI previews, fast unit-test loop), open the relevant `Packages/.../Package.swift` directly in Xcode rather than the app project.
 
+## App Store screenshots
+
+```sh
+Scripts/capture-screenshots.sh                          # 5 locales x iPhone + iPad
+Scripts/capture-screenshots.sh --locales en             # one language
+Scripts/capture-screenshots.sh --devices iphone --locales en,ja
+```
+
+Output lands in `fastlane/screenshots/<App Store locale>/<order>_<alias>_<scene>.png` (deliver-compatible,
+gitignored). `fastlane deliver` consumes that directory at upload time.
+
+The script builds once per device, then runs `FolinoScreenshotTests/CaptureScreenshotsTests` once per language. That
+one hosted unit test captures **every** scene in a single app process: it swaps each `ScreenshotScene` into the host
+app's window and draws it out with `drawHierarchy`, waiting for two consecutive pixel-identical frames instead of
+sleeping. A language needs its own run because much of the Feature packages resolves strings with `String(localized:)`
+at call time, which reads the *process* language — `-testLanguage` is the only thing that moves it.
+
+The shared mechanics (`TrueScaleInner`, `ScreenshotSceneFrame`, `ScreenshotCaptureSession`) live in the
+`swift-screenshot-kit` package, which VocalTuner uses too; only the scenes, the locale table and the destination pins
+are per-repo.
+
+Notes for anyone touching this:
+
+- **Scenes lay the app UI out at the real device size** (440x956 / 1032x1376) via `ScreenshotSceneFrame` and scale the
+  raster into the marketing thumbnail, so controls read at true proportions. Marketing chrome is drawn at full output
+  resolution. `PiPScene` is the deliberate exception — it's a drawing, not app UI; see the comment on its `body`.
+- **Scenes share one process now**, so anything a scene writes to `UserDefaults` or a singleton is still live for the
+  next one. `ScreenshotSharedState.reset()` clears the keys scenes disagree about between captures; add to it when a
+  new scene pins a global.
+- **Anything that can appear on first run must be suppressed.** `ScreenshotSetup.ensure()` retires every
+  `ReaderFeatureHint` and the page-tap coach mark — one of those bubbles landed on top of a score in the first run
+  after the hints shipped.
+- **`\.screenshotIdiom` must be installed by app code**, and is — in `ScreenshotScene.view`. ScreenshotKit is linked
+  separately into the app and the test bundle, so an environment value written on the test side keys a different entry
+  than the scene reads; that silently framed the iPad deliverables with the iPhone layout.
+- The `#Preview`s on each scene still work and match what gets captured — use them (or the Xcode MCP `RenderPreview`
+  with the `FolinoScreenshot` scheme active) to iterate on layout.
+
 ## Architecture (must respect)
 
 Strict layered SPM modules. **Read `docs/engineering/module-architecture.md` for details** — the rules below are summary only.
