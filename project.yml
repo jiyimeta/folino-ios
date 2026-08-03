@@ -62,7 +62,7 @@ packages:
     from: 11.0.0
   ScreenshotKit:
     url: git@github.com:jiyimeta/swift-screenshot-kit.git
-    revision: bb620a8d26eb1f7d86221cde277309ed12896f73
+    revision: 13ae05e58f2937468d1e3cd779ba420b4310ed21
 targets:
   Folino:
     type: application
@@ -253,20 +253,24 @@ targets:
         product: LicenseList
       - package: ScreenshotKit
         products: [ScreenshotKit]
-  FolinoUITests:
-    type: bundle.ui-testing
+  # Hosted inside the screenshot app: swaps each marketing scene into the host window and writes the App Store PNGs
+  # straight into fastlane/screenshots/. One process captures every scene, so there is no per-scene app relaunch.
+  # Driven by Scripts/capture-screenshots.sh.
+  FolinoScreenshotTests:
+    type: bundle.unit-test
     platform: iOS
     sources:
-      - Tests/FolinoUITests
+      - path: Tests/FolinoScreenshotTests
     dependencies:
       - target: FolinoScreenshot
       - package: ScreenshotKit
-        products: [ScreenshotKitUITest]
+        products: [ScreenshotKit, ScreenshotKitCapture]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.uiTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.screenshotTests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: FolinoScreenshot
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/FolinoScreenshot.app/FolinoScreenshot
 schemes:
   Folino:
     build:
@@ -289,10 +293,16 @@ schemes:
     build:
       targets:
         FolinoScreenshot: [run, test]
-        FolinoUITests: [test]
+        FolinoScreenshotTests: [test]
     run:
       config: Debug
+      commandLineArguments:
+        "-UITestMode": true
     test:
       config: Debug
+      # The host app only enters screenshot mode (animations off, no on-device capture tool) when it sees
+      # `-UITestMode`, and the capture test needs that.
+      commandLineArguments:
+        "-UITestMode": true
       targets:
-        - FolinoUITests
+        - FolinoScreenshotTests

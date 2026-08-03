@@ -26,7 +26,7 @@ struct VisualInspectorScene: View {
     }
 
     var body: some View {
-        ScreenshotFrameView(
+        ScreenshotSceneFrame(
             title: LocalizedStringResource(
                 "scene.visualInspector.title",
                 table: "ScreenshotStrings",
@@ -42,6 +42,7 @@ struct VisualInspectorScene: View {
                 subtitleBullet: true,
                 innerStatusBarColor: Color(.systemGroupedBackground),
             ),
+            idiom: idiom,
         ) {
             switch idiom {
             case .iPhone:
@@ -86,7 +87,7 @@ struct VisualInspectorScene: View {
                 gateway: FixtureGateway(),
                 shareService: FixtureShareService(),
                 metadataReader: FixtureMetadataReader(),
-                annotationStore: FixtureAnnotationStore(),
+                annotationCoordinator: .fixture,
                 scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                 hidesBackButton: true,
             )

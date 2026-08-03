@@ -16,9 +16,14 @@ struct ScreenshotApp: App {
                 if let id = ScreenshotEnvironment.requestedSceneID,
                    let scene = ScreenshotScene.allCases.first(where: { $0.id == id })
                 {
+                    // Explicit scene arg → render just that one. Kept for iterating on a single scene by hand.
                     scene.view
+                } else if ScreenshotEnvironment.isActive {
+                    // Screenshot mode with no scene arg → the capture test is about to take the window over, so put
+                    // nothing in it. Building a Reader here would only be torn down a moment later.
+                    Color.black.ignoresSafeArea()
                 } else {
-                    // No scene arg (icon tap / plain Xcode Run on a device) → the on-device ink capture tool.
+                    // Plain launch (icon tap / Xcode Run on a device) → the on-device ink capture tool.
                     CaptureScene()
                 }
             }

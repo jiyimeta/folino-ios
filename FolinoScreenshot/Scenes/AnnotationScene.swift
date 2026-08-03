@@ -27,9 +27,8 @@ private final class ScreenshotStringsAnchor {}
 ///       xcrun devicectl device capture screenshot --device <id> --destination <path>.png
 ///  5. Crop off ONLY the iOS status bar (capture mode leaves no chrome, so it's a fixed height: iPad @2x ≈ 82px,
 ///     iPhone @3x ≈ 118px), saving as `Resources/annotated-device.png` (iPad) / `annotated-device-iphone.png` (phone).
-///  6. Regenerate the framed PNGs with the ios-screenshot tool (single-scene: `test_plan:
-///     FolinoUITests/ScreenshotsUITests/testCaptureAnnotation`) and copy `07_*_Annotation.png` into
-///     `fastlane/screenshots/<locale>/`.
+///  6. Regenerate the framed PNGs with `Scripts/capture-screenshots.sh`. Capture is per-language, not per-scene, so
+///     there is no single-scene run — `--devices <one> --locales en` is the fastest check, then the full sweep.
 struct AnnotationScene: View {
     @Environment(\.screenshotIdiom) private var idiom
 
@@ -42,7 +41,7 @@ struct AnnotationScene: View {
     }
 
     var body: some View {
-        ScreenshotFrameView(
+        ScreenshotSceneFrame(
             title: LocalizedStringResource(
                 "scene.annotation.title",
                 table: "ScreenshotStrings",
@@ -54,6 +53,7 @@ struct AnnotationScene: View {
                 bundle: .forClass(ScreenshotStringsAnchor.self),
             ),
             layout: FolinoScreenshotLayout.layout(for: idiom, subtitleBullet: true),
+            idiom: idiom,
         ) {
             NavigationStack {
                 ReaderRootScreen(
@@ -62,7 +62,7 @@ struct AnnotationScene: View {
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
                     metadataReader: FixtureMetadataReader(),
-                    annotationStore: FixtureAnnotationStore(),
+                    annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
                     scoreContentOverride: AnyView(deviceCapture),

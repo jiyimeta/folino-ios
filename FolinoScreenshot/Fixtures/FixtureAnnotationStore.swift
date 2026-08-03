@@ -1,29 +1,28 @@
 import Domain
 import Foundation
 
-/// Inert `AnnotationStore` for the screenshot scenes. Returns a fixed, pre-authored `AnnotationLayer` (or `nil` for the
-/// scenes that show no ink) and ignores all writes — nothing here touches disk or a database. Production injects the
-/// real `LiveAnnotationStore` from the App composition root; the screenshot target needs only this static stand-in.
+/// Inert `AnnotationBlobStore` for the screenshot scenes: every load misses, every write is dropped — nothing here
+/// touches disk or a database. Production injects the real `LiveAnnotationStore` from the App composition root; the
+/// screenshot target needs only this stand-in.
 ///
-/// The `Reader` package's own `NoopAnnotationStore` is `internal`, so the scenes (which use plain `import Reader`, not
-/// `@testable`) can't reach it. This fixture conforms to the public Domain protocol directly, mirroring the other
-/// `Fixture…` services in this target.
-struct FixtureAnnotationStore: AnnotationStore {
-    /// The layer every score resolves to. `nil` makes the store inert (the `Reader`/`ABRepeat`/inspector scenes pass no
-    /// layer); the annotation scene passes `FixtureInk.layer` so committed ink renders on the score.
-    var layer: AnnotationLayer?
-
-    init(layer: AnnotationLayer? = nil) {
-        self.layer = layer
+/// No scene renders live ink. The annotation scene shows a real-device capture instead, because PencilKit doesn't
+/// composite in the simulator — see `AnnotationScene`.
+struct FixtureAnnotationStore: AnnotationBlobStore {
+    // swiftlint:disable:next async_without_await
+    func load(scoreID _: ScoreItemID) async throws -> Data? {
+        nil
     }
 
     // swiftlint:disable:next async_without_await
-    func annotationLayer(forScoreItem _: ScoreItemID) async throws -> AnnotationLayer? {
-        layer
-    }
+    func save(scoreID _: ScoreItemID, updatedAt _: Date, payload _: Data) async throws {}
+    // swiftlint:disable:next async_without_await
+    func delete(scoreID _: ScoreItemID) async throws {}
+}
 
-    // swiftlint:disable:next async_without_await
-    func saveAnnotationLayer(_: AnnotationLayer) async throws {}
-    // swiftlint:disable:next async_without_await
-    func deleteAnnotationLayer(forScoreItem _: ScoreItemID) async throws {}
+extension AnnotationSaveCoordinator {
+    /// The coordinator every scene hands to `ReaderRootScreen`. Backed by `FixtureAnnotationStore`, so the Reader's
+    /// annotation plumbing is wired exactly as in production but persists nothing.
+    static var fixture: AnnotationSaveCoordinator {
+        AnnotationSaveCoordinator(store: FixtureAnnotationStore())
+    }
 }
