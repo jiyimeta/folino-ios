@@ -209,7 +209,9 @@ final class ReaderHintCoordinator {
         cursor = (index + 1) % ReaderFeatureHint.rotationOrder.count
     }
 
-    private static func usedKey(_ hint: ReaderFeatureHint) -> String {
+    /// Internal rather than private so the screenshot harness can retire every hint up front without duplicating the
+    /// key format — a marketing shot must never carry a coach mark.
+    nonisolated static func usedKey(_ hint: ReaderFeatureHint) -> String {
         "readerHint.used.\(hint.rawValue)"
     }
 

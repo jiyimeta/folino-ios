@@ -36,7 +36,7 @@ struct PlaybackInspectorScene: View {
     }
 
     var body: some View {
-        ScreenshotFrameView(
+        ScreenshotSceneFrame(
             title: LocalizedStringResource(
                 "scene.playbackInspector.title",
                 table: "ScreenshotStrings",
@@ -52,6 +52,7 @@ struct PlaybackInspectorScene: View {
                 subtitleBullet: true,
                 innerStatusBarColor: Color(.systemGroupedBackground),
             ),
+            idiom: idiom,
         ) {
             switch idiom {
             case .iPhone:
@@ -89,7 +90,9 @@ struct PlaybackInspectorScene: View {
             repeatModel: viewModel.repeatModel,
             transposeModel: viewModel.transposeModel,
             score: Fixture.score,
-            playbackCursor: nil,
+            // The fixture view model's own session: nothing is loaded into it, so it stays stopped with no cursor —
+            // which is what this panel should show.
+            playbackSession: viewModel.playbackSession,
             isInPlaylist: true,
         )
         .task { await viewModel.load() }
@@ -103,7 +106,7 @@ struct PlaybackInspectorScene: View {
                 gateway: FixtureGateway(),
                 shareService: FixtureShareService(),
                 metadataReader: FixtureMetadataReader(),
-                annotationStore: FixtureAnnotationStore(),
+                annotationCoordinator: .fixture,
                 scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                 hidesBackButton: true,
             )

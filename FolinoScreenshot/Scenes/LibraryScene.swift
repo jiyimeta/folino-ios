@@ -30,7 +30,7 @@ struct LibraryScene: View {
     }
 
     var body: some View {
-        ScreenshotFrameView(
+        ScreenshotSceneFrame(
             title: LocalizedStringResource(
                 "scene.library.title",
                 table: "ScreenshotStrings",
@@ -53,6 +53,7 @@ struct LibraryScene: View {
                     iPad: Color(white: 0.8),
                 ),
             ),
+            idiom: idiom,
         ) {
             switch idiom {
             case .iPhone:
@@ -91,7 +92,11 @@ struct LibraryScene: View {
                 onOpenInPlaylist: { _, _ in },
                 licenseContent: { EmptyView() },
             )
-            .navigationSplitViewColumnWidth(min: 350, ideal: 420)
+            // The real sidebar is a frosted panel over the detail. `drawHierarchy` can't reproduce backdrop blur (see
+            // `ScreenshotCaptureSession`), so without an opaque backing the score behind it comes through sharp and
+            // the list reads as printed on top of the music. Substitute the material's resting tint.
+            .background(Color(.systemGroupedBackground))
+                .navigationSplitViewColumnWidth(min: 350, ideal: 420)
         } detail: {
             ReaderRootScreen(
                 scoreItem: Fixture.items[0],
@@ -99,7 +104,7 @@ struct LibraryScene: View {
                 gateway: FixtureGateway(),
                 shareService: FixtureShareService(),
                 metadataReader: FixtureMetadataReader(),
-                annotationStore: FixtureAnnotationStore(),
+                annotationCoordinator: .fixture,
                 scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                 hidesBackButton: true,
             )

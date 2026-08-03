@@ -39,7 +39,7 @@ struct CaptureScene: View {
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
                     metadataReader: FixtureMetadataReader(),
-                    annotationStore: FixtureAnnotationStore(),
+                    annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
                 )

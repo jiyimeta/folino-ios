@@ -5,6 +5,7 @@ import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
 import SwiftUI
+import UtilityUI
 
 /// Marker class used to resolve the bundle that hosts `ScreenshotStrings.xcstrings`. See `LibraryScene` for the
 /// rationale behind `.forClass` over `.atURL(Bundle.main.bundleURL)`.
@@ -27,6 +28,11 @@ struct PiPScene: View {
         ScreenshotSetup.ensure()
     }
 
+    /// The one scene that stays on `ScreenshotFrameView` rather than `ScreenshotSceneFrame`: `TrueScaleInner` exists so
+    /// that *real app UI* — whose fonts, controls and paddings are fixed points — is laid out at the device's size
+    /// instead of the thumbnail's. `HomeScreenMock` is a drawing, not app UI: every dimension in it is a fraction of
+    /// the slot it's given, so laying it out larger and scaling the raster back down would be a no-op — except for
+    /// `PiPScoreView`'s absolute `staffSize`, which was tuned against this slot and would come out ~20% small.
     var body: some View {
         ScreenshotFrameView(
             title: LocalizedStringResource(
@@ -202,7 +208,7 @@ private struct HomeScreenMock: View {
                     endPoint: .bottom,
                 ),
             )
-            .glassEffect(in: .rect(cornerRadius: radius))
+            .regularGlassCompat(in: .rect(cornerRadius: radius))
             .frame(width: side, height: side)
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -215,7 +221,7 @@ private struct HomeScreenMock: View {
     private func searchPill(width: CGFloat) -> some View {
         Color.clear
             .frame(width: width * 0.16, height: width * 0.06)
-            .glassEffect(.clear, in: .capsule)
+            .clearGlassMock(in: .capsule)
     }
 
     // MARK: - Dock
@@ -232,7 +238,7 @@ private struct HomeScreenMock: View {
             }
         }
         .padding(innerPad)
-        .glassEffect(.clear, in: .rect(cornerRadius: (iconSide + innerPad * 2) * 0.32))
+        .clearGlassMock(in: .rect(cornerRadius: (iconSide + innerPad * 2) * 0.32))
     }
 
     // MARK: - PiP window
@@ -309,6 +315,22 @@ private struct PiPScoreView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .clipped()
+    }
+}
+
+extension View {
+    /// `.glassEffect(.clear, in:)` on iOS 26+, a thin material below it.
+    ///
+    /// Local to this scene rather than a `UtilityUI` compat helper: the home-screen mock is the only thing in the app
+    /// that wants *clear* glass, and capture always runs on an iOS 26+ simulator, so the fallback exists only to keep
+    /// the file compiling at the app's iOS 18 floor.
+    @ViewBuilder
+    fileprivate func clearGlassMock(in shape: some Shape) -> some View {
+        if #available(iOS 26, *) {
+            glassEffect(.clear, in: shape)
+        } else {
+            background(.thinMaterial, in: shape)
+        }
     }
 }
 

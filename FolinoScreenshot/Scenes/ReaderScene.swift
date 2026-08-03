@@ -27,7 +27,7 @@ struct ReaderScene: View {
     }
 
     var body: some View {
-        ScreenshotFrameView(
+        ScreenshotSceneFrame(
             title: LocalizedStringResource(
                 "scene.reader.title",
                 table: "ScreenshotStrings",
@@ -42,6 +42,7 @@ struct ReaderScene: View {
                 for: idiom,
                 subtitleBullet: true,
             ),
+            idiom: idiom,
         ) {
             // ReaderRootScreen puts its controls in a real `.toolbar`, so it needs an ancestor nav container to host
             // them. The bar's own background is hidden, so the outer NavigationStack adds no doubled chrome.
@@ -52,7 +53,7 @@ struct ReaderScene: View {
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
                     metadataReader: FixtureMetadataReader(),
-                    annotationStore: FixtureAnnotationStore(),
+                    annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
                 )

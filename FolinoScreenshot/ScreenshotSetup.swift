@@ -1,4 +1,6 @@
+import Domain
 import Foundation
+@testable import Reader
 import SheetMusicLayoutApple
 
 /// Shared, idempotent setup that every screenshot scene needs in order to render
@@ -16,7 +18,17 @@ enum ScreenshotSetup {
         // Suppress the Reader's first-run page-tap onboarding coachmarks so the
         // framed marketing shot shows a clean score.
         UserDefaults.standard.register(defaults: [
-            "readerPageTapHintDismissed": true,
+            ReaderGlobalSettingsKey.pageTapHintDismissed: true,
         ])
+
+        // Retire every rotating feature hint. `ReaderHintCoordinator` offers one per launch as soon as the chrome
+        // reports an anchor, so without this a bubble ("Swipe left to enlarge it") lands on top of the score — which
+        // it did, in the first capture run after the hints shipped. Driven off `allCases`, so a hint added later is
+        // suppressed without touching this file.
+        UserDefaults.standard.register(
+            defaults: Dictionary(
+                uniqueKeysWithValues: ReaderFeatureHint.allCases.map { (ReaderHintCoordinator.usedKey($0), true) },
+            ),
+        )
     }
 }
