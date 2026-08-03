@@ -64,7 +64,9 @@ struct VerticalZoomedSurface: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
-                selection: editingHost?.isEditing == true ? (editingHost?.selection ?? .none) : .none,
+                // `displaySelection`, not `selection`: the editor addresses the unfiltered score, this document is
+                // laid out from the staff-filtered one. See `ReaderEditingHost.displayItem(for:)`.
+                selection: editingHost?.isEditing == true ? (editingHost?.displaySelection ?? .none) : .none,
                 voiceColors: ReaderEditingPresentation.voiceColors,
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )

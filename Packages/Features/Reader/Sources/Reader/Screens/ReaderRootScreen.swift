@@ -217,8 +217,9 @@ public struct ReaderRootScreen: View {
         // screen's title ("ライブラリ", a playlist name) and spend leading width the score actions need.
         .toolbarRole(.editor)
         .navigationBarBackButtonHidden(hidesSystemBackButton)
-        // Capture mode strips the bar entirely; editing keeps it mounted but empty (see `readerToolbar`), so the
-        // score's top inset — and with it a paged score's page breaks — doesn't shift when an edit session starts.
+        // Capture mode strips the bar entirely; editing keeps it mounted and hands its contents over to the injected
+        // editing chrome (see `readerToolbar`), so the score's top inset — and with it a paged score's page breaks —
+        // doesn't shift when an edit session starts.
         .toolbarVisibility(isCaptureMode ? .hidden : .visible, for: .navigationBar)
         .floatingToolbarBackgroundCompat()
         .toolbar { readerToolbar }
@@ -266,6 +267,15 @@ public struct ReaderRootScreen: View {
             // the transport behaves exactly as it did.
             editingHost?.onSelectionMade = { [weak viewModel] in
                 viewModel?.playbackSession.hideDisplayedCursor()
+            }
+            // What the Editor addresses (the whole score, hidden staves included) and what the reader has hidden —
+            // together these let the host re-stamp IDs between source and rendered addressing. Providers rather than
+            // stored values so the host always sees the current visibility without the Reader having to push it.
+            editingHost?.sourceScoreProvider = { [weak viewModel, weak editingHost] in
+                editingHost?.editedScore ?? viewModel?.loadState.score
+            }
+            editingHost?.hiddenStavesProvider = { [weak viewModel] in
+                viewModel?.layoutModel.hiddenStaves ?? []
             }
             viewModel.playbackSession.startCursorProvider = { [weak editingHost] in
                 guard let host = editingHost, host.isEditing,
@@ -370,9 +380,9 @@ public struct ReaderRootScreen: View {
         }
     }
 
-    /// Whether an edit session is running. The toolbar empties out for the duration — its buttons (back / share /
-    /// annotate / inspectors) have no meaning over the editing surface, and the App-injected chrome takes over that
-    /// space instead.
+    /// Whether an edit session is running. The Reader yields the whole toolbar for the duration — its buttons (back /
+    /// share / annotate / inspectors) have no meaning over the editing surface — and the App-injected chrome fills
+    /// the same bar with the editing controls from its own `.toolbar` (see `EditorChromeView+Toolbar.swift`).
     private var isEditing: Bool {
         editingHost?.isEditing == true
     }
@@ -498,9 +508,10 @@ public struct ReaderRootScreen: View {
         return true
     }
 
-    /// The App-injected editing chrome (score-info bar, keyboard, 完了), shown only while `editingHost.isEditing` and
-    /// a builder was supplied. `nil` on either side leaves this an empty overlay — the default, so every existing
-    /// `ReaderRootScreen` call site (which passes neither) is unaffected.
+    /// The App-injected editing chrome (note pad, callout, and — via its own `.toolbar` — the navigation-bar controls
+    /// this screen vacates while editing), shown only while `editingHost.isEditing` and a builder was supplied. `nil`
+    /// on either side leaves this an empty overlay — the default, so every existing `ReaderRootScreen` call site
+    /// (which passes neither) is unaffected.
     @ViewBuilder
     private var editingChromeOverlay: some View {
         if let host = editingHost, host.isEditing, let editingChrome {
@@ -545,16 +556,29 @@ public struct ReaderRootScreen: View {
 
     /// The score being edited, or `nil` when not editing.
     ///
-    /// Raw apart from ONE display transform: clef overrides survive, because `applying(clefOverrides:)` only
-    /// REPLACES a staff's opening clef element (or sets `defaultClefType`) — it never inserts or removes elements, so
-    /// every index the editor holds still points at the same note. Dropping it made a staff the user had re-clefed
-    /// jump back to its authored clef the moment they started editing it. Transpose, hidden staves and
-    /// multi-measure-rest collapse stay off, since those DO renumber elements.
+    /// Two display transforms survive into an edit session:
+    ///
+    /// * **clef overrides**, because `applying(clefOverrides:)` only REPLACES a staff's opening clef element (or sets
+    ///   `defaultClefType`) — it never inserts or removes elements, so every index the editor holds still points at
+    ///   the same note. Dropping it made a staff the user had re-clefed jump back to its authored clef the moment
+    ///   they started editing it.
+    /// * **hidden staves**, because a staff the reader put away has no business coming back — the score visibly
+    ///   re-engraved (and, in page mode, re-paginated) on entering edit mode purely to show staves they had chosen
+    ///   not to see. This one DOES renumber `StaffAddress`, so it is confined to what is rendered: the Editor keeps
+    ///   working on the unfiltered score and `ReaderEditingHost` re-stamps every ID that crosses between the two.
+    ///
+    /// Applied in the same order as `ReaderViewModel.recomputeVisibleScore` — clef overrides are keyed by full-score
+    /// address, so they have to land before the filter renumbers anything.
+    ///
+    /// Transpose and multi-measure-rest collapse stay off: those renumber ELEMENTS within a staff, which no staff
+    /// remap can undo.
     ///
     /// Computed here rather than in `ScoreContentView` so it's rebuilt per edit, not per playback tick.
     private var editingScore: Score? {
         guard let host = editingHost, host.isEditing, let editScore = host.editedScore else { return nil }
-        return editScore.applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
+        return editScore
+            .applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
+            .filtered(hidingStaves: viewModel.layoutModel.hiddenStaves)
     }
 
     /// Which edit `editingScore` is — the containers' relayout key, read HERE so the two always travel together.

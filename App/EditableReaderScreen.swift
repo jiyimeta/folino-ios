@@ -104,6 +104,13 @@ struct EditableReaderScreen: View {
             guard let host else { return nil }
             return host.document
         }
+        // The document above is laid out from whatever the Reader is SHOWING, which drops the staves the reader has
+        // hidden and renumbers the rest; the view model edits (and saves) the score entire. The host owns that
+        // conversion because only the Reader knows the current visibility.
+        vm.displayToSourceItem = { [weak host] item in
+            guard let host else { return item }
+            return host.sourceItem(for: item)
+        }
         vm.onScoreChanged = { [weak host] score in
             guard let host else { return }
             host.editedScore = score

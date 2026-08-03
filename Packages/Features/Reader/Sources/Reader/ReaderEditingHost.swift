@@ -39,6 +39,87 @@ public final class ReaderEditingHost {
     /// The caret target (insertion indicator drawn by the Reader's editing overlay).
     public var caretItem: SheetMusicCore.ScoreItemID?
 
+    // MARK: - Hidden staves: source ↔ display addressing
+
+    /// The score the Editor addresses: every staff the file declares, hidden ones included. Wired by the Reader.
+    ///
+    /// Editing works in this "source" space so what gets written back to disk is the whole score. What is RENDERED,
+    /// though, is `filtered(hidingStaves:)` — a staff the reader has hidden stays hidden while they edit, exactly as
+    /// it was before they tapped 音符入力. That filter renumbers `StaffAddress`, so every ID crossing between the two
+    /// has to be re-stamped: taps come back in display addressing, and the selection / caret the Reader draws arrive
+    /// in source addressing. Only the staff part of an ID moves; measure / voice / element indices are untouched.
+    ///
+    /// The remap machinery is `swift-sheet-music`'s own (`filterStaffAddress` / `unfilterStaffAddress`) — the same
+    /// pair the playback cursor already rides through this exact mismatch.
+    var sourceScoreProvider: @MainActor () -> Score? = { nil }
+    /// Which staves the reader has hidden, read live from the Reader's layout settings.
+    var hiddenStavesProvider: @MainActor () -> Set<StaffAddress> = { [] }
+
+    /// Source (full-score) ID → the addressing of the rendered, staff-filtered document. `nil` when the item lives on
+    /// a staff that isn't currently shown — there is nothing on screen to draw it against.
+    func displayItem(for id: SheetMusicCore.ScoreItemID) -> SheetMusicCore.ScoreItemID? {
+        let hidden = hiddenStavesProvider()
+        guard !hidden.isEmpty else { return id }
+        guard let score = sourceScoreProvider(),
+              let staff = score.filterStaffAddress(id.staff, hidingStaves: hidden)
+        else { return nil }
+        return Self.restamping(id, onto: staff)
+    }
+
+    /// Display ID (resolved against the rendered document) → source addressing, which is what the Editor mutates and
+    /// saves. `nil` when the address can't be placed back in the full score.
+    ///
+    /// `public` because the App wires it into the Editor's hit-test path; its counterpart `displayItem(for:)` never
+    /// leaves the Reader.
+    public func sourceItem(for id: SheetMusicCore.ScoreItemID) -> SheetMusicCore.ScoreItemID? {
+        let hidden = hiddenStavesProvider()
+        guard !hidden.isEmpty else { return id }
+        guard let score = sourceScoreProvider(),
+              let staff = score.unfilterStaffAddress(id.staff, hidingStaves: hidden)
+        else { return nil }
+        return Self.restamping(id, onto: staff)
+    }
+
+    /// The selection in display addressing — what `ScoreView` and the caret overlay tint. A selection on a hidden
+    /// staff collapses to `.none` rather than tinting whatever staff happens to sit at that index now.
+    var displaySelection: ScoreSelection {
+        guard case let .single(item) = selection else { return selection }
+        guard let mapped = displayItem(for: item) else { return .none }
+        return .single(mapped)
+    }
+
+    /// The caret in display addressing. See `displaySelection`.
+    var displayCaretItem: SheetMusicCore.ScoreItemID? {
+        guard let caretItem else { return nil }
+        return displayItem(for: caretItem)
+    }
+
+    /// Rebuilds `id` on a different staff, leaving measure / voice / element indices alone. `.clef` passes through:
+    /// the editor has no clef-editing UI, so a clef ID never travels this path.
+    private static func restamping(
+        _ id: SheetMusicCore.ScoreItemID, onto staff: StaffAddress,
+    ) -> SheetMusicCore.ScoreItemID {
+        switch id {
+        case let .note(note):
+            .note(NoteID(
+                staff: staff, measureIndex: note.measureIndex, voiceIndex: note.voiceIndex,
+                elementIndex: note.elementIndex, noteIndexInChord: note.noteIndexInChord,
+            ))
+        case let .rest(rest):
+            .rest(RestID(
+                staff: staff, measureIndex: rest.measureIndex, voiceIndex: rest.voiceIndex,
+                elementIndex: rest.elementIndex,
+            ))
+        case let .tuplet(tuplet):
+            .tuplet(TupletID(
+                staff: staff, measureIndex: tuplet.measureIndex, voiceIndex: tuplet.voiceIndex,
+                startElementIndex: tuplet.startElementIndex,
+            ))
+        case .clef:
+            id
+        }
+    }
+
     /// Written by the Reader, read by the App/Editor:
     /// Latest LayoutDocument of the editing surface (published by the score container).
     public internal(set) var document: LayoutDocument?
@@ -95,9 +176,12 @@ public final class ReaderEditingHost {
 
     /// Records what a tap-to-seek landed on, so a later edit session can start there. `nearestCursor` always answers
     /// with an `.item`, but the `.beat` case exists (measure stepping, scrubbing) and names no element to select.
+    ///
+    /// The cursor is resolved against the rendered (staff-filtered) document, while the session it seeds runs in
+    /// source addressing — so it is re-stamped on the way in, the same conversion the transport does for the engine.
     func rememberTappedItem(_ cursor: ScoreCursor) {
         guard case let .item(id) = cursor else { return }
-        pendingSelection = id
+        pendingSelection = sourceItem(for: id)
     }
 }
 
