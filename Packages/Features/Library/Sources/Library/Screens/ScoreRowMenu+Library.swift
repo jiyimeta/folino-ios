@@ -24,6 +24,7 @@ func scoreRowMenu(
         onEditTags: onEditTags,
         onAddToPlaylist: onAddToPlaylist,
         onShare: { format in Task { await library.requestShare(item, format: format) } },
+        onOpenInVocalTuner: { Task { await library.requestVocalTunerHandoff(item) } },
         onRequestDelete: onRequestDelete,
     )
 }
