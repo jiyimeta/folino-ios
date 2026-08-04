@@ -1,31 +1,39 @@
-folino is a score viewer and player for performers.
-It is designed to make score reading, playback, and part practice quick and accessible on Android phones and tablets.
-Once you open a score, it stays easy to use offline, whether you are in rehearsal, on stage, or reviewing music on the go.
+folino is a score viewer and player that carries you from part practice and learning your notes through to rehearsal and performance — for choir, a cappella, and any ensemble that rehearses part by part.
+Import MuseScore .mscz, MusicXML, MIDI, or PDF, then solo your own part, mute the others, or turn one up. No more exporting a separate rehearsal track for every part.
+Add fingerings, breath marks, and anything else you notice directly onto the score you imported, and your marks stay with it.
+Once you open a score, it stays easy to use offline, whether you are in rehearsal, on stage, or learning your part on the go.
 
-[Supported Formats]
-Import MuseScore .mscz and .mscx files, MusicXML, and MIDI, then play them back while reading the score.
-
-[Readable by Design]
-Switch between vertical scrolling and page mode, then use zoom and cursor movement to quickly check the passage you need.
-Show or hide individual parts so you can focus on the staff you need, even on a smaller phone screen.
-
-[Practice Features]
-Adjust volume per part, mute or solo individual staves, and change instruments for each part so you can focus on the line you want to hear.
+[Part Practice]
+Adjust volume per part, mute or solo individual staves, and change instruments for each part so you can focus on the line you need to learn. Solo your own part first, then bring the others back in as you get comfortable.
 Use A-B repeat, a metronome, and tempo control to work through difficult phrases with repetition.
 Background playback is also supported, so you can keep listening while doing other things on your device.
-Picture in Picture keeps the score visible in a mini-player while another app is in use, so you can follow along without switching back.
+Picture-in-picture keeps the score visible in a mini-player while another app is in use, so you can follow along without switching back.
+
+[Write on the Score]
+Add fingerings, breath marks, and anything else you notice directly onto the score. Pen, eraser, width and color changes, and undo are all there, and you can write with a finger or a stylus.
+Your marks are saved with the score and are still there next time you open it. Change the scroll mode or the zoom and the music reflows — your marks follow it.
+
+[Supported Formats]
+Import MuseScore .mscz files, MusicXML, and MIDI, then play them back while reading the score.
+PDFs can be imported too. folino reads the PDF to play it back and follow along with a cursor. The result isn't always perfect — it works best with PDFs exported from MuseScore or folino.
+
+[Readable by Design]
+Switch between scroll modes, then use zoom and cursor movement to quickly check the passage you need.
+Show or hide individual parts so you can focus on your own staff — on a tablet, and on a smaller phone screen too.
 
 [Stay Organized]
 Use playlists and tags to organize your scores by ensemble, event, rehearsal set, or any other workflow that fits your music life.
 Group the pieces you need and open them quickly for rehearsal, performance, or review.
 
 [Key Features]
-- Score display: vertical scroll / page mode
-- Zoom and playback cursor movement
-- MIDI playback
-- Per-part volume, mute, and solo
+- Per-part volume, mute, and solo (part practice)
 - Per-part instrument selection
+- Show or hide individual parts
+- Handwritten annotation (pen, eraser)
 - A-B repeat
 - Metronome
 - Tempo control
-- Import .mscz, .mscx, MusicXML, and MIDI
+- Score display: vertical scroll / horizontal scroll / page mode
+- Zoom and playback cursor movement
+- MIDI playback
+- Import MuseScore files, MusicXML, MIDI, and PDF

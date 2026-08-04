@@ -1,1 +1,1 @@
-vocal,piano,guitar,bass,karaoke,a cappella,rehearsal,choir,concert,band,orchestra,finale,flat,pdf
+choir,cappella,part,practice,rehearsal,mscz,musescore,sheet,music,sing,annotate,transpose,midi,pdf

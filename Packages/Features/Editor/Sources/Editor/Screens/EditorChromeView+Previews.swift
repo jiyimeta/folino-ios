@@ -30,31 +30,37 @@ private func previewChromeScore() -> Score {
 
 private let previewStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
+/// The chrome's fixed controls are `ToolbarItem`s now, so a preview has to stand it inside a navigation container the
+/// way the Reader does — outside one, `.toolbar` has no bar to fill and the row simply doesn't render.
+@MainActor
+private func previewChromeHost(viewModel: EditorViewModel) -> some View {
+    NavigationStack {
+        EditorChromeView(
+            viewModel: viewModel,
+            bottomTransportClearance: 44,
+            onDone: {},
+        )
+        .background(Color.gray.opacity(0.15))
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 #Preview("chrome · compact / rest selected") {
     let restItem = SheetMusicCore.ScoreItemID.rest(
         RestID(staff: previewStaff, measureIndex: 0, voiceIndex: 0, elementIndex: 2),
     )
-    return EditorChromeView(
-        viewModel: previewChromeViewModel(select: restItem),
-        bottomTransportClearance: 44,
-        onDone: {},
-    )
-    .frame(width: 390, height: 844)
-    .environment(\.horizontalSizeClass, .compact)
-    .background(Color.gray.opacity(0.15))
+    return previewChromeHost(viewModel: previewChromeViewModel(select: restItem))
+        .frame(width: 390, height: 844)
+        .environment(\.horizontalSizeClass, .compact)
 }
 
 #Preview("chrome · regular / note selected") {
     let noteItem = SheetMusicCore.ScoreItemID.note(
         NoteID(staff: previewStaff, measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0),
     )
-    return EditorChromeView(
-        viewModel: previewChromeViewModel(select: noteItem),
-        bottomTransportClearance: 44,
-        onDone: {},
-    )
-    .frame(width: 1180, height: 820)
-    .environment(\.horizontalSizeClass, .regular)
-    .background(Color.gray.opacity(0.15))
+    return previewChromeHost(viewModel: previewChromeViewModel(select: noteItem))
+        .frame(width: 1180, height: 820)
+        .environment(\.horizontalSizeClass, .regular)
 }
 #endif

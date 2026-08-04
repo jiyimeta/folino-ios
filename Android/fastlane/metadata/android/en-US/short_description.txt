@@ -1,1 +1,1 @@
-Score viewer & player for performers — MIDI playback, A-B repeat, metronome.
+Part practice for choir, a cappella & more — solo a part, annotate the score.

@@ -51,7 +51,15 @@ extension EditorViewModel {
     ///    contains an item of the active voice, prefer the first such item (spec §5.5 — the picker targets a
     ///    voice).
     /// 3. No hit → `nil`.
+    /// 4. The hit is addressed against the RENDERED document, which may be a staff-filtered rendition of the score
+    ///    this view model edits — so the result is re-stamped into source addressing before it leaves
+    ///    (`displayToSourceItem`, identity when nothing is filtered).
     private func resolvedItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {
+        displayedItem(at: point).flatMap(displayToSourceItem)
+    }
+
+    /// The hit itself, still in the rendered document's addressing.
+    private func displayedItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {
         guard let document = documentProvider() else { return nil }
         let tester = ScoreHitTester(document: document)
         let slop = Self.slopRect(around: point)

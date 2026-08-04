@@ -145,6 +145,14 @@ public final class EditorViewModel {
     /// Wired by the App composition root.
     /// Returns the Reader's current LayoutDocument for hit-testing (Task 8).
     public var documentProvider: @MainActor () -> LayoutDocument? = { nil }
+    /// Re-addresses an item resolved against that document into the score's own addressing, or `nil` if it can't be
+    /// placed there.
+    ///
+    /// The two spaces can differ: the Reader may render a staff-filtered rendition of the score (the reader hid a
+    /// staff) while this view model edits — and saves — the score entire. Filtering renumbers `StaffAddress`, so a
+    /// hit test against the rendered document names a staff by its position on screen, not its position in the file.
+    /// The default is identity, which is exactly right when nothing is filtered; the App supplies the real mapping.
+    public var displayToSourceItem: @MainActor (SheetMusicCore.ScoreItemID) -> SheetMusicCore.ScoreItemID? = { $0 }
     /// Fired after every score mutation with the fresh score (App mirrors it into the Reader seam).
     public var onScoreChanged: @MainActor (Score) -> Void = { _ in }
     /// Fired whenever the selection or the caret changes (App mirrors both into the Reader seam: the first argument
