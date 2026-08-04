@@ -222,6 +222,27 @@ public struct ReaderRootScreen: View {
         // doesn't shift when an edit session starts.
         .toolbarVisibility(isCaptureMode ? .hidden : .visible, for: .navigationBar)
         .floatingToolbarBackgroundCompat()
+        // The Reader is a light-appearance screen whatever the system is set to, because its content is: the paper is
+        // `Color.white` (both the engraved score and a PDF's pages), and ink is resolved against a light trait before
+        // it is even stored (`InkStrokePencilKitBridge.rgba(from:)`). Everything floating over that paper has to match
+        // it, and following the system instead did not merely look dark — it came apart:
+        //
+        // * iOS 26 flips Liquid Glass by the luminance of what is BEHIND it, so in dark mode the navigation bar's
+        //   items rendered light over the white score and dark over the scroll background above page 1 — the same
+        //   button, two appearances, a scroll apart.
+        // * The pad and the transport draw their own `glassEffect`, which does not do that. So the top chrome went
+        //   light while the bottom chrome stayed dark, over one sheet of white paper.
+        // * Anything stated in absolute ink lost its meaning at the moment the glass under it flipped: the pad
+        //   toggle's active state is a dark disc, and over the dark scroll background there was nothing to see.
+        //
+        // Two modifiers rather than one `preferredColorScheme`, because that one is scoped to the window scene and
+        // takes the whole app with it — including the library, which then slid in white for the length of every pop.
+        // `hostingAppearance` is scoped to this screen's own view controller (and carries the status bar and the
+        // UIKit-hosted content with it); a navigation bar belongs to the enclosing navigation controller, one level
+        // ABOVE that, so it is pinned separately. Sheets presented from here are unaffected by either and come up in
+        // the system appearance on their own, which is what the inspectors want.
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .hostingAppearance(.light)
         .toolbar { readerToolbar }
         // Attached to the screen, not to the toolbar: a sheet anchored inside `ToolbarContent` would be torn down
         // whenever the toolbar's own content changes (a collapse threshold crossing, entering edit mode).

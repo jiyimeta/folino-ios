@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The chrome's fixed controls — voice, the pad toggle, undo / redo / 完了 — as navigation-bar items.
 ///
@@ -55,26 +56,30 @@ extension EditorChromeView {
     /// callout beside the note and nothing else. The pad is a big bite out of a phone screen to leave standing during
     /// the second, so it comes and goes; the callout stays either way.
     ///
-    /// Inverted rather than swapped, exactly like the Reader's annotation toggle: same glyph in both states, active =
-    /// white on a black disc. Two icons for one control reads as two different buttons. Black rather than the accent
-    /// tint, deliberately — this is a mode indicator, not a call to action, and the glyph carries the same ink weight
-    /// as the score it sits over. The glyph keeps a FIXED frame in both states so the disc can't change the item's
-    /// width — a toolbar item that grows when it is toggled on is what makes iOS 26 start folding the row into an
-    /// overflow menu of its own.
+    /// Inverted rather than swapped: same glyph in both states, active = the glyph knocked out of a filled disc. Two
+    /// icons for one control reads as two different buttons. Ink rather than the accent tint, deliberately — this is a
+    /// mode indicator, not a call to action, and the glyph carries the same weight as the score it sits over. The
+    /// glyph keeps a FIXED frame in both states so the disc can't change the item's width — a toolbar item that grows
+    /// when it is toggled on is what makes iOS 26 start folding the row into an overflow menu of its own.
+    ///
+    /// The two colours are the semantic pair (`.primary` on `.systemBackground`), not literal black on white. Today
+    /// the Reader pins itself to a light appearance so the pair always resolves to exactly that — but stating it as
+    /// ink-on-paper rather than as two fixed values is what keeps the disc from disappearing into the chrome if this
+    /// button is ever drawn against a dark bar, which is precisely how the fixed version failed.
     private var padToggleButton: some View {
         Button {
             withAnimation(.snappy(duration: 0.28)) { isPadVisible.toggle() }
         } label: {
             Image("custom.music.note.badge.plus", bundle: .module)
                 .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(isPadVisible ? Color.white : Color.primary)
+                .foregroundStyle(isPadVisible ? Color(uiColor: .systemBackground) : Color.primary)
                 // The badge hangs off the note's right, so the symbol's ink sits right of its own box's centre and the
                 // glyph looked shunted over inside the round button. Nudged back by a tenth of its size.
                 .offset(x: -1.5)
                 .frame(width: 30, height: 30)
                 .background {
                     if isPadVisible {
-                        Circle().fill(Color.black)
+                        Circle().fill(Color.primary)
                     }
                 }
         }
