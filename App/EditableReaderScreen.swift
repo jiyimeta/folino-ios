@@ -46,8 +46,8 @@ struct EditableReaderScreen: View {
                     editingHost.editingChromeTopInset = top
                     editingHost.editingChromeBottomInset = bottom
                 },
-                onNoteInputAnchorChange: { [editingHost] frame in
-                    editingHost.noteInputAnchorFrame = frame
+                onNoteInputBarOrderChange: { [editingHost] order in
+                    editingHost.noteInputBarLeadingOrder = order
                 },
             ))
         }

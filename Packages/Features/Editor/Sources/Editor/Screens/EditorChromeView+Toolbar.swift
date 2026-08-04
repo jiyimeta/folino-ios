@@ -87,10 +87,12 @@ extension EditorChromeView {
         .accessibilityLabel(Text(
             isPadVisible ? "editor.chrome.hidePad" : "editor.chrome.showPad", bundle: .module,
         ))
-        // Relayed to the Reader (via the App) so its note-input coach mark can point here. Global coordinates: the
-        // mark is drawn by a different view tree entirely, and the window is the only space the two share.
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { onNoteInputAnchorChange($0) }
-        .onDisappear { onNoteInputAnchorChange(nil) }
+        // Relayed to the Reader (via the App) so its note-input coach mark can point here. Its PLACE in this row, not
+        // a frame: a bar item cannot measure itself (it reports its own bounds centred on the origin), so the Reader
+        // matches the ordinal against the bar's rendered items. Second, because the voice picker leads — the fixed
+        // spacer between them is not an item.
+        .onAppear { onNoteInputBarOrderChange(1) }
+        .onDisappear { onNoteInputBarOrderChange(nil) }
     }
 
     /// The voice picker used to hide behind the callout's `⋯`; as its own item it stays reachable with nothing
