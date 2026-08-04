@@ -1,42 +1,46 @@
-folino is a score viewer and player for performers.
-It is designed to make score reading, playback, and part practice quick and accessible on iPhone and iPad.
-Once you open a score, it stays easy to use offline, whether you are in rehearsal, on stage, or reviewing music on the go.
+folino is a score viewer and player that carries you from part practice and learning your notes through to rehearsal and performance — for choir, a cappella, and any ensemble that rehearses part by part.
+Import MuseScore .mscz, MusicXML, MIDI, or PDF, then solo your own part, mute the others, or turn one up. No more exporting a separate rehearsal track for every part.
+Write dynamics and breath marks onto the score with Apple Pencil or your finger, and fix anything an import got wrong right where you are reading it.
+Once you open a score, it stays easy to use offline, whether you are in rehearsal, on stage, or learning your part on the go.
 
-[Supported Formats]
-Import MuseScore `.mscz` and `.mscx` files, MusicXML, and MIDI, then play them back while reading the score.
-PDF scores are read into real notation on import, so playback, transposition, part visibility, and note editing all work just like any other format. You can switch back to the original PDF at any time.
-
-[Readable by Design]
-Switch between vertical scrolling and page mode, then use zoom and cursor movement to quickly check the passage you need.
-Show or hide individual parts so you can focus on the staff you need, even on the smaller iPhone screen.
-
-[Annotation]
-Write directly on scores and PDFs with Apple Pencil or your finger. Keep fingerings, practice notes, and dynamics right on top of the music.
-
-[Editing]
-Enter and delete notes, change pitches, and write chords, ties, and tuplets. Fix what an import got wrong, or rewrite a passage for practice, right where you are reading it.
-
-[Practice Features]
-Adjust volume per part, mute or solo individual staves, and change instruments for each part so you can focus on the line you want to hear.
+[Part Practice]
+Adjust volume per part, mute or solo individual staves, and change instruments for each part so you can focus on the line you need to learn. Solo your own part first, then bring the others back in as you get comfortable.
 Use A-B repeat, a metronome, and tempo control to work through difficult phrases with repetition.
 Background playback is also supported, so you can keep listening while doing other things on your device.
 Picture in Picture keeps the score visible in a mini-player while another app is in use, so you can follow along without switching back.
+
+[Annotation]
+Write directly on scores and PDFs with Apple Pencil or your finger. Keep fingerings, practice notes, and dynamics right on top of the music.
+Your marks are saved with the score and are still there next time you open it. Change the zoom or the scroll mode and the music reflows — your marks follow it.
+
+[Editing]
+Enter and delete notes, change pitches, and write chords, ties, and tuplets. Fix what an import got wrong, or rewrite a passage for practice, right where you are reading it.
+Being able to correct a score, not just read it, is what sets folino apart from a playback-only viewer.
+
+[Supported Formats]
+Import MuseScore .mscz files, MusicXML, and MIDI, then play them back while reading the score.
+PDF scores are read into real notation on import as well, so playback, transposition, part visibility, and note editing all work just like any other format. You can also switch to the original PDF to view and play it.
+
+[Readable by Design]
+Switch between scroll modes, then use zoom and cursor movement to quickly check the passage you need.
+Show or hide individual parts so you can focus on your own staff — on iPad, and on the smaller iPhone screen too.
 
 [Stay Organized]
 Use playlists and tags to organize your scores by ensemble, event, rehearsal set, or any other workflow that fits your music life.
 Group the pieces you need and open them quickly for rehearsal, performance, or review.
 
 [Key Features]
-- Score display: vertical scroll / page mode
-- PDF import, read into real notation
+- Per-part volume, mute, and solo (part practice)
+- Per-part instrument selection
+- Show or hide individual parts
 - Handwriting with Apple Pencil or finger
 - Note editing (input, delete, pitch, chords, ties, tuplets)
 - Transposition
-- Zoom and playback cursor movement
-- MIDI playback
-- Per-part volume, mute, and solo
-- Per-part instrument selection
 - A-B repeat
 - Metronome
 - Tempo control
-- Import `.mscz`, `.mscx`, MusicXML, and MIDI
+- Score display: vertical scroll / horizontal scroll / page mode
+- Zoom and playback cursor movement
+- MIDI playback
+- PDF import, read into real notation
+- Import MuseScore files, MusicXML, and MIDI

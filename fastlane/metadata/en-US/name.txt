@@ -1,1 +1,1 @@
-folino - Score Viewer & Player
+folino - Score Editor & Player

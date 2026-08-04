@@ -1,1 +1,1 @@
-Score viewer & player for performers. PDFs become real notation — play, transpose, and edit them like .mscz, MusicXML, or MIDI. Annotate with Apple Pencil.
+For choir, a cappella and more. Import MuseScore files, MusicXML, MIDI or PDF, solo your own part, annotate and edit the notes — then play from your marked-up score.
