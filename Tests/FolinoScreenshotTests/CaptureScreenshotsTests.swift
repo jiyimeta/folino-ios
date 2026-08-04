@@ -24,6 +24,7 @@ final class CaptureScreenshotsTests: XCTestCase {
         let session = try ScreenshotCaptureSession(
             idiom: idiom,
             outputDirectory: Self.outputDirectory(),
+            deliverableSource: Self.deliverableSource(),
         )
 
         let scenes = ScreenshotScene.allCases.map { scene in
@@ -39,6 +40,25 @@ final class CaptureScreenshotsTests: XCTestCase {
         )
     }
 
+    /// Where the delivered pixels come from.
+    ///
+    /// `Scripts/capture-screenshots.sh` creates the broker directory for the length of a run and answers the markers
+    /// this session writes into it with `simctl io … screenshot` grabs — the simulator's composited framebuffer,
+    /// which is the only capture that carries real backdrop blur (the in-process rasterization draws the app's own
+    /// layer tree, so a glass surface comes out tinted but unblurred, with the content behind it sharp).
+    ///
+    /// Keyed off the directory existing rather than an environment variable, because `xcodebuild
+    /// test-without-building` gives no straightforward way to hand one to a hosted unit test — and because the
+    /// fallback is then the right one by construction: run this test from Xcode, with no script around it, and there
+    /// is no watcher to answer a marker, so it renders in-process instead of waiting for a frame that never comes.
+    private static func deliverableSource() -> ScreenshotDeliverableSource {
+        let broker = repositoryRoot()
+            .appendingPathComponent("fastlane/screenshots")
+            .appendingPathComponent(".broker")
+        guard FileManager.default.fileExists(atPath: broker.path) else { return .drawHierarchy }
+        return .hostCompositor(brokerDirectory: broker)
+    }
+
     // MARK: - Output
 
     /// Device tag in the filename. Kept from the old `.screenshots.yml` destination aliases so the delivered files
@@ -52,12 +72,17 @@ final class CaptureScreenshotsTests: XCTestCase {
     /// The simulator runs as the host user, so writing back into the checkout is allowed and keeps the pipeline to a
     /// single `xcodebuild test` — no result-bundle extraction, no `simctl get_app_container`.
     private static func outputDirectory() -> URL {
-        let repositoryRoot = URL(fileURLWithPath: #filePath)
+        repositoryRoot()
+            .appendingPathComponent("fastlane/screenshots")
+            .appendingPathComponent(AppStoreLocale.folder())
+    }
+
+    /// The checkout this test was compiled from — `#filePath` rather than anything runtime-derived, so it points at
+    /// the right worktree even when several are on disk.
+    private static func repositoryRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent() // Tests/FolinoScreenshotTests
             .deletingLastPathComponent() // Tests
             .deletingLastPathComponent() // repo root
-        return repositoryRoot
-            .appendingPathComponent("fastlane/screenshots")
-            .appendingPathComponent(AppStoreLocale.folder())
     }
 }
