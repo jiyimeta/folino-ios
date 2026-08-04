@@ -132,7 +132,7 @@ public struct ReaderRootScreen: View {
 
     /// Whether the seek card is showing right now. The user's `showSeekBar` preference is overridden to `false` while
     /// editing: the pad already owns most of the bottom of the screen, and the expanded card would push it up over
-    /// the music. Note this shrinks the bottom reserve (114 → 44) on entering edit mode, so a PAGE-mode score with
+    /// the music. Note this shrinks the bottom reserve (110 → 44) on entering edit mode, so a PAGE-mode score with
     /// the seek bar enabled re-paginates for the edit session — the trade the compact transport buys.
     private var showsSeekBarNow: Bool {
         showSeekBar && editingHost?.isEditing != true
@@ -509,7 +509,7 @@ public struct ReaderRootScreen: View {
     /// preference here would either do nothing visible or silently re-expand the card when editing ends.
     ///
     /// The write itself is DEFERRED until the transport's release animations are over. It flips
-    /// `bottomControlContentHeight` (114 ⇄ 44), and in page mode that re-paginates the score — synchronous work heavy
+    /// `bottomControlContentHeight` (110 ⇄ 44), and in page mode that re-paginates the score — synchronous work heavy
     /// enough to stall the very frames the settle spring and the card morph start on, which read as the control
     /// snagging at the moment the finger lifts. The transport holds the committed mode locally (`previewSeekBar`)
     /// until the preference catches up, so deferring changes nothing the user can see — the reflow just lands on a

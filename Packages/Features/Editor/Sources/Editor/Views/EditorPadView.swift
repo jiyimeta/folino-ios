@@ -5,7 +5,7 @@ import SwiftUI
 import UtilityUI
 
 /// Bottom editing pad, composed into the Reader seam above the bottom transport's reserved clearance
-/// (`ReaderTransportControl.expandedContentHeight`, 114 pt) so the two never overlap. Liquid Glass card, floating
+/// (`ReaderTransportControl.expandedContentHeight`, 110 pt) so the two never overlap. Liquid Glass card, floating
 /// over the score.
 ///
 /// iPhone (compact width), two 44 pt rows:
