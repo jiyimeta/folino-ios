@@ -129,6 +129,9 @@ private struct ReadyShell: View {
     @State private var columnVisibility: NavigationSplitViewVisibility
     @State private var navStateStore = NavigationStateStore()
     @State private var drainBannerMessage: String?
+    #if DEBUG
+    @State private var isDebugMenuPresented = false
+    #endif
 
     init(
         bootstrap: AppBootstrap,
@@ -213,9 +216,6 @@ private struct ReadyShell: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebar
                         .navigationSplitViewColumnWidth(min: 350, ideal: 420)
-                    #if DEBUG
-                        .debuggable()
-                    #endif
                 } detail: {
                     detail
                 }
@@ -235,13 +235,13 @@ private struct ReadyShell: View {
                         compactPath.append(PlaylistReaderRoute(scoreItem: item, playlistID: playlistID))
                     },
                     licenseContent: { LicenseListView() },
-                    leadingToolbarItem: { settingsButton },
+                    leadingToolbarItem: { leadingToolbarItems },
                 )
-                #if DEBUG
-                .debuggable()
-                #endif
             }
         }
+        #if DEBUG
+        .debugMenu(isPresented: $isDebugMenuPresented)
+        #endif
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(
                 provider: bootstrap.museScoreGeneralProvider,
@@ -489,8 +489,24 @@ private struct ReadyShell: View {
                 columnVisibility = .detailOnly
             },
             licenseContent: { LicenseListView() },
-            leadingToolbarItem: { settingsButton },
+            leadingToolbarItem: { leadingToolbarItems },
         )
+    }
+
+    /// The library's leading bar slot. Settings in every build; the debug entry point beside it in DEBUG ones.
+    ///
+    /// Both go through this seam rather than through a `.toolbar` of their own, because `LibraryRootScreen` owns the
+    /// `NavigationStack` they belong to — see `DebugMenuButton`.
+    @ViewBuilder
+    private var leadingToolbarItems: some View {
+        #if DEBUG
+        HStack(spacing: 8) {
+            settingsButton
+            DebugMenuButton(isPresented: $isDebugMenuPresented)
+        }
+        #else
+        settingsButton
+        #endif
     }
 
     private var settingsButton: some View {
