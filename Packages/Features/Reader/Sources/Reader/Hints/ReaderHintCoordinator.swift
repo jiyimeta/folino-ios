@@ -33,6 +33,8 @@ final class ReaderHintCoordinator {
     @ObservationIgnored private var didOfferNotePadHintThisLaunch = false
     /// Pending "the transport just went compact" offer (see `scheduleTransportExpandHint`).
     @ObservationIgnored private var transportExpandOfferTask: Task<Void, Never>?
+    /// Pending re-measure of the navigation bar (see `scheduleBarRefresh`).
+    @ObservationIgnored private var barRefreshTask: Task<Void, Never>?
     /// Mirrored from the editing seam. Edit mode forces the transport compact and declines mode swipes, so the
     /// expand hint has to stay away for the duration — it would be teaching a gesture that currently does nothing.
     @ObservationIgnored private var isEditing = false
@@ -69,6 +71,86 @@ final class ReaderHintCoordinator {
         // The compact transport appearing IS the trigger for its own hint — on opening a Reader that is already
         // compact, and on the swipe (or bubble tap) that just shrank it.
         if isFirstReport, target == .transportCompact { scheduleTransportExpandHint() }
+    }
+
+    // MARK: - Bar-hosted controls
+
+    /// The bar-hosted controls currently on screen. They report their PRESENCE rather than their position, because a
+    /// navigation-bar item cannot measure itself (see `ReaderBarItemLocator`); the position comes from matching this
+    /// set against the bar's measured items.
+    private var barTargets: [ReaderHintTarget: ReaderBarSlot] = [:]
+    /// The Reader's own area in the window, which is how the right bar gets picked on iPad. Reported by the hint
+    /// overlay, which is the one part of this feature that lives in the Reader's own view tree.
+    private var readerRegion: CGRect = .zero
+
+    /// `slot: nil` withdraws the control — it has left the bar, so its hint goes with it.
+    func registerBarTarget(_ target: ReaderHintTarget, slot: ReaderBarSlot?) {
+        guard barTargets[target] != slot else { return }
+        barTargets[target] = slot
+        if slot == nil { clearAnchor(for: target) }
+        scheduleBarRefresh()
+    }
+
+    func setReaderRegion(_ region: CGRect) {
+        guard readerRegion != region else { return }
+        readerRegion = region
+        scheduleBarRefresh()
+    }
+
+    /// Matches the bar's measured items to the registered controls by counting in from each end.
+    ///
+    /// A control whose ordinal is past the end of what was measured — or one that would have to be the same item as a
+    /// control counted in from the other end — is left WITHOUT an anchor, which drops its hint entirely. Refusing to
+    /// answer is the right failure here: a caret pointing at the wrong button is worse than no bubble at all.
+    func refreshBarAnchors() {
+        guard !barTargets.isEmpty else { return }
+        guard let measured = ReaderBarItemLocator.itemFrames(servingRegionInWindow: readerRegion) else {
+            for target in barTargets.keys {
+                clearAnchor(for: target)
+            }
+            return
+        }
+
+        // Each end is walked outward-in from its own edge, nearest item first.
+        let leading = barTargets.compactMap { target, slot -> (ReaderHintTarget, Int)? in
+            if case let .leading(order) = slot { (target, order) } else { nil }
+        }.sorted { $0.1 < $1.1 }
+        let trailing = barTargets.compactMap { target, slot -> (ReaderHintTarget, Int)? in
+            if case let .trailing(order) = slot { (target, order) } else { nil }
+        }.sorted { $0.1 > $1.1 }
+
+        let items = measured.items
+        for (offset, entry) in leading.enumerated() {
+            assign(items, index: offset, reservedFromOtherEnd: trailing.count, to: entry.0)
+        }
+        for (offset, entry) in trailing.enumerated() {
+            assign(items, index: items.count - 1 - offset, reservedFromOtherEnd: leading.count, to: entry.0)
+        }
+    }
+
+    private func assign(_ items: [CGRect], index: Int, reservedFromOtherEnd: Int, to target: ReaderHintTarget) {
+        guard items.indices.contains(index), items.count > reservedFromOtherEnd else {
+            clearAnchor(for: target)
+            return
+        }
+        setAnchor(items[index], for: target)
+    }
+
+    /// Re-measures shortly after being asked, and again a few times after that.
+    ///
+    /// The cue to refresh is always something SwiftUI did — an item appearing, the Reader resizing — and the bar lays
+    /// itself out after that, sometimes over several frames while a glass platter settles or a push transition runs.
+    /// Rather than guess one delay, this samples a handful; the anchors are change-guarded, so a sample that finds
+    /// nothing new costs nothing.
+    private func scheduleBarRefresh() {
+        barRefreshTask?.cancel()
+        barRefreshTask = Task { [weak self] in
+            for delay in [0, 120, 320, 700, 1400] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard !Task.isCancelled, let self else { return }
+                refreshBarAnchors()
+            }
+        }
     }
 
     /// Forgets a control that has left the screen, and takes any hint pointing at it down with it — a bubble whose
@@ -111,7 +193,7 @@ final class ReaderHintCoordinator {
     /// inspectors) simply has no anchor for it. A hint whose control is missing is skipped WITHOUT advancing the
     /// cursor past it, so it comes up again in a Reader that does show it.
     func offerRotationHint() {
-        guard !didOfferRotationHintThisLaunch, presentedHint == nil else { return }
+        guard ignoresPerLaunchBudget || !didOfferRotationHintThisLaunch, presentedHint == nil else { return }
         guard let hint = Self.selectHint(
             order: ReaderFeatureHint.rotationOrder,
             cursor: cursor,
@@ -149,7 +231,7 @@ final class ReaderHintCoordinator {
     /// affordance that is useless until explained, and the user has just walked into it), but still at most once per
     /// launch and never once the pad has been used.
     func offerNotePadHint() {
-        guard !didOfferNotePadHintThisLaunch, !hasUsed(.notePad) else { return }
+        guard ignoresPerLaunchBudget || !didOfferNotePadHintThisLaunch, !hasUsed(.notePad) else { return }
         guard anchors[ReaderFeatureHint.notePad.target] != nil else { return }
         didOfferNotePadHintThisLaunch = true
         present(.notePad)
@@ -204,6 +286,20 @@ final class ReaderHintCoordinator {
         set { defaults.set(newValue, forKey: Keys.cursor) }
     }
 
+    // MARK: - QA
+
+    /// Stops enforcing the one-hint-per-launch budgets, so EVERY Reader opened offers the next hint in the rotation.
+    ///
+    /// Checking a coach mark's placement otherwise costs a relaunch per hint: the rotation spends its single offer on
+    /// whichever hint the cursor lands on, and the reset that re-arms it also rewinds the cursor to the transport —
+    /// which is why "reset, then look at the toolbar hints" shows the transport one and nothing else. Persisted, so it
+    /// survives the relaunch that installing a new build forces. Driven from the app's DEBUG menu; nothing in a
+    /// shipping build can turn it on.
+    var ignoresPerLaunchBudget: Bool {
+        get { defaults.bool(forKey: Keys.ignoresPerLaunchBudget) }
+        set { defaults.set(newValue, forKey: Keys.ignoresPerLaunchBudget) }
+    }
+
     private func advanceCursor(past hint: ReaderFeatureHint) {
         guard let index = ReaderFeatureHint.rotationOrder.firstIndex(of: hint) else { return }
         cursor = (index + 1) % ReaderFeatureHint.rotationOrder.count
@@ -217,5 +313,26 @@ final class ReaderHintCoordinator {
 
     private enum Keys {
         static let cursor = "readerHint.cursor"
+        static let ignoresPerLaunchBudget = "readerHint.debug.ignoresPerLaunchBudget"
+    }
+}
+
+/// The one thing outside this feature is allowed to do to the coach marks: start them over. Kept as a two-line facade
+/// so the coordinator itself — which the Reader's own views drive through `ReaderHintCoordinator.shared` — stays
+/// internal rather than becoming public API for the sake of one QA button.
+public enum ReaderHints {
+    /// Forgets every "already used" flag and the rotation cursor, and re-arms this launch's budget, so the next Reader
+    /// opened offers a hint again. Wired to the app's DEBUG menu.
+    @MainActor
+    public static func resetAll() {
+        ReaderHintCoordinator.shared.reset()
+    }
+
+    /// See `ReaderHintCoordinator.ignoresPerLaunchBudget` — with this on, every Reader opened offers the next hint,
+    /// which is what makes checking each one's placement a matter of going back and in again rather than relaunching.
+    @MainActor
+    public static var ignoresPerLaunchBudget: Bool {
+        get { ReaderHintCoordinator.shared.ignoresPerLaunchBudget }
+        set { ReaderHintCoordinator.shared.ignoresPerLaunchBudget = newValue }
     }
 }
