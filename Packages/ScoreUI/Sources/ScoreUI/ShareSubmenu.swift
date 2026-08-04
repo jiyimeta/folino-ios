@@ -67,7 +67,8 @@ public struct ShareFormatMenuItems: View {
 
 /// A labeled "Share" row that opens a nested submenu of formats — for use inside a larger context/ellipsis menu (e.g.
 /// Library's score-row menu). Wraps `ShareFormatMenuItems`. A standalone share button should use `ShareFormatMenuItems`
-/// as its `Menu` content directly so the first tap expands the formats.
+/// as its `Menu` content directly so the first tap expands the formats. `companionAction` is passed straight through:
+/// when non-nil, a row for it renders above the formats, separated by a `Divider()`.
 @MainActor
 public struct ShareSubmenu: View {
     let loadFormats: @Sendable () async -> [ScoreShareFormatOption]

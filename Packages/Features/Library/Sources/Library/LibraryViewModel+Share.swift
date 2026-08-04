@@ -25,28 +25,29 @@ extension LibraryViewModel {
     /// because VocalTuner can be installed or removed while folino sits in the background.
     ///
     /// `.needsShareFallback` is not an error path: the file is already prepared, so the ordinary share sheet still
-    /// gets the score across, and it is the state every VocalTuner build predating the receiver reports.
+    /// gets the score across. It covers a VocalTuner that predates the receiver, a staging failure, and a deep link
+    /// the system refused to open.
     func requestVocalTunerHandoff(_ item: ScoreItem, source: AnalyticsSource = .scoreRowMenu) async {
         guard vocalTunerHandoff.availability != .notInstalled else {
             vocalTunerHandoff.presentAppStore()
-            analytics.log(.companionHandoff(target: "vocaltuner", outcome: .appStore, source: source))
+            analytics.log(.companionHandoff(target: .vocalTuner, outcome: .appStore, source: source))
             return
         }
         isPreparingShare = true
         defer { isPreparingShare = false }
         do {
             let url = try await shareService.prepareShare(item: item, format: .museScoreV4)
-            let result = vocalTunerHandoff.openScore(fileURL: url, displayName: item.title)
+            let result = await vocalTunerHandoff.openScore(fileURL: url, displayName: item.title)
             switch result {
             case .openedViaDeepLink:
-                analytics.log(.companionHandoff(target: "vocaltuner", outcome: .deepLink, source: source))
+                analytics.log(.companionHandoff(target: .vocalTuner, outcome: .deepLink, source: source))
             case .needsShareFallback:
                 shareTarget = ScoreShareTarget(urls: [url])
-                analytics.log(.companionHandoff(target: "vocaltuner", outcome: .shareFallback, source: source))
+                analytics.log(.companionHandoff(target: .vocalTuner, outcome: .shareFallback, source: source))
             }
         } catch {
             currentError = error
-            analytics.log(.companionHandoff(target: "vocaltuner", outcome: .failed, source: source))
+            analytics.log(.companionHandoff(target: .vocalTuner, outcome: .failed, source: source))
         }
     }
 

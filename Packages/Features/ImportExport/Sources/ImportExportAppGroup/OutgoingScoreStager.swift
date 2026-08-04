@@ -13,7 +13,12 @@ public struct OutgoingScoreStager: Sendable {
     ///     VocalTuner applies in the other direction — and given `fileURL`'s extension. VocalTuner addresses the
     ///     staged bytes by `originalName`, so the on-disk basename and `originalName` must stay identical.
     ///   - format: advisory `ScoreFormat`-style hint. The receiver re-derives the real format from the extension.
-    ///   - token: opaque, URL-safe. The receiver validates it before using it as a path component.
+    ///   - token: opaque, URL-safe. Validated here before it becomes a path component, mirroring what the receiving
+    ///     side does with an inbound token: everything below starts with a recursive delete at
+    ///     `IncomingScoresVT/<token>`, and a traversal value like `"../.."` would aim that delete at the shared
+    ///     container root.
+    /// - Throws: `CocoaError(.fileWriteInvalidFileName)` for a token that is not a safe path component — thrown
+    ///   before any filesystem work happens; every other error comes from `FileManager`.
     @discardableResult
     public func stage(
         fileURL: URL,
@@ -24,6 +29,9 @@ public struct OutgoingScoreStager: Sendable {
         now: Date,
         fileManager: FileManager = .default,
     ) throws -> IncomingScoreIntent {
+        guard SharedScorePaths.isValidToken(token) else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
         let root = SharedScorePaths.vocalTunerTokenURL(token: token, in: container)
         let filesDir = SharedScorePaths.vocalTunerTokenFilesURL(token: token, in: container)
         // Clear the whole token directory first: a retried hand-off on the same token must not leave the previous
@@ -31,6 +39,8 @@ public struct OutgoingScoreStager: Sendable {
         try? fileManager.removeItem(at: root)
         try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true)
 
+        // Load-bearing: `ScoreExportNaming.sanitize` maps `/` and `\` to `_`, which is the only thing keeping an
+        // arbitrary score title from escaping `files/` as a path component. The stager does not own that sanitizer.
         let stem = ScoreExportNaming.sanitize(title: displayName)
         let ext = fileURL.pathExtension
         let originalName = ext.isEmpty ? stem : "\(stem).\(ext)"

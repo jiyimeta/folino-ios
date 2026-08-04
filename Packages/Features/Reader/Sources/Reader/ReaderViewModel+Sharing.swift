@@ -31,24 +31,24 @@ extension ReaderViewModel {
     func requestVocalTunerHandoff() async {
         guard vocalTunerHandoff.availability != .notInstalled else {
             vocalTunerHandoff.presentAppStore()
-            analytics.log(.companionHandoff(target: "vocaltuner", outcome: .appStore, source: .readerOverlay))
+            analytics.log(.companionHandoff(target: .vocalTuner, outcome: .appStore, source: .readerOverlay))
             return
         }
         isPreparingShare = true
         defer { isPreparingShare = false }
         do {
             let url = try await shareService.prepareShare(item: scoreItem, format: .museScoreV4)
-            switch vocalTunerHandoff.openScore(fileURL: url, displayName: scoreItem.title) {
+            switch await vocalTunerHandoff.openScore(fileURL: url, displayName: scoreItem.title) {
             case .openedViaDeepLink:
-                analytics.log(.companionHandoff(target: "vocaltuner", outcome: .deepLink, source: .readerOverlay))
+                analytics.log(.companionHandoff(target: .vocalTuner, outcome: .deepLink, source: .readerOverlay))
             case .needsShareFallback:
                 shareTarget = ScoreShareTarget(urls: [url])
                 analytics.log(
-                    .companionHandoff(target: "vocaltuner", outcome: .shareFallback, source: .readerOverlay),
+                    .companionHandoff(target: .vocalTuner, outcome: .shareFallback, source: .readerOverlay),
                 )
             }
         } catch {
-            analytics.log(.companionHandoff(target: "vocaltuner", outcome: .failed, source: .readerOverlay))
+            analytics.log(.companionHandoff(target: .vocalTuner, outcome: .failed, source: .readerOverlay))
         }
     }
 }

@@ -137,7 +137,7 @@ struct AnalyticsEventFactoryTests {
 
     @Test func `companion handoff event carries target outcome and source`() {
         let event = AnalyticsEvent.companionHandoff(
-            target: "vocaltuner", outcome: .deepLink, source: .scoreRowMenu,
+            target: .vocalTuner, outcome: .deepLink, source: .scoreRowMenu,
         )
         #expect(event.name == "companion_handoff")
         #expect(event.parameters["target"] == .string("vocaltuner"))
@@ -150,5 +150,9 @@ struct AnalyticsEventFactoryTests {
         #expect(CompanionHandoffOutcome.shareFallback.rawValue == "share_fallback")
         #expect(CompanionHandoffOutcome.appStore.rawValue == "app_store")
         #expect(CompanionHandoffOutcome.failed.rawValue == "failed")
+    }
+
+    @Test func `companion target raw value is the wire name`() {
+        #expect(CompanionTarget.vocalTuner.rawValue == "vocaltuner")
     }
 }

@@ -20,9 +20,9 @@ public struct VocalTunerCapabilities: Codable, Sendable, Equatable {
 public enum VocalTunerAvailability: Equatable, Sendable {
     /// VocalTuner is not on the device. The share-menu row leads to its App Store page instead.
     case notInstalled
-    /// Installed, but predating the `open-score` receiver (no stamp, or an older `protocolVersion`). Every
-    /// VocalTuner build shipped before this feature is in this state, which is why the share-sheet fallback is not
-    /// an edge case.
+    /// Installed, but not advertising the hand-off protocol: no `vocaltuner/capabilities.json` stamp, or a stamp
+    /// whose `protocolVersion` is below `requiredProtocolVersion`. This is why the share-sheet fallback is a normal
+    /// path rather than an edge case.
     case installedLegacy
     /// Installed and speaking the hand-off protocol — the one-tap path.
     case installedHandoffCapable
@@ -62,7 +62,11 @@ public protocol VocalTunerHandoff: Sendable {
 
     /// Stage `fileURL` into the shared container and open `vocaltuner://open-score`. `displayName` is the score's
     /// user-facing title, used to name the staged copy.
-    func openScore(fileURL: URL, displayName: String) -> VocalTunerHandoffResult
+    ///
+    /// `async` because the system's answer to "did the URL actually open?" only arrives after the fact: VocalTuner
+    /// can be removed between the availability check and the tap, so `.openedViaDeepLink` must mean the open
+    /// succeeded, not that it was requested. Anything else is `.needsShareFallback`.
+    func openScore(fileURL: URL, displayName: String) async -> VocalTunerHandoffResult
 
     /// Present VocalTuner's App Store page in-app.
     func presentAppStore()
@@ -80,6 +84,8 @@ public struct NoopVocalTunerHandoff: VocalTunerHandoff {
         .notInstalled
     }
 
+    /// Witnesses the protocol's `async` requirement synchronously — there is nothing to await when the answer is a
+    /// constant.
     public func openScore(fileURL _: URL, displayName _: String) -> VocalTunerHandoffResult {
         .needsShareFallback
     }

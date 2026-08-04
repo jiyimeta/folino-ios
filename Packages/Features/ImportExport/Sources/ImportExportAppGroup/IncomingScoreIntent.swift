@@ -54,8 +54,9 @@ public struct IncomingScoreIntent: Codable, Sendable, Equatable {
         return decoder
     }
 
-    /// Encoder matching the contract. folino never stages a hand-off itself; this exists so tests can round-trip
-    /// against the exact bytes the sibling produces.
+    /// Encoder matching the contract — the inverse of `decoder()`, so `createdAt` is written as the ISO-8601 string
+    /// a sibling expects rather than a bare number. Used by `OutgoingScoreStager` when folino stages a hand-off, and
+    /// by tests round-tripping against the exact bytes the sibling produces.
     public static func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

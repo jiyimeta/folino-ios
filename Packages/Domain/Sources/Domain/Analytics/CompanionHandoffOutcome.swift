@@ -6,3 +6,9 @@ public enum CompanionHandoffOutcome: String, Sendable {
     case appStore = "app_store"
     case failed
 }
+
+/// Which companion app a hand-off was aimed at. A typed case rather than a bare string at each call site: the raw
+/// value is the analytics dimension the whole feature is read by, and a typo would silently mis-bucket one outcome.
+public enum CompanionTarget: String, Sendable {
+    case vocalTuner = "vocaltuner"
+}

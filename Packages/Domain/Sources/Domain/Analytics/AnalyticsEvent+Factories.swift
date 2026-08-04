@@ -170,15 +170,15 @@ extension AnalyticsEvent {
         ])
     }
 
-    /// Logged once the hand-off resolves, not on tap — matching how `share` is instrumented. `target` is the
-    /// companion app's short name so a future second companion needs no new event.
+    /// Logged once the hand-off resolves, not on tap — matching how `share` is instrumented. `target` carries the
+    /// companion app's short name so a future second companion needs no new event, only a new `CompanionTarget` case.
     public static func companionHandoff(
-        target: String,
+        target: CompanionTarget,
         outcome: CompanionHandoffOutcome,
         source: AnalyticsSource,
     ) -> AnalyticsEvent {
         AnalyticsEvent(name: "companion_handoff", parameters: [
-            "target": .string(target), "outcome": .string(outcome.rawValue),
+            "target": .string(target.rawValue), "outcome": .string(outcome.rawValue),
             "source": .string(source.rawValue),
         ])
     }

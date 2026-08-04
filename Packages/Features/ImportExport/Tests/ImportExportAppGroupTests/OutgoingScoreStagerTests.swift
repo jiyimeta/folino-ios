@@ -115,6 +115,28 @@ struct OutgoingScoreStagerTests {
         #expect(FileManager.default.fileExists(atPath: inbound.path) == false)
     }
 
+    @Test func `rejects a traversal token without touching the container`() throws {
+        let container = try Self.makeContainer()
+        let source = try Self.makeSourceFile(named: "Air.mscz")
+        // Something the container must survive: staging clears its token directory recursively, so a token that
+        // escapes `IncomingScoresVT/` would aim that delete at the shared container root.
+        let sibling = container.appending(path: "folino", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: sibling, withIntermediateDirectories: true)
+
+        // Specifically the validation error, not just "something threw": a `FileManager` failure would also throw
+        // here, and it would not prove the guard ran before any filesystem work.
+        #expect(throws: CocoaError(.fileWriteInvalidFileName)) {
+            try OutgoingScoreStager().stage(
+                fileURL: source, displayName: "Air", format: "musescore",
+                token: "../..", into: container, now: Self.now,
+            )
+        }
+
+        #expect(FileManager.default.fileExists(atPath: sibling.path))
+        let entries = try FileManager.default.contentsOfDirectory(atPath: container.path)
+        #expect(entries == ["folino"])
+    }
+
     @Test func `capability reader returns nil when no stamp exists`() throws {
         let container = try Self.makeContainer()
         #expect(VocalTunerCapabilityReader(sharedContainer: container).read() == nil)
