@@ -141,8 +141,10 @@ final class ReaderViewModel {
     // would not.
     @ObservationIgnored let repository: any ScoreLibraryRepository
     @ObservationIgnored let gateway: any ScoreFileGateway
-    // Internal so the share methods in `ReaderViewModel+Sharing.swift` can reach it.
+    /// Internal so the share methods in `ReaderViewModel+Sharing.swift` can reach it.
     @ObservationIgnored let shareService: any ScoreShareService
+    // Internal so `requestVocalTunerHandoff` in `ReaderViewModel+Sharing.swift` can reach it.
+    @ObservationIgnored let vocalTunerHandoff: any VocalTunerHandoff
     @ObservationIgnored let metadataReader: any ScoreMetadataReading
     /// The shared annotation save policy (debounce + empty→delete + assembly), reused by iOS and Android.
     @ObservationIgnored let annotationCoordinator: AnnotationSaveCoordinator
@@ -181,6 +183,7 @@ final class ReaderViewModel {
         repository: any ScoreLibraryRepository,
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService = NoopScoreShareService(),
+        vocalTunerHandoff: any VocalTunerHandoff = NoopVocalTunerHandoff(),
         metadataReader: any ScoreMetadataReading = NoopScoreMetadataReading(),
         annotationCoordinator: AnnotationSaveCoordinator = AnnotationSaveCoordinator(store: NoopAnnotationBlobStore()),
         scoresDirectory: URL,
@@ -198,6 +201,7 @@ final class ReaderViewModel {
         self.repository = repository
         self.gateway = gateway
         self.shareService = shareService
+        self.vocalTunerHandoff = vocalTunerHandoff
         self.metadataReader = metadataReader
         self.annotationCoordinator = annotationCoordinator
         self.pdfPlaybackParser = pdfPlaybackParser

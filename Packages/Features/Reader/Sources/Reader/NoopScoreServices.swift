@@ -1,6 +1,9 @@
 import Domain
 import Foundation
 
+// The companion hand-off's no-op default (`NoopVocalTunerHandoff`) lives in Domain, not here — both Library and
+// Reader want the same default, so it is defined once and re-exported as `public` from `Domain`.
+
 /// Inert default for `ReaderViewModel.shareService` so previews and tests that don't exercise sharing need no extra
 /// argument. Production always injects the real `LiveScoreShareService` from the App composition root.
 struct NoopScoreShareService: ScoreShareService {

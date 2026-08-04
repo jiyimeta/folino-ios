@@ -107,6 +107,9 @@ struct ReaderToolbar: ToolbarContent {
                         onShare: { format in
                             Task { await viewModel.requestShare(format: format) }
                         },
+                        companionAction: {
+                            Task { await viewModel.requestVocalTunerHandoff() }
+                        },
                     )
                     if collapse >= .noteEditing, let onStartEditing {
                         Divider()
@@ -134,6 +137,9 @@ struct ReaderToolbar: ToolbarContent {
                         loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
                         onShare: { format in
                             Task { await viewModel.requestShare(format: format) }
+                        },
+                        companionAction: {
+                            Task { await viewModel.requestVocalTunerHandoff() }
                         },
                     )
                 } label: {
