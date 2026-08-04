@@ -281,6 +281,7 @@ public struct ReaderRootScreen: View {
             // Initial sync: the engine starts up unaware of persisted state, so seed it from the @AppStorage value at
             // view start.
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
+            startScreenshotEditingIfRequested()
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake }
         .onAppear { viewModel.analytics.logScreen(.reader) }
@@ -526,6 +527,24 @@ public struct ReaderRootScreen: View {
             host.isEditing = true
             host.onBeginEditing(score)
         }
+    }
+
+    /// Screenshot-only: enter edit mode on a freshly loaded score with a note already picked, so the marketing shot
+    /// shows the editing surface populated rather than an empty pad. Seeds `pendingSelection` first — that is the same
+    /// channel a tap-to-seek uses to carry a target into the session, so the selection arrives through the normal
+    /// path instead of a second one built for the camera. See `ReaderScreenshotEditing`.
+    ///
+    /// The note has to be one the score shows WITHOUT scrolling: a score opens at bar 1 and nothing here can scroll
+    /// it. (Parking the transport's cursor on the note doesn't — the surfaces only follow the cursor while it is
+    /// running.) So the scene picks a measure inside the opening screenful; a later one leaves the callout clamped at
+    /// the bottom edge, pointing at a note that isn't on screen.
+    private func startScreenshotEditingIfRequested() {
+        guard let measureIndex = ReaderScreenshotEditing.requestedMeasure,
+              case let .loaded(score) = viewModel.loadState,
+              let host = editingHost
+        else { return }
+        host.pendingSelection = ReaderScreenshotEditing.firstSoundingNote(inMeasure: measureIndex, of: score)
+        startEditing()
     }
 
     /// Exit edit mode: let the App flush any final edit, adopt the edited score back into the Reader (reloading the
