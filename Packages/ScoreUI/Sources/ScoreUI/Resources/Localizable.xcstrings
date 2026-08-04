@@ -693,6 +693,40 @@
         }
       }
     },
+    "scoreUI.share.vocalTuner.action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check pitch in VocalTuner"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VocalTunerで音程確認"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VocalTuner에서 음정 확인"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 VocalTuner 中检查音准"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 VocalTuner 中檢查音準"
+          }
+        }
+      }
+    },
     "scoreUI.source.unknown" : {
       "localizations" : {
         "en" : {
