@@ -41,13 +41,13 @@ struct ReaderTransportControl: View {
     /// bottom padding, so it hugs the top of the bottom safe area. Used by `ReaderRootScreen` to inset the horizontal /
     /// page viewport so the score never renders under it.
     static let collapsedContentHeight = TransportCardMetrics.collapsedHeight
-    /// Height the expanded card's content reserves above the bottom safe area — top 6 + rehearsal-mark bar (32, with an
-    /// -8 overlap onto the seek bar) + seek ~28 + time/title row (~17, pulled up -6) + transport row 44 ≈ 114. Reserved
+    /// Height the expanded card's content reserves above the bottom safe area — top 6 + rehearsal-mark bar (28, with an
+    /// -8 overlap onto the seek bar) + seek ~28 + time/title row (~17, pulled up -6) + transport row 44 ≈ 110. Reserved
     /// unconditionally (even for scores without rehearsal marks, which omit the mark bar) so the inset stays constant.
     /// The glass background additionally bleeds down into the safe area (stopping `cardMargin` from the physical edge),
     /// but that region sits below the safe area where the score never renders, so the inset only needs the content
     /// height. The A/B pill that floats above the card is intentionally excluded — it overlays the score bottom-right.
-    static let expandedContentHeight: CGFloat = 114
+    static let expandedContentHeight: CGFloat = 110
 
     private var loadedScore: Score? {
         if case let .loaded(score) = viewModel.loadState { return score }

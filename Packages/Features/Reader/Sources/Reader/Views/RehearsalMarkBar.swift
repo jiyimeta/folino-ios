@@ -17,7 +17,9 @@ struct RehearsalMarkBar: View {
     let currentFraction: Double
     let onSeek: (ScoreCursor) -> Void
 
-    static let height: CGFloat = 32
+    /// Tracks the bubble's own height (10pt label + its vertical padding + the tail), so the bar takes no more room
+    /// than the bubbles need — the transport card's expanded height is measured, and slack here inflates it.
+    static let height: CGFloat = 28
 
     /// Measured body width per mark id, used to clamp the body within the bar.
     @State private var bodyWidths: [String: CGFloat] = [:]
@@ -115,7 +117,7 @@ private struct RehearsalMarkButton: View {
         let shape = SpeechBubble(tailHeight: Self.tailHeight, tailOffset: tailOffset)
         Button(action: action) {
             Text(text)
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .foregroundStyle(isCurrent ? Color.white : Color.primary)

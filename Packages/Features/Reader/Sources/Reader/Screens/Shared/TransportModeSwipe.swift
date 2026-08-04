@@ -116,7 +116,7 @@ enum TransportModeSwipe {
 
     /// How long the owner should sit on the persisted-preference write after taking a committed swipe. Writing
     /// `showSeekBar` immediately shrinks or grows the room `ReaderRootScreen` reserves for the score
-    /// (`bottomControlContentHeight`, 114 ⇄ 44), and in page mode that re-paginates the score — heavy enough to eat
+    /// (`bottomControlContentHeight`, 110 ⇄ 44), and in page mode that re-paginates the score — heavy enough to eat
     /// the first frames of the settle spring and the card morph, which read as the control snagging right as the
     /// finger lifts. Longer than the slowest of either release animation (`slowModeSwapDuration`,
     /// `slowSettleDuration`), so the reflow only lands once the transport has visually come to rest; the control
