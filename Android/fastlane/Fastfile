@@ -111,6 +111,24 @@ platform :android do
     )
   end
 
+  desc "Upload ONLY the listing text — titles, short and full descriptions."
+  desc "Nothing else moves: no binary, no release notes, and no images. Prefer this over upload_listing"
+  desc "for a copy fix — the Play API can reject icon updates, and re-pushing unchanged screenshots just"
+  desc "widens the blast radius of a wording change."
+  lane :upload_text do
+    upload_to_play_store(
+      # The listing is global, but supply still resolves a track release; point it at the live one.
+      track: ENV.fetch("PLAY_TRACK", "production"),
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: false,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      validate_only: ENV["PLAY_VALIDATE_ONLY"] == "1"
+    )
+  end
+
   desc "Upload ONLY the feature graphic — no icon, text, screenshots, or binary."
   desc "Copies just featureGraphic.png per locale into a temp metadata tree and uploads from there, so"
   desc "supply touches nothing else: the store icon stays untouched (icon updates can be rejected by the"
