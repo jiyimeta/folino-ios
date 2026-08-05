@@ -19,23 +19,24 @@ private final class FakeReaderPreferencesStore: ReaderPreferencesStore {
     }
 }
 
+/// A pre-`schemaVersion` blob, built by encoding a current one and dropping the marker key. Goes through
+/// `JSONSerialization` rather than string surgery because `JSONEncoder` does not fix key order. The result is
+/// asserted to actually read as legacy — otherwise a silent no-op would leave a v2 blob behind and quietly stop
+/// testing the legacy path. Shared with `AnalyticsBridgeScorePrefsTests`, which exercises the same demotion rule
+/// from the analytics side.
+func legacyReaderPreferencesBlob(_ prefs: ReaderPreferences) -> String {
+    let encoded = Data(ReaderPreferencesReducer.encode(prefs).utf8)
+    var object = ((try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any]) ?? [:]
+    object.removeValue(forKey: "schemaVersion")
+    let stripped = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
+    let legacy = String(bytes: stripped, encoding: .utf8) ?? ""
+    #expect(ReaderPreferencesReducer.isLegacyBlob(legacy))
+    return legacy
+}
+
 struct ReaderPreferencesBridgeTests {
     private func saved(_ store: FakeReaderPreferencesStore, _ scoreId: String) -> ReaderPreferences? {
         ReaderPreferencesReducer.decode(store.loadJSON(scoreId: scoreId))
-    }
-
-    /// A pre-`schemaVersion` blob, built by encoding a current one and dropping the marker key. Goes through
-    /// `JSONSerialization` rather than string surgery because `JSONEncoder` does not fix key order. The result is
-    /// asserted to actually read as legacy — otherwise a silent no-op would leave a v2 blob behind and quietly stop
-    /// testing the legacy path.
-    private func legacyBlob(_ prefs: ReaderPreferences) -> String {
-        let encoded = Data(ReaderPreferencesReducer.encode(prefs).utf8)
-        var object = ((try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any]) ?? [:]
-        object.removeValue(forKey: "schemaVersion")
-        let stripped = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
-        let legacy = String(bytes: stripped, encoding: .utf8) ?? ""
-        #expect(ReaderPreferencesReducer.isLegacyBlob(legacy))
-        return legacy
     }
 
     /// A row that says nothing but "defaults" carries no information, and writing one on first open would make every
@@ -116,7 +117,7 @@ struct ReaderPreferencesBridgeTests {
     /// forever.
     @Test func `a legacy blob whose staff size is the global default decodes as untouched`() {
         let store = FakeReaderPreferencesStore()
-        store.blobs["s1"] = legacyBlob(
+        store.blobs["s1"] = legacyReaderPreferencesBlob(
             ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 28, hiddenStaves: []),
         )
         let bridge = ReaderPreferencesBridge(store: store)
@@ -130,7 +131,7 @@ struct ReaderPreferencesBridgeTests {
     /// The other half: a legacy staff size the user actually chose differs from the global and must be kept.
     @Test func `a legacy blob whose staff size differs from the global default keeps it`() {
         let store = FakeReaderPreferencesStore()
-        store.blobs["s1"] = legacyBlob(
+        store.blobs["s1"] = legacyReaderPreferencesBlob(
             ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 18, hiddenStaves: []),
         )
         let bridge = ReaderPreferencesBridge(store: store)

@@ -293,6 +293,26 @@ public final class AnalyticsBridge {
         ))
     }
 
+    /// One `score_prefs` wire event from ONE stored preferences JSON blob. Kotlin's launch path enumerates its live
+    /// blobs and relays each through this builder, skipping empty-named results (all-untouched rows and undecodable
+    /// blobs). Event name, the presence-means-changed rule, and every bucket boundary live in the shared Domain
+    /// factory — Kotlin authors no wire string. `widthDp` is Android's point-equivalent width; analysis never compares
+    /// widths across platforms without the auto-attached `platform`. Deliberately a single-`String` argument per call:
+    /// wirelet's `[String]` method-arg support is unreleased.
+    ///
+    /// `defaultStaffSize` is the Reader's current *global* staff size — the same `prefs.staffSize` flow `MainActivity`
+    /// hands to `ReaderPreferencesBridge.open`. It is required, not optional: this builder decodes the raw blob
+    /// instead of going through `open`, so without it the legacy correction in `decode(_:defaultStaffSize:)` would
+    /// never run here and every score any Android user has ever opened would report `staff_size` as explicitly
+    /// configured. See that overload for why Domain cannot make the correction on its own.
+    @WireletExpose
+    public func scorePrefs(prefsJson: String, widthDp: Double, defaultStaffSize: Double) -> AnalyticsEventWire {
+        guard let prefs = ReaderPreferencesReducer.decode(prefsJson, defaultStaffSize: defaultStaffSize),
+              let event = AnalyticsEvent.scorePrefs(prefs, screenWidthPt: widthDp)
+        else { return AnalyticsEventWire(name: "", params: []) }
+        return Self.encode(event)
+    }
+
     // MARK: - Marshaling
 
     /// Marshal a shared `AnalyticsEvent` into the JNI wire shape, mirroring iOS `FirebaseAnalyticsClient`'s
@@ -313,85 +333,5 @@ public final class AnalyticsBridge {
             }
         }
         return AnalyticsEventWire(name: event.name, params: params)
-    }
-
-    // MARK: - Token mappers (case-name token -> Domain enum)
-    //
-    // Each resolves a Swift case-name token (what Kotlin passes) to the Domain enum, whose factory/`analyticsValue`
-    // emits the stable wire string. Defaults are defensive: an unknown token degrades to the least-surprising case
-    // rather than crashing the bridge. `RepeatMode` / `ReaderLayoutMode` / `AnalyticsActionMode` are String-raw with
-    // rawValue == case name, so `init(rawValue:)` already accepts the token directly.
-
-    private static func source(_ token: String) -> AnalyticsSource {
-        switch token {
-        case "scoreRowMenu": .scoreRowMenu
-        case "bulkEdit": .bulkEdit
-        case "readerOverlay": .readerOverlay
-        case "scoreInfoSheet": .scoreInfoSheet
-        case "recentlyOpened": .recentlyOpened
-        case "favorites": .favorites
-        case "playlist": .playlist
-        case "tag": .tag
-        case "searchResult": .searchResult
-        case "libraryAll": .libraryAll
-        default: .libraryAll
-        }
-    }
-
-    private static func mode(_ token: String) -> AnalyticsActionMode {
-        AnalyticsActionMode(rawValue: token) ?? .single
-    }
-
-    private static func shareFormat(_ token: String) -> ScoreShareFormat {
-        switch token {
-        case "museScoreV4": .museScoreV4
-        case "museScoreV3": .museScoreV3
-        case "pdf": .pdf
-        case "midi": .midi
-        case "audioM4A": .audioM4A
-        default: .museScoreV4
-        }
-    }
-
-    private static func scoreFormat(_ token: String) -> ScoreFormat? {
-        switch token {
-        case "mscx": .mscx
-        case "mscz": .mscz
-        case "musicXML": .musicXML
-        case "mxl": .mxl
-        case "midi": .midi
-        case "pdf": .pdf
-        default: nil
-        }
-    }
-
-    private static func repeatMode(_ token: String) -> RepeatMode {
-        RepeatMode(rawValue: token) ?? .off
-    }
-
-    private static func layoutMode(_ token: String) -> ReaderLayoutMode {
-        ReaderLayoutMode(rawValue: token) ?? .page
-    }
-
-    private static func continuationMode(_ token: String) -> PlaylistContinuationMode {
-        switch token {
-        case "off": .off
-        case "playThrough": .playThrough
-        case "loopPlaylist": .loopPlaylist
-        default: .off
-        }
-    }
-
-    private static func screen(_ token: String) -> AnalyticsScreen {
-        switch token {
-        case "library": .library
-        case "reader": .reader
-        case "scoreInfo": .scoreInfo
-        case "settings": .settings
-        case "recentlyDeleted": .recentlyDeleted
-        case "playlistDetail": .playlistDetail
-        case "tagDetail": .tagDetail
-        default: .library
-        }
     }
 }
