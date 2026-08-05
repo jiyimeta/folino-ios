@@ -107,8 +107,11 @@ extension EditorViewModel {
         // A tie is the one gesture whose whole point is holding a note past what one slot can express, so the armed
         // length outrunning the bar is the expected case here rather than an edge one: spell it as a chain across
         // the barline and tie the selected note onto its head.
+        // A fresh `Note`, not the selected one: what the chain carries is this note's PITCH, and copying the note
+        // whole would carry its ties too — the `SetTie` below is what joins the two.
         if let plan = CrossBarInputPlanner.plan(
-            .note(pitch: note.pitch, tpc: note.tpc), duration: armed, at: next, in: score,
+            .chord(Chord(duration: armed, notes: [Note(pitch: note.pitch, tpc: note.tpc)])),
+            duration: armed, at: next, in: score,
         ) {
             let tieOntoChain = SetTie(
                 from: noteID,

@@ -14,11 +14,16 @@ import SheetMusicCore
 /// Everything is planned against the pre-edit score and emitted as one `ReplaceVoiceElements` per measure, so the
 /// whole chain is a single undo step and no half-written intermediate state is ever visible.
 enum CrossBarInputPlanner {
-    /// What the chain is made of. Notes need ties to read as one length across the barline; rests don't tie — the
-    /// pieces summing to the armed length ARE the rest, which is how every engraver writes one. Everything else
-    /// about the chain — where it breaks, how each bar's share is beat-aligned, what it displaces — is the same.
+    /// What the chain is made of. A chord is cloned into every piece and tied at each joint — the only way a score
+    /// can write one sound across a barline; rests don't tie, so the pieces summing to the length ARE the rest,
+    /// which is how every engraver writes one. Everything else about the chain — where it breaks, how each bar's
+    /// share is beat-aligned, what it displaces — is the same.
+    ///
+    /// A whole `Chord` rather than one pitch because this also re-times what is already written: a three-note chord
+    /// stretched over a barline has to arrive on the far side as the same three notes, not as its lowest one. The
+    /// chord's own `duration` is ignored — the plan decides each piece's length.
     enum Content {
-        case note(pitch: Int, tpc: Int)
+        case chord(Chord)
         case rest
     }
 
@@ -303,17 +308,35 @@ enum CrossBarInputPlanner {
         return DurationChangeAlgorithm.makeChordChain(from: chord, durations: durations)
     }
 
+    /// One link of the chain: tied at every interior joint, with the chord's ties at the two ENDS left as its own —
+    /// a note tied in from before is still tied in, and one tied onward still is.
+    ///
+    /// The head keeps the source chord entire; the continuations are bare noteheads. That is where an engraver puts
+    /// the marks — an arpeggio, a lyric, a staccato dot, a grace note belong to the sound, and a tied group is one
+    /// sound, so they sit on the notehead it starts from and nowhere else. It also means re-timing a decorated chord
+    /// across a barline loses nothing, which matters because the same edit one beat earlier (`SetChordDuration`,
+    /// in-bar) keeps everything.
     private static func piece(
         duration: NoteDuration, content: Content, isFirst: Bool, isLast: Bool,
     ) -> VoiceElement {
-        guard case let .note(pitch, tpc) = content else { return .rest(duration: duration) }
-        let note = Note(
-            pitch: pitch,
-            tpc: tpc,
-            tieForward: isLast ? nil : 1,
-            tieBack: isFirst ? nil : 1,
-        )
-        return .chord(Chord(duration: duration, notes: [note]))
+        guard case let .chord(source) = content else { return .rest(duration: duration) }
+        var notes = source.notes
+        for index in notes.indices {
+            notes[index].tieBack = isFirst ? source.notes[index].tieBack : 1
+            notes[index].tieForward = isLast ? source.notes[index].tieForward : 1
+        }
+        guard isFirst else {
+            return .chord(Chord(
+                duration: duration, notes: notes, graceNotesAfter: isLast ? source.graceNotesAfter : [],
+            ))
+        }
+        var head = source
+        head.duration = duration
+        head.notes = notes
+        // Grace notes AFTER the chord lead into whatever follows the sound, so they belong on its last piece, not
+        // its first — the one case the head doesn't keep.
+        head.graceNotesAfter = isLast ? source.graceNotesAfter : []
+        return .chord(head)
     }
 
     // MARK: - Lookups

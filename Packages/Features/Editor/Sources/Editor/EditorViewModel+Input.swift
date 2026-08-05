@@ -200,8 +200,9 @@ extension EditorViewModel {
         return (split.base, split.dots)
     }
 
-    /// Re-times the selected element to `base`, keeping whatever dots it already has. Refused by the engine (and so a
-    /// no-op) inside a tuplet, where the member lengths are the tuplet's to decide.
+    /// Re-times the selected element to `base`, keeping whatever dots it already has — spilling across the barline
+    /// as a tied chain (a run of rests, for a rest) when the bar can't hold the new length. Refused by the engine
+    /// (and so a no-op) inside a tuplet, where the member lengths are the tuplet's to decide.
     public func setSelectionDuration(_ base: NoteDuration) {
         applyToSelection(base: base, dots: selectedDuration?.dots ?? 0)
     }
@@ -219,16 +220,36 @@ extension EditorViewModel {
     }
 
     private func applyToSelection(base: NoteDuration, dots: Int) {
-        guard let selectedItem, let slot = Self.slot(of: selectedItem) else { return }
+        guard let selectedItem, let slot = Self.slot(of: selectedItem), let score else { return }
         let duration = dots > 0 ? base.dotted(dots) : base
         switch selectedItem {
         case .note:
+            guard case let .chord(chord)? = score[slot] else { return }
+            if retimeCrossingBarline(.chord(chord), duration: duration, at: slot, in: score) { return }
             applyCommand(SetChordDuration(at: slot, duration: duration))
         case .rest:
+            if retimeCrossingBarline(.rest, duration: duration, at: slot, in: score) { return }
             applyCommand(SetRestDuration(at: slot, duration: restDuration(duration, at: slot)))
         case .tuplet, .clef:
             return
         }
+    }
+
+    /// A length the bar can't hold → re-spell the item as a chain across the barline, and report that the re-time is
+    /// done. False means this isn't that case and the caller's ordinary single-slot command should run.
+    ///
+    /// The callout's length keys are the pad's keys pointed at one item instead of at the next one, so they have to
+    /// reach as far: without this, asking a beat-4 quarter for a half was simply refused by the engine and the key
+    /// read as dead — the very thing `CrossBarInputPlanner` was written to fix on the input side. One composite, so
+    /// it stays one undo step, and the selection re-derives onto the chain's head.
+    private func retimeCrossingBarline(
+        _ content: CrossBarInputPlanner.Content, duration: NoteDuration, at slot: VoiceElementID, in score: Score,
+    ) -> Bool {
+        guard let plan = CrossBarInputPlanner.plan(content, duration: duration, at: slot, in: score) else {
+            return false
+        }
+        applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.head))
+        return true
     }
 
     /// Reference pitch for octave choice: the previous chord's first note walking backwards in voice order from
@@ -320,7 +341,8 @@ extension EditorViewModel {
     ) -> Bool {
         guard let armed = armedInputDuration,
               let plan = CrossBarInputPlanner.plan(
-                  .note(pitch: pitch, tpc: tpc), duration: armed, at: location, in: score,
+                  .chord(Chord(duration: armed, notes: [Note(pitch: pitch, tpc: tpc)])),
+                  duration: armed, at: location, in: score,
               )
         else { return false }
         applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.head))

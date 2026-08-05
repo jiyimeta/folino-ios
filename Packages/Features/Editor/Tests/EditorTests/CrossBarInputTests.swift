@@ -255,6 +255,90 @@ struct CrossBarInputTests {
         #expect(vm.score == before)
     }
 
+    // MARK: - the callout's length keys, which re-time what is already written
+
+    @Test func `re-timing a note past the barline ties it instead of doing nothing`() throws {
+        var score = EditorFixtures.twoMeasuresOfQuarterRests()
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4))) // beat 4 — a half has one beat of bar left
+
+        vm.setSelectionDuration(.half)
+
+        let head = try #require(chord(0, 4, in: vm))
+        #expect(head.duration == .quarter)
+        #expect(head.notes.first?.pitch == 60)
+        #expect(head.notes.first?.tieForward == 1)
+        let tail = try #require(chord(1, 0, in: vm))
+        #expect(tail.duration == .quarter)
+        #expect(tail.notes.first?.pitch == 60)
+        #expect(tail.notes.first?.tieBack == 1)
+        #expect(tail.notes.first?.tieForward == nil)
+        #expect(vm.generation == 1) // one composite, one undo step
+        #expect(vm.selectedItem == .note(EditorFixtures.noteID(measure: 0, element: 4)))
+    }
+
+    @Test func `every note of a chord crosses, not just the lowest`() throws {
+        var score = EditorFixtures.twoMeasuresOfQuarterRests()
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14), Note(pitch: 64, tpc: 18)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4)))
+
+        vm.setSelectionDuration(.half)
+
+        let tail = try #require(chord(1, 0, in: vm))
+        #expect(tail.notes.map(\.pitch) == [60, 64])
+        #expect(tail.notes.allSatisfy { $0.tieBack == 1 })
+    }
+
+    @Test func `the callout's dot key can push a note past the barline too`() {
+        var score = EditorFixtures.twoMeasuresOfQuarterRests()
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4)))
+
+        vm.toggleSelectionDot() // dotted quarter from beat 4 — half a beat past the barline
+
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+        #expect(chord(0, 4, in: vm)?.notes.first?.tieForward == 1)
+        #expect(chord(1, 0, in: vm)?.duration == .eighth)
+        #expect(chord(1, 0, in: vm)?.notes.first?.tieBack == 1)
+    }
+
+    @Test func `re-timing a rest past the barline runs it on without ties`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.twoMeasuresOfQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 4)))
+
+        vm.setSelectionDuration(.half)
+
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+        #expect(chord(0, 4, in: vm)?.notes.isEmpty == true)
+        #expect(chord(1, 0, in: vm)?.duration == .quarter)
+        #expect(chord(1, 0, in: vm)?.notes.isEmpty == true)
+        #expect(vm.generation == 1)
+    }
+
+    @Test func `a re-time with nowhere to land is still refused`() {
+        var score = EditorFixtures.fourQuarterRests() // one bar only
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4)))
+
+        vm.setSelectionDuration(.half)
+
+        #expect(vm.generation == 0)
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+    }
+
     // MARK: - the tie ＋ key, which writes the armed length one slot on
 
     @Test func `the tie key carries its note across the barline too`() {
