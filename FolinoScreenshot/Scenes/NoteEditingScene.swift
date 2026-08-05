@@ -27,14 +27,31 @@ struct NoteEditingScene: View {
     /// and time signature, every part but the percussion resting), and not a later bar however good it looks: the
     /// score opens at the top and the capture can't scroll, so the note has to be in the opening screenful or the
     /// callout ends up clamped at the bottom edge pointing off-screen.
-    private static let editedMeasureIndex = 1
+    private static let editedMeasureIndex = 3
 
     /// Engraved staff size for this scene, against the Reader's default of 14. Editing is a shot about ONE note — the
     /// tinted notehead, the callout beside it, the length its keys are showing — and at the reading default those are
-    /// a few pixels each in a thumbnail. Note that hiding staves (the obvious other way to buy room) is not an option
-    /// here: the editing surface renders the RAW score so the Editor's positional IDs stay valid, which drops hidden
-    /// staves along with transpose and collapsed rests (`ScoreContentView.renderedScore`).
-    private static let staffSize: Double = 20
+    /// a few pixels each in a thumbnail.
+    private static let staffSize: Double = 24
+
+    /// Which parts of the fixture score to put away, per idiom — the Reader's own part-visibility feature rather
+    /// than a screenshot trick, and one that now survives an edit session: the surface renders the filtered score
+    /// while the Editor keeps working in full-score addresses, with the host re-stamping selection and caret between
+    /// the two.
+    ///
+    /// The phone keeps one part. The fixture is a six-part vocal arrangement, and six staves on a 440 pt-wide page
+    /// leave each note a few pixels of a thumbnail — while its opening bar rests in all but the percussion, so an
+    /// unfiltered phone shot leads with a screenful of empty staves.
+    ///
+    /// The iPad keeps all six, which is the opposite call for the same reason: it is two and a half times as wide,
+    /// so a lone melody line comes out as eight near-identical systems of "tu tu tu" — thin where the phone's
+    /// version is legible. The full arrangement gives that canvas something to be.
+    private static func hiddenStaves(for idiom: ScreenshotIdiom) -> Set<StaffAddress> {
+        idiom.pick(
+            iPhone: Set([0, 2, 3, 4, 5].map { StaffAddress(partIndex: $0, staffIndexInPart: 0) }),
+            iPad: [],
+        )
+    }
 
     private let repository: FixtureScoreRepository
 
@@ -56,7 +73,7 @@ struct NoteEditingScene: View {
             scoreItemID: ReaderPreferences(
                 scoreItemID: scoreItemID,
                 staffSize: Self.staffSize,
-                hiddenStaves: [],
+                hiddenStaves: Self.hiddenStaves(for: ScreenshotEnvironment.idiom),
                 // Ignore the authored breaks so bar 1 doesn't get a system to itself. It is an intro bar every part
                 // rests through, and honoring the break parked a screenful of empty staves at the top and pushed the
                 // edited note down into the pad's half of the screen — where the callout has to clamp above the pad
@@ -78,7 +95,7 @@ struct NoteEditingScene: View {
                 table: "ScreenshotStrings",
                 bundle: .forClass(ScreenshotStringsAnchor.self),
             ),
-            layout: FolinoScreenshotLayout.layout(for: idiom, subtitleBullet: true),
+            layout: FolinoScreenshotLayout.layout(for: idiom, subtitleBullet: true, innerStatusBarHeight: 0),
             idiom: idiom,
         ) {
             // ReaderRootScreen puts its controls in a real `.toolbar`, so it needs an ancestor nav container to host
@@ -105,6 +122,7 @@ struct NoteEditingScene: View {
                     )
                 }
             }
+            .readerStatusBarBand(for: idiom)
         } overlay: {
             EmptyView()
         }

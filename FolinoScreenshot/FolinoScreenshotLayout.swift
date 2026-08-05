@@ -47,4 +47,43 @@ enum FolinoScreenshotLayout {
             )
         }
     }
+
+    /// ScreenshotKit's per-idiom band height, restated so a scene can draw that space itself — see
+    /// `readerStatusBarBand(for:)`.
+    static func statusBarHeight(for idiom: ScreenshotIdiom) -> CGFloat {
+        idiom.pick(iPhone: 50, iPad: 28)
+    }
+}
+
+extension View {
+    /// Draw the faux status-bar band for a Reader-backed scene as the *continuation* of the toolbar's shadow, so the
+    /// white score page reads as one surface. Pair with `innerStatusBarHeight: 0` so this is the only band drawn.
+    ///
+    /// A real phone gives the app a ~59pt top safe area, so the toolbar's glass pills sit well clear of the screen
+    /// edge and the soft shadow they cast upwards fades out inside the app's own bounds. A scene has no safe area:
+    /// the pills land against the top of the app UI, and both `NavigationStack` and `TrueScaleInner` clip there — so
+    /// the shadow stops dead on that line. With ScreenshotKit's flat white `innerStatusBarColor` above it, the page
+    /// steps 255 -> 251 across the full width of the card and reads as a lighter strip.
+    ///
+    /// Neither half of the clip can be lifted: padding the nav container just moves the line down, and
+    /// `safeAreaInset` insets the content under the toolbar while leaving the toolbar itself pinned. So the band
+    /// picks the shadow back up instead. The iPad's 28pt band is far enough from its pills that nothing bleeds into
+    /// it — it stays flat white, which `shadowEdge: 1` gives for free.
+    ///
+    /// - Parameter shadowEdge: white level the app paints at its own top edge, sampled from a capture.
+    func readerStatusBarBand(
+        for idiom: ScreenshotIdiom,
+        shadowEdge: Double = 0.982,
+    ) -> some View {
+        let edge = Color(white: idiom.pick(iPhone: shadowEdge, iPad: 1))
+        return VStack(spacing: 0) {
+            LinearGradient(colors: [.white, edge], startPoint: .top, endPoint: .bottom)
+                .frame(height: FolinoScreenshotLayout.statusBarHeight(for: idiom))
+            self
+        }
+        // The band's height lands on a fractional pixel once the thumbnail is scaled, and the seam row between the
+        // two children then shows the marketing gradient through as a blue hairline. Back the stack with the band's
+        // own edge colour so that row blends into the join instead.
+        .background(edge)
+    }
 }

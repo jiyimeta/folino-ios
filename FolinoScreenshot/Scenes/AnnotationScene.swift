@@ -52,7 +52,7 @@ struct AnnotationScene: View {
                 table: "ScreenshotStrings",
                 bundle: .forClass(ScreenshotStringsAnchor.self),
             ),
-            layout: FolinoScreenshotLayout.layout(for: idiom, subtitleBullet: true),
+            layout: FolinoScreenshotLayout.layout(for: idiom, subtitleBullet: true, innerStatusBarHeight: 0),
             idiom: idiom,
         ) {
             NavigationStack {
@@ -68,6 +68,9 @@ struct AnnotationScene: View {
                     scoreContentOverride: AnyView(deviceCapture),
                 )
             }
+            // Lighter edge than the other Reader scenes: this one's pill row is sparser, so less shadow reaches the
+            // clip.
+            .readerStatusBarBand(for: idiom, shadowEdge: 0.993)
         } overlay: {
             EmptyView()
         }
