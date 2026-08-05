@@ -37,10 +37,14 @@ extension EditorViewModel {
     /// Never auto-advances (spec §5.4).
     func addLetterToChord(_ letter: Character, at noteID: NoteID, in score: Score) {
         isAddToChordArmed = false
-        guard let note = score[noteID] else { return }
-        let keySig = score.activeKey(at: noteID)
-        guard let target = inKeyPitch(forLetter: letter, nearestTo: note.pitch, keySig: keySig) else { return }
-        addNoteToChord(at: noteID, pitch: target.pitch, tpc: target.tpc, keySig: keySig)
+        guard let note = score[noteID],
+              let target = MeasureAccidentals.plannedPitch(
+                  forLetter: letter, nearestTo: note.pitch, at: VoiceElementID(noteID), in: score,
+              )
+        else { return }
+        addNoteToChord(
+            at: noteID, pitch: target.pitch, tpc: target.tpc, keySig: score.activeKey(at: noteID),
+        )
     }
 
     /// Shared `AddNoteToChord` apply + select-the-added-note landing, used by both the chord-arm letter path and

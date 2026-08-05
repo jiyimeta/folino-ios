@@ -20,6 +20,31 @@ enum EditorFixtures {
         return Score(division: 480, parts: [part])
     }
 
+    /// One part, one staff, two measures of four quarter rests, under a key signature of `concertKey`.
+    ///
+    /// Measure 0's voice elements: [0] keySignature, [1] timeSignature(4/4), [2...5] rest(quarter) — the key and the
+    /// meter both belong to the first bar, so the rests start two slots in rather than one. Measure 1 carries
+    /// neither, so its rests are [0...3].
+    static func twoMeasuresOfQuarterRests(key concertKey: Int) -> Score {
+        let firstVoice = Voice(elements: [
+            .keySignature(KeySignature(concertKey: concertKey)),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        let secondVoice = Voice(elements: [
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        let staff = Staff(measures: [Measure(voices: [firstVoice]), Measure(voices: [secondVoice])])
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
+        return Score(division: 480, parts: [part])
+    }
+
     /// Same, but element index 1 is a quarter chord on C4 (pitch 60, tpc 14).
     static func chordAtIndex1() -> Score {
         var score = fourQuarterRests()

@@ -6,9 +6,11 @@ import SheetMusicLayout // DurationInterpretation: splits a written duration bac
 /// The pad's core operations — note input, delete, duration change — per spec §5.3.
 extension EditorViewModel {
     /// Letter key C…B — writes at the CARET. Rest at the caret → `InputNote` (wrapped with `SetRestDuration` in a
-    /// `CompositeEditCommand` when a different duration is armed); note at the caret → `SetNotePitch` to that
-    /// letter's in-key pitch nearest the current pitch. Add-to-chord armed is the one exception: it stacks onto the
-    /// SELECTED chord (`AddNoteToChord`, Task 7), since what it means is "another note in the one I just wrote".
+    /// `CompositeEditCommand` when a different duration is armed); note at the caret → `SetNotePitch`. Either way the
+    /// pitch is the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedPitch`) nearest the previous
+    /// note: the key signature's, unless an accidental earlier in the same measure has already respelled that staff
+    /// line. Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`AddNoteToChord`, Task 7),
+    /// since what it means is "another note in the one I just wrote".
     ///
     /// Afterwards the selection lands on the note that was written and the caret moves on to the next timed element
     /// (spec §11-5: advance on after keys), so ♯ / ♭ / ⌫ keep addressing the note rather than the empty slot ahead.
@@ -222,13 +224,15 @@ extension EditorViewModel {
     }
 
     private func inputPitch(letter: Character, onRest restID: RestID, in score: Score) {
+        let veID = VoiceElementID(restID)
         guard let rest = score[restID],
-              let planned = NoteInputPlanner.pitch(
+              let planned = MeasureAccidentals.plannedPitch(
                   forLetter: letter,
-                  nearestTo: referencePitch(before: VoiceElementID(restID)),
+                  nearestTo: referencePitch(before: veID),
+                  at: veID,
+                  in: score,
               )
         else { return }
-        let veID = VoiceElementID(restID)
         let generationBeforeInput = generation
         if writeCrossingBarline(
             pitch: planned.pitch, tpc: planned.tpc, at: veID, in: score, from: generationBeforeInput,
@@ -253,10 +257,12 @@ extension EditorViewModel {
     /// the next note will be — so a quarter armed over an existing half has to produce a quarter. Leaving the length
     /// alone silently ignored half of what the pad was showing.
     private func inputPitch(letter: Character, onNote noteID: NoteID, in score: Score) {
-        guard let note = score[noteID] else { return }
-        let keySig = score.activeKey(at: noteID)
-        guard let target = inKeyPitch(forLetter: letter, nearestTo: note.pitch, keySig: keySig) else { return }
         let veID = VoiceElementID(noteID)
+        guard let note = score[noteID],
+              let target = MeasureAccidentals.plannedPitch(
+                  forLetter: letter, nearestTo: note.pitch, at: veID, in: score,
+              )
+        else { return }
         let pitch = SetNotePitch(at: noteID, pitch: target.pitch, tpc: target.tpc)
         let generationBeforeInput = generation
         if writeCrossingBarline(
@@ -315,18 +321,4 @@ extension EditorViewModel {
         place(selection: written, caret: next)
         auditionSelectedNote(unlessStillAt: previousGeneration)
     }
-}
-
-/// Nearest pitch to `reference` spelled as `letter` under `keySig`: `NoteInputPlanner`'s natural-letter octave
-/// search, retargeted by the key's alteration so the search lands on the nearest ALTERED pitch instead.
-/// Not `private`: Task 7's `EditorViewModel+ChordTieTuplet.swift` reuses it for the chord-arm letter-add path.
-func inKeyPitch(
-    forLetter letter: Character, nearestTo reference: Int, keySig: Int,
-) -> (pitch: Int, tpc: Int)? {
-    guard let natural = NoteInputKeyMap.pitch(forLetter: letter, octave: 4) else { return nil }
-    let keyedTpc = StaffStepPitch.inKeyTpc(naturalTpc: natural.tpc, keySig: keySig)
-    let alteration = (keyedTpc - natural.tpc) / 7
-    guard let nearestNatural = NoteInputPlanner.pitch(forLetter: letter, nearestTo: reference - alteration)
-    else { return nil }
-    return (nearestNatural.pitch + alteration, keyedTpc)
 }
