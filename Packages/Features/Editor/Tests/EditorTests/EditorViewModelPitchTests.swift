@@ -64,7 +64,7 @@ struct EditorViewModelPitchTests {
 
     // MARK: - setAccidental
 
-    @Test func `setAccidental sharp respells and clearing it afterwards leaves pitch and tpc alone`() throws {
+    @Test func `setAccidental sharp respells, and clearing the glyph can't outlive what the bar needs`() throws {
         let vm = makeViewModel()
         vm.beginSession(score: EditorFixtures.chordAtIndex1())
         let noteID = EditorFixtures.noteID(element: 1)
@@ -82,7 +82,9 @@ struct EditorViewModelPitchTests {
         note = try #require(vm.score?[noteID])
         #expect(note.pitch == 61)
         #expect(note.tpc == 21)
-        #expect(note.accidental == nil)
+        // `nil` clears the glyph, and `MeasureAccidentals` puts it straight back: in C major a C♯ with no ♯ in front
+        // of it reads as C natural while still sounding C♯, which is the one thing an editor must never write.
+        #expect(note.accidental == .sharp)
     }
 
     // MARK: - undo granularity

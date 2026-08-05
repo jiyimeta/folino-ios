@@ -246,6 +246,74 @@
         }
       }
     },
+    "scene.noteEditing.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change pitch and length\nEnter notes and rests with ease"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音符の高さ・長さを変更\n音符や休符を簡単入力"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음표의 음높이와 길이 변경\n음표와 쉼표를 간편하게 입력"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改音符的音高与时值\n轻松输入音符和休止符"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "變更音符的音高與時值\n輕鬆輸入音符和休止符"
+          }
+        }
+      }
+    },
+    "scene.noteEditing.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit the notes in the score"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "楽譜の中身を編集"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "악보 내용을 편집"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑乐谱内容"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯樂譜內容"
+          }
+        }
+      }
+    },
     "scene.pip.subtitle" : {
       "extractionState" : "stale",
       "localizations" : {

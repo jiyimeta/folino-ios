@@ -50,7 +50,14 @@ struct PlaybackInspectorScene: View {
             layout: FolinoScreenshotLayout.layout(
                 for: idiom,
                 subtitleBullet: true,
-                innerStatusBarColor: Color(.systemGroupedBackground),
+                // Match the faux status-bar band to whatever sits directly below it on each device, so the band reads
+                // as part of the screen rather than a strip (same rule as `LibraryScene`). The iPhone gets the
+                // inspector as a full sheet, so the band is grouped background; the iPad gets it as a popover over the
+                // Reader, so the band is the Reader's white page.
+                innerStatusBarColor: idiom.pick(
+                    iPhone: Color(.systemGroupedBackground),
+                    iPad: .white,
+                ),
             ),
             idiom: idiom,
         ) {
@@ -105,6 +112,7 @@ struct PlaybackInspectorScene: View {
                 repository: FixtureScoreRepository(),
                 gateway: FixtureGateway(),
                 shareService: FixtureShareService(),
+                vocalTunerHandoff: NoopVocalTunerHandoff(),
                 metadataReader: FixtureMetadataReader(),
                 annotationCoordinator: .fixture,
                 scoresDirectory: URL(filePath: NSTemporaryDirectory()),

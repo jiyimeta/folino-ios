@@ -4,11 +4,12 @@ import Foundation
 import SheetMusicUI
 import Testing
 
-/// Input of a note longer than the room left in its measure: it continues across the barline as a tied chain
-/// instead of being refused outright (which is what made the letter keys look dead near a barline).
+/// Input of a note or a rest longer than the room left in its measure: it continues across the barline as a chain
+/// instead of being refused outright (which is what made the letter keys look dead near a barline). Notes are tied
+/// at every joint; rests just follow one another.
 @MainActor
-@Suite("Cross-barline note input")
-struct CrossBarNoteInputTests {
+@Suite("Cross-barline input")
+struct CrossBarInputTests {
     private func makeViewModel() -> EditorViewModel {
         EditorViewModel(
             scoreItem: EditorFixtures.sampleItem(),
@@ -166,6 +167,176 @@ struct CrossBarNoteInputTests {
         // nothing than to silently write half of what was asked for.
         #expect(vm.generation == 0)
         #expect(chord(0, 4, in: vm)?.notes.isEmpty == true)
+    }
+
+    // MARK: - the rest key, which crosses the barline the same way minus the ties
+
+    @Test func `a rest longer than the bar continues past the barline`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.twoMeasuresOfQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 4))) // beat 4 of bar 1
+        vm.setDuration(.whole)
+
+        vm.writeRest()
+
+        // quarter (bar 1 beat 4) — half + quarter (bar 2 beats 1-3), the same beat-aligned spelling the tied chain
+        // gets, and the lengths still add up to the whole that was armed.
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+        #expect(chord(1, 0, in: vm)?.duration == .half)
+        #expect(chord(1, 1, in: vm)?.duration == .quarter)
+        #expect(chord(1, 2, in: vm)?.duration == .quarter)
+        #expect(elementCount(1, in: vm) == 3)
+        // Rests, all of them — and nothing that could carry a tie.
+        for element in 0 ... 2 {
+            #expect(chord(1, element, in: vm)?.notes.isEmpty == true)
+        }
+        #expect(chord(0, 4, in: vm)?.notes.isEmpty == true)
+        #expect(vm.generation == 1) // one composite, one undo step
+    }
+
+    @Test func `the rest key over a note crosses the barline too`() {
+        var score = EditorFixtures.twoMeasuresOfQuarterRests()
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4)))
+        vm.setDuration(.half)
+
+        vm.writeRest()
+
+        #expect(chord(0, 4, in: vm)?.notes.isEmpty == true)
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+        #expect(chord(1, 0, in: vm)?.notes.isEmpty == true)
+        #expect(chord(1, 0, in: vm)?.duration == .quarter)
+        #expect(vm.generation == 1)
+    }
+
+    @Test func `a bar the rest covers end to end is written as a measure rest`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.threeMeasuresOfQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 4)))
+        vm.setDuration(.whole)
+        vm.setArmedDots(1) // dotted whole = six beats: 1 + 4 + 1
+
+        vm.writeRest()
+
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+        // Bar 2 is silent from its first beat to its last: that is a measure rest, not a whole rest that happens to
+        // be the right length — the same rule `restDuration(_:at:)` applies to a rest written into one slot.
+        #expect(chord(1, 0, in: vm)?.duration == .measure)
+        #expect(elementCount(1, in: vm) == 1)
+        #expect(chord(2, 0, in: vm)?.duration == .quarter)
+        #expect(chord(2, 1, in: vm)?.duration == .quarter)
+    }
+
+    @Test func `a rest the score has no room for is refused, like the note`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests()) // one bar only
+        vm.select(.rest(EditorFixtures.restID(element: 4)))
+        vm.setDuration(.half)
+
+        vm.writeRest()
+
+        #expect(vm.generation == 0)
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+    }
+
+    @Test func `undo puts the bars back after a rest chain too`() {
+        let before = EditorFixtures.twoMeasuresOfQuarterRests()
+        let vm = makeViewModel()
+        vm.beginSession(score: before)
+        vm.select(.rest(EditorFixtures.restID(element: 4)))
+        vm.setDuration(.whole)
+        vm.writeRest()
+
+        vm.undo()
+
+        #expect(vm.score == before)
+    }
+
+    // MARK: - the callout's length keys, which re-time what is already written
+
+    @Test func `re-timing a note past the barline ties it instead of doing nothing`() throws {
+        var score = EditorFixtures.twoMeasuresOfQuarterRests()
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4))) // beat 4 — a half has one beat of bar left
+
+        vm.setSelectionDuration(.half)
+
+        let head = try #require(chord(0, 4, in: vm))
+        #expect(head.duration == .quarter)
+        #expect(head.notes.first?.pitch == 60)
+        #expect(head.notes.first?.tieForward == 1)
+        let tail = try #require(chord(1, 0, in: vm))
+        #expect(tail.duration == .quarter)
+        #expect(tail.notes.first?.pitch == 60)
+        #expect(tail.notes.first?.tieBack == 1)
+        #expect(tail.notes.first?.tieForward == nil)
+        #expect(vm.generation == 1) // one composite, one undo step
+        #expect(vm.selectedItem == .note(EditorFixtures.noteID(measure: 0, element: 4)))
+    }
+
+    @Test func `every note of a chord crosses, not just the lowest`() throws {
+        var score = EditorFixtures.twoMeasuresOfQuarterRests()
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14), Note(pitch: 64, tpc: 18)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4)))
+
+        vm.setSelectionDuration(.half)
+
+        let tail = try #require(chord(1, 0, in: vm))
+        #expect(tail.notes.map(\.pitch) == [60, 64])
+        #expect(tail.notes.allSatisfy { $0.tieBack == 1 })
+    }
+
+    @Test func `the callout's dot key can push a note past the barline too`() {
+        var score = EditorFixtures.twoMeasuresOfQuarterRests()
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4)))
+
+        vm.toggleSelectionDot() // dotted quarter from beat 4 — half a beat past the barline
+
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+        #expect(chord(0, 4, in: vm)?.notes.first?.tieForward == 1)
+        #expect(chord(1, 0, in: vm)?.duration == .eighth)
+        #expect(chord(1, 0, in: vm)?.notes.first?.tieBack == 1)
+    }
+
+    @Test func `re-timing a rest past the barline runs it on without ties`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.twoMeasuresOfQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 4)))
+
+        vm.setSelectionDuration(.half)
+
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
+        #expect(chord(0, 4, in: vm)?.notes.isEmpty == true)
+        #expect(chord(1, 0, in: vm)?.duration == .quarter)
+        #expect(chord(1, 0, in: vm)?.notes.isEmpty == true)
+        #expect(vm.generation == 1)
+    }
+
+    @Test func `a re-time with nowhere to land is still refused`() {
+        var score = EditorFixtures.fourQuarterRests() // one bar only
+        score[VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let vm = makeViewModel()
+        vm.beginSession(score: score)
+        vm.select(.note(EditorFixtures.noteID(measure: 0, element: 4)))
+
+        vm.setSelectionDuration(.half)
+
+        #expect(vm.generation == 0)
+        #expect(chord(0, 4, in: vm)?.duration == .quarter)
     }
 
     // MARK: - the tie ＋ key, which writes the armed length one slot on

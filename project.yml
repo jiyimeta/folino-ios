@@ -62,7 +62,7 @@ packages:
     from: 11.0.0
   ScreenshotKit:
     url: git@github.com:jiyimeta/swift-screenshot-kit.git
-    revision: 13ae05e58f2937468d1e3cd779ba420b4310ed21
+    revision: 1ef0c01776140616cb5dc94bf2d6b0614185b756
 targets:
   Folino:
     type: application

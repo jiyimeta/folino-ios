@@ -41,6 +41,7 @@ struct ReaderScene: View {
             layout: FolinoScreenshotLayout.layout(
                 for: idiom,
                 subtitleBullet: true,
+                innerStatusBarHeight: 0,
             ),
             idiom: idiom,
         ) {
@@ -52,12 +53,14 @@ struct ReaderScene: View {
                     repository: FixtureScoreRepository(),
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
+                    vocalTunerHandoff: NoopVocalTunerHandoff(),
                     metadataReader: FixtureMetadataReader(),
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     hidesBackButton: true,
                 )
             }
+            .readerStatusBarBand(for: idiom)
         } overlay: {
             EmptyView()
         }
