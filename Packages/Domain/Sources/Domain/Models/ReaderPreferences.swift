@@ -198,17 +198,69 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         case transposeSemitones
         case hasSeededAuthoredVisibility
         case authoredHiddenStaves
+        case schemaVersion
+    }
+
+    /// Version stamped into every encoded payload. `1` is implicit: blobs written before this key existed simply
+    /// don't carry it, which is exactly what `init(from:)` uses to recognize legacy data.
+    static let codableSchemaVersion = 2
+
+    /// What the pre-`schemaVersion` code stored for a user who had never chosen anything — staff size was seeded to
+    /// the then-default 14, and the other three were written eagerly at their defaults. Frozen on purpose: a
+    /// migration must keep describing the data as it was written, even if the live defaults later move.
+    private enum LegacyStoredDefaults {
+        static let staffSize: Double = 14
+        static let honorLayoutBreaks = true
+        static let masterVolume: Double = 1
+        static let transposeSemitones = 0
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(Self.codableSchemaVersion, forKey: .schemaVersion)
+        try c.encode(id, forKey: .id)
+        try c.encode(scoreItemID, forKey: .scoreItemID)
+        try c.encodeIfPresent(staffSize, forKey: .staffSize)
+        try c.encode(hiddenStaves, forKey: .hiddenStaves)
+        try c.encode(authoredHiddenStaves, forKey: .authoredHiddenStaves)
+        try c.encode(staffProgramOverrides, forKey: .staffProgramOverrides)
+        try c.encode(staffVolumeOverrides, forKey: .staffVolumeOverrides)
+        try c.encode(staffClefOverrides, forKey: .staffClefOverrides)
+        try c.encodeIfPresent(tempoMultiplier, forKey: .tempoMultiplier)
+        try c.encodeIfPresent(honorLayoutBreaks, forKey: .honorLayoutBreaks)
+        try c.encode(repeatMode, forKey: .repeatMode)
+        try c.encodeIfPresent(abRepeat, forKey: .abRepeat)
+        try c.encodeIfPresent(masterVolume, forKey: .masterVolume)
+        try c.encodeIfPresent(transposeSemitones, forKey: .transposeSemitones)
+        try c.encodeIfPresent(a4ReferenceHz, forKey: .a4ReferenceHz)
+        try c.encode(hasSeededAuthoredVisibility, forKey: .hasSeededAuthoredVisibility)
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        // A blob with no `schemaVersion` predates the "untouched is `nil`" model: back then every scalar was written
+        // eagerly, so a stored default is indistinguishable from an untouched one and is reclassified as untouched
+        // below. This is the Android counterpart of the iOS v16 migration — the JSON-blob store has no migration
+        // runner, so the version marker lives in the payload.
+        //
+        // The marker is what makes the conversion one-time IN EFFECT: the next `encode(to:)` stamps
+        // `codableSchemaVersion`, after which present values are authoritative. Without it the normalization would
+        // re-run on every read and permanently collapse a deliberately re-chosen default back to "untouched".
+        // iOS persistence never takes this path (GRDB records only), so the blast radius is the Android blob.
+        let isLegacy = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) == nil
         let id = try c.decode(ReaderPreferencesID.self, forKey: .id)
         let scoreItemID = try c.decode(ScoreItemID.self, forKey: .scoreItemID)
-        let staffSize = try c.decodeIfPresent(Double.self, forKey: .staffSize)
+        let rawStaffSize = try c.decodeIfPresent(Double.self, forKey: .staffSize)
+        let staffSize = (isLegacy && rawStaffSize == LegacyStoredDefaults.staffSize) ? nil : rawStaffSize
         let hiddenStaves = try c.decode(Set<StaffAddress>.self, forKey: .hiddenStaves)
+        // Legacy blobs have no provenance to read, so all of their hides are attributed to the score — the same
+        // conservative seed the iOS v16 migration makes (`authored_hidden_staves` starts as a copy of
+        // `hidden_staff_ids`). Under-reporting user intent is the safe direction, and the next open self-heals it via
+        // `reconcilingAuthoredHidden`. A v2 blob always writes the key, so an absent one there genuinely means
+        // "nothing authored hidden" and must NOT be back-seeded.
         let authoredHidden = try c.decodeIfPresent(
             Set<StaffAddress>.self, forKey: .authoredHiddenStaves,
-        ) ?? []
+        ) ?? (isLegacy ? hiddenStaves : [])
         let programOverrides = try c.decodeIfPresent(
             [StaffAddress: Int].self, forKey: .staffProgramOverrides,
         ) ?? [:]
@@ -219,11 +271,16 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             [StaffAddress: String].self, forKey: .staffClefOverrides,
         ) ?? [:]
         let tempo = try c.decodeIfPresent(Double.self, forKey: .tempoMultiplier)
-        let honorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks)
+        let rawHonorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks)
+        let honorBreaks = (isLegacy && rawHonorBreaks == LegacyStoredDefaults.honorLayoutBreaks)
+            ? nil : rawHonorBreaks
         let mode = try c.decodeIfPresent(RepeatMode.self, forKey: .repeatMode) ?? .off
         let ab = try c.decodeIfPresent(ABRepeatRange.self, forKey: .abRepeat)
-        let master = try c.decodeIfPresent(Double.self, forKey: .masterVolume)
-        let transpose = try c.decodeIfPresent(Int.self, forKey: .transposeSemitones)
+        let rawMaster = try c.decodeIfPresent(Double.self, forKey: .masterVolume)
+        let master = (isLegacy && rawMaster == LegacyStoredDefaults.masterVolume) ? nil : rawMaster
+        let rawTranspose = try c.decodeIfPresent(Int.self, forKey: .transposeSemitones)
+        let transpose = (isLegacy && rawTranspose == LegacyStoredDefaults.transposeSemitones)
+            ? nil : rawTranspose
         let a4 = try c.decodeIfPresent(Double.self, forKey: .a4ReferenceHz)
         let hasSeeded = try c.decodeIfPresent(
             Bool.self, forKey: .hasSeededAuthoredVisibility,
