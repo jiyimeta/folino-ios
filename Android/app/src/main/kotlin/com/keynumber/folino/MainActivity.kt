@@ -333,10 +333,16 @@ private fun LibraryNavGraph(
         // ReaderPreferencesBridge.open. Every blob written before the eager seed was removed stores that global, and
         // the decoder only demotes it to "untouched" when it matches the default in effect; a constant here would
         // report staff_size as configured on essentially every score.
-        val store = com.keynumber.folino.library.RoomLibraryStore(context)
+        // A failed read degrades to "no events" — the same best-effort stance as the two snapshots above, none of
+        // which may fail a launch. It is recorded as a non-fatal, though, mirroring iOS AppBootstrap.scorePrefsEvents:
+        // this is a whole-table read, so one bad row zeroes every score_prefs event for the launch, and silence would
+        // be indistinguishable downstream from "these users customize nothing".
         val widthDp = context.resources.configuration.screenWidthDp.toDouble()
         val defaultStaffSize = prefs.staffSize.first()
-        store.loadAllLiveReaderPreferencesJson().forEach { json ->
+        val blobs = runCatching {
+            com.keynumber.folino.library.RoomLibraryStore(context).loadAllLiveReaderPreferencesJson()
+        }.onFailure { CrashReporting.recordNonFatal(it) }.getOrDefault(emptyList())
+        blobs.forEach { json ->
             val wire = AndroidAnalytics.bridge.scorePrefs(json, widthDp, defaultStaffSize)
             if (wire.name.isNotEmpty()) AndroidAnalytics.log(wire)
         }
