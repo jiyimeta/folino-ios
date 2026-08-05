@@ -31,8 +31,14 @@ final class ReaderPreferencesStore {
     /// `authoredHiddenStaves` are the staves the score file authored as hidden (MuseScore `<Part><show>0</show>`, via
     /// `Score.authoredHiddenStaffAddresses`). They open hidden by default: a brand-new row seeds them directly, and a
     /// row created before this feature is back-filled with them ONCE (unioned with anything the user already hid) and
-    /// then marked seeded. On every subsequent open the stored row wins untouched, so a staff the user reveals stays
-    /// revealed. Callers with no notation score (PDFs) pass the empty default.
+    /// then marked seeded. On every subsequent open the stored `hiddenStaves` wins, so a staff the user reveals stays
+    /// revealed — but `authoredHiddenStaves` is refreshed and rewritten whenever it disagrees with the score, keeping
+    /// the provenance correct across re-reads that renumber staves.
+    ///
+    /// Because of that refresh, `authoredHiddenStaves` must only ever be the *known* authored set: passing `[]` for a
+    /// notation score whose parse failed or is incomplete would permanently reclassify its authored-hidden staves as
+    /// user-hidden. Callers with no notation score at all (PDFs) pass the empty default legitimately. See the caller
+    /// contract on `ReaderPreferences.reconcilingAuthoredHidden`.
     @discardableResult
     func loadOrSeed(authoredHiddenStaves: Set<StaffAddress> = []) async -> ReaderPreferences {
         // A persistence error is non-fatal — `try?` collapses "no row" and "load failed" alike into

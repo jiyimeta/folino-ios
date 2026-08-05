@@ -302,7 +302,9 @@ per-score ID is a correlation handle we don't need).
 
 **The crucial mechanic: a parameter is included only when its underlying value is non-`nil` (non-empty for sets and
 override dictionaries).** In BigQuery, "param present" == changed, and the param's value is the settled value. That
-single rule delivers all of (a), (b), (c), and (d) — no sentinel values, no separate `*_changed` booleans.
+single rule delivers all of (a), (b), (c), and (d) — no sentinel values, no separate `*_changed` booleans. The rule
+only ever errs toward absence: `staff_size` is suppressed for legacy Android blobs, where a seed and a choice are
+genuinely indistinguishable (see Known limitations).
 
 | Parameter | Type | Present when | Value |
 | --- | --- | --- | --- |
@@ -498,6 +500,17 @@ package scheme.
   landed *on* a default value reads as untouched, and pre-v16 hides all read as authored until their score's next
   open. Early numbers therefore under-report (a) and (b); they converge as users open scores and change things
   post-update. There is no retroactive fix — the distinction was never recorded.
+- **On Android, a pre-`schemaVersion` blob never reports `staff_size`.** The two platforms' migrations are not
+  equivalent in outcome here, and only iOS's is exact. iOS seeded the frozen constant `14`, so v16's `CASE WHEN
+  staff_size = 14 THEN NULL` separates seed from choice precisely. Android's since-removed eager seed wrote the
+  *global* staff size in effect when the score was first opened — a prominent continuous 8…28 slider defaulting to its
+  maximum — so a user who has since moved that slider leaves blobs matching no default in effect, and no rule keyed to
+  the current global can tell a stale seed from a real choice. `AnalyticsBridge.scorePrefs` therefore drops
+  `staff_size` for **every** legacy Android blob. Android's `staff_size` numbers consequently under-report until each
+  score is next changed — the first mutation re-encodes it as `schemaVersion: 2`, after which the value is
+  authoritative and reported. Under-reporting is the direction chosen everywhere else here (§4, §6). Rendering is
+  unaffected: `ReaderPreferencesBridge.open` keeps the stored value, and the widening lives in the analytics builder
+  alone.
 - `score_prefs` reaches BigQuery only from launches on app versions carrying this change, and the BigQuery export
   itself is not retroactive; trend analysis starts at rollout.
 - A score changed on one device and never opened where analytics consent differs follows the usual consent-gate

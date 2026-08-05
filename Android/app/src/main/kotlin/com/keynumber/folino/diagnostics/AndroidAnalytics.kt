@@ -22,6 +22,34 @@ object AndroidAnalytics {
     @Volatile private var enabled: Boolean = true
     @Volatile private var firebaseAnalytics: FirebaseAnalytics? = null
     @Volatile private var bridgeInstance: AnalyticsBridgeViewModel? = null
+    @Volatile private var launchSnapshotsClaimed: Boolean = false
+
+    /**
+     * One-shot gate for the launch snapshot batch (`library_snapshot`, `settings_snapshot`, and one `score_prefs`
+     * per changed score). Returns `true` exactly once per process; every later caller gets `false`.
+     *
+     * iOS emits these from `AppBootstrap.bootstrap()`, which runs once per process. Android's equivalent hook is a
+     * `LaunchedEffect(Unit)` in the nav graph, which re-runs whenever the Activity is recreated — and the manifest's
+     * `configChanges` covers only the size/orientation/density family, NOT `uiMode`, `locale` or `fontScale`. So a
+     * dark-mode flip (including the automatic day/night one), a language change or a font-scale change would re-emit
+     * the whole batch inside the same `ga_session_id`.
+     *
+     * That is unfixable downstream for `score_prefs`: it deliberately carries no score identifier, so BigQuery has
+     * nothing to de-duplicate on, and the "how many scores has this user changed" query (a `SUM(COUNTIF(...))` over
+     * the user's latest session) would simply read high. Hence a process-scoped claim rather than any per-event
+     * dedupe. `library_snapshot` / `settings_snapshot` are singular per launch and ride along for the same reason.
+     *
+     * The state deliberately survives Activity recreation and is never reset — a genuinely new launch means a new
+     * process, which means a fresh `object`.
+     */
+    fun claimLaunchSnapshots(): Boolean = synchronized(this) {
+        if (launchSnapshotsClaimed) {
+            false
+        } else {
+            launchSnapshotsClaimed = true
+            true
+        }
+    }
 
     /**
      * The Swift event-builder bridge. Stateless and process-lifetime: created once, never released (mirrors

@@ -96,8 +96,10 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public var a4ReferenceHz: Double?
     /// Whether the Reader has already reconciled this row with the score's authored `<Part><show>` hidden staves. Rows
     /// created before that feature (and non-notation formats, which have no authored visibility) carry `false`; on open
-    /// the Reader seeds/back-fills the authored-hidden staves once, sets this `true`, and thereafter returns the user's
-    /// value untouched so staves the user revealed are never re-hidden. Defaults to `false`.
+    /// the Reader seeds/back-fills the authored-hidden staves once and sets this `true`. Thereafter `hiddenStaves` is
+    /// the user's alone — a staff they revealed is never re-hidden — but `authoredHiddenStaves` keeps being refreshed
+    /// on open whenever it disagrees with the score, which is what makes the provenance self-healing across re-reads
+    /// and staff renumbering (see `reconcilingAuthoredHidden`). Defaults to `false`.
     public var hasSeededAuthoredVisibility: Bool
 
     public init(

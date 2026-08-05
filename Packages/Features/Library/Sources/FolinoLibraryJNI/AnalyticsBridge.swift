@@ -300,16 +300,33 @@ public final class AnalyticsBridge {
     /// widths across platforms without the auto-attached `platform`. Deliberately a single-`String` argument per call:
     /// wirelet's `[String]` method-arg support is unreleased.
     ///
+    /// **A legacy (pre-`schemaVersion`) blob never reports `staff_size`, whatever it stores.** Android's since-removed
+    /// eager seed wrote the *global* staff size in effect when the score was first opened, and that global is a
+    /// prominent continuous 8…28 slider defaulting to its maximum — so for any user who has since moved it, every
+    /// previously-opened score stores a number that is neither the current global nor a per-score choice.
+    /// `decode(_:defaultStaffSize:)`'s "equals the default in effect" rule cannot tell the two apart, so on Android it
+    /// would report a stale global as an explicit choice and break the event's central claim that a present parameter
+    /// means the user changed something. The pre-`schemaVersion` world simply did not record the distinction; dropping
+    /// the parameter under-reports, which is the direction this instrumentation errs everywhere else (spec §4, §6),
+    /// and the population is self-limiting — the first mutation of any such score re-encodes it as `schemaVersion: 2`,
+    /// after which its `staffSize` is authoritative and reported. iOS needs no such rule: its seed was the frozen
+    /// constant `14`, so the v16 migration's `CASE WHEN staff_size = 14 THEN NULL` is exact.
+    ///
+    /// This is an **analytics-only** widening. `ReaderPreferencesBridge.open` keeps using
+    /// `decode(_:defaultStaffSize:)`, so what the Reader renders is unaffected.
+    ///
     /// `defaultStaffSize` is the Reader's current *global* staff size — the same `prefs.staffSize` flow `MainActivity`
-    /// hands to `ReaderPreferencesBridge.open`. It is required, not optional: this builder decodes the raw blob
-    /// instead of going through `open`, so without it the legacy correction in `decode(_:defaultStaffSize:)` would
-    /// never run here and every score any Android user has ever opened would report `staff_size` as explicitly
-    /// configured. See that overload for why Domain cannot make the correction on its own.
+    /// hands to `ReaderPreferencesBridge.open`. With the rule above it no longer influences any parameter; it is kept
+    /// in the signature so the JNI wire shape stays put and so the value is on hand if a later parameter needs it.
     @WireletExpose
     public func scorePrefs(prefsJson: String, widthDp: Double, defaultStaffSize: Double) -> AnalyticsEventWire {
-        guard let prefs = ReaderPreferencesReducer.decode(prefsJson, defaultStaffSize: defaultStaffSize),
-              let event = AnalyticsEvent.scorePrefs(prefs, screenWidthPt: widthDp)
-        else { return AnalyticsEventWire(name: "", params: []) }
+        guard var prefs = ReaderPreferencesReducer.decode(prefsJson) else {
+            return AnalyticsEventWire(name: "", params: [])
+        }
+        if ReaderPreferencesReducer.isLegacyBlob(prefsJson) { prefs.staffSize = nil }
+        guard let event = AnalyticsEvent.scorePrefs(prefs, screenWidthPt: widthDp) else {
+            return AnalyticsEventWire(name: "", params: [])
+        }
         return Self.encode(event)
     }
 

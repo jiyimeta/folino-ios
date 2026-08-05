@@ -77,9 +77,16 @@ public final class ReaderPreferencesBridge {
     /// Reconciles the score's authored-hidden staves (`<Part><show>0</show>`, from the ssm `PartWire`) into the loaded
     /// preferences once. Kotlin calls this after the parsed score's parts arrive — the point where authored visibility
     /// becomes known — since `open` fires before the score parses. Uses the shared
-    /// `ReaderPreferences.reconcilingAuthoredHidden` so it matches iOS exactly: a not-yet-seeded row gets the authored-
-    /// hidden staves unioned in and is marked seeded; an already-seeded row (or one with nothing authored-hidden) is
-    /// left untouched, so staves the user reveals stay revealed on reopen.
+    /// `ReaderPreferences.reconcilingAuthoredHidden` so it matches iOS exactly: a not-yet-seeded row gets the
+    /// authored-hidden staves unioned in and is marked seeded; an already-seeded row whose recorded authored set no
+    /// longer matches the score's has just that provenance refreshed and rewritten, with `hiddenStaves` left alone so
+    /// staves the user revealed stay revealed on reopen; a row already in agreement is returned unchanged and not
+    /// written.
+    ///
+    /// Re-firing is safe only *given the caller contract* on `reconcilingAuthoredHidden`: because the refresh branch
+    /// rewrites the authored set to whatever it is handed, this is idempotent for the same authored set, not for any
+    /// argument. Kotlin must not call it before the parse has produced parts — `ReaderScreen.kt:562-563` enforces
+    /// that with `if (mixerParts.isNotEmpty())`, and that guard is load-bearing.
     @WireletExpose
     public func seedAuthoredHidden(staves: [HiddenStaffEntryWire]) {
         let authored = Set(staves.map {

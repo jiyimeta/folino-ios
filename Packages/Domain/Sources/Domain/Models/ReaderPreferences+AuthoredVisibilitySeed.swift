@@ -18,6 +18,23 @@ extension ReaderPreferences {
     ///   for scores whose staves were renumbered by a re-read.
     /// - Otherwise (the recorded authored set already matches) → return the stored value unchanged
     ///   and do not write.
+    ///
+    /// **Caller contract: never call this with an empty `authoredHiddenStaves` unless the score's
+    /// authored visibility is genuinely known to be empty.** The refresh branch above rewrites
+    /// `authoredHiddenStaves` to whatever it is handed, so passing `[]` after a failed or partial
+    /// parse permanently reclassifies every authored-hidden staff as user-hidden: the provenance is
+    /// gone, the row is written, and nothing later restores it. The staves stay hidden, so nothing
+    /// looks wrong — the damage is silent and shows up only in `authored_hidden_staff_count`
+    /// analytics and in any future behavior keyed to provenance.
+    ///
+    /// Both call sites uphold this by only calling once the parse has produced parts:
+    /// - iOS `ReaderPreferencesStore.loadOrSeed` is called with the loaded score's
+    ///   `Score.authoredHiddenStaffAddresses`; PDFs (no notation, so nothing authored) pass the
+    ///   empty default deliberately.
+    /// - Android `ReaderScreen.kt:562-563` guards the `onAuthoredHiddenStavesReady` call with
+    ///   `if (mixerParts.isNotEmpty())`. That guard is load-bearing — `mixerParts` starts empty and
+    ///   fills in asynchronously, so removing it would hand `[]` to this function on every open,
+    ///   before the score has parsed. Do not "simplify" it away.
     public static func reconcilingAuthoredHidden(
         stored: ReaderPreferences?,
         authoredHiddenStaves: Set<StaffAddress>,

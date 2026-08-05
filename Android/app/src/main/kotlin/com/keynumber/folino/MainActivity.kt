@@ -304,7 +304,13 @@ private fun LibraryNavGraph(
     // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
     // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
     // after import/delete is a deferred minor (iOS emits once at launch too).
+    //
+    // claimLaunchSnapshots() makes the whole batch process-scoped, which LaunchedEffect(Unit) alone is not: this
+    // composable is recreated with the Activity, and the manifest's configChanges does not cover uiMode / locale /
+    // fontScale, so a dark-mode flip or a language change would re-emit every event below inside one ga_session_id.
+    // score_prefs carries no score identifier by design, so such duplicates cannot be removed downstream.
     LaunchedEffect(Unit) {
+        if (!AndroidAnalytics.claimLaunchSnapshots()) return@LaunchedEffect
         AndroidAnalytics.log(vm.librarySnapshot())
         AndroidAnalytics.log(
             AndroidAnalytics.bridge.settingsSnapshot(
@@ -329,10 +335,10 @@ private fun LibraryNavGraph(
         // Swift; Kotlin only enumerates and relays. An empty name means "untouched or undecodable — skip". One call
         // per blob: wirelet's [String] method-arg support is unreleased.
         //
-        // defaultStaffSize must be the *live* global staff size, the same prefs.staffSize the Reader hands to
-        // ReaderPreferencesBridge.open. Every blob written before the eager seed was removed stores that global, and
-        // the decoder only demotes it to "untouched" when it matches the default in effect; a constant here would
-        // report staff_size as configured on essentially every score.
+        // defaultStaffSize is still the *live* global staff size, the same prefs.staffSize the Reader hands to
+        // ReaderPreferencesBridge.open. The analytics builder no longer uses it to decide staff_size — it drops that
+        // parameter for every legacy blob outright (see AnalyticsBridge.scorePrefs) — but the argument is kept so the
+        // wire signature stays put and so the value is right if a future parameter needs it.
         // A failed read degrades to "no events" — the same best-effort stance as the two snapshots above, none of
         // which may fail a launch. It is recorded as a non-fatal, though, mirroring iOS AppBootstrap.scorePrefsEvents:
         // this is a whole-table read, so one bad row zeroes every score_prefs event for the launch, and silence would
