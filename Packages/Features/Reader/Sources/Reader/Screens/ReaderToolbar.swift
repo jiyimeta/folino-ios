@@ -183,10 +183,10 @@ struct ReaderToolbar: ToolbarContent {
             ToolbarItem(placement: .topBarTrailing) {
                 noteEditingButton(action: onStartEditing)
                     .labelStyle(.iconOnly)
-                    // Anchored only here, not on the overflow-menu copy: a coach mark points at something visible,
-                    // and a folded button has no frame worth pointing at (which also drops the hint — see
+                    // Declared only here, not on the overflow-menu copy: a coach mark points at something visible,
+                    // and a folded button is not one of the bar's items to count (which also drops the hint — see
                     // `ReaderHintCoordinator.offerRotationHint`).
-                    .readerHintAnchor(.noteEditingButton)
+                    .readerHintBarAnchor(.noteEditingButton)
             }
             groupSeparator
         }
@@ -208,7 +208,7 @@ struct ReaderToolbar: ToolbarContent {
             ToolbarItem(placement: .topBarTrailing) {
                 annotationToggleButton
                     .labelStyle(.iconOnly)
-                    .readerHintAnchor(.annotationButton)
+                    .readerHintBarAnchor(.annotationButton)
             }
             groupSeparator
         }
@@ -271,7 +271,7 @@ struct ReaderToolbar: ToolbarContent {
             }
             .labelStyle(.iconOnly)
         }
-        .readerHintAnchor(.playbackInspectorButton)
+        .readerHintBarAnchor(.playbackInspectorButton)
         .inspectorPopover(
             isPresented: $viewModel.isPlaybackInspectorPresented,
             anchored: anchorsInspectorPopovers,
@@ -289,7 +289,7 @@ struct ReaderToolbar: ToolbarContent {
             }
             .labelStyle(.iconOnly)
         }
-        .readerHintAnchor(.visualInspectorButton)
+        .readerHintBarAnchor(.visualInspectorButton)
         .inspectorPopover(
             isPresented: $viewModel.isVisualInspectorPresented,
             anchored: anchorsInspectorPopovers,
