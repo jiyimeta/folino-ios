@@ -4,6 +4,12 @@ import SheetMusicCore
 /// Per-score Reader display settings: engraved staff size and the set of hidden staves (addressed by `(partIndex,
 /// staffIndexInPart)`). Layout mode (vertical vs. page) is global and is NOT stored here — the Reader feature reads it
 /// from `@AppStorage`.
+///
+/// The Optional scalar fields carry a third state beyond their value range: `nil` means the user never touched the
+/// setting, so it resolves to whatever the current default is (read it through the matching `effective…` accessor).
+/// A stored value — even one equal to the default — means the user chose it, and must survive every clamp / re-seat /
+/// save round-trip. That is why clamping is `Optional.map`-based: a clamp that materialized a number out of `nil`
+/// would silently mark the score as touched.
 public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public static let minStaffSize: Double = 8
     public static let maxStaffSize: Double = 28
@@ -17,6 +23,12 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// Minimum run length (in measures) at which the Reader collapses consecutive empty-rest measures into a single
     /// H-bar. Fixed — not user-tunable in this iteration.
     public static let multiMeasureRestThreshold = 2
+
+    /// Defaults an untouched (`nil`) field resolves to. Staff size has NO static default here — its default is the one
+    /// that becomes device-class-dependent (`ReaderRootScreen`), so resolution takes it as an argument instead.
+    public static let defaultHonorLayoutBreaks = true
+    public static let defaultMasterVolume = 1.0
+    public static let defaultTransposeSemitones = 0
 
     /// Allow-list of canonical `NotatedClef.rawType` values the Domain initializer accepts. Mirrors the 14 forms
     /// `NotatedClef.rawType` emits in `swift-sheet-music`. Aliases that `NotatedClef(rawType:)` accepts as inputs but
@@ -33,7 +45,10 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
 
     public let id: ReaderPreferencesID
     public let scoreItemID: ScoreItemID
-    public var staffSize: Double
+    /// Engraved staff size in mm. `nil` = the user never chose one, so the Reader resolves it to the current default
+    /// (which is device-class-dependent) via `effectiveStaffSize(default:)`. A stored value — including one that
+    /// happens to equal the default — means the user chose it, and survives every re-seat/clamp/save round-trip.
+    public var staffSize: Double?
     public var hiddenStaves: Set<StaffAddress>
     /// User-chosen GM program (0…127) per staff that overrides whatever the score declares. Absent entries fall back to
     /// the score's instrument channel program. Bank stays at 0 — the picker only swaps melodic programs (matches
@@ -55,19 +70,22 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// When `true` (default), the layout engine honors authored `<LayoutBreak>line` / `<LayoutBreak>page` markup, so
     /// the engraver's chosen system / page boundaries are reproduced. When `false`, the engine ignores both forms and
     /// wraps measures purely on the available view width — useful when the score was authored for a different page
-    /// size.
-    public var honorLayoutBreaks: Bool
+    /// size. `nil` = the user never chose, so it resolves to `defaultHonorLayoutBreaks` via
+    /// `effectiveHonorLayoutBreaks`.
+    public var honorLayoutBreaks: Bool?
     /// Current repeat / loop mode for this score. Defaults to `.off`.
     public var repeatMode: RepeatMode
     /// Active A–B loop range. Only meaningful when `repeatMode == .abLoop`. `nil` when no range has been set.
     public var abRepeat: ABRepeatRange?
-    /// Per-score master output volume. `1.0` (default) is unity — the mix plays at the score's authored level.
-    /// Boosts up to `maxMasterVolume` (300%) raise the whole mix past per-staff CC7's ceiling; the engine
-    /// brick-wall-limits the result so a boost doesn't clip. Clamped to `[minMasterVolume, maxMasterVolume]`.
-    public var masterVolume: Double
-    /// Per-score transposition offset in semitones. `0` (default) means no transposition. Clamped to
-    /// `[-7, +7]` (a diminished fifth / tritone either way), matching the engine's supported range.
-    public var transposeSemitones: Int
+    /// Per-score master output volume. `1.0` (`defaultMasterVolume`) is unity — the mix plays at the score's authored
+    /// level. Boosts up to `maxMasterVolume` (300%) raise the whole mix past per-staff CC7's ceiling; the engine
+    /// brick-wall-limits the result so a boost doesn't clip. Clamped to `[minMasterVolume, maxMasterVolume]` when set.
+    /// `nil` = the user never chose, so it resolves to the default via `effectiveMasterVolume`.
+    public var masterVolume: Double?
+    /// Per-score transposition offset in semitones. `0` (`defaultTransposeSemitones`) means no transposition. Clamped
+    /// to `[-7, +7]` (a diminished fifth / tritone either way) when set, matching the engine's supported range.
+    /// `nil` = the user never chose, so it resolves to the default via `effectiveTransposeSemitones`.
+    public var transposeSemitones: Int?
     /// Per-score A4 reference override in Hz. `nil` = inherit the global default. Clamped to
     /// `[A4Reference.minHz, A4Reference.maxHz]` when set.
     public var a4ReferenceHz: Double?
@@ -80,23 +98,23 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     public init(
         id: ReaderPreferencesID = ReaderPreferencesID(),
         scoreItemID: ScoreItemID,
-        staffSize: Double,
+        staffSize: Double? = nil,
         hiddenStaves: Set<StaffAddress>,
         staffProgramOverrides: [StaffAddress: Int] = [:],
         staffVolumeOverrides: [StaffAddress: Double] = [:],
         staffClefOverrides: [StaffAddress: String] = [:],
         tempoMultiplier: Double? = nil,
-        honorLayoutBreaks: Bool = true,
+        honorLayoutBreaks: Bool? = nil,
         repeatMode: RepeatMode = .off,
         abRepeat: ABRepeatRange? = nil,
-        masterVolume: Double = 1.0,
-        transposeSemitones: Int = 0,
+        masterVolume: Double? = nil,
+        transposeSemitones: Int? = nil,
         a4ReferenceHz: Double? = nil,
         hasSeededAuthoredVisibility: Bool = false,
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
-        self.staffSize = min(max(staffSize, Self.minStaffSize), Self.maxStaffSize)
+        self.staffSize = staffSize.map { min(max($0, Self.minStaffSize), Self.maxStaffSize) }
         self.hiddenStaves = hiddenStaves
         self.staffProgramOverrides = staffProgramOverrides.mapValues { min(max($0, 0), 127) }
         self.staffVolumeOverrides = staffVolumeOverrides.mapValues { min(max($0, 0), 1) }
@@ -109,10 +127,32 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.honorLayoutBreaks = honorLayoutBreaks
         self.repeatMode = repeatMode
         self.abRepeat = abRepeat
-        self.masterVolume = min(max(masterVolume, Self.minMasterVolume), Self.maxMasterVolume)
-        self.transposeSemitones = min(max(transposeSemitones, -7), 7)
+        self.masterVolume = masterVolume.map {
+            min(max($0, Self.minMasterVolume), Self.maxMasterVolume)
+        }
+        self.transposeSemitones = transposeSemitones.map { min(max($0, -7), 7) }
         self.a4ReferenceHz = a4ReferenceHz.map(A4Reference.clamp)
         self.hasSeededAuthoredVisibility = hasSeededAuthoredVisibility
+    }
+
+    /// The value to use for a field the user may never have set: the stored value when there is one, the default
+    /// otherwise. Reading through these is what keeps `nil` from having to be materialized at the use site.
+    public var effectiveHonorLayoutBreaks: Bool {
+        honorLayoutBreaks ?? Self.defaultHonorLayoutBreaks
+    }
+
+    public var effectiveMasterVolume: Double {
+        masterVolume ?? Self.defaultMasterVolume
+    }
+
+    public var effectiveTransposeSemitones: Int {
+        transposeSemitones ?? Self.defaultTransposeSemitones
+    }
+
+    /// Staff size resolved against the caller's default, because the default is device-class-dependent and so can't
+    /// live on the model.
+    public func effectiveStaffSize(default defaultValue: Double) -> Double {
+        staffSize ?? defaultValue
     }
 
     /// Whether any setting addressed by staff index is set. These are exactly the settings that stop meaning what the
@@ -122,19 +162,21 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             || !staffProgramOverrides.isEmpty
             || !staffVolumeOverrides.isEmpty
             || !staffClefOverrides.isEmpty
-            || transposeSemitones != 0
+            || (transposeSemitones ?? 0) != 0
     }
 
     /// A copy with every staff-index-addressed setting reset. Sound-only settings (tempo, A4, master volume, repeat)
-    /// and `staffSize` survive — they don't reference staves by index. `hasSeededAuthoredVisibility` goes back to
-    /// `false` so the next open re-seeds the new parse's authored hidden staves.
+    /// and `staffSize` survive — they don't reference staves by index. `transposeSemitones` goes back to `nil`
+    /// (untouched) rather than an explicit `0`, since the user's choice no longer applies to the new staff numbering.
+    /// `hasSeededAuthoredVisibility` goes back to `false` so the next open re-seeds the new parse's authored hidden
+    /// staves.
     public func clearingStaffBoundOverrides() -> ReaderPreferences {
         var copy = self
         copy.hiddenStaves = []
         copy.staffProgramOverrides = [:]
         copy.staffVolumeOverrides = [:]
         copy.staffClefOverrides = [:]
-        copy.transposeSemitones = 0
+        copy.transposeSemitones = nil
         copy.hasSeededAuthoredVisibility = false
         return copy
     }
@@ -152,7 +194,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let id = try c.decode(ReaderPreferencesID.self, forKey: .id)
         let scoreItemID = try c.decode(ScoreItemID.self, forKey: .scoreItemID)
-        let staffSize = try c.decode(Double.self, forKey: .staffSize)
+        let staffSize = try c.decodeIfPresent(Double.self, forKey: .staffSize)
         let hiddenStaves = try c.decode(Set<StaffAddress>.self, forKey: .hiddenStaves)
         let programOverrides = try c.decodeIfPresent(
             [StaffAddress: Int].self, forKey: .staffProgramOverrides,
@@ -164,11 +206,11 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
             [StaffAddress: String].self, forKey: .staffClefOverrides,
         ) ?? [:]
         let tempo = try c.decodeIfPresent(Double.self, forKey: .tempoMultiplier)
-        let honorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks) ?? true
+        let honorBreaks = try c.decodeIfPresent(Bool.self, forKey: .honorLayoutBreaks)
         let mode = try c.decodeIfPresent(RepeatMode.self, forKey: .repeatMode) ?? .off
         let ab = try c.decodeIfPresent(ABRepeatRange.self, forKey: .abRepeat)
-        let master = try c.decodeIfPresent(Double.self, forKey: .masterVolume) ?? 1.0
-        let transpose = try c.decodeIfPresent(Int.self, forKey: .transposeSemitones) ?? 0
+        let master = try c.decodeIfPresent(Double.self, forKey: .masterVolume)
+        let transpose = try c.decodeIfPresent(Int.self, forKey: .transposeSemitones)
         let a4 = try c.decodeIfPresent(Double.self, forKey: .a4ReferenceHz)
         let hasSeeded = try c.decodeIfPresent(
             Bool.self, forKey: .hasSeededAuthoredVisibility,

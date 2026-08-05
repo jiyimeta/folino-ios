@@ -38,7 +38,7 @@ struct ReaderPreferencesTests {
         #expect(!cleared.hasStaffBoundOverrides)
         #expect(cleared.hiddenStaves.isEmpty)
         #expect(cleared.staffClefOverrides.isEmpty)
-        #expect(cleared.transposeSemitones == 0)
+        #expect(cleared.transposeSemitones == nil)
         #expect(cleared.staffSize == 14)
         #expect(cleared.tempoMultiplier == 1.5)
         #expect(cleared.masterVolume == 2.0)
@@ -263,11 +263,12 @@ struct ReaderPreferencesTests {
         #expect(prefs.staffClefOverrides.isEmpty)
     }
 
-    @Test func `master volume defaults to unity`() {
+    @Test func `master volume is untouched by default and resolves to unity`() {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
         )
-        #expect(prefs.masterVolume == 1.0)
+        #expect(prefs.masterVolume == nil)
+        #expect(prefs.effectiveMasterVolume == 1.0)
     }
 
     @Test func `master volume is clamped to zero through three`() {
@@ -300,10 +301,11 @@ struct ReaderPreferencesTests {
         #expect(decoded.masterVolume == 2.5)
     }
 
-    @Test func `legacy JSON without master volume key decodes as unity`() throws {
-        // Additive-only schema change: rows persisted before masterVolume landed must still load at unity.
+    @Test func `JSON without a master volume key decodes as untouched and resolves to unity`() throws {
+        // An absent key means the user never set the field, so it decodes as `nil` and resolves to unity through
+        // `effectiveMasterVolume` — no value is materialized on the way in.
         let prefs = ReaderPreferences(
-            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [],
+            scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [], masterVolume: 2.5,
         )
         let encoded = try JSONEncoder().encode(prefs)
         let jsonObject = try JSONSerialization.jsonObject(with: encoded)
@@ -311,7 +313,8 @@ struct ReaderPreferencesTests {
         dict.removeValue(forKey: "masterVolume")
         let stripped = try JSONSerialization.data(withJSONObject: dict)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: stripped)
-        #expect(decoded.masterVolume == 1.0)
+        #expect(decoded.masterVolume == nil)
+        #expect(decoded.effectiveMasterVolume == 1.0)
     }
 
     @Test func `legacy JSON without tempo multiplier key decodes as nil`() throws {
