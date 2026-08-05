@@ -27,6 +27,7 @@ struct ReaderPreferencesTests {
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [address],
+            authoredHiddenStaves: [address],
             staffClefOverrides: [address: "F"],
             tempoMultiplier: 1.5,
             masterVolume: 2.0,
@@ -37,6 +38,7 @@ struct ReaderPreferencesTests {
         let cleared = prefs.clearingStaffBoundOverrides()
         #expect(!cleared.hasStaffBoundOverrides)
         #expect(cleared.hiddenStaves.isEmpty)
+        #expect(cleared.authoredHiddenStaves.isEmpty)
         #expect(cleared.staffClefOverrides.isEmpty)
         #expect(cleared.transposeSemitones == nil)
         #expect(cleared.staffSize == 14)
@@ -343,6 +345,7 @@ struct ReaderPreferencesTests {
             scoreItemID: ScoreItemID(),
             staffSize: 17,
             hiddenStaves: [StaffAddress(partIndex: 0, staffIndexInPart: 1)],
+            authoredHiddenStaves: [StaffAddress(partIndex: 1, staffIndexInPart: 1)],
             staffProgramOverrides: [StaffAddress(partIndex: 0, staffIndexInPart: 0): 40],
             staffVolumeOverrides: [StaffAddress(partIndex: 1, staffIndexInPart: 0): 0.5],
             staffClefOverrides: [StaffAddress(partIndex: 0, staffIndexInPart: 0): "F"],

@@ -50,6 +50,11 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// happens to equal the default — means the user chose it, and survives every re-seat/clamp/save round-trip.
     public var staffSize: Double?
     public var hiddenStaves: Set<StaffAddress>
+    /// Score-derived ground truth of the staves the score itself authored hidden (`<Part><show>false`), refreshed on
+    /// every open. It is provenance, not user intent — subtracting it from `hiddenStaves` isolates what the user
+    /// actually did: `hiddenStaves.subtracting(authoredHiddenStaves)` is what the user hid on their own, and
+    /// `authoredHiddenStaves.subtracting(hiddenStaves)` is what the user revealed against the score's wishes.
+    public var authoredHiddenStaves: Set<StaffAddress>
     /// User-chosen GM program (0…127) per staff that overrides whatever the score declares. Absent entries fall back to
     /// the score's instrument channel program. Bank stays at 0 — the picker only swaps melodic programs (matches
     /// `swift-sheet-music`'s `ProgramMenu`).
@@ -100,6 +105,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         scoreItemID: ScoreItemID,
         staffSize: Double? = nil,
         hiddenStaves: Set<StaffAddress>,
+        authoredHiddenStaves: Set<StaffAddress> = [],
         staffProgramOverrides: [StaffAddress: Int] = [:],
         staffVolumeOverrides: [StaffAddress: Double] = [:],
         staffClefOverrides: [StaffAddress: String] = [:],
@@ -116,6 +122,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.scoreItemID = scoreItemID
         self.staffSize = staffSize.map { min(max($0, Self.minStaffSize), Self.maxStaffSize) }
         self.hiddenStaves = hiddenStaves
+        self.authoredHiddenStaves = authoredHiddenStaves
         self.staffProgramOverrides = staffProgramOverrides.mapValues { min(max($0, 0), 127) }
         self.staffVolumeOverrides = staffVolumeOverrides.mapValues { min(max($0, 0), 1) }
         self.staffClefOverrides = staffClefOverrides.filter { _, raw in
@@ -169,10 +176,12 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// and `staffSize` survive — they don't reference staves by index. `transposeSemitones` goes back to `nil`
     /// (untouched) rather than an explicit `0`, since the user's choice no longer applies to the new staff numbering.
     /// `hasSeededAuthoredVisibility` goes back to `false` so the next open re-seeds the new parse's authored hidden
-    /// staves.
+    /// staves, and `authoredHiddenStaves` is emptied with it: keeping the old parse's provenance next to an emptied
+    /// `hiddenStaves` would read as "the user revealed all of these" until the score is opened again.
     public func clearingStaffBoundOverrides() -> ReaderPreferences {
         var copy = self
         copy.hiddenStaves = []
+        copy.authoredHiddenStaves = []
         copy.staffProgramOverrides = [:]
         copy.staffVolumeOverrides = [:]
         copy.staffClefOverrides = [:]
@@ -188,6 +197,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         case staffClefOverrides
         case transposeSemitones
         case hasSeededAuthoredVisibility
+        case authoredHiddenStaves
     }
 
     public init(from decoder: Decoder) throws {
@@ -196,6 +206,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let scoreItemID = try c.decode(ScoreItemID.self, forKey: .scoreItemID)
         let staffSize = try c.decodeIfPresent(Double.self, forKey: .staffSize)
         let hiddenStaves = try c.decode(Set<StaffAddress>.self, forKey: .hiddenStaves)
+        let authoredHidden = try c.decodeIfPresent(
+            Set<StaffAddress>.self, forKey: .authoredHiddenStaves,
+        ) ?? []
         let programOverrides = try c.decodeIfPresent(
             [StaffAddress: Int].self, forKey: .staffProgramOverrides,
         ) ?? [:]
@@ -217,7 +230,8 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         ) ?? false
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
-            hiddenStaves: hiddenStaves, staffProgramOverrides: programOverrides,
+            hiddenStaves: hiddenStaves, authoredHiddenStaves: authoredHidden,
+            staffProgramOverrides: programOverrides,
             staffVolumeOverrides: volumeOverrides,
             staffClefOverrides: clefOverrides,
             tempoMultiplier: tempo,
