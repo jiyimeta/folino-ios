@@ -21,6 +21,19 @@ enum ScreenshotSharedState {
     static func reset() {
         UserDefaults.standard.removeObject(forKey: ReaderGlobalSettingsKey.layoutMode)
         UserDefaults.standard.removeObject(forKey: ReaderGlobalSettingsKey.showSeekBarEnabled)
+        // Left behind, `readerAutoEditMeasure` would drop every LATER scene into an edit session too — the pad and a
+        // selected note on top of the A–B loop shot, and so on.
+        UserDefaults.standard.removeObject(forKey: ScreenshotEditingKey.autoEditMeasure)
+        UserDefaults.standard.removeObject(forKey: ScreenshotEditingKey.padVisible)
         RepeatModeStorage.set(.off)
     }
+}
+
+/// The two `UserDefaults` keys `NoteEditingScene` writes, declared once so the scene and the reset above can't drift
+/// apart. Both are owned by other modules and neither has a public constant to import: `autoEditMeasure` is the
+/// Reader's screenshot hook (`ReaderRootScreen.screenshotEditMeasure`), `padVisible` is the Editor chrome's own
+/// `@AppStorage` for the input pad (`EditorChromeView.isPadVisible`).
+enum ScreenshotEditingKey {
+    static let autoEditMeasure = "readerAutoEditMeasure"
+    static let padVisible = "editorPadVisible"
 }

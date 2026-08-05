@@ -41,6 +41,7 @@ struct ReaderScene: View {
             layout: FolinoScreenshotLayout.layout(
                 for: idiom,
                 subtitleBullet: true,
+                innerStatusBarHeight: 0,
             ),
             idiom: idiom,
         ) {
@@ -59,6 +60,7 @@ struct ReaderScene: View {
                     hidesBackButton: true,
                 )
             }
+            .readerStatusBarBand(for: idiom)
         } overlay: {
             EmptyView()
         }
