@@ -112,9 +112,57 @@ enum ReaderPreferencesReducer {
 
     /// Decodes a stored JSON blob back into `ReaderPreferences`. Returns `nil` for empty / invalid input — the
     /// caller treats `nil` as "no saved preferences yet" and seeds defaults.
+    ///
+    /// This is the raw decode. Any caller that knows the Reader's current global default staff size should use
+    /// `decode(_:defaultStaffSize:)` instead — see the note there on what Domain's legacy normalization cannot fix
+    /// on its own.
     static func decode(_ json: String) -> ReaderPreferences? {
         guard let data = json.data(using: .utf8), !data.isEmpty else { return nil }
         return try? JSONDecoder().decode(ReaderPreferences.self, from: data)
+    }
+
+    /// Decodes a stored blob and applies the one legacy correction Domain cannot make on its own.
+    ///
+    /// `ReaderPreferences.init(from:)` demotes a legacy (pre-`schemaVersion`) `staffSize` to "untouched" only when it
+    /// equals the frozen constant `14` — the value iOS seeded. Android's since-removed eager seed wrote the Reader's
+    /// *global* default staff size instead (`MainActivity` passes `defaultStaffSize = prefs.staffSize`, a
+    /// user-variable setting whose initial value is `28`), so a legacy Android blob carries whatever that global was
+    /// when the score was first opened. Left alone it decodes as `.some`, permanently marking every score any Android
+    /// user has ever opened as one with an explicitly configured staff size.
+    ///
+    /// The rule mirrors the iOS v16 migration exactly — "the stored value equals the default in effect, so treat it
+    /// as untouched" — with the default supplied by the caller, because on Android it is user-variable and only this
+    /// layer knows it. Same accepted trade-off as iOS: a user who deliberately chose a size that happens to equal the
+    /// current global is reclassified as untouched. It is also approximate in the other direction — a user who has
+    /// since moved the global keeps the stored value — which errs toward preserving data.
+    ///
+    /// There is no user-visible effect: a cleared `staffSize` resolves back through `effectiveStaffSize(default:)` to
+    /// the very global it was compared against, so the score renders identically. If the user later moves the global,
+    /// an untouched score follows it, which is the intent.
+    ///
+    /// A v2 blob is authoritative and is never touched.
+    static func decode(_ json: String, defaultStaffSize: Double) -> ReaderPreferences? {
+        guard var prefs = decode(json) else { return nil }
+        guard isLegacyBlob(json) else { return prefs }
+        // The legacy write path clamped as it stored, so compare against the clamped default.
+        let seeded = min(max(defaultStaffSize, ReaderPreferences.minStaffSize), ReaderPreferences.maxStaffSize)
+        guard prefs.staffSize == seeded else { return prefs }
+        prefs.staffSize = nil
+        return prefs
+    }
+
+    /// Whether `json` predates the `schemaVersion` marker, i.e. was written before "untouched is `nil`" existed. Only
+    /// such a blob is subject to a legacy correction; see `ReaderPreferences.init(from:)`.
+    static func isLegacyBlob(_ json: String) -> Bool {
+        guard let data = json.data(using: .utf8), !data.isEmpty,
+              let probe = try? JSONDecoder().decode(SchemaVersionProbe.self, from: data)
+        else { return false }
+        return probe.schemaVersion == nil
+    }
+
+    /// Reads just the schema marker out of a stored blob, ignoring every other key.
+    private struct SchemaVersionProbe: Decodable {
+        let schemaVersion: Int?
     }
 
     /// Encodes `p` to a JSON blob for opaque persistence. Returns `""` if encoding fails (never expected for this

@@ -1,5 +1,6 @@
 import Domain
 @testable import FolinoLibraryJNI
+import Foundation
 import Testing
 
 /// In-memory stand-in for the Kotlin/Room blob backend. Counts writes so the "an untouched score is not persisted"
@@ -21,6 +22,20 @@ private final class FakeReaderPreferencesStore: ReaderPreferencesStore {
 struct ReaderPreferencesBridgeTests {
     private func saved(_ store: FakeReaderPreferencesStore, _ scoreId: String) -> ReaderPreferences? {
         ReaderPreferencesReducer.decode(store.loadJSON(scoreId: scoreId))
+    }
+
+    /// A pre-`schemaVersion` blob, built by encoding a current one and dropping the marker key. Goes through
+    /// `JSONSerialization` rather than string surgery because `JSONEncoder` does not fix key order. The result is
+    /// asserted to actually read as legacy — otherwise a silent no-op would leave a v2 blob behind and quietly stop
+    /// testing the legacy path.
+    private func legacyBlob(_ prefs: ReaderPreferences) -> String {
+        let encoded = Data(ReaderPreferencesReducer.encode(prefs).utf8)
+        var object = ((try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any]) ?? [:]
+        object.removeValue(forKey: "schemaVersion")
+        let stripped = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
+        let legacy = String(bytes: stripped, encoding: .utf8) ?? ""
+        #expect(ReaderPreferencesReducer.isLegacyBlob(legacy))
+        return legacy
     }
 
     /// A row that says nothing but "defaults" carries no information, and writing one on first open would make every
@@ -93,6 +108,49 @@ struct ReaderPreferencesBridgeTests {
         // Compose still sees resolved scalars.
         #expect(bridge.state.masterVolume == ReaderPreferences.defaultMasterVolume)
         #expect(bridge.state.transposeSemitones == Int32(ReaderPreferences.defaultTransposeSemitones))
+    }
+
+    /// The Android half of the "untouched is `nil`" migration. Domain demotes a legacy `staffSize` only when it
+    /// equals iOS's frozen `14`; Android's removed eager seed wrote the *global* default instead (initially 28), so
+    /// without this every score an Android user has ever opened would report an explicitly configured staff size
+    /// forever.
+    @Test func `a legacy blob whose staff size is the global default decodes as untouched`() {
+        let store = FakeReaderPreferencesStore()
+        store.blobs["s1"] = legacyBlob(
+            ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 28, hiddenStaves: []),
+        )
+        let bridge = ReaderPreferencesBridge(store: store)
+        bridge.open(scoreId: "s1", defaultStaffSize: 28)
+        // No user-visible change: the cleared value resolves back to the same global.
+        #expect(bridge.state.staffSize == 28)
+        bridge.setMasterVolume(value: 0.5) // force the first save so the stored value can be inspected
+        #expect(saved(store, "s1")?.staffSize == nil)
+    }
+
+    /// The other half: a legacy staff size the user actually chose differs from the global and must be kept.
+    @Test func `a legacy blob whose staff size differs from the global default keeps it`() {
+        let store = FakeReaderPreferencesStore()
+        store.blobs["s1"] = legacyBlob(
+            ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 18, hiddenStaves: []),
+        )
+        let bridge = ReaderPreferencesBridge(store: store)
+        bridge.open(scoreId: "s1", defaultStaffSize: 28)
+        #expect(bridge.state.staffSize == 18)
+        bridge.setMasterVolume(value: 0.5)
+        #expect(saved(store, "s1")?.staffSize == 18)
+    }
+
+    /// A v2 blob is authoritative: it was written under "untouched is `nil`", so a stored value equal to the global
+    /// is a deliberate choice and must survive.
+    @Test func `a current blob keeps a staff size equal to the global default`() {
+        let store = FakeReaderPreferencesStore()
+        store.blobs["s1"] = ReaderPreferencesReducer.encode(
+            ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 28, hiddenStaves: []),
+        )
+        let bridge = ReaderPreferencesBridge(store: store)
+        bridge.open(scoreId: "s1", defaultStaffSize: 28)
+        bridge.setMasterVolume(value: 0.5)
+        #expect(saved(store, "s1")?.staffSize == 28)
     }
 
     /// Seeding authored visibility on a score that authored nothing hidden must not write a row either — and must

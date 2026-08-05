@@ -59,13 +59,15 @@ public final class ReaderPreferencesBridge {
     /// it via `mutate`.
     ///
     /// `defaultStaffSize` is the Reader's current global default. It is not stored into the preferences — it is
-    /// retained as the value the wire projection resolves an untouched `staffSize` against.
+    /// retained as the value the wire projection resolves an untouched `staffSize` against, and it is what a legacy
+    /// blob's eagerly-seeded staff size is demoted against (see `decode(_:defaultStaffSize:)`; that correction is
+    /// held in memory like the rest of the seed, so it costs no write until the user actually changes something).
     @WireletExpose
     public func open(scoreId: String, defaultStaffSize: Double) {
         self.scoreId = scoreId
         openDefaultStaffSize = defaultStaffSize
         let json = store.loadJSON(scoreId: scoreId)
-        if let decoded = ReaderPreferencesReducer.decode(json) {
+        if let decoded = ReaderPreferencesReducer.decode(json, defaultStaffSize: defaultStaffSize) {
             prefs = decoded
         } else {
             prefs = ReaderPreferences(scoreItemID: ScoreItemID(), hiddenStaves: [])
