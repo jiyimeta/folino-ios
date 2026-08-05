@@ -1,3 +1,4 @@
+- Added opening VocalTuner from the share menu to check your pitch
 - Improved the look of dark mode
 - Improved the score editing screen
 - Fixed note input ignoring the key signature
