@@ -61,9 +61,8 @@ packages:
     url: https://github.com/firebase/firebase-ios-sdk
     from: 11.0.0
   ScreenshotKit:
-    # TEMPORARY: local worktree while the host-compositor capture lands in swift-screenshot-kit. Re-pin to the pushed
-    # revision before merging.
-    path: /Users/kiichi/Developer/Personal/swift-screenshot-kit-compositor
+    url: git@github.com:jiyimeta/swift-screenshot-kit.git
+    revision: 1ef0c01776140616cb5dc94bf2d6b0614185b756
 targets:
   Folino:
     type: application
