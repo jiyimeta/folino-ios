@@ -3,6 +3,7 @@ import SwiftUI
 
 enum ScreenshotScene: CaseIterable {
     case reader
+    case noteEditing
     case playbackInspector
     case visualInspector
     case abRepeat
@@ -13,12 +14,13 @@ enum ScreenshotScene: CaseIterable {
     var id: String {
         switch self {
         case .reader: "01_Reader"
-        case .playbackInspector: "02_PlaybackInspector"
-        case .visualInspector: "03_VisualInspector"
-        case .abRepeat: "04_ABRepeat"
-        case .library: "05_Library"
-        case .pip: "06_PiP"
-        case .annotation: "07_Annotation"
+        case .noteEditing: "02_NoteEditing"
+        case .playbackInspector: "03_PlaybackInspector"
+        case .visualInspector: "04_VisualInspector"
+        case .abRepeat: "05_ABRepeat"
+        case .library: "06_Library"
+        case .pip: "07_PiP"
+        case .annotation: "08_Annotation"
         }
     }
 
@@ -38,6 +40,7 @@ enum ScreenshotScene: CaseIterable {
     private var sceneBody: some View {
         switch self {
         case .reader: ReaderScene()
+        case .noteEditing: NoteEditingScene()
         case .playbackInspector: PlaybackInspectorScene()
         case .visualInspector: VisualInspectorScene()
         case .abRepeat: ABRepeatScene()

@@ -31,7 +31,8 @@ struct SelectionCalloutLayer: View {
 
     var body: some View {
         GeometryReader { proxy in
-            if viewModel.hasSelectionCallout, let anchor = viewModel.selectionAnchor {
+            if viewModel.hasSelectionCallout, let globalAnchor = viewModel.selectionAnchor {
+                let anchor = localAnchor(globalAnchor, in: proxy)
                 let sides = availableSides(for: anchor, in: proxy)
                 EditorCalloutView(viewModel: viewModel)
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { calloutSize = $0 }
@@ -39,11 +40,32 @@ struct SelectionCalloutLayer: View {
                     .position(position(for: anchor, in: proxy, side: resolved(side, among: sides)))
                     // Same trick as the pad: a high-priority drag that only wins once the finger actually travels, so
                     // a tap still reaches the key underneath and a drag cancels it rather than firing it on release.
-                    .highPriorityGesture(dragGesture(anchor: anchor, proxy: proxy, sides: sides))
+                    .highPriorityGesture(dragGesture(anchor: anchor, sides: sides))
                     .animation(.snappy(duration: 0.18), value: viewModel.selectedItem)
             }
         }
         .onAppear { side = CalloutSide(rawValue: storedSide) ?? .above }
+    }
+
+    /// The anchor in THIS layer's own coordinates.
+    ///
+    /// The anchor arrives in global (screen) coordinates — only the Reader's overlay knows the document→screen
+    /// transform, and it publishes across a `UIHostingController` boundary (the score surface is hosted inside one),
+    /// which the window is the only space both sides can name. Everything else here — the card's measured size, the
+    /// gap, the clamps — is layout geometry, so the anchor has to be brought into that space rather than merely
+    /// shifted into it: any scale applied above this view is folded into the global frame and not into the measured
+    /// size. Normally the two are the same and `scale` is exactly 1; under the App Store screenshot harness, which
+    /// lays the app out at true device size and shrinks the raster with a `scaleEffect`, they are not — and mixing
+    /// them put the card a hundred points off its note, growing with distance down the screen.
+    private func localAnchor(_ anchor: CGRect, in proxy: GeometryProxy) -> CGRect {
+        let global = proxy.frame(in: .global)
+        let scale = proxy.size.width > 0 && global.width > 0 ? global.width / proxy.size.width : 1
+        return CGRect(
+            x: (anchor.minX - global.minX) / scale,
+            y: (anchor.minY - global.minY) / scale,
+            width: anchor.width / scale,
+            height: anchor.height / scale,
+        )
     }
 
     /// Which sides the card may park on for this note. The card must clear the header at the top and the pad plus
@@ -53,7 +75,7 @@ struct SelectionCalloutLayer: View {
         let top = proxy.safeAreaInsets.top + calloutSize.height / 2 + Self.edgeInset
         let bottom = proxy.size.height - bottomClearance - calloutSize.height / 2
         let sides = CalloutSide.allCases.filter { candidate in
-            let y = unclampedY(for: anchor, in: proxy, side: candidate)
+            let y = unclampedY(for: anchor, side: candidate)
             return y >= top && y <= bottom
         }
         // Neither fits (a tall card on a short viewport): keep both and let the clamp in `position` decide.
@@ -65,23 +87,20 @@ struct SelectionCalloutLayer: View {
     }
 
     /// Where the card's center wants to be for `side`, before any clamping — the value the snap decision compares.
-    private func unclampedY(for anchor: CGRect, in proxy: GeometryProxy, side: CalloutSide) -> CGFloat {
-        let global = proxy.frame(in: .global)
+    /// `anchor` is already in this layer's own coordinates (see `localAnchor(_:in:)`).
+    private func unclampedY(for anchor: CGRect, side: CalloutSide) -> CGFloat {
         let half = calloutSize.height / 2
         return switch side {
-        case .above: anchor.minY - global.minY - half - Self.noteGap
-        case .below: anchor.maxY - global.minY + half + Self.noteGap
+        case .above: anchor.minY - half - Self.noteGap
+        case .below: anchor.maxY + half + Self.noteGap
         }
     }
 
-    /// The card's center: on `side` of the note, then clamped into the viewport. The anchor arrives in GLOBAL
-    /// coordinates (only the Reader's overlay knows the document→screen transform), so it is converted through this
-    /// layer's own global frame first.
+    /// The card's center: on `side` of the note, then clamped into the viewport. `anchor` is already in this layer's
+    /// own coordinates (see `localAnchor(_:in:)`).
     private func position(for anchor: CGRect, in proxy: GeometryProxy, side: CalloutSide) -> CGPoint {
-        let global = proxy.frame(in: .global)
-        let localAnchor = anchor.offsetBy(dx: -global.minX, dy: -global.minY)
-        let rawX = localAnchor.midX
-        let rawY = unclampedY(for: anchor, in: proxy, side: side)
+        let rawX = anchor.midX
+        let rawY = unclampedY(for: anchor, side: side)
 
         // Clamping keeps the card reachable while the note it belongs to is on screen. Once the note has scrolled
         // out, clamping would strand the card at the edge pointing at nothing — so it goes with the note instead and
@@ -90,17 +109,17 @@ struct SelectionCalloutLayer: View {
         let halfWidth = calloutSize.width / 2
         let minX = halfWidth + Self.edgeInset
         let maxX = max(minX, proxy.size.width - halfWidth - Self.edgeInset)
-        let x = localAnchor.maxX >= 0 && localAnchor.minX <= viewport.maxX ? min(max(rawX, minX), maxX) : rawX
+        let x = anchor.maxX >= 0 && anchor.minX <= viewport.maxX ? min(max(rawX, minX), maxX) : rawX
 
         let topLimit = proxy.safeAreaInsets.top + calloutSize.height / 2 + Self.edgeInset
         let bottomLimit = max(topLimit, proxy.size.height - bottomClearance - calloutSize.height / 2)
-        let y = localAnchor.maxY >= 0 && localAnchor.minY <= viewport.maxY
+        let y = anchor.maxY >= 0 && anchor.minY <= viewport.maxY
             ? min(max(rawY, topLimit), bottomLimit)
             : rawY
         return CGPoint(x: x, y: y)
     }
 
-    private func dragGesture(anchor: CGRect, proxy: GeometryProxy, sides: [CalloutSide]) -> some Gesture {
+    private func dragGesture(anchor: CGRect, sides: [CalloutSide]) -> some Gesture {
         // GLOBAL space, like the pad's: in `.local` the translation is measured against a frame this very gesture is
         // moving, which feeds back and judders.
         DragGesture(minimumDistance: 12, coordinateSpace: .global)
@@ -108,11 +127,11 @@ struct SelectionCalloutLayer: View {
             .onEnded { value in
                 releasedTranslation = value.translation.height
                 let current = resolved(side, among: sides)
-                let released = unclampedY(for: anchor, in: proxy, side: current) + value.predictedEndTranslation.height
+                let released = unclampedY(for: anchor, side: current) + value.predictedEndTranslation.height
                 // Snap to whichever ALLOWED side the card was thrown nearest — with only one allowed, that's the one.
                 let destination = sides.min(by: { first, second in
-                    abs(unclampedY(for: anchor, in: proxy, side: first) - released)
-                        < abs(unclampedY(for: anchor, in: proxy, side: second) - released)
+                    abs(unclampedY(for: anchor, side: first) - released)
+                        < abs(unclampedY(for: anchor, side: second) - released)
                 }) ?? current
                 withAnimation(.snappy(duration: 0.28)) {
                     side = destination

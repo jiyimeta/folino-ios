@@ -247,7 +247,7 @@ public final class EditorViewModel {
     func applyCommand(_ command: any EditCommand) {
         guard let editor else { return }
         do {
-            try editor.apply(command)
+            try editor.apply(renotatingAccidentals(command, from: editor.score))
         } catch SheetMusicError.invalidEdit {
             // A refused edit leaves the score untouched by the engine's contract — no user-facing error in v1.
             return
@@ -260,6 +260,25 @@ public final class EditorViewModel {
         onScoreChanged(editor.score)
         isDirty = true
         scheduleAutosave()
+    }
+
+    /// `command` with the accidental-glyph repairs its own edit makes necessary bundled onto it, as one undo step —
+    /// or `command` untouched when it needs none (the common case) or when the engine would refuse it anyway.
+    ///
+    /// Editing is what makes this necessary: a stored glyph is only true relative to what precedes it in the bar, so
+    /// any edit that changes a pitch, adds a note, or removes one can leave a LATER note in that bar saying the
+    /// wrong thing — flipping the first C♯ of a bar to C♮ silently turns the second one into a C♮ to the eye while
+    /// it still sounds C♯. MuseScore re-runs its accidental state over the measure after every such edit;
+    /// `MeasureAccidentals` is that pass, and this is where it hangs.
+    ///
+    /// The repairs have to be planned against the post-edit score, so the command is applied to a throwaway copy
+    /// first. That copy is also what tells us a refused edit needs no repairs at all.
+    private func renotatingAccidentals(_ command: any EditCommand, from score: Score) -> any EditCommand {
+        var preview = score
+        guard (try? command.apply(to: &preview)) != nil else { return command }
+        let repairs = MeasureAccidentals.renotationCommands(in: preview, changedFrom: score)
+        guard !repairs.isEmpty else { return command }
+        return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
     }
 
     /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
