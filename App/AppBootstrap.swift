@@ -150,7 +150,7 @@ final class AppBootstrap {
             if let writer { writer.publish(playlists: repository.playlists) }
             // Drain any tokens queued by the Share Extension before this launch.
             _ = await incomingShareCoordinator?.drain(token: nil)
-            pushAnalyticsSnapshot(repository: repository)
+            await pushAnalyticsSnapshot(repository: repository)
             isReady = true
         } catch {
             failure = error
@@ -161,49 +161,6 @@ final class AppBootstrap {
         let enabled = UserDefaults.standard
             .object(forKey: PrivacySettingsKey.analyticsEnabled) as? Bool ?? true
         analytics = FirebaseAnalyticsClient.make(collectionEnabled: enabled)
-    }
-
-    /// Emits the two launch snapshot events (events-first; no user properties). Called once after the repository is
-    /// ready so library counts are current. Behind the consent gate inside the sink. Sort order is not persisted
-    /// (held in-memory in `ScoreListViewModel`), so it is intentionally not part of the settings snapshot — sort is
-    /// captured by the `sort_changed` event instead.
-    private func pushAnalyticsSnapshot(repository: LiveScoreLibraryRepository) {
-        guard let analytics else { return }
-        let defaults = UserDefaults.standard
-
-        analytics.log(AnalyticsLibrarySnapshot.event(
-            items: repository.scoreItems,
-            playlistCount: repository.playlists.count,
-            tagCount: repository.tags.count,
-        ))
-
-        func boolSetting(_ key: String, default defaultValue: Bool) -> Bool {
-            defaults.object(forKey: key) as? Bool ?? defaultValue
-        }
-        let repeatMode = RepeatMode(rawValue: defaults.string(forKey: ReaderGlobalSettingsKey.repeatMode) ?? "")
-            ?? .off
-        let continuation = PlaylistContinuationMode(
-            rawValue: defaults.string(forKey: ReaderGlobalSettingsKey.playlistContinuationMode) ?? "",
-        ) ?? .playThrough
-        let layoutMode = ReaderLayoutMode(rawValue: defaults.string(forKey: ReaderGlobalSettingsKey.layoutMode) ?? "")
-            ?? .page
-        let a4 = defaults.object(forKey: ReaderGlobalSettingsKey.a4ReferenceHz) as? Double ?? A4Reference.standardHz
-
-        analytics.log(.settingsSnapshot(
-            metronome: boolSetting(ReaderGlobalSettingsKey.metronomeEnabled, default: false),
-            pictureInPicture: boolSetting(ReaderGlobalSettingsKey.pictureInPictureEnabled, default: true),
-            collapseMultiMeasureRests: boolSetting(ReaderGlobalSettingsKey.collapseMultiMeasureRests, default: false),
-            showInvisibles: boolSetting(ReaderGlobalSettingsKey.showInvisibleElements, default: false),
-            keepScreenAwake: boolSetting(ReaderGlobalSettingsKey.keepScreenAwakeEnabled, default: true),
-            showSeekBar: boolSetting(ReaderGlobalSettingsKey.showSeekBarEnabled, default: true),
-            repeatMode: repeatMode,
-            playlistContinuation: continuation,
-            a4ReferenceHz: a4,
-            layoutMode: layoutMode,
-            crashReportingEnabled: boolSetting(PrivacySettingsKey.crashReportingEnabled, default: true),
-            soundfontPreset: museScoreGeneralProvider?.currentPreset.rawValue
-                ?? SoundfontPreset.lightweight.rawValue,
-        ))
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {
