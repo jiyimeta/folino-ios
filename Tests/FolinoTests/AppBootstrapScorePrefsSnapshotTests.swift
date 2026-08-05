@@ -3,6 +3,7 @@ import Domain
 import Foundation
 import Observation
 import Testing
+import UtilityCore
 
 /// Covers the App-owned half of the launch `score_prefs` snapshot. Parameter selection and bucketing belong to the
 /// Domain factory (and are tested there); what this layer decides is which rows reach it — the live-item filter comes
@@ -16,7 +17,9 @@ struct AppBootstrapScorePrefsSnapshotTests {
         repository.scoreItems = [live]
         repository.preferences = [touched(live.id, staffSize: 18)]
 
-        let events = await AppBootstrap.scorePrefsEvents(repository: repository, screenWidthPt: 700)
+        let events = await AppBootstrap.scorePrefsEvents(
+            repository: repository, screenWidthPt: 700, crashReporter: NoopCrashReporter(),
+        )
 
         #expect(events.count == 1)
         #expect(events[0].name == "score_prefs")
@@ -34,7 +37,9 @@ struct AppBootstrapScorePrefsSnapshotTests {
         repository.deletedScoreItems = [trashed]
         repository.preferences = [touched(live.id, staffSize: 18), touched(trashed.id, staffSize: 24)]
 
-        let events = await AppBootstrap.scorePrefsEvents(repository: repository, screenWidthPt: 430)
+        let events = await AppBootstrap.scorePrefsEvents(
+            repository: repository, screenWidthPt: 430, crashReporter: NoopCrashReporter(),
+        )
 
         #expect(events.count == 1)
         #expect(events[0].parameters["staff_size"] == .int(18))
@@ -46,24 +51,48 @@ struct AppBootstrapScorePrefsSnapshotTests {
         repository.scoreItems = [live]
         repository.preferences = [ReaderPreferences(scoreItemID: live.id, hiddenStaves: [])]
 
-        let events = await AppBootstrap.scorePrefsEvents(repository: repository, screenWidthPt: 430)
+        let events = await AppBootstrap.scorePrefsEvents(
+            repository: repository, screenWidthPt: 430, crashReporter: NoopCrashReporter(),
+        )
 
         #expect(events.isEmpty)
     }
 
     @Test func `a failed preferences read degrades to no events`() async {
+        let repository = failingRepository()
+
+        let events = await AppBootstrap.scorePrefsEvents(
+            repository: repository, screenWidthPt: 430, crashReporter: NoopCrashReporter(),
+        )
+
+        #expect(events.isEmpty)
+    }
+
+    /// The degradation must not be silent: `allReaderPreferences()` is a whole-table read, so one bad row zeroes the
+    /// entire launch's `score_prefs` — which downstream is indistinguishable from "nobody customizes anything".
+    @Test func `a failed preferences read is recorded as a non-fatal`() async {
+        let repository = failingRepository()
+        let crashReporter = SpyCrashReporter()
+
+        _ = await AppBootstrap.scorePrefsEvents(
+            repository: repository, screenWidthPt: 430, crashReporter: crashReporter,
+        )
+
+        #expect(crashReporter.recordedErrors.count == 1)
+        #expect(crashReporter.recordedErrors.first is StubScoreLibraryRepository.ReadFailure)
+    }
+
+    // MARK: - Helpers
+
+    /// One live, touched score whose preferences read always throws.
+    private func failingRepository() -> StubScoreLibraryRepository {
         let live = makeItem()
         let repository = StubScoreLibraryRepository()
         repository.scoreItems = [live]
         repository.preferences = [touched(live.id, staffSize: 18)]
         repository.readFailure = StubScoreLibraryRepository.ReadFailure()
-
-        let events = await AppBootstrap.scorePrefsEvents(repository: repository, screenWidthPt: 430)
-
-        #expect(events.isEmpty)
+        return repository
     }
-
-    // MARK: - Helpers
 
     private func touched(_ id: ScoreItemID, staffSize: Double) -> ReaderPreferences {
         ReaderPreferences(scoreItemID: id, staffSize: staffSize, hiddenStaves: [])
@@ -86,6 +115,18 @@ struct AppBootstrapScorePrefsSnapshotTests {
             tagIDs: [],
             isFavorite: false,
         )
+    }
+}
+
+/// Captures the non-fatals recorded by the code under test. Mutated only on the main actor here, hence
+/// `@unchecked Sendable` — the same shape as the Feature packages' spy.
+private final class SpyCrashReporter: CrashReporter, @unchecked Sendable {
+    private(set) var recordedErrors: [any Error] = []
+
+    func setCollectionEnabled(_: Bool) {}
+    func log(_: String) {}
+    func record(error: Error) {
+        recordedErrors.append(error)
     }
 }
 
