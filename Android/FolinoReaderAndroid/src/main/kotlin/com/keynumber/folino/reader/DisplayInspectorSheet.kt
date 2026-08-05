@@ -131,6 +131,8 @@ fun DisplayInspectorSheet(
     onPageTurnButtonsVisibleChange: (Boolean) -> Unit = {},
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
+    /** Tap-to-reset on the transpose readout: clears the stored value instead of writing an explicit 0. */
+    onResetTranspose: () -> Unit = { onTransposeChange(0) },
     /** What this session's format allows — fetched from the shared Domain decision over JNI by
      * [ReaderScreen]. Never re-derived here from `parts`/format: this sheet only renders what the wire
      * says (Folino's iOS/Android parity rule). Defaults to every control available for callers (previews,
@@ -150,6 +152,7 @@ fun DisplayInspectorSheet(
             onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = onTransposeChange,
+            onResetTranspose = onResetTranspose,
             capabilities = capabilities,
         )
     }
@@ -178,6 +181,7 @@ fun DisplayInspectorContent(
     initialPartsExpanded: Boolean = true,
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
+    onResetTranspose: () -> Unit = { onTransposeChange(0) },
     /** See [DisplayInspectorSheet]'s parameter doc — read, never re-derived. */
     capabilities: ReaderCapabilitiesWire = ALL_READER_CAPABILITIES,
 ) {
@@ -227,6 +231,7 @@ fun DisplayInspectorContent(
                             semitones = transposeSemitones,
                             enabled = true,
                             onChange = onTransposeChange,
+                            onReset = onResetTranspose,
                             showLeadingIcon = false,
                         )
                     }

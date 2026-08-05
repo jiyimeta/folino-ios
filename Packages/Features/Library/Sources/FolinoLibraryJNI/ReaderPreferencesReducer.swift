@@ -7,16 +7,27 @@ import Foundation
 ///
 /// The wirelet bridge that wraps this is a separate layer — it converts `Int32`↔`Int` and projects
 /// to/from wire structs. This reducer is Domain-native (`Int`, `Double`) and has no JNI dependency.
+///
+/// The `set…` verbs always record an explicit choice, even when the value equals the current default: a Kotlin-side
+/// set is a user action. Only the `clear…` verbs write "untouched" (`nil`), and they are what the UI's reset
+/// affordances must call — matching iOS, where reset goes back to untouched.
 enum ReaderPreferencesReducer {
     /// Re-seats `p` through `ReaderPreferences.init` so every clamping/normalization rule re-runs after a mutation.
+    ///
+    /// EVERY field must be listed here. A field left out is silently reset to the initializer's default on the next
+    /// mutation — which is how `hasSeededAuthoredVisibility` used to be dropped, making the Reader re-hide staves the
+    /// user had revealed. The clamping is `Optional.map`-based on the model side, so an untouched (`nil`) scalar
+    /// stays `nil` through the round-trip.
     private static func reseat(_ p: ReaderPreferences) -> ReaderPreferences {
         ReaderPreferences(
             id: p.id, scoreItemID: p.scoreItemID, staffSize: p.staffSize,
-            hiddenStaves: p.hiddenStaves, staffProgramOverrides: p.staffProgramOverrides,
+            hiddenStaves: p.hiddenStaves, authoredHiddenStaves: p.authoredHiddenStaves,
+            staffProgramOverrides: p.staffProgramOverrides,
             staffVolumeOverrides: p.staffVolumeOverrides, staffClefOverrides: p.staffClefOverrides,
             tempoMultiplier: p.tempoMultiplier, honorLayoutBreaks: p.honorLayoutBreaks,
             repeatMode: p.repeatMode, abRepeat: p.abRepeat, masterVolume: p.masterVolume,
             transposeSemitones: p.transposeSemitones, a4ReferenceHz: p.a4ReferenceHz,
+            hasSeededAuthoredVisibility: p.hasSeededAuthoredVisibility,
         )
     }
 
@@ -53,6 +64,23 @@ enum ReaderPreferencesReducer {
     static func setTranspose(_ p: ReaderPreferences, _ v: Int) -> ReaderPreferences {
         var c = p
         c.transposeSemitones = v
+        return reseat(c)
+    }
+
+    /// Reset master volume to "the user never chose one" (`nil`), so it resolves to the current default. Distinct
+    /// from `setMasterVolume(_, defaultMasterVolume)`, which records an explicit choice that happens to equal the
+    /// default. Mirrors iOS `MasterVolumeModel.resetValue`.
+    static func clearMasterVolume(_ p: ReaderPreferences) -> ReaderPreferences {
+        var c = p
+        c.masterVolume = nil
+        return reseat(c)
+    }
+
+    /// Reset transposition to "untouched" (`nil`) rather than an explicit `0`, so the score stops counting as one the
+    /// user transposed. Mirrors iOS `TransposeModel.reset`.
+    static func clearTranspose(_ p: ReaderPreferences) -> ReaderPreferences {
+        var c = p
+        c.transposeSemitones = nil
         return reseat(c)
     }
 

@@ -694,6 +694,9 @@ private fun LibraryNavGraph(
                     initialA4ReferenceHz =
                         if (prefsState.a4ReferenceHz == 0.0) globalA4Hz else prefsState.a4ReferenceHz,
                     persistMasterVolume = { v -> prefsVm.setMasterVolume(v) },
+                    // Reset means "the user never chose a master volume", not "the user chose unity" — the bridge
+                    // keeps the two apart so an untouched score is never reported as configured (iOS parity).
+                    persistMasterVolumeReset = { prefsVm.clearMasterVolume() },
                     persistTempoMultiplier = { v ->
                         if (v > lastTempoForAnalytics) {
                             AndroidAnalytics.log(AndroidAnalytics.bridge.tempoIncreased())
@@ -713,6 +716,17 @@ private fun LibraryNavGraph(
                         }
                         lastTransposeForAnalytics = v
                         prefsVm.setTranspose(v)
+                    },
+                    // Tap-to-reset clears the stored value instead of writing an explicit 0 (iOS parity). The
+                    // analytics direction still reflects the move back to no transposition.
+                    persistTransposeReset = {
+                        if (lastTransposeForAnalytics > 0) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeDown())
+                        } else if (lastTransposeForAnalytics < 0) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeUp())
+                        }
+                        lastTransposeForAnalytics = 0
+                        prefsVm.clearTranspose()
                     },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },

@@ -224,6 +224,8 @@ fun ReaderScreen(
     initialA4ReferenceHz: Double = 440.0,
     /** Persists the per-score master volume on user change. */
     persistMasterVolume: (Double) -> Unit = {},
+    /** Clears the per-score master volume back to "untouched" on reset (iOS `MasterVolumeModel.resetValue`). */
+    persistMasterVolumeReset: () -> Unit = { persistMasterVolume(1.0) },
     /** Persists the per-score tempo multiplier on user change. */
     persistTempoMultiplier: (Double) -> Unit = {},
     /** Persists the per-score A4 reference pitch on user change. */
@@ -234,6 +236,8 @@ fun ReaderScreen(
     transposeSemitones: Int = 0,
     /** Persists the per-score transpose value (semitones) on user change. */
     persistTranspose: (Int) -> Unit = {},
+    /** Clears the per-score transpose back to "untouched" on reset (iOS `TransposeModel.reset`). */
+    persistTransposeReset: () -> Unit = { persistTranspose(0) },
     /** Wire string for the current continuation mode (e.g. "playThrough", "loopPlaylist"); shown in the
      * playback inspector's continuation row. */
     continuationModeWire: String = "playThrough",
@@ -876,10 +880,12 @@ fun ReaderScreen(
             countInEnabled = countInEnabled,
             onCountInChange = onCountInChange,
             onPersistMasterVolume = persistMasterVolume,
+            onResetMasterVolume = persistMasterVolumeReset,
             onPersistTempoMultiplier = persistTempoMultiplier,
             onPersistA4ReferenceHz = persistA4ReferenceHz,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
+            onResetTranspose = persistTransposeReset,
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = persistStaffProgram,
             drumKits = drumKits,
@@ -907,6 +913,7 @@ fun ReaderScreen(
             onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
+            onResetTranspose = persistTransposeReset,
             capabilities = capabilities,
         )
     }

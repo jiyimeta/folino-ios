@@ -76,4 +76,43 @@ struct ReaderPreferencesReducerTests {
     @Test func `decode empty returns nil`() {
         #expect(ReaderPreferencesReducer.decode("") == nil)
     }
+
+    /// Every mutation re-seats through `ReaderPreferences.init`, so the re-seat is the one place that could quietly
+    /// drop a field. It must carry the untouched (`nil`) scalars AND the authored-visibility provenance through —
+    /// dropping `hasSeededAuthoredVisibility` would make the next open re-hide staves the user revealed, and
+    /// dropping `authoredHiddenStaves` would make `reconcilingAuthoredHidden` re-persist on every open.
+    @Test func `reseat carries nil scalars and provenance through`() {
+        var p = ReaderPreferences(scoreItemID: ScoreItemID(), hiddenStaves: [])
+        p.authoredHiddenStaves = [StaffAddress(partIndex: 1, staffIndexInPart: 0)]
+        p.hasSeededAuthoredVisibility = true
+        let reseated = ReaderPreferencesReducer.setClef(p, part: 0, staff: 0, rawType: "F")
+        #expect(reseated.staffSize == nil)
+        #expect(reseated.honorLayoutBreaks == nil)
+        #expect(reseated.masterVolume == nil)
+        #expect(reseated.transposeSemitones == nil)
+        #expect(reseated.authoredHiddenStaves == p.authoredHiddenStaves)
+        #expect(reseated.hasSeededAuthoredVisibility)
+    }
+
+    /// A Kotlin-side set is always an explicit user action, so it writes `.some` even when the value equals the
+    /// default. Only the `clear*` verbs go back to "untouched".
+    @Test func `kotlin setters still write explicit values`() {
+        let p = ReaderPreferences(scoreItemID: ScoreItemID(), hiddenStaves: [])
+        #expect(ReaderPreferencesReducer.setStaffSize(p, 18).staffSize == 18)
+        #expect(ReaderPreferencesReducer.setMasterVolume(p, 1.0).masterVolume == 1.0)
+        #expect(ReaderPreferencesReducer.setTranspose(p, 0).transposeSemitones == 0)
+    }
+
+    /// Reset affordances mean "I never chose this", matching iOS `MasterVolumeModel.resetValue` /
+    /// `TransposeModel.reset`. Writing an explicit default instead would report the score as touched.
+    @Test func `clear verbs go back to untouched`() {
+        let touched = ReaderPreferencesReducer.setTranspose(
+            ReaderPreferencesReducer.setMasterVolume(base(), 0.4), 5,
+        )
+        #expect(ReaderPreferencesReducer.clearMasterVolume(touched).masterVolume == nil)
+        #expect(ReaderPreferencesReducer.clearTranspose(touched).transposeSemitones == nil)
+        // Clearing one scalar leaves the other alone.
+        #expect(ReaderPreferencesReducer.clearMasterVolume(touched).transposeSemitones == 5)
+        #expect(ReaderPreferencesReducer.clearTranspose(touched).masterVolume == 0.4)
+    }
 }
