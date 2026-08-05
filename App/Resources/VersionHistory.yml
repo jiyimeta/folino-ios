@@ -1,3 +1,20 @@
+- version: 1.11.0
+  descriptions:
+    - en: Improved the look of dark mode
+      ja: ダークモードの見た目を改善
+      ko: 다크 모드 디자인 개선
+      zh-Hans: 改进深色模式的显示效果
+      zh-Hant: 改進深色模式的顯示效果
+    - en: Improved the score editing screen
+      ja: 楽譜編集画面の改善
+      ko: 악보 편집 화면 개선
+      zh-Hans: 改进乐谱编辑界面
+      zh-Hant: 改進樂譜編輯介面
+    - en: Fixed note input ignoring the key signature
+      ja: 音符入力で調号が反映されない問題を修正
+      ko: 음표 입력 시 조표가 반영되지 않는 문제 수정
+      zh-Hans: 修复音符输入时未应用调号的问题
+      zh-Hant: 修正音符輸入時未套用調號的問題
 - version: 1.10.0
   descriptions:
     - en: Improved PDF handling so a PDF works like any other score
