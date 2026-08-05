@@ -63,6 +63,14 @@ public final class EditorViewModel {
         if case .note = selectedItem { true } else { false }
     }
 
+    /// Whether the floating callout has anything to stand beside. The card is pinned to one timed slot and edits
+    /// THAT slot's length, which a rest has exactly as a note does — so it shows for both, and only drops the pitch
+    /// steps and the tie key on a rest (see `EditorCalloutView`). A tuplet bracket names no slot, and neither does
+    /// an empty selection.
+    public var hasSelectionCallout: Bool {
+        Self.slot(of: selectedItem) != nil
+    }
+
     // Arming state (Tasks 5/7). internal(set), not private(set): the ops live in same-type extensions in OTHER
     // files (`EditorViewModel+Input.swift` etc.), and Swift's `private` does not span files.
     //

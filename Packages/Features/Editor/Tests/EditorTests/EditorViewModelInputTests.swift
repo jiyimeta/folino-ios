@@ -107,6 +107,50 @@ struct EditorViewModelInputTests {
         #expect(vm.armedDuration == .sixteenth)
     }
 
+    @Test func `the callout stands beside a rest too, and re-times it`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        #expect(!vm.hasSelectionCallout) // nothing selected
+
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+
+        #expect(vm.hasSelectionCallout)
+        #expect(vm.selectedDuration?.base == .quarter)
+        #expect(vm.selectedDuration?.dots == 0)
+
+        vm.setSelectionDuration(.half)
+
+        #expect(duration(atElement: 1, in: vm) == .half)
+        #expect(vm.selectedDuration?.base == .half)
+    }
+
+    @Test func `the callout's dot key dots a selected rest as well`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+
+        vm.toggleSelectionDot()
+
+        let dotted = try #require(duration(atElement: 1, in: vm))
+        #expect(dotted.asFraction == NoteDuration.quarter.dotted(1).asFraction)
+        #expect(vm.selectedDuration?.dots == 1)
+    }
+
+    /// A measure rest reads as a whole rest — that is how the score draws it and so how the card has to label it,
+    /// or the tray would open with nothing lit.
+    @Test func `a measure rest reports itself as a whole`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+        vm.setDuration(.whole)
+        vm.writeRest() // fills the bar → written as `.measure`
+
+        #expect(duration(atElement: 1, in: vm) == .measure)
+        #expect(vm.hasSelectionCallout)
+        #expect(vm.selectedDuration?.base == .whole)
+        #expect(vm.selectedDuration?.dots == 0)
+    }
+
     @Test func `the callout's dot key dots the selected note and keeps its base length`() throws {
         let vm = makeViewModel()
         vm.beginSession(score: EditorFixtures.chordAtIndex1())

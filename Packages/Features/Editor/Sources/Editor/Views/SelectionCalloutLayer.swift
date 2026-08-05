@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Floats `EditorCalloutView` beside the selected note, clamped to stay on screen and clear of the pad.
+/// Floats `EditorCalloutView` beside the selected note or rest, clamped to stay on screen and clear of the pad.
 ///
 /// Its own `View`, and NOT part of `EditorChromeView.body`, on purpose: `selectionAnchor` is republished on every
 /// scroll and zoom frame while a note is selected, so whichever body reads it re-runs at that rate. Kept here, that
@@ -31,7 +31,7 @@ struct SelectionCalloutLayer: View {
 
     var body: some View {
         GeometryReader { proxy in
-            if viewModel.isNoteSelected, let anchor = viewModel.selectionAnchor {
+            if viewModel.hasSelectionCallout, let anchor = viewModel.selectionAnchor {
                 let sides = availableSides(for: anchor, in: proxy)
                 EditorCalloutView(viewModel: viewModel)
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { calloutSize = $0 }

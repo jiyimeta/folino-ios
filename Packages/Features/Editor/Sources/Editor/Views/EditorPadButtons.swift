@@ -281,6 +281,21 @@ enum PadKeyGlyph {
             .padding(.bottom, -summaryTrim.bottom)
     }
 
+    /// The same summary key when a REST is selected: the rest's own glyph with its augmentation dots beside it.
+    ///
+    /// Composed in an `HStack`, which is exactly what `textNote(for:dots:)` exists to avoid for notes — and it works
+    /// here for the reason it fails there. A note's engraving glyph advances by its notehead alone, so a stem or a
+    /// flag overhangs anything laid out after it; a rest is the whole mark and advances by all of it, leaving the
+    /// dot the clear space an engraver would give it.
+    static func restSummary(_ duration: NoteDuration?, dots: Int) -> some View {
+        HStack(spacing: 3) {
+            rest(duration)
+            if dots > 0 {
+                PadKeyGlyph.dots(dots)
+            }
+        }
+    }
+
     private static let summarySize: CGFloat = 20
     /// Trimmed against every note this key can show (undotted — the dot adds nothing above or below a notehead), so
     /// the key's height stays put as the selection moves between lengths.
