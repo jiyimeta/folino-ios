@@ -279,6 +279,10 @@ private final class NoopScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     func saveReaderPreferences(_: ReaderPreferences) throws {}
+
+    func allReaderPreferences() throws -> [ReaderPreferences] {
+        []
+    }
 }
 
 #Preview("pad · compact") {

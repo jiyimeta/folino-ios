@@ -53,4 +53,8 @@ final class FixtureScoreRepository: ScoreLibraryRepository {
     }
 
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
+
+    func allReaderPreferences() throws -> [ReaderPreferences] {
+        Array(readerPreferences.values)
+    }
 }

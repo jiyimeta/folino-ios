@@ -134,6 +134,10 @@ struct IncomingShareCoordinatorTests {
         func saveReaderPreferences(_ preferences: ReaderPreferences) throws {
             prefs[preferences.scoreItemID] = preferences
         }
+
+        func allReaderPreferences() throws -> [ReaderPreferences] {
+            Array(prefs.values)
+        }
     }
 
     struct FixedClock: Clock {

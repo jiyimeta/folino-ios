@@ -354,6 +354,17 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         }
     }
 
+    public func allReaderPreferences() async throws -> [ReaderPreferences] {
+        do {
+            let records = try await database.pool.read { db in
+                try ReaderPreferencesRecord.fetchAll(db)
+            }
+            return try records.map { try $0.toDomain() }
+        } catch {
+            throw DomainError.persistenceFailed(reason: "\(error)")
+        }
+    }
+
     public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {
         do {
             return try await database.pool.read { db in
