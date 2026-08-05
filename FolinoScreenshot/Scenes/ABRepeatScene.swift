@@ -68,7 +68,7 @@ struct ABRepeatScene: View {
                 table: "ScreenshotStrings",
                 bundle: .forClass(ScreenshotStringsAnchor.self),
             ),
-            layout: FolinoScreenshotLayout.layout(for: idiom),
+            layout: FolinoScreenshotLayout.layout(for: idiom, innerStatusBarHeight: 0),
             idiom: idiom,
         ) {
             // ReaderRootScreen puts its controls in a real `.toolbar`, so it needs an ancestor nav container to host
@@ -86,6 +86,7 @@ struct ABRepeatScene: View {
                     hidesBackButton: true,
                 )
             }
+            .readerStatusBarBand(for: idiom)
         } overlay: {
             EmptyView()
         }
