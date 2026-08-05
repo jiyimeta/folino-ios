@@ -25,6 +25,15 @@ struct ReaderPreferencesStoreSeedTests {
         #expect(repo.savedReaderPreferences.count == 1)
     }
 
+    /// §5: a first open that learns nothing — no stored row, and the score authors nothing hidden — writes no row at
+    /// all. The store has to honor `reconcilingAuthoredHidden`'s persist flag; saving the resolved value
+    /// unconditionally would make every score the user merely opened read as configured in the launch snapshot.
+    @Test func `loadOrSeed with no row and no authored staves performs no save`() async {
+        let repo = FakeScoreLibraryRepository()
+        await makeStore(repo).loadOrSeed(authoredHiddenStaves: [])
+        #expect(repo.savedReaderPreferences.isEmpty)
+    }
+
     @Test func `backfills authored hidden into pre feature row`() async {
         let repo = FakeScoreLibraryRepository()
         repo.storedReaderPreferences[itemID] = ReaderPreferences(

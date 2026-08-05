@@ -53,4 +53,45 @@ struct ReaderUntouchedPreferencesTests {
         #expect(saved.staffSize == nil)
         #expect(saved.honorLayoutBreaks == nil)
     }
+
+    /// The first step away from untouched has to resolve through `effectiveStaffSize`. A mutator that read the raw
+    /// `nil` slice instead would persist a size unrelated to the one the user was looking at when they tapped.
+    @Test func `first staff size step from untouched persists default plus one`() async throws {
+        let repo = FakeScoreLibraryRepository()
+        let vm = Self.makeViewModel(repository: repo)
+        await vm.loadOrSeedPreferences()
+        await vm.layoutModel.incrementStaffSize()
+        let saved = try #require(repo.savedReaderPreferences.last)
+        #expect(saved.staffSize == 15) // the harness leaves `defaultStaffSize` at 14
+    }
+
+    /// Stepping back onto the default is still an explicit choice. `.some(default)` has to survive the re-seat
+    /// through `ReaderPreferences.init` in `ReaderPreferencesStore.mutate` rather than collapsing to `nil` — only a
+    /// dedicated reset affordance writes "untouched" back.
+    @Test func `stepping back onto the default persists it explicitly`() async throws {
+        let repo = FakeScoreLibraryRepository()
+        let vm = Self.makeViewModel(repository: repo)
+        await vm.loadOrSeedPreferences()
+        await vm.layoutModel.incrementStaffSize()
+        await vm.layoutModel.decrementStaffSize()
+        let saved = try #require(repo.savedReaderPreferences.last)
+        #expect(saved.staffSize == 14)
+    }
+
+    /// `wireTransposeModel` copies the model's raw Optional into the preferences. Copying `effectiveSemitones`
+    /// instead would persist an explicit `0` on reset, leaving the score permanently counted as one the user
+    /// transposed. `TransposeModelTests` pins the model in isolation; this pins the persistence seam.
+    @Test func `transpose reset persists nil`() async throws {
+        let repo = FakeScoreLibraryRepository()
+        let vm = Self.makeViewModel(repository: repo)
+        await vm.loadOrSeedPreferences()
+
+        await vm.transposeModel.setSemitones(3)
+        let afterSet = try #require(repo.savedReaderPreferences.last)
+        #expect(afterSet.transposeSemitones == 3)
+
+        await vm.transposeModel.reset()
+        let afterReset = try #require(repo.savedReaderPreferences.last)
+        #expect(afterReset.transposeSemitones == nil)
+    }
 }
