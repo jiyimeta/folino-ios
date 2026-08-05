@@ -14,7 +14,12 @@
 #   Scripts/capture-screenshots.sh                          # everything
 #   Scripts/capture-screenshots.sh --devices iphone         # one device
 #   Scripts/capture-screenshots.sh --locales en,ja          # a subset of languages
+#   Scripts/capture-screenshots.sh --scenes NoteEditing     # one scene, leaving the other PNGs alone
 #   Scripts/capture-screenshots.sh --devices ipad --locales en
+#   Scripts/capture-screenshots.sh --verbose                # print the test's output, including why it failed
+#
+# While iterating on one shot, narrow all three: `--devices iphone --locales en --scenes NoteEditing` is about
+# twenty seconds of capture rather than eight scenes across five languages.
 #
 set -euo pipefail
 
@@ -53,6 +58,8 @@ LOCALES=(
 
 DEVICES="iphone,ipad"
 REQUESTED_LOCALES=""
+REQUESTED_SCENES=""
+VERBOSE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -63,6 +70,16 @@ while [[ $# -gt 0 ]]; do
     --locales)
       REQUESTED_LOCALES="$2"
       shift 2
+      ;;
+    --scenes)
+      REQUESTED_SCENES="$2"
+      shift 2
+      ;;
+    --verbose)
+      # Drops `-quiet` from the test run. Worth knowing about: a capture failure is reported as a thrown error, and
+      # `-quiet` prints that a test failed without printing why.
+      VERBOSE=1
+      shift
       ;;
     -h | --help)
       sed -n '3,18p' "${BASH_SOURCE[0]}"
@@ -113,40 +130,51 @@ device_udid() {
     | python3 "$REPO_ROOT/Scripts/simctl-device-udid.py" "$name" "$os"
 }
 
-# One framebuffer grab, repeated until THREE consecutive captures are byte-identical, so a frame caught before the
-# compositor has caught up is never delivered.
+# One framebuffer grab, bounded in time.
 #
-# Three, spaced generously, and not two: the app settles on its own rasterization, which is drawn from its layer tree
-# and therefore says nothing about the render server. Right after launch that server has not yet produced the
-# backdrop a glass surface samples, and while it hasn't, every material on screen renders as a flat dark slab — a
-# state that holds still long enough for two quick grabs to agree on it. It cost one delivered screenshot with a
-# black status band and grey chrome before this loop was widened.
+# The bound is the point: `xcrun simctl io` occasionally never returns, and the watcher is a single loop — one wedged
+# grab and every scene behind it waits forever, which is how two capture runs died mid-language. macOS ships no
+# `timeout`, hence perl's alarm. An overrunning grab is abandoned and the caller simply asks again.
+grab_frame() {
+  local udid="$1" out="$2"
+  rm -f "$out"
+  perl -e 'alarm shift; exec @ARGV' 20 xcrun simctl io "$udid" screenshot --type=png "$out" > /dev/null 2>&1 || true
+  # A grab cut short by the alarm can leave a truncated file behind, which would then be compared, moved and
+  # delivered as if it were a frame.
+  if [[ ! -s "$out" ]]; then
+    rm -f "$out"
+    return 1
+  fi
+}
+
+# A frame, grabbed until two consecutive grabs are byte-identical so nothing caught mid-animation is delivered.
+#
+# Ruling out MOTION is all this has to do. The other failure — a screen the compositor has not re-composited since
+# the scene was swapped in, where every glass surface is still a flat dark slab — holds far too still for a stability
+# check to notice, and is caught on the app side instead: it nudges the compositor and asks twice, and two answers
+# only agree once the frame is fresh (see `HostCompositorBroker`).
 capture_stable() {
-  local udid="$1" out="$2" attempt matches
-  matches=0
-  xcrun simctl io "$udid" screenshot --type=png "$out.a" > /dev/null 2>&1 || true
-  for attempt in 1 2 3 4 5 6 7 8; do
-    sleep 0.6
-    xcrun simctl io "$udid" screenshot --type=png "$out.b" > /dev/null 2>&1 || true
-    if [[ -s "$out.b" ]]; then
-      if cmp -s "$out.a" "$out.b"; then
-        matches=$((matches + 1))
-        if [[ $matches -ge 2 ]]; then
-          mv "$out.b" "$out"
-          rm -f "$out.a"
-          return 0
-        fi
-      else
-        matches=0
+  local udid="$1" out="$2" attempt
+  grab_frame "$udid" "$out.a"
+  for attempt in 1 2 3 4 5 6; do
+    sleep 0.4
+    if grab_frame "$udid" "$out.b"; then
+      if [[ -s "$out.a" ]] && cmp -s "$out.a" "$out.b"; then
+        mv "$out.b" "$out"
+        rm -f "$out.a"
+        return 0
       fi
       mv "$out.b" "$out.a"
     fi
   done
-  # Never settled (a live animation, or a simulator that is still booting): deliver the last frame and let the test's
-  # own resemblance check decide whether it is usable.
+  # Never settled (a live animation, or a simulator that is still booting): deliver the last frame and let the app's
+  # own checks decide whether it is usable. Returns non-zero when there is no frame at all, which is what keeps the
+  # request unanswered rather than answered with nothing.
   if [[ -s "$out.a" ]]; then
     mv "$out.a" "$out"
+    return 0
   fi
+  return 1
 }
 
 # The host half of the capture handshake. The test bundle runs INSIDE the simulator and cannot invoke `simctl`, and
@@ -162,11 +190,15 @@ watch_broker() {
   while [[ -d "$BROKER_DIR" ]]; do
     for request in "$BROKER_DIR"/*.request; do
       scene="$(basename "$request" .request)"
-      capture_stable "$udid" "$BROKER_DIR/$scene.png"
-      # Tolerated: an app that gave up waiting deletes its own marker, and renaming what is no longer there must not
-      # take the watcher down with it — the next scene still needs answering.
-      mv "$request" "$BROKER_DIR/$scene.done" 2> /dev/null || true
-      echo "    [frame] $(date +%H:%M:%S) $scene"
+      # Answer ONLY with a frame in hand. Marking a request done without one made the app read a file that wasn't
+      # there and fail the whole run; leaving the request alone instead just means the next pass tries again, and the
+      # app's own timeout is what bounds the retrying.
+      if capture_stable "$udid" "$BROKER_DIR/$scene.png"; then
+        # Tolerated: an app that gave up waiting deletes its own marker, and renaming what is no longer there must
+        # not take the watcher down with it — the next scene still needs answering.
+        mv "$request" "$BROKER_DIR/$scene.done" 2> /dev/null || true
+        echo "    [frame] $(date +%H:%M:%S) $scene"
+      fi
     done
     sleep 0.15
   done
@@ -190,9 +222,23 @@ capture_device() {
   udid="$(device_udid "$name" "$os")"
   rm -rf "$BROKER_DIR"
   mkdir -p "$BROKER_DIR"
+  # Which scenes the capture test should run, one per line. Absent means all of them; see `isRequested` in
+  # `CaptureScreenshotsTests`. It rides in the broker directory because a hosted unit test has no other channel a
+  # shell script can write to.
+  if [[ -n "$REQUESTED_SCENES" ]]; then
+    printf '%s\n' "${REQUESTED_SCENES//,/$'\n'}" > "$BROKER_DIR/scenes"
+  fi
   watch_broker "$udid" &
   local watcher=$!
   trap 'kill "$watcher" 2> /dev/null || true; rm -rf "$BROKER_DIR"' RETURN
+
+  # `-collect-test-diagnostics never` below is about wall-clock, not output: left on, xcodebuild decides after some
+  # runs that it wants a sysdiagnose out of the simulator, then waits ten minutes for one that never arrives — per
+  # language, which is most of a full sweep spent on nothing.
+  local quiet=(-quiet)
+  if [[ "$VERBOSE" == "1" ]]; then
+    quiet=()
+  fi
 
   while IFS= read -r entry; do
     local language="${entry%%:*}" region="${entry##*:}"
@@ -204,7 +250,8 @@ capture_device() {
       -destination "$destination" \
       -testLanguage "$language" \
       -testRegion "$region" \
-      -quiet
+      -collect-test-diagnostics never \
+      ${quiet[@]+"${quiet[@]}"} # bash 3.2 counts an empty array as unbound under `set -u`
   done < <(selected_locales)
 }
 

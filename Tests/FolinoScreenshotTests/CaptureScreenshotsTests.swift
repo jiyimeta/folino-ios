@@ -27,7 +27,7 @@ final class CaptureScreenshotsTests: XCTestCase {
             deliverableSource: Self.deliverableSource(),
         )
 
-        let scenes = ScreenshotScene.allCases.map { scene in
+        let scenes = ScreenshotScene.allCases.filter(Self.isRequested).map { scene in
             // The closure is what defers each scene's `init` — every Folino scene seeds `UserDefaults` there, so
             // building them all up front would let the last one's seeding win for all seven.
             ScreenshotCaptureScene(id: scene.id) { scene.view }
@@ -39,6 +39,32 @@ final class CaptureScreenshotsTests: XCTestCase {
             resetSharedState: ScreenshotSharedState.reset,
         )
     }
+
+    /// Whether this run was asked for `scene`.
+    ///
+    /// `Scripts/capture-screenshots.sh --scenes NoteEditing` writes the wanted names into the broker directory, and
+    /// this filters `allCases` by them — so iterating on one shot costs one scene's capture rather than eight, in one
+    /// language rather than five. Every other scene's PNG is simply left as it was. No file, or an empty one, means
+    /// the whole set, which is what a plain run and an Xcode run both get.
+    ///
+    /// Matched case-insensitively against the scene id, so `--scenes 02` and `--scenes noteediting` both work.
+    private static func isRequested(_ scene: ScreenshotScene) -> Bool {
+        guard !requestedScenes.isEmpty else { return true }
+        let id = scene.id.lowercased()
+        return requestedScenes.contains { id.contains($0) }
+    }
+
+    private static let requestedScenes: [String] = {
+        let list = repositoryRoot()
+            .appendingPathComponent("fastlane/screenshots")
+            .appendingPathComponent(".broker")
+            .appendingPathComponent("scenes")
+        guard let contents = try? String(contentsOf: list, encoding: .utf8) else { return [] }
+        return contents
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
+    }()
 
     /// Where the delivered pixels come from.
     ///
