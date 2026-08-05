@@ -52,6 +52,7 @@ struct ReaderScene: View {
                     repository: FixtureScoreRepository(),
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
+                    vocalTunerHandoff: NoopVocalTunerHandoff(),
                     metadataReader: FixtureMetadataReader(),
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),

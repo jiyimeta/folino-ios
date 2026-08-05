@@ -79,6 +79,7 @@ struct ABRepeatScene: View {
                     repository: repository,
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
+                    vocalTunerHandoff: NoopVocalTunerHandoff(),
                     metadataReader: FixtureMetadataReader(),
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
