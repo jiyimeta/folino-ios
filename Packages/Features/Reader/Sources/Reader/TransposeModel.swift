@@ -9,11 +9,18 @@ import Observation
 @MainActor
 @Observable
 final class TransposeModel {
-    /// Committed transposition offset in semitones. `0` = no transposition.
-    private(set) var semitones = 0
+    /// Committed transposition offset in semitones. `nil` = the user never chose one, so it resolves to
+    /// `ReaderPreferences.defaultTransposeSemitones` (no transposition). Persisted raw so an untouched score stays
+    /// untouched.
+    private(set) var semitones: Int?
 
     @ObservationIgnored var onChange: (() async -> Void)?
     @ObservationIgnored var controllerProvider: () -> (any PlaybackController)? = { nil }
+
+    /// Offset the renderer and the engine use. Everything that needs a number reads this, never `semitones`.
+    var effectiveSemitones: Int {
+        semitones ?? ReaderPreferences.defaultTransposeSemitones
+    }
 
     func sync(from prefs: ReaderPreferences) {
         semitones = prefs.transposeSemitones
@@ -23,14 +30,18 @@ final class TransposeModel {
     /// `onChange` only when the value actually changes.
     func setSemitones(_ value: Int) async {
         let clamped = max(-7, min(7, value))
-        guard clamped != semitones else { return }
+        guard clamped != effectiveSemitones else { return }
         semitones = clamped
         await controllerProvider()?.setTranspose(semitones: clamped)
         await onChange?()
     }
 
-    /// Reset to no transposition (0 semitones).
+    /// Reset to no transposition. Goes back to "untouched" (`nil`) rather than an explicit `0`, so the score stops
+    /// counting as one the user transposed.
     func reset() async {
-        await setSemitones(0)
+        guard semitones != nil else { return }
+        semitones = nil
+        await controllerProvider()?.setTranspose(semitones: ReaderPreferences.defaultTransposeSemitones)
+        await onChange?()
     }
 }

@@ -22,6 +22,11 @@ public final class ReaderPreferencesBridge {
         didSet { republish() }
     }
 
+    /// The Reader's current global default staff size, handed in by `open`. Retained because `staffSize` is Optional
+    /// on the model (`nil` = the user never chose one) while the wire is a resolved scalar — this is the value the
+    /// projection resolves against. Kept in sync only by `open`, which is also where the Reader learns it.
+    @ObservationIgnored private var openDefaultStaffSize: Double = 14
+
     /// Monotonic change token folded into `state` on each republish. The per-staff collections (hidden / clef /
     /// program / volume) are not part of `ReaderPreferencesStateWire`, so a collection-only mutation would
     /// otherwise rebuild an `Equatable`-equal wire that the Kotlin `MutableStateFlow` dedups — leaving the
@@ -42,31 +47,46 @@ public final class ReaderPreferencesBridge {
 
     public init(store: ReaderPreferencesStore) {
         self.store = store
-        prefs = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [])
+        // Placeholder until `open` runs. It carries no user choices, so every scalar stays untouched.
+        prefs = ReaderPreferences(scoreItemID: ScoreItemID(), hiddenStaves: [])
     }
 
     // MARK: - Open / lifecycle
 
-    /// Loads stored preferences for `scoreId`. When nothing is stored, seeds defaults (using the Reader's
-    /// current global default staff size) and writes them through so the row exists for subsequent saves.
+    /// Loads stored preferences for `scoreId`. When nothing is stored, seeds an untouched value in memory and does
+    /// NOT write it through: a row that says nothing but "defaults" carries no information, and persisting one on
+    /// every open would make every opened score look like one the user configured. The first real mutation persists
+    /// it via `mutate`.
+    ///
+    /// `defaultStaffSize` is the Reader's current global default. It is not stored into the preferences — it is
+    /// retained as the value the wire projection resolves an untouched `staffSize` against, and it is what a legacy
+    /// blob's eagerly-seeded staff size is demoted against (see `decode(_:defaultStaffSize:)`; that correction is
+    /// held in memory like the rest of the seed, so it costs no write until the user actually changes something).
     @WireletExpose
     public func open(scoreId: String, defaultStaffSize: Double) {
         self.scoreId = scoreId
+        openDefaultStaffSize = defaultStaffSize
         let json = store.loadJSON(scoreId: scoreId)
-        if let decoded = ReaderPreferencesReducer.decode(json) {
+        if let decoded = ReaderPreferencesReducer.decode(json, defaultStaffSize: defaultStaffSize) {
             prefs = decoded
         } else {
-            prefs = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: defaultStaffSize, hiddenStaves: [])
-            store.saveJSON(scoreId: scoreId, json: ReaderPreferencesReducer.encode(prefs))
+            prefs = ReaderPreferences(scoreItemID: ScoreItemID(), hiddenStaves: [])
         }
     }
 
     /// Reconciles the score's authored-hidden staves (`<Part><show>0</show>`, from the ssm `PartWire`) into the loaded
     /// preferences once. Kotlin calls this after the parsed score's parts arrive — the point where authored visibility
     /// becomes known — since `open` fires before the score parses. Uses the shared
-    /// `ReaderPreferences.reconcilingAuthoredHidden` so it matches iOS exactly: a not-yet-seeded row gets the authored-
-    /// hidden staves unioned in and is marked seeded; an already-seeded row (or one with nothing authored-hidden) is
-    /// left untouched, so staves the user reveals stay revealed on reopen.
+    /// `ReaderPreferences.reconcilingAuthoredHidden` so it matches iOS exactly: a not-yet-seeded row gets the
+    /// authored-hidden staves unioned in and is marked seeded; an already-seeded row whose recorded authored set no
+    /// longer matches the score's has just that provenance refreshed and rewritten, with `hiddenStaves` left alone so
+    /// staves the user revealed stay revealed on reopen; a row already in agreement is returned unchanged and not
+    /// written.
+    ///
+    /// Re-firing is safe only *given the caller contract* on `reconcilingAuthoredHidden`: because the refresh branch
+    /// rewrites the authored set to whatever it is handed, this is idempotent for the same authored set, not for any
+    /// argument. Kotlin must not call it before the parse has produced parts — `ReaderScreen.kt:562-563` enforces
+    /// that with `if (mixerParts.isNotEmpty())`, and that guard is load-bearing.
     @WireletExpose
     public func seedAuthoredHidden(staves: [HiddenStaffEntryWire]) {
         let authored = Set(staves.map {
@@ -76,7 +96,6 @@ public final class ReaderPreferencesBridge {
             stored: prefs,
             authoredHiddenStaves: authored,
             scoreItemID: prefs.scoreItemID,
-            defaultStaffSize: prefs.staffSize,
         )
         guard shouldPersist else { return }
         prefs = resolved
@@ -113,6 +132,23 @@ public final class ReaderPreferencesBridge {
     @WireletExpose
     public func setTranspose(value: Int32) {
         mutate { ReaderPreferencesReducer.setTranspose($0, Int(value)) }
+    }
+
+    // MARK: - Reset verbs (Kotlin -> Swift)
+
+    /// Reset affordance for master volume (the slider's double-tap). Writes "the user never chose one" rather than
+    /// an explicit unity, matching iOS `MasterVolumeModel.resetValue` — otherwise a reset on Android would report the
+    /// score as one the user deliberately set to the default.
+    @WireletExpose
+    public func clearMasterVolume() {
+        mutate { ReaderPreferencesReducer.clearMasterVolume($0) }
+    }
+
+    /// Reset affordance for transposition (tap on the signed readout). Writes "untouched" rather than an explicit
+    /// `0`, matching iOS `TransposeModel.reset`. Stepping to `0` with the ± buttons still records an explicit `0`.
+    @WireletExpose
+    public func clearTranspose() {
+        mutate { ReaderPreferencesReducer.clearTranspose($0) }
     }
 
     // MARK: - Per-staff mutators (Kotlin -> Swift)
@@ -188,15 +224,19 @@ public final class ReaderPreferencesBridge {
         store.saveJSON(scoreId: scoreId, json: ReaderPreferencesReducer.encode(prefs))
     }
 
+    /// Projects `prefs` to the Compose-facing wire. This is the boundary where "untouched" is resolved: the wire is
+    /// a resolved scalar projection, so Kotlin never sees the Optional — an untouched field comes out as the current
+    /// default, read through the model's `effective…` accessors. The resolution goes ONLY this way; nothing here
+    /// writes back, so a projected default never becomes a stored one.
     private func republish() {
         revision &+= 1
         state = ReaderPreferencesStateWire(
-            staffSize: prefs.staffSize,
-            honorLayoutBreaks: prefs.honorLayoutBreaks,
-            masterVolume: prefs.masterVolume,
+            staffSize: prefs.effectiveStaffSize(default: openDefaultStaffSize),
+            honorLayoutBreaks: prefs.effectiveHonorLayoutBreaks,
+            masterVolume: prefs.effectiveMasterVolume,
             tempoMultiplier: prefs.tempoMultiplier ?? 0,
             a4ReferenceHz: prefs.a4ReferenceHz ?? 0,
-            transposeSemitones: Int32(prefs.transposeSemitones),
+            transposeSemitones: Int32(prefs.effectiveTransposeSemitones),
             revision: revision,
         )
     }

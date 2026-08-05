@@ -8,7 +8,7 @@ struct TransposeRow: View {
 
     var body: some View {
         let binding = Binding<Int>(
-            get: { transposeModel.semitones },
+            get: { transposeModel.effectiveSemitones },
             set: { newValue in Task { await transposeModel.setSemitones(newValue) } },
         )
         // The row content lives in the Stepper's own label (rather than a sibling HStack with `.labelsHidden()`),
@@ -27,8 +27,8 @@ struct TransposeRow: View {
                     Task { await transposeModel.reset() }
                 } label: {
                     Text(
-                        verbatim: transposeModel.semitones > 0
-                            ? "+\(transposeModel.semitones)" : "\(transposeModel.semitones)",
+                        verbatim: transposeModel.effectiveSemitones > 0
+                            ? "+\(transposeModel.effectiveSemitones)" : "\(transposeModel.effectiveSemitones)",
                     )
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.primary)

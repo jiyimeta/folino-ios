@@ -33,7 +33,11 @@ struct ReaderViewModelPDFRereadTests {
         let rig = try PDFReaderTestRig(converted: true, edited: true)
         let vm = rig.makeViewModel()
         await vm.load()
-        await vm.mutatePreferences { $0.hiddenStaves = [StaffAddress(partIndex: 0, staffIndexInPart: 0)] }
+        await vm.mutatePreferences {
+            $0.hiddenStaves = [StaffAddress(partIndex: 0, staffIndexInPart: 0)]
+            $0.authoredHiddenStaves = [StaffAddress(partIndex: 0, staffIndexInPart: 0)]
+            $0.transposeSemitones = 3
+        }
 
         await vm.reReadPDF()
 
@@ -42,6 +46,12 @@ struct ReaderViewModelPDFRereadTests {
         #expect(!vm.scoreItem.isPDFDerivedScoreEdited)
         #expect(vm.scoreItem.localFileName.hasSuffix(".mscz"))
         #expect(vm.preferences.hiddenStaves.isEmpty)
+        // A re-read renumbers the staves, so the old parse's provenance has to go with the hides it described —
+        // keeping it beside an emptied `hiddenStaves` would read as "the user revealed all of these".
+        #expect(vm.preferences.authoredHiddenStaves.isEmpty)
+        #expect(!vm.preferences.hasSeededAuthoredVisibility)
+        // Back to untouched, not an explicit 0 — the user's choice no longer applies to the new numbering.
+        #expect(vm.preferences.transposeSemitones == nil)
         #expect(vm.displaySource == .score)
     }
 

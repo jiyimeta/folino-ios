@@ -88,7 +88,7 @@ struct ReaderViewModelTests {
         }
     }
 
-    @Test func `first open populates device class default staff size`() async {
+    @Test func `first open resolves the device class default without persisting`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -100,9 +100,13 @@ struct ReaderViewModelTests {
         )
 
         await vm.load()
-        #expect(vm.layoutModel.staffSize == 11)
+        // The user never chose a staff size, so the slice stays untouched and only the effective read resolves it.
+        #expect(vm.layoutModel.staffSize == nil)
+        #expect(vm.layoutModel.effectiveStaffSize == 11)
         #expect(vm.layoutModel.hiddenStaves.isEmpty)
-        #expect(repo.savedReaderPreferences.count == 1)
+        // The fixture score authors nothing hidden, so the seed carries no information and is not written. A row that
+        // says only "defaults" would make every opened score look touched.
+        #expect(repo.savedReaderPreferences.isEmpty)
     }
 
     @Test func `load uses persisted preferences when present`() async {
@@ -316,7 +320,9 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        #expect(vm.layoutModel.honorLayoutBreaks == true)
+        // Untouched: nothing stored, so it reads as the default without being marked as a user choice.
+        #expect(vm.layoutModel.honorLayoutBreaks == nil)
+        #expect(vm.layoutModel.effectiveHonorLayoutBreaks == true)
 
         await vm.layoutModel.setHonorLayoutBreaks(false)
         #expect(vm.layoutModel.honorLayoutBreaks == false)

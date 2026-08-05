@@ -258,6 +258,65 @@ extension AnalyticsEvent {
         ])
     }
 
+    /// One-per-changed-score launch snapshot (§7 of the 2026-08-05 per-score-prefs spec). THE mechanic: a parameter is
+    /// included only when the underlying value is non-`nil` (non-empty for sets/dictionaries) — in BigQuery "param
+    /// present" == changed and its value is the settled value. Returns `nil` for an all-untouched row so callers skip
+    /// the event entirely. Carries NO score identifier by design. `master_volume_pct` / `tempo_multiplier_pct` round to
+    /// 10% steps and `screen_width_pt` snaps to a breakpoint — a documented exception to the raw-params policy; these
+    /// are continuous values whose sub-bucket precision carries no decision value.
+    ///
+    /// `repeatMode` / `abRepeat` deliberately have no parameter: repeat mode is a global sticky setting already covered
+    /// by `settings_snapshot` / `repeat_mode_changed`, and neither has a per-score user-intent question to answer.
+    public static func scorePrefs(_ prefs: ReaderPreferences, screenWidthPt: Double) -> AnalyticsEvent? {
+        var params: [String: AnalyticsValue] = [:]
+        if let staffSize = prefs.staffSize { params["staff_size"] = .int(Int(staffSize.rounded())) }
+        if let honorBreaks = prefs.honorLayoutBreaks { params["honor_layout_breaks"] = .bool(honorBreaks) }
+        if let volume = prefs.masterVolume { params["master_volume_pct"] = .int(percentBucket(volume)) }
+        if let transpose = prefs.transposeSemitones { params["transpose_semitones"] = .int(transpose) }
+        if let tempo = prefs.tempoMultiplier { params["tempo_multiplier_pct"] = .int(percentBucket(tempo)) }
+        if let a4 = prefs.a4ReferenceHz { params["a4_reference_hz"] = .int(Int(a4.rounded())) }
+        let userHidden = prefs.hiddenStaves.subtracting(prefs.authoredHiddenStaves)
+        if !userHidden.isEmpty { params["hidden_staff_count"] = .int(userHidden.count) }
+        let userRevealed = prefs.authoredHiddenStaves.subtracting(prefs.hiddenStaves)
+        if !userRevealed.isEmpty { params["revealed_staff_count"] = .int(userRevealed.count) }
+        if !prefs.staffProgramOverrides.isEmpty {
+            params["program_override_count"] = .int(prefs.staffProgramOverrides.count)
+        }
+        if !prefs.staffVolumeOverrides.isEmpty {
+            params["volume_override_count"] = .int(prefs.staffVolumeOverrides.count)
+        }
+        if !prefs.staffClefOverrides.isEmpty {
+            params["clef_override_count"] = .int(prefs.staffClefOverrides.count)
+        }
+        guard !params.isEmpty else { return nil }
+        params["screen_width_pt"] = .int(screenWidthBucket(screenWidthPt))
+        return AnalyticsEvent(name: "score_prefs", parameters: params)
+    }
+
+    /// A `1.0`-is-unity multiplier as a percentage rounded to 10% steps (`0.55` -> `60`).
+    private static func percentBucket(_ multiplier: Double) -> Int {
+        Int((multiplier * 10).rounded()) * 10
+    }
+
+    /// Effective-width bucket: the largest breakpoint that does not exceed the width (below 320 reports 320). Owned by
+    /// Domain so iOS (points) and Android (dp) share one table.
+    public static func screenWidthBucket(_ widthPt: Double) -> Int {
+        let breakpoints = [1366, 1024, 834, 744, 430, 390, 375, 320]
+        return breakpoints.first { Double($0) <= widthPt } ?? 320
+    }
+
+    /// Launch-time enumeration: one event per LIVE score whose row has any explicitly-set preference. Trashed scores
+    /// are excluded so the numerator matches `library_snapshot.score_count_total`.
+    public static func scorePrefsEvents(
+        allPreferences: [ReaderPreferences],
+        liveScoreItemIDs: Set<ScoreItemID>,
+        screenWidthPt: Double,
+    ) -> [AnalyticsEvent] {
+        allPreferences
+            .filter { liveScoreItemIDs.contains($0.scoreItemID) }
+            .compactMap { scorePrefs($0, screenWidthPt: screenWidthPt) }
+    }
+
     /// Session-level annotation summary, emitted when annotation mode exits. Replaces the per-stroke
     /// `annotation_ink_committed` so the pipeline is not flooded with one event per stroke.
     public static func annotationEnded(strokes: Int, durationSec: Double) -> AnalyticsEvent {

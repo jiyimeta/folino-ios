@@ -107,7 +107,7 @@ struct VisualInspectorScreen: View {
     @ViewBuilder
     private var breakPolicyRow: some View {
         let binding = Binding<Bool>(
-            get: { layoutModel.honorLayoutBreaks },
+            get: { layoutModel.effectiveHonorLayoutBreaks },
             set: { newValue in
                 Task { await layoutModel.setHonorLayoutBreaks(newValue) }
             },
@@ -166,9 +166,9 @@ struct VisualInspectorScreen: View {
     @ViewBuilder
     private var staffSizeRow: some View {
         let staffSize = Binding<Double>(
-            get: { layoutModel.staffSize },
+            get: { layoutModel.effectiveStaffSize },
             set: { newValue in
-                let current = layoutModel.staffSize
+                let current = layoutModel.effectiveStaffSize
                 if newValue > current {
                     Task { await layoutModel.incrementStaffSize() }
                 } else if newValue < current {
@@ -183,7 +183,7 @@ struct VisualInspectorScreen: View {
         ) {
             Text(String(
                 localized: "reader.preferences.staffSize",
-                defaultValue: "Staff size: \(Int(layoutModel.staffSize)) pt",
+                defaultValue: "Staff size: \(Int(layoutModel.effectiveStaffSize)) pt",
                 bundle: .module,
             ))
         }

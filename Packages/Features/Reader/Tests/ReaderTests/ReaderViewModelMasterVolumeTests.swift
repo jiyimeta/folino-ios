@@ -34,7 +34,8 @@ struct ReaderViewModelMasterVolumeTests {
 
     @Test func `master volume defaults to unity`() {
         let (vm, _, _) = Self.makeVM()
-        #expect(vm.masterVolumeModel.value == 1.0)
+        // Untouched — the slider reads unity without the score being marked as one the user set a volume on.
+        #expect(vm.masterVolumeModel.value == nil)
         #expect(vm.masterVolumeModel.displayValue == 1.0)
     }
 
@@ -51,7 +52,7 @@ struct ReaderViewModelMasterVolumeTests {
 
         #expect(controller.masterVolumeCalls == [2.0])
         #expect(repo.savedReaderPreferences.count == savedBefore)
-        #expect(vm.masterVolumeModel.value == 1.0) // not yet committed
+        #expect(vm.masterVolumeModel.value == nil) // not yet committed
         #expect(vm.masterVolumeModel.displayValue == 2.0) // transient drag value
     }
 
@@ -77,15 +78,30 @@ struct ReaderViewModelMasterVolumeTests {
         #expect(controller.masterVolumeCalls.last == 3.0)
     }
 
-    @Test func `reset master volume clears boost and forwards unity`() async {
+    @Test func `reset master volume clears boost and forwards unity`() async throws {
         let (vm, controller, repo) = Self.makeVM()
         await vm.load()
         await vm.masterVolumeModel.commitValue(2.0)
 
         await vm.masterVolumeModel.resetValue()
 
-        #expect(repo.savedReaderPreferences.last?.masterVolume == 1.0)
+        // Reset is the one affordance that writes "untouched" back — the persisted value goes to nil, not to an
+        // explicit 1.0, so the score stops counting as one the user set a master volume on.
+        let saved = try #require(repo.savedReaderPreferences.last)
+        #expect(saved.masterVolume == nil)
         #expect(controller.masterVolumeCalls.last == 1.0)
+        #expect(vm.masterVolumeModel.value == nil)
+        #expect(vm.masterVolumeModel.displayValue == 1.0)
+    }
+
+    @Test func `committing exactly unity is kept as an explicit choice`() async throws {
+        let (vm, _, repo) = Self.makeVM()
+        await vm.load()
+
+        await vm.masterVolumeModel.commitValue(ReaderPreferences.defaultMasterVolume)
+
+        let saved = try #require(repo.savedReaderPreferences.last)
+        #expect(saved.masterVolume == 1.0)
         #expect(vm.masterVolumeModel.value == 1.0)
     }
 

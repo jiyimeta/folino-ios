@@ -101,6 +101,11 @@ fun PlaybackInspectorSheet(
     onCountInChange: (Boolean) -> Unit = {},
     /** Persists the per-score master volume after the live engine/VM update. */
     onPersistMasterVolume: (Double) -> Unit = {},
+    /**
+     * Clears the per-score master volume back to "the user never chose one" (double-tap reset), rather than storing
+     * an explicit unity. iOS parity: `MasterVolumeModel.resetValue`.
+     */
+    onResetMasterVolume: () -> Unit = { onPersistMasterVolume(1.0) },
     /** Persists the per-score tempo multiplier after the live engine update. */
     onPersistTempoMultiplier: (Double) -> Unit = {},
     /** Persists the per-score A4 reference pitch after the live engine/VM update. */
@@ -109,6 +114,11 @@ fun PlaybackInspectorSheet(
     transposeSemitones: Int = 0,
     /** Persists the per-score transpose value (semitones) via the ReaderPreferences bridge. */
     onTransposeChange: (Int) -> Unit = {},
+    /**
+     * Clears the per-score transpose back to "untouched" (tap on the readout), rather than storing an explicit 0.
+     * iOS parity: `TransposeModel.reset`. Stepping to 0 with ± still records an explicit choice.
+     */
+    onResetTranspose: () -> Unit = { onTransposeChange(0) },
     /** Flat mixer staffIndex -> positional StaffAddress, for persisting per-staff overrides. */
     staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
     /** Persists a per-score program override (by staff address) after the live engine update. */
@@ -138,10 +148,12 @@ fun PlaybackInspectorSheet(
             countInEnabled = countInEnabled,
             onCountInChange = onCountInChange,
             onPersistMasterVolume = onPersistMasterVolume,
+            onResetMasterVolume = onResetMasterVolume,
             onPersistTempoMultiplier = onPersistTempoMultiplier,
             onPersistA4ReferenceHz = onPersistA4ReferenceHz,
             transposeSemitones = transposeSemitones,
             onTransposeChange = onTransposeChange,
+            onResetTranspose = onResetTranspose,
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = onPersistStaffProgram,
             drumKits = drumKits,
@@ -173,10 +185,12 @@ fun PlaybackInspectorContent(
     /** Writes the global count-in flag on toggle. */
     onCountInChange: (Boolean) -> Unit = {},
     onPersistMasterVolume: (Double) -> Unit = {},
+    onResetMasterVolume: () -> Unit = { onPersistMasterVolume(1.0) },
     onPersistTempoMultiplier: (Double) -> Unit = {},
     onPersistA4ReferenceHz: (Double) -> Unit = {},
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
+    onResetTranspose: () -> Unit = { onTransposeChange(0) },
     staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
     onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
     /** Bank-128 kit catalog for percussion parts, supplied by the composition root (shared Swift owns
@@ -287,7 +301,7 @@ fun PlaybackInspectorContent(
                             defaultValue = 1f,
                             onReset = {
                                 audioVm.setMasterVolume(1f)
-                                onPersistMasterVolume(1.0)
+                                onResetMasterVolume()
                             },
                             valueRange = 0f..1f,
                             enabled = controlsEnabled,
@@ -295,7 +309,14 @@ fun PlaybackInspectorContent(
                         )
                     }
                 }
-                item { TransposeRow(semitones = transposeSemitones, enabled = controlsEnabled, onChange = onTransposeChange) }
+                item {
+                    TransposeRow(
+                        semitones = transposeSemitones,
+                        enabled = controlsEnabled,
+                        onChange = onTransposeChange,
+                        onReset = onResetTranspose,
+                    )
+                }
                 item {
                     A4ReferenceRow(
                         hz = a4ReferenceHz,
@@ -316,10 +337,14 @@ fun PlaybackInspectorContent(
                             onPersistA4ReferenceHz(next)
                         },
                         // Double-tap resets the per-score A4 to the inherited global reference,
-                        // matching iOS where reset clears the per-score override.
+                        // matching iOS where reset CLEARS the per-score override (`A4ReferenceModel.resetValue`
+                        // persists nil). Persisting `0` — the wire's "inherit" sentinel — is what clears it;
+                        // persisting the global's Hz would instead pin an override that happens to equal the
+                        // global today and would stop tracking it if the global later moved. The engine still
+                        // gets the resolved Hz.
                         onReset = {
                             audioVm.setA4ReferenceHz(globalA4ReferenceHz)
-                            onPersistA4ReferenceHz(globalA4ReferenceHz)
+                            onPersistA4ReferenceHz(0.0)
                         },
                     )
                 }

@@ -1,3 +1,4 @@
+import Domain // ScoreItemSort
 @testable import FolinoLibraryJNI
 import Foundation
 import Testing
@@ -645,6 +646,9 @@ struct LibraryAndroidStoreTests {
         let t = try #require(store.tags.first).id
         store.bulkAddTag(t, [a, b])
 
+        // The tag list follows the global library sort order, whose shipping default is `.dateAddedDesc`; pick the
+        // title order explicitly rather than relying on the default (which is what this assertion once did).
+        store.setSortOrder(ScoreItemSort.titleAsc.rawValue)
         store.selectTag(t)
         // title-sorted: "Apple" (b) then "Zebra" (a)
         #expect(store.selectedTagItems.map(\.id) == [b, a])

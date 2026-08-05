@@ -224,6 +224,8 @@ fun ReaderScreen(
     initialA4ReferenceHz: Double = 440.0,
     /** Persists the per-score master volume on user change. */
     persistMasterVolume: (Double) -> Unit = {},
+    /** Clears the per-score master volume back to "untouched" on reset (iOS `MasterVolumeModel.resetValue`). */
+    persistMasterVolumeReset: () -> Unit = { persistMasterVolume(1.0) },
     /** Persists the per-score tempo multiplier on user change. */
     persistTempoMultiplier: (Double) -> Unit = {},
     /** Persists the per-score A4 reference pitch on user change. */
@@ -234,6 +236,8 @@ fun ReaderScreen(
     transposeSemitones: Int = 0,
     /** Persists the per-score transpose value (semitones) on user change. */
     persistTranspose: (Int) -> Unit = {},
+    /** Clears the per-score transpose back to "untouched" on reset (iOS `TransposeModel.reset`). */
+    persistTransposeReset: () -> Unit = { persistTranspose(0) },
     /** Wire string for the current continuation mode (e.g. "playThrough", "loopPlaylist"); shown in the
      * playback inspector's continuation row. */
     continuationModeWire: String = "playThrough",
@@ -547,7 +551,14 @@ fun ReaderScreen(
         staffAddressByIndex.entries.associate { (index, addr) -> addr to index }
     }
     // Once the parts load, hand the file's authored-hidden staves (<Part><show>0</show>) to the app layer to
-    // seed into the per-score hidden set. Idempotent on the bridge (reconciles once), so re-firing is safe.
+    // seed into the per-score hidden set. Re-firing with the SAME set is safe (the bridge reconciles and writes
+    // nothing), which is why keying on mixerParts is fine.
+    //
+    // The isNotEmpty() guard is LOAD-BEARING, not a micro-optimization. mixerParts starts empty and fills in
+    // asynchronously after the parse, and the shared rule this feeds (ReaderPreferences.reconcilingAuthoredHidden)
+    // REWRITES a seeded row's authored set to whatever it is handed. Calling it with an empty set therefore
+    // permanently reclassifies every authored-hidden staff as user-hidden — silently, since the staves stay hidden
+    // either way. See the caller contract on that function; do not remove or invert this guard.
     LaunchedEffect(mixerParts) {
         if (mixerParts.isNotEmpty()) onAuthoredHiddenStavesReady(mixerParts.authoredHiddenStaffAddresses())
     }
@@ -876,10 +887,12 @@ fun ReaderScreen(
             countInEnabled = countInEnabled,
             onCountInChange = onCountInChange,
             onPersistMasterVolume = persistMasterVolume,
+            onResetMasterVolume = persistMasterVolumeReset,
             onPersistTempoMultiplier = persistTempoMultiplier,
             onPersistA4ReferenceHz = persistA4ReferenceHz,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
+            onResetTranspose = persistTransposeReset,
             staffAddressByIndex = staffAddressByIndex,
             onPersistStaffProgram = persistStaffProgram,
             drumKits = drumKits,
@@ -907,6 +920,7 @@ fun ReaderScreen(
             onPageTurnButtonsVisibleChange = onPageTurnButtonsVisibleChange,
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
+            onResetTranspose = persistTransposeReset,
             capabilities = capabilities,
         )
     }

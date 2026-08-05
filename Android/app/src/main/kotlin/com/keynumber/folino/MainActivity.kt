@@ -304,7 +304,13 @@ private fun LibraryNavGraph(
     // Launch analytics (events-first; replaces the old user-property push). The store hydrates synchronously in its
     // init, so emit the library_snapshot + settings_snapshot events once here, mirroring iOS AppBootstrap. Re-emitting
     // after import/delete is a deferred minor (iOS emits once at launch too).
+    //
+    // claimLaunchSnapshots() makes the whole batch process-scoped, which LaunchedEffect(Unit) alone is not: this
+    // composable is recreated with the Activity, and the manifest's configChanges does not cover uiMode / locale /
+    // fontScale, so a dark-mode flip or a language change would re-emit every event below inside one ga_session_id.
+    // score_prefs carries no score identifier by design, so such duplicates cannot be removed downstream.
     LaunchedEffect(Unit) {
+        if (!AndroidAnalytics.claimLaunchSnapshots()) return@LaunchedEffect
         AndroidAnalytics.log(vm.librarySnapshot())
         AndroidAnalytics.log(
             AndroidAnalytics.bridge.settingsSnapshot(
@@ -323,6 +329,29 @@ private fun LibraryNavGraph(
                 soundfontPreset = "lightweight",
             ),
         )
+
+        // One score_prefs per changed score, mirroring iOS AppBootstrap. The bridge decodes each blob with the shared
+        // Domain factory — parameter selection, the presence-means-changed rule and the width bucketing all live in
+        // Swift; Kotlin only enumerates and relays. An empty name means "untouched or undecodable — skip". One call
+        // per blob: wirelet's [String] method-arg support is unreleased.
+        //
+        // defaultStaffSize is still the *live* global staff size, the same prefs.staffSize the Reader hands to
+        // ReaderPreferencesBridge.open. The analytics builder no longer uses it to decide staff_size — it drops that
+        // parameter for every legacy blob outright (see AnalyticsBridge.scorePrefs) — but the argument is kept so the
+        // wire signature stays put and so the value is right if a future parameter needs it.
+        // A failed read degrades to "no events" — the same best-effort stance as the two snapshots above, none of
+        // which may fail a launch. It is recorded as a non-fatal, though, mirroring iOS AppBootstrap.scorePrefsEvents:
+        // this is a whole-table read, so one bad row zeroes every score_prefs event for the launch, and silence would
+        // be indistinguishable downstream from "these users customize nothing".
+        val widthDp = context.resources.configuration.screenWidthDp.toDouble()
+        val defaultStaffSize = prefs.staffSize.first()
+        val blobs = runCatching {
+            com.keynumber.folino.library.RoomLibraryStore(context).loadAllLiveReaderPreferencesJson()
+        }.onFailure { CrashReporting.recordNonFatal(it) }.getOrDefault(emptyList())
+        blobs.forEach { json ->
+            val wire = AndroidAnalytics.bridge.scorePrefs(json, widthDp, defaultStaffSize)
+            if (wire.name.isNotEmpty()) AndroidAnalytics.log(wire)
+        }
     }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -694,6 +723,9 @@ private fun LibraryNavGraph(
                     initialA4ReferenceHz =
                         if (prefsState.a4ReferenceHz == 0.0) globalA4Hz else prefsState.a4ReferenceHz,
                     persistMasterVolume = { v -> prefsVm.setMasterVolume(v) },
+                    // Reset means "the user never chose a master volume", not "the user chose unity" — the bridge
+                    // keeps the two apart so an untouched score is never reported as configured (iOS parity).
+                    persistMasterVolumeReset = { prefsVm.clearMasterVolume() },
                     persistTempoMultiplier = { v ->
                         if (v > lastTempoForAnalytics) {
                             AndroidAnalytics.log(AndroidAnalytics.bridge.tempoIncreased())
@@ -713,6 +745,17 @@ private fun LibraryNavGraph(
                         }
                         lastTransposeForAnalytics = v
                         prefsVm.setTranspose(v)
+                    },
+                    // Tap-to-reset clears the stored value instead of writing an explicit 0 (iOS parity). The
+                    // analytics direction still reflects the move back to no transposition.
+                    persistTransposeReset = {
+                        if (lastTransposeForAnalytics > 0) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeDown())
+                        } else if (lastTransposeForAnalytics < 0) {
+                            AndroidAnalytics.log(AndroidAnalytics.bridge.transposeUp())
+                        }
+                        lastTransposeForAnalytics = 0
+                        prefsVm.clearTranspose()
                     },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeChange = { v -> scope.launch { prefs.setMetronome(v) } },

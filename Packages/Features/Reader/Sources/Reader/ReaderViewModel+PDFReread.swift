@@ -84,14 +84,12 @@ extension ReaderViewModel {
     }
 
     private func resetStaffBoundPreferences() async {
+        // Adopt the cleared value wholesale rather than copying field by field: `clearingStaffBoundOverrides` already
+        // returns a copy of exactly this value, and enumerating the fields here silently drops any the Domain later
+        // adds to the reset (`authoredHiddenStaves` was already being missed that way — leaving the old parse's
+        // provenance beside an emptied `hiddenStaves` reads as "the user revealed all of these").
         await mutatePreferences { prefs in
-            let cleared = prefs.clearingStaffBoundOverrides()
-            prefs.hiddenStaves = cleared.hiddenStaves
-            prefs.staffProgramOverrides = cleared.staffProgramOverrides
-            prefs.staffVolumeOverrides = cleared.staffVolumeOverrides
-            prefs.staffClefOverrides = cleared.staffClefOverrides
-            prefs.transposeSemitones = cleared.transposeSemitones
-            prefs.hasSeededAuthoredVisibility = cleared.hasSeededAuthoredVisibility
+            prefs = prefs.clearingStaffBoundOverrides()
         }
     }
 }

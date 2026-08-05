@@ -11,31 +11,34 @@ final class ReaderPreferencesStore {
 
     private let repository: any ScoreLibraryRepository
     private let scoreItemID: ScoreItem.ID
-    private let defaultStaffSize: Double
 
     init(
         scoreItemID: ScoreItem.ID,
-        defaultStaffSize: Double,
         repository: any ScoreLibraryRepository,
     ) {
         self.scoreItemID = scoreItemID
-        self.defaultStaffSize = defaultStaffSize
         self.repository = repository
-        preferences = ReaderPreferences(
-            scoreItemID: scoreItemID,
-            staffSize: defaultStaffSize,
-            hiddenStaves: [],
-        )
+        // Placeholder until `loadOrSeed` runs. Every Optional field stays `nil` — an untouched score must not look
+        // touched just because the Reader stood a store up for it.
+        preferences = ReaderPreferences(scoreItemID: scoreItemID, hiddenStaves: [])
     }
 
-    /// Loads the persisted preferences if any, otherwise seeds defaults and writes them through. Either way
-    /// the resolved value lands in `preferences` and is returned for the caller to distribute into sub-models.
+    /// Loads the persisted preferences if any, otherwise seeds a fresh value. Either way the resolved value lands in
+    /// `preferences` and is returned for the caller to distribute into sub-models. A seed is written through only when
+    /// it actually records something (see `reconcilingAuthoredHidden`) — a row that says nothing but "defaults" would
+    /// make every score the user merely opened look like one they configured.
     ///
     /// `authoredHiddenStaves` are the staves the score file authored as hidden (MuseScore `<Part><show>0</show>`, via
     /// `Score.authoredHiddenStaffAddresses`). They open hidden by default: a brand-new row seeds them directly, and a
     /// row created before this feature is back-filled with them ONCE (unioned with anything the user already hid) and
-    /// then marked seeded. On every subsequent open the stored row wins untouched, so a staff the user reveals stays
-    /// revealed. Callers with no notation score (PDFs) pass the empty default.
+    /// then marked seeded. On every subsequent open the stored `hiddenStaves` wins, so a staff the user reveals stays
+    /// revealed — but `authoredHiddenStaves` is refreshed and rewritten whenever it disagrees with the score, keeping
+    /// the provenance correct across re-reads that renumber staves.
+    ///
+    /// Because of that refresh, `authoredHiddenStaves` must only ever be the *known* authored set: passing `[]` for a
+    /// notation score whose parse failed or is incomplete would permanently reclassify its authored-hidden staves as
+    /// user-hidden. Callers with no notation score at all (PDFs) pass the empty default legitimately. See the caller
+    /// contract on `ReaderPreferences.reconcilingAuthoredHidden`.
     @discardableResult
     func loadOrSeed(authoredHiddenStaves: Set<StaffAddress> = []) async -> ReaderPreferences {
         // A persistence error is non-fatal — `try?` collapses "no row" and "load failed" alike into
@@ -45,7 +48,6 @@ final class ReaderPreferencesStore {
             stored: stored,
             authoredHiddenStaves: authoredHiddenStaves,
             scoreItemID: scoreItemID,
-            defaultStaffSize: defaultStaffSize,
         )
         preferences = resolved
         if shouldPersist {
@@ -64,6 +66,7 @@ final class ReaderPreferencesStore {
             scoreItemID: copy.scoreItemID,
             staffSize: copy.staffSize,
             hiddenStaves: copy.hiddenStaves,
+            authoredHiddenStaves: copy.authoredHiddenStaves,
             staffProgramOverrides: copy.staffProgramOverrides,
             staffVolumeOverrides: copy.staffVolumeOverrides,
             staffClefOverrides: copy.staffClefOverrides,

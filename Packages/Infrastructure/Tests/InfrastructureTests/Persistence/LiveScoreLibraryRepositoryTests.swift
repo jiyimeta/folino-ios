@@ -461,4 +461,30 @@ struct LiveScoreLibraryRepositoryTests {
         #expect(loaded?.staffSize == 20)
         #expect(loaded?.hiddenStaves == [StaffAddress(partIndex: 1, staffIndexInPart: 0)])
     }
+
+    @Test func `allReaderPreferences returns every stored row`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let repo = LiveScoreLibraryRepository(database: db, scoresDirectory: URL(fileURLWithPath: "/dev/null"))
+        try await repo.refresh()
+
+        let untouchedItem = makeBareItem(localFileName: "a.mscz", contentHash: "a")
+        let touchedItem = makeBareItem(localFileName: "b.mscz", contentHash: "b")
+        try await repo.saveScoreItem(untouchedItem)
+        try await repo.saveScoreItem(touchedItem)
+
+        // One row where the user never chose anything (every scalar `nil`), one where they picked a staff size — the
+        // snapshot has to carry both, because "untouched" is exactly what the analytics event needs to distinguish.
+        try await repo.saveReaderPreferences(
+            ReaderPreferences(scoreItemID: untouchedItem.id, hiddenStaves: []),
+        )
+        try await repo.saveReaderPreferences(
+            ReaderPreferences(scoreItemID: touchedItem.id, staffSize: 18, hiddenStaves: []),
+        )
+
+        let rows = try await repo.allReaderPreferences()
+        #expect(rows.count == 2)
+        #expect(rows.contains { $0.staffSize == 18 })
+        #expect(rows.contains { $0.scoreItemID == untouchedItem.id && $0.staffSize == nil })
+    }
 }

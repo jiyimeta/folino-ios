@@ -43,6 +43,10 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
         storedReaderPreferences[scoreItemID]
     }
 
+    func allReaderPreferences() throws -> [ReaderPreferences] {
+        Array(storedReaderPreferences.values)
+    }
+
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {
         savedReaderPreferences.append(preferences)
         storedReaderPreferences[preferences.scoreItemID] = preferences

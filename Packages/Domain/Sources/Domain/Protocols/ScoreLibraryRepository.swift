@@ -55,4 +55,8 @@ public protocol ScoreLibraryRepository: AnyObject, Observable {
     /// Persist (insert or update) the Reader display settings for a score. Errors are mapped to
     /// `DomainError.persistenceFailed` by the live implementation; callers may surface or swallow them.
     func saveReaderPreferences(_ preferences: ReaderPreferences) async throws
+
+    /// Every stored per-score Reader preferences row, in no particular order. Used once per launch by the
+    /// `score_prefs` analytics snapshot; callers filter to live score items themselves.
+    func allReaderPreferences() async throws -> [ReaderPreferences]
 }

@@ -30,13 +30,18 @@ private final class FailingRepository: ScoreLibraryRepository {
         []
     }
 
-    /// Reader preferences: no-op stubs — this fake exists to fail score-item saves; reader-pref methods aren't
-    /// exercised by these tests.
+    /// Reader preferences: not exercised by these tests — this fake exists to fail score-item saves. The read stubs
+    /// stay empty; `allReaderPreferences` throws instead of vending `[]` so a future caller that starts depending on
+    /// it fails loudly rather than silently reading a snapshot this fake never populates.
     func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
         nil
     }
 
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
+
+    func allReaderPreferences() throws -> [ReaderPreferences] {
+        throw DomainError.persistenceFailed(reason: "stub failure")
+    }
 }
 
 @MainActor

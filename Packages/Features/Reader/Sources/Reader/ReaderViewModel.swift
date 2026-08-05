@@ -212,7 +212,6 @@ final class ReaderViewModel {
         self.openedFrom = openedFrom
         preferencesStore = ReaderPreferencesStore(
             scoreItemID: scoreItem.id,
-            defaultStaffSize: defaultStaffSize,
             repository: repository,
         )
         playbackSession = ReaderPlaybackSession(
@@ -243,6 +242,7 @@ final class ReaderViewModel {
     }
 
     private func wireLayoutModel() {
+        layoutModel.defaultStaffSize = defaultStaffSize
         layoutModel.onChange = { [weak self] in
             guard let self else { return }
             recomputeVisibleScore()
@@ -403,7 +403,6 @@ final class ReaderViewModel {
         scoreItem = newItem
         preferencesStore = ReaderPreferencesStore(
             scoreItemID: newItem.id,
-            defaultStaffSize: defaultStaffSize,
             repository: repository,
         )
         hasUpdatedLastOpened = false
@@ -439,7 +438,7 @@ final class ReaderViewModel {
         let withClefs = score.applying(clefOverrides: layoutModel.staffClefOverrides)
         // Transpose sits between clef overrides and the hidden-staves filter. It preserves note IDs and ticks, so the
         // playback cursor translation downstream is unaffected.
-        let transposed = withClefs.transposed(bySemitones: transposeModel.semitones)
+        let transposed = withClefs.transposed(bySemitones: transposeModel.effectiveSemitones)
         visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
     }
 
@@ -470,7 +469,7 @@ final class ReaderViewModel {
         // Seed the direction baselines from the loaded values so the first user edit compares against what's persisted
         // (and the sync itself logs nothing — `sync(from:)` bypasses the models' `onChange`).
         lastTempoMultiplier = tempoModel.effectiveMultiplier
-        lastTransposeSemitones = transposeModel.semitones
+        lastTransposeSemitones = transposeModel.effectiveSemitones
     }
 
     func updateLastOpenedAtOnce() async {

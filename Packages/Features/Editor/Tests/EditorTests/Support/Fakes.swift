@@ -63,4 +63,10 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     }
 
     func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
+
+    /// This fake never stores preferences (`loadReaderPreferences` is a `nil` stub), so an empty snapshot is the
+    /// honest answer rather than a placeholder.
+    func allReaderPreferences() throws -> [ReaderPreferences] {
+        []
+    }
 }

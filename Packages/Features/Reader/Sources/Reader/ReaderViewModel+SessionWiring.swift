@@ -46,10 +46,10 @@ extension ReaderViewModel {
 
     private func currentPiPLayoutSnapshot() -> PiPLayoutSnapshot {
         PiPLayoutSnapshot(
-            staffSize: layoutModel.staffSize,
+            staffSize: layoutModel.effectiveStaffSize,
             hiddenStaves: layoutModel.hiddenStaves,
             clefOverrides: layoutModel.staffClefOverrides,
-            transposeSemitones: transposeModel.semitones,
+            transposeSemitones: transposeModel.effectiveSemitones,
         )
     }
 }

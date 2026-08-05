@@ -36,6 +36,11 @@ internal fun TransposeRow(
     semitones: Int,
     enabled: Boolean,
     onChange: (Int) -> Unit,
+    /**
+     * Tap-to-reset. Separate from `onChange(0)` because a reset means "the user never chose a transposition",
+     * while stepping to 0 with ± is an explicit choice — the store keeps the two apart (iOS parity).
+     */
+    onReset: () -> Unit = { onChange(0) },
     showLeadingIcon: Boolean = true,
 ) {
     val signedReadout = if (semitones > 0) "+$semitones" else "$semitones"
@@ -51,7 +56,7 @@ internal fun TransposeRow(
             Text(
                 text = signedReadout,
                 modifier = Modifier
-                    .clickable(enabled = enabled) { onChange(0) }
+                    .clickable(enabled = enabled) { onReset() }
                     .padding(horizontal = 4.dp),
                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
             )

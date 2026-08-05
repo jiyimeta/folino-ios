@@ -11,10 +11,28 @@ import SheetMusicCore
 @MainActor
 @Observable
 final class LayoutSettingsModel {
-    private(set) var staffSize: Double = 14
-    private(set) var honorLayoutBreaks = false
+    /// `nil` = the user never chose a staff size, so it resolves to `defaultStaffSize`. Kept raw (not resolved) because
+    /// the shared `onChange` copies all four fields at once: resolving here would write a number into `staffSize` the
+    /// first time the user changed any OTHER field, permanently marking the score as touched.
+    private(set) var staffSize: Double?
+    /// `nil` = untouched; resolves to `ReaderPreferences.defaultHonorLayoutBreaks`. Same raw-Optional reasoning as
+    /// `staffSize`.
+    private(set) var honorLayoutBreaks: Bool?
     private(set) var hiddenStaves: Set<StaffAddress> = []
     private(set) var staffClefOverrides: [StaffAddress: String] = [:]
+
+    /// Injected by `ReaderViewModel` at wiring time — the screen-level default that will become device-class-dependent.
+    @ObservationIgnored var defaultStaffSize: Double = 14
+
+    /// Values the UI and the renderer read. Everything that needs a number goes through these, never through the raw
+    /// Optionals.
+    var effectiveStaffSize: Double {
+        staffSize ?? defaultStaffSize
+    }
+
+    var effectiveHonorLayoutBreaks: Bool {
+        honorLayoutBreaks ?? ReaderPreferences.defaultHonorLayoutBreaks
+    }
 
     @ObservationIgnored var onChange: (() async -> Void)?
     /// Fires synchronously after `toggleStaff` mutates `hiddenStaves`, so the parent VM can re-translate the playback
@@ -24,28 +42,28 @@ final class LayoutSettingsModel {
     @ObservationIgnored var scoreProvider: () -> Score? = { nil }
 
     func sync(from prefs: ReaderPreferences) {
-        staffSize = prefs.staffSize
+        staffSize = prefs.staffSize // raw Optional — resolving here would mark every score touched on save
         honorLayoutBreaks = prefs.honorLayoutBreaks
         hiddenStaves = prefs.hiddenStaves
         staffClefOverrides = prefs.staffClefOverrides
     }
 
     func incrementStaffSize() async {
-        let next = min(staffSize + 1, ReaderPreferences.maxStaffSize)
-        guard next != staffSize else { return }
+        let next = min(effectiveStaffSize + 1, ReaderPreferences.maxStaffSize)
+        guard next != effectiveStaffSize else { return }
         staffSize = next
         await onChange?()
     }
 
     func decrementStaffSize() async {
-        let next = max(staffSize - 1, ReaderPreferences.minStaffSize)
-        guard next != staffSize else { return }
+        let next = max(effectiveStaffSize - 1, ReaderPreferences.minStaffSize)
+        guard next != effectiveStaffSize else { return }
         staffSize = next
         await onChange?()
     }
 
     func setHonorLayoutBreaks(_ value: Bool) async {
-        guard value != honorLayoutBreaks else { return }
+        guard value != effectiveHonorLayoutBreaks else { return }
         honorLayoutBreaks = value
         await onChange?()
     }

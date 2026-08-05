@@ -11,8 +11,10 @@ import Observation
 @MainActor
 @Observable
 final class MasterVolumeModel {
-    /// Committed master volume. `1.0` = unity. Persisted by the parent via `onChange`.
-    private(set) var value = 1.0
+    /// Committed master volume. `nil` = the user never chose one, so it resolves to
+    /// `ReaderPreferences.defaultMasterVolume` (unity). Persisted raw by the parent via `onChange`, so an untouched
+    /// score is never marked touched by an unrelated save.
+    private(set) var value: Double?
 
     /// Transient slider write during a drag (or thumb-release writeback). Populated by `setValue`, cleared by
     /// `commitValue` / `resetValue`. Lives here so the slider tracks the finger without a plain `@State` clobbering a
@@ -24,7 +26,7 @@ final class MasterVolumeModel {
 
     /// Value the inspector slider should render — the in-flight drag value when present, else the committed value.
     var displayValue: Double {
-        liveValue ?? value
+        liveValue ?? value ?? ReaderPreferences.defaultMasterVolume
     }
 
     func sync(from prefs: ReaderPreferences) {
@@ -40,7 +42,8 @@ final class MasterVolumeModel {
     }
 
     /// Slider release: clamp to the supported window, persist, clear the transient drag value, and forward the
-    /// post-clamp value to the engine.
+    /// post-clamp value to the engine. Storing `.some` even when the value lands exactly on unity is deliberate — an
+    /// explicit choice is an explicit choice; only `resetValue` goes back to "untouched".
     func commitValue(_ newValue: Double) async {
         let clamped = min(
             max(newValue, ReaderPreferences.minMasterVolume),
@@ -52,11 +55,12 @@ final class MasterVolumeModel {
         await controllerProvider()?.setMasterVolume(clamped)
     }
 
-    /// Reset to unity (100%). Clears the saved value and any transient drag value, then forwards `1.0`.
+    /// Reset to the default (unity). Clears the saved value back to "untouched" and drops any transient drag value,
+    /// then forwards the default to the engine.
     func resetValue() async {
-        value = 1.0
+        value = nil
         liveValue = nil
         await onChange?()
-        await controllerProvider()?.setMasterVolume(1.0)
+        await controllerProvider()?.setMasterVolume(ReaderPreferences.defaultMasterVolume)
     }
 }
