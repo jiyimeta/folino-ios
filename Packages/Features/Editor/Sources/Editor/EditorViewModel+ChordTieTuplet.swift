@@ -107,8 +107,8 @@ extension EditorViewModel {
         // A tie is the one gesture whose whole point is holding a note past what one slot can express, so the armed
         // length outrunning the bar is the expected case here rather than an edge one: spell it as a chain across
         // the barline and tie the selected note onto its head.
-        if let plan = CrossBarNoteInputPlanner.plan(
-            pitch: note.pitch, tpc: note.tpc, duration: armed, at: next, in: score,
+        if let plan = CrossBarInputPlanner.plan(
+            .note(pitch: note.pitch, tpc: note.tpc), duration: armed, at: next, in: score,
         ) {
             let tieOntoChain = SetTie(
                 from: noteID,
@@ -127,7 +127,7 @@ extension EditorViewModel {
         // No plan and no room means the chain would run off the end of the staff: there is nowhere to put the
         // length being asked for, and issuing the single-slot write anyway just hands the engine an edit it
         // refuses — a lit key that does nothing. Report it as unavailable so the key dims instead.
-        guard CrossBarNoteInputPlanner.fitsInMeasure(armed, at: next, in: score) else { return nil }
+        guard CrossBarInputPlanner.fitsInMeasure(armed, at: next, in: score) else { return nil }
         let restID = RestID(
             staff: next.staff,
             measureIndex: next.measureIndex,

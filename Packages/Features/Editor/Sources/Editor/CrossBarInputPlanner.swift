@@ -2,17 +2,26 @@ import Domain
 import Foundation
 import SheetMusicCore
 
-/// Spells a note that outlasts the bar it starts in as a beat-aligned chain of tied notes running across the
-/// barline — the only way a score can write one.
+/// Spells a note or a rest that outlasts the bar it starts in as a beat-aligned chain running across the barline —
+/// the only way a score can write one.
 ///
 /// Without this the letter keys simply died near a barline. The engine refuses any single-slot lengthening that
 /// would cross one (`DurationChangeAlgorithm`: "not enough room in the measure to lengthen"), and input applies the
 /// armed length and the note as ONE composite, so that refusal took the note down with it: half armed on the last
-/// beat of a 4/4 bar produced nothing at all, with no way to tell the key apart from a dead one.
+/// beat of a 4/4 bar produced nothing at all, with no way to tell the key apart from a dead one. The rest key had
+/// the same hole, and this closes it on the same terms.
 ///
 /// Everything is planned against the pre-edit score and emitted as one `ReplaceVoiceElements` per measure, so the
 /// whole chain is a single undo step and no half-written intermediate state is ever visible.
-enum CrossBarNoteInputPlanner {
+enum CrossBarInputPlanner {
+    /// What the chain is made of. Notes need ties to read as one length across the barline; rests don't tie — the
+    /// pieces summing to the armed length ARE the rest, which is how every engraver writes one. Everything else
+    /// about the chain — where it breaks, how each bar's share is beat-aligned, what it displaces — is the same.
+    enum Content {
+        case note(pitch: Int, tpc: Int)
+        case rest
+    }
+
     struct Plan {
         let commands: [any EditCommand]
         /// Slot of the first piece — where the selection lands, since that is where the note you wrote begins.
@@ -22,12 +31,11 @@ enum CrossBarNoteInputPlanner {
         let tail: VoiceElementID
     }
 
-    /// The plan for writing `pitch` / `tpc` for `duration` at `location`, or nil when there is nothing to plan:
-    /// the note fits its bar (the ordinary single-slot path owns that), or the chain can't be honored — see
-    /// `segments` (runs off the end of the staff) and `splice` (a tuplet in the way).
+    /// The plan for writing `content` for `duration` at `location`, or nil when there is nothing to plan: it fits
+    /// its bar (the ordinary single-slot path owns that), or the chain can't be honored — see `segments` (runs off
+    /// the end of the staff) and `splice` (a tuplet in the way).
     static func plan(
-        pitch: Int,
-        tpc: Int,
+        _ content: Content,
         duration: NoteDuration,
         at location: VoiceElementID,
         in score: Score,
@@ -35,8 +43,8 @@ enum CrossBarNoteInputPlanner {
         guard let room = room(at: location, in: score) else { return nil }
         let wanted = duration.resolved(in: room.measureDuration).ticks(division: room.division)
         guard room.ticks > 0, wanted > room.ticks else { return nil }
-        guard let segments = segments(wanted: wanted, from: location, room: room) else { return nil }
-        return plan(segments: segments, pitch: pitch, tpc: tpc, at: location, room: room)
+        guard let segments = segments(wanted: wanted, from: location, room: room, content: content) else { return nil }
+        return plan(segments: segments, content: content, at: location, room: room)
     }
 
     /// Whether a note of `duration` written at `location` stays inside its bar — i.e. whether the ordinary
@@ -101,14 +109,17 @@ enum CrossBarNoteInputPlanner {
     /// nil when the chain would run past the end of the staff. Writing the part that fits and dropping the rest
     /// would produce a note of a length nobody asked for, silently — refusing leaves the score alone and keeps the
     /// armed length meaning exactly what it says.
-    private static func segments(wanted: Int, from location: VoiceElementID, room: Room) -> [Segment]? {
+    private static func segments(
+        wanted: Int, from location: VoiceElementID, room: Room, content: Content,
+    ) -> [Segment]? {
         let restOfBar = Segment(
             measureIndex: location.measureIndex,
             startIndex: location.elementIndex,
             startRtick: room.rtick,
             ticks: room.ticks,
-            durations: DurationChangeAlgorithm.alignedDurations(
-                forTicks: room.ticks, rtickStart: room.rtick, division: room.division,
+            durations: durations(
+                forTicks: room.ticks, rtickStart: room.rtick, inMeasure: location.measureIndex,
+                room: room, content: content,
             ),
         )
         var segments = [restOfBar]
@@ -126,8 +137,8 @@ enum CrossBarNoteInputPlanner {
                 startIndex: startIndex,
                 startRtick: 0,
                 ticks: ticks,
-                durations: DurationChangeAlgorithm.alignedDurations(
-                    forTicks: ticks, rtickStart: 0, division: room.division,
+                durations: durations(
+                    forTicks: ticks, rtickStart: 0, inMeasure: measureIndex, room: room, content: content,
                 ),
             ))
             left -= ticks
@@ -137,10 +148,27 @@ enum CrossBarNoteInputPlanner {
         return segments
     }
 
+    /// One segment's beat-aligned lengths — except that a bar the chain covers end to end is one `.measure` rest,
+    /// the same promotion `EditorViewModel.restDuration(_:at:)` applies to a single-slot rest that fills its bar.
+    /// A silent bar reads as a measure rest whatever the meter; spelling it `.half` + `.quarter` in 3/4 because it
+    /// happens to be a link in a longer chain would be the one place that rule didn't hold. Notes never take it —
+    /// `.measure` is a rest's spelling.
+    private static func durations(
+        forTicks ticks: Int, rtickStart: Int, inMeasure measureIndex: Int, room: Room, content: Content,
+    ) -> [NoteDuration] {
+        if case .rest = content, rtickStart == 0, room.measureDurations.indices.contains(measureIndex),
+           ticks == room.measureDurations[measureIndex].ticks(division: room.division)
+        {
+            return [.measure]
+        }
+        return DurationChangeAlgorithm.alignedDurations(
+            forTicks: ticks, rtickStart: rtickStart, division: room.division,
+        )
+    }
+
     private static func plan(
         segments: [Segment],
-        pitch: Int,
-        tpc: Int,
+        content: Content,
         at location: VoiceElementID,
         room: Room,
     ) -> Plan? {
@@ -154,8 +182,7 @@ enum CrossBarNoteInputPlanner {
             let pieces = segment.durations.enumerated().map { offset, duration in
                 piece(
                     duration: duration,
-                    pitch: pitch,
-                    tpc: tpc,
+                    content: content,
                     isFirst: written + offset == 0,
                     isLast: written + offset == pieceCount - 1,
                 )
@@ -277,8 +304,9 @@ enum CrossBarNoteInputPlanner {
     }
 
     private static func piece(
-        duration: NoteDuration, pitch: Int, tpc: Int, isFirst: Bool, isLast: Bool,
+        duration: NoteDuration, content: Content, isFirst: Bool, isLast: Bool,
     ) -> VoiceElement {
+        guard case let .note(pitch, tpc) = content else { return .rest(duration: duration) }
         let note = Note(
             pitch: pitch,
             tpc: tpc,
