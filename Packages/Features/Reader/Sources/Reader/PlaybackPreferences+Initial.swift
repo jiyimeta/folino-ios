@@ -36,12 +36,12 @@ extension PlaybackPreferences {
             perStaff: states,
             tempoMultiplier: readerPreferences.tempoMultiplier ?? 1.0,
             abRepeat: readerPreferences.abRepeat,
-            masterVolume: readerPreferences.masterVolume,
+            masterVolume: readerPreferences.effectiveMasterVolume,
             a4ReferenceHz: A4Reference.effectiveHz(
                 override: readerPreferences.a4ReferenceHz,
                 globalDefault: globalA4,
             ),
-            transposeSemitones: readerPreferences.transposeSemitones,
+            transposeSemitones: readerPreferences.effectiveTransposeSemitones,
         )
     }
 }

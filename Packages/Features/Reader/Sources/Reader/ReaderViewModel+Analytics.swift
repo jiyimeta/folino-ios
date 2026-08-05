@@ -58,7 +58,7 @@ extension ReaderViewModel {
     /// Log a `transpose_changed` with the up/down direction. `TransposeModel.setSemitones` only fires `onChange` on a
     /// real change, so this always reflects a genuine semitone move relative to the last logged baseline.
     func logTransposeChangeIfNeeded() {
-        let new = transposeModel.semitones
+        let new = transposeModel.effectiveSemitones
         guard new != lastTransposeSemitones else { return }
         analytics.log(.transposeChanged(direction: new > lastTransposeSemitones ? "up" : "down"))
         lastTransposeSemitones = new

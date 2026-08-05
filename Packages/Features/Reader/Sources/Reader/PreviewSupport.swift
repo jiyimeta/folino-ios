@@ -39,6 +39,10 @@ final class PreviewFakeRepository: ScoreLibraryRepository {
         nil
     }
 
+    func allReaderPreferences() throws -> [ReaderPreferences] {
+        []
+    }
+
     func saveReaderPreferences(_: ReaderPreferences) throws {}
 
     static var sampleItem: ScoreItem {
@@ -76,6 +80,10 @@ final class PreviewSeededPreferencesRepository: ScoreLibraryRepository {
 
     func loadReaderPreferences(for _: Domain.ScoreItemID) throws -> ReaderPreferences? {
         seededPreferences
+    }
+
+    func allReaderPreferences() throws -> [ReaderPreferences] {
+        [seededPreferences]
     }
 
     /// Delegate every other method to `base`. (List them all so a future protocol addition fails to compile here,

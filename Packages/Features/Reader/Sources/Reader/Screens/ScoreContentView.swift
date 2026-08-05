@@ -50,7 +50,7 @@ struct ScoreContentView: View {
     }
 
     private var effectiveTransposeSemitones: Int {
-        isEditing ? 0 : viewModel.transposeModel.semitones
+        isEditing ? 0 : viewModel.transposeModel.effectiveSemitones
     }
 
     var body: some View {
@@ -91,8 +91,8 @@ struct ScoreContentView: View {
                 case .vertical:
                     VerticalScoreContainer(
                         score: score,
-                        staffSize: viewModel.layoutModel.staffSize,
-                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                        staffSize: viewModel.layoutModel.effectiveStaffSize,
+                        honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
                         collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
@@ -107,8 +107,8 @@ struct ScoreContentView: View {
                 case .horizontal:
                     HorizontalScoreContainer(
                         score: score,
-                        staffSize: viewModel.layoutModel.staffSize,
-                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                        staffSize: viewModel.layoutModel.effectiveStaffSize,
+                        honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
                         collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,
@@ -122,8 +122,8 @@ struct ScoreContentView: View {
                 case .page:
                     PagedScoreContainer(
                         score: score,
-                        staffSize: viewModel.layoutModel.staffSize,
-                        honorLayoutBreaks: viewModel.layoutModel.honorLayoutBreaks,
+                        staffSize: viewModel.layoutModel.effectiveStaffSize,
+                        honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
                         collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
                         playbackCursor: viewModel.playbackSession.displayCursor,

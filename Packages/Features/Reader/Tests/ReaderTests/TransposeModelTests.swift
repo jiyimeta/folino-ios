@@ -19,7 +19,8 @@ struct TransposeModelTests {
 
     @Test func `semitones defaults to zero`() {
         let model = TransposeModel()
-        #expect(model.semitones == 0)
+        #expect(model.semitones == nil) // untouched
+        #expect(model.effectiveSemitones == 0)
     }
 
     // MARK: - setSemitones clamping
@@ -103,17 +104,31 @@ struct TransposeModelTests {
             hiddenStaves: [],
         )
         model.sync(from: prefs)
-        #expect(model.semitones == 0)
+        #expect(model.semitones == nil)
+        #expect(model.effectiveSemitones == 0)
     }
 
     // MARK: - reset
 
-    @Test func `reset sets semitones to zero`() async {
+    @Test func `reset returns semitones to untouched`() async {
         let (model, controller) = Self.makeModel()
         await model.setSemitones(5)
         await model.reset()
-        #expect(model.semitones == 0)
+        // Back to "untouched", not an explicit 0 — the engine still gets the resolved default.
+        #expect(model.semitones == nil)
+        #expect(model.effectiveSemitones == 0)
         #expect(controller.transposeSemitoneCalls.last == 0)
+    }
+
+    @Test func `reset on an untouched model does nothing`() async {
+        let (model, controller) = Self.makeModel()
+        var fired = false
+        model.onChange = { fired = true }
+
+        await model.reset()
+
+        #expect(!fired)
+        #expect(controller.transposeSemitoneCalls.isEmpty)
     }
 
     @Test func `reset fires onChange`() async {
