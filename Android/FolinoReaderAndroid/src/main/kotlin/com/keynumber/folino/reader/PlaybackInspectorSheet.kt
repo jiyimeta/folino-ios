@@ -337,10 +337,14 @@ fun PlaybackInspectorContent(
                             onPersistA4ReferenceHz(next)
                         },
                         // Double-tap resets the per-score A4 to the inherited global reference,
-                        // matching iOS where reset clears the per-score override.
+                        // matching iOS where reset CLEARS the per-score override (`A4ReferenceModel.resetValue`
+                        // persists nil). Persisting `0` — the wire's "inherit" sentinel — is what clears it;
+                        // persisting the global's Hz would instead pin an override that happens to equal the
+                        // global today and would stop tracking it if the global later moved. The engine still
+                        // gets the resolved Hz.
                         onReset = {
                             audioVm.setA4ReferenceHz(globalA4ReferenceHz)
-                            onPersistA4ReferenceHz(globalA4ReferenceHz)
+                            onPersistA4ReferenceHz(0.0)
                         },
                     )
                 }
