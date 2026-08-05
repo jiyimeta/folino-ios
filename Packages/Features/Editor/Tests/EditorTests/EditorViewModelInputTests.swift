@@ -107,6 +107,50 @@ struct EditorViewModelInputTests {
         #expect(vm.armedDuration == .sixteenth)
     }
 
+    @Test func `the callout stands beside a rest too, and re-times it`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        #expect(!vm.hasSelectionCallout) // nothing selected
+
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+
+        #expect(vm.hasSelectionCallout)
+        #expect(vm.selectedDuration?.base == .quarter)
+        #expect(vm.selectedDuration?.dots == 0)
+
+        vm.setSelectionDuration(.half)
+
+        #expect(duration(atElement: 1, in: vm) == .half)
+        #expect(vm.selectedDuration?.base == .half)
+    }
+
+    @Test func `the callout's dot key dots a selected rest as well`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+
+        vm.toggleSelectionDot()
+
+        let dotted = try #require(duration(atElement: 1, in: vm))
+        #expect(dotted.asFraction == NoteDuration.quarter.dotted(1).asFraction)
+        #expect(vm.selectedDuration?.dots == 1)
+    }
+
+    /// A measure rest reads as a whole rest — that is how the score draws it and so how the card has to label it,
+    /// or the tray would open with nothing lit.
+    @Test func `a measure rest reports itself as a whole`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+        vm.setDuration(.whole)
+        vm.writeRest() // fills the bar → written as `.measure`
+
+        #expect(duration(atElement: 1, in: vm) == .measure)
+        #expect(vm.hasSelectionCallout)
+        #expect(vm.selectedDuration?.base == .whole)
+        #expect(vm.selectedDuration?.dots == 0)
+    }
+
     @Test func `the callout's dot key dots the selected note and keeps its base length`() throws {
         let vm = makeViewModel()
         vm.beginSession(score: EditorFixtures.chordAtIndex1())
@@ -189,6 +233,54 @@ struct EditorViewModelInputTests {
             return
         }
         #expect(chord.notes.isEmpty)
+    }
+
+    @Test func `the rest key over a note writes the armed length, not the note's own`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.chordAtIndex1()) // quarter C4 on beat 1, quarter rests after
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+
+        vm.setDuration(.half)
+        vm.writeRest()
+
+        // The half the pad was showing — not the quarter the note happened to be.
+        #expect(duration(atElement: 1, in: vm) == .half)
+        guard case let .chord(rest)? = vm.score?[VoiceElementID(EditorFixtures.restID(element: 1))] else {
+            Issue.record("expected a rest at element 1")
+            return
+        }
+        #expect(rest.notes.isEmpty)
+        // The half swallowed the quarter rest that followed it; the bar's other two beats stay as they were.
+        let voice = try #require(vm.score?[EditorFixtures.staff0]?.measures[0].voices[0])
+        #expect(voice.elements.count == 4) // time signature + half + two quarters
+        #expect(vm.selectedItem == .rest(EditorFixtures.restID(element: 1)))
+    }
+
+    @Test func `the rest key over a note with its own length armed still collapses the bar`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.chordAtIndex1())
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+
+        vm.setDuration(.quarter) // what the note already is — no re-timing asked for
+        vm.writeRest()
+
+        // Plain delete, so the emptied bar still reads as one measure rest.
+        let voice = try #require(vm.score?[EditorFixtures.staff0]?.measures[0].voices[0])
+        #expect(voice.elements.count == 2)
+        #expect(duration(atElement: 1, in: vm) == .measure)
+    }
+
+    @Test func `a bar-filling armed length over a note writes a measure rest`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.chordAtIndex1())
+        vm.select(.note(EditorFixtures.noteID(element: 1))) // beat 1 of a 4/4 bar
+
+        vm.setDuration(.whole)
+        vm.writeRest()
+
+        let voice = try #require(vm.score?[EditorFixtures.staff0]?.measures[0].voices[0])
+        #expect(voice.elements.count == 2) // time signature + the rest
+        #expect(duration(atElement: 1, in: vm) == .measure)
     }
 
     // MARK: - tie state

@@ -60,23 +60,56 @@ extension EditorViewModel {
         }
     }
 
-    /// The rest key. Writes a rest at the selection — which for a note means deleting it (a rest of that note's length
-    /// takes its place), and for a rest already there means re-timing it to the ARMED length.
+    /// The rest key. Writes a rest of the ARMED length at the selection — over a note, the note goes and that rest
+    /// takes its place; over a rest already there, that rest is re-timed.
     ///
-    /// That second case is why the key isn't note-only: with a whole rest selected, tapping it with the half armed is
-    /// a real edit — "make this bar's silence a half rest" — and the key's own glyph, which is the armed length's
-    /// rest, is already promising exactly that.
+    /// One rule for both, because the key's own glyph is the armed length's rest and it promises the same thing
+    /// whatever is underneath: "this slot becomes a rest of THIS length". A note is not the exception it used to be —
+    /// deleting it and keeping the note's own length silently ignored half of what the pad was showing, exactly as
+    /// `inputPitch(letter:onNote:)` refuses to do on the pitch side.
     public func writeRest() {
-        guard let selectedItem else { return }
+        guard let selectedItem, let score else { return }
         switch selectedItem {
-        case .note, .tuplet:
-            deleteSelection()
+        case let .note(noteID):
+            writeRest(over: VoiceElementID(noteID), in: score)
         case let .rest(restID):
-            guard let armed = armedInputDuration else { return }
-            let location = VoiceElementID(restID)
-            applyCommand(SetRestDuration(at: location, duration: restDuration(armed, at: location)))
+            writeRest(over: VoiceElementID(restID), in: score)
+        case .tuplet:
+            deleteSelection()
         case .clef:
             return
+        }
+    }
+
+    /// Writes a rest of the armed length over the timed slot at `location`, whatever is currently in it.
+    ///
+    /// Over a note that means `DeleteVoiceElement` (which leaves a rest of the NOTE's length) paired with the
+    /// re-time, as one composite so it is a single undo step; over a rest the re-time alone. Falls back to the plain
+    /// delete when there is no re-timing to do — nothing armed, or the armed length is what's already there — so
+    /// that path keeps `FullMeasureRestCollapse`'s "an emptied bar reads as one measure rest". Re-timing has to skip
+    /// the collapse: it would throw away the length the user just stated. A length that fills the bar still lands as
+    /// `.measure`, via `restDuration(_:at:)`. Inside a tuplet the engine refuses the re-time and its refusal would
+    /// take the delete down with it (`CompositeEditCommand` is all-or-nothing), so those slots delete plainly too.
+    private func writeRest(over location: VoiceElementID, in score: Score) {
+        guard case let .chord(current)? = score[location] else { return }
+        let isNote = !current.notes.isEmpty
+        guard let armed = armedInputDuration, current.duration != armed, !isInsideTuplet(location) else {
+            if isNote { deleteSelection() }
+            return
+        }
+        // Outlasting the bar is spelled as a chain across the barline, exactly as a note is — minus the ties, which
+        // rests don't take. Without it the engine refuses the lengthening and the key goes dead near a barline.
+        if let plan = CrossBarInputPlanner.plan(.rest, duration: armed, at: location, in: score) {
+            applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.head))
+            return
+        }
+        let retime = SetRestDuration(at: location, duration: restDuration(armed, at: location))
+        if isNote {
+            applyCommand(CompositeEditCommand(
+                commands: [DeleteVoiceElement(at: location), retime], location: location,
+            ))
+        } else {
+            applyCommand(retime)
         }
     }
 
@@ -169,8 +202,9 @@ extension EditorViewModel {
         return (split.base, split.dots)
     }
 
-    /// Re-times the selected element to `base`, keeping whatever dots it already has. Refused by the engine (and so a
-    /// no-op) inside a tuplet, where the member lengths are the tuplet's to decide.
+    /// Re-times the selected element to `base`, keeping whatever dots it already has — spilling across the barline
+    /// as a tied chain (a run of rests, for a rest) when the bar can't hold the new length. Refused by the engine
+    /// (and so a no-op) inside a tuplet, where the member lengths are the tuplet's to decide.
     public func setSelectionDuration(_ base: NoteDuration) {
         applyToSelection(base: base, dots: selectedDuration?.dots ?? 0)
     }
@@ -188,16 +222,36 @@ extension EditorViewModel {
     }
 
     private func applyToSelection(base: NoteDuration, dots: Int) {
-        guard let selectedItem, let slot = Self.slot(of: selectedItem) else { return }
+        guard let selectedItem, let slot = Self.slot(of: selectedItem), let score else { return }
         let duration = dots > 0 ? base.dotted(dots) : base
         switch selectedItem {
         case .note:
+            guard case let .chord(chord)? = score[slot] else { return }
+            if retimeCrossingBarline(.chord(chord), duration: duration, at: slot, in: score) { return }
             applyCommand(SetChordDuration(at: slot, duration: duration))
         case .rest:
+            if retimeCrossingBarline(.rest, duration: duration, at: slot, in: score) { return }
             applyCommand(SetRestDuration(at: slot, duration: restDuration(duration, at: slot)))
         case .tuplet, .clef:
             return
         }
+    }
+
+    /// A length the bar can't hold → re-spell the item as a chain across the barline, and report that the re-time is
+    /// done. False means this isn't that case and the caller's ordinary single-slot command should run.
+    ///
+    /// The callout's length keys are the pad's keys pointed at one item instead of at the next one, so they have to
+    /// reach as far: without this, asking a beat-4 quarter for a half was simply refused by the engine and the key
+    /// read as dead — the very thing `CrossBarInputPlanner` was written to fix on the input side. One composite, so
+    /// it stays one undo step, and the selection re-derives onto the chain's head.
+    private func retimeCrossingBarline(
+        _ content: CrossBarInputPlanner.Content, duration: NoteDuration, at slot: VoiceElementID, in score: Score,
+    ) -> Bool {
+        guard let plan = CrossBarInputPlanner.plan(content, duration: duration, at: slot, in: score) else {
+            return false
+        }
+        applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.head))
+        return true
     }
 
     /// Reference pitch for octave choice: the previous chord's first note walking backwards in voice order from
@@ -282,7 +336,7 @@ extension EditorViewModel {
     }
 
     /// The armed length doesn't fit the bar → write it as tied notes across the barline instead (spelled by
-    /// `CrossBarNoteInputPlanner`), and report that input is done. False means this isn't that case and the caller's
+    /// `CrossBarInputPlanner`), and report that input is done. False means this isn't that case and the caller's
     /// ordinary single-slot path should run.
     ///
     /// The chain is one composite, so it is one undo step; the selection lands on the note's first piece while the
@@ -292,8 +346,9 @@ extension EditorViewModel {
         pitch: Int, tpc: Int, at location: VoiceElementID, in score: Score, from previousGeneration: Int,
     ) -> Bool {
         guard let armed = armedInputDuration,
-              let plan = CrossBarNoteInputPlanner.plan(
-                  pitch: pitch, tpc: tpc, duration: armed, at: location, in: score,
+              let plan = CrossBarInputPlanner.plan(
+                  .chord(Chord(duration: armed, notes: [Note(pitch: pitch, tpc: tpc)])),
+                  duration: armed, at: location, in: score,
               )
         else { return false }
         applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.head))
