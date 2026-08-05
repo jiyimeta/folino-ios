@@ -7,11 +7,13 @@ import UtilityUI
 /// the rows in place. Loading on first open avoids parsing every score in a large list at row-appear time.
 ///
 /// Use this directly as a `Menu`'s content for a standalone share button (one tap → formats). For a labeled "Share"
-/// row nested inside a larger context/ellipsis menu, use `ShareSubmenu`, which wraps this.
+/// row nested inside a larger context/ellipsis menu, use `ShareSubmenu`, which wraps this. When `companionAction` is
+/// non-nil, a row for it renders above the formats, separated by a `Divider()`.
 @MainActor
 public struct ShareFormatMenuItems: View {
     let loadFormats: @Sendable () async -> [ScoreShareFormatOption]
     let onShare: (ScoreShareFormat) -> Void
+    let companionAction: (() -> Void)?
 
     @State private var options: [ScoreShareFormatOption] = ShareFormatMenuItems.placeholderFormats
     @State private var hasLoaded = false
@@ -19,12 +21,24 @@ public struct ShareFormatMenuItems: View {
     public init(
         loadFormats: @escaping @Sendable () async -> [ScoreShareFormatOption],
         onShare: @escaping (ScoreShareFormat) -> Void,
+        companionAction: (() -> Void)? = nil,
     ) {
         self.loadFormats = loadFormats
         self.onShare = onShare
+        self.companionAction = companionAction
     }
 
     public var body: some View {
+        if let companionAction {
+            Button(action: companionAction) {
+                Label {
+                    Text("scoreUI.share.vocalTuner.action", bundle: .module)
+                } icon: {
+                    Image(systemName: "tuningfork")
+                }
+            }
+            Divider()
+        }
         ForEach(options, id: \.self) { option in
             Button {
                 onShare(option.format)
@@ -53,23 +67,29 @@ public struct ShareFormatMenuItems: View {
 
 /// A labeled "Share" row that opens a nested submenu of formats — for use inside a larger context/ellipsis menu (e.g.
 /// Library's score-row menu). Wraps `ShareFormatMenuItems`. A standalone share button should use `ShareFormatMenuItems`
-/// as its `Menu` content directly so the first tap expands the formats.
+/// as its `Menu` content directly so the first tap expands the formats. `companionAction` is passed straight through:
+/// when non-nil, a row for it renders above the formats, separated by a `Divider()`.
 @MainActor
 public struct ShareSubmenu: View {
     let loadFormats: @Sendable () async -> [ScoreShareFormatOption]
     let onShare: (ScoreShareFormat) -> Void
+    let companionAction: (() -> Void)?
 
     public init(
         loadFormats: @escaping @Sendable () async -> [ScoreShareFormatOption],
         onShare: @escaping (ScoreShareFormat) -> Void,
+        companionAction: (() -> Void)? = nil,
     ) {
         self.loadFormats = loadFormats
         self.onShare = onShare
+        self.companionAction = companionAction
     }
 
     public var body: some View {
         Menu {
-            ShareFormatMenuItems(loadFormats: loadFormats, onShare: onShare)
+            ShareFormatMenuItems(
+                loadFormats: loadFormats, onShare: onShare, companionAction: companionAction,
+            )
         } label: {
             Label {
                 L10n.Common.share

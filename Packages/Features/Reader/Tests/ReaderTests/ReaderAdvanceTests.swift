@@ -135,9 +135,14 @@ struct ReaderAdvanceTests {
         // Real engine ordering: state → .stopped (isPlaying false) first, THEN cursor → nil.
         controller.emitIsPlaying(false)
         controller.emitCursor(nil)
-        // onReachedEnd is dispatched onto a detached Task; let it and the async advance run.
-        for _ in 0 ..< 100 where vm.scoreItem.id == a.id {
-            await Task.yield()
+        // onReachedEnd is dispatched onto a detached Task, so the advance lands some number of main-actor turns
+        // later. Wait on a deadline rather than a fixed yield count: this suite shares the main actor with every
+        // other `@MainActor` suite in the bundle, so a fixed budget is really "however many turns the rest of the
+        // bundle leaves us" — adding one `await` anywhere else silently turns this green test red. Sleeping (rather
+        // than spinning on `Task.yield()`) hands the actor over so the detached work can actually make progress.
+        let deadline = ContinuousClock.now + .seconds(2)
+        while vm.scoreItem.id == a.id, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(1))
         }
         #expect(vm.scoreItem.id == b.id)
     }

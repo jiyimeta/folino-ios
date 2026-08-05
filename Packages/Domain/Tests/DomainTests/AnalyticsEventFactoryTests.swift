@@ -134,4 +134,25 @@ struct AnalyticsEventFactoryTests {
         #expect(event.parameters["crash_reporting_enabled"] == .bool(true))
         #expect(event.parameters["soundfont_preset"] == .string("lightweight"))
     }
+
+    @Test func `companion handoff event carries target outcome and source`() {
+        let event = AnalyticsEvent.companionHandoff(
+            target: .vocalTuner, outcome: .deepLink, source: .scoreRowMenu,
+        )
+        #expect(event.name == "companion_handoff")
+        #expect(event.parameters["target"] == .string("vocaltuner"))
+        #expect(event.parameters["outcome"] == .string("deep_link"))
+        #expect(event.parameters["source"] == .string("score_row_menu"))
+    }
+
+    @Test func `companion handoff outcome raw values are snake case`() {
+        #expect(CompanionHandoffOutcome.deepLink.rawValue == "deep_link")
+        #expect(CompanionHandoffOutcome.shareFallback.rawValue == "share_fallback")
+        #expect(CompanionHandoffOutcome.appStore.rawValue == "app_store")
+        #expect(CompanionHandoffOutcome.failed.rawValue == "failed")
+    }
+
+    @Test func `companion target raw value is the wire name`() {
+        #expect(CompanionTarget.vocalTuner.rawValue == "vocaltuner")
+    }
 }

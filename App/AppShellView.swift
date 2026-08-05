@@ -37,6 +37,7 @@ struct AppShellView: View {
                     gateway: gateway,
                     shareService: shareService,
                     metadataReader: metadataReader,
+                    vocalTunerHandoff: LiveVocalTunerHandoff(),
                     annotationCoordinator: annotationCoordinator,
                     scoresDirectory: AppPaths.scoresDirectory,
                     versionHistoryPresenter: versionHistoryPresenter,
@@ -106,6 +107,7 @@ private struct ReadyShell: View {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
+    let vocalTunerHandoff: any VocalTunerHandoff
     let annotationCoordinator: AnnotationSaveCoordinator
     let scoresDirectory: URL
     let versionHistoryPresenter: VersionHistoryPresenter
@@ -140,6 +142,7 @@ private struct ReadyShell: View {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
+        vocalTunerHandoff: any VocalTunerHandoff,
         annotationCoordinator: AnnotationSaveCoordinator,
         scoresDirectory: URL,
         versionHistoryPresenter: VersionHistoryPresenter,
@@ -150,6 +153,7 @@ private struct ReadyShell: View {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
+        self.vocalTunerHandoff = vocalTunerHandoff
         self.annotationCoordinator = annotationCoordinator
         self.scoresDirectory = scoresDirectory
         self.versionHistoryPresenter = versionHistoryPresenter
@@ -160,6 +164,7 @@ private struct ReadyShell: View {
                 gateway: gateway,
                 shareService: shareService,
                 metadataReader: metadataReader,
+                vocalTunerHandoff: vocalTunerHandoff,
                 analytics: bootstrap.analytics ?? NoopAnalytics(),
                 crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
             ),
@@ -425,6 +430,7 @@ private struct ReadyShell: View {
                 repository: repository,
                 gateway: gateway,
                 shareService: shareService,
+                vocalTunerHandoff: vocalTunerHandoff,
                 metadataReader: metadataReader,
                 annotationCoordinator: annotationCoordinator,
                 scoresDirectory: scoresDirectory,

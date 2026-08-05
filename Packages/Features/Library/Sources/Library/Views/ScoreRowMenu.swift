@@ -16,6 +16,7 @@ func scoreRowMenu(
     onEditTags: @escaping (ScoreItem) -> Void,
     onAddToPlaylist: @escaping (ScoreItem) -> Void,
     onShare: @escaping (ScoreShareFormat) -> Void,
+    onOpenInVocalTuner: @escaping () -> Void,
     onRequestDelete: ((ScoreItem) -> Void)?,
 ) -> some View {
     Button { onOpen(item) } label: {
@@ -55,7 +56,9 @@ func scoreRowMenu(
     }
 
     Divider()
-    ShareSubmenu(loadFormats: loadShareFormats, onShare: onShare)
+    ShareSubmenu(
+        loadFormats: loadShareFormats, onShare: onShare, companionAction: onOpenInVocalTuner,
+    )
 
     if let onRequestDelete {
         Divider()

@@ -12,6 +12,7 @@ public final class LibraryViewModel {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
+    let vocalTunerHandoff: any VocalTunerHandoff
     /// Analytics sink. Read by the Screens that mutate the repository directly (playlist/tag rename, reorder, single
     /// add/remove) so those view-layer bypass paths log against the same instance as the VM-owned actions.
     let analytics: any Analytics
@@ -61,6 +62,7 @@ public final class LibraryViewModel {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
+        vocalTunerHandoff: any VocalTunerHandoff = NoopVocalTunerHandoff(),
         analytics: any Analytics = NoopAnalytics(),
         crashReporter: any CrashReporter = NoopCrashReporter(),
     ) {
@@ -69,6 +71,7 @@ public final class LibraryViewModel {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
+        self.vocalTunerHandoff = vocalTunerHandoff
         self.analytics = analytics
         self.crashReporter = crashReporter
     }
@@ -258,40 +261,6 @@ public final class LibraryViewModel {
         if changedCount > 0 {
             analytics.log(.tagAssigned(source: .bulkEdit, count: changedCount))
         }
-    }
-
-    /// `source` defaults to `.scoreRowMenu` because the only single-item caller is the score row's share menu; the
-    /// parameter keeps the surface explicit. `share` is logged on success (a prepared URL), not on intent — matching
-    /// the Reader's share instrumentation — with `method` = the actually-chosen export format.
-    func requestShare(_ item: ScoreItem, format: ScoreShareFormat, source: AnalyticsSource = .scoreRowMenu) async {
-        isPreparingShare = true
-        defer { isPreparingShare = false }
-        do {
-            let url = try await shareService.prepareShare(item: item, format: format)
-            shareTarget = ScoreShareTarget(urls: [url])
-            analytics.log(.share(method: format.analyticsValue, source: source, mode: .single))
-        } catch {
-            currentError = error
-        }
-    }
-
-    func requestBulkShare(_ items: [ScoreItem], format: ScoreShareFormat) async {
-        guard !items.isEmpty else { return }
-        isPreparingShare = true
-        defer { isPreparingShare = false }
-        var urls: [URL] = []
-        urls.reserveCapacity(items.count)
-        for item in items {
-            do {
-                let url = try await shareService.prepareShare(item: item, format: format)
-                urls.append(url)
-            } catch {
-                currentError = error
-                return
-            }
-        }
-        shareTarget = ScoreShareTarget(urls: urls)
-        analytics.log(.share(method: format.analyticsValue, source: .bulkEdit, mode: .bulk))
     }
 
     func setTagIDs(_ tagIDs: Set<TagID>, on scoreItem: ScoreItem) async {
