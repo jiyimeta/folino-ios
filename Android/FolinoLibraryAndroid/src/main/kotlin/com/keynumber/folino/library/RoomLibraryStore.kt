@@ -180,6 +180,10 @@ interface ReaderPreferencesDao {
     @Query("SELECT json FROM reader_preferences WHERE score_id = :scoreId")
     fun load(scoreId: String): String?
 
+    /** Every stored blob, score id included so the caller can filter to live scores. */
+    @Query("SELECT * FROM reader_preferences")
+    fun loadAll(): List<ReaderPreferencesEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsert(entity: ReaderPreferencesEntity)
 }
@@ -396,6 +400,19 @@ class RoomLibraryStore(context: Context) : LibraryStore, ReaderPreferencesStore 
 
     override fun saveJSON(scoreId: String, json: String) {
         db.readerPreferencesDao().upsert(ReaderPreferencesEntity(scoreId, json))
+    }
+
+    /**
+     * Stored preferences blobs for live (non-trashed) scores — the launch `score_prefs` snapshot's input.
+     *
+     * Live-ness is decided in Kotlin against the score rows, not in SQL: this schema carries no live predicate to
+     * mirror (`ScoreRecordDao` loads every row and the callers filter), and `deleted_at` is a `Double` sentinel where
+     * `0.0` means live rather than a NULL. The comparison is the same one [orderedLivePlaylistScoreIds] uses, so a
+     * trashed score can never contribute a `score_prefs` event.
+     */
+    fun loadAllLiveReaderPreferencesJson(): List<String> {
+        val live = dao.loadAll().filter { it.deletedAt == 0.0 }.map { it.id }.toSet()
+        return db.readerPreferencesDao().loadAll().filter { it.scoreId in live }.map { it.json }
     }
 
     /** Live, position-ordered score ids for [playlistId] (or empty). Backs the Reader's auto-advance. */

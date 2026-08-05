@@ -323,6 +323,23 @@ private fun LibraryNavGraph(
                 soundfontPreset = "lightweight",
             ),
         )
+
+        // One score_prefs per changed score, mirroring iOS AppBootstrap. The bridge decodes each blob with the shared
+        // Domain factory — parameter selection, the presence-means-changed rule and the width bucketing all live in
+        // Swift; Kotlin only enumerates and relays. An empty name means "untouched or undecodable — skip". One call
+        // per blob: wirelet's [String] method-arg support is unreleased.
+        //
+        // defaultStaffSize must be the *live* global staff size, the same prefs.staffSize the Reader hands to
+        // ReaderPreferencesBridge.open. Every blob written before the eager seed was removed stores that global, and
+        // the decoder only demotes it to "untouched" when it matches the default in effect; a constant here would
+        // report staff_size as configured on essentially every score.
+        val store = com.keynumber.folino.library.RoomLibraryStore(context)
+        val widthDp = context.resources.configuration.screenWidthDp.toDouble()
+        val defaultStaffSize = prefs.staffSize.first()
+        store.loadAllLiveReaderPreferencesJson().forEach { json ->
+            val wire = AndroidAnalytics.bridge.scorePrefs(json, widthDp, defaultStaffSize)
+            if (wire.name.isNotEmpty()) AndroidAnalytics.log(wire)
+        }
     }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
