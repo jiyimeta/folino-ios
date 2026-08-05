@@ -123,16 +123,100 @@ struct ReaderPreferencesRecordTests {
         #expect(restored.honorLayoutBreaks == false)
     }
 
-    @Test func `honor layout breaks defaults to true on domain construction`() throws {
+    @Test func `an unset honor layout breaks stays untouched and resolves to true`() throws {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
         )
-        #expect(prefs.honorLayoutBreaks == true)
+        #expect(prefs.honorLayoutBreaks == nil)
+        let record = ReaderPreferencesRecord(domain: prefs)
+        #expect(record.honorLayoutBreaks == nil)
+        let restored = try record.toDomain()
+        #expect(restored.honorLayoutBreaks == nil)
+        #expect(restored.effectiveHonorLayoutBreaks)
+    }
+
+    @Test func `untouched scalars round trip as nil and keep the authored hidden set`() throws {
+        let authored: Set<StaffAddress> = [
+            StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            StaffAddress(partIndex: 2, staffIndexInPart: 0),
+        ]
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: nil,
+            hiddenStaves: [StaffAddress(partIndex: 0, staffIndexInPart: 1)],
+            authoredHiddenStaves: authored,
+            honorLayoutBreaks: nil,
+            masterVolume: nil,
+            transposeSemitones: nil,
+        )
         let record = ReaderPreferencesRecord(domain: prefs)
         let restored = try record.toDomain()
+        #expect(restored.staffSize == nil)
+        #expect(restored.honorLayoutBreaks == nil)
+        #expect(restored.masterVolume == nil)
+        #expect(restored.transposeSemitones == nil)
+        #expect(restored.authoredHiddenStaves == authored)
+        #expect(restored == prefs)
+    }
+
+    @Test func `explicitly chosen defaults survive the round trip as set values`() throws {
+        // The whole point of the Optionals: a user who deliberately picks the default value must not be filed as
+        // "never touched it". A `.some(default)` has to come back as `.some(default)`, not `nil`.
+        let prefs = ReaderPreferences(
+            scoreItemID: ScoreItemID(),
+            staffSize: 14,
+            hiddenStaves: [],
+            honorLayoutBreaks: ReaderPreferences.defaultHonorLayoutBreaks,
+            masterVolume: ReaderPreferences.defaultMasterVolume,
+            transposeSemitones: ReaderPreferences.defaultTransposeSemitones,
+        )
+        let record = ReaderPreferencesRecord(domain: prefs)
+        let restored = try record.toDomain()
+        #expect(restored.staffSize == 14)
         #expect(restored.honorLayoutBreaks == true)
+        #expect(restored.masterVolume == 1.0)
+        #expect(restored.transposeSemitones == 0)
+    }
+
+    @Test func `untouched scalars persist as NULL through SQLite`() throws {
+        let queue = try DatabaseQueue()
+        try AppMigrations.all.migrate(queue)
+        let scoreID = ScoreItemID()
+        try queue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO score_items (id, title, local_file_name, content_hash,
+                    size_bytes, length_beats, default_tempo_bpm, added_at)
+                VALUES (?, 'T', 'f.mscx', 'h', 0, 0, 120, 0)
+                """,
+                arguments: [scoreID.rawValue.uuidString],
+            )
+        }
+        let authored: Set<StaffAddress> = [StaffAddress(partIndex: 1, staffIndexInPart: 0)]
+        let prefs = ReaderPreferences(
+            scoreItemID: scoreID, hiddenStaves: [], authoredHiddenStaves: authored,
+        )
+        try queue.write { try ReaderPreferencesRecord(domain: prefs).save($0) }
+        try queue.read { db in
+            let row = try #require(try Row.fetchOne(
+                db,
+                sql: "SELECT * FROM reader_preferences WHERE score_item_id = ?",
+                arguments: [scoreID.rawValue.uuidString],
+            ))
+            #expect(row["staff_size"] == nil as Double?)
+            #expect(row["honor_layout_breaks"] == nil as Bool?)
+            #expect(row["master_volume"] == nil as Double?)
+            #expect(row["transpose_semitones"] == nil as Int?)
+            #expect(row["authored_hidden_staves"] == "[[1,0]]")
+        }
+        let restored = try queue.read { db in
+            try ReaderPreferencesRecord
+                .filter(Column("score_item_id") == scoreID.rawValue.uuidString)
+                .fetchOne(db)
+        }
+        #expect(try #require(restored).toDomain() == prefs)
     }
 
     @Test func `empty volume overrides encodes as empty JSON`() {

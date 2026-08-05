@@ -1,5 +1,8 @@
 import GRDB
 
+/// Migration bodies live here, one `migrateVn` per version, except where a version is large enough to warrant its own
+/// file — v16 (the first table rebuild) is in `Migrations+V16.swift`. This file is close to SwiftLint's 400-line
+/// budget: the next migration should move the `upToVn` test-support migrators out rather than grow it further.
 enum AppMigrations {
     /// Aggregate migrator that runs every registered version in order. Use this from production code (`AppDatabase`)
     /// and from tests that want a fully-migrated DB. The per-version migrators (`v1`, `v2`) remain available for
@@ -21,6 +24,7 @@ enum AppMigrations {
         m.registerMigration("v13", migrate: migrateV13)
         m.registerMigration("v14", migrate: migrateV14)
         m.registerMigration("v15", migrate: migrateV15)
+        m.registerMigration("v16", migrate: migrateV16)
         return m
     }()
 
@@ -112,6 +116,28 @@ enum AppMigrations {
         m.registerMigration("v6", migrate: migrateV6)
         m.registerMigration("v7", migrate: migrateV7)
         m.registerMigration("v8", migrate: migrateV8)
+        return m
+    }()
+
+    /// Migrator that registers v1 … v15 only — the pre-rebuild schema, so tests can seed `reader_preferences` rows in
+    /// their v15 shape (four NOT NULL scalars, no `authored_hidden_staves`) and then exercise the v16 upgrade.
+    static let upToV15: DatabaseMigrator = {
+        var m = DatabaseMigrator()
+        m.registerMigration("v1", migrate: migrateV1)
+        m.registerMigration("v2", migrate: migrateV2)
+        m.registerMigration("v3", migrate: migrateV3)
+        m.registerMigration("v4", migrate: migrateV4)
+        m.registerMigration("v5", migrate: migrateV5)
+        m.registerMigration("v6", migrate: migrateV6)
+        m.registerMigration("v7", migrate: migrateV7)
+        m.registerMigration("v8", migrate: migrateV8)
+        m.registerMigration("v9", migrate: migrateV9)
+        m.registerMigration("v10", migrate: migrateV10)
+        m.registerMigration("v11", migrate: migrateV11)
+        m.registerMigration("v12", migrate: migrateV12)
+        m.registerMigration("v13", migrate: migrateV13)
+        m.registerMigration("v14", migrate: migrateV14)
+        m.registerMigration("v15", migrate: migrateV15)
         return m
     }()
 

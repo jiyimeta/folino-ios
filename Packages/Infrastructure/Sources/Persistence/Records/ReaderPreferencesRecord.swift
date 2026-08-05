@@ -2,25 +2,29 @@ import Domain
 import Foundation
 import GRDB
 
-/// Row mirror for the `reader_preferences` table. `hidden_staff_ids` is stored as a JSON-encoded `[StaffAddress]` (each
-/// address serialized as the two-element array `[partIndex, staffIndexInPart]`) so GRDB doesn't need a custom column
-/// type for the set.
+/// Row mirror for the `reader_preferences` table. `hidden_staff_ids` and `authored_hidden_staves` are stored as a
+/// JSON-encoded `[StaffAddress]` (each address serialized as the two-element array `[partIndex, staffIndexInPart]`) so
+/// GRDB doesn't need a custom column type for the set.
+///
+/// The four Optional scalars mirror the Domain model's "untouched" state: a NULL column means the user never chose a
+/// value, so it resolves to the current default at the use site. They became nullable in migration v16.
 struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     static let databaseTableName = "reader_preferences"
 
     var id: String
     var scoreItemId: String
-    var staffSize: Double
+    var staffSize: Double?
     var hiddenStaffIds: String
+    var authoredHiddenStaves: String
     var staffProgramOverrides: String
     var staffVolumeOverrides: String
     var staffClefOverrides: String
-    var honorLayoutBreaks: Bool
+    var honorLayoutBreaks: Bool?
     var repeatMode: String
     var tempoMultiplier: Double?
     var abRepeat: String?
-    var masterVolume: Double
-    var transposeSemitones: Int
+    var masterVolume: Double?
+    var transposeSemitones: Int?
     var a4ReferenceHz: Double?
     var hasSeededAuthoredVisibility: Bool
 
@@ -29,6 +33,7 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         case scoreItemId = "score_item_id"
         case staffSize = "staff_size"
         case hiddenStaffIds = "hidden_staff_ids"
+        case authoredHiddenStaves = "authored_hidden_staves"
         case staffProgramOverrides = "staff_program_overrides"
         case staffVolumeOverrides = "staff_volume_overrides"
         case staffClefOverrides = "staff_clef_overrides"
@@ -45,10 +50,13 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
     init(domain prefs: ReaderPreferences) {
         id = prefs.id.rawValue.uuidString
         scoreItemId = prefs.scoreItemID.rawValue.uuidString
-        staffSize = Double(prefs.staffSize)
+        staffSize = prefs.staffSize
         let sortedAddresses = prefs.hiddenStaves.sorted()
         let hiddenData = try? JSONEncoder().encode(sortedAddresses)
         hiddenStaffIds = hiddenData.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        let sortedAuthored = prefs.authoredHiddenStaves.sorted()
+        let authoredData = try? JSONEncoder().encode(sortedAuthored)
+        authoredHiddenStaves = authoredData.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         let sortedOverrides = prefs.staffProgramOverrides
             .sorted { $0.key < $1.key }
             .map { Self.encodeTriple(address: $0.key, program: $0.value) }
@@ -106,8 +114,9 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         return ReaderPreferences(
             id: ReaderPreferencesID(rawValue: idUUID),
             scoreItemID: ScoreItemID(rawValue: scoreUUID),
-            staffSize: CGFloat(staffSize),
+            staffSize: staffSize,
             hiddenStaves: Self.decodeHidden(hiddenStaffIds),
+            authoredHiddenStaves: Self.decodeHidden(authoredHiddenStaves),
             staffProgramOverrides: Self.decodeProgramOverrides(staffProgramOverrides),
             staffVolumeOverrides: Self.decodeVolumeOverrides(staffVolumeOverrides),
             staffClefOverrides: Self.decodeClefOverrides(staffClefOverrides),

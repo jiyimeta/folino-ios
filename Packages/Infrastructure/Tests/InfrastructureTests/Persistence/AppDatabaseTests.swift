@@ -126,8 +126,9 @@ struct AppDatabaseTests {
             )
         }
 
-        // Run v4.
-        try AppMigrations.all.migrate(queue)
+        // Run v4. Stop at v15: v16 rebuilds the table and reclassifies a stored `1` as untouched (NULL), which is a
+        // separate contract covered by `MigrationV16Tests` — running it here would hide what v4's DEFAULT does.
+        try AppMigrations.upToV15.migrate(queue)
 
         let value = try queue.read { db in
             try Int.fetchOne(
@@ -201,7 +202,8 @@ struct AppDatabaseTests {
 
     @Test func `v 9 defaults existing rows to unity master volume`() throws {
         // Insert a row at the v8 schema (no master_volume), then run v9. The new column's DEFAULT 1.0 should backfill
-        // the pre-existing row so prior scores play unchanged.
+        // the pre-existing row so prior scores play unchanged. Stops at v15 for the same reason as the v4 test above:
+        // v16 reclassifies that stored 1.0 as untouched (NULL).
         let queue = try DatabaseQueue()
         try AppMigrations.upToV8.migrate(queue)
         let scoreID = "00000000-0000-0000-0000-000000000009"
@@ -226,7 +228,7 @@ struct AppDatabaseTests {
             )
         }
 
-        try AppMigrations.all.migrate(queue)
+        try AppMigrations.upToV15.migrate(queue)
 
         try queue.read { db in
             let value = try Row.fetchOne(
