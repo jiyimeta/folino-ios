@@ -1,5 +1,9 @@
 import Foundation
 
+// PARITY(android): PDF-to-score conversion follow-up — consume this state on Android for the display-source switch,
+//   re-read-the-PDF action and the `readerPdfSourceNoticeDismissed` key (Android still reads the older
+//   `readerPdfPlaybackNoticeDismissed`). The decisions are all in Domain pure functions already, so Android wires UI
+//   and persistence only
 /// Where an item's notation came from, and how far the PDF → score conversion got. Derived, never stored — the fields
 /// on `ScoreItem` are the state; this is the one place that reads them, so iOS and Android cannot disagree about what
 /// a PDF-origin item is.

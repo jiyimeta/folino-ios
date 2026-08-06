@@ -29,6 +29,9 @@ import java.io.File
  * [AndroidPlaybackEngine.prepare] first, so we prepare immediately before
  * exporting.
  */
+// PARITY(android): exported audio ignores tuning — neither the A4 calibration nor the transpose reaches this path,
+//   so an export sounds different from what the Reader played. Carry the engine's tuning state into the export
+//   snapshot the way playback already does
 class AudioScoreExporter(
     context: Context,
     private val engineFactory: () -> AndroidPlaybackEngine = {
