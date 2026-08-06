@@ -220,6 +220,10 @@ extension AnalyticsEvent {
         layoutMode: ReaderLayoutMode,
         crashReportingEnabled: Bool,
         soundfontPreset: String,
+        // Defaulted ONLY so the Android `AnalyticsBridge` — whose signature is a `@WireletExpose` wire contract —
+        // keeps compiling until Android grows the setting. `false` is the honest value for a platform that cannot
+        // turn it on. Drop the default once the Kotlin side passes it.
+        showAllMeasureNumbers: Bool = false,
     ) -> AnalyticsEvent {
         AnalyticsEvent(name: "settings_snapshot", parameters: [
             "metronome_enabled": .bool(metronome),
@@ -234,6 +238,7 @@ extension AnalyticsEvent {
             "layout_mode": .string(layoutMode.analyticsValue),
             "crash_reporting_enabled": .bool(crashReportingEnabled),
             "soundfont_preset": .string(soundfontPreset),
+            "show_all_measure_numbers": .bool(showAllMeasureNumbers),
         ])
     }
 

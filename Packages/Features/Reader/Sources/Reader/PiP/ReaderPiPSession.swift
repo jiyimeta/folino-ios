@@ -26,6 +26,7 @@ final class ReaderPiPSession {
     @ObservationIgnored private var isEnabled = false
     @ObservationIgnored private var collapseMultiMeasureRests = false
     @ObservationIgnored private var showInvisibleElements = false
+    @ObservationIgnored private var showAllMeasureNumbers = false
     @ObservationIgnored private var pendingArmTask: Task<Void, Never>?
     @ObservationIgnored private var hasArmed = false
     @ObservationIgnored private var isDirty = false
@@ -98,6 +99,12 @@ final class ReaderPiPSession {
         armIfReady()
     }
 
+    func setShowAllMeasureNumbers(_ enabled: Bool) {
+        guard showAllMeasureNumbers != enabled else { return }
+        showAllMeasureNumbers = enabled
+        armIfReady()
+    }
+
     /// No-ops when not active. Called from the Reader scenePhase observer on foreground return AND
     /// from the hidden-staves change handler (so AVKit renegotiates the PiP window aspect ratio on
     /// the next auto-start).
@@ -166,6 +173,7 @@ final class ReaderPiPSession {
                 playbackCursor: playbackCursorProvider(),
                 collapseMultiMeasureRests: collapseMultiMeasureRests,
                 showInvisibleElements: showInvisibleElements,
+                showAllMeasureNumbers: showAllMeasureNumbers,
             )
             hasArmed = true
         } catch is CancellationError {

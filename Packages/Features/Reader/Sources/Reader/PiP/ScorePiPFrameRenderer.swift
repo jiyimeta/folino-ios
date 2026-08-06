@@ -111,6 +111,7 @@ final class ScorePiPFrameRenderer {
         staffSize: CGFloat,
         collapseMultiMeasureRests: Bool,
         showInvisibleElements: Bool,
+        showAllMeasureNumbers: Bool,
     ) throws -> Prepared {
         let opts = ScoreViewOptions(
             staffSize: staffSize, systemGap: staffSize * 1.25,
@@ -121,6 +122,7 @@ final class ScorePiPFrameRenderer {
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
             showsInvisibleElements: showInvisibleElements,
+            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
         )
         let naturalWidth = LayoutEngine.naturalContentWidth(score: score, options: opts)
         let document = LayoutEngine.layout(
@@ -143,11 +145,13 @@ final class ScorePiPFrameRenderer {
         staffSize: CGFloat,
         collapseMultiMeasureRests: Bool,
         showInvisibleElements: Bool,
+        showAllMeasureNumbers: Bool,
     ) throws {
         let prepared = try Self.prepare(
             score: score, staffSize: staffSize,
             collapseMultiMeasureRests: collapseMultiMeasureRests,
             showInvisibleElements: showInvisibleElements,
+            showAllMeasureNumbers: showAllMeasureNumbers,
         )
         try self.init(score: score, prepared: prepared)
     }

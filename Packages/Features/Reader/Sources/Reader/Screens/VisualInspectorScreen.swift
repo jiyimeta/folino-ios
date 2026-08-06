@@ -21,6 +21,9 @@ struct VisualInspectorScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
     private var showInvisibleElements = false
 
+    @AppStorage(ReaderGlobalSettingsKey.showAllMeasureNumbers)
+    private var showAllMeasureNumbers = false
+
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
     private var showSeekBar = true
 
@@ -48,6 +51,7 @@ struct VisualInspectorScreen: View {
                 TransposeRow(transposeModel: transposeModel, showsIcon: false)
                 breakPolicyRow
                 collapseRow
+                allMeasureNumbersRow
                 showInvisibleRow
                 seekBarRow
                 autoFollowRow
@@ -120,6 +124,14 @@ struct VisualInspectorScreen: View {
     private var collapseRow: some View {
         Toggle(isOn: $collapseMultiMeasureRests) {
             Text("reader.preferences.collapseMultiMeasureRests", bundle: .module)
+        }
+    }
+
+    /// Numbers every measure instead of only the first of each system. Shares the global
+    /// `showAllMeasureNumbers` store with the Settings sheet, so flipping it here mirrors there.
+    private var allMeasureNumbersRow: some View {
+        Toggle(isOn: $showAllMeasureNumbers) {
+            Text("reader.preferences.showAllMeasureNumbers", bundle: .module)
         }
     }
 

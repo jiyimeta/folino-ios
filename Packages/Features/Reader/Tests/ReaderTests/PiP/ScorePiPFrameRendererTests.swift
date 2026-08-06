@@ -20,6 +20,7 @@ struct ScorePiPFrameRendererTests {
         _ = try ScorePiPFrameRenderer(
             score: makeScore(), staffSize: 28,
             collapseMultiMeasureRests: false, showInvisibleElements: false,
+            showAllMeasureNumbers: false,
         )
     }
 
@@ -27,6 +28,7 @@ struct ScorePiPFrameRendererTests {
         let renderer = try ScorePiPFrameRenderer(
             score: makeScore(), staffSize: 28,
             collapseMultiMeasureRests: false, showInvisibleElements: false,
+            showAllMeasureNumbers: false,
         )
         let buffer = try #require(renderer.renderFrame(playbackCursor: nil, lookaheadCursor: nil))
         #expect(CVPixelBufferGetWidth(buffer) == Int(renderer.pixelSize.width))
@@ -37,6 +39,7 @@ struct ScorePiPFrameRendererTests {
         let renderer = try ScorePiPFrameRenderer(
             score: makeScore(), staffSize: 28,
             collapseMultiMeasureRests: false, showInvisibleElements: false,
+            showAllMeasureNumbers: false,
         )
         let cursor: ScoreCursor = .beat(measureIndex: 0, tickInMeasure: 0)
         #expect(renderer.renderFrame(playbackCursor: cursor, lookaheadCursor: nil) != nil)
