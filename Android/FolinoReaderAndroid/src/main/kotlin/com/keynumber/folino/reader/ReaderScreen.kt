@@ -238,6 +238,10 @@ fun ReaderScreen(
     persistTranspose: (Int) -> Unit = {},
     /** Clears the per-score transpose back to "untouched" on reset (iOS `TransposeModel.reset`). */
     persistTransposeReset: () -> Unit = { persistTranspose(0) },
+    /** This device's default staff size — the display inspector's slider tick and double-tap target. */
+    defaultStaffSize: Double = ReaderDeviceDefaults.staffSize(LocalContext.current),
+    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. */
+    onResetStaffSize: () -> Unit = {},
     /** Wire string for the current continuation mode (e.g. "playThrough", "loopPlaylist"); shown in the
      * playback inspector's continuation row. */
     continuationModeWire: String = "playThrough",
@@ -921,6 +925,8 @@ fun ReaderScreen(
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
             onResetTranspose = persistTransposeReset,
+            defaultStaffSize = defaultStaffSize,
+            onResetStaffSize = onResetStaffSize,
             capabilities = capabilities,
         )
     }

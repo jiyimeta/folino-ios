@@ -59,7 +59,12 @@ data class LayoutOptions(
     )
 
     companion object {
-        /** Defaults matching the SettingsPrefs display-flow defaults (page mode, 28.0 staff, honor breaks). */
+        /**
+         * Render placeholder — NOT the preference default. The per-score defaults are device-class-dependent and live
+         * in [ReaderDeviceDefaults]; this constant is what [ReaderViewModel] starts from before the real preferences
+         * arrive, what `PdfScoreRenderer` exports with (a printed page should not re-engrave according to the phone
+         * that triggered the export), and the base the screenshot scenes copy from.
+         */
         val DEFAULT = LayoutOptions(
             mode = ReaderLayoutMode.PAGE,
             staffSize = 28.0,

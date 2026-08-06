@@ -133,6 +133,10 @@ fun DisplayInspectorSheet(
     onTransposeChange: (Int) -> Unit = {},
     /** Tap-to-reset on the transpose readout: clears the stored value instead of writing an explicit 0. */
     onResetTranspose: () -> Unit = { onTransposeChange(0) },
+    /** This device's default staff size — the slider's tick and double-tap target. */
+    defaultStaffSize: Double = ReaderDeviceDefaults.staffSize(LocalContext.current),
+    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. */
+    onResetStaffSize: () -> Unit = {},
     /** What this session's format allows — fetched from the shared Domain decision over JNI by
      * [ReaderScreen]. Never re-derived here from `parts`/format: this sheet only renders what the wire
      * says (Folino's iOS/Android parity rule). Defaults to every control available for callers (previews,
@@ -153,6 +157,8 @@ fun DisplayInspectorSheet(
             transposeSemitones = transposeSemitones,
             onTransposeChange = onTransposeChange,
             onResetTranspose = onResetTranspose,
+            defaultStaffSize = defaultStaffSize,
+            onResetStaffSize = onResetStaffSize,
             capabilities = capabilities,
         )
     }
@@ -182,6 +188,10 @@ fun DisplayInspectorContent(
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
     onResetTranspose: () -> Unit = { onTransposeChange(0) },
+    /** This device's default staff size — the slider's tick and double-tap target. */
+    defaultStaffSize: Double = ReaderDeviceDefaults.staffSize(LocalContext.current),
+    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. */
+    onResetStaffSize: () -> Unit = {},
     /** See [DisplayInspectorSheet]'s parameter doc — read, never re-derived. */
     capabilities: ReaderCapabilitiesWire = ALL_READER_CAPABILITIES,
 ) {
@@ -223,7 +233,14 @@ fun DisplayInspectorContent(
                     }
                 }
                 if (capabilities.canEditStaves) {
-                    item { StaffSizeRow(options.staffSize) { onChange(options.copy(staffSize = it)) } }
+                    item {
+                        StaffSizeRow(
+                            staffSize = options.staffSize,
+                            defaultStaffSize = defaultStaffSize,
+                            onChange = { onChange(options.copy(staffSize = it)) },
+                            onReset = onResetStaffSize,
+                        )
+                    }
                 }
                 if (capabilities.canTranspose) {
                     item {
@@ -365,7 +382,12 @@ private fun LayoutModeRow(
 }
 
 @Composable
-private fun StaffSizeRow(staffSize: Double, onChange: (Double) -> Unit) {
+private fun StaffSizeRow(
+    staffSize: Double,
+    defaultStaffSize: Double,
+    onChange: (Double) -> Unit,
+    onReset: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -381,9 +403,11 @@ private fun StaffSizeRow(staffSize: Double, onChange: (Double) -> Unit) {
         ResettableSlider(
             value = staffSize.toFloat(),
             onValueChange = { onChange(it.toDouble()) },
-            // Default staff size matches LayoutOptions.DEFAULT.staffSize (28pt); double-tap restores it.
-            defaultValue = 28f,
-            onReset = { onChange(28.0) },
+            // The tick and the double-tap target both sit at this device's default. Reset CLEARS the per-score value
+            // rather than writing this number, so the score keeps following the default (iOS parity, and the reason
+            // `onReset` is separate from `onChange`).
+            defaultValue = defaultStaffSize.toFloat(),
+            onReset = onReset,
             valueRange = 8f..28f,
             modifier = Modifier.weight(1f).height(InspectorSliderHeight),
         )
