@@ -32,7 +32,7 @@
 
 | File | Responsibility |
 | --- | --- |
-| `Sources/SheetMusicCore/Editing/Planners/{MeasureAccidentals,CrossBarInputPlanner,FullMeasureRestCollapse,NoteInputPlanner,TiePlanner,IntervalPlanner,StaffStepPitch}.swift` (create) | The seven planners, moved from Folino verbatim, made `public`. |
+| `Sources/SheetMusicCore/Editing/Planners/{MeasureAccidentals,CrossBarInputPlanner,FullMeasureRestCollapse,NoteInputPlanner,TiePlanner,IntervalPlanner,StaffStepPitch,ElementNavigator}.swift` (create) | The planners, moved from Folino verbatim, made `public`. |
 | `Sources/SheetMusicCore/Editing/ScoreEditSession.swift` (modify) | Plans an intent through the planners; bundles accidental repairs; handles the new intents. |
 | `Sources/SheetMusicCore/Editing/EditIntent.swift` (modify) | The remaining seven intent cases. |
 | `Sources/SheetMusicCore/Score/ScoreFingerprint.swift` (modify) | Walk the fields the new intents can reach. |
@@ -56,6 +56,16 @@ Android host would otherwise have to reimplement editing logic. Four of them
 declare `import Domain`, which is unused — Folino's `Domain` re-exports
 `SheetMusicCore`, so dropping that line is the whole port.
 
+**`ElementNavigator` moves too — eight files, not seven.** Found while executing
+this task and ruled by the user on 2026-08-06: `TiePlanner.tieTarget` calls
+`ElementNavigator.nextTimedElement`, so the planner cannot compile here without
+it, and a second copy of that walk is what the parity rule forbids. It is pure
+`Foundation` + `SheetMusicCore` score walking, and its other half
+(`previousTimedElement`, the pad's ← key) is wanted on this side by SP2 anyway.
+Its own suite, `ElementNavigatorTests`, ports with it — it calls the enum
+directly, so it makes five ported suites rather than four. The spec's §5.1 has
+been amended to match.
+
 Folino's own tests for these are split: `NoteInputPlannerTests`,
 `TiePlannerTests`, `IntervalPlannerTests`, `StaffStepPitchTests` call the
 planners directly and port over; `MeasureAccidentalsTests` and
@@ -71,7 +81,9 @@ direct suites and writes direct coverage for the other two.
 - Create: `Sources/SheetMusicCore/Editing/Planners/TiePlanner.swift`
 - Create: `Sources/SheetMusicCore/Editing/Planners/IntervalPlanner.swift`
 - Create: `Sources/SheetMusicCore/Editing/Planners/StaffStepPitch.swift`
+- Create: `Sources/SheetMusicCore/Editing/Planners/ElementNavigator.swift`
 - Create: `Tests/SheetMusicTests/EditingTests/EditingFixtures.swift`
+- Create: `Tests/SheetMusicTests/EditingTests/Planners/ElementNavigatorTests.swift`
 - Create: `Tests/SheetMusicTests/EditingTests/Planners/NoteInputPlannerTests.swift`
 - Create: `Tests/SheetMusicTests/EditingTests/Planners/TiePlannerTests.swift`
 - Create: `Tests/SheetMusicTests/EditingTests/Planners/IntervalPlannerTests.swift`
@@ -89,6 +101,7 @@ direct suites and writes direct coverage for the other two.
   - `TiePlanner.tieTarget(for:in:) -> NoteID?`
   - `IntervalPlanner.diatonicThirdAbove(_:keySig:)`, `IntervalPlanner.octaveAbove(_:)`
   - `StaffStepPitch.diatonicShift(from:bySteps:keySig:)`, `StaffStepPitch.inKeyTpc(naturalTpc:keySig:)`
+  - `ElementNavigator.nextTimedElement(after:in:)`, `ElementNavigator.previousTimedElement(before:in:)`
   - `EditingFixtures` (test-only): `fourQuarterRests()`, `twoMeasuresOfQuarterRests()`, `twoMeasuresOfQuarterRests(key:)`, `threeMeasuresOfQuarterRests()`, `chordAtIndex1()`, `twoNoteChordAtIndex1()`, `twoConsecutiveC4Chords()`, `c4ThenD4Chords()`, `c4AcrossBarline()`, `restID(measure:element:)`, `noteID(measure:element:noteIndex:)`, `staff0`
 
 - [ ] **Step 1: Copy the seven files**
@@ -1674,9 +1687,10 @@ branch (Tasks 2, 6, 12), which weakens the within-branch regression guard;
 unavoidable when the behavior under test changes on purpose, and each
 re-recording step says exactly which files may move and which may not.
 
-**Not in SP1, deliberately.** `SelectionRederivation`, `ElementNavigator`,
-`NoteNameFormatter` and `EditorFileFacts` stay in Folino (spec §5.1 — they read
-the score for the UI rather than mutate it). The stale-layout race SP0 flagged
+**Not in SP1, deliberately.** `SelectionRederivation`, `NoteNameFormatter` and
+`EditorFileFacts` stay in Folino (spec §5.1 — they read the score for the UI
+rather than mutate it). `ElementNavigator` was on that list until Task 1 found
+`TiePlanner` depends on it; it moves, and §5.1 records why. The stale-layout race SP0 flagged
 (`nativeComputeLayout` writing `LayoutDocumentCache` without the edit lock)
 belongs to SP3 per SP0's findings, and Task 11 does not make it worse:
 `nativeEncodeDrawProgram` only *reads* the cache.

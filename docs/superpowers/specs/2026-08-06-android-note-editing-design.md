@@ -218,13 +218,22 @@ when source and destination ticks match, so `.whole` → `.measure` cannot be
 expressed as a duration change alone.
 
 Moved from Folino into `SheetMusicCore` with their tests, unchanged apart from
-`import`s (all seven import only `Foundation` + `SheetMusicCore`, verified):
+`import`s (all import only `Foundation` + `SheetMusicCore`, verified):
 `MeasureAccidentals`, `CrossBarInputPlanner`, `FullMeasureRestCollapse`,
-`NoteInputPlanner`, `TiePlanner`, `IntervalPlanner`, `StaffStepPitch`.
+`NoteInputPlanner`, `TiePlanner`, `IntervalPlanner`, `StaffStepPitch`, and —
+added 2026-08-06 during SP1 — `ElementNavigator`.
+
+`ElementNavigator` was listed as *not* moved here until SP1's first task hit the
+wall: `TiePlanner.tieTarget` calls `ElementNavigator.nextTimedElement`, so the
+planner cannot compile in `SheetMusicCore` without it. Leaving it behind would
+mean a second copy of that walk in ssm, which is exactly the duplication the
+repo's parity rule forbids. Its other half, `previousTimedElement`, is what the
+pad's ← key steps with, so SP2's `EditorSessionCore` wants it on this side too.
+Ruled by the user.
 
 Not moved — these read the score for the UI rather than mutate it, and Folino's
-side has a local score to read: `SelectionRederivation`, `ElementNavigator`,
-`NoteNameFormatter`, `EditorFileFacts`.
+side has a local score to read: `SelectionRederivation`, `NoteNameFormatter`,
+`EditorFileFacts`.
 
 ### 5.2 Selection and editing geometry → platform-neutral
 
