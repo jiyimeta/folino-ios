@@ -232,7 +232,7 @@ public final class ReaderPreferencesBridge {
         revision &+= 1
         state = ReaderPreferencesStateWire(
             staffSize: prefs.effectiveStaffSize(default: openDefaultStaffSize),
-            honorLayoutBreaks: prefs.effectiveHonorLayoutBreaks,
+            honorLayoutBreaks: prefs.effectiveHonorLayoutBreaks(default: true),
             masterVolume: prefs.effectiveMasterVolume,
             tempoMultiplier: prefs.tempoMultiplier ?? 0,
             a4ReferenceHz: prefs.a4ReferenceHz ?? 0,

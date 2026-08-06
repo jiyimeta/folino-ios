@@ -15,14 +15,15 @@ final class LayoutSettingsModel {
     /// the shared `onChange` copies all four fields at once: resolving here would write a number into `staffSize` the
     /// first time the user changed any OTHER field, permanently marking the score as touched.
     private(set) var staffSize: Double?
-    /// `nil` = untouched; resolves to `ReaderPreferences.defaultHonorLayoutBreaks`. Same raw-Optional reasoning as
+    /// `nil` = untouched; resolves to the injected `defaultHonorLayoutBreaks`. Same raw-Optional reasoning as
     /// `staffSize`.
     private(set) var honorLayoutBreaks: Bool?
     private(set) var hiddenStaves: Set<StaffAddress> = []
     private(set) var staffClefOverrides: [StaffAddress: String] = [:]
 
-    /// Injected by `ReaderViewModel` at wiring time — the screen-level default that will become device-class-dependent.
+    /// Injected by `ReaderViewModel` at wiring time — the screen-level defaults, which are device-class-dependent.
     @ObservationIgnored var defaultStaffSize: Double = 14
+    @ObservationIgnored var defaultHonorLayoutBreaks = true
 
     /// Values the UI and the renderer read. Everything that needs a number goes through these, never through the raw
     /// Optionals.
@@ -31,7 +32,7 @@ final class LayoutSettingsModel {
     }
 
     var effectiveHonorLayoutBreaks: Bool {
-        honorLayoutBreaks ?? ReaderPreferences.defaultHonorLayoutBreaks
+        honorLayoutBreaks ?? defaultHonorLayoutBreaks
     }
 
     @ObservationIgnored var onChange: (() async -> Void)?

@@ -56,7 +56,7 @@ struct ReaderPreferencesBridgeTests {
         let bridge = ReaderPreferencesBridge(store: store)
         bridge.open(scoreId: "s1", defaultStaffSize: 20)
         #expect(bridge.state.staffSize == 20)
-        #expect(bridge.state.honorLayoutBreaks == ReaderPreferences.defaultHonorLayoutBreaks)
+        #expect(bridge.state.honorLayoutBreaks == true)
         #expect(bridge.state.masterVolume == ReaderPreferences.defaultMasterVolume)
         #expect(bridge.state.transposeSemitones == Int32(ReaderPreferences.defaultTransposeSemitones))
         #expect(bridge.state.tempoMultiplier == 0) // sentinel: no override

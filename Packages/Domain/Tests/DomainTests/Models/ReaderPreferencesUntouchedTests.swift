@@ -48,9 +48,18 @@ struct ReaderPreferencesUntouchedTests {
 
     @Test func `effective accessors resolve nil to the static defaults`() {
         let prefs = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [])
-        #expect(prefs.effectiveHonorLayoutBreaks == true)
         #expect(prefs.effectiveMasterVolume == 1.0)
         #expect(prefs.effectiveTransposeSemitones == 0)
+    }
+
+    /// `honorLayoutBreaks` resolves against the caller's default for the same reason `staffSize` does: the default is
+    /// device-class-dependent, so it cannot live on the model.
+    @Test func `effectiveHonorLayoutBreaks follows the injected default`() {
+        let untouched = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [])
+        #expect(untouched.effectiveHonorLayoutBreaks(default: false) == false)
+        #expect(untouched.effectiveHonorLayoutBreaks(default: true) == true)
+        let touched = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [], honorLayoutBreaks: false)
+        #expect(touched.effectiveHonorLayoutBreaks(default: true) == false)
     }
 
     @Test func `effectiveStaffSize follows the injected default`() {
