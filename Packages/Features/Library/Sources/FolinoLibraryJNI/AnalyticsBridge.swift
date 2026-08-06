@@ -312,12 +312,8 @@ public final class AnalyticsBridge {
     ///
     /// This is an **analytics-only** widening. `ReaderPreferencesBridge.open` renders from the decoded value, so what
     /// the Reader shows is unaffected.
-    ///
-    /// `defaultStaffSize` is the Reader's current *global* staff size — the same `prefs.staffSize` flow `MainActivity`
-    /// hands to `ReaderPreferencesBridge.open`. With the rule above it no longer influences any parameter; it is kept
-    /// in the signature so the JNI wire shape stays put and so the value is on hand if a later parameter needs it.
     @WireletExpose
-    public func scorePrefs(prefsJson: String, widthDp: Double, defaultStaffSize: Double) -> AnalyticsEventWire {
+    public func scorePrefs(prefsJson: String, widthDp: Double) -> AnalyticsEventWire {
         guard var prefs = ReaderPreferencesReducer.decode(prefsJson) else {
             return AnalyticsEventWire(name: "", params: [])
         }
