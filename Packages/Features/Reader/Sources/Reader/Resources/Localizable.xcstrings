@@ -3105,6 +3105,40 @@
         }
       }
     },
+    "reader.preferences.showAllMeasureNumbers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Number every measure"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全ての小節に番号を表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 마디에 번호 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每个小节都显示小节号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每個小節都顯示小節號"
+          }
+        }
+      }
+    },
     "reader.preferences.showInvisibleElements" : {
       "localizations" : {
         "en" : {

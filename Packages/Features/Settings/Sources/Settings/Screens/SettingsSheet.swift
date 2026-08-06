@@ -14,6 +14,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
     private let crashReporter: any CrashReporter
     private let analytics: any Analytics
     @Environment(\.dismiss) private var dismiss
+    @State private var isFeedbackMailPresented = false
 
     public init(
         provider: (any MuseScoreGeneralProvider)? = nil,
@@ -40,8 +41,11 @@ public struct SettingsSheet<LicenseContent: View>: View {
                     versionHistoryLoader: versionHistoryLoader,
                     onVersionHistoryViewed: onVersionHistoryViewed,
                     licenseContent: licenseContent,
+                    isFeedbackMailPresented: $isFeedbackMailPresented,
                 )
             }
+            // Screen level on purpose — see `FeedbackMailPresentation`.
+            .feedbackMailPresentation(isPresented: $isFeedbackMailPresented)
             .navigationTitle(Text("settings.title", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { doneToolbar }

@@ -27,6 +27,7 @@ struct PagedScoreContainer: View {
     let honorLayoutBreaks: Bool
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
+    let showAllMeasureNumbers: Bool
     let playbackCursor: ScoreCursor?
     /// Lookahead anchor (1 beat ahead) used to turn the page early — the page containing this cursor is made
     /// active. `nil` when not playing, in which case page-follow falls back to the real cursor (manual seek).
@@ -144,6 +145,7 @@ struct PagedScoreContainer: View {
                         honorLayoutBreaks: honorLayoutBreaks,
                         collapseMultiMeasureRests: collapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
+                        showAllMeasureNumbers: showAllMeasureNumbers,
                         pageHeight: viewportHeight,
                         transposeSemitones: transposeSemitones,
                         editGeneration: editingScoreVersion,
@@ -442,6 +444,7 @@ struct PagedScoreContainer: View {
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
             showsInvisibleElements: showInvisibleElements,
+            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
         )
     }
 
@@ -473,6 +476,7 @@ struct PagedScoreContainer: View {
         let honorLayoutBreaks: Bool
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
+        let showAllMeasureNumbers: Bool
         let pageHeight: CGFloat
         let transposeSemitones: Int
         let editGeneration: Int
@@ -484,6 +488,7 @@ struct PagedScoreContainer: View {
             honorLayoutBreaks: Bool,
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
+            showAllMeasureNumbers: Bool,
             pageHeight: CGFloat,
             transposeSemitones: Int,
             editGeneration: Int,
@@ -499,6 +504,7 @@ struct PagedScoreContainer: View {
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
             self.showInvisibleElements = showInvisibleElements
+            self.showAllMeasureNumbers = showAllMeasureNumbers
             self.pageHeight = pageHeight
             self.transposeSemitones = transposeSemitones
         }

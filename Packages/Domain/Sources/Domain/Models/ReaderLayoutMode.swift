@@ -41,6 +41,13 @@ public enum ReaderGlobalSettingsKey {
     /// entirely — matching print behavior.
     public static let showInvisibleElements = "readerShowInvisibleElements"
 
+    // PARITY(android): number every measure — carry the policy on LayoutOptionsWire (the layout half is shared, so
+    //   Android needs only the wire field, the SettingsPrefs key and a Compose toggle)
+    /// Bool. When true, every measure carries its number, via `ScoreViewOptions.measureNumbers = .everyMeasure`. When
+    /// false (the default), only the first measure of each system does — the engraving convention, and what the Reader
+    /// did before this setting. An anacrusis stays unnumbered either way.
+    public static let showAllMeasureNumbers = "readerShowAllMeasureNumbers"
+
     /// Bool. When true, the device's idle timer is disabled while the Reader is on screen so the display does not dim
     /// or lock during practice. The Reader restores the idle timer when it disappears. Defaults to true at the
     /// `@AppStorage` site for first-launch users.

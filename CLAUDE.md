@@ -165,6 +165,14 @@ Folino is becoming cross-platform (iOS/iPadOS native; Android via `swift-wirelet
 
 - **UI / UX placement → Android idioms are preferred.** Button placement, icons, copy/wording, navigation patterns, and screen transitions follow Android conventions (e.g. FAB for the primary action, swipe-to-dismiss + Snackbar undo, gear-icon Settings) rather than mirroring the iOS layout. The *content* shown stays at iOS parity; only the *presentation/placement* adapts to the platform.
 
+### Recording a deliberate one-platform-first gap
+
+When a feature lands on one platform and the other half is deliberately deferred, leave a marker at the point of
+divergence — `// PARITY(android): <title> — <what Android still needs>` (or `PARITY(ios)`). `Scripts/parity-report.py`
+collects them into `docs/engineering/ios-android-parity.md`, and the `parity-ledger` pre-commit hook fails if that file
+drifted, so the ledger cannot rot. Implementing the other half deletes the marker, which deletes the row. Details and
+the format are in the ledger itself. Reserve it for real, intended gaps — it is not a TODO list.
+
 ### Android builds (pointer)
 
 The Android half lives in `Android/` (Gradle + Compose); the Swift JNI `.so`s are built by `Scripts/android-build-libs.sh` (Settings) and `Scripts/android-build-{library,reader,soundfont}-libs.sh`. Cross-compiling needs the release toolchain first on `PATH` (`PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"`) — the Xcode-bundled Swift is incompatible with the prebuilt Android SDK. Ordering matters: run the Gradle wirelet codegen first, then (re)build the `.so`s, then `assembleDebug` — building `.so`s first in a fresh worktree yields libraries without `JNI_OnLoad` that crash at launch. See the project memory for the detailed gotchas.

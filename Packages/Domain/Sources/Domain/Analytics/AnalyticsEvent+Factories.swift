@@ -220,6 +220,13 @@ extension AnalyticsEvent {
         layoutMode: ReaderLayoutMode,
         crashReportingEnabled: Bool,
         soundfontPreset: String,
+        // Defaulted ONLY so the Android `AnalyticsBridge` — whose signature is a `@WireletExpose` wire contract —
+        // keeps compiling until Android grows the setting. `false` is the honest value for a platform that cannot
+        // turn it on.
+        // PARITY(android): settings_snapshot.show_all_measure_numbers — pass it from the AnalyticsBridge and drop
+        //   the default here, so the parameter stops reading as "off" for every Android launch
+
+        showAllMeasureNumbers: Bool = false,
     ) -> AnalyticsEvent {
         AnalyticsEvent(name: "settings_snapshot", parameters: [
             "metronome_enabled": .bool(metronome),
@@ -234,6 +241,7 @@ extension AnalyticsEvent {
             "layout_mode": .string(layoutMode.analyticsValue),
             "crash_reporting_enabled": .bool(crashReportingEnabled),
             "soundfont_preset": .string(soundfontPreset),
+            "show_all_measure_numbers": .bool(showAllMeasureNumbers),
         ])
     }
 

@@ -1,20 +1,17 @@
 import Domain
 import SettingsLogic
 import SwiftUI
-import UtilityUI
 
-/// The Settings sheet's about section: version history, third-party licenses, and the feedback-mail entry point. Owns
-/// the feedback-mail presentation and result-alert `@State` so that flow is scoped here, alongside the button that
-/// triggers it.
+/// The Settings sheet's about section: version history, third-party licenses, and the feedback-mail entry point.
+///
+/// The mail flow itself is presented by `feedbackMailPresentation(isPresented:)` on the enclosing `Form`; this section
+/// only flips the binding. A presentation modifier written here would be applied to every row of the section and the
+/// composer would dismiss itself as soon as it opened.
 struct AboutSettingsSection<LicenseContent: View>: View {
     let versionHistoryLoader: any VersionHistoryLoader
     let onVersionHistoryViewed: @MainActor () -> Void
     let licenseContent: () -> LicenseContent
-
-    @State private var isFeedbackMailPresented = false
-    @State private var feedbackMailResult: FeedbackMailComposeResult?
-    @State private var isMailSavedAlertPresented = false
-    @State private var isMailFailedAlertPresented = false
+    @Binding var isFeedbackMailPresented: Bool
 
     var body: some View {
         Section {
@@ -54,31 +51,6 @@ struct AboutSettingsSection<LicenseContent: View>: View {
             .disabled(!FeedbackMailView.canSendMail)
         } header: {
             Text("settings.about.title", bundle: .module)
-        }
-        .sheet(isPresented: $isFeedbackMailPresented) {
-            FeedbackMailView(result: $feedbackMailResult)
-        }
-        .alert(
-            Text("settings.feedback.saved.title", bundle: .module),
-            isPresented: $isMailSavedAlertPresented,
-        ) {
-            Button(role: .cancel) {} label: { L10n.Common.ok }
-        }
-        .alert(
-            Text("settings.feedback.failed.title", bundle: .module),
-            isPresented: $isMailFailedAlertPresented,
-        ) {
-            Button(role: .cancel) {} label: { L10n.Common.ok }
-        }
-        .onChange(of: feedbackMailResult) { _, newValue in
-            switch newValue {
-            case .saved:
-                isMailSavedAlertPresented = true
-            case .failed:
-                isMailFailedAlertPresented = true
-            case .cancelled, .sent, nil:
-                break
-            }
         }
     }
 

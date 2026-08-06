@@ -30,6 +30,8 @@ struct ReaderSettingsSection: View {
     private var collapseMultiMeasureRests = false
     @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
     private var showInvisibleElements = false
+    @AppStorage(ReaderGlobalSettingsKey.showAllMeasureNumbers)
+    private var showAllMeasureNumbers = false
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
     @AppStorage(ReaderGlobalSettingsKey.showSeekBarEnabled)
@@ -57,6 +59,7 @@ struct ReaderSettingsSection: View {
             precountToggle
             pictureInPictureToggle
             collapseRestsToggle
+            allMeasureNumbersToggle
             showInvisibleToggle
             keepScreenAwakeToggle
             seekBarToggle
@@ -106,6 +109,24 @@ struct ReaderSettingsSection: View {
             }
         }
         .onChange(of: collapseMultiMeasureRests) { _, value in changeLog.log(.collapseMultiMeasureRests, value) }
+    }
+
+    /// Numbers every measure rather than only the first of each system. The footnote names the default so the row
+    /// reads as "more numbers than usual" rather than "numbers on/off" — system heads stay numbered either way.
+    private var allMeasureNumbersToggle: some View {
+        Toggle(isOn: $showAllMeasureNumbers) {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("settings.reader.showAllMeasureNumbers", bundle: .module)
+                    Text("settings.reader.showAllMeasureNumbers.footer", bundle: .module)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "number")
+            }
+        }
+        .onChange(of: showAllMeasureNumbers) { _, value in changeLog.log(.showAllMeasureNumbers, value) }
     }
 
     private var showInvisibleToggle: some View {

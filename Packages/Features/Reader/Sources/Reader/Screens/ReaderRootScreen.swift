@@ -45,6 +45,9 @@ public struct ReaderRootScreen: View {
     @AppStorage(ReaderGlobalSettingsKey.showInvisibleElements)
     private var showInvisibleElements = false
 
+    @AppStorage(ReaderGlobalSettingsKey.showAllMeasureNumbers)
+    private var showAllMeasureNumbers = false
+
     @AppStorage(ReaderGlobalSettingsKey.keepScreenAwakeEnabled)
     private var keepScreenAwake = true
 
@@ -136,6 +139,14 @@ public struct ReaderRootScreen: View {
     /// the seek bar enabled re-paginates for the edit session — the trade the compact transport buys.
     private var showsSeekBarNow: Bool {
         showSeekBar && editingHost?.isEditing != true
+    }
+
+    /// Every display global the PiP window renders from, as one value — see `PiPDisplayOptions`.
+    private var pipDisplayOptions: PiPDisplayOptions {
+        .init(
+            isEnabled: isPiPEnabled, collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showInvisibleElements: showInvisibleElements, showAllMeasureNumbers: showAllMeasureNumbers,
+        )
     }
 
     public init(
@@ -306,9 +317,7 @@ public struct ReaderRootScreen: View {
                 else { return nil }
                 return .item(item)
             }
-            viewModel.pipSession.setEnabled(isPiPEnabled)
-            viewModel.pipSession.setCollapseMultiMeasureRests(collapseMultiMeasureRests)
-            viewModel.pipSession.setShowInvisibleElements(showInvisibleElements)
+            pipDisplayOptions.apply(to: viewModel.pipSession)
             await viewModel.load()
             await viewModel.playbackSession.prepareForPlayback()
             // Initial sync: the engine starts up unaware of persisted state, so seed it from the @AppStorage value at
@@ -376,14 +385,8 @@ public struct ReaderRootScreen: View {
             Task { await viewModel.tempoModel.setMetronomeEnabled(newValue) }
             hints.markUsed(.metronome)
         }
-        .onChange(of: isPiPEnabled) { _, newValue in
-            viewModel.pipSession.setEnabled(newValue)
-        }
-        .onChange(of: collapseMultiMeasureRests) { _, newValue in
-            viewModel.pipSession.setCollapseMultiMeasureRests(newValue)
-        }
-        .onChange(of: showInvisibleElements) { _, newValue in
-            viewModel.pipSession.setShowInvisibleElements(newValue)
+        .onChange(of: pipDisplayOptions) { _, newValue in
+            newValue.apply(to: viewModel.pipSession)
         }
         .onChange(of: scenePhase) { _, newValue in
             // The Settings spec dismisses PiP whenever the app returns to the foreground, regardless of how it was
@@ -656,6 +659,7 @@ public struct ReaderRootScreen: View {
                     pdfLayoutMode: pdfLayoutMode,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
+                    showAllMeasureNumbers: showAllMeasureNumbers,
                     autoFollowEnabled: autoFollowEnabled,
                     pageTurnButtonsVisible: pageTurnButtonsVisible,
                     bottomControlContentHeight: bottomControlContentHeight,
