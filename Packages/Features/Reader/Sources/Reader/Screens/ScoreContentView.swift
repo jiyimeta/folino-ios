@@ -24,6 +24,7 @@ struct ScoreContentView: View {
     let pdfLayoutMode: ReaderLayoutMode
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
+    let showAllMeasureNumbers: Bool
     let autoFollowEnabled: Bool
     let pageTurnButtonsVisible: Bool
     let bottomControlContentHeight: CGFloat
@@ -95,6 +96,7 @@ struct ScoreContentView: View {
                         honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
                         collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
+                        showAllMeasureNumbers: showAllMeasureNumbers,
                         playbackCursor: viewModel.playbackSession.displayCursor,
                         scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                         autoFollowEnabled: autoFollowEnabled,
@@ -111,6 +113,7 @@ struct ScoreContentView: View {
                         honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
                         collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
+                        showAllMeasureNumbers: showAllMeasureNumbers,
                         playbackCursor: viewModel.playbackSession.displayCursor,
                         scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                         autoFollowEnabled: autoFollowEnabled,
@@ -126,6 +129,7 @@ struct ScoreContentView: View {
                         honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
                         collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                         showInvisibleElements: showInvisibleElements,
+                        showAllMeasureNumbers: showAllMeasureNumbers,
                         playbackCursor: viewModel.playbackSession.displayCursor,
                         pageAnchorCursor: viewModel.playbackSession.pageAnchorCursor,
                         autoFollowEnabled: autoFollowEnabled,

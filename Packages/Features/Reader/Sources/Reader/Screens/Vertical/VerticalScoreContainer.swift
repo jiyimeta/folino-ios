@@ -32,6 +32,7 @@ struct VerticalScoreContainer: View {
     let honorLayoutBreaks: Bool
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
+    let showAllMeasureNumbers: Bool
     let playbackCursor: ScoreCursor?
     /// Lookahead anchor used for auto-scroll ONLY — a cursor a couple of beats ahead of `playbackCursor` during
     /// playback, so the viewport scrolls before the playing cursor reaches the edge. `nil` when not playing /
@@ -142,6 +143,7 @@ struct VerticalScoreContainer: View {
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
+                    showAllMeasureNumbers: showAllMeasureNumbers,
                     transposeSemitones: transposeSemitones,
                     editGeneration: editingScoreVersion,
                 )) {
@@ -328,6 +330,7 @@ struct VerticalScoreContainer: View {
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
             showsInvisibleElements: showInvisibleElements,
+            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
         )
     }
 
@@ -451,6 +454,7 @@ struct VerticalScoreContainer: View {
         let honorLayoutBreaks: Bool
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
+        let showAllMeasureNumbers: Bool
         let transposeSemitones: Int
         /// `ReaderEditingHost.editGeneration`, bumped by the editing surface on every edit that needs a relayout.
         /// `scoreSignature` only tracks STRUCTURAL shape (part/staff counts, division, opening clefs) — a pitch
@@ -465,6 +469,7 @@ struct VerticalScoreContainer: View {
             honorLayoutBreaks: Bool,
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
+            showAllMeasureNumbers: Bool,
             transposeSemitones: Int,
             editGeneration: Int,
         ) {
@@ -481,6 +486,7 @@ struct VerticalScoreContainer: View {
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
             self.showInvisibleElements = showInvisibleElements
+            self.showAllMeasureNumbers = showAllMeasureNumbers
             self.transposeSemitones = transposeSemitones
             self.editGeneration = editGeneration
         }

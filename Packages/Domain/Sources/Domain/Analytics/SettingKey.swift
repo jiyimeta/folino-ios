@@ -22,6 +22,7 @@ public enum SettingKey: String, Sendable, CaseIterable {
     case crashReporting = "crash_reporting_enabled"
     case analytics = "analytics_enabled"
     case precount = "precount_enabled"
+    case showAllMeasureNumbers = "show_all_measure_numbers"
 
     /// Resolve a `SettingKey` from its Swift case name (e.g. `"metronome"`), the symbolic token the Android bridge
     /// receives across the JNI boundary. The wire `rawValue` is never crossed from Kotlin — the bridge maps the
@@ -43,6 +44,7 @@ public enum SettingKey: String, Sendable, CaseIterable {
         case "crashReporting": self = .crashReporting
         case "analytics": self = .analytics
         case "precount": self = .precount
+        case "showAllMeasureNumbers": self = .showAllMeasureNumbers
         default: return nil
         }
     }

@@ -18,6 +18,7 @@ struct HorizontalScoreContainer: View {
     let honorLayoutBreaks: Bool
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
+    let showAllMeasureNumbers: Bool
     let playbackCursor: ScoreCursor?
     /// Lookahead anchor (2 beats ahead) used for the X auto-scroll trigger ONLY — never the highlight. `nil`
     /// when not playing, in which case the scroll falls back to the reactive measure keep-in-view.
@@ -82,6 +83,7 @@ struct HorizontalScoreContainer: View {
                     honorLayoutBreaks: honorLayoutBreaks,
                     collapseMultiMeasureRests: collapseMultiMeasureRests,
                     showInvisibleElements: showInvisibleElements,
+                    showAllMeasureNumbers: showAllMeasureNumbers,
                     transposeSemitones: transposeSemitones,
                     editGeneration: editingScoreVersion,
                 )) {
@@ -281,6 +283,7 @@ struct HorizontalScoreContainer: View {
                 ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
                 : .disabled,
             showsInvisibleElements: showInvisibleElements,
+            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
         )
     }
 
@@ -409,6 +412,7 @@ struct HorizontalScoreContainer: View {
         let honorLayoutBreaks: Bool
         let collapseMultiMeasureRests: Bool
         let showInvisibleElements: Bool
+        let showAllMeasureNumbers: Bool
         let transposeSemitones: Int
         let editGeneration: Int
 
@@ -418,6 +422,7 @@ struct HorizontalScoreContainer: View {
             honorLayoutBreaks: Bool,
             collapseMultiMeasureRests: Bool,
             showInvisibleElements: Bool,
+            showAllMeasureNumbers: Bool,
             transposeSemitones: Int,
             editGeneration: Int,
         ) {
@@ -431,6 +436,7 @@ struct HorizontalScoreContainer: View {
             self.honorLayoutBreaks = honorLayoutBreaks
             self.collapseMultiMeasureRests = collapseMultiMeasureRests
             self.showInvisibleElements = showInvisibleElements
+            self.showAllMeasureNumbers = showAllMeasureNumbers
             self.transposeSemitones = transposeSemitones
         }
     }

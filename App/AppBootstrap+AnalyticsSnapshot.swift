@@ -48,6 +48,7 @@ extension AppBootstrap {
             crashReportingEnabled: boolSetting(PrivacySettingsKey.crashReportingEnabled, default: true),
             soundfontPreset: museScoreGeneralProvider?.currentPreset.rawValue
                 ?? SoundfontPreset.lightweight.rawValue,
+            showAllMeasureNumbers: boolSetting(ReaderGlobalSettingsKey.showAllMeasureNumbers, default: false),
         ))
 
         // One event per changed score (spec 2026-08-05), last so the two aggregate snapshots are already in flight.
