@@ -1,5 +1,7 @@
 package com.keynumber.folino.settings
 
+import java.util.Locale
+
 // VersionHistoryWireListCodec + VersionHistoryWire are wirelet-generated
 // (emitModels=true). They live in this same package under build/generated/.
 
@@ -10,6 +12,13 @@ package com.keynumber.folino.settings
  * into Kotlin model objects.
  */
 object VersionHistoryBridge {
-    fun load(ymlBytes: ByteArray): List<VersionHistoryWire> =
-        VersionHistoryWireListCodec.decode(SettingsJNI.nativeLoadVersionHistory(ymlBytes)).entries
+    /**
+     * @param languageTag the language whose translations the descriptions come back in; defaults to the
+     * device language. Swift cannot read it for itself — see [SettingsJNI.nativeLoadVersionHistory].
+     */
+    fun load(
+        ymlBytes: ByteArray,
+        languageTag: String = Locale.getDefault().toLanguageTag(),
+    ): List<VersionHistoryWire> =
+        VersionHistoryWireListCodec.decode(SettingsJNI.nativeLoadVersionHistory(ymlBytes, languageTag)).entries
 }

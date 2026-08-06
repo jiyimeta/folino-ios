@@ -16,8 +16,14 @@ public struct YAMLVersionHistoryLoader: VersionHistoryLoader {
     }
 
     private let data: Data
-    public init(data: Data) {
+    private let locale: Locale
+
+    /// - Parameter locale: the locale whose translation each description resolves to. Defaults to `Locale.current`,
+    ///   which is right on iOS; the Android bridge must pass the device locale explicitly because the JNI library's
+    ///   `Locale.current` describes the Swift runtime's environment rather than the phone's language setting.
+    public init(data: Data, locale: Locale = .current) {
         self.data = data
+        self.locale = locale
     }
 
     public func load() throws -> [VersionHistoryEntry] {
@@ -31,6 +37,7 @@ public struct YAMLVersionHistoryLoader: VersionHistoryLoader {
             throw LoadError.unparseableRoot
         }
         let decoder = YAMLDecoder()
-        return sequence.compactMap { try? decoder.decode(VersionHistoryEntry.self, from: $0) }
+        let userInfo: [CodingUserInfoKey: Any] = [VersionHistoryEntry.localeUserInfoKey: locale]
+        return sequence.compactMap { try? decoder.decode(VersionHistoryEntry.self, from: $0, userInfo: userInfo) }
     }
 }

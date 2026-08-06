@@ -154,7 +154,10 @@ class MainActivity : ComponentActivity(), PipHost {
                 // Spike note: synchronous JNI decode on the main thread before setContent. Acceptable for this
                 // PoC (one small asset); production should move the asset read + JNI round-trip off the main thread.
                 val yml = assets.open("VersionHistory.yml").readBytes()
-                VersionHistoryBridge.load(yml)
+                // Pass the configuration's locale rather than letting Swift read its own: the descriptions are
+                // localized on the Swift side, and this is the locale the rest of the screen's strings resolve
+                // with, so a per-app language override moves the release notes with everything else.
+                VersionHistoryBridge.load(yml, resources.configuration.locales[0].toLanguageTag())
                     .map { VersionHistoryItem(it.version, it.descriptions) }
             }
 
