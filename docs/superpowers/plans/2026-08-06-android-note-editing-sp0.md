@@ -1820,6 +1820,77 @@ Report status and hand back.
 
 ---
 
+## Findings — SP0 as executed (2026-08-06)
+
+**The acceptance test passes on hardware.** Ten editing steps, encoded in Swift and relayed as opaque bytes from
+Kotlin over JNI, produce byte-identical score fingerprints on a physical Pixel 8a at every step. Replay across the
+boundary is sound, and the rest of the Android design can be built on it. Both full suites are green: host 2286
+tests, and the same suite cross-compiled and run on the device, 0 failures either side.
+
+### What the plan got wrong
+
+- **`ScoreEditor` was `@MainActor`.** Not in the plan; found while writing it, and a hard prerequisite — a JNI
+  process pumps no main runloop, so the hop would never resume. Task 1 removed it. Note the knock-on: a
+  `@MainActor final class` is implicitly `Sendable`, and it no longer is. That is a source-breaking change for
+  consumers, now recorded in the CHANGELOG.
+- **The wire is not fixed-width little-endian.** Task 10's Kotlin encoder sketch was wrong: swift-wirelet emits
+  protobuf-style TLV with LEB128 varints and zig-zag signed integers. Three older codec files in ssm still carry
+  stale fixed-width comments; `EditIntentCodec.swift`'s doc comment is now the only accurate description in the repo.
+- **Kotlin should never have been encoding intents at all.** The shipping data flow has Folino's core apply an
+  intent and hand Kotlin the bytes to relay — Kotlin is a courier. Task 10 was re-specified so the Swift test writes
+  committed `step-N.bin` assets and Kotlin relays them, which is both simpler and a more faithful test.
+- **`midi01.mscx` has one measure and no rests**, not the four measures the plan assumed. Every task that touched it
+  re-aimed its indices. `.inputNote` needs a rest, which only exists after a `.delete` at the same slot.
+- **`HandleTable` is backed by a serial `DispatchQueue`** (`queue`/`storage`), not the `lock`/`storage` the drafts
+  guessed.
+
+### What SP1 must carry
+
+- **Confirm `CrossBarInputPlanner` intercepts before the composite is built.** `SetRestDuration` refuses for four
+  reasons besides tuplets, and each refusal takes the note write down with it. iOS avoids the common case only
+  because `writeCrossingBarline` runs first. Ruled by the user: keep parity, verify the interception in SP1.
+- **Introduce a richer fixture before citing `EditReplayDeterminismTests` as proof.** One measure, one voice, one
+  staff, no rests, no tuplets, no `.locationShift` — the determinism claim is narrower than it reads.
+- **`ScoreEditSession.apply` does not yet bundle `MeasureAccidentals` repairs.** Expected (the planners move in SP1),
+  but it means this branch alone cannot drive real editing.
+- **Extend `stableFingerprint` when new intents land.** Its exclusion list is now enumerated in the file. SP1's
+  `ReplaceVoiceElements` carries whole `VoiceElement` subtrees — articulations, grace notes, lyrics — none of which
+  the walk currently sees.
+
+### What SP3 must carry
+
+- **Treat any `false` from apply/undo/redo as "resync now."** The authoritative side only emits intents it already
+  applied, so a refusal downstream is always an anomaly, never a benign no-op. `lastRefusalReason` was added for
+  exactly this diagnostic.
+- **The stale-layout race is newly reachable.** `nativeComputeLayout` reads the score and writes
+  `LayoutDocumentCache` without the edit lock. Before this branch the score behind a handle never changed, so the
+  cache could never go stale; now a compute in flight when an edit lands can cache a layout of the old score against
+  a handle whose score is new. **The fingerprint check cannot detect this** — it compares scores, not layouts. The
+  cheap fix is a per-handle generation in ssm's cache.
+- **Begin/end must be strictly paired across both sides.** Re-opening a session re-seeds the mirror from the current
+  score and discards its undo stack; if the authoritative session survives that, a later relayed undo returns `false`
+  while the authoritative score has reverted.
+- **`FolinoEditorJNI` will need `JNI_OnLoad`.** ssm's `.so` does not have one — swift-java puts it in
+  `libSwiftJava.so` — but `@WireletObservable`'s `RegisterNatives` is a different mechanism, and the gradle-codegen-
+  before-`.so` ordering trap applies there.
+- **Leave a `// PARITY(android):` marker** at the divergence point per CLAUDE.md's ledger convention, and delete it
+  when the Android half lands.
+
+### Open decision for the user
+
+`EditIntentCodec` is `public` in `SheetMusicAndroidJNI`, a product that only exists under
+`SWIFT_SHEET_MUSIC_ANDROID=1` and which Folino does not link. So the side that must *produce* the bytes has no
+access to the encoder, and the spec's §6.2 currently plans a second, independent `@WireFormat EditIntentWire` inside
+`FolinoEditorJNI` — two hand-maintained declarations of one frozen schema in two repos, whose failure mode is a
+silent misdecode caught only on the fingerprint sampling interval. See the section below.
+
+### Smaller things left deliberately undone
+
+Three stale wire-layout comments in ssm (`ScoreItemIDCodec`, `PathIDCodecs`, `StaffAddressCodec`) claim fixed-width
+payloads the macros do not emit. The Android cross-compile resolves to the co-installed `swift-6.3.2-RELEASE_android`
+SDK bundle rather than 6.3.3, because the build script's `PATH` pin fixes the compiler but not SwiftPM's bundle
+selection; harmless here, worth remembering if something toolchain-shaped appears later.
+
 ## Self-review
 
 **Spec coverage.** SP0's bullet in the spec's §11 names: `EditIntent` + wire for
