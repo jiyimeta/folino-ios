@@ -22,8 +22,8 @@ final class LayoutSettingsModel {
     private(set) var staffClefOverrides: [StaffAddress: String] = [:]
 
     /// Injected by `ReaderViewModel` at wiring time — the screen-level defaults, which are device-class-dependent.
-    @ObservationIgnored var defaultStaffSize: Double = 14
-    @ObservationIgnored var defaultHonorLayoutBreaks = true
+    @ObservationIgnored var defaultStaffSize: Double = 12
+    @ObservationIgnored var defaultHonorLayoutBreaks = false
 
     /// Values the UI and the renderer read. Everything that needs a number goes through these, never through the raw
     /// Optionals.
