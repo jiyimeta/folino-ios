@@ -264,6 +264,27 @@ run one implementation:
 FNV-1a walk of the value tree. Deliberately **not** `Hashable`/`Hasher`: that is
 seeded per process, which is meaningless across two runtime images.
 
+### 5.4 One declaration of the intent wire, shared by both repos
+
+The two sides of the relay sit in different repositories: ssm's `.so` decodes
+the bytes, and Folino's `.so` produces them. The obvious arrangement — each
+declaring its own `@WireFormat` projection of `EditIntent` — puts two
+hand-maintained copies of a frozen schema in two repos whose failure mode is a
+*silent misdecode*: reorder a case on one side and the other applies a different
+intent to the mirror, caught only whenever the fingerprint sampling next fires.
+That is also exactly what the repo's parity rule forbids.
+
+So the wire lives in **one Android-gated ssm product** (`SheetMusicCore` +
+`Wirelet`), which ssm's JNI target and Folino's `FolinoEditorJNI` both link.
+
+Two properties make this cheap. Both sides are Android-only — iOS never encodes
+an intent, it calls the session directly — so **no iOS build is affected**. And
+Folino's Editor package already depends on swift-sheet-music, so this adds a
+product, not an edge.
+
+Decided 2026-08-06 after SP0, on the strength of SP0's finding that this is far
+cheaper before Folino writes its copy than after.
+
 ## 6. Changes in Folino
 
 ### 6.1 `EditorSessionCore` — the shared half of the view model
@@ -313,8 +334,7 @@ A new Android-gated dynamic library target in the Editor package, following the
   `hasEditTarget`, `isNoteSelected`, the callout's length summary).
 - `@WireletProvided` for the two things only Kotlin can do: SHA-256 of a file,
   and the score file's bytes / destination path.
-- `@WireFormat EditIntentWire` — the §4.1 vocabulary, and the `ScoreItemID` /
-  `VoiceElementID` / `NoteDuration` / `Accidental` scalars it is built from.
+- The intent wire is **linked, not re-declared** — see §5.4.
 
 Two traps already recorded in project memory and designed around here:
 `Task { @MainActor in … }` never runs in a Swift-on-Android JNI process (no
@@ -444,8 +464,14 @@ sub-plans land and tag before Folino consumes them.
 - **SP1 — ssm: planners, selection, geometry.** Move the seven planners in;
   relocate `Selection/` to `SheetMusicLayout`; add `editingHitTest`,
   `editingCaretRect`, the remaining intents, and the draw-program tint +
-  `nativeEncodeDrawProgram`. iOS is refactored onto the relocated types in the
-  same pass and must stay behavior-identical. Tag at the end.
+  `nativeEncodeDrawProgram`. Split the intent wire out into the shared
+  Android-gated product of §5.4 while it has only one consumer. iOS is
+  refactored onto the relocated types in the same pass and must stay
+  behavior-identical. Tag at the end.
+
+  SP0's findings (`docs/superpowers/plans/2026-08-06-android-note-editing-sp0.md`)
+  list four assumptions this spec and that plan got wrong; read them before
+  planning SP1.
 - **SP2 — Folino: extract `EditorCore`.** iOS-only, pure refactor, gated by the
   existing Editor tests. Cuts the hashing, localization and audition seams.
   Re-pin to the SP1 tag.
