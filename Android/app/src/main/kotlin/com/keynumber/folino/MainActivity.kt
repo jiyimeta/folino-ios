@@ -571,7 +571,6 @@ private fun LibraryNavGraph(
                 // half is read from the bridge, not from these global flows.
                 val context = LocalContext.current
                 val layoutPref by prefs.layoutMode.collectAsState(initial = "page")
-                val staffSize by prefs.staffSize.collectAsState(initial = ReaderDeviceDefaults.staffSize(context))
                 val collapseRests by prefs.collapseRests.collectAsState(initial = false)
                 val showInvisible by prefs.showInvisible.collectAsState(initial = false)
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
@@ -611,7 +610,7 @@ private fun LibraryNavGraph(
                 LaunchedEffect(currentScoreId) {
                     prefsVm.open(
                         currentScoreId,
-                        defaultStaffSize = staffSize,
+                        defaultStaffSize = ReaderDeviceDefaults.staffSize(context),
                         defaultHonorLayoutBreaks = ReaderDeviceDefaults.honorLayoutBreaks(context),
                     )
                 }

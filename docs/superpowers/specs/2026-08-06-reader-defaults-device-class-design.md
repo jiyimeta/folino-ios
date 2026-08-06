@@ -129,8 +129,12 @@ The wire gains two things, so this requires the usual Gradle wirelet codegen →
   initial value is seeded from the device default instead, so the Reader doesn't render one frame
   at 28 before settling.
 - `SettingsKeys.honorBreaks` and `SettingsPrefs.setHonorBreaks` are deleted. They were added in
-  `db9ca50e` and have never been written or collected; leaving a dead global next to a real
-  device-class default invites someone to wire the wrong one.
+  `db9ca50e`. Contrary to an earlier draft of this section, the key was briefly written: from
+  `33dff903` (2026-06-05) to `9f9c10a4` (2026-06-10) the Display inspector's slider wrote through
+  `setHonorBreaks` before that commit moved it to the per-score bridge — five days of dev-only
+  history, not a shipped build, and Android has not shipped to the Play Store. No live code reads
+  the key today either way; leaving a dead global next to a real device-class default invites
+  someone to wire the wrong one.
 
 ### Fix 1 — tempo reset
 
@@ -170,8 +174,11 @@ So the comparison moves to a frozen constant:
 
 ```swift
 /// What Android's since-removed eager seed wrote for an untouched staff size. `SettingsPrefs`'
-/// `staffSize` key has existed since `db9ca50e` but `setStaffSize` has never been called, so the
-/// global was 28.0 for every build that wrote a legacy blob. Frozen for the same reason
+/// `staffSize` key has existed since `db9ca50e` and was 28.0 for every build that **shipped**. One
+/// known exception: from `33dff903` (2026-06-05) to `9f9c10a4` (2026-06-10) the Display inspector's
+/// slider wrote through `setStaffSize` to this global key before that commit moved it to the
+/// per-score bridge — five days of dev-only history; Android has not shipped to the Play Store, so
+/// the affected population is dev/test devices only. Frozen for the same reason
 /// `LegacyStoredDefaults` is.
 private enum LegacyAndroidSeed { static let staffSize: Double = 28 }
 ```

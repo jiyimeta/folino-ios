@@ -24,11 +24,16 @@ public final class ReaderPreferencesBridge {
 
     /// The Reader's current global default staff size, handed in by `open`. Retained because `staffSize` is Optional
     /// on the model (`nil` = the user never chose one) while the wire is a resolved scalar — this is the value the
-    /// projection resolves against. Kept in sync only by `open`, which is also where the Reader learns it.
-    @ObservationIgnored private var openDefaultStaffSize: Double = 14
+    /// projection resolves against. Kept in sync only by `open`, which is also where the Reader learns it. The `21`
+    /// here is only a placeholder for the sliver of time before the first `open` call runs (this bridge is
+    /// Android-only, so it is the phone pair, not iOS's `14`); every real read goes through `open`, which overwrites
+    /// it before any `republish()`.
+    @ObservationIgnored private var openDefaultStaffSize: Double = 21
     /// The same, for the break policy. Both defaults are device-class-dependent on Android
-    /// (`ReaderDeviceDefaults.kt`), which is why neither can be a constant here.
-    @ObservationIgnored private var openDefaultHonorLayoutBreaks = true
+    /// (`ReaderDeviceDefaults.kt`), which is why neither can be a constant here. `false` is the same kind of
+    /// pre-`open` placeholder as `openDefaultStaffSize` above — the phone value, overwritten by `open` before any
+    /// real use.
+    @ObservationIgnored private var openDefaultHonorLayoutBreaks = false
 
     /// Monotonic change token folded into `state` on each republish. The per-staff collections (hidden / clef /
     /// program / volume) are not part of `ReaderPreferencesStateWire`, so a collection-only mutation would

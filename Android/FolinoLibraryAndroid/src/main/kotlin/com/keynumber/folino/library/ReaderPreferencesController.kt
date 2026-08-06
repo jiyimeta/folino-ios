@@ -14,9 +14,9 @@ import com.keynumber.folino.library.generated.ReaderPreferencesBridgeViewModel
  *
  * Unlike the process-wide soundfont download bridge, Reader preferences are per-score: callers obtain a fresh view
  * model per Reader screen (scoped via [factory] + `ViewModelProvider`, or built ad-hoc with [build]) and call
- * `open(scoreId, defaultStaffSize)` to load that score's stored JSON blob. The persistence is the same Room-backed
- * [RoomLibraryStore] used elsewhere; its underlying `LibraryDatabase` is a shared singleton, so constructing a new
- * `RoomLibraryStore` per view model is cheap and shares one database.
+ * `open(scoreId, defaultStaffSize, defaultHonorLayoutBreaks)` to load that score's stored JSON blob. The
+ * persistence is the same Room-backed [RoomLibraryStore] used elsewhere; its underlying `LibraryDatabase` is a
+ * shared singleton, so constructing a new `RoomLibraryStore` per view model is cheap and shares one database.
  */
 object ReaderPreferencesController {
 

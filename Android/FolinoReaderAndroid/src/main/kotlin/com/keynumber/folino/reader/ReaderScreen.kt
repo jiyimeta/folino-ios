@@ -240,7 +240,9 @@ fun ReaderScreen(
     persistTransposeReset: () -> Unit = { persistTranspose(0) },
     /** This device's default staff size — the display inspector's slider tick and double-tap target. */
     defaultStaffSize: Double = ReaderDeviceDefaults.staffSize(LocalContext.current),
-    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. */
+    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. The
+     * no-op default is deliberate — previews and the screenshot harness have no bridge to clear against; a caller
+     * that forgets to wire this parameter gets a silently dead double-tap rather than a crash. */
     onResetStaffSize: () -> Unit = {},
     /** Wire string for the current continuation mode (e.g. "playThrough", "loopPlaylist"); shown in the
      * playback inspector's continuation row. */

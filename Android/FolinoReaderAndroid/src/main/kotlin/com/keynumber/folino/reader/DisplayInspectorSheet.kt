@@ -135,7 +135,9 @@ fun DisplayInspectorSheet(
     onResetTranspose: () -> Unit = { onTransposeChange(0) },
     /** This device's default staff size — the slider's tick and double-tap target. */
     defaultStaffSize: Double = ReaderDeviceDefaults.staffSize(LocalContext.current),
-    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. */
+    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. The
+     * no-op default is deliberate — previews and the screenshot harness have no bridge to clear against; a caller
+     * that forgets to wire this parameter gets a silently dead double-tap rather than a crash. */
     onResetStaffSize: () -> Unit = {},
     /** What this session's format allows — fetched from the shared Domain decision over JNI by
      * [ReaderScreen]. Never re-derived here from `parts`/format: this sheet only renders what the wire
@@ -190,7 +192,9 @@ fun DisplayInspectorContent(
     onResetTranspose: () -> Unit = { onTransposeChange(0) },
     /** This device's default staff size — the slider's tick and double-tap target. */
     defaultStaffSize: Double = ReaderDeviceDefaults.staffSize(LocalContext.current),
-    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. */
+    /** Double-tap on the staff-size slider: clears the stored value instead of writing an explicit number. The
+     * no-op default is deliberate — previews and the screenshot harness have no bridge to clear against; a caller
+     * that forgets to wire this parameter gets a silently dead double-tap rather than a crash. */
     onResetStaffSize: () -> Unit = {},
     /** See [DisplayInspectorSheet]'s parameter doc — read, never re-derived. */
     capabilities: ReaderCapabilitiesWire = ALL_READER_CAPABILITIES,

@@ -125,11 +125,14 @@ enum ReaderPreferencesReducer {
     }
 
     /// What Android's since-removed eager seed wrote for a staff size the user never chose. `SettingsPrefs`' global
-    /// `staffSize` key has existed since `db9ca50e`, but `SettingsPrefs.setStaffSize` has never been called from
-    /// anywhere — the Display inspector's slider is the *per-score* one — so the global was `28.0` in every build
-    /// that could write a legacy blob. Frozen for the same reason `ReaderPreferences.LegacyStoredDefaults` is: a
-    /// migration has to keep describing the data as it was written, even after the live defaults move (which they
-    /// now have, to 21 on a phone and 24 on a tablet).
+    /// `staffSize` key has existed since `db9ca50e` and was `28.0` in every build that **shipped**. There is one
+    /// known exception: from `33dff903` (2026-06-05) to `9f9c10a4` (2026-06-10) the Display inspector's slider
+    /// wrote through `SettingsPrefs.setStaffSize` to this global key, before that commit moved it to the per-score
+    /// bridge — five days of dev-only history, not a released build; Android has not shipped to the Play Store, so
+    /// the affected population is dev/test devices only. A blob seeded from the global during that window decodes
+    /// as an explicit staff size and stays pinned. Frozen for the same reason `ReaderPreferences.LegacyStoredDefaults`
+    /// is: a migration has to keep describing the data as it was written, even after the live defaults move (which
+    /// they now have, to 21 on a phone and 24 on a tablet).
     private enum LegacyAndroidSeed {
         static let staffSize: Double = 28
     }

@@ -72,7 +72,7 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// values are clamped to `[minTempoMultiplier, maxTempoMultiplier]`. The Reader's view model normalizes a saved
     /// value of exactly 1.0 back to `nil` so the override doesn't outlive the user's intent.
     public var tempoMultiplier: Double?
-    /// When `true` (default), the layout engine honors authored `<LayoutBreak>line` / `<LayoutBreak>page` markup, so
+    /// When `true`, the layout engine honors authored `<LayoutBreak>line` / `<LayoutBreak>page` markup, so
     /// the engraver's chosen system / page boundaries are reproduced. When `false`, the engine ignores both forms and
     /// wraps measures purely on the available view width — useful when the score was authored for a different page
     /// size. `nil` = the user never chose, so it resolves to the caller's device-class default via

@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.keynumber.folino.reader.ReaderDeviceDefaults
 import com.keynumber.folino.reader.ink.AnnotationTool
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationWidths
@@ -39,7 +38,6 @@ object SettingsKeys {
     val collapseRests = booleanPreferencesKey("reader.collapseMultiMeasureRests")
     val keepAwake = booleanPreferencesKey("reader.keepScreenAwake.enabled")
     val layoutMode = stringPreferencesKey("reader.layoutMode") // "vertical" | "horizontal" | "page"
-    val staffSize = doublePreferencesKey("reader.staffSize")
     val showInvisible = booleanPreferencesKey("reader.showInvisibleElements")
     /**
      * Each element encodes a hidden staff address as `"<partIndex>:<staffIndexInPart>"`,
@@ -136,13 +134,6 @@ class SettingsPrefs(private val context: Context) {
     val collapseRests: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.collapseRests] ?: false }
     val keepAwake: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.keepAwake] ?: true }
     val layoutMode: Flow<String> = context.dataStore.data.map { it[SettingsKeys.layoutMode] ?: "page" }
-    /**
-     * The Reader's global default staff size. No UI writes this key — it is the device-class default, read here so
-     * the per-score bridge has a value to resolve an untouched `staffSize` against. See [ReaderDeviceDefaults].
-     */
-    val staffSize: Flow<Double> = context.dataStore.data.map {
-        it[SettingsKeys.staffSize] ?: ReaderDeviceDefaults.staffSize(context)
-    }
     val showInvisible: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showInvisible] ?: false }
     val hiddenStaves: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.hiddenStaves] ?: emptySet() }
     val clefOverrides: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.clefOverrides] ?: emptySet() }
@@ -185,7 +176,6 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setCollapseRests(v: Boolean) = context.dataStore.edit { it[SettingsKeys.collapseRests] = v }
     suspend fun setKeepAwake(v: Boolean) = context.dataStore.edit { it[SettingsKeys.keepAwake] = v }
     suspend fun setLayoutMode(v: String) = context.dataStore.edit { it[SettingsKeys.layoutMode] = v }
-    suspend fun setStaffSize(v: Double) = context.dataStore.edit { it[SettingsKeys.staffSize] = v }
     suspend fun setShowInvisible(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showInvisible] = v }
     suspend fun setHiddenStaves(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.hiddenStaves] = v }
     suspend fun setClefOverrides(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.clefOverrides] = v }
