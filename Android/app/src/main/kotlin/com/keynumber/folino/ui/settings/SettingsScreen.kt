@@ -103,7 +103,8 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // ── Reader ────────────────────────────────────────────────────────────
-        item { InspectorSectionHeader(stringResource(R.string.settings_section_reader)) }
+        // Deliberately headerless, like the iOS sheet's first Section: "Reader" is the developer's name for the
+        // feature, not a word users have met, and the group leads the screen so it needs no label to be found.
         item {
             ToggleRow(
                 icon = MetronomeIcon,

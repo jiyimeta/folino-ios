@@ -115,8 +115,7 @@
     <string name="edit_info_discard_keep">Keep editing</string>
     <string name="edit_info_discard_confirm">Discard</string>
 
-    <!-- Settings – Reader section -->
-    <string name="settings_section_reader">Reader</string>
+    <!-- Settings – Reader section (headerless: see SettingsScreen) -->
     <string name="settings_reader_metronome">Metronome</string>
     <string name="settings_reader_precount">Count-in</string>
     <string name="settings_reader_pip">Picture in Picture</string>
