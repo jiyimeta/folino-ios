@@ -510,14 +510,12 @@ Append to `ReaderPreferencesReducerTests.swift`, inside the struct:
     /// against the live default. Once the live default moved to 21/24, comparing against it would strand every
     /// previously-opened score at an explicit 28 AND would reclassify a tablet user's deliberate 24 as untouched.
     @Test func `a legacy blob demotes only the frozen android seed`() {
+        // `legacyReaderPreferencesBlob` is the shared file-scope helper in `ReaderPreferencesBridgeTests.swift` —
+        // same test target, and it already asserts that what it builds really reads as legacy.
         func legacy(_ staffSize: Double) -> String {
-            let encoded = Data(ReaderPreferencesReducer.encode(
+            legacyReaderPreferencesBlob(
                 ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: staffSize, hiddenStaves: []),
-            ).utf8)
-            var object = ((try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any]) ?? [:]
-            object.removeValue(forKey: "schemaVersion")
-            let stripped = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
-            return String(bytes: stripped, encoding: .utf8) ?? ""
+            )
         }
         #expect(ReaderPreferencesReducer.decode(legacy(28))?.staffSize == nil)
         #expect(ReaderPreferencesReducer.decode(legacy(24))?.staffSize == 24)
@@ -530,7 +528,7 @@ Append to `ReaderPreferencesReducerTests.swift`, inside the struct:
     }
 ```
 
-Add `import Foundation` to the file's import block (it needs `Data` and `JSONSerialization`).
+No new imports are needed — the helper lives in the same test target.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
