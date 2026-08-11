@@ -115,4 +115,53 @@ struct ReaderPreferencesReducerTests {
         #expect(ReaderPreferencesReducer.clearMasterVolume(touched).transposeSemitones == 5)
         #expect(ReaderPreferencesReducer.clearTranspose(touched).masterVolume == 0.4)
     }
+
+    /// iOS's `TempoModel.commitMultiplier` snaps a value visually at 100% back to "no override", so a slider that
+    /// stops at 0.9999 doesn't leave one behind — and so the two reset affordances (BPM-readout tap, slider
+    /// double-tap), which both route through `onRate(1.0f)`, actually clear. Without the snap Android persists an
+    /// explicit 1.0 and reports the score in `score_prefs` as one the user set a tempo on.
+    @Test func `a tempo at unity snaps back to untouched`() {
+        let touched = ReaderPreferencesReducer.setTempoMultiplier(base(), 1.5)
+        #expect(ReaderPreferencesReducer.setTempoMultiplier(touched, 1.0).tempoMultiplier == nil)
+        #expect(ReaderPreferencesReducer.setTempoMultiplier(touched, 0.9999).tempoMultiplier == nil)
+        #expect(ReaderPreferencesReducer.setTempoMultiplier(touched, 1.004).tempoMultiplier == nil)
+        #expect(ReaderPreferencesReducer.setTempoMultiplier(touched, 0.0).tempoMultiplier == nil)
+        // Outside the snap window a set is still an explicit choice.
+        #expect(ReaderPreferencesReducer.setTempoMultiplier(touched, 1.01).tempoMultiplier == 1.01)
+        #expect(ReaderPreferencesReducer.setTempoMultiplier(touched, 0.5).tempoMultiplier == 0.5)
+    }
+
+    /// The staff-size slider's double-tap means "I never chose a size", like every other reset affordance. It used to
+    /// write a hardcoded 28, which both marked the score touched and ignored the device default entirely.
+    @Test func `clearing staff size goes back to untouched`() {
+        let touched = ReaderPreferencesReducer.setStaffSize(base(), 18)
+        #expect(touched.staffSize == 18)
+        let cleared = ReaderPreferencesReducer.clearStaffSize(touched)
+        #expect(cleared.staffSize == nil)
+        // Clearing one scalar leaves the others alone.
+        #expect(ReaderPreferencesReducer.clearStaffSize(
+            ReaderPreferencesReducer.setMasterVolume(touched, 0.4),
+        ).masterVolume == 0.4)
+    }
+
+    /// Legacy (pre-`schemaVersion`) blobs are demoted against the seed Android actually wrote — a frozen 28.0 — not
+    /// against the live default. Once the live default moved to 21/24, comparing against it would strand every
+    /// previously-opened score at an explicit 28 AND would reclassify a tablet user's deliberate 24 as untouched.
+    @Test func `a legacy blob demotes only the frozen android seed`() {
+        /// `legacyReaderPreferencesBlob` is the shared file-scope helper in `ReaderPreferencesBridgeTests.swift` —
+        /// same test target, and it already asserts that what it builds really reads as legacy.
+        func legacy(_ staffSize: Double) -> String {
+            legacyReaderPreferencesBlob(
+                ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: staffSize, hiddenStaves: []),
+            )
+        }
+        #expect(ReaderPreferencesReducer.decode(legacy(28))?.staffSize == nil)
+        #expect(ReaderPreferencesReducer.decode(legacy(24))?.staffSize == 24)
+        #expect(ReaderPreferencesReducer.decode(legacy(21))?.staffSize == 21)
+        // A v2 blob is authoritative even at the frozen seed value.
+        let current = ReaderPreferencesReducer.encode(
+            ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 28, hiddenStaves: []),
+        )
+        #expect(ReaderPreferencesReducer.decode(current)?.staffSize == 28)
+    }
 }

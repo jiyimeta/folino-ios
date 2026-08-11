@@ -134,7 +134,7 @@ struct ReaderPreferencesRecordTests {
         #expect(record.honorLayoutBreaks == nil)
         let restored = try record.toDomain()
         #expect(restored.honorLayoutBreaks == nil)
-        #expect(restored.effectiveHonorLayoutBreaks)
+        #expect(restored.effectiveHonorLayoutBreaks(default: true))
     }
 
     @Test func `untouched scalars round trip as nil and keep the authored hidden set`() throws {
@@ -168,7 +168,7 @@ struct ReaderPreferencesRecordTests {
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            honorLayoutBreaks: ReaderPreferences.defaultHonorLayoutBreaks,
+            honorLayoutBreaks: true,
             masterVolume: ReaderPreferences.defaultMasterVolume,
             transposeSemitones: ReaderPreferences.defaultTransposeSemitones,
         )

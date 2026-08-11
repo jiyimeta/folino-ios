@@ -49,9 +49,14 @@ enum ReaderPreferencesReducer {
         return reseat(c)
     }
 
+    /// `0` is the wire's "no override" sentinel. The unity window is the deliberate exception to this type's rule
+    /// that a `set…` always records an explicit choice: it mirrors iOS `TempoModel.commitMultiplier`, where a
+    /// slider that stops visually at 100% clears the override rather than pinning one the user thought they had
+    /// released. It is also what makes Android's two reset affordances clear — both route through `onRate(1.0f)`,
+    /// not a `clear…` verb. An explicit `1.0` is therefore unrepresentable here, exactly as on iOS.
     static func setTempoMultiplier(_ p: ReaderPreferences, _ v: Double) -> ReaderPreferences {
         var c = p
-        c.tempoMultiplier = (v == 0 ? nil : v)
+        c.tempoMultiplier = (v == 0 || abs(v - 1.0) < 0.005) ? nil : v
         return reseat(c)
     }
 
@@ -64,6 +69,15 @@ enum ReaderPreferencesReducer {
     static func setTranspose(_ p: ReaderPreferences, _ v: Int) -> ReaderPreferences {
         var c = p
         c.transposeSemitones = v
+        return reseat(c)
+    }
+
+    /// Reset staff size to "the user never chose one" (`nil`), so it resolves to the current device-class default.
+    /// The Compose affordance is the slider's double-tap; it used to write a hardcoded `28.0`, which both marked the
+    /// score as configured and ignored the device default it was supposed to return to.
+    static func clearStaffSize(_ p: ReaderPreferences) -> ReaderPreferences {
+        var c = p
+        c.staffSize = nil
         return reseat(c)
     }
 
@@ -110,43 +124,40 @@ enum ReaderPreferencesReducer {
         return reseat(c)
     }
 
-    /// Decodes a stored JSON blob back into `ReaderPreferences`. Returns `nil` for empty / invalid input — the
-    /// caller treats `nil` as "no saved preferences yet" and seeds defaults.
-    ///
-    /// This is the raw decode. Any caller that knows the Reader's current global default staff size should use
-    /// `decode(_:defaultStaffSize:)` instead — see the note there on what Domain's legacy normalization cannot fix
-    /// on its own.
-    static func decode(_ json: String) -> ReaderPreferences? {
-        guard let data = json.data(using: .utf8), !data.isEmpty else { return nil }
-        return try? JSONDecoder().decode(ReaderPreferences.self, from: data)
+    /// What Android's since-removed eager seed wrote for a staff size the user never chose. `SettingsPrefs`' global
+    /// `staffSize` key has existed since `db9ca50e` and was `28.0` in every build that **shipped**. There is one
+    /// known exception: from `33dff903` (2026-06-05) to `9f9c10a4` (2026-06-10) the Display inspector's slider
+    /// wrote through `SettingsPrefs.setStaffSize` to this global key, before that commit moved it to the per-score
+    /// bridge — five days of dev-only history, not a released build; Android has not shipped to the Play Store, so
+    /// the affected population is dev/test devices only. A blob seeded from the global during that window decodes
+    /// as an explicit staff size and stays pinned. Frozen for the same reason `ReaderPreferences.LegacyStoredDefaults`
+    /// is: a migration has to keep describing the data as it was written, even after the live defaults move (which
+    /// they now have, to 21 on a phone and 24 on a tablet).
+    private enum LegacyAndroidSeed {
+        static let staffSize: Double = 28
     }
 
-    /// Decodes a stored blob and applies the one legacy correction Domain cannot make on its own.
+    /// Decodes a stored JSON blob back into `ReaderPreferences`, applying the one legacy correction Domain cannot
+    /// make on its own. Returns `nil` for empty / invalid input — the caller treats `nil` as "no saved preferences
+    /// yet" and seeds defaults.
     ///
-    /// `ReaderPreferences.init(from:)` demotes a legacy (pre-`schemaVersion`) `staffSize` to "untouched" only when it
-    /// equals the frozen constant `14` — the value iOS seeded. Android's since-removed eager seed wrote the Reader's
-    /// *global* default staff size instead (`MainActivity` passes `defaultStaffSize = prefs.staffSize`, a
-    /// user-variable setting whose initial value is `28`), so a legacy Android blob carries whatever that global was
-    /// when the score was first opened. Left alone it decodes as `.some`, permanently marking every score any Android
-    /// user has ever opened as one with an explicitly configured staff size.
+    /// `ReaderPreferences.init(from:)` demotes a legacy (pre-`schemaVersion`) `staffSize` only when it equals the
+    /// frozen constant `14`, the value iOS seeded. Android's eager seed wrote its own global instead. Left alone
+    /// such a blob decodes as `.some`, permanently marking every score any Android user has ever opened as one with
+    /// an explicitly configured staff size.
     ///
-    /// The rule mirrors the iOS v16 migration exactly — "the stored value equals the default in effect, so treat it
-    /// as untouched" — with the default supplied by the caller, because on Android it is user-variable and only this
-    /// layer knows it. Same accepted trade-off as iOS: a user who deliberately chose a size that happens to equal the
-    /// current global is reclassified as untouched. It is also approximate in the other direction — a user who has
-    /// since moved the global keeps the stored value — which errs toward preserving data.
+    /// The rule mirrors the iOS v16 migration — "the stored value equals the seed that was in effect, so treat it as
+    /// untouched" — and carries the same accepted trade-off: a user who deliberately chose 28 (the slider maximum) is
+    /// reclassified as untouched. That was already true when 28 was also the live default, so this is not a
+    /// regression.
     ///
-    /// There is no user-visible effect: a cleared `staffSize` resolves back through `effectiveStaffSize(default:)` to
-    /// the very global it was compared against, so the score renders identically. If the user later moves the global,
-    /// an untouched score follows it, which is the intent.
-    ///
-    /// A v2 blob is authoritative and is never touched.
-    static func decode(_ json: String, defaultStaffSize: Double) -> ReaderPreferences? {
-        guard var prefs = decode(json) else { return nil }
-        guard isLegacyBlob(json) else { return prefs }
-        // The legacy write path clamped as it stored, so compare against the clamped default.
-        let seeded = min(max(defaultStaffSize, ReaderPreferences.minStaffSize), ReaderPreferences.maxStaffSize)
-        guard prefs.staffSize == seeded else { return prefs }
+    /// There is no user-visible effect on a phone or tablet whose default is now 21 / 24: the score re-engraves at the
+    /// current default, which is the intent of the defaults change. A v2 blob is authoritative and is never touched.
+    static func decode(_ json: String) -> ReaderPreferences? {
+        guard let data = json.data(using: .utf8), !data.isEmpty,
+              var prefs = try? JSONDecoder().decode(ReaderPreferences.self, from: data)
+        else { return nil }
+        guard isLegacyBlob(json), prefs.staffSize == LegacyAndroidSeed.staffSize else { return prefs }
         prefs.staffSize = nil
         return prefs
     }

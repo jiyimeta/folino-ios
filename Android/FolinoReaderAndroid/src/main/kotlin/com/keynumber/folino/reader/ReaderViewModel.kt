@@ -143,7 +143,14 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     // layoutMode plumbing already respects); the app collects the DataStore
     // display flows, assembles a LayoutOptions, and pushes it in via
     // [setLayoutOptions]. The recompute flow keys off this + the score handle.
-    private val _layoutOptions = MutableStateFlow(LayoutOptions.DEFAULT)
+    // Seeded from this device's default so the first composed frame does not engrave at the placeholder size and then
+    // reflow when the real per-score preferences arrive from the bridge.
+    private val _layoutOptions = MutableStateFlow(
+        LayoutOptions.DEFAULT.copy(
+            staffSize = ReaderDeviceDefaults.staffSize(app),
+            honorLayoutBreaks = ReaderDeviceDefaults.honorLayoutBreaks(app),
+        ),
+    )
     val layoutOptions: StateFlow<LayoutOptions> = _layoutOptions.asStateFlow()
 
     // Viewport-derived layout width (mm) for the wrapping (VERTICAL) layout, pushed via

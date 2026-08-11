@@ -318,6 +318,7 @@ struct ReaderViewModelTests {
             gateway: FakeScoreFileGateway(),
             scoresDirectory: URL(filePath: "/tmp"),
             defaultStaffSize: 14,
+            defaultHonorLayoutBreaks: true,
         )
         await vm.load()
         // Untouched: nothing stored, so it reads as the default without being marked as a user choice.

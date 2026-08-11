@@ -24,8 +24,16 @@ public final class ReaderPreferencesBridge {
 
     /// The Reader's current global default staff size, handed in by `open`. Retained because `staffSize` is Optional
     /// on the model (`nil` = the user never chose one) while the wire is a resolved scalar — this is the value the
-    /// projection resolves against. Kept in sync only by `open`, which is also where the Reader learns it.
-    @ObservationIgnored private var openDefaultStaffSize: Double = 14
+    /// projection resolves against. Kept in sync only by `open`, which is also where the Reader learns it. The `21`
+    /// here is only a placeholder for the sliver of time before the first `open` call runs (this bridge is
+    /// Android-only, so it is the phone pair, not iOS's `14`); every real read goes through `open`, which overwrites
+    /// it before any `republish()`.
+    @ObservationIgnored private var openDefaultStaffSize: Double = 21
+    /// The same, for the break policy. Both defaults are device-class-dependent on Android
+    /// (`ReaderDeviceDefaults.kt`), which is why neither can be a constant here. `false` is the same kind of
+    /// pre-`open` placeholder as `openDefaultStaffSize` above — the phone value, overwritten by `open` before any
+    /// real use.
+    @ObservationIgnored private var openDefaultHonorLayoutBreaks = false
 
     /// Monotonic change token folded into `state` on each republish. The per-staff collections (hidden / clef /
     /// program / volume) are not part of `ReaderPreferencesStateWire`, so a collection-only mutation would
@@ -58,16 +66,17 @@ public final class ReaderPreferencesBridge {
     /// every open would make every opened score look like one the user configured. The first real mutation persists
     /// it via `mutate`.
     ///
-    /// `defaultStaffSize` is the Reader's current global default. It is not stored into the preferences — it is
-    /// retained as the value the wire projection resolves an untouched `staffSize` against, and it is what a legacy
-    /// blob's eagerly-seeded staff size is demoted against (see `decode(_:defaultStaffSize:)`; that correction is
-    /// held in memory like the rest of the seed, so it costs no write until the user actually changes something).
+    /// `defaultStaffSize` and `defaultHonorLayoutBreaks` are the Reader's current device-class defaults. Neither is
+    /// stored into the preferences — they are retained as the values the wire projection resolves the matching
+    /// untouched fields against. The legacy demotion does not use them: it compares against the frozen seed Android
+    /// actually wrote (see `ReaderPreferencesReducer.decode(_:)`).
     @WireletExpose
-    public func open(scoreId: String, defaultStaffSize: Double) {
+    public func open(scoreId: String, defaultStaffSize: Double, defaultHonorLayoutBreaks: Bool) {
         self.scoreId = scoreId
         openDefaultStaffSize = defaultStaffSize
+        openDefaultHonorLayoutBreaks = defaultHonorLayoutBreaks
         let json = store.loadJSON(scoreId: scoreId)
-        if let decoded = ReaderPreferencesReducer.decode(json, defaultStaffSize: defaultStaffSize) {
+        if let decoded = ReaderPreferencesReducer.decode(json) {
             prefs = decoded
         } else {
             prefs = ReaderPreferences(scoreItemID: ScoreItemID(), hiddenStaves: [])
@@ -135,6 +144,13 @@ public final class ReaderPreferencesBridge {
     }
 
     // MARK: - Reset verbs (Kotlin -> Swift)
+
+    /// Reset affordance for staff size (the slider's double-tap). Writes "the user never chose one" rather than a
+    /// number, so the score follows the device-class default. Its predecessor wrote a hardcoded `28.0`.
+    @WireletExpose
+    public func clearStaffSize() {
+        mutate { ReaderPreferencesReducer.clearStaffSize($0) }
+    }
 
     /// Reset affordance for master volume (the slider's double-tap). Writes "the user never chose one" rather than
     /// an explicit unity, matching iOS `MasterVolumeModel.resetValue` — otherwise a reset on Android would report the
@@ -232,7 +248,7 @@ public final class ReaderPreferencesBridge {
         revision &+= 1
         state = ReaderPreferencesStateWire(
             staffSize: prefs.effectiveStaffSize(default: openDefaultStaffSize),
-            honorLayoutBreaks: prefs.effectiveHonorLayoutBreaks,
+            honorLayoutBreaks: prefs.effectiveHonorLayoutBreaks(default: openDefaultHonorLayoutBreaks),
             masterVolume: prefs.effectiveMasterVolume,
             tempoMultiplier: prefs.tempoMultiplier ?? 0,
             a4ReferenceHz: prefs.a4ReferenceHz ?? 0,

@@ -14,7 +14,7 @@ struct AnalyticsBridgeScorePrefsTests {
     @Test func `changed blob builds a score_prefs wire with bucketed width`() {
         let prefs = ReaderPreferencesReducer.setStaffSize(untouched(), 18)
         let json = ReaderPreferencesReducer.encode(prefs)
-        let wire = AnalyticsBridge().scorePrefs(prefsJson: json, widthDp: 507, defaultStaffSize: 28)
+        let wire = AnalyticsBridge().scorePrefs(prefsJson: json, widthDp: 507)
         #expect(wire.name == "score_prefs")
         #expect(param(wire, "staff_size")?.longValue == 18)
         #expect(param(wire, "screen_width_pt")?.longValue == 430)
@@ -22,9 +22,9 @@ struct AnalyticsBridgeScorePrefsTests {
 
     @Test func `untouched blob and invalid json return the skip wire`() {
         let blob = ReaderPreferencesReducer.encode(untouched())
-        #expect(AnalyticsBridge().scorePrefs(prefsJson: blob, widthDp: 430, defaultStaffSize: 28).name.isEmpty)
-        #expect(AnalyticsBridge().scorePrefs(prefsJson: "not json", widthDp: 430, defaultStaffSize: 28).name.isEmpty)
-        #expect(AnalyticsBridge().scorePrefs(prefsJson: "", widthDp: 430, defaultStaffSize: 28).name.isEmpty)
+        #expect(AnalyticsBridge().scorePrefs(prefsJson: blob, widthDp: 430).name.isEmpty)
+        #expect(AnalyticsBridge().scorePrefs(prefsJson: "not json", widthDp: 430).name.isEmpty)
+        #expect(AnalyticsBridge().scorePrefs(prefsJson: "", widthDp: 430).name.isEmpty)
     }
 
     /// The carry-forward from Task 10, widened by the final review. Every score any Android user has ever opened
@@ -35,14 +35,14 @@ struct AnalyticsBridgeScorePrefsTests {
         var prefs = ReaderPreferencesReducer.setStaffSize(untouched(), 28)
         prefs = ReaderPreferencesReducer.setTranspose(prefs, 2)
         let wire = AnalyticsBridge()
-            .scorePrefs(prefsJson: legacyReaderPreferencesBlob(prefs), widthDp: 430, defaultStaffSize: 28)
+            .scorePrefs(prefsJson: legacyReaderPreferencesBlob(prefs), widthDp: 430)
         #expect(wire.name == "score_prefs")
         #expect(param(wire, "transpose_semitones")?.longValue == 2)
         #expect(param(wire, "staff_size") == nil)
 
         // With the seeded staff size the only thing stored, the whole row is untouched and emits no event at all.
         let seedOnly = legacyReaderPreferencesBlob(ReaderPreferencesReducer.setStaffSize(untouched(), 28))
-        #expect(AnalyticsBridge().scorePrefs(prefsJson: seedOnly, widthDp: 430, defaultStaffSize: 28).name.isEmpty)
+        #expect(AnalyticsBridge().scorePrefs(prefsJson: seedOnly, widthDp: 430).name.isEmpty)
     }
 
     /// The case the "equals the current global" rule got wrong: a user who moved the global slider after opening the
@@ -53,13 +53,13 @@ struct AnalyticsBridgeScorePrefsTests {
         var prefs = ReaderPreferencesReducer.setStaffSize(untouched(), 18)
         prefs = ReaderPreferencesReducer.setTranspose(prefs, 2)
         let wire = AnalyticsBridge()
-            .scorePrefs(prefsJson: legacyReaderPreferencesBlob(prefs), widthDp: 430, defaultStaffSize: 28)
+            .scorePrefs(prefsJson: legacyReaderPreferencesBlob(prefs), widthDp: 430)
         #expect(wire.name == "score_prefs")
         #expect(param(wire, "transpose_semitones")?.longValue == 2)
         #expect(param(wire, "staff_size") == nil)
 
         let seedOnly = legacyReaderPreferencesBlob(ReaderPreferencesReducer.setStaffSize(untouched(), 18))
-        #expect(AnalyticsBridge().scorePrefs(prefsJson: seedOnly, widthDp: 430, defaultStaffSize: 28).name.isEmpty)
+        #expect(AnalyticsBridge().scorePrefs(prefsJson: seedOnly, widthDp: 430).name.isEmpty)
     }
 
     /// The boundary of the rule: once a blob carries the `schemaVersion` marker its `staffSize` is authoritative —
@@ -67,12 +67,12 @@ struct AnalyticsBridgeScorePrefsTests {
     /// even when it happens to equal the global default.
     @Test func `a v2 blob reports its staff size even when it equals the global default`() {
         let chosen = ReaderPreferencesReducer.encode(ReaderPreferencesReducer.setStaffSize(untouched(), 18))
-        let wire = AnalyticsBridge().scorePrefs(prefsJson: chosen, widthDp: 430, defaultStaffSize: 28)
+        let wire = AnalyticsBridge().scorePrefs(prefsJson: chosen, widthDp: 430)
         #expect(wire.name == "score_prefs")
         #expect(param(wire, "staff_size")?.longValue == 18)
 
         let atDefault = ReaderPreferencesReducer.encode(ReaderPreferencesReducer.setStaffSize(untouched(), 28))
-        let atDefaultWire = AnalyticsBridge().scorePrefs(prefsJson: atDefault, widthDp: 430, defaultStaffSize: 28)
+        let atDefaultWire = AnalyticsBridge().scorePrefs(prefsJson: atDefault, widthDp: 430)
         #expect(atDefaultWire.name == "score_prefs")
         #expect(param(atDefaultWire, "staff_size")?.longValue == 28)
     }
@@ -83,7 +83,7 @@ struct AnalyticsBridgeScorePrefsTests {
         var prefs = ReaderPreferencesReducer.setMasterVolume(untouched(), 1.0)
         prefs = ReaderPreferencesReducer.setStaffHidden(prefs, part: 0, staff: 0, hidden: true)
         let wire = AnalyticsBridge()
-            .scorePrefs(prefsJson: ReaderPreferencesReducer.encode(prefs), widthDp: 1024, defaultStaffSize: 28)
+            .scorePrefs(prefsJson: ReaderPreferencesReducer.encode(prefs), widthDp: 1024)
         #expect(param(wire, "master_volume_pct")?.longValue == 100)
         #expect(param(wire, "hidden_staff_count")?.longValue == 1)
         #expect(param(wire, "screen_width_pt")?.longValue == 1024)
