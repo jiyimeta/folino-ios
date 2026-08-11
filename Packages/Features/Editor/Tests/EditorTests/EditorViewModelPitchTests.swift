@@ -62,6 +62,55 @@ struct EditorViewModelPitchTests {
         #expect(note.accidental == nil)
     }
 
+    // MARK: - tie chains
+
+    @Test func `shiftPitch moves every note of the tie chain, not just the selected one`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.tiedC4Chain(length: 3))
+        // Selected in the MIDDLE, so the walk has to go both ways.
+        vm.select(.note(EditorFixtures.noteID(element: 2)))
+
+        vm.shiftPitch(bySemitones: 1)
+
+        for element in 1 ... 3 {
+            let note = try #require(vm.score?[EditorFixtures.noteID(element: element)])
+            #expect(note.pitch == 61)
+            #expect(note.tpc == PitchSpelling.shiftedTpc(from: 60, priorTpc: 14, to: 61, in: 0))
+        }
+        // The ♯ belongs to the chain's head; MuseScore prints nothing on the far side of a tie.
+        #expect(vm.score?[EditorFixtures.noteID(element: 1)]?.accidental == .sharp)
+        #expect(vm.score?[EditorFixtures.noteID(element: 2)]?.accidental == nil)
+        #expect(vm.score?[EditorFixtures.noteID(element: 3)]?.accidental == nil)
+        // The untied C4 that follows the chain is a different note and stays where it was.
+        #expect(vm.score?[EditorFixtures.noteID(element: 4)]?.pitch == 60)
+        #expect(vm.selectedItem == .note(EditorFixtures.noteID(element: 2)))
+    }
+
+    @Test func `shiftOctave moves every note of the tie chain`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.tiedC4Chain(length: 3))
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+
+        vm.shiftOctave(by: 1)
+
+        for element in 1 ... 3 {
+            #expect(vm.score?[EditorFixtures.noteID(element: element)]?.pitch == 72)
+        }
+        #expect(vm.score?[EditorFixtures.noteID(element: 4)]?.pitch == 60)
+    }
+
+    @Test func `moving a chain is one undo step`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.tiedC4Chain(length: 3))
+        vm.select(.note(EditorFixtures.noteID(element: 2)))
+
+        vm.shiftPitch(bySemitones: 1)
+        vm.undo()
+
+        #expect(!vm.canUndo)
+        #expect(vm.score == EditorFixtures.tiedC4Chain(length: 3))
+    }
+
     // MARK: - setAccidental
 
     @Test func `setAccidental sharp respells, and clearing the glyph can't outlive what the bar needs`() throws {
