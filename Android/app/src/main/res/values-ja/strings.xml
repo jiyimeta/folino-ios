@@ -1,10 +1,115 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Library (wording mirrors the iOS Library / ScoreUI string catalogs) -->
+    <string name="library_title">ライブラリ</string>
+    <string name="library_empty_title">まだ楽譜がありません</string>
+    <string name="library_empty_hint">最初の楽譜を取り込んで始めましょう</string>
+    <string name="library_import">楽譜を取り込む</string>
+    <string name="library_deleted">楽譜を削除しました</string>
+    <string name="library_undo">元に戻す</string>
+    <string name="nav_library">ライブラリ</string>
+    <string name="nav_settings">設定</string>
+    <string name="nav_all_scores">すべての楽譜</string>
+    <string name="nav_recent">最近開いた</string>
+    <string name="recent_empty">まだ開いた楽譜がありません</string>
+    <string name="recent_today">今日</string>
+    <string name="recent_this_week">今週</string>
+    <string name="recent_earlier">それ以前</string>
+    <string name="nav_open_menu">ナビゲーションメニューを開く</string>
+    <string name="library_recently_deleted">最近削除した楽譜</string>
+    <string name="more">その他</string>
+    <string name="cancel">キャンセル</string>
+    <string name="recently_deleted_title">最近削除した楽譜</string>
+    <string name="recently_deleted_restore">復元</string>
+    <string name="recently_deleted_delete">完全に削除</string>
+    <string name="recently_deleted_delete_confirm_title">「%1$s」を完全に削除しますか？</string>
+    <string name="recently_deleted_delete_bulk_confirm_title">%1$d 件の楽譜を完全に削除しますか？</string>
+    <string name="recently_deleted_delete_confirm_message">この楽譜とファイルがこの端末から削除されます。</string>
+    <string name="recently_deleted_empty_title">ゴミ箱は空です</string>
+    <string name="recently_deleted_empty_hint">削除した楽譜がここに表示されます</string>
+    <string name="nav_playlists">プレイリスト</string>
+    <string name="playlists_title">プレイリスト</string>
+    <string name="playlists_empty_title">プレイリストなし</string>
+    <string name="playlists_empty_hint">+ をタップしてプレイリストを作成します。</string>
+    <string name="playlists_create">新しいプレイリスト</string>
+    <string name="playlists_name_hint">プレイリスト名</string>
+    <string name="playlists_member_count">%1$d 件</string>
+    <string name="playlists_delete">プレイリストを削除</string>
+    <string name="playlists_delete_confirm_title">「%1$s」を削除しますか？</string>
+    <string name="playlists_delete_confirm_message">楽譜はライブラリに残ります。</string>
+    <string name="playlists_rename">名前を変更</string>
+    <string name="playlist_remove_from">プレイリストから削除</string>
+    <string name="playlist_reorder_handle">並び替え</string>
+    <string name="add_to_playlist">プレイリストに追加</string>
+    <string name="create">作成</string>
+    <string name="rename">名前を変更</string>
+    <string name="library_delete">削除</string>
+    <string name="nav_tags">タグ</string>
+    <string name="tags_title">タグ</string>
+    <string name="tags_empty_title">タグなし</string>
+    <string name="tags_empty_hint">+ をタップしてタグを作成します。</string>
+    <string name="tags_create">新しいタグ</string>
+    <string name="tags_name_hint">タグ名</string>
+    <string name="tags_member_count">%1$d 件</string>
+    <string name="tags_delete">タグを削除</string>
+    <string name="tags_delete_confirm_title">「%1$s」を削除しますか？</string>
+    <string name="tags_delete_confirm_message">楽譜はライブラリに残ります。</string>
+    <string name="tags_rename">名前を変更</string>
+    <string name="edit_tags">タグを編集</string>
+    <string name="edit_tags_apply">適用</string>
+    <string name="tag_add">タグ</string>
+    <string name="tag_remove_from">タグから外す</string>
+    <string name="export">書き出す</string>
+    <string name="export_format_audio">オーディオ (M4A)</string>
+    <string name="export_original_badge">元の形式</string>
+    <string name="export_failed">書き出しに失敗しました</string>
+    <string name="search_hint">検索</string>
+    <string name="search_no_results">該当なし</string>
+    <string name="nav_favorites">スター付き</string>
+    <string name="favorites_empty_title">スター付きの楽譜がありません</string>
+    <string name="favorites_empty_hint">スターを付けた楽譜がここに表示されます。</string>
+    <string name="favorite_add">スターを付ける</string>
+    <string name="favorite_remove">スターを外す</string>
+    <string name="favorite_indicator">スター付き</string>
+    <string name="import_failed">このファイルを取り込めませんでした。</string>
+
+    <!-- Share sheet import -->
+    <string name="share_import_count">%d 件の楽譜を取り込む</string>
+    <string name="share_unsupported_skipped">対応していないファイル %d 件はスキップされます</string>
+    <string name="share_add_to">追加先</string>
+    <string name="share_dest_library">ライブラリ</string>
+    <string name="share_dest_existing">既存のプレイリスト</string>
+    <string name="share_dest_new">新しいプレイリスト</string>
+    <string name="share_new_playlist_name">プレイリスト名</string>
+    <string name="share_save">保存</string>
+    <string name="share_save_and_open">保存して開く</string>
+    <string name="share_no_supported_files">取り込める楽譜ファイルがありません。</string>
+    <string name="share_imported_count">%d 件の楽譜を取り込みました。</string>
+    <string name="share_nothing_imported">取り込まれませんでした。</string>
+
+    <!-- Edit score info -->
+    <string name="edit_info">情報を編集</string>
+    <string name="edit_info_save">保存</string>
+    <string name="edit_info_section_credits">クレジット</string>
+    <string name="edit_info_section_info">その他の情報</string>
+    <string name="edit_info_field_title">タイトル</string>
+    <string name="edit_info_field_subtitle">サブタイトル</string>
+    <string name="edit_info_field_composer">作曲者</string>
+    <string name="edit_info_field_arranger">編曲者</string>
+    <string name="edit_info_field_lyricist">作詞者</string>
+    <string name="edit_info_field_copyright">著作権</string>
+    <string name="edit_info_info_source">ソース</string>
+    <string name="edit_info_info_date_added">追加日時</string>
+    <string name="edit_info_source_unknown">不明</string>
+    <string name="edit_info_close">閉じる</string>
+    <string name="edit_info_discard_title">変更を破棄しますか？</string>
+    <string name="edit_info_discard_keep">編集を続ける</string>
+    <string name="edit_info_discard_confirm">破棄</string>
+
     <!-- Repurposed: now mirrors iOS settings.playback.a4Reference.title -->
     <string name="settings_a4_reference">既定キャリブレーション</string>
 
     <!-- Settings – Reader section -->
-    <string name="settings_section_reader">Reader</string>
     <string name="settings_reader_metronome">メトロノーム</string>
     <string name="settings_reader_precount">カウントイン</string>
     <string name="settings_reader_pip">ピクチャインピクチャ</string>
@@ -33,6 +138,8 @@
     <string name="settings_privacy_title">プライバシー</string>
     <string name="settings_privacy_crash_title">クラッシュレポートを送信</string>
     <string name="settings_privacy_crash_description">匿名のクラッシュ診断を共有して不具合の修正に役立てます。個人とは結び付けられません。</string>
+    <string name="settings_privacy_analytics_title">利用状況の分析を共有</string>
+    <string name="settings_privacy_analytics_description">匿名の利用傾向を共有して folino の改善に役立てます。楽譜の内容が収集されることはありません。</string>
 
     <!-- Settings – A4 description -->
     <string name="reader_settings_a4_description">すべての楽譜の再生に適用される基準です。楽譜ごとに上書きできます。</string>

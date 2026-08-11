@@ -12,9 +12,10 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
         self.descriptions = descriptions
     }
 
-    /// Inject a `Locale` into `Decoder.userInfo` under this key to override the default `Locale.current` lookup. Tests
-    /// use this; production code can leave `userInfo` empty.
-    static let localeUserInfoKey: CodingUserInfoKey = // swiftlint:disable:next force_unwrapping
+    /// Inject a `Locale` into `Decoder.userInfo` under this key to override the default `Locale.current` lookup.
+    /// Android must set it — the JNI library's `Locale.current` reflects the Swift runtime's environment, not the
+    /// device language, so the host passes Android's own language tag down. iOS can leave `userInfo` empty.
+    public static let localeUserInfoKey: CodingUserInfoKey = // swiftlint:disable:next force_unwrapping
         .init(rawValue: "VersionHistoryEntry.locale")!
 
     private enum CodingKeys: String, CodingKey {
@@ -55,7 +56,7 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
         let entries = try container.decode([LocalizedDescription].self, forKey: .descriptions)
         let locale = decoder.userInfo[Self.localeUserInfoKey] as? Locale ?? .current
         let lang = locale.language.languageCode?.identifier
-        let script = locale.language.script?.identifier
+        let script = locale.language.script?.identifier ?? Self.impliedScript(of: locale, language: lang)
         descriptions = entries.map { entry in
             switch (lang, script) {
             case ("ja", _): entry.ja
@@ -64,6 +65,20 @@ public struct VersionHistoryEntry: Equatable, Identifiable, Sendable, Decodable 
             case ("zh", "Hant"): entry.zhHant ?? entry.en
             default: entry.en
             }
+        }
+    }
+
+    /// The script a Chinese locale means when it doesn't spell one out. A tag like `zh-CN` carries the script only
+    /// through CLDR's likely-subtags, which `Locale` resolves on Apple platforms but not necessarily elsewhere —
+    /// Android hands us whatever `java.util.Locale.getDefault().toLanguageTag()` produced. Deriving it from the
+    /// region here keeps both platforms on one rule instead of leaving Simplified/Traditional users on English.
+    private static func impliedScript(of locale: Locale, language: String?) -> String? {
+        guard language == "zh" else {
+            return nil
+        }
+        return switch locale.region?.identifier {
+        case "TW", "HK", "MO": "Hant"
+        default: "Hans"
         }
     }
 }

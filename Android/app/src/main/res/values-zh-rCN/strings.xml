@@ -1,10 +1,115 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Library (wording mirrors the iOS Library / ScoreUI string catalogs) -->
+    <string name="library_title">资料库</string>
+    <string name="library_empty_title">还没有乐谱</string>
+    <string name="library_empty_hint">导入第一份乐谱开始使用吧</string>
+    <string name="library_import">导入乐谱</string>
+    <string name="library_deleted">已删除乐谱</string>
+    <string name="library_undo">撤消</string>
+    <string name="nav_library">资料库</string>
+    <string name="nav_settings">设置</string>
+    <string name="nav_all_scores">所有乐谱</string>
+    <string name="nav_recent">最近打开</string>
+    <string name="recent_empty">还没有打开过乐谱</string>
+    <string name="recent_today">今天</string>
+    <string name="recent_this_week">本周</string>
+    <string name="recent_earlier">更早</string>
+    <string name="nav_open_menu">打开导航菜单</string>
+    <string name="library_recently_deleted">最近删除</string>
+    <string name="more">更多</string>
+    <string name="cancel">取消</string>
+    <string name="recently_deleted_title">最近删除</string>
+    <string name="recently_deleted_restore">恢复</string>
+    <string name="recently_deleted_delete">永久删除</string>
+    <string name="recently_deleted_delete_confirm_title">永久删除「%1$s」？</string>
+    <string name="recently_deleted_delete_bulk_confirm_title">永久删除 %1$d 份乐谱？</string>
+    <string name="recently_deleted_delete_confirm_message">此乐谱及其文件将从此设备中移除。</string>
+    <string name="recently_deleted_empty_title">回收站是空的</string>
+    <string name="recently_deleted_empty_hint">删除的乐谱会显示在这里</string>
+    <string name="nav_playlists">播放列表</string>
+    <string name="playlists_title">播放列表</string>
+    <string name="playlists_empty_title">暂无播放列表</string>
+    <string name="playlists_empty_hint">点按 + 创建播放列表。</string>
+    <string name="playlists_create">新建播放列表</string>
+    <string name="playlists_name_hint">播放列表名称</string>
+    <string name="playlists_member_count">%1$d 份乐谱</string>
+    <string name="playlists_delete">删除播放列表</string>
+    <string name="playlists_delete_confirm_title">要删除「%1$s」吗？</string>
+    <string name="playlists_delete_confirm_message">乐谱仍会保留在资料库中。</string>
+    <string name="playlists_rename">重命名</string>
+    <string name="playlist_remove_from">从播放列表移除</string>
+    <string name="playlist_reorder_handle">重新排序</string>
+    <string name="add_to_playlist">添加到播放列表</string>
+    <string name="create">创建</string>
+    <string name="rename">重命名</string>
+    <string name="library_delete">删除</string>
+    <string name="nav_tags">标签</string>
+    <string name="tags_title">标签</string>
+    <string name="tags_empty_title">暂无标签</string>
+    <string name="tags_empty_hint">点按 + 创建标签。</string>
+    <string name="tags_create">新建标签</string>
+    <string name="tags_name_hint">标签名称</string>
+    <string name="tags_member_count">%1$d 份乐谱</string>
+    <string name="tags_delete">删除标签</string>
+    <string name="tags_delete_confirm_title">要删除「%1$s」吗？</string>
+    <string name="tags_delete_confirm_message">乐谱仍会保留在资料库中。</string>
+    <string name="tags_rename">重命名</string>
+    <string name="edit_tags">编辑标签</string>
+    <string name="edit_tags_apply">应用</string>
+    <string name="tag_add">标签</string>
+    <string name="tag_remove_from">从标签移除</string>
+    <string name="export">导出</string>
+    <string name="export_format_audio">音频 (M4A)</string>
+    <string name="export_original_badge">原始格式</string>
+    <string name="export_failed">导出失败</string>
+    <string name="search_hint">搜索</string>
+    <string name="search_no_results">无结果</string>
+    <string name="nav_favorites">已加星标</string>
+    <string name="favorites_empty_title">还没有加星标的乐谱</string>
+    <string name="favorites_empty_hint">加星标的乐谱会显示在这里。</string>
+    <string name="favorite_add">加星标</string>
+    <string name="favorite_remove">取消星标</string>
+    <string name="favorite_indicator">已加星标</string>
+    <string name="import_failed">无法导入此文件。</string>
+
+    <!-- Share sheet import -->
+    <string name="share_import_count">导入 %d 份乐谱</string>
+    <string name="share_unsupported_skipped">将跳过 %d 个不支持的文件</string>
+    <string name="share_add_to">添加到</string>
+    <string name="share_dest_library">资料库</string>
+    <string name="share_dest_existing">已有的播放列表</string>
+    <string name="share_dest_new">新建播放列表</string>
+    <string name="share_new_playlist_name">播放列表名称</string>
+    <string name="share_save">保存</string>
+    <string name="share_save_and_open">保存并打开</string>
+    <string name="share_no_supported_files">没有可导入的乐谱文件。</string>
+    <string name="share_imported_count">已导入 %d 份乐谱。</string>
+    <string name="share_nothing_imported">未导入任何内容。</string>
+
+    <!-- Edit score info -->
+    <string name="edit_info">编辑信息</string>
+    <string name="edit_info_save">保存</string>
+    <string name="edit_info_section_credits">制作信息</string>
+    <string name="edit_info_section_info">其他信息</string>
+    <string name="edit_info_field_title">标题</string>
+    <string name="edit_info_field_subtitle">副标题</string>
+    <string name="edit_info_field_composer">作曲</string>
+    <string name="edit_info_field_arranger">编曲</string>
+    <string name="edit_info_field_lyricist">作词</string>
+    <string name="edit_info_field_copyright">版权</string>
+    <string name="edit_info_info_source">来源</string>
+    <string name="edit_info_info_date_added">添加日期</string>
+    <string name="edit_info_source_unknown">未知</string>
+    <string name="edit_info_close">关闭</string>
+    <string name="edit_info_discard_title">放弃更改？</string>
+    <string name="edit_info_discard_keep">继续编辑</string>
+    <string name="edit_info_discard_confirm">放弃</string>
+
     <!-- Repurposed: now mirrors iOS settings.playback.a4Reference.title -->
     <string name="settings_a4_reference">默认校准</string>
 
     <!-- Settings – Reader section -->
-    <string name="settings_section_reader">Reader</string>
     <string name="settings_reader_metronome">节拍器</string>
     <string name="settings_reader_precount">预备拍</string>
     <string name="settings_reader_pip">画中画</string>
@@ -17,22 +122,24 @@
     <string name="settings_reader_auto_follow">自动滚动</string>
     <string name="settings_reader_page_turn_buttons">翻页按钮</string>
     <string name="settings_reader_page_turn_buttons_footer">即使关闭，仍可滑动翻页。</string>
-    <string name="settings_reader_repeat">Repeat</string>
+    <string name="settings_reader_repeat">重复</string>
     <string name="settings_reader_display_mode">显示模式</string>
     <string name="settings_layout_vertical">垂直滚动</string>
     <string name="settings_layout_horizontal">水平滚动</string>
     <string name="settings_layout_page">翻页</string>
     <string name="settings_reader_high_quality_audio">高品质音源</string>
-    <string name="settings_reader_continuation_footer">开启 Repeat（单曲或 A–B）时，将优先执行，不会自动播放下一首乐谱。</string>
-    <string name="settings_playlist_continuation">Playlist</string>
-    <string name="playlist_continuation_off">Off</string>
-    <string name="playlist_continuation_play_through">Continuous</string>
-    <string name="playlist_continuation_loop">Repeat All</string>
+    <string name="settings_reader_continuation_footer">开启重复（单曲或 A–B）时，将优先执行，不会自动播放下一首乐谱。</string>
+    <string name="settings_playlist_continuation">播放列表</string>
+    <string name="playlist_continuation_off">关闭</string>
+    <string name="playlist_continuation_play_through">连续播放</string>
+    <string name="playlist_continuation_loop">全部重复</string>
 
     <!-- Settings – Privacy section -->
     <string name="settings_privacy_title">隐私</string>
     <string name="settings_privacy_crash_title">发送崩溃报告</string>
     <string name="settings_privacy_crash_description">共享匿名崩溃诊断信息以帮助修复缺陷。绝不与您关联。</string>
+    <string name="settings_privacy_analytics_title">共享使用情况分析</string>
+    <string name="settings_privacy_analytics_description">共享匿名使用趋势以帮助改进 folino。绝不会收集乐谱的内容。</string>
 
     <!-- Settings – A4 description -->
     <string name="reader_settings_a4_description">应用于所有乐谱的基准音。可按乐谱单独覆盖。</string>

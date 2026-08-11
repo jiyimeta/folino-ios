@@ -80,6 +80,28 @@ struct VersionHistoryEntryTests {
         #expect(entry.descriptions == ["新增 X（繁）"])
     }
 
+    /// A locale carrying only a region — what Android's `Locale.getDefault().toLanguageTag()` gives us for Chinese —
+    /// has to resolve to a script anyway, or Simplified and Traditional readers both fall through to English.
+    @Test(arguments: [("zh-CN", "新增 X"), ("zh-SG", "新增 X"), ("zh-TW", "新增 X（繁）"), ("zh-HK", "新增 X（繁）")])
+    func `infers chinese script from region`(tag: String, expected: String) throws {
+        let json = #"""
+        {
+          "version": "1.2.3",
+          "descriptions": [
+            {
+              "en": "Added X", "ja": "Xを追加",
+              "zh-Hans": "新增 X", "zh-Hant": "新增 X（繁）", "ko": "X 추가"
+            }
+          ]
+        }
+        """#
+        let decoder = JSONDecoder()
+        decoder.userInfo[VersionHistoryEntry.localeUserInfoKey] = Locale(identifier: tag)
+        let entry = try decoder.decode(VersionHistoryEntry.self, from: Data(json.utf8))
+
+        #expect(entry.descriptions == [expected])
+    }
+
     @Test func `decodes korean when locale is ko`() throws {
         let json = #"""
         {

@@ -172,9 +172,10 @@ public struct ReaderRootScreen: View {
         editingHost: ReaderEditingHost? = nil,
         editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
     ) {
-        // Seed the device-class default at construction time. The view model only uses this if no persisted record
-        // exists.
-        let initialDefault: Double = 14 // TBD: device-class override (follow-up)
+        // Seed the device-class defaults at construction time. The view model only uses these if no persisted record
+        // exists — a stored value, including one equal to the default, always wins.
+        let deviceStaffSize = ReaderDeviceDefaults.staffSize
+        let deviceHonorLayoutBreaks = ReaderDeviceDefaults.honorLayoutBreaks
         _viewModel = State(
             wrappedValue: ReaderViewModel(
                 scoreItem: scoreItem,
@@ -185,7 +186,8 @@ public struct ReaderRootScreen: View {
                 metadataReader: metadataReader,
                 annotationCoordinator: annotationCoordinator,
                 scoresDirectory: scoresDirectory,
-                defaultStaffSize: initialDefault,
+                defaultStaffSize: deviceStaffSize,
+                defaultHonorLayoutBreaks: deviceHonorLayoutBreaks,
                 playbackController: playbackController,
                 pdfPlaybackParser: pdfPlaybackParser,
                 pdfConversion: pdfConversion,

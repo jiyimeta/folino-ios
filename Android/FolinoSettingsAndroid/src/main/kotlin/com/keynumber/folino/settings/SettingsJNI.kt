@@ -21,10 +21,17 @@ object SettingsJNI {
      * them, resolves localized descriptions, and re-encodes the result as
      * a wirelet-format `VersionHistoryWireList` payload. Returns the
      * encoded bytes (decode via [VersionHistoryWireListCodec]).
+     *
+     * [languageTag] is an IETF BCP 47 tag (`Locale.getDefault().toLanguageTag()`). Swift picks the
+     * translation from it because the descriptions are localized before they cross the wire, and the
+     * native library's own `Locale.current` reports the Swift runtime's environment rather than the
+     * device language — without this every non-English device got the English release notes.
      */
-    fun nativeLoadVersionHistory(ymlBytes: ByteArray): ByteArray {
+    fun nativeLoadVersionHistory(ymlBytes: ByteArray, languageTag: String): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
-        return SwiftJavaJNI.nativeLoadVersionHistory(SwiftData.fromByteArray(ymlBytes, arena), arena).toByteArray()
+        return SwiftJavaJNI
+            .nativeLoadVersionHistory(SwiftData.fromByteArray(ymlBytes, arena), languageTag, arena)
+            .toByteArray()
     }
 
     /**

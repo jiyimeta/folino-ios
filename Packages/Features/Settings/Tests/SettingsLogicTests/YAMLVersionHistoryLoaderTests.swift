@@ -73,4 +73,36 @@ struct YAMLVersionHistoryLoaderTests {
         let list = try VersionHistoryWireList(decoding: payload)
         #expect(list.entries.isEmpty)
     }
+
+    @Test func `resolves descriptions in the requested locale`() throws {
+        let entries = try YAMLVersionHistoryLoader(data: Data(sampleYAML.utf8), locale: Locale(identifier: "ja-JP"))
+            .load()
+        #expect(entries[0].descriptions == ["ja-a", "ja-b"])
+    }
+
+    /// The Android host is the reason the tag exists: the JNI library's own `Locale.current` reports the Swift
+    /// runtime's environment, so without a tag every non-English device would read the English notes.
+    @Test func `wire payload localizes to the given language tag`() throws {
+        let payload = versionHistoryWirePayload(ymlData: Data(sampleYAML.utf8), languageTag: "ko-KR")
+        let list = try VersionHistoryWireList(decoding: payload)
+        #expect(list.entries[0].descriptions == ["ko-a", "Crash fix"])
+    }
+
+    /// Android reports Chinese as zh-CN / zh-TW; the script that picks Hans vs Hant is implied by the region.
+    @Test func `wire payload maps chinese regions to scripts`() throws {
+        let simplified = try VersionHistoryWireList(
+            decoding: versionHistoryWirePayload(ymlData: Data(sampleYAML.utf8), languageTag: "zh-CN"),
+        )
+        let traditional = try VersionHistoryWireList(
+            decoding: versionHistoryWirePayload(ymlData: Data(sampleYAML.utf8), languageTag: "zh-TW"),
+        )
+        #expect(simplified.entries[0].descriptions.first == "ha")
+        #expect(traditional.entries[0].descriptions.first == "ht")
+    }
+
+    @Test func `empty language tag falls back to the current locale`() throws {
+        let payload = versionHistoryWirePayload(ymlData: Data(sampleYAML.utf8), languageTag: "")
+        let list = try VersionHistoryWireList(decoding: payload)
+        #expect(list.entries.count == 2)
+    }
 }

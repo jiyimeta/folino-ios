@@ -58,10 +58,11 @@
     <string name="tag_add">Tag</string>
     <string name="tag_remove_from">Remove from tag</string>
     <string name="export">Export</string>
-    <string name="export_format_musescore4">MuseScore 4</string>
-    <string name="export_format_musescore3">MuseScore 3</string>
-    <string name="export_format_pdf">PDF</string>
-    <string name="export_format_midi">MIDI</string>
+    <!-- Format names are the same in every language; marking them keeps them out of the translation gap. -->
+    <string name="export_format_musescore4" translatable="false">MuseScore 4</string>
+    <string name="export_format_musescore3" translatable="false">MuseScore 3</string>
+    <string name="export_format_pdf" translatable="false">PDF</string>
+    <string name="export_format_midi" translatable="false">MIDI</string>
     <string name="export_format_audio">Audio (M4A)</string>
     <string name="export_original_badge">Original</string>
     <string name="export_failed">Export failed</string>
@@ -114,8 +115,7 @@
     <string name="edit_info_discard_keep">Keep editing</string>
     <string name="edit_info_discard_confirm">Discard</string>
 
-    <!-- Settings – Reader section -->
-    <string name="settings_section_reader">Reader</string>
+    <!-- Settings – Reader section (headerless: see SettingsScreen) -->
     <string name="settings_reader_metronome">Metronome</string>
     <string name="settings_reader_precount">Count-in</string>
     <string name="settings_reader_pip">Picture in Picture</string>

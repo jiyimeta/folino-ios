@@ -58,6 +58,7 @@ import androidx.core.content.ContextCompat
 import com.keynumber.folino.reader.PipHost
 import com.keynumber.folino.reader.AbRepeatRange
 import com.keynumber.folino.reader.LayoutOptions
+import com.keynumber.folino.reader.ReaderDeviceDefaults
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
@@ -154,7 +155,10 @@ class MainActivity : ComponentActivity(), PipHost {
                 // Spike note: synchronous JNI decode on the main thread before setContent. Acceptable for this
                 // PoC (one small asset); production should move the asset read + JNI round-trip off the main thread.
                 val yml = assets.open("VersionHistory.yml").readBytes()
-                VersionHistoryBridge.load(yml)
+                // Pass the configuration's locale rather than letting Swift read its own: the descriptions are
+                // localized on the Swift side, and this is the locale the rest of the screen's strings resolve
+                // with, so a per-app language override moves the release notes with everything else.
+                VersionHistoryBridge.load(yml, resources.configuration.locales[0].toLanguageTag())
                     .map { VersionHistoryItem(it.version, it.descriptions) }
             }
 
@@ -335,21 +339,16 @@ private fun LibraryNavGraph(
         // Swift; Kotlin only enumerates and relays. An empty name means "untouched or undecodable — skip". One call
         // per blob: wirelet's [String] method-arg support is unreleased.
         //
-        // defaultStaffSize is still the *live* global staff size, the same prefs.staffSize the Reader hands to
-        // ReaderPreferencesBridge.open. The analytics builder no longer uses it to decide staff_size — it drops that
-        // parameter for every legacy blob outright (see AnalyticsBridge.scorePrefs) — but the argument is kept so the
-        // wire signature stays put and so the value is right if a future parameter needs it.
         // A failed read degrades to "no events" — the same best-effort stance as the two snapshots above, none of
         // which may fail a launch. It is recorded as a non-fatal, though, mirroring iOS AppBootstrap.scorePrefsEvents:
         // this is a whole-table read, so one bad row zeroes every score_prefs event for the launch, and silence would
         // be indistinguishable downstream from "these users customize nothing".
         val widthDp = context.resources.configuration.screenWidthDp.toDouble()
-        val defaultStaffSize = prefs.staffSize.first()
         val blobs = runCatching {
             com.keynumber.folino.library.RoomLibraryStore(context).loadAllLiveReaderPreferencesJson()
         }.onFailure { CrashReporting.recordNonFatal(it) }.getOrDefault(emptyList())
         blobs.forEach { json ->
-            val wire = AndroidAnalytics.bridge.scorePrefs(json, widthDp, defaultStaffSize)
+            val wire = AndroidAnalytics.bridge.scorePrefs(json, widthDp)
             if (wire.name.isNotEmpty()) AndroidAnalytics.log(wire)
         }
     }
@@ -570,8 +569,8 @@ private fun LibraryNavGraph(
                 // GLOBAL (DataStore, shared across scores); staff size / honor-breaks / hidden-staves /
                 // clef-overrides are PER-SCORE (the ReaderPreferences bridge below). The score-specific
                 // half is read from the bridge, not from these global flows.
+                val context = LocalContext.current
                 val layoutPref by prefs.layoutMode.collectAsState(initial = "page")
-                val staffSize by prefs.staffSize.collectAsState(initial = 28.0)
                 val collapseRests by prefs.collapseRests.collectAsState(initial = false)
                 val showInvisible by prefs.showInvisible.collectAsState(initial = false)
                 val hintDismissed by prefs.pageTapHintDismissed.collectAsState(initial = false)
@@ -590,7 +589,6 @@ private fun LibraryNavGraph(
                 // resolved AnnotationToolState via the prop/callback pair below.
                 val annotationToolState by prefs.annotationToolState.collectAsState(initial = AnnotationToolState())
                 val scope = rememberCoroutineScope()
-                val context = LocalContext.current
                 // Per-score A–B range persistence (Room). Global repeat mode lives in DataStore (prefs).
                 val abRepeatStore = remember(context) { com.keynumber.folino.library.RoomLibraryStore(context) }
                 // Share: the format picker → export → system share-sheet flow for this score, owned by
@@ -609,7 +607,13 @@ private fun LibraryNavGraph(
                         key = "readerPrefs/$currentScoreId",
                         factory = ReaderPreferencesController.factory(context.applicationContext),
                     )
-                LaunchedEffect(currentScoreId) { prefsVm.open(currentScoreId, defaultStaffSize = staffSize) }
+                LaunchedEffect(currentScoreId) {
+                    prefsVm.open(
+                        currentScoreId,
+                        defaultStaffSize = ReaderDeviceDefaults.staffSize(context),
+                        defaultHonorLayoutBreaks = ReaderDeviceDefaults.honorLayoutBreaks(context),
+                    )
+                }
                 val prefsState by prefsVm.state.collectAsState()
                 // Per-score staff visibility + clef overrides come from the bridge's imperative getters.
                 // Re-read them whenever the bridge state ticks (every per-staff mutation publishes a new
@@ -662,6 +666,8 @@ private fun LibraryNavGraph(
                     },
                     layoutMode = ReaderLayoutMode.fromPref(layoutPref),
                     displayOptions = displayOptions,
+                    defaultStaffSize = ReaderDeviceDefaults.staffSize(context),
+                    onResetStaffSize = { prefsVm.clearStaffSize() },
                     // Seed the file's authored-hidden staves (<Part><show>0</show>) into this score's hidden
                     // set once the parts load. The bridge reconciles once (retroactive back-fill for existing
                     // rows), then leaves user reveals untouched — mirroring iOS.

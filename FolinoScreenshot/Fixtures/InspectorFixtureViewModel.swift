@@ -12,6 +12,9 @@ import Foundation
 enum InspectorFixtureViewModel {
     @MainActor
     static func make() -> ReaderViewModel {
+        // Read the live device defaults rather than pinning numbers: the marketing captures run on both an iPhone
+        // and an iPad simulator (`Scripts/capture-screenshots.sh`), and the Visual inspector scene renders the
+        // resolved staff size as visible text, so each capture has to see its own device-class pair.
         ReaderViewModel(
             scoreItem: Fixture.items[0],
             repository: FixtureScoreRepository(),
@@ -19,6 +22,8 @@ enum InspectorFixtureViewModel {
             shareService: FixtureShareService(),
             metadataReader: FixtureMetadataReader(),
             scoresDirectory: URL(filePath: NSTemporaryDirectory()),
+            defaultStaffSize: ReaderDeviceDefaults.staffSize,
+            defaultHonorLayoutBreaks: ReaderDeviceDefaults.honorLayoutBreaks,
         )
     }
 }

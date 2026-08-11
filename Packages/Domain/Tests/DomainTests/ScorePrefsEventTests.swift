@@ -31,7 +31,7 @@ struct ScorePrefsEventTests {
     @Test func `a deliberately re-chosen default is still reported`() throws {
         let prefs = ReaderPreferences(
             scoreItemID: scoreID, hiddenStaves: [],
-            honorLayoutBreaks: ReaderPreferences.defaultHonorLayoutBreaks,
+            honorLayoutBreaks: true,
             masterVolume: ReaderPreferences.defaultMasterVolume,
             transposeSemitones: ReaderPreferences.defaultTransposeSemitones,
         )

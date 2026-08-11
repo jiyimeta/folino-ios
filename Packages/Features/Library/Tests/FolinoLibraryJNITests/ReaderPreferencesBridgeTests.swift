@@ -44,7 +44,7 @@ struct ReaderPreferencesBridgeTests {
     @Test func `opening a score with nothing stored writes no row`() {
         let store = FakeReaderPreferencesStore()
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 20)
+        bridge.open(scoreId: "s1", defaultStaffSize: 20, defaultHonorLayoutBreaks: true)
         #expect(store.saveCount == 0)
         #expect(store.loadJSON(scoreId: "s1").isEmpty)
     }
@@ -54,9 +54,9 @@ struct ReaderPreferencesBridgeTests {
     @Test func `the wire projection resolves untouched scalars to defaults`() {
         let store = FakeReaderPreferencesStore()
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 20)
+        bridge.open(scoreId: "s1", defaultStaffSize: 20, defaultHonorLayoutBreaks: true)
         #expect(bridge.state.staffSize == 20)
-        #expect(bridge.state.honorLayoutBreaks == ReaderPreferences.defaultHonorLayoutBreaks)
+        #expect(bridge.state.honorLayoutBreaks == true)
         #expect(bridge.state.masterVolume == ReaderPreferences.defaultMasterVolume)
         #expect(bridge.state.transposeSemitones == Int32(ReaderPreferences.defaultTransposeSemitones))
         #expect(bridge.state.tempoMultiplier == 0) // sentinel: no override
@@ -68,7 +68,7 @@ struct ReaderPreferencesBridgeTests {
     @Test func `a mutation on an untouched score does not materialize the other scalars`() {
         let store = FakeReaderPreferencesStore()
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 20)
+        bridge.open(scoreId: "s1", defaultStaffSize: 20, defaultHonorLayoutBreaks: true)
         bridge.setMasterVolume(value: 0.5)
         let persisted = saved(store, "s1")
         #expect(persisted?.masterVolume == 0.5)
@@ -81,12 +81,12 @@ struct ReaderPreferencesBridgeTests {
     @Test func `an explicitly chosen default survives reopening`() {
         let store = FakeReaderPreferencesStore()
         let first = ReaderPreferencesBridge(store: store)
-        first.open(scoreId: "s1", defaultStaffSize: 20)
+        first.open(scoreId: "s1", defaultStaffSize: 20, defaultHonorLayoutBreaks: true)
         first.setMasterVolume(value: ReaderPreferences.defaultMasterVolume)
         first.setTranspose(value: 0)
 
         let second = ReaderPreferencesBridge(store: store)
-        second.open(scoreId: "s1", defaultStaffSize: 20)
+        second.open(scoreId: "s1", defaultStaffSize: 20, defaultHonorLayoutBreaks: true)
         second.setStaffHidden(part: 0, staff: 0, hidden: true)
         let persisted = saved(store, "s1")
         #expect(persisted?.masterVolume == ReaderPreferences.defaultMasterVolume)
@@ -98,7 +98,7 @@ struct ReaderPreferencesBridgeTests {
     @Test func `clearing a scalar persists it as untouched`() {
         let store = FakeReaderPreferencesStore()
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 20)
+        bridge.open(scoreId: "s1", defaultStaffSize: 20, defaultHonorLayoutBreaks: true)
         bridge.setMasterVolume(value: 0.5)
         bridge.setTranspose(value: 3)
         bridge.clearMasterVolume()
@@ -121,7 +121,7 @@ struct ReaderPreferencesBridgeTests {
             ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 28, hiddenStaves: []),
         )
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 28)
+        bridge.open(scoreId: "s1", defaultStaffSize: 28, defaultHonorLayoutBreaks: true)
         // No user-visible change: the cleared value resolves back to the same global.
         #expect(bridge.state.staffSize == 28)
         bridge.setMasterVolume(value: 0.5) // force the first save so the stored value can be inspected
@@ -135,7 +135,7 @@ struct ReaderPreferencesBridgeTests {
             ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 18, hiddenStaves: []),
         )
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 28)
+        bridge.open(scoreId: "s1", defaultStaffSize: 28, defaultHonorLayoutBreaks: true)
         #expect(bridge.state.staffSize == 18)
         bridge.setMasterVolume(value: 0.5)
         #expect(saved(store, "s1")?.staffSize == 18)
@@ -149,7 +149,7 @@ struct ReaderPreferencesBridgeTests {
             ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 28, hiddenStaves: []),
         )
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 28)
+        bridge.open(scoreId: "s1", defaultStaffSize: 28, defaultHonorLayoutBreaks: true)
         bridge.setMasterVolume(value: 0.5)
         #expect(saved(store, "s1")?.staffSize == 28)
     }
@@ -159,7 +159,7 @@ struct ReaderPreferencesBridgeTests {
     @Test func `seeding authored hidden staves persists only what the score authored`() {
         let store = FakeReaderPreferencesStore()
         let bridge = ReaderPreferencesBridge(store: store)
-        bridge.open(scoreId: "s1", defaultStaffSize: 20)
+        bridge.open(scoreId: "s1", defaultStaffSize: 20, defaultHonorLayoutBreaks: true)
         bridge.seedAuthoredHidden(staves: [])
         #expect(store.saveCount == 0)
 
@@ -169,5 +169,45 @@ struct ReaderPreferencesBridgeTests {
         #expect(persisted?.authoredHiddenStaves == [StaffAddress(partIndex: 1, staffIndexInPart: 0)])
         #expect(persisted?.hasSeededAuthoredVisibility == true)
         #expect(persisted?.staffSize == nil)
+    }
+
+    /// The break policy is device-class-dependent now, so the bridge resolves it against what `open` was handed rather
+    /// than a constant. Two bridges over the same untouched row must project differently.
+    @Test func `the wire projection resolves the break policy against the opened default`() {
+        let store = FakeReaderPreferencesStore()
+        let phone = ReaderPreferencesBridge(store: store)
+        phone.open(scoreId: "s1", defaultStaffSize: 21, defaultHonorLayoutBreaks: false)
+        #expect(phone.state.staffSize == 21)
+        #expect(phone.state.honorLayoutBreaks == false)
+
+        let tablet = ReaderPreferencesBridge(store: store)
+        tablet.open(scoreId: "s1", defaultStaffSize: 24, defaultHonorLayoutBreaks: true)
+        #expect(tablet.state.staffSize == 24)
+        #expect(tablet.state.honorLayoutBreaks == true)
+        // Projecting a default never writes one.
+        #expect(store.saveCount == 0)
+    }
+
+    /// An explicitly chosen break policy outranks the device default in both directions.
+    @Test func `an explicit break policy survives the device default`() {
+        let store = FakeReaderPreferencesStore()
+        let bridge = ReaderPreferencesBridge(store: store)
+        bridge.open(scoreId: "s1", defaultStaffSize: 21, defaultHonorLayoutBreaks: false)
+        bridge.setHonorLayoutBreaks(value: true)
+        #expect(bridge.state.honorLayoutBreaks == true)
+        #expect(saved(store, "s1")?.honorLayoutBreaks == true)
+    }
+
+    /// Reset parity with the other scalars: the staff-size double-tap means untouched, and Compose still sees the
+    /// device default resolved back.
+    @Test func `clearing staff size persists untouched and projects the default`() {
+        let store = FakeReaderPreferencesStore()
+        let bridge = ReaderPreferencesBridge(store: store)
+        bridge.open(scoreId: "s1", defaultStaffSize: 21, defaultHonorLayoutBreaks: false)
+        bridge.setStaffSize(value: 18)
+        #expect(saved(store, "s1")?.staffSize == 18)
+        bridge.clearStaffSize()
+        #expect(saved(store, "s1")?.staffSize == nil)
+        #expect(bridge.state.staffSize == 21)
     }
 }

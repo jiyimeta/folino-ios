@@ -3,9 +3,13 @@ import Foundation
 import SettingsLogic
 
 /// swift-java entry point for Kotlin `SettingsJNI.nativeLoadVersionHistory`.
-/// Takes the YAML asset bytes, returns the wirelet-encoded entry list.
-public func nativeLoadVersionHistory(ymlBytes: Data) -> Data {
-    versionHistoryWirePayload(ymlData: ymlBytes)
+///
+/// Takes the YAML asset bytes plus the device's language tag (`java.util.Locale.getDefault().toLanguageTag()`),
+/// returns the wirelet-encoded entry list. The tag has to come from the host: descriptions are localized before
+/// they cross the wire, and this library's `Locale.current` describes the Swift runtime's environment, not the
+/// phone's language — reading it here left every non-English device showing the English release notes.
+public func nativeLoadVersionHistory(ymlBytes: Data, languageTag: String) -> Data {
+    versionHistoryWirePayload(ymlData: ymlBytes, languageTag: languageTag)
 }
 
 /// swift-java entry point for Kotlin `SettingsJNI.nativeShouldPromptForReview`.

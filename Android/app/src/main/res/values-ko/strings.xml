@@ -1,10 +1,115 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Library (wording mirrors the iOS Library / ScoreUI string catalogs) -->
+    <string name="library_title">라이브러리</string>
+    <string name="library_empty_title">아직 악보가 없습니다</string>
+    <string name="library_empty_hint">첫 악보를 가져와서 시작하세요</string>
+    <string name="library_import">악보 가져오기</string>
+    <string name="library_deleted">악보를 삭제했습니다</string>
+    <string name="library_undo">실행취소</string>
+    <string name="nav_library">라이브러리</string>
+    <string name="nav_settings">설정</string>
+    <string name="nav_all_scores">모든 악보</string>
+    <string name="nav_recent">최근 항목</string>
+    <string name="recent_empty">아직 연 악보가 없습니다</string>
+    <string name="recent_today">오늘</string>
+    <string name="recent_this_week">이번 주</string>
+    <string name="recent_earlier">이전</string>
+    <string name="nav_open_menu">탐색 메뉴 열기</string>
+    <string name="library_recently_deleted">최근 삭제</string>
+    <string name="more">더 보기</string>
+    <string name="cancel">취소</string>
+    <string name="recently_deleted_title">최근 삭제</string>
+    <string name="recently_deleted_restore">복원</string>
+    <string name="recently_deleted_delete">영구 삭제</string>
+    <string name="recently_deleted_delete_confirm_title">\'%1$s\'을(를) 영구 삭제할까요?</string>
+    <string name="recently_deleted_delete_bulk_confirm_title">악보 %1$d개를 영구 삭제할까요?</string>
+    <string name="recently_deleted_delete_confirm_message">이 악보와 파일이 이 기기에서 제거됩니다.</string>
+    <string name="recently_deleted_empty_title">휴지통이 비어 있습니다</string>
+    <string name="recently_deleted_empty_hint">삭제한 악보가 여기에 표시됩니다</string>
+    <string name="nav_playlists">재생목록</string>
+    <string name="playlists_title">재생목록</string>
+    <string name="playlists_empty_title">재생목록 없음</string>
+    <string name="playlists_empty_hint">+를 눌러 재생목록을 만드세요.</string>
+    <string name="playlists_create">새 재생목록</string>
+    <string name="playlists_name_hint">재생목록 이름</string>
+    <string name="playlists_member_count">악보 %1$d개</string>
+    <string name="playlists_delete">재생목록 삭제</string>
+    <string name="playlists_delete_confirm_title">\'%1$s\'을(를) 삭제할까요?</string>
+    <string name="playlists_delete_confirm_message">악보는 라이브러리에 그대로 남습니다.</string>
+    <string name="playlists_rename">이름 변경</string>
+    <string name="playlist_remove_from">재생목록에서 제거</string>
+    <string name="playlist_reorder_handle">순서 변경</string>
+    <string name="add_to_playlist">재생목록에 추가</string>
+    <string name="create">만들기</string>
+    <string name="rename">이름 변경</string>
+    <string name="library_delete">삭제</string>
+    <string name="nav_tags">태그</string>
+    <string name="tags_title">태그</string>
+    <string name="tags_empty_title">태그 없음</string>
+    <string name="tags_empty_hint">+를 눌러 태그를 만드세요.</string>
+    <string name="tags_create">새 태그</string>
+    <string name="tags_name_hint">태그 이름</string>
+    <string name="tags_member_count">악보 %1$d개</string>
+    <string name="tags_delete">태그 삭제</string>
+    <string name="tags_delete_confirm_title">\'%1$s\'을(를) 삭제할까요?</string>
+    <string name="tags_delete_confirm_message">악보는 라이브러리에 그대로 남습니다.</string>
+    <string name="tags_rename">이름 변경</string>
+    <string name="edit_tags">태그 편집</string>
+    <string name="edit_tags_apply">적용</string>
+    <string name="tag_add">태그</string>
+    <string name="tag_remove_from">태그에서 제거</string>
+    <string name="export">내보내기</string>
+    <string name="export_format_audio">오디오 (M4A)</string>
+    <string name="export_original_badge">원본 형식</string>
+    <string name="export_failed">내보내기에 실패했습니다</string>
+    <string name="search_hint">검색</string>
+    <string name="search_no_results">검색 결과 없음</string>
+    <string name="nav_favorites">별표</string>
+    <string name="favorites_empty_title">별표 표시한 악보가 없습니다</string>
+    <string name="favorites_empty_hint">별표를 표시한 악보가 여기에 표시됩니다.</string>
+    <string name="favorite_add">별표 표시</string>
+    <string name="favorite_remove">별표 해제</string>
+    <string name="favorite_indicator">별표 표시됨</string>
+    <string name="import_failed">이 파일을 가져올 수 없습니다.</string>
+
+    <!-- Share sheet import -->
+    <string name="share_import_count">악보 %d개 가져오기</string>
+    <string name="share_unsupported_skipped">지원하지 않는 파일 %d개는 건너뜁니다</string>
+    <string name="share_add_to">추가할 위치</string>
+    <string name="share_dest_library">라이브러리</string>
+    <string name="share_dest_existing">기존 재생목록</string>
+    <string name="share_dest_new">새 재생목록</string>
+    <string name="share_new_playlist_name">재생목록 이름</string>
+    <string name="share_save">저장</string>
+    <string name="share_save_and_open">저장 후 열기</string>
+    <string name="share_no_supported_files">가져올 수 있는 악보 파일이 없습니다.</string>
+    <string name="share_imported_count">악보 %d개를 가져왔습니다.</string>
+    <string name="share_nothing_imported">가져온 항목이 없습니다.</string>
+
+    <!-- Edit score info -->
+    <string name="edit_info">정보 편집</string>
+    <string name="edit_info_save">저장</string>
+    <string name="edit_info_section_credits">크레딧</string>
+    <string name="edit_info_section_info">기타 정보</string>
+    <string name="edit_info_field_title">제목</string>
+    <string name="edit_info_field_subtitle">부제</string>
+    <string name="edit_info_field_composer">작곡가</string>
+    <string name="edit_info_field_arranger">편곡자</string>
+    <string name="edit_info_field_lyricist">작사가</string>
+    <string name="edit_info_field_copyright">저작권</string>
+    <string name="edit_info_info_source">소스</string>
+    <string name="edit_info_info_date_added">추가 날짜</string>
+    <string name="edit_info_source_unknown">알 수 없음</string>
+    <string name="edit_info_close">닫기</string>
+    <string name="edit_info_discard_title">변경 사항을 폐기할까요?</string>
+    <string name="edit_info_discard_keep">계속 편집</string>
+    <string name="edit_info_discard_confirm">폐기</string>
+
     <!-- Repurposed: now mirrors iOS settings.playback.a4Reference.title -->
     <string name="settings_a4_reference">기본 캘리브레이션</string>
 
     <!-- Settings – Reader section -->
-    <string name="settings_section_reader">Reader</string>
     <string name="settings_reader_metronome">메트로놈</string>
     <string name="settings_reader_precount">카운트인</string>
     <string name="settings_reader_pip">픽처 인 픽처</string>
@@ -17,22 +122,24 @@
     <string name="settings_reader_auto_follow">자동 스크롤</string>
     <string name="settings_reader_page_turn_buttons">페이지 넘김 버튼</string>
     <string name="settings_reader_page_turn_buttons_footer">꺼도 스와이프로 페이지를 넘길 수 있습니다.</string>
-    <string name="settings_reader_repeat">Repeat</string>
+    <string name="settings_reader_repeat">반복</string>
     <string name="settings_reader_display_mode">표시 모드</string>
     <string name="settings_layout_vertical">세로 스크롤</string>
     <string name="settings_layout_horizontal">가로 스크롤</string>
     <string name="settings_layout_page">페이지</string>
     <string name="settings_reader_high_quality_audio">고품질 음원</string>
-    <string name="settings_reader_continuation_footer">Repeat(단일 또는 A–B)가 켜져 있으면 우선 적용되며 다음 악보로 넘어가지 않습니다.</string>
-    <string name="settings_playlist_continuation">Playlist</string>
-    <string name="playlist_continuation_off">Off</string>
-    <string name="playlist_continuation_play_through">Continuous</string>
-    <string name="playlist_continuation_loop">Repeat All</string>
+    <string name="settings_reader_continuation_footer">반복(단일 또는 A–B)이 켜져 있으면 우선 적용되며 다음 악보로 넘어가지 않습니다.</string>
+    <string name="settings_playlist_continuation">재생목록</string>
+    <string name="playlist_continuation_off">끄기</string>
+    <string name="playlist_continuation_play_through">연속 재생</string>
+    <string name="playlist_continuation_loop">전체 반복</string>
 
     <!-- Settings – Privacy section -->
     <string name="settings_privacy_title">개인정보 보호</string>
     <string name="settings_privacy_crash_title">오류 보고서 전송</string>
     <string name="settings_privacy_crash_description">익명 오류 진단을 공유해 버그 수정에 도움을 줍니다. 사용자와 연결되지 않습니다.</string>
+    <string name="settings_privacy_analytics_title">사용 분석 공유</string>
+    <string name="settings_privacy_analytics_description">익명의 사용 추세를 공유해 folino 개선에 도움을 줍니다. 악보의 내용은 수집되지 않습니다.</string>
 
     <!-- Settings – A4 description -->
     <string name="reader_settings_a4_description">모든 악보에 적용되는 기준입니다. 악보별로 재정의할 수 있습니다.</string>

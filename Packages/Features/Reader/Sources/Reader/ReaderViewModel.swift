@@ -159,6 +159,7 @@ final class ReaderViewModel {
     /// Internal so `ReaderViewModel+PDFConversion.swift` can resolve sidecar / destination paths.
     @ObservationIgnored let scoresDirectory: URL
     @ObservationIgnored private let defaultStaffSize: Double
+    @ObservationIgnored private let defaultHonorLayoutBreaks: Bool
     /// Internal so the transport / overlay / sharing view-layer log sites reach the same sink as the VM-owned events.
     @ObservationIgnored let analytics: any Analytics
     /// Origin surface the score was opened from, threaded from the Library navigation. Stamped onto `playback_started`
@@ -187,7 +188,8 @@ final class ReaderViewModel {
         metadataReader: any ScoreMetadataReading = NoopScoreMetadataReading(),
         annotationCoordinator: AnnotationSaveCoordinator = AnnotationSaveCoordinator(store: NoopAnnotationBlobStore()),
         scoresDirectory: URL,
-        defaultStaffSize: Double = 14,
+        defaultStaffSize: Double = 12,
+        defaultHonorLayoutBreaks: Bool = false,
         playbackController: (any PlaybackController)? = nil,
         pdfPlaybackParser: (any PDFPlaybackParser)? = nil,
         pdfConversion: PDFScoreConversion? = nil,
@@ -208,6 +210,7 @@ final class ReaderViewModel {
         self.pdfConversion = pdfConversion
         self.scoresDirectory = scoresDirectory
         self.defaultStaffSize = defaultStaffSize
+        self.defaultHonorLayoutBreaks = defaultHonorLayoutBreaks
         self.analytics = analytics
         self.openedFrom = openedFrom
         preferencesStore = ReaderPreferencesStore(
@@ -243,6 +246,7 @@ final class ReaderViewModel {
 
     private func wireLayoutModel() {
         layoutModel.defaultStaffSize = defaultStaffSize
+        layoutModel.defaultHonorLayoutBreaks = defaultHonorLayoutBreaks
         layoutModel.onChange = { [weak self] in
             guard let self else { return }
             recomputeVisibleScore()

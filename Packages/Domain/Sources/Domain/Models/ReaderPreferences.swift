@@ -24,9 +24,9 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// H-bar. Fixed — not user-tunable in this iteration.
     public static let multiMeasureRestThreshold = 2
 
-    /// Defaults an untouched (`nil`) field resolves to. Staff size has NO static default here — its default is the one
-    /// that becomes device-class-dependent (`ReaderRootScreen`), so resolution takes it as an argument instead.
-    public static let defaultHonorLayoutBreaks = true
+    /// Defaults an untouched (`nil`) field resolves to. Staff size and the break policy have NO static default here —
+    /// theirs are device-class-dependent (`ReaderDeviceDefaults` on iOS, `ReaderDeviceDefaults.kt` on Android), so
+    /// resolution takes them as arguments instead.
     public static let defaultMasterVolume = 1.0
     public static let defaultTransposeSemitones = 0
 
@@ -72,11 +72,11 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// values are clamped to `[minTempoMultiplier, maxTempoMultiplier]`. The Reader's view model normalizes a saved
     /// value of exactly 1.0 back to `nil` so the override doesn't outlive the user's intent.
     public var tempoMultiplier: Double?
-    /// When `true` (default), the layout engine honors authored `<LayoutBreak>line` / `<LayoutBreak>page` markup, so
+    /// When `true`, the layout engine honors authored `<LayoutBreak>line` / `<LayoutBreak>page` markup, so
     /// the engraver's chosen system / page boundaries are reproduced. When `false`, the engine ignores both forms and
     /// wraps measures purely on the available view width — useful when the score was authored for a different page
-    /// size. `nil` = the user never chose, so it resolves to `defaultHonorLayoutBreaks` via
-    /// `effectiveHonorLayoutBreaks`.
+    /// size. `nil` = the user never chose, so it resolves to the caller's device-class default via
+    /// `effectiveHonorLayoutBreaks(default:)`.
     public var honorLayoutBreaks: Bool?
     /// Current repeat / loop mode for this score. Defaults to `.off`.
     public var repeatMode: RepeatMode
@@ -146,10 +146,6 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
 
     /// The value to use for a field the user may never have set: the stored value when there is one, the default
     /// otherwise. Reading through these is what keeps `nil` from having to be materialized at the use site.
-    public var effectiveHonorLayoutBreaks: Bool {
-        honorLayoutBreaks ?? Self.defaultHonorLayoutBreaks
-    }
-
     public var effectiveMasterVolume: Double {
         masterVolume ?? Self.defaultMasterVolume
     }
@@ -162,6 +158,13 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// live on the model.
     public func effectiveStaffSize(default defaultValue: Double) -> Double {
         staffSize ?? defaultValue
+    }
+
+    /// Break policy resolved against the caller's default, because the default is device-class-dependent (a phone
+    /// ignores authored breaks and wraps to the viewport; a tablet reproduces the engraver's boundaries) and so can't
+    /// live on the model.
+    public func effectiveHonorLayoutBreaks(default defaultValue: Bool) -> Bool {
+        honorLayoutBreaks ?? defaultValue
     }
 
     /// Whether any setting addressed by staff index is set. These are exactly the settings that stop meaning what the
