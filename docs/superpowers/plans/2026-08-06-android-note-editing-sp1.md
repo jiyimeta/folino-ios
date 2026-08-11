@@ -17,6 +17,14 @@
 - **The wire discriminator order is append-only.** `EditIntentWire`'s existing cases 0–4 (`inputNote`, `setRestDuration`, `setChordDuration`, `delete`, `composite`) keep their indices; new intents append at 5 and up. Same rule for `DrawCommand` and every `@WireFormatChoice` this plan touches.
 - No randomness, no clock reads in the replay tests. A determinism test that is itself nondeterministic proves nothing.
 - Comment paragraphs reflow at 120 columns. American spelling except where an Apple/framework API name dictates otherwise (`cancelled`).
+- **On Android, `Foundation` ships its own `CGRect` / `CGPoint` / `CGFloat`, and it shadows
+  `SheetMusicLayout`'s stubs silently — no ambiguity error.** A file that imports both gets Foundation's
+  types, whose `minX` / `maxX` and arithmetic are not the ones the layout target's geometry is written
+  against. This is why `NearestCursor.swift` and `JNISymbols.swift` already carry
+  `private typealias CGPoint = SheetMusicLayout.CGPoint` under `#if !canImport(CoreGraphics)`. Found the
+  hard way in Task 7, on a device: a stub fix looked inert until the shadowing import was removed. Every
+  task from 8 on adds Android-facing geometry — carry the typealias shim, or don't import `Foundation`
+  in a file that does geometry.
 - **iOS behavior must not change.** Every type this plan relocates keeps its public name and semantics; `SheetMusicUI` re-exports what moved so no Apple-side call site has to be rewritten. The Apple-side test suites are the gate.
 - ssm `main` is at **1.9.0**. SP1 releases **1.10.0** (Task 13). SP0's memory note said "1.9.0" — that version was taken by the measure-number work that landed on main meanwhile.
 
@@ -619,6 +627,13 @@ git -C /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music/.claude
 ---
 
 ### Task 4: Wire cases for the new intents
+
+**Tasks 3 and 4 are one atomic change and this plan was wrong to split them.** `EditIntentWire.init(from:)`
+switches exhaustively over `EditIntent`, so the moment Task 3 appends a case the package stops compiling
+until this task lands. Found while executing Task 3; ruled by the user on 2026-08-06: land them as
+separate reviewable commits — the wire is where a silent misdecode would hide, and it deserves its own
+review diff — then **squash the two into one commit** once this task is green, since the branch is
+unpushed. A future plan that adds an intent should put the case and its wire projection in one task.
 
 Append seven discriminators to `EditIntentWire` (indices 5…11) and the payload
 structs they need. `Accidental` is a `String`-raw-value enum: encode the raw
@@ -1606,6 +1621,14 @@ SP0's finding that SwiftPM still resolves the co-installed
 toolchain-shaped appears, that is the first thing to check.
 
 - [ ] **Step 2: Confirm the new symbols and `JNI_OnLoad`**
+
+Also settle the one question Task 5 could not answer from the host. Moving the wire types out of
+`SheetMusicAndroidJNI` means `JExtractSwiftPlugin` no longer emits JNI type-metadata thunks for them in
+that target. Both the implementer and the reviewer concluded it is inert — every `public func` entry point
+in that target takes and returns only `Int64` / `Bool` / `Data`, and a grep found no JNI signature naming a
+moved type — but only a cross-build can prove it. Compare the plugin-generated Kotlin bridge surface (or
+the `.so`'s exported `Java_…` symbol table) against a build of `282eecaa`, the commit before the move, and
+confirm nothing disappeared. A missing thunk shows up on device as `UnsatisfiedLinkError`.
 
 ```
 nm -D --defined-only /Users/kiichi/Developer/Personal/swift-packages/swift-sheet-music/.claude/worktrees/android-note-editing/Android/SheetMusicAndroid/src/main/jniLibs/arm64-v8a/libSheetMusicAndroidJNI.so
