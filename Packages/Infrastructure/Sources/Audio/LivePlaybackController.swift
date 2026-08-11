@@ -185,10 +185,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // here: prepare(score:) otherwise leaves the channel on the score's authored program, silently dropping the
         // user's instrument override. Bank is fixed at prepare time; mirrors the live setStaffInstrument(...) path.
         for state in preferences.perStaff {
-            engine.setVolume(forChannel: .staff(state.staffIndex), to: Float(state.volume))
-            engine.setMuted(forChannel: .staff(state.staffIndex), to: state.isMuted)
-            engine.setSoloed(forChannel: .staff(state.staffIndex), to: state.isSolo)
-            engine.setProgram(forChannel: .staff(state.staffIndex), to: UInt8(clamping: state.gmProgram))
+            guard let channel = channel(forStaff: state.staffIndex) else { continue }
+            engine.setVolume(forChannel: channel, to: Float(state.volume))
+            engine.setMuted(forChannel: channel, to: state.isMuted)
+            engine.setSoloed(forChannel: channel, to: state.isSolo)
+            engine.setProgram(forChannel: channel, to: UInt8(clamping: state.gmProgram))
         }
         engine.setRate(Float(preferences.tempoMultiplier))
         applyMasterVolume(preferences.masterVolume)
@@ -237,22 +238,37 @@ public final class LivePlaybackController: Domain.PlaybackController {
         publishNowPlayingInfo(seeking: true)
     }
 
+    /// The engine strip a flattened staff index drives.
+    ///
+    /// swift-sheet-music 1.10.0 replaced `MixerChannel.Kind.staff(Int)` with `.instrument(partIndex:ordinal:)`: a
+    /// strip is a (part × distinct instrument) pair now, not a staff. folino's mixer is still addressed per staff, so
+    /// this maps each staff onto its part's strip — meaning a grand staff's two rows currently drive ONE strip, and a
+    /// part that changes instrument mid-score is only reachable at its tick-0 instrument (`ordinal: 0`). Both fall
+    /// out once the mixer itself becomes per-instrument, which is the point of the ssm change; this adapter is the
+    /// narrowest thing that keeps the existing per-staff surface working until then.
+    private func channel(forStaff staff: Int) -> MixerChannel.Kind? {
+        guard let staves = loadedScore?.allStaves, staves.indices.contains(staff) else { return nil }
+        return .instrument(partIndex: staves[staff].address.partIndex, ordinal: 0)
+    }
+
     public func setStaffVolume(staff: Int, volume: Double) {
-        engine.setVolume(forChannel: .staff(staff), to: Float(volume))
+        guard let channel = channel(forStaff: staff) else { return }
+        engine.setVolume(forChannel: channel, to: Float(volume))
     }
 
     public func setStaffMute(staff: Int, isMuted: Bool) {
-        engine.setMuted(forChannel: .staff(staff), to: isMuted)
+        guard let channel = channel(forStaff: staff) else { return }
+        engine.setMuted(forChannel: channel, to: isMuted)
     }
 
     public func setStaffSolo(staff: Int, isSolo: Bool) {
-        engine.setSoloed(forChannel: .staff(staff), to: isSolo)
+        guard let channel = channel(forStaff: staff) else { return }
+        engine.setSoloed(forChannel: channel, to: isSolo)
     }
 
     public func setStaffInstrument(staff: Int, bank _: Int, program: Int) {
-        engine.setProgram(
-            forChannel: .staff(staff), to: UInt8(clamping: program),
-        )
+        guard let channel = channel(forStaff: staff) else { return }
+        engine.setProgram(forChannel: channel, to: UInt8(clamping: program))
     }
 
     public func setMetronomeEnabled(_ enabled: Bool) {
