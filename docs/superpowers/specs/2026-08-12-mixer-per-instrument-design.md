@@ -123,6 +123,12 @@ and is not a part of the score. The adapter drops it: the metronome keeps its ow
 toggle in the inspector's general section and its own
 `PlaybackController.setMetronomeEnabled(_:)` path, exactly as today.
 
+**This needs nothing from swift-sheet-music.** `mixerChannels`, the `.instrument`
+kind, the per-channel setters and the composed name all ship in 1.10.1, which
+folino is already pinned to. (1.11.0 adds `MixerChannel.partName` /
+`instrumentName` for hosts that group their strips; the flat list in §4 does not
+use them, so this work does not wait on that release.)
+
 ### 2. `MixerStripID` replaces the flat staff index
 
 | before | after |
@@ -157,26 +163,52 @@ their one caller in `ReaderViewModel+PDFReread.swift`. Leaving the old names wou
 mean a member called *staff*-bound whose largest contributors are no longer keyed
 by staff.
 
-### 4. The Reader draws one row per strip
+### 4. The Reader draws a flat list, one row per strip
 
 `PlaybackMixerModel`'s dictionaries re-key from `StaffAddress` to `MixerStripID`,
-and it holds the strip list refreshed from the controller. `PlaybackInspectorScreen`
-groups by `partIndex`:
+and it holds the strip list refreshed from the controller.
+`PlaybackInspectorScreen` draws the list in the order the engine reports it — by
+part, then by ordinal within the part — with **no part header**. Each row carries
+the strip's `displayName`, the slider, mute / solo and the program picker.
 
-- a part with one strip draws a single row carrying the part's name, the slider,
-  mute / solo and the program picker;
-- a part with several draws a part-name header with one row per strip beneath it,
-  each labelled with the strip's own display name.
+Dropping the header is a decision against the obvious alternative, and the reason
+is in the data. A grouped layout would need a group title and a row label that
+differ, and swift-sheet-music derives them from the same place: the part title
+from `Score.staffDisplayName` (instrument `longName`, then part `trackName`) and
+the instrument label from the instrument's `longName`, then `trackName`, then id.
+In real scores those collide. Measured on three of the user's own a cappella
+arrangements, every single-instrument part reported an instrument name **equal to
+its part name** — the arranger names the instrument after the voice, so a grouped
+mixer would read "Soprano 1" under a header "Soprano 1", ten times over. One
+score goes further: its part-level instrument carries
+`<longName>S</longName><trackName>ピアノ</trackName>`, so the *instrument* name
+resolves to the *part* label.
 
-That is the current layout minus its redundant inner level: the part header
-already carries the program picker today, because the program has always been
-chosen per part (`setPartProgram` fans the same value out to every staff of the
-part and `effectiveProgram(forPartIndex:)` reads the first staff back). Collapsing
-loses nothing there; what it gains is a program picker per strip, which is what
-makes an instrument-change strip selectable at all.
+`displayName` already solves this, because it is defined as the shortest label
+that distinguishes a strip: the part alone when the part has one strip, the part
+plus the instrument in parentheses when it has several. A flat list of those is
+unambiguous with no header to stutter against, and it is the same string the
+Android mixer shows, so the two platforms agree by construction rather than by
+convention.
+
+The program picker moves from the part to the strip. That is what makes an
+instrument-change strip selectable at all, and it loses nothing: the program has
+always been chosen per part in practice (`setPartProgram` fans one value out to
+every staff of the part and `effectiveProgram(forPartIndex:)` reads the first
+staff back).
 
 Mute and solo remain session-only, exactly as today — they are not fields of
 `ReaderPreferences` and this change does not make them persistent.
+
+**Expect more rows, not fewer, on scores with instrument changes.** The five-part
+arrangement above reports eleven strips: three of its parts alternate piano and
+accordion, and each part's tick-0 piano is a *different* strip from the piano it
+returns to, because the part-level channel authors `<controller ctrl="10"
+value="63"/>` while the instrument-change channel omits it and defaults to 64.
+Both strips own real measures, so this is faithful rather than wrong — but it
+means a row can appear twice under names that differ only by a suffix. Left as
+is; narrowing the engine's dedup to ignore inaudible differences is an ssm
+judgement that one score is too thin a basis for.
 
 ### 5. Migration
 
