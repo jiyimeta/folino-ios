@@ -74,11 +74,8 @@ struct EditingSelectionOverlay: View {
     /// Reads `displaySelection`, not `selection`: the editor addresses the unfiltered score while `document` and
     /// `score` here are the staff-filtered rendition. See `ReaderEditingHost.displayItem(for:)`.
     private var selectionRect: CGRect? {
-        guard case let .single(item) = host.displaySelection,
-              let frame = document.cursorFrame(for: .item(item), in: score),
-              let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
-        else { return nil }
-        return CGRect(x: frame.minX, y: band.top, width: max(frame.width, 1), height: band.height)
+        guard case let .single(item) = host.displaySelection else { return nil }
+        return document.editingCaretRect(for: item, in: score, minimumWidth: 1)
     }
 
     /// The caret, drawn as the same translucent column the transport's playback head uses
@@ -102,27 +99,15 @@ struct EditingSelectionOverlay: View {
         }
     }
 
-    /// The caret's column (from `document.cursorFrame(for:in:)`, `CursorFrame.swift:13` — its Y spans the whole
-    /// system) narrowed to `caretItem`'s own staff band: one `sp` above the staff top to one `sp` below the staff
-    /// bottom (a staff is 4 sp tall, so the total band is 6 sp). Narrowed, unlike the playback head, because editing
-    /// happens in one staff at a time. `nil` when `caretItem` is unset, doesn't resolve to a laid-out frame (e.g. a
-    /// stale ID right after an edit reflows the document), or names a staff/measure this document doesn't contain.
+    /// The caret's column, narrowed to `caretItem`'s own staff band. `nil` when `caretItem` is unset, doesn't
+    /// resolve to a laid-out frame (e.g. a stale ID right after an edit reflows the document), or names a
+    /// staff/measure this document doesn't contain.
+    ///
+    /// The band math — one `sp` above the staff top to one `sp` below its bottom, so 6 sp for a 4 sp staff — is
+    /// `LayoutDocument.editingCaretRect`'s as of swift-sheet-music 1.11.0, shared with Android rather than computed
+    /// here twice. `minimumWidth` is the only thing the two call sites above ever disagreed about.
     private var caretRect: CGRect? {
-        guard let item = host.displayCaretItem,
-              let frame = document.cursorFrame(for: .item(item), in: score),
-              let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
-        else { return nil }
-        return CGRect(x: frame.minX, y: band.top, width: max(frame.width, 2), height: band.height)
-    }
-
-    /// Vertical band (document coords) spanning `staff`'s five lines, one `sp` clear on each side, within the
-    /// `LayoutSystem` that contains `measureIndex`. `nil` when the staff/measure can't be located.
-    private func staffBand(for staff: StaffAddress, measureIndex: Int) -> (top: CGFloat, height: CGFloat)? {
-        guard let system = document.systems.first(where: { candidate in
-            candidate.measures.contains { $0.measureIndex == measureIndex }
-        }), let flatIndex = system.flatIndex(for: staff) else { return nil }
-        let sp = document.metrics.sp
-        let staffTop = system.origin.y + system.staffOrigins[flatIndex].y
-        return (top: staffTop - sp, height: 6 * sp)
+        guard let item = host.displayCaretItem else { return nil }
+        return document.editingCaretRect(for: item, in: score, minimumWidth: 2)
     }
 }
