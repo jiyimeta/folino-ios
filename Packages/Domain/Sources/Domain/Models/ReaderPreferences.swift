@@ -55,14 +55,14 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     /// actually did: `hiddenStaves.subtracting(authoredHiddenStaves)` is what the user hid on their own, and
     /// `authoredHiddenStaves.subtracting(hiddenStaves)` is what the user revealed against the score's wishes.
     public var authoredHiddenStaves: Set<StaffAddress>
-    /// User-chosen GM program (0…127) per staff that overrides whatever the score declares. Absent entries fall back to
-    /// the score's instrument channel program. Bank stays at 0 — the picker only swaps melodic programs (matches
-    /// `swift-sheet-music`'s `ProgramMenu`).
-    public var staffProgramOverrides: [StaffAddress: Int]
-    /// User-chosen volume `[0, 1]` per staff that overrides the score's mscx CC7. Absent entries fall back to the
-    /// score's `InstrumentChannel.volume` (mapped from `0…127` to `0…1`), then to `1.0` if the score has no matching
-    /// part. Matches the override-overlay shape of `staffProgramOverrides`.
-    public var staffVolumeOverrides: [StaffAddress: Double]
+    /// User-chosen GM program (0…127) per mixer strip that overrides whatever the score declares. Absent entries fall
+    /// back to the score's instrument channel program. Bank stays at 0 — the picker only swaps melodic programs
+    /// (matches `swift-sheet-music`'s `ProgramMenu`).
+    public var stripProgramOverrides: [MixerStripID: Int]
+    /// User-chosen volume `[0, 1]` per mixer strip that overrides the score's mscx CC7. Absent entries fall back to
+    /// the score's `InstrumentChannel.volume` (mapped from `0…127` to `0…1`), then to `1.0` if the score has no
+    /// matching part. Matches the override-overlay shape of `stripProgramOverrides`.
+    public var stripVolumeOverrides: [MixerStripID: Double]
     /// User-chosen display-only clef per staff that overrides the score's authored opening clef. Values are
     /// `NotatedClef.rawType` strings (e.g. `"G"`, `"G8vb"`, `"F8va"`, `"C3"`). Stored as `String` to avoid pulling
     /// `SheetMusicLayout` into Domain — the Reader feature converts via `NotatedClef(rawType:)` at the use site.
@@ -108,8 +108,8 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         staffSize: Double? = nil,
         hiddenStaves: Set<StaffAddress>,
         authoredHiddenStaves: Set<StaffAddress> = [],
-        staffProgramOverrides: [StaffAddress: Int] = [:],
-        staffVolumeOverrides: [StaffAddress: Double] = [:],
+        stripProgramOverrides: [MixerStripID: Int] = [:],
+        stripVolumeOverrides: [MixerStripID: Double] = [:],
         staffClefOverrides: [StaffAddress: String] = [:],
         tempoMultiplier: Double? = nil,
         honorLayoutBreaks: Bool? = nil,
@@ -125,8 +125,8 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.staffSize = staffSize.map { min(max($0, Self.minStaffSize), Self.maxStaffSize) }
         self.hiddenStaves = hiddenStaves
         self.authoredHiddenStaves = authoredHiddenStaves
-        self.staffProgramOverrides = staffProgramOverrides.mapValues { min(max($0, 0), 127) }
-        self.staffVolumeOverrides = staffVolumeOverrides.mapValues { min(max($0, 0), 1) }
+        self.stripProgramOverrides = stripProgramOverrides.mapValues { min(max($0, 0), 127) }
+        self.stripVolumeOverrides = stripVolumeOverrides.mapValues { min(max($0, 0), 1) }
         self.staffClefOverrides = staffClefOverrides.filter { _, raw in
             Self.knownClefRawTypes.contains(raw)
         }
@@ -167,28 +167,30 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         honorLayoutBreaks ?? defaultValue
     }
 
-    /// Whether any setting addressed by staff index is set. These are exactly the settings that stop meaning what the
-    /// user chose if the staves are renumbered — which is what re-reading a PDF can do.
-    public var hasStaffBoundOverrides: Bool {
+    /// Whether any setting addressed by an index the score supplies, which a re-parse can renumber, is set. These are
+    /// exactly the settings that stop meaning what the user chose if that renumbering happens — which is what
+    /// re-reading a PDF can do.
+    public var hasScoreBoundOverrides: Bool {
         !hiddenStaves.isEmpty
-            || !staffProgramOverrides.isEmpty
-            || !staffVolumeOverrides.isEmpty
+            || !stripProgramOverrides.isEmpty
+            || !stripVolumeOverrides.isEmpty
             || !staffClefOverrides.isEmpty
             || (transposeSemitones ?? 0) != 0
     }
 
-    /// A copy with every staff-index-addressed setting reset. Sound-only settings (tempo, A4, master volume, repeat)
-    /// and `staffSize` survive — they don't reference staves by index. `transposeSemitones` goes back to `nil`
-    /// (untouched) rather than an explicit `0`, since the user's choice no longer applies to the new staff numbering.
-    /// `hasSeededAuthoredVisibility` goes back to `false` so the next open re-seeds the new parse's authored hidden
-    /// staves, and `authoredHiddenStaves` is emptied with it: keeping the old parse's provenance next to an emptied
-    /// `hiddenStaves` would read as "the user revealed all of these" until the score is opened again.
-    public func clearingStaffBoundOverrides() -> ReaderPreferences {
+    /// A copy with every setting addressed by an index the score supplies, which a re-parse can renumber, reset.
+    /// Sound-only settings (tempo, A4, master volume, repeat) and `staffSize` survive — they don't reference such an
+    /// index. `transposeSemitones` goes back to `nil` (untouched) rather than an explicit `0`, since the user's
+    /// choice no longer applies to the new numbering. `hasSeededAuthoredVisibility` goes back to `false` so the next
+    /// open re-seeds the new parse's authored hidden staves, and `authoredHiddenStaves` is emptied with it: keeping
+    /// the old parse's provenance next to an emptied `hiddenStaves` would read as "the user revealed all of these"
+    /// until the score is opened again.
+    public func clearingScoreBoundOverrides() -> ReaderPreferences {
         var copy = self
         copy.hiddenStaves = []
         copy.authoredHiddenStaves = []
-        copy.staffProgramOverrides = [:]
-        copy.staffVolumeOverrides = [:]
+        copy.stripProgramOverrides = [:]
+        copy.stripVolumeOverrides = [:]
         copy.staffClefOverrides = [:]
         copy.transposeSemitones = nil
         copy.hasSeededAuthoredVisibility = false
@@ -207,8 +209,10 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
     }
 
     /// Version stamped into every encoded payload. `1` is implicit: blobs written before this key existed simply
-    /// don't carry it, which is exactly what `init(from:)` uses to recognize legacy data.
-    static let codableSchemaVersion = 2
+    /// don't carry it, which is exactly what `init(from:)` uses to recognize legacy data. `3` is when
+    /// `staffProgramOverrides` / `staffVolumeOverrides` (the JSON keys, unchanged) switched from addressing a staff
+    /// to addressing a mixer strip — a blob at `2` or earlier decodes those rows as staff-keyed and gets collapsed.
+    static let codableSchemaVersion = 3
 
     /// What the pre-`schemaVersion` code stored for a user who had never chosen anything — staff size was seeded to
     /// the then-default 14, and the other three were written eagerly at their defaults. Frozen on purpose: a
@@ -228,8 +232,8 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         try c.encodeIfPresent(staffSize, forKey: .staffSize)
         try c.encode(hiddenStaves, forKey: .hiddenStaves)
         try c.encode(authoredHiddenStaves, forKey: .authoredHiddenStaves)
-        try c.encode(staffProgramOverrides, forKey: .staffProgramOverrides)
-        try c.encode(staffVolumeOverrides, forKey: .staffVolumeOverrides)
+        try c.encode(stripProgramOverrides, forKey: .staffProgramOverrides)
+        try c.encode(stripVolumeOverrides, forKey: .staffVolumeOverrides)
         try c.encode(staffClefOverrides, forKey: .staffClefOverrides)
         try c.encodeIfPresent(tempoMultiplier, forKey: .tempoMultiplier)
         try c.encodeIfPresent(honorLayoutBreaks, forKey: .honorLayoutBreaks)
@@ -252,7 +256,8 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         // `codableSchemaVersion`, after which present values are authoritative. Without it the normalization would
         // re-run on every read and permanently collapse a deliberately re-chosen default back to "untouched".
         // iOS persistence never takes this path (GRDB records only), so the blast radius is the Android blob.
-        let isLegacy = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) == nil
+        let schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion)
+        let isLegacy = schemaVersion == nil
         let id = try c.decode(ReaderPreferencesID.self, forKey: .id)
         let scoreItemID = try c.decode(ScoreItemID.self, forKey: .scoreItemID)
         let rawStaffSize = try c.decodeIfPresent(Double.self, forKey: .staffSize)
@@ -266,12 +271,21 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         let authoredHidden = try c.decodeIfPresent(
             Set<StaffAddress>.self, forKey: .authoredHiddenStaves,
         ) ?? (isLegacy ? hiddenStaves : [])
-        let programOverrides = try c.decodeIfPresent(
-            [StaffAddress: Int].self, forKey: .staffProgramOverrides,
+        var programOverrides = try c.decodeIfPresent(
+            [MixerStripID: Int].self, forKey: .staffProgramOverrides,
         ) ?? [:]
-        let volumeOverrides = try c.decodeIfPresent(
-            [StaffAddress: Double].self, forKey: .staffVolumeOverrides,
+        var volumeOverrides = try c.decodeIfPresent(
+            [MixerStripID: Double].self, forKey: .staffVolumeOverrides,
         ) ?? [:]
+        // A blob at schema 2 or earlier keyed these by STAFF. A staff and a strip both encode as two integers,
+        // so the rows decode without complaint and mean the wrong thing: `[0,1]` was "part 0's second staff",
+        // which under strips is "part 0's second instrument" — a different sound. Collapse to the part's first
+        // entry, which is what the SQL migration does to the same rows.
+        let isPreStrip = (schemaVersion ?? 0) < 3
+        if isPreStrip {
+            programOverrides = programOverrides.filter { $0.key.instrumentOrdinal == 0 }
+            volumeOverrides = volumeOverrides.filter { $0.key.instrumentOrdinal == 0 }
+        }
         let clefOverrides = try c.decodeIfPresent(
             [StaffAddress: String].self, forKey: .staffClefOverrides,
         ) ?? [:]
@@ -293,8 +307,8 @@ public struct ReaderPreferences: Hashable, Sendable, Codable, Identifiable {
         self.init(
             id: id, scoreItemID: scoreItemID, staffSize: staffSize,
             hiddenStaves: hiddenStaves, authoredHiddenStaves: authoredHidden,
-            staffProgramOverrides: programOverrides,
-            staffVolumeOverrides: volumeOverrides,
+            stripProgramOverrides: programOverrides,
+            stripVolumeOverrides: volumeOverrides,
             staffClefOverrides: clefOverrides,
             tempoMultiplier: tempo,
             honorLayoutBreaks: honorBreaks, repeatMode: mode, abRepeat: ab,

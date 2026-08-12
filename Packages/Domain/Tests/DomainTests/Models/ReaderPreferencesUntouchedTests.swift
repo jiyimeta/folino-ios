@@ -69,13 +69,13 @@ struct ReaderPreferencesUntouchedTests {
         #expect(touched.effectiveStaffSize(default: 16) == 20)
     }
 
-    @Test func `explicit zero transpose is not a staff-bound override`() {
+    @Test func `explicit zero transpose is not a score-bound override`() {
         let prefs = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [], transposeSemitones: 0)
-        #expect(!prefs.hasStaffBoundOverrides)
+        #expect(!prefs.hasScoreBoundOverrides)
     }
 
-    @Test func `clearingStaffBoundOverrides resets transpose to nil`() {
+    @Test func `clearingScoreBoundOverrides resets transpose to nil`() {
         let prefs = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [], transposeSemitones: 3)
-        #expect(prefs.clearingStaffBoundOverrides().transposeSemitones == nil)
+        #expect(prefs.clearingScoreBoundOverrides().transposeSemitones == nil)
     }
 }

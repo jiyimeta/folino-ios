@@ -21,7 +21,7 @@ struct ReaderPreferencesTests {
         #expect(inRange.staffSize == 14)
     }
 
-    @Test func `staff-bound overrides are detected and cleared, leaving sound-only settings alone`() {
+    @Test func `score-bound overrides are detected and cleared, leaving sound-only settings alone`() {
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
@@ -33,10 +33,10 @@ struct ReaderPreferencesTests {
             masterVolume: 2.0,
             transposeSemitones: 3,
         )
-        #expect(prefs.hasStaffBoundOverrides)
+        #expect(prefs.hasScoreBoundOverrides)
 
-        let cleared = prefs.clearingStaffBoundOverrides()
-        #expect(!cleared.hasStaffBoundOverrides)
+        let cleared = prefs.clearingScoreBoundOverrides()
+        #expect(!cleared.hasScoreBoundOverrides)
         #expect(cleared.hiddenStaves.isEmpty)
         #expect(cleared.authoredHiddenStaves.isEmpty)
         #expect(cleared.staffClefOverrides.isEmpty)
@@ -46,9 +46,17 @@ struct ReaderPreferencesTests {
         #expect(cleared.masterVolume == 2.0)
     }
 
-    @Test func `preferences with nothing staff-bound set report clean`() {
+    @Test func `preferences with nothing score-bound set report clean`() {
         let prefs = ReaderPreferences(scoreItemID: ScoreItemID(), staffSize: 14, hiddenStaves: [])
-        #expect(!prefs.hasStaffBoundOverrides)
+        #expect(!prefs.hasScoreBoundOverrides)
+    }
+
+    @Test func `a strip override alone makes the preferences score-bound`() {
+        var prefs = ReaderPreferences(scoreItemID: ScoreItemID(), hiddenStaves: [])
+        prefs.stripVolumeOverrides = [MixerStripID(partIndex: 0, instrumentOrdinal: 0): 0.5]
+
+        #expect(prefs.hasScoreBoundOverrides)
+        #expect(prefs.clearingScoreBoundOverrides().stripVolumeOverrides.isEmpty)
     }
 
     @Test func `default ID is fresh`() {
@@ -77,40 +85,40 @@ struct ReaderPreferencesTests {
             staffSize: 14,
             hiddenStaves: [],
         )
-        #expect(prefs.staffProgramOverrides.isEmpty)
+        #expect(prefs.stripProgramOverrides.isEmpty)
     }
 
     @Test func `program overrides are clamped to 0 through 127`() {
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let strip = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
         let belowRange = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffProgramOverrides: [address: -5],
+            stripProgramOverrides: [strip: -5],
         )
-        #expect(belowRange.staffProgramOverrides[address] == 0)
+        #expect(belowRange.stripProgramOverrides[strip] == 0)
 
         let aboveRange = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffProgramOverrides: [address: 999],
+            stripProgramOverrides: [strip: 999],
         )
-        #expect(aboveRange.staffProgramOverrides[address] == 127)
+        #expect(aboveRange.stripProgramOverrides[strip] == 127)
     }
 
     @Test func `program overrides round trip through codable`() throws {
-        let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let strip1 = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+        let strip2 = MixerStripID(partIndex: 1, instrumentOrdinal: 1)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffProgramOverrides: [address1: 6, address2: 40],
+            stripProgramOverrides: [strip1: 6, strip2: 40],
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
-        #expect(decoded.staffProgramOverrides == prefs.staffProgramOverrides)
+        #expect(decoded.stripProgramOverrides == prefs.stripProgramOverrides)
     }
 
     @Test func `tempo multiplier defaults to nil`() {
@@ -171,54 +179,54 @@ struct ReaderPreferencesTests {
         #expect(decoded.tempoMultiplier == 1.25)
     }
 
-    @Test func `staff volume overrides default to empty`() {
+    @Test func `strip volume overrides default to empty`() {
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
         )
-        #expect(prefs.staffVolumeOverrides.isEmpty)
+        #expect(prefs.stripVolumeOverrides.isEmpty)
     }
 
-    @Test func `staff volume overrides are clamped to zero through one`() {
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+    @Test func `strip volume overrides are clamped to zero through one`() {
+        let strip = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
         let belowRange = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: -0.5],
+            stripVolumeOverrides: [strip: -0.5],
         )
-        #expect(belowRange.staffVolumeOverrides[address] == 0)
+        #expect(belowRange.stripVolumeOverrides[strip] == 0)
 
         let aboveRange = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 2.0],
+            stripVolumeOverrides: [strip: 2.0],
         )
-        #expect(aboveRange.staffVolumeOverrides[address] == 1)
+        #expect(aboveRange.stripVolumeOverrides[strip] == 1)
 
         let inRange = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 0.42],
+            stripVolumeOverrides: [strip: 0.42],
         )
-        #expect(inRange.staffVolumeOverrides[address] == 0.42)
+        #expect(inRange.stripVolumeOverrides[strip] == 0.42)
     }
 
-    @Test func `staff volume overrides round trip through codable`() throws {
-        let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+    @Test func `strip volume overrides round trip through codable`() throws {
+        let strip1 = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+        let strip2 = MixerStripID(partIndex: 1, instrumentOrdinal: 1)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address1: 0.25, address2: 0.8],
+            stripVolumeOverrides: [strip1: 0.25, strip2: 0.8],
         )
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(ReaderPreferences.self, from: data)
-        #expect(decoded.staffVolumeOverrides == prefs.staffVolumeOverrides)
+        #expect(decoded.stripVolumeOverrides == prefs.stripVolumeOverrides)
     }
 
     @Test func `clef override round trips through codable`() throws {
@@ -346,8 +354,8 @@ struct ReaderPreferencesTests {
             staffSize: 17,
             hiddenStaves: [StaffAddress(partIndex: 0, staffIndexInPart: 1)],
             authoredHiddenStaves: [StaffAddress(partIndex: 1, staffIndexInPart: 1)],
-            staffProgramOverrides: [StaffAddress(partIndex: 0, staffIndexInPart: 0): 40],
-            staffVolumeOverrides: [StaffAddress(partIndex: 1, staffIndexInPart: 0): 0.5],
+            stripProgramOverrides: [MixerStripID(partIndex: 0, instrumentOrdinal: 0): 40],
+            stripVolumeOverrides: [MixerStripID(partIndex: 1, instrumentOrdinal: 0): 0.5],
             staffClefOverrides: [StaffAddress(partIndex: 0, staffIndexInPart: 0): "F"],
             tempoMultiplier: 1.5,
             honorLayoutBreaks: false,

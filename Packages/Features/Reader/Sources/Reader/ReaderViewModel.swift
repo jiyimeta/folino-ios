@@ -238,8 +238,21 @@ final class ReaderViewModel {
         mixerModel.onChange = { [weak self] in
             guard let self else { return }
             await preferencesStore.mutate { prefs in
-                prefs.staffProgramOverrides = self.mixerModel.staffProgramOverrides
-                prefs.staffVolumeOverrides = self.mixerModel.staffVolumeOverrides
+                // re-keyed in Task 9: collapse the still-staff-addressed mixer model onto one strip per part —
+                // the same `instrumentOrdinal: 0` stopgap `PlaybackMixerModel` already uses for the engine — until
+                // the real per-strip UI lands.
+                prefs.stripProgramOverrides = Dictionary(
+                    self.mixerModel.staffProgramOverrides.map { address, program in
+                        (MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0), program)
+                    },
+                    uniquingKeysWith: { first, _ in first },
+                )
+                prefs.stripVolumeOverrides = Dictionary(
+                    self.mixerModel.staffVolumeOverrides.map { address, volume in
+                        (MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0), volume)
+                    },
+                    uniquingKeysWith: { first, _ in first },
+                )
             }
         }
     }

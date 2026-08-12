@@ -287,11 +287,11 @@ extension AnalyticsEvent {
         if !userHidden.isEmpty { params["hidden_staff_count"] = .int(userHidden.count) }
         let userRevealed = prefs.authoredHiddenStaves.subtracting(prefs.hiddenStaves)
         if !userRevealed.isEmpty { params["revealed_staff_count"] = .int(userRevealed.count) }
-        if !prefs.staffProgramOverrides.isEmpty {
-            params["program_override_count"] = .int(prefs.staffProgramOverrides.count)
+        if !prefs.stripProgramOverrides.isEmpty {
+            params["program_override_count"] = .int(prefs.stripProgramOverrides.count)
         }
-        if !prefs.staffVolumeOverrides.isEmpty {
-            params["volume_override_count"] = .int(prefs.staffVolumeOverrides.count)
+        if !prefs.stripVolumeOverrides.isEmpty {
+            params["volume_override_count"] = .int(prefs.stripVolumeOverrides.count)
         }
         if !prefs.staffClefOverrides.isEmpty {
             params["clef_override_count"] = .int(prefs.staffClefOverrides.count)

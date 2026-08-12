@@ -34,8 +34,23 @@ final class PlaybackMixerModel {
     static let defaultVolume = 1.0
 
     func sync(from prefs: ReaderPreferences) {
-        staffProgramOverrides = prefs.staffProgramOverrides
-        staffVolumeOverrides = prefs.staffVolumeOverrides
+        // re-keyed in Task 9: this model stays staff-addressed until Task 9 converts it; every write elsewhere in
+        // this file already synthesizes `instrumentOrdinal: 0` as the part's one strip, so mirror that assumption
+        // on the way in — a restored override lands on the part's first staff until the real per-strip UI lands.
+        staffProgramOverrides = Dictionary(
+            prefs.stripProgramOverrides.compactMap { strip, program in
+                strip.instrumentOrdinal == 0
+                    ? (StaffAddress(partIndex: strip.partIndex, staffIndexInPart: 0), program) : nil
+            },
+            uniquingKeysWith: { first, _ in first },
+        )
+        staffVolumeOverrides = Dictionary(
+            prefs.stripVolumeOverrides.compactMap { strip, volume in
+                strip.instrumentOrdinal == 0
+                    ? (StaffAddress(partIndex: strip.partIndex, staffIndexInPart: 0), volume) : nil
+            },
+            uniquingKeysWith: { first, _ in first },
+        )
     }
 
     // MARK: - Volume / mute / solo

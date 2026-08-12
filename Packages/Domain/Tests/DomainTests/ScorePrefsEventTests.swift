@@ -6,6 +6,8 @@ struct ScorePrefsEventTests {
     private let scoreID = ScoreItemID()
     private let staffA = StaffAddress(partIndex: 0, staffIndexInPart: 0)
     private let staffB = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+    private let stripA = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+    private let stripB = MixerStripID(partIndex: 1, instrumentOrdinal: 0)
 
     @Test func `an all-untouched row produces no event`() {
         let prefs = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [])
@@ -76,7 +78,7 @@ struct ScorePrefsEventTests {
     @Test func `override dictionaries report counts`() throws {
         let prefs = ReaderPreferences(
             scoreItemID: scoreID, hiddenStaves: [],
-            staffProgramOverrides: [staffA: 40], staffVolumeOverrides: [staffA: 0.5, staffB: 0.7],
+            stripProgramOverrides: [stripA: 40], stripVolumeOverrides: [stripA: 0.5, stripB: 0.7],
             staffClefOverrides: [staffA: "F"],
         )
         let event = try #require(AnalyticsEvent.scorePrefs(prefs, screenWidthPt: 375))
@@ -110,7 +112,7 @@ struct ScorePrefsEventTests {
         let prefs = ReaderPreferences(
             scoreItemID: scoreID, staffSize: 16,
             hiddenStaves: [staffA], authoredHiddenStaves: [staffB],
-            staffProgramOverrides: [staffA: 40], staffVolumeOverrides: [staffA: 0.5],
+            stripProgramOverrides: [stripA: 40], stripVolumeOverrides: [stripA: 0.5],
             staffClefOverrides: [staffA: "F"],
             tempoMultiplier: 1.2, honorLayoutBreaks: false,
             masterVolume: 0.8, transposeSemitones: -3, a4ReferenceHz: 442,
