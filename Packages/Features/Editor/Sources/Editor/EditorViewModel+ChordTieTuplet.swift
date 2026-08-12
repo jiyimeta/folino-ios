@@ -21,7 +21,7 @@ extension EditorViewModel {
     }
 
     /// iPad +3度 / +8度 → `AddNoteToChord` with `IntervalPlanner`'s pitch.
-    public func addIntervalNote(_ interval: EditorInterval) {
+    public func addIntervalNote(_ interval: DiatonicInterval) {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
         let keySig = score.activeKey(at: noteID)
         let target: (pitch: Int, tpc: Int)? = switch interval {
