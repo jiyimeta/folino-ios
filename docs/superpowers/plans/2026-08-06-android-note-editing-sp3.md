@@ -501,21 +501,30 @@ struct HostFileFacts: FileFactsProviding, @unchecked Sendable {
 /// The writer seam, unimplemented in SP3 by design.
 ///
 /// SP5 owns persistence: the MSCZ encode plus the POSIX write, and the Room row refresh behind a second
-/// `@WireletProvided` method. Until then nothing calls it — the bridge never schedules a save and never flushes one
-/// — and a write that somehow did arrive must fail loudly rather than silently drop an edit on the floor.
+/// `@WireletProvided` method. Until then nothing calls it — the bridge never schedules a save and never flushes one.
+///
+/// **Android's `refreshRow` will be a partial update, and that is decided here rather than in SP5.** It writes
+/// exactly the three columns a save derives — `localFileName`, `contentHash`, `sizeBytes` — keyed on the row's id,
+/// which is what `ScoreFileWriting`'s own doc comment asks for ("so the list shows the new size and digest"). That
+/// decision is what makes the stub row below permanently harmless, and it is the reason no `ScoreItem` wire
+/// projection has to exist: a 20-field hand-maintained duplicate of a Domain type is exactly the drift §5.4 is
+/// about. iOS keeps its whole-row repository write; the seam is per-platform by construction.
+///
+/// `preconditionFailure` rather than a thrown error, on purpose. `performSave` catches everything and keeps
+/// `isDirty` true, so a thrown "unimplemented" is indistinguishable from a retriable save failure — it would just
+/// mark the session permanently dirty and say nothing. A call here is a plan violation, not a runtime condition, and
+/// a dev-time crash that names the plan beats a flag nobody reads. (`SheetMusicError.invalidEdit` in particular
+/// would be the least honest spelling available: it is the one error this feature deliberately swallows as benign.)
 struct UnimplementedScoreWriter: ScoreFileWriting, @unchecked Sendable {
     func write(_: Score, to _: URL, format _: ScoreFormat) async throws {
-        throw SheetMusicError.invalidEdit
+        preconditionFailure("persistence is SP5's; nothing may reach ScoreFileWriting before it lands")
     }
 
     func refreshRow(_: ScoreItem) async throws {
-        throw SheetMusicError.invalidEdit
+        preconditionFailure("persistence is SP5's; nothing may reach ScoreFileWriting before it lands")
     }
 }
 ```
-
-If `SheetMusicError.invalidEdit` is not the right spelling in 1.13.0, use whatever `SheetMusicError` case the engine
-already throws for a refused edit — do not add a new error type for a stub.
 
 - [ ] **Step 5: The bridge, with lifecycle only**
 
@@ -590,7 +599,7 @@ public final class EditorBridge {
     @WireletExpose
     public func beginSession(scorePath: String, scoresDirectory: String, scoreId: String) -> Bool {
         guard let score = Self.parseScore(atPath: scorePath) else { return false }
-        let item = Self.scoreItem(id: scoreId, localFileName: URL(fileURLWithPath: scorePath).lastPathComponent)
+        let item = Self.stubRowPendingSave(id: scoreId, localFileName: URL(fileURLWithPath: scorePath).lastPathComponent)
         let core = EditorSessionCore(
             scoreItem: item,
             scoresDirectory: URL(fileURLWithPath: scoresDirectory),
@@ -642,24 +651,39 @@ public final class EditorBridge {
         return try? ScoreFileParsing.parse(data: data, filename: URL(fileURLWithPath: path).lastPathComponent)
     }
 
-    /// The library row this session edits. SP3 carries only what the save policy reads — the file name decides
-    /// `.mscx`/`.mscz` in place versus a sibling `.mscz`, and the id keys the Room row. SP5 widens this when it
-    /// implements the refresh; until then no field but these two is ever read back out.
-    private static func scoreItem(id: String, localFileName: String) -> ScoreItem { … }
+    /// A deliberately partial library row, named so nobody mistakes it for a real one.
+    ///
+    /// Only two fields are real: the id, which keys the Room row, and the file name, which is what decides
+    /// `.mscx`/`.mscz`-in-place versus a sibling `.mscz`. Every other field is a neutral placeholder.
+    ///
+    /// **That is safe only because Android's `refreshRow` is a partial update of the three save-derived columns**
+    /// — see `UnimplementedScoreWriter`, which is where that decision is written down. Note that
+    /// `EditorSessionCore.performSave` rebuilds the row from EVERY field of this value before calling
+    /// `refreshRow`, so a whole-row Android writer would push these placeholders over the user's real title, tags
+    /// and dates. The two halves are one safety; do not implement either without the other.
+    private static func stubRowPendingSave(id: String, localFileName: String) -> ScoreItem { … }
 }
 ```
 
-Two blanks to fill from the actual APIs rather than from this plan:
+Three blanks to fill from the actual APIs rather than from this plan:
 
-1. **`ScoreFileParsing.parse(data:filename:)` is a placeholder name.** Use whatever Folino already calls to parse a
-   score from bytes on Android — check `Packages/Features/Library/Sources/FolinoLibraryJNI/LibraryAndroidStore.swift`
-   (`importScore`) and mirror it, including its format dispatch. Do not write a second format-dispatch ladder; if
-   the Library's one is not reachable from here, call `MSCZReader` / `MSCXParser` / the MusicXML reader directly in
-   the same order it does.
-2. **`ScoreItem(…)`** — fill every field from `Domain.ScoreItem`'s initializer with the neutral value for its type,
-   setting only `id` (from `scoreId`) and `localFileName`. Read the type first; do not guess the field list.
-3. **`MSCZWriter.data(from:)` is a placeholder name.** Use the encoder `Packages/Infrastructure` already uses for
-   `.mscz` writes and match its throwing shape.
+1. **`ScoreFileParsing.parse(data:filename:)` is a placeholder name.** The real one is
+   `MSCZReader.parse(contentsOf: URL)` from `SheetMusicMSCX` — it dispatches on the file's own format, which is why
+   `LibraryAndroidStore` runs every pickable format through it
+   (`Packages/Features/Library/Sources/FolinoLibraryJNI/LibraryAndroidStore.swift:309`, `:521`, `:1068`). Mirror that
+   call; do not write a second format-dispatch ladder.
+2. **`ScoreItem(…)`** — most fields have defaults; the ones you must pass are `title`, `composer`,
+   `instrumentationSummary`, `localFileName`, `contentHash`, `sizeBytes`, `lengthBeats`, `defaultTempoBpm`,
+   `primaryKey`, `addedAt`, `lastOpenedAt`, `tagIDs`, `isFavorite`
+   (`Packages/Domain/Sources/Domain/Models/ScoreItem.swift:52`). Read the type before writing the call. `id` is a
+   `ScoreItemID(rawValue: UUID)` — parse `scoreId`, and fall back to a fresh `UUID()` if it does not parse, exactly
+   as `AnnotationSaveBridge.open(scoreId:)` does.
+3. **`MSCZWriter.data(from:)` is a placeholder name.** The API Folino already uses is
+   `MSCZWriter.write(score:options:to:)`, which writes to a URL rather than returning bytes
+   (`LibraryAndroidStore.swift:566`, `Packages/Infrastructure/Sources/ScoreFiles/LiveScoreShareService.swift:135`).
+   If `SheetMusicMSCX` exposes no data-returning variant, write to a temporary file under `FileManager`'s temp
+   directory, read it back, and delete it — and say so in a comment, because a round trip through the disk for a
+   resync is worth a reader knowing about. Use the same `MSCXEncoderOptions(targetVersion:)` the Library passes.
 
 - [ ] **Step 6: Cross-compile just this much**
 
@@ -798,8 +822,15 @@ Fill in the rest of `sync()`:
     func sync() {
         isSessionActive = core?.isSessionActive ?? false
         guard let core else {
+            // Reset EVERYTHING the session owned. An asymmetric reset — clearing the booleans but leaving the armed
+            // length and the counters behind — reads as a bug even where it is inert, and one of these is not inert:
+            // Compose keeps collecting these StateFlows after a session ends, so a stale `armedDurationKind` lights
+            // a pad key for a session that no longer exists. `armedTuplet` is the one exception and stays put: the
+            // core deliberately survives `beginSession` with it, because it is a preference about how you are
+            // writing rather than state about one score.
             revision = 0
             appliedIntentCount = 0
+            selectionRevision = 0
             canUndo = false
             canRedo = false
             hasEditTarget = false
@@ -810,6 +841,12 @@ Fill in the rest of `sync()`:
             isSelectionTied = false
             canAppendTiedNote = false
             isCaretInTuplet = false
+            armedDurationKind = 0
+            armedDots = 0
+            isAddToChordArmed = false
+            calloutDurationKind = 0
+            calloutDots = 0
+            activeVoice = 0
             selectedItemFrame = nil
             caretItemFrame = nil
             return
@@ -1218,7 +1255,7 @@ git commit -m "build(android): cross-compile and stage the editor JNI library"
 
 ---
 
-# Part B — Kotlin: one relay, two gates (Tasks 6–8)
+# Part B — Kotlin: one relay, three gates (Tasks 6–8)
 
 ### Task 6: `:FolinoEditorAndroid`
 
@@ -1348,9 +1385,17 @@ git commit -m "build(android): add the FolinoEditorAndroid module and its file s
 
 ### Task 7: `EditSessionRelay` — the funnel and the gates
 
-The heart of SP3. One public method performs an op, and everything that must happen around an op happens inside it,
-so no caller can do half of it. The two gates from spec §8 live here too, because both of them are about the
-relationship between the two images and this class is the only thing that touches both.
+The heart of SP3. Every editing action is a method on this class, and everything that must happen around an action
+happens inside it, so no caller can do half of it. Spec §8's gates live here too — the version check before a
+session opens, the fingerprint check when it opens, and the sampled fingerprint check as it runs — because all three
+are about the relationship between the two images, and this class is the only thing that touches both.
+
+**The relay is the only holder of the bridge.** An earlier draft took a `perform(op: () -> Unit)` lambda and left the
+view model in the caller's hands too — which means SP4's Compose code can call `vm.inputPitch("C")` directly, strand
+its intent frames in the queue, and have them relayed later against a mirror that a resync has meanwhile rebuilt from
+a score already containing them. Double-application, divergence, and a resync loop, from a call that looks perfectly
+reasonable at the call site. Named delegations cost about twenty-five one-line methods and delete the escape hatch,
+which is what "one funnel that cannot be half-called" actually requires.
 
 **Files:**
 - Create: `Android/FolinoEditorAndroid/src/main/kotlin/com/keynumber/folino/editor/EditSessionHost.kt`
@@ -1362,9 +1407,15 @@ relationship between the two images and this class is the only thing that touche
   `io.github.jiyimeta.sheetmusic.SheetMusicJNI`.
 - Produces:
   - `interface EditSessionHost { fun scoreHandle(): Long; fun replaceScoreHandle(handle: Long); fun requestRelayout() }`
-  - `class EditSessionRelay(bridge, host, natives = RealEditNatives)` with `open(scorePath, scoresDirectory, scoreId): OpenResult`,
-    `perform(op: () -> Unit)`, `undo()`, `redo()`, `close()`, and `var resyncCount` for the tests.
-  - `interface EditNatives` — every ssm entry point the relay calls, so Task 8 can fake it on the JVM.
+  - `interface EditBridging` — the bridge surface the relay drives, plus `GeneratedEditBridging`, a pure delegation
+    over the generated view model. (Task 8 tests the relay's policy on the JVM, where the generated final class over
+    JNI cannot be constructed; the interface is what makes that possible, so it exists from the start rather than
+    being retrofitted.)
+  - `interface EditNatives` + `object RealEditNatives` — every ssm entry point the relay calls, likewise fakeable.
+  - `enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRROR_REFUSED }`
+  - `class EditSessionRelay(bridge: EditBridging, host: EditSessionHost, natives: EditNatives = RealEditNatives)`
+    with `open(scorePath, scoresDirectory, scoreId): OpenResult`, `close()`, `undo()`, `redo()`, one method per
+    editing op (SP4 calls these), the read-only projection SP4 collects, and `resyncCount` for the tests.
 
 - [ ] **Step 1: The host seam**
 
@@ -1403,8 +1454,10 @@ interface EditSessionHost {
 ```kotlin
 package com.keynumber.folino.editor
 
+import android.util.Log
 import com.keynumber.folino.editor.generated.EditorBridgeViewModel
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The ssm entry points the relay uses, behind an interface so the JVM tests can drive the policy without a device.
@@ -1435,6 +1488,53 @@ object RealEditNatives : EditNatives {
     override fun releaseScore(handle: Long) = SheetMusicJNI.nativeReleaseScore(handle)
 }
 
+/**
+ * The bridge surface the relay drives, behind an interface for the same reason `EditNatives` is one: the generated
+ * `EditorBridgeViewModel` is a final class over JNI, so the relay's policy — the part actually worth being sure
+ * about — would otherwise be testable only on a device. `GeneratedEditBridging` must stay a pure delegation.
+ *
+ * Ops are declared here as the relay needs them; add one per op the relay exposes.
+ */
+interface EditBridging {
+    fun engineVersionStamp(): Long
+    fun beginSession(path: String, dir: String, id: String): Boolean
+    fun endSession()
+    fun scoreFingerprint(): Long
+    fun encodeScore(): ByteArray
+    fun takeRelayFrames(): List<ByteArray>
+    fun revision(): Int
+    fun appliedIntentCount(): Int
+
+    fun selectItem(bytes: ByteArray)
+    fun inputPitch(letter: String)
+    fun deleteSelection()
+    fun writeRest()
+    fun armDuration(kind: Int)
+    fun toggleArmedDot()
+    fun setArmedDots(dots: Int)
+    fun setSelectionDuration(kind: Int)
+    fun setSelectionDots(dots: Int)
+    fun toggleSelectionDot()
+    fun shiftPitch(semitones: Int)
+    fun shiftOctave(octaves: Int)
+    fun setAccidental(raw: String)
+    fun toggleAddToChord()
+    fun removeSelectedNoteFromChord()
+    fun toggleTie()
+    fun appendTiedNote()
+    fun createTuplet(actualNotes: Int)
+    fun removeTuplet()
+    fun selectPreviousElement()
+    fun selectNextElement()
+    fun setActiveVoice(voice: Int)
+    fun setPlaybackActive(active: Boolean)
+    fun undo()
+    fun redo()
+}
+
+/** Pure delegation over the generated view model. No policy, no branching — anything else belongs in the relay. */
+class GeneratedEditBridging(val vm: EditorBridgeViewModel) : EditBridging { /* one line per member */ }
+
 /** Why a session could not open. */
 enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRROR_REFUSED }
 
@@ -1443,8 +1543,22 @@ enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRRO
  *
  * Editing on Android has an authoritative score in Folino's `.so` and a rendering score behind ssm's handle
  * (spec §4). Keeping them identical is four steps that must always happen together and in order — apply locally,
- * relay every intent that landed, check the two agree, redraw — so they are one method rather than four a caller
- * could get half right. `perform` is that method; nothing else in the app may call `nativeApplyEditIntent`.
+ * relay every intent that landed, check the two agree, redraw — so they are one private method rather than four a
+ * caller could get half right, and every editing op is a named entry point that runs it.
+ *
+ * **The relay owns the bridge.** `bridge` is private, and SP4 gets the ops through this class. A caller holding the
+ * view model could apply an intent locally without relaying it: the frames would sit in the queue until the next
+ * relayed op drained them — usually harmless, since order is preserved — but a resync in between re-encodes the
+ * authoritative score with those edits already in it, and the stranded frames then apply a second time. There is no
+ * way to make that safe from the outside, so there is no way in from the outside.
+ *
+ * ## Threading
+ *
+ * **Every method here must be called from one thread**, and on Android that thread is Compose's main thread.
+ * ssm's side takes a lock across each of its entry points; Folino's bridge deliberately does not (it holds a
+ * non-`Sendable` core, one per isolation domain), and an op followed by `takeRelayFrames()` is two separate JNI
+ * calls that must not interleave with another op's pair. Do not move these onto a coroutine dispatcher without
+ * giving the bridge a lock first.
  *
  * ## Why a `false` is never shrugged off
  *
@@ -1453,7 +1567,7 @@ enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRRO
  * call for a resync (SP0's finding, and the doc comment on `nativeApplyEditIntent` itself).
  */
 class EditSessionRelay(
-    private val bridge: EditorBridgeViewModel,
+    private val bridge: EditBridging,
     private val host: EditSessionHost,
     private val natives: EditNatives = RealEditNatives,
 ) {
@@ -1464,18 +1578,35 @@ class EditSessionRelay(
     private var appliedSinceCheck = 0
     private var isOpen = false
 
+    // MARK: - Lifecycle
+
     /**
      * Opens both sessions, or neither.
      *
-     * The version gate runs first and is absolute (§8.1): Folino's compiled-in `SheetMusicCore` and the one behind
-     * the handle must be the same build, because every guarantee here rests on both planning an intent identically.
-     * A stale `.so` has bricked this app before, and the answer is to stay read-only rather than to edit and hope.
+     * Three gates, in order.
      *
-     * Begin/end are strictly paired across both sides. If the mirror refuses, the authoritative session is closed
-     * again before returning — an authoritative session outliving a mirror is how a later undo returns `false`
-     * against a score that has already reverted.
+     * **The version gate (§8.1) is absolute.** Folino's compiled-in `SheetMusicCore` and the one behind the handle
+     * must be the same build, because every guarantee here rests on both planning an intent identically. A stale
+     * `.so` has bricked this app before, and the answer is to stay read-only rather than to edit and hope. Note what
+     * it does *not* catch: the stamp hashes a version string, so a stale mavenLocal AAR rebuilt at the same
+     * `0.0.0-SNAPSHOT` sails through. The gate protects shipped skew; keeping the local AARs republished protects
+     * dev skew.
+     *
+     * **Begin/end are strictly paired across both sides.** If the mirror refuses, the authoritative session is
+     * closed again before returning — an authoritative session outliving a mirror is how a later undo returns
+     * `false` against a score that has already reverted.
+     *
+     * **The fingerprint check at open is not paranoia; it is the normal second session.** Ending a session does not
+     * revert the mirror ("the score keeps whatever the session last wrote" — ssm's own words), and SP3/SP4 ship no
+     * save at all. So: edit, close, reopen — and the mirror is seeded from the *edited* score behind the handle
+     * while this side parses the *unedited* file. They diverge before the first keystroke, and nothing else would
+     * notice for up to `FINGERPRINT_SAMPLE_EVERY` edits — during which taps resolve against one score and edits
+     * apply to another, which is the "wrong element edited" failure, not a cosmetic one. Resyncing here pushes the
+     * file-parsed score into the handle, which is also the correct semantics: unsaved edits were never persisted, so
+     * the file is the truth. The same check covers a failed save, a double open, and a file replaced underneath us.
      */
     fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
+        if (isOpen) close()
         val handle = host.scoreHandle()
         if (handle == 0L) return OpenResult.NO_HANDLE
         if (bridge.engineVersionStamp() != natives.engineVersionStamp()) return OpenResult.VERSION_SKEW
@@ -1486,24 +1617,72 @@ class EditSessionRelay(
         }
         appliedSinceCheck = 0
         isOpen = true
+        if (verifyOrResync()) host.requestRelayout()
         return OpenResult.OPENED
     }
+
+    /** Ends both sides. Safe to call twice; `nativeEndEditSession` is a no-op for a handle with no session. */
+    fun close() {
+        if (!isOpen) return
+        natives.endEditSession(host.scoreHandle())
+        bridge.endSession()
+        isOpen = false
+    }
+
+    // MARK: - The editing ops
+    //
+    // One named method per op, each `relay { … }`. They exist so that `bridge` can stay private — see the class
+    // doc. Nothing here may branch: a decision in this file is a rule Android has and iOS does not.
+
+    fun selectItem(bytes: ByteArray) = relay { bridge.selectItem(bytes) }
+    fun inputPitch(letter: String) = relay { bridge.inputPitch(letter) }
+    fun deleteSelection() = relay { bridge.deleteSelection() }
+    fun writeRest() = relay { bridge.writeRest() }
+    fun armDuration(kind: Int) = relay { bridge.armDuration(kind) }
+    fun toggleArmedDot() = relay { bridge.toggleArmedDot() }
+    fun setArmedDots(dots: Int) = relay { bridge.setArmedDots(dots) }
+    fun setSelectionDuration(kind: Int) = relay { bridge.setSelectionDuration(kind) }
+    fun setSelectionDots(dots: Int) = relay { bridge.setSelectionDots(dots) }
+    fun toggleSelectionDot() = relay { bridge.toggleSelectionDot() }
+    fun shiftPitch(semitones: Int) = relay { bridge.shiftPitch(semitones) }
+    fun shiftOctave(octaves: Int) = relay { bridge.shiftOctave(octaves) }
+    fun setAccidental(raw: String) = relay { bridge.setAccidental(raw) }
+    fun toggleAddToChord() = relay { bridge.toggleAddToChord() }
+    fun removeSelectedNoteFromChord() = relay { bridge.removeSelectedNoteFromChord() }
+    fun toggleTie() = relay { bridge.toggleTie() }
+    fun appendTiedNote() = relay { bridge.appendTiedNote() }
+    fun createTuplet(actualNotes: Int) = relay { bridge.createTuplet(actualNotes) }
+    fun removeTuplet() = relay { bridge.removeTuplet() }
+    fun selectPreviousElement() = relay { bridge.selectPreviousElement() }
+    fun selectNextElement() = relay { bridge.selectNextElement() }
+    fun setActiveVoice(voice: Int) = relay { bridge.setActiveVoice(voice) }
+    fun setPlaybackActive(active: Boolean) = relay { bridge.setPlaybackActive(active) }
+
+    /**
+     * Undo and redo drive the mirror's OWN stacks rather than replaying an inverse: it was fed identical intents, so
+     * it has an identical stack. They are also always fingerprint-checked, because they are the two operations whose
+     * effect on the mirror is inferred rather than transmitted.
+     */
+    fun undo() = replay(natives::editUndo) { bridge.undo() }
+
+    fun redo() = replay(natives::editRedo) { bridge.redo() }
+
+    // MARK: - The funnel
 
     /**
      * Performs one op and carries its consequences across.
      *
-     * `op` is a call on `bridge` — `bridge.inputPitch("C")`, `bridge.deleteSelection()`, and so on. It may apply no
-     * intents (an inert key), one, or several; the frame list is what actually happened, which is why the count is
-     * read from the bridge rather than assumed from the op.
+     * The op may apply no intents (an inert key), one, or several; the frame list is what actually happened, which
+     * is why the count comes from the bridge rather than from the op.
      */
-    fun perform(op: () -> Unit) {
+    private fun relay(op: () -> Unit) {
         if (!isOpen) return
         op()
         val frames = bridge.takeRelayFrames()
         if (frames.isEmpty()) return
         val handle = host.scoreHandle()
         for (frame in frames) {
-            if (!natives.applyEditIntent(handle, frame.bytes)) {
+            if (!natives.applyEditIntent(handle, frame)) {
                 resync()
                 host.requestRelayout()
                 return
@@ -1517,23 +1696,14 @@ class EditSessionRelay(
         host.requestRelayout()
     }
 
-    /**
-     * Undo and redo drive the mirror's OWN stacks rather than replaying an inverse: it was fed identical intents, so
-     * it has an identical stack. They are also always fingerprint-checked, because they are the two operations whose
-     * effect on the mirror is inferred rather than transmitted.
-     */
-    fun undo() = replay(natives::editUndo) { bridge.undo() }
-
-    fun redo() = replay(natives::editRedo) { bridge.redo() }
-
     private fun replay(mirror: (Long) -> Boolean, local: () -> Unit) {
         if (!isOpen) return
-        val before = bridge.appliedIntentCount.value
-        val revisionBefore = bridge.revision.value
+        val before = bridge.appliedIntentCount()
+        val revisionBefore = bridge.revision()
         local()
         // A refused undo/redo leaves the local revision where it was, and must not touch the mirror.
-        if (bridge.revision.value == revisionBefore) return
-        check(bridge.appliedIntentCount.value == before) { "undo/redo must not count as an applied intent" }
+        if (bridge.revision() == revisionBefore) return
+        check(bridge.appliedIntentCount() == before) { "undo/redo must not count as an applied intent" }
         if (!mirror(host.scoreHandle())) {
             resync()
         } else {
@@ -1543,17 +1713,13 @@ class EditSessionRelay(
         host.requestRelayout()
     }
 
-    /** Ends both sides. Safe to call twice; `nativeEndEditSession` is a no-op for a handle with no session. */
-    fun close() {
-        if (!isOpen) return
-        natives.endEditSession(host.scoreHandle())
-        bridge.endSession()
-        isOpen = false
-    }
+    // MARK: - The §8.3 gate
 
-    /** The §8.3 check: the two copies must be byte-identical, or one of them is wrong. */
-    private fun verifyOrResync() {
-        if (bridge.scoreFingerprint() != natives.scoreFingerprint(host.scoreHandle())) resync()
+    /** Returns true when the two copies already agreed; false when they did not and a resync was attempted. */
+    private fun verifyOrResync(): Boolean {
+        if (bridge.scoreFingerprint() == natives.scoreFingerprint(host.scoreHandle())) return true
+        resync()
+        return false
     }
 
     /**
@@ -1563,13 +1729,31 @@ class EditSessionRelay(
      * why the authoritative session's stack is the one the UI reads: `canUndo` comes from Folino's side, and a
      * post-resync undo relays into a mirror that will refuse it — which resyncs again, from a score that is by then
      * correct. Divergence costs a redraw and a stack, never a file: saves always encode the authoritative copy.
+     *
+     * Queued frames are dropped first. The encode about to be loaded already contains every edit they describe, so
+     * relaying them afterwards would apply each one twice — the one way a resync could make things worse than the
+     * divergence it is repairing.
+     *
+     * A resync that cannot complete closes the session rather than leaving it open: with the two copies known to
+     * disagree and no way to reconcile them, every further op would re-trigger a failing resync, and the taps in
+     * between would edit whatever the stale layout resolved to. SP4 surfaces that as dropping back to read-only.
      */
     private fun resync() {
         resyncCount += 1
-        val bytes = bridge.encodeScore().bytes
-        if (bytes.isEmpty()) return
+        Log.w(TAG, "edit session diverged; resyncing the mirror (resync #$resyncCount)")
+        bridge.takeRelayFrames()
+        val bytes = bridge.encodeScore()
+        if (bytes.isEmpty()) {
+            Log.e(TAG, "resync failed: the authoritative score would not encode; closing the session")
+            close()
+            return
+        }
         val fresh = natives.loadScore(bytes)
-        if (fresh == 0L) return
+        if (fresh == 0L) {
+            Log.e(TAG, "resync failed: the re-encoded score would not load; closing the session")
+            close()
+            return
+        }
         val stale = host.scoreHandle()
         host.replaceScoreHandle(fresh)
         natives.releaseScore(stale)
@@ -1578,22 +1762,36 @@ class EditSessionRelay(
     }
 
     companion object {
+        private const val TAG = "EditSessionRelay"
+
         /**
          * How many applied intents may pass between fingerprint checks.
          *
          * `stableFingerprint` walks the whole value tree, so it is the one thing here whose cost grows with the
          * score. Eight is the starting point the device test in Task 9 measures against: if one walk on the parity
          * fixture costs more than about two milliseconds, raise this until the amortized cost per edit is under half
-         * a millisecond, and record the measurement in this comment. Undo, redo and (from SP5) every save check
-         * unconditionally regardless of this number.
+         * a millisecond, and record the measurement in this comment. Session open, undo, redo and (from SP5) every
+         * save check unconditionally regardless of this number.
          */
         const val FINGERPRINT_SAMPLE_EVERY = 8
     }
 }
 ```
 
-`bridge.revision` / `bridge.appliedIntentCount` are StateFlows on the generated view model; if the generator names
-them differently (or exposes plain getters), match what it actually emits.
+Three things to settle against the generator rather than against this plan:
+
+- **`GeneratedEditBridging`'s body is left as a comment above on purpose** — write one delegating line per member,
+  matching whatever the generated view model actually emits. Its ops may be plain methods or suspend functions, and
+  its projection may be `StateFlow` properties or getters; `revision()` / `appliedIntentCount()` in `EditBridging`
+  are declared as plain functions so the interface does not leak that choice into the relay.
+- **`EditorBridgeViewModel` stays reachable through `GeneratedEditBridging.vm`** so SP4 can collect the projection
+  StateFlows for the UI. Reading state is not the hazard the private `bridge` guards against — applying an op is.
+  If the generated projection turns out to be inconvenient to expose that way, add read-only pass-throughs on the
+  relay rather than handing SP4 the whole view model.
+- **`Log`** is `android.util.Log`, which is unavailable in JVM unit tests unless the module sets
+  `testOptions { unitTests.isReturnDefaultValues = true }`. Add that to `build.gradle.kts` if Task 8's tests fail
+  with `Method w in android.util.Log not mocked`. Spec §8.3 asks for an analytics event here as well; SP4/SP5 wires
+  the analytics bridge, and the log is what SP3 can honestly do.
 
 - [ ] **Step 3: Compile**
 
@@ -1614,23 +1812,24 @@ git commit -m "feat(android): relay every applied intent through one gated funne
 
 ### Task 8: The relay's policy, tested on the JVM
 
-Everything in Task 7 that is a *decision* rather than a JNI call, tested where it is cheap: the gates, the sampling
-interval, and the four ways a resync gets triggered.
+Everything in Task 7 that is a *decision* rather than a JNI call, tested where it is cheap: the three gates, the
+sampling interval, and the ways a resync gets triggered.
 
 **Files:**
 - Create: `Android/FolinoEditorAndroid/src/test/kotlin/com/keynumber/folino/editor/EditSessionRelayTest.kt`
 
 **Interfaces:**
-- Consumes: `EditSessionRelay`, `EditNatives`, `EditSessionHost` (Task 7).
+- Consumes: `EditSessionRelay`, `EditBridging`, `EditNatives`, `EditSessionHost` (Task 7).
 - Produces: nothing further; this is a leaf.
 
 - [ ] **Step 1: Write the failing tests**
 
-The generated `EditorBridgeViewModel` is a final class over JNI, so it cannot be faked on the JVM. Extract the
-bridge's surface the relay uses into a small interface in Task 7 if it is not already one — **do this by changing
-`EditSessionRelay`'s constructor to take an `EditBridging` interface, with a one-line adapter over the generated view
-model in the same file.** The same argument as `EditNatives`: the relay's policy is what is worth testing, and it is
-untestable while it is welded to two JNI classes.
+Both seams the fakes need — `EditBridging` and `EditNatives` — already exist from Task 7, so this task only writes
+tests.
+
+The cases below are the ones that must exist; write them in this shape, and add any others the relay's code makes
+you want. `FakeBridge` implements `EditBridging`, `FakeNatives` implements `EditNatives`, `FakeHost` implements
+`EditSessionHost`; the ops on `FakeBridge` that this file does not exercise can be empty bodies.
 
 ```kotlin
 package com.keynumber.folino.editor
@@ -1643,10 +1842,11 @@ private class FakeBridge : EditBridging {
     var stamp = 7L
     var fingerprint = 100L
     var opened = false
-    var framesToEmit = mutableListOf<ByteArray>()
     var revision = 0
     var appliedIntentCount = 0
     var encoded = byteArrayOf(1, 2, 3)
+    var refuseUndo = false
+    private val framesToEmit = mutableListOf<ByteArray>()
 
     override fun engineVersionStamp() = stamp
     override fun beginSession(path: String, dir: String, id: String) = true.also { opened = true }
@@ -1656,133 +1856,51 @@ private class FakeBridge : EditBridging {
     override fun takeRelayFrames(): List<ByteArray> = framesToEmit.toList().also { framesToEmit.clear() }
     override fun revision() = revision
     override fun appliedIntentCount() = appliedIntentCount
-    override fun undo() { revision += 1 }
+    override fun undo() { if (!refuseUndo) revision += 1 }
     override fun redo() { revision += 1 }
 
-    /** Simulates one op that applies `count` intents. */
-    fun willApply(count: Int) {
+    /** Stands in for one op that applies `count` intents — what a pad key does through the bridge. */
+    override fun inputPitch(letter: String) = willApply(1)
+    override fun deleteSelection() = willApply(1)
+    // …the remaining `EditBridging` members: empty bodies, or `willApply(n)` where a test needs them.
+
+    private fun willApply(count: Int) {
         repeat(count) { framesToEmit.add(byteArrayOf(it.toByte())) }
         revision += count
         appliedIntentCount += count
     }
 }
-
-private class FakeNatives : EditNatives {
-    var stamp = 7L
-    var fingerprint = 100L
-    var applyAnswers = ArrayDeque<Boolean>()
-    var applied = mutableListOf<ByteArray>()
-    var begins = 0
-    var loads = 0
-    var undoAnswer = true
-
-    override fun engineVersionStamp() = stamp
-    override fun beginEditSession(handle: Long) = true.also { begins += 1 }
-    override fun applyEditIntent(handle: Long, bytes: ByteArray): Boolean {
-        applied.add(bytes)
-        return applyAnswers.removeFirstOrNull() ?: true
-    }
-    override fun editUndo(handle: Long) = undoAnswer
-    override fun editRedo(handle: Long) = true
-    override fun endEditSession(handle: Long) {}
-    override fun scoreFingerprint(handle: Long) = fingerprint
-    override fun loadScore(bytes: ByteArray) = 99L.also { loads += 1 }
-    override fun releaseScore(handle: Long) {}
-}
-
-private class FakeHost : EditSessionHost {
-    var handle = 42L
-    var relayouts = 0
-    override fun scoreHandle() = handle
-    override fun replaceScoreHandle(handle: Long) { this.handle = handle }
-    override fun requestRelayout() { relayouts += 1 }
-}
-
-class EditSessionRelayTest {
-    private fun rig(): Triple<FakeBridge, FakeNatives, FakeHost> = Triple(FakeBridge(), FakeNatives(), FakeHost())
-
-    @Test fun `a version mismatch refuses to open`() {
-        val (bridge, natives, host) = rig()
-        natives.stamp = 8L
-        val relay = EditSessionRelay(bridge, host, natives)
-        assertEquals(OpenResult.VERSION_SKEW, relay.open("/s.mscz", "/scores", "id"))
-        assertTrue(!bridge.opened)
-        assertEquals(0, natives.begins)
-    }
-
-    @Test fun `an applied intent reaches the mirror once, in order`() {
-        val (bridge, natives, host) = rig()
-        val relay = EditSessionRelay(bridge, host, natives)
-        relay.open("/s.mscz", "/scores", "id")
-        relay.perform { bridge.willApply(2) }
-        assertEquals(2, natives.applied.size)
-        assertEquals(0, natives.applied[0][0].toInt())
-        assertEquals(1, natives.applied[1][0].toInt())
-    }
-
-    @Test fun `an op that applies nothing relays nothing`() {
-        val (bridge, natives, host) = rig()
-        val relay = EditSessionRelay(bridge, host, natives)
-        relay.open("/s.mscz", "/scores", "id")
-        relay.perform { /* inert key */ }
-        assertEquals(0, natives.applied.size)
-        assertEquals(0, relay.resyncCount)
-    }
-
-    @Test fun `a refused relay resyncs immediately`() {
-        val (bridge, natives, host) = rig()
-        natives.applyAnswers.add(false)
-        val relay = EditSessionRelay(bridge, host, natives)
-        relay.open("/s.mscz", "/scores", "id")
-        relay.perform { bridge.willApply(1) }
-        assertEquals(1, relay.resyncCount)
-        assertEquals(1, natives.loads)
-        assertEquals(99L, host.handle)
-    }
-
-    @Test fun `fingerprints are compared on the sampling interval, not every edit`() {
-        val (bridge, natives, host) = rig()
-        natives.fingerprint = 999L // permanently disagrees
-        val relay = EditSessionRelay(bridge, host, natives)
-        relay.open("/s.mscz", "/scores", "id")
-        repeat(EditSessionRelay.FINGERPRINT_SAMPLE_EVERY - 1) { relay.perform { bridge.willApply(1) } }
-        assertEquals(0, relay.resyncCount)
-        relay.perform { bridge.willApply(1) }
-        assertEquals(1, relay.resyncCount)
-    }
-
-    @Test fun `undo checks the fingerprint unconditionally`() {
-        val (bridge, natives, host) = rig()
-        val relay = EditSessionRelay(bridge, host, natives)
-        relay.open("/s.mscz", "/scores", "id")
-        natives.fingerprint = 999L
-        relay.undo()
-        assertEquals(1, relay.resyncCount)
-    }
-
-    @Test fun `a refused undo on the local side leaves the mirror alone`() {
-        val (bridge, natives, host) = rig()
-        val relay = EditSessionRelay(bridge, host, natives)
-        relay.open("/s.mscz", "/scores", "id")
-        bridge.revision = 5
-        // FakeBridge.undo bumps revision; make it refuse by overriding the answer for this call.
-        val refusing = object : EditBridging by bridge { override fun undo() {} }
-        val refusingRelay = EditSessionRelay(refusing, host, natives)
-        refusingRelay.open("/s.mscz", "/scores", "id")
-        natives.fingerprint = 999L
-        refusingRelay.undo()
-        assertEquals(0, refusingRelay.resyncCount)
-    }
-
-    @Test fun `closing ends both sides`() {
-        val (bridge, natives, host) = rig()
-        val relay = EditSessionRelay(bridge, host, natives)
-        relay.open("/s.mscz", "/scores", "id")
-        relay.close()
-        assertTrue(!bridge.opened)
-    }
-}
 ```
+
+The cases:
+
+1. **`a version mismatch refuses to open`** — `natives.stamp = 8L`; `open` returns `VERSION_SKEW`, `bridge.opened`
+   is false, and `natives.begins == 0`. Neither side may open.
+2. **`a missing handle refuses to open`** — `host.handle = 0L`; `open` returns `NO_HANDLE` and nothing is touched.
+3. **`a mirror that refuses closes the local session again`** — `natives.beginAnswer = false`; `open` returns
+   `MIRROR_REFUSED` and `bridge.opened` is false. This is the begin/end pairing rule.
+4. **`opening onto a diverged handle resyncs before the first edit`** — the fingerprints disagree at `open` time;
+   `open` still returns `OPENED`, `resyncCount == 1`, and the host was asked to redraw. This is the reopen-without-save
+   case, and it is the single most important test in this file: it is the one that fails if someone deletes the
+   fingerprint check from `open` as redundant.
+5. **`an applied intent reaches the mirror once, in order`** — one op applying two intents; `natives.applied` has
+   both, in the order the bridge emitted them.
+6. **`an op that applies nothing relays nothing`** — an inert key; no native apply, no resync.
+7. **`a refused relay resyncs immediately`** — `natives.applyAnswers` yields `false`; `resyncCount == 1`,
+   `natives.loads == 1`, and `host.handle` is the fresh one.
+8. **`fingerprints are compared on the sampling interval, not every edit`** — fingerprints permanently disagree;
+   after `FINGERPRINT_SAMPLE_EVERY - 1` single-intent ops `resyncCount` is still 0 (the check at `open` saw them
+   agreeing — set the disagreement after `open` returns), and the next op makes it 1.
+9. **`undo checks the fingerprint unconditionally`** — one undo with disagreeing fingerprints resyncs, without
+   waiting for the interval.
+10. **`a refused undo on the local side leaves the mirror alone`** — `bridge.refuseUndo = true` so the local
+    revision does not move; `natives.editUndo` is never called and no resync happens even with fingerprints
+    disagreeing.
+11. **`a resync drops the frames it is about to make redundant`** — queue frames, force a resync, and assert the
+    next relayed op sends only its own frames. Without the purge in `resync()`, the stranded ones apply twice.
+12. **`a resync that cannot encode closes the session`** — `bridge.encoded = ByteArray(0)`; after the resync the
+    relay is closed, and a subsequent op relays nothing.
+13. **`closing ends both sides`** — after `close()`, `bridge.opened` is false and `natives.ends == 1`.
 
 - [ ] **Step 2: Run them and watch them fail**
 
@@ -1790,38 +1908,21 @@ class EditSessionRelayTest {
 Android/gradlew -p Android :FolinoEditorAndroid:testDebugUnitTest
 ```
 
-Expected: compile failure until `EditBridging` exists.
-
-- [ ] **Step 3: Introduce `EditBridging`**
-
-In `EditSessionRelay.kt`, above the relay:
+Expected: they fail (or do not compile) only for reasons in the test file itself — the relay is already written. If
+they fail with `Method w in android.util.Log not mocked`, add to `Android/FolinoEditorAndroid/build.gradle.kts`:
 
 ```kotlin
-/**
- * The bridge surface the relay drives, behind an interface for exactly one reason: the generated
- * `EditorBridgeViewModel` is a final class over JNI, so the relay's policy — which is the part worth being sure
- * about — would otherwise be testable only on a device. The adapter below must stay a pure delegation.
- */
-interface EditBridging {
-    fun engineVersionStamp(): Long
-    fun beginSession(path: String, dir: String, id: String): Boolean
-    fun endSession()
-    fun scoreFingerprint(): Long
-    fun encodeScore(): ByteArray
-    fun takeRelayFrames(): List<ByteArray>
-    fun revision(): Int
-    fun appliedIntentCount(): Int
-    fun undo()
-    fun redo()
+android {
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
-
-class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridging { … }
 ```
 
-and change `EditSessionRelay`'s first parameter to `EditBridging`, updating the body's `bridge.…` calls to the
-interface's shape (`bridge.revision()` rather than `bridge.revision.value`).
+- [ ] **Step 3: Make them pass**
 
-- [ ] **Step 4: Run them green**
+If a test fails because the relay's behavior is genuinely wrong, fix the relay — that is the point of writing them.
+If it fails because the test is wrong, fix the test. Do not weaken a case to make it pass; case 4 and case 11 in
+particular exist because of specific, argued failure modes, and a version of them that passes trivially is worse than
+no test.
 
 ```sh
 Android/gradlew -p Android :FolinoEditorAndroid:testDebugUnitTest
@@ -1829,10 +1930,10 @@ Android/gradlew -p Android :FolinoEditorAndroid:testDebugUnitTest
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```sh
-git add Android/FolinoEditorAndroid/src
+git add Android/FolinoEditorAndroid/src Android/FolinoEditorAndroid/build.gradle.kts
 git commit -m "test(android): pin the relay's gates and sampling policy"
 ```
 
@@ -1869,6 +1970,9 @@ package com.keynumber.folino.editor
 
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.RestID
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -1882,6 +1986,11 @@ import java.io.File
  * The sampling interval is a shipping compromise about cost; this test is about correctness, so it checks
  * everything. A divergence that the shipped sampling would have caught eight edits later shows up here on the edit
  * that caused it.
+ *
+ * The test encodes a `ScoreItemID` itself to seed the first selection. That is the one place Kotlin is allowed to
+ * speak this schema: `EditorSessionCore.selectNextElement()` is a no-op with nothing selected, so a cold session has
+ * no target, and here the test is standing in for SP4's tap. The shipping path still gets its bytes from
+ * `nativeEditingHitTest` and relays them without looking.
  */
 class EditSessionParityTest {
     private class TestHost(var handle: Long) : EditSessionHost {
@@ -1891,58 +2000,101 @@ class EditSessionParityTest {
         override fun requestRelayout() { relayouts += 1 }
     }
 
-    @Test fun sessionsStayIdenticalThroughAScriptedEdit() {
+    private class Rig(val bridge: EditBridging, val host: TestHost, val relay: EditSessionRelay)
+
+    private fun openRig(file: File, scoresDir: File): Rig {
+        val handle = SheetMusicJNI.nativeLoadScore(file.readBytes())
+        assertNotEquals(0L, handle)
+        val bridge = GeneratedEditBridging(EditorBridgeViewModel(EditorRoomFiles()))
+        val host = TestHost(handle)
+        val relay = EditSessionRelay(bridge, host, RealEditNatives)
+        assertEquals(OpenResult.OPENED, relay.open(file.path, scoresDir.path, "parity"))
+        return Rig(bridge, host, relay)
+    }
+
+    private fun stagedFixture(): Pair<File, File> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val scoresDir = File(context.filesDir, "Scores").apply { mkdirs() }
         val file = File(scoresDir, "parity.mscz")
         context.assets.open("parity.mscz").use { input -> file.outputStream().use { input.copyTo(it) } }
+        return file to scoresDir
+    }
 
-        val handle = SheetMusicJNI.nativeLoadScore(file.readBytes())
-        assertNotEquals(0L, handle)
+    @Test fun sessionsStayIdenticalThroughAScriptedEdit() {
+        val (file, scoresDir) = stagedFixture()
+        val rig = openRig(file, scoresDir)
+        val relay = rig.relay
+        assertAgreed(rig, "after open")
 
-        val vm = EditorBridgeViewModel(EditorRoomFiles())
-        val bridge = GeneratedEditBridging(vm)
-        val host = TestHost(handle)
-        val relay = EditSessionRelay(bridge, host, RealEditNatives)
+        // Stand in for SP4's tap: select the first rest of the first bar by its ID.
+        relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID())))
+        assertAgreed(rig, "after the first selection")
 
-        assertEquals(OpenResult.OPENED, relay.open(file.path, scoresDir.path, "parity"))
-        assertAgreed(bridge, host, "after open")
+        relay.armDuration(QUARTER)
+        relay.inputPitch("C")
+        assertAgreed(rig, "after writing C")
 
-        // Pick a target the way the UI will: the first element of the first bar, resolved by ssm's own hit test is
-        // SP4's path — here we walk to it with the navigation ops, which need no layout.
-        relay.perform { vm.selectNextElement() }
-        assertAgreed(bridge, host, "after first selection")
+        relay.inputPitch("E")
+        relay.inputPitch("G")
+        assertAgreed(rig, "after writing E and G")
 
-        relay.perform { vm.armDuration(QUARTER) }
-        relay.perform { vm.inputPitch("C") }
-        assertAgreed(bridge, host, "after writing C")
+        relay.shiftPitch(1)
+        assertAgreed(rig, "after a semitone up")
 
-        relay.perform { vm.inputPitch("E") }
-        relay.perform { vm.inputPitch("G") }
-        assertAgreed(bridge, host, "after writing E and G")
+        relay.armDuration(EIGHTH)
+        relay.toggleArmedDot()
+        relay.inputPitch("A")
+        assertAgreed(rig, "after a dotted eighth")
 
-        relay.perform { vm.shiftPitch(1) }
-        assertAgreed(bridge, host, "after a semitone up")
+        relay.writeRest()
+        assertAgreed(rig, "after a rest")
 
-        relay.perform { vm.armDuration(EIGHTH) }
-        relay.perform { vm.toggleArmedDot() }
-        relay.perform { vm.inputPitch("A") }
-        assertAgreed(bridge, host, "after a dotted eighth")
+        relay.deleteSelection()
+        assertAgreed(rig, "after a delete")
 
-        relay.perform { vm.writeRest() }
-        assertAgreed(bridge, host, "after a rest")
-
-        relay.perform { vm.deleteSelection() }
-        assertAgreed(bridge, host, "after a delete")
-
-        repeat(4) { relay.undo(); assertAgreed(bridge, host, "after undo $it") }
-        repeat(4) { relay.redo(); assertAgreed(bridge, host, "after redo $it") }
+        repeat(4) { relay.undo(); assertAgreed(rig, "after undo $it") }
+        repeat(4) { relay.redo(); assertAgreed(rig, "after redo $it") }
 
         assertEquals("no resync should have been needed", 0, relay.resyncCount)
-        assertTrue("the host should have been asked to redraw", host.relayouts > 0)
+        assertTrue("the host should have been asked to redraw", rig.host.relayouts > 0)
 
         relay.close()
-        SheetMusicJNI.nativeReleaseScore(host.handle)
+        SheetMusicJNI.nativeReleaseScore(rig.host.handle)
+    }
+
+    /**
+     * Closing a session does not revert the mirror, and SP3 saves nothing — so a second session parses the unedited
+     * file while the handle still holds the edits. The fingerprint check in `open()` is what catches that, and this
+     * is the test that fails if someone removes it as redundant.
+     */
+    @Test fun reopeningAfterAnUnsavedEditResyncsInsteadOfDiverging() {
+        val (file, scoresDir) = stagedFixture()
+        val first = openRig(file, scoresDir)
+        first.relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID())))
+        first.relay.armDuration(QUARTER)
+        first.relay.inputPitch("C")
+        assertAgreed(first, "after the first session's edit")
+        val editedFingerprint = SheetMusicJNI.nativeScoreFingerprint(first.host.handle)
+        first.relay.close()
+
+        // Same handle, same (untouched) file: exactly what the Reader does when edit mode is re-entered.
+        val bridge = GeneratedEditBridging(EditorBridgeViewModel(EditorRoomFiles()))
+        val relay = EditSessionRelay(bridge, first.host, RealEditNatives)
+        assertEquals(OpenResult.OPENED, relay.open(file.path, scoresDir.path, "parity"))
+        assertEquals("open must have resynced", 1, relay.resyncCount)
+        assertEquals(
+            "the two copies must agree after the resync",
+            bridge.scoreFingerprint(),
+            SheetMusicJNI.nativeScoreFingerprint(first.host.handle),
+        )
+        assertNotEquals(
+            "the resync must have replaced the mirror's edited score, not adopted it",
+            editedFingerprint,
+            SheetMusicJNI.nativeScoreFingerprint(first.host.handle),
+        )
+
+        relay.close()
+        SheetMusicJNI.nativeReleaseScore(first.host.handle)
     }
 
     /** Measures one fingerprint walk, so `FINGERPRINT_SAMPLE_EVERY` is chosen against a number, not a guess. */
@@ -1958,19 +2110,33 @@ class EditSessionParityTest {
         assertTrue("fingerprint walk unexpectedly slow: ${perWalkMicros}us", perWalkMicros < 2_000)
     }
 
-    private fun assertAgreed(bridge: EditBridging, host: TestHost, step: String) {
-        assertEquals(step, bridge.scoreFingerprint(), SheetMusicJNI.nativeScoreFingerprint(host.handle))
+    private fun assertAgreed(rig: Rig, step: String) {
+        assertEquals(step, rig.bridge.scoreFingerprint(), SheetMusicJNI.nativeScoreFingerprint(rig.host.handle))
     }
 
     private companion object {
         const val QUARTER = 3
         const val EIGHTH = 4
+
+        /** The fixture's first timed slot. Adjust the indices to whatever the staged score actually starts with. */
+        fun firstRestID() = RestID(staff = 0, measureIndex = 0, voiceIndex = 0, elementIndex = 1)
     }
 }
 ```
 
-The `EditorBridgeViewModel(EditorRoomFiles())` constructor shape comes from the generator (`nativeNew` wraps the
-`@WireletProvided` handle); read the generated file and match it.
+Three things to settle against the real APIs:
+
+- **`RestID`'s Kotlin field names and element index.** The Kotlin models come from the ssm audio AAR
+  (`io.github.jiyimeta.sheetmusic.audio.model`); read the generated class rather than trusting the call above, and
+  pick an `elementIndex` that is actually a rest in the staged fixture — element 0 is usually the clef or the time
+  signature, not a timed slot. If the first selection lands on nothing, every later assertion still passes
+  vacuously, so **assert that the selection took**: `bridge` exposes `selectedItemFrame` through the generated view
+  model, and it must be non-empty after the first `selectItem`.
+- **`EditorBridgeViewModel(EditorRoomFiles())`** — the constructor shape comes from the generator (`nativeNew` wraps
+  the `@WireletProvided` handle). Read the generated file and match it.
+- **`GeneratedEditBridging.scoreFingerprint()`** is used as the authoritative side's digest here; that is the same
+  call `EditSessionRelay` makes internally, which is what makes this a real cross-image comparison rather than a
+  tautology.
 
 - [ ] **Step 3: Run it on the Pixel**
 
@@ -1979,12 +2145,19 @@ adb devices                       # confirm the physical device is listed
 Android/gradlew -p Android :FolinoEditorAndroid:connectedDebugAndroidTest
 ```
 
-Expected: both tests pass. Wireless `adb` setup, if the device is not attached, is in
+Expected: all three tests pass. Wireless `adb` setup, if the device is not attached, is in
 `reference_android_pixel_wireless_adb`.
 
-If the parity test fails at a specific step, that step's op is the one whose intent does not carry everything the
-mirror needs — which is an ssm-side gap in the intent vocabulary, the same class of finding SP2 hit five times. Do
-not paper over it in Kotlin; report it.
+Triage order when the parity test fails:
+
+1. **A stale mavenLocal AAR is suspect number one**, and the §8.1 version gate will NOT catch it: the stamp hashes a
+   version string, and every local ssm publish carries the same `0.0.0-SNAPSHOT`. Re-run Task 6 Step 1 (build the
+   `.so`s, publish all three modules from one ssm revision) and re-run the test before believing anything else.
+2. **A failure at one specific step** means that step's intent does not carry everything the mirror needs — an
+   ssm-side gap in the intent vocabulary, the same class of finding SP2 hit five times. Do not paper over it in
+   Kotlin; report it.
+3. **A failure at `after open`** means the fixture parses differently on the two sides, which is a parser-level
+   problem, not a relay one.
 
 - [ ] **Step 4: Fix the sampling constant to the measurement**
 
@@ -2061,8 +2234,11 @@ git commit -m "docs(android): record what note editing still owes Android"
    overlap a tap. The prescription is SP0's: a per-handle generation in ssm's cache. It is an ssm change, so it lands
    and tags on that side first.
 2. **`.tuplet` is still in filtered addressing** out of `engineCursorForFilteredTap`.
-3. **Persistence.** No save path, no autosave, no `onPause` flush, no Room refresh — all SP5. `UnimplementedScoreWriter`
-   throws rather than no-ops so this cannot be mistaken for working.
+3. **Persistence.** No save path, no autosave, no `onPause` flush, no Room refresh — all SP5.
+   `UnimplementedScoreWriter` traps rather than no-ops so this cannot be mistaken for working, and it is where the
+   decision that Android's `refreshRow` is a partial update of three columns is written down. That decision and the
+   stub row are one safety: SP5 must not implement a whole-row Android writer while the row is still a stub, or the
+   first autosave writes placeholder titles, tags and dates over the user's real library row.
 
 **The one thing to check before starting.** Project memory recorded (2026-08-12) that `main`'s Android build was
 broken because the mixer per-instrument migration changed Swift's staff addressing to `(part, staff)` and the Kotlin
@@ -2083,24 +2259,48 @@ built but never called — SP4 supplies the tap coordinates and the layout optio
 (`nativeEncodeDrawProgram(handle, selectionBytes)`) are both ssm entry points that SP3 leaves untouched: the bytes
 they need are already projected, so SP4 is UI plus two native calls, not more plumbing.
 
+## Amendments after design review (2026-08-13)
+
+The plan was reviewed once more before execution, and four things changed. They are recorded here because the
+reasoning matters more than the diff.
+
+1. **`open()` now fingerprint-checks and resyncs.** The original plan opened both sessions and trusted that they
+   started from the same score. They do not, on the second session of any score: ending a session does not revert
+   the mirror, SP3/SP4 save nothing, so a reopen parses an unedited file against a handle holding the edits. Every
+   later gate would have missed it for up to eight edits, during which taps resolve against one score and edits land
+   on another. Tasks 7, 8 (case 4) and 9 (`reopeningAfterAnUnsavedEditResyncsInsteadOfDiverging`) all changed.
+2. **`EditSessionRelay` owns the bridge privately, with one named method per op**, replacing
+   `perform(op: () -> Unit)`. A caller holding the view model could apply an intent without relaying it, and a
+   resync in between would then double-apply the stranded frames. `resync()` also purges the queue for the same
+   reason.
+3. **The deferred save is spelled honestly.** `UnimplementedScoreWriter` traps instead of throwing
+   `SheetMusicError.invalidEdit` (the one error this feature deliberately swallows, and one `performSave` catches
+   silently), the stub row's factory is named `stubRowPendingSave`, and Android's partial-update `refreshRow`
+   semantics are decided now rather than left for SP5 to discover.
+4. **Smaller:** `sync()`'s no-session branch resets everything the session owned; the version gate's blind spot
+   (a stale mavenLocal AAR at an unchanged `0.0.0-SNAPSHOT`) is stated where it matters and leads Task 9's triage;
+   a failed resync closes the session instead of spinning; and the relay documents that it is single-threaded,
+   because ssm's side locks and Folino's deliberately does not.
+
 ## Self-review
 
 **Spec coverage.** §11's SP3 bullet names: `FolinoEditorJNI` (Tasks 2–5), the Kotlin relay as *one* function so it
-cannot be half-called (Task 7 `perform`), the §8 gates (§8.1 version skew in `open`, §8.2 refused edits — a refused
-op produces no frame, which Task 1 tests and Task 8 re-tests at the relay, §8.3 divergence detection and resync in
-`verifyOrResync` / `resync`, §8.4 save failure — SP5's, noted), and recovery (`resync`). §5.3's nine JNI entry points
-are all ssm's and all already shipped; SP3 consumes six of them and leaves the three geometry ones for SP4.
+cannot be half-called (Task 7's private `relay`, reachable only through the named ops), the §8 gates (§8.1 version
+skew in `open`, §8.2 refused edits — a refused op produces no frame, which Task 1 tests and Task 8 re-tests at the
+relay, §8.3 divergence detection and resync in `verifyOrResync` / `resync`, §8.4 save failure — SP5's, noted), and
+recovery (`resync`). §5.3's nine JNI entry points are all ssm's and all already shipped; SP3 consumes six of them and
+leaves the three geometry ones for SP4. §8.3's analytics event is downgraded to a log line, noted in Task 7.
 
-**Additions beyond the spec.** `EditBridging` (Task 8) is not in the spec — it exists because the generated view
-model is final and the relay's policy would otherwise be device-only. `EditSessionHost` (Task 7) likewise: the spec
-assumed the relay lives next to the Reader, and an interface is what lets the device test drive it without one.
-Both are noted so §11 can be amended when SP3 reports.
+**Additions beyond the spec.** `EditBridging` and `EditSessionHost` (both Task 7) are not in the spec: the generated
+view model is a final class over JNI and the spec assumed the relay lives beside the Reader, so without these two the
+relay's policy would be testable only on a device and the device test would need a whole Reader. Both are noted so
+§11 can be amended when SP3 reports.
 
 **Known deviation.** The spec's §6.1 says each op returns the intent it applied; SP2 shipped `Void` ops with the
 intent visible only inside `apply`. Task 1 resolves that with a drained queue instead of return values, which also
 handles the ops that apply more than one intent. Same guarantee, different shape.
 
-**Placeholders.** Three names in Task 2 Step 5 are explicitly marked as unverified (`ScoreFileParsing.parse`,
-`MSCZWriter.data(from:)`, the `ScoreItem` field list) with instructions to read the real API rather than trust this
-plan. That is deliberate, not an omission — inventing a plausible-looking name for an API nobody checked is worse
-than saying which file to open.
+**Placeholders.** Three names in Task 2 Step 5 are marked as unverified (`ScoreFileParsing.parse`,
+`MSCZWriter.data(from:)`, the `ScoreItem` field list), each with the real API named beside it and the file to read
+before writing the call. That is deliberate: a plausible-looking name for an API nobody opened is worse than a
+pointer to the file that has the answer.
