@@ -42,7 +42,6 @@ struct CaptureScene: View {
                     metadataReader: FixtureMetadataReader(),
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
-                    hidesBackButton: true,
                 )
             }
             .allowsHitTesting(false)

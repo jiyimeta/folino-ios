@@ -65,7 +65,6 @@ struct AnnotationScene: View {
                     metadataReader: FixtureMetadataReader(),
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
-                    hidesBackButton: true,
                     scoreContentOverride: AnyView(deviceCapture),
                 )
             }

@@ -57,7 +57,6 @@ struct ReaderScene: View {
                     metadataReader: FixtureMetadataReader(),
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
-                    hidesBackButton: true,
                 )
             }
             .readerStatusBarBand(for: idiom)
