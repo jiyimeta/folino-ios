@@ -13,9 +13,6 @@ import UtilityUI
 @MainActor
 public struct ReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
-    private let onBack: (() -> Void)?
-    private let hidesBackButton: Bool
-    private let leadingIsSidebarToggle: Bool
     /// Screenshot-only: when non-nil, renders in place of the live score container, so the top chrome and bottom
     /// transport stay LIVE (and follow future app changes) while the score + ink come from a real-device capture the
     /// simulator can't reproduce (PencilKit ink doesn't composite in the simulator; note spacing is OS/device-bound).
@@ -165,9 +162,6 @@ public struct ReaderRootScreen: View {
         playlistID: PlaylistID? = nil,
         analytics: any Analytics = NoopAnalytics(),
         openedFrom: AnalyticsSource = .libraryAll,
-        onBack: (() -> Void)? = nil,
-        hidesBackButton: Bool = false,
-        leadingIsSidebarToggle: Bool = false,
         scoreContentOverride: AnyView? = nil,
         editingHost: ReaderEditingHost? = nil,
         editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
@@ -197,9 +191,6 @@ public struct ReaderRootScreen: View {
                 openedFrom: openedFrom,
             ),
         )
-        self.onBack = onBack
-        self.hidesBackButton = hidesBackButton
-        self.leadingIsSidebarToggle = leadingIsSidebarToggle
         self.scoreContentOverride = scoreContentOverride
         self.editingHost = editingHost
         self.editingChrome = editingChrome
@@ -231,7 +222,7 @@ public struct ReaderRootScreen: View {
         // Back button as a bare chevron: the editor role drops its label, which would otherwise carry the previous
         // screen's title ("ライブラリ", a playlist name) and spend leading width the score actions need.
         .toolbarRole(.editor)
-        .navigationBarBackButtonHidden(hidesSystemBackButton)
+        .navigationBarBackButtonHidden(isEditing)
         // Capture mode strips the bar entirely; editing keeps it mounted and hands its contents over to the injected
         // editing chrome (see `readerToolbar`), so the score's top inset — and with it a paged score's page breaks —
         // doesn't shift when an edit session starts.
@@ -416,19 +407,6 @@ public struct ReaderRootScreen: View {
         editingHost?.isEditing == true
     }
 
-    /// The leading affordance the Reader draws itself, or `nil` to leave the leading edge to the system's own back
-    /// button. Non-nil only in the iPad split-view detail, whose leading control reveals the library column rather
-    /// than popping a stack — the compact `NavigationStack` path passes no `onBack`, so it simply gets the standard
-    /// back button (with its label, and with the edge-swipe that comes with it).
-    private var customLeadingAction: (() -> Void)? {
-        guard !hidesBackButton, !isEditing, let onBack else { return nil }
-        return onBack
-    }
-
-    private var hidesSystemBackButton: Bool {
-        hidesBackButton || isEditing || customLeadingAction != nil
-    }
-
     /// How much of the trailing row has to fold into one overflow menu at the current width — the least aggressive
     /// level whose row still fits.
     ///
@@ -446,7 +424,10 @@ public struct ReaderRootScreen: View {
         guard case .loaded = viewModel.loadState, viewModel.displaySource != .originalPDF else { return .expanded }
         return ReaderToolbar.collapse(
             availableWidth: availableWidth,
-            hasLeadingAffordance: !hidesBackButton,
+            // Always: the leading edge belongs to the system in both layouts — the back button in the compact
+            // `NavigationStack`, the split view's own sidebar toggle in the iPad detail column — and either one
+            // spends the same width before the trailing row gets any.
+            hasLeadingAffordance: true,
             hasNoteEditing: editingHost != nil,
         )
     }
@@ -471,8 +452,6 @@ public struct ReaderRootScreen: View {
         if !isCaptureMode, !isEditing {
             ReaderToolbar(
                 viewModel: viewModel,
-                leadingAction: customLeadingAction,
-                leadingIsSidebarToggle: leadingIsSidebarToggle,
                 collapse: collapse,
                 anchorsInspectorPopovers: anchorsInspectorPopovers,
                 onConfirmReReadPDF: { isReReadConfirmPresented = true },
