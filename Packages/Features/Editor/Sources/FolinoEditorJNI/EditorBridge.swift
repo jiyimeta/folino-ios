@@ -91,10 +91,17 @@ public final class EditorBridge {
     /// Mirrored both ways: Kotlin sets it from the voice selector, the core reads it when planning input.
     public internal(set) var activeVoice: Int32 = 0
 
-    /// Task 4 fills in the mapping; the stored property exists now so `sync()` compiles.
+    /// The selected item and the caret, as the same `ScoreItemID` bytes ssm speaks.
+    ///
+    /// Bytes rather than fields because of what the host does with them: `nativeEditingCaretFrame(handle, itemBytes)`
+    /// wants exactly this encoding back, and re-projecting the ID into integers here would mean Kotlin re-encoding
+    /// it there — a second spelling of ssm's own schema, in Kotlin, which is what §5.4 rules out.
     public internal(set) var selectedItemFrame: EditBytesWire?
-    /// Task 4 fills in the mapping; the stored property exists now so `sync()` compiles.
     public internal(set) var caretItemFrame: EditBytesWire?
+
+    static func frame(for item: SheetMusicCore.ScoreItemID?) -> EditBytesWire? {
+        item.map { EditBytesWire(bytes: ScoreItemIDCodec.encode($0)) }
+    }
 
     public init(files: EditorHostFiles) {
         self.files = files
@@ -323,6 +330,26 @@ public final class EditorBridge {
         sync()
     }
 
+    // MARK: Selection
+
+    /// A tap, already resolved to an item by `nativeEditingHitTest` — which is also where the hidden-staff
+    /// re-addressing happens, so the ID arriving here is in the SCORE's addressing, not the rendered document's.
+    ///
+    /// Empty bytes mean the tap landed on paper. That deselects, deliberately: the same "a tap off any staff band
+    /// clears the selection" policy iOS has had since the hit-test ladder moved into ssm, and the reason
+    /// `editingHitTest` answers "nothing" rather than rescuing every near miss.
+    @WireletExpose
+    public func selectItem(frame: EditBytesWire) {
+        guard !frame.bytes.isEmpty else {
+            core?.select(nil)
+            sync()
+            return
+        }
+        guard let item = try? ScoreItemIDCodec.decode(frame.bytes) else { return }
+        core?.select(item)
+        sync()
+    }
+
     // MARK: Navigation and voice
 
     @WireletExpose
@@ -475,6 +502,8 @@ public final class EditorBridge {
         calloutDurationKind = Self.durationKind(core.selectedDuration?.base)
         calloutDots = Int32(core.selectedDuration?.dots ?? 0)
         activeVoice = Int32(core.activeVoice)
+        selectedItemFrame = Self.frame(for: core.selectedItem)
+        caretItemFrame = Self.frame(for: core.caretItem)
         relayFrames.append(contentsOf: core.takeRelayIntents().map {
             EditBytesWire(bytes: EditIntentCodec.encode($0))
         })
