@@ -147,10 +147,15 @@ report the user's saved overrides, and every "reset to the score's level" and
 "does this strip have an override" answer built on them would be a tautology. The
 adapter therefore captures `engine.mixerChannels` **between `prepare` and
 `applyPreferences`**, in both `load` and `reloadSoundfont`, and `mixerStrips()`
-serves that snapshot.
+serves that snapshot. It is cleared wherever the prepared engine goes away:
+`releaseEngine()`, and a `reloadSoundfont` whose re-prepare throws — that path
+already tore the engine down before it failed, so an empty list is the truthful
+answer rather than a stale one.
 
 **This needs swift-sheet-music 1.11.0**, which folino re-pins to as the first step
-of the work. `mixerChannels`, the `.instrument` kind and the per-channel setters
+of the work — after the tag exists. 1.11.0 is written in that package's CHANGELOG
+and its `main` carries the API, but the tag is cut only once CI is green, so
+"re-pin to 1.11.0" is a step with a precondition, not a given. `mixerChannels`, the `.instrument` kind and the per-channel setters
 ship in 1.10.1, but `partName` / `instrumentName` — which §4's rows are built from
 — are 1.11.0 additions, as is the fix that makes `instrumentName` read MuseScore's
 `<trackName>` (the instrument) rather than `<longName>` (the part's own label).
@@ -183,16 +188,46 @@ stop carrying a parameter that has never been read.
 the Editor is otherwise untouched by this work —
 `Editor/Tests/.../Support/FakePlaybackController.swift`.
 
-**`perStrip` carries overrides only.** Today `perStaff` is a resolved list built
-from `score.allStaves` before `load(...)` is called, carrying a value for every
-staff whether the user set one or not. That is unbuildable now: the Reader cannot
-enumerate strips before the engine has prepared the score, which is the whole
-point of §1. It is also unnecessary — `rebuildMixerChannels` already seeds every
-strip from the score's authored CC 7 and program, so a full list would only
-re-send what the engine just did. `PlaybackPreferences.initial` therefore maps the
-strip-keyed override dictionaries straight into `perStrip`, needing no score walk
-and no strip list, and `applyPreferences` sends only those. `StripMixerState`
-loses its `gmBank` / `gmProgram` fallbacks with the walk that computed them.
+One non-obvious reader of the renamed dictionaries is analytics:
+`AnalyticsEvent+Factories` reports `program_override_count` and
+`volume_override_count` from their sizes. Both keep their names and meaning —
+"how many things did the user override" — but the unit changes from staves to
+strips, so a part-level program override that used to count once per staff now
+counts once. The `score_prefs` instrumentation owns that series and should be told
+the unit moved rather than discovering a step in the numbers.
+
+**`perStrip` carries overrides only, and each field is independently optional.**
+Today `perStaff` is a resolved list built from `score.allStaves` before `load(...)`
+is called, carrying a value for every staff whether the user set one or not. That
+is unbuildable now: the Reader cannot enumerate strips before the engine has
+prepared the score, which is the whole point of §1. It is also unnecessary —
+`rebuildMixerChannels` already seeds every strip from the score's authored CC 7
+and program, so a full list would only re-send what the engine just did.
+
+The shape has to change with it, because the two overrides are independent
+dictionaries and a strip can appear in one and not the other:
+
+```swift
+public struct StripMixerState: Hashable, Sendable, Codable {
+    public let strip: MixerStripID
+    /// `nil` = the user never set one; the engine's authored seed stands.
+    public var volume: Double?
+    /// `nil` = likewise. NOT a program of 0, which is Acoustic Grand Piano.
+    public var gmProgram: Int?
+}
+```
+
+Both fields optional is the whole point: with today's non-optional `volume` /
+`gmProgram`, a strip carrying only a volume override would have to invent a
+program to sit beside it, and the obvious filler — `0` — is Acoustic Grand Piano,
+so saving a volume would silently retune the strip. `applyPreferences` sends a
+setter only for a field that is present. `isMuted` / `isSolo` leave the type
+entirely: they were always written `false` here (mute and solo are session-only,
+§4) and an overrides-only list has nothing to say about them.
+
+`PlaybackPreferences.initial` therefore zips the two override dictionaries by
+strip id — no score walk, no strip list — and `gmBank` goes with the walk that
+computed it.
 
 ### 3. Staff-keyed notation settings stay staff-keyed
 
@@ -226,18 +261,21 @@ part, then by ordinal — and draws each part one of two ways:
   the part, then one row per strip beneath it, each labelled with the strip's
   `instrumentName` and carrying slider, mute / solo and program picker.
 
-The collapse is what keeps the header from stuttering. A group title and a row
-label have to say different things, and on real scores they often cannot: the
-part title comes from `Score.staffDisplayName` and — before the 1.11.0 fix — the
-instrument name resolved to the same string, because MuseScore's `<longName>` is
-the part's printed label and arrangers set it to the voice. Measured across three
-a cappella arrangements, every single-instrument part reported an instrument name
-equal to its part name. Those parts now draw one row with the part's name and no
-header at all, so there is nothing to repeat.
+The collapse is what keeps most headers from appearing at all. A group title and
+a row label have to say different things, and on real scores they often cannot:
+the part title comes from `Score.staffDisplayName` and — before the 1.11.0 fix —
+the instrument name resolved to the same string, because MuseScore's `<longName>`
+is the part's printed label and arrangers set it to the voice. Measured across
+three a cappella arrangements, every single-instrument part reported an instrument
+name equal to its part name. Those parts now draw one row with the part's name and
+no header, so there is nothing to repeat.
 
-Where a header does appear, the part genuinely has more than one of something,
-and that is exactly when the split labels earn their place: `S` over rows reading
-`ピアノ` and `アコーディオン`.
+A header can still appear over a *single* strip — a grand staff is one strip and
+two staves, and takes the header path for the eyes. There the row would repeat the
+header verbatim ("Piano" under "Piano"), so **a row draws no label when its part
+has only one strip**: the header names it, and the row is the controls alone. With
+several strips the labels differ by construction and every row is labelled — `S`
+over `ピアノ` and `アコーディオン`.
 
 **The eye belongs to the header, because visibility belongs to the staff.**
 `StaffVisibilityButton` is keyed by `StaffAddress` and today rides each per-staff
@@ -248,6 +286,12 @@ staves, so it carries them, one per staff of the part. In the collapsed
 single-row case there is exactly one staff and one strip, so the eye stays where
 it is today. The PDF reader still opts out wholesale
 (`showsStaffVisibility == false`), which is unchanged.
+
+Several eyes side by side have to be tellable apart. `StaffVisibilityButton` takes
+one address and composes fine, but every instance shares one accessibility label
+today, and two adjacent identical glyphs say nothing about which staff each
+controls. Each eye in a header therefore carries its staff's position within the
+part in its accessibility label, and the buttons are drawn in staff order.
 
 The program picker moves from the part to the strip. That is what makes an
 instrument-change strip selectable at all, and it loses nothing: the program has
@@ -303,6 +347,11 @@ the strip-keyed dictionaries. The mechanism already exists — version 2 introdu
 the "untouched is `nil`" reinterpretation the same way — so this is one more
 branch in a decoder that already has one.
 
+The coding keys keep their existing names (`staffProgramOverrides`,
+`staffVolumeOverrides`) even though the Swift properties are renamed. The version
+marker is what disambiguates the two readings, so changing the key as well would
+buy nothing and would strand any blob written between the two.
+
 The SQL side goes in `Migrations+V17.swift`, following `Migrations+V16.swift`.
 v17 rewrites column contents only; the table is not rebuilt. `Migrations.swift`'s
 own header asks that the next migration move the `upToVn` test-support migrators
@@ -318,18 +367,26 @@ The constraint that shapes the iOS work: `ReaderPreferencesReducer` /
 `ReaderPreferencesBridge` are Swift inside folino's Library package and are what
 the Kotlin mixer calls. Renaming a `ReaderPreferences` field changes them, and
 changing their signatures breaks the Kotlin build. So **the bridge keeps its
-`(part, staff)` signature**, translating to `MixerStripID(partIndex: part,
-instrumentOrdinal: 0)` in both directions — setters map any staff onto the part's
-tick-0 strip, and the getters answer every staff of a part with that strip's
-value.
+`(part, staff)` signature**: the setters map any staff onto
+`MixerStripID(partIndex: part, instrumentOrdinal: 0)`.
 
-That is not quite "no change on Android", and the spec should own the difference:
-today a value written on staff 1 comes back at staff 1, so Compose shows it on the
-row the user touched. After the translation, both rows of a grand staff read the
-same stored value, and a value set on the second row appears on the first as well.
-Nothing sounds different — those two rows always drove one channel — but the UI
-stops pretending they are independent, which is the same correction iOS is making,
-arriving on Android as a side effect rather than as a redesign.
+The getters cannot be symmetrical, and the spec has to be exact about why. They
+are *list* getters — one wire entry per stored key, each carrying its own
+`partIndex` / `staffIndexInPart`, which Kotlin rebuilds into a per-`(part, staff)`
+map. The bridge holds only the preferences, never the score, so it cannot know how
+many staves a part has and cannot fan one strip's value out across them. **Each
+strip is therefore emitted once, at `staffIndexInPart: 0`.**
+
+The Android-visible consequence, stated plainly: on a multi-staff part, a value
+the user sets on the second row is stored against the part and comes back on the
+**first** row, and the second row falls back to the score's authored default.
+Nothing sounds different — those rows always drove one channel — but the value
+appears to move. A one-line Kotlin fallback (read `(part, staff)`, else
+`(part, 0)`) removes it entirely, and is the first thing to do when Android's
+mixer is next opened; it is left out here only because this change is not building
+or testing the Android app. The `PARITY(android)` marker names this behaviour, not
+just the missing migration, so the ledger row is about something a reader can act
+on.
 
 When Android follows properly, it must **read its strip list from its own engine**
 rather than re-deriving it, and must not reimplement the dedup rule in Kotlin.
