@@ -27,8 +27,6 @@ final class ReaderViewModel {
         }
     }
 
-    static let defaultStaffVolume = 1.0
-
     /// Always the same instance (set once at init); declared `var` only so `@Bindable` projections like
     /// `$viewModel.repeatModel.mode` type-check — the chain needs the intermediate path to be writable.
     var repeatModel = RepeatModel()
