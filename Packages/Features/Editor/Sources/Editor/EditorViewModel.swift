@@ -6,38 +6,44 @@ import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
 
-/// Owns the engine `ScoreEditor` for one editing session: applies commands, manages selection / voice / arming
-/// state, re-derives selection after every mutation, and drives autosave. Created once per Reader screen by the App
-/// composition root; `beginSession(score:)` / `endSession()` bracket each entry into edit mode.
+/// Owns the engine's `ScoreEditSession` for one editing session: names the intents each key means, manages
+/// selection / voice / arming state, re-derives selection after every mutation, and drives autosave. Created once
+/// per Reader screen by the App composition root; `beginSession(score:)` / `endSession()` bracket each entry into
+/// edit mode.
+///
+/// The keys name *intents*, not commands. Everything between an op and the engine — cross-bar interception, the
+/// `.measure` promotion for a bar-filling rest, the full-measure-rest collapse, the accidental renotation pass — is
+/// `ScoreEditSession.apply`'s job, and both platforms plan the same commands from the same scalars. That is what
+/// stops iOS and Android from drifting: there is one planner, not two.
 @MainActor
 @Observable
 public final class EditorViewModel {
-    public private(set) var editor: ScoreEditor?
-    /// The editor's live score, or nil outside a session. Views and the Reader seam render THIS score while editing.
+    public private(set) var session: ScoreEditSession?
+    /// The session's live score, or nil outside a session. Views and the Reader seam render THIS score while editing.
     ///
-    /// The `generation` read is load-bearing, not decoration. `ScoreEditor` is a plain class, so mutating the score
-    /// inside it changes nothing Observation can see — the `editor` reference is the same object it was. Anything a
-    /// view derives from the score (the callout's length readout and its highlighted key, `canTie`, `isCaretInTuplet`)
-    /// would then be computed once and never again: change a note's length with the tray open and the tray kept
-    /// showing the old one. Touching `generation` — a stored property this type bumps on every applied edit, undo and
-    /// redo — registers the dependency that makes those views recompute.
+    /// The `generation` read is load-bearing, not decoration. `ScoreEditSession` is a plain class, so mutating the
+    /// score inside it changes nothing Observation can see — the `session` reference is the same object it was.
+    /// Anything a view derives from the score (the callout's length readout and its highlighted key, `canTie`,
+    /// `isCaretInTuplet`) would then be computed once and never again: change a note's length with the tray open and
+    /// the tray kept showing the old one. Touching `generation` — a stored property this type bumps on every applied
+    /// edit, undo and redo — registers the dependency that makes those views recompute.
     public var score: Score? {
         _ = generation
-        return editor?.score
+        return session?.score
     }
 
     /// Bumped on every applied / undone / redone command. The Reader includes it in its layout task key so the
     /// score re-lays-out after edits that don't change the structural score signature.
     public private(set) var generation = 0
 
-    /// Bumped ONLY by `applyCommand`'s success path — never by `undo()`/`redo()`. Distinct from `generation` (which
+    /// Bumped ONLY by `apply(_:)`'s success path — never by `undo()`/`redo()`. Distinct from `generation` (which
     /// bumps on all three) because `EditorChromeView`'s system-undo bridge must re-register its `UndoManager`
     /// trampoline only on a genuinely NEW edit; re-registering after undo/redo would double up with
-    /// `registerSystemUndo`'s own symmetric re-registration and drift the system stack from `ScoreEditor`'s real
+    /// `registerSystemUndo`'s own symmetric re-registration and drift the system stack from the session's real
     /// depth (Task 16 review fix).
     public private(set) var appliedEditCount = 0
     public var isSessionActive: Bool {
-        editor != nil
+        session != nil
     }
 
     // Selection and caret (both rendered by the Reader through the seam — the selection as a tint on the item, the
@@ -144,11 +150,11 @@ public final class EditorViewModel {
     }
 
     public var canUndo: Bool {
-        editor?.canUndo ?? false
+        session?.canUndo ?? false
     }
 
     public var canRedo: Bool {
-        editor?.canRedo ?? false
+        session?.canRedo ?? false
     }
 
     /// Wired by the App composition root.
@@ -190,7 +196,7 @@ public final class EditorViewModel {
     }
 
     public func beginSession(score: Score) {
-        editor = ScoreEditor(score: score)
+        session = ScoreEditSession(score: score)
         generation = 0
         appliedEditCount = 0
         selection = .none
@@ -204,33 +210,31 @@ public final class EditorViewModel {
     /// Flushes any pending autosave (Task 10) and tears the session down.
     public func endSession() async {
         await flushPendingSave()
-        editor = nil
+        session = nil
     }
 
     public func undo() {
-        guard let editor, editor.canUndo else { return }
-        // Mirror applyCommand's do/catch contract: a swallowed engine failure must not fire a false
-        // generation bump / onSelectionChanged / onScoreChanged (Task 3 review parity fix).
-        do { try editor.undo() } catch { return }
+        // The `guard`'s second clause carries the same contract the old `do { try … } catch { return }` did: a
+        // refused undo must not fire a generation bump, `onSelectionChanged` or `onScoreChanged`.
+        guard let session, session.undo() else { return }
         generation += 1
         rederiveSelection()
-        onScoreChanged(editor.score)
+        onScoreChanged(session.score)
         isDirty = true
         scheduleAutosave()
     }
 
     public func redo() {
-        guard let editor, editor.canRedo else { return }
-        do { try editor.redo() } catch { return }
+        guard let session, session.redo() else { return }
         generation += 1
         rederiveSelection()
-        onScoreChanged(editor.score)
+        onScoreChanged(session.score)
         isDirty = true
         scheduleAutosave()
     }
 
-    /// Bridges ScoreEditor's own stacks to the system UndoManager so three-finger swipe gestures work. Each mutation
-    /// registers one undo action; performing it re-registers the redo symmetrically. The ScoreEditor remains the
+    /// Bridges the session's own stacks to the system UndoManager so three-finger swipe gestures work. Each mutation
+    /// registers one undo action; performing it re-registers the redo symmetrically. The session remains the
     /// source of truth — the UndoManager holds only trampolines.
     func registerSystemUndo(with manager: UndoManager?) {
         guard let manager else { return }
@@ -243,43 +247,26 @@ public final class EditorViewModel {
         }
     }
 
-    /// Central apply choke point: every command goes through here so selection re-derivation, generation bump,
-    /// onScoreChanged, and autosave scheduling can never be skipped. Internal — ops extensions call it.
-    func applyCommand(_ command: any EditCommand) {
-        guard let editor else { return }
-        do {
-            try editor.apply(renotatingAccidentals(command, from: editor.score))
-        } catch SheetMusicError.invalidEdit {
-            // A refused edit leaves the score untouched by the engine's contract — no user-facing error in v1.
-            return
-        } catch {
-            return
-        }
+    /// Central apply choke point: every edit goes through here, so selection re-derivation, the generation bump,
+    /// `onScoreChanged` and autosave scheduling can never be skipped. Internal — the ops extensions call it.
+    ///
+    /// Returns the intent when it landed and `nil` when the session refused it. The return value is what an Android
+    /// host relays to the mirror session behind ssm's score handle (SP3) — a refused intent must not be relayed, or
+    /// the two copies diverge. On iOS nothing reads it, and a refusal stays silent: the engine leaves the score
+    /// untouched by contract, and v1 shows no error.
+    ///
+    /// The accidental renotation pass that used to hang here is `ScoreEditSession.apply`'s job now, from the same
+    /// `MeasureAccidentals` this used to call.
+    @discardableResult
+    func apply(_ intent: EditIntent) -> EditIntent? {
+        guard let session, session.apply(intent) else { return nil }
         generation += 1
         appliedEditCount += 1
         rederiveSelection()
-        onScoreChanged(editor.score)
+        onScoreChanged(session.score)
         isDirty = true
         scheduleAutosave()
-    }
-
-    /// `command` with the accidental-glyph repairs its own edit makes necessary bundled onto it, as one undo step —
-    /// or `command` untouched when it needs none (the common case) or when the engine would refuse it anyway.
-    ///
-    /// Editing is what makes this necessary: a stored glyph is only true relative to what precedes it in the bar, so
-    /// any edit that changes a pitch, adds a note, or removes one can leave a LATER note in that bar saying the
-    /// wrong thing — flipping the first C♯ of a bar to C♮ silently turns the second one into a C♮ to the eye while
-    /// it still sounds C♯. MuseScore re-runs its accidental state over the measure after every such edit;
-    /// `MeasureAccidentals` is that pass, and this is where it hangs.
-    ///
-    /// The repairs have to be planned against the post-edit score, so the command is applied to a throwaway copy
-    /// first. That copy is also what tells us a refused edit needs no repairs at all.
-    private func renotatingAccidentals(_ command: any EditCommand, from score: Score) -> any EditCommand {
-        var preview = score
-        guard (try? command.apply(to: &preview)) != nil else { return command }
-        let repairs = MeasureAccidentals.renotationCommands(in: preview, changedFrom: score)
-        guard !repairs.isEmpty else { return command }
-        return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
+        return intent
     }
 
     /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
@@ -294,8 +281,8 @@ public final class EditorViewModel {
     /// what was just sharpened. Whichever one wasn't aimed at keeps its own slot; when the two already share a slot —
     /// the ordinary case, and every case before the first note of a run — both follow.
     private func rederiveSelection() {
-        guard let editor, let location = editor.lastAffectedLocation else { return }
-        let score = editor.score
+        guard let session, let location = session.lastAffectedLocation else { return }
+        let score = session.score
         let affected = SelectionRederivation.item(
             at: location, in: score, preferringNoteIndex: previousNoteIndex(at: location),
         )

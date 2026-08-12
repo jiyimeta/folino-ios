@@ -39,7 +39,7 @@ struct EditorViewModelPitchTests {
         vm.beginSession(score: EditorFixtures.chordAtIndex1())
         let noteID = EditorFixtures.noteID(element: 1)
         vm.select(.note(noteID))
-        vm.applyCommand(SetNotePitch(at: noteID, pitch: 127, tpc: 19))
+        vm.apply(.setNotePitch(at: noteID, pitch: 127, tpc: 19, accidental: nil))
         let generationBeforeShift = vm.generation
 
         vm.shiftPitch(bySemitones: 1)

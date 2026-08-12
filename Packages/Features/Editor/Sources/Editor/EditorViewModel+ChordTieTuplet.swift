@@ -14,13 +14,13 @@ extension EditorViewModel {
         isAddToChordArmed.toggle()
     }
 
-    /// −音 → `RemoveNoteFromChord` on the selected notehead (last note leaves a rest, engine-canonical).
+    /// −音 → `.removeNoteFromChord` on the selected notehead (last note leaves a rest, engine-canonical).
     public func removeSelectedNoteFromChord() {
         guard case let .note(noteID)? = selectedItem else { return }
-        applyCommand(RemoveNoteFromChord(at: noteID))
+        apply(.removeNoteFromChord(at: noteID))
     }
 
-    /// iPad +3度 / +8度 → `AddNoteToChord` with `IntervalPlanner`'s pitch.
+    /// iPad +3度 / +8度 → `.addNoteToChord` with `IntervalPlanner`'s pitch.
     public func addIntervalNote(_ interval: DiatonicInterval) {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
         let keySig = score.activeKey(at: noteID)
@@ -47,14 +47,14 @@ extension EditorViewModel {
         )
     }
 
-    /// Shared `AddNoteToChord` apply + select-the-added-note landing, used by both the chord-arm letter path and
+    /// Shared `.addNoteToChord` apply + select-the-added-note landing, used by both the chord-arm letter path and
     /// the iPad interval shortcuts. A refused add (duplicate pitch) leaves `generation` and selection untouched.
     /// Auditions the newly added note on success (spec §5.6).
     private func addNoteToChord(at noteID: NoteID, pitch: Int, tpc: Int, keySig: Int) {
         let accidental = PitchSpelling.displayedAccidental(forTpc: tpc, in: keySig)
         let veID = VoiceElementID(noteID)
         let generationBeforeAdd = generation
-        applyCommand(AddNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental))
+        apply(.addNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental))
         guard generation != generationBeforeAdd, let score, case let .chord(chord)? = score[veID] else { return }
         let addedNoteID = NoteID(
             staff: noteID.staff,
@@ -84,7 +84,7 @@ extension EditorViewModel {
     }
 
     /// The pad's tie ＋ key: writes a note of the ARMED length in the slot after the selected one, at the same pitch,
-    /// and ties the two together — one command, one undo step.
+    /// and ties the two together — one composite, so one undo step.
     ///
     /// This is the "hold this note longer" gesture, and a tie is how a score says that across a barline or past what
     /// a single note value can express. As a bare toggle the key was near-useless: it needed you to have already
@@ -92,7 +92,7 @@ extension EditorViewModel {
     /// (Toggling an existing tie off still lives in the callout's tie key, which appears exactly when there is one.)
     public func appendTiedNote() {
         guard let plan = tieAppendPlan() else { return }
-        applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.location))
+        apply(.composite(plan.intents))
     }
 
     /// Whether `appendTiedNote` has somewhere to write: a selected note, an armed length, and a rest in the next slot
@@ -102,78 +102,55 @@ extension EditorViewModel {
         tieAppendPlan() != nil
     }
 
-    private func tieAppendPlan() -> (commands: [any EditCommand], location: VoiceElementID)? {
+    /// The chain across the barline is `.inputNote`'s job now — it asks the cross-bar planner itself — so this only
+    /// names the slot, the pitch and the length, then ties onto whatever landed. `sourceTieForward: 1` /
+    /// `targetTieBack: 1` are the tie's own numbering, unchanged.
+    ///
+    /// The planner is still consulted, but only to answer "is there anywhere for this length to go": no chain and no
+    /// room means the write would run off the end of the staff, and issuing it anyway hands the session an intent it
+    /// refuses — a lit key that does nothing. Reporting unavailable is what dims it instead.
+    private func tieAppendPlan() -> (intents: [EditIntent], target: NoteID)? {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID],
               let armed = armedInputDuration,
               let next = ElementNavigator.nextTimedElement(after: VoiceElementID(noteID), in: score),
               case let .chord(target)? = score[next], target.notes.isEmpty
         else { return nil }
-        // A tie is the one gesture whose whole point is holding a note past what one slot can express, so the armed
-        // length outrunning the bar is the expected case here rather than an edge one: spell it as a chain across
-        // the barline and tie the selected note onto its head.
-        // A fresh `Note`, not the selected one: what the chain carries is this note's PITCH, and copying the note
-        // whole would carry its ties too — the `SetTie` below is what joins the two.
-        if let plan = CrossBarInputPlanner.plan(
+        guard CrossBarInputPlanner.plan(
             .chord(Chord(duration: armed, notes: [Note(pitch: note.pitch, tpc: note.tpc)])),
             duration: armed, at: next, in: score,
-        ) {
-            let tieOntoChain = SetTie(
-                from: noteID,
-                to: NoteID(
-                    staff: plan.head.staff,
-                    measureIndex: plan.head.measureIndex,
-                    voiceIndex: plan.head.voiceIndex,
-                    elementIndex: plan.head.elementIndex,
-                    noteIndexInChord: 0,
-                ),
-                sourceTieForward: 1,
-                targetTieBack: 1,
-            )
-            return (plan.commands + [tieOntoChain], VoiceElementID(noteID))
-        }
-        // No plan and no room means the chain would run off the end of the staff: there is nowhere to put the
-        // length being asked for, and issuing the single-slot write anyway just hands the engine an edit it
-        // refuses — a lit key that does nothing. Report it as unavailable so the key dims instead.
-        guard CrossBarInputPlanner.fitsInMeasure(armed, at: next, in: score) else { return nil }
+        ) != nil || CrossBarInputPlanner.fitsInMeasure(armed, at: next, in: score) else { return nil }
+        let head = NoteID(
+            staff: next.staff,
+            measureIndex: next.measureIndex,
+            voiceIndex: next.voiceIndex,
+            elementIndex: next.elementIndex,
+            noteIndexInChord: 0,
+        )
         let restID = RestID(
             staff: next.staff,
             measureIndex: next.measureIndex,
             voiceIndex: next.voiceIndex,
             elementIndex: next.elementIndex,
         )
-        var commands: [any EditCommand] = []
-        // Re-time the slot first when it isn't already the armed length — the same composite shape note input uses,
-        // and the reason this works at all: `SetRestDuration` re-splices what FOLLOWS the slot, leaving the slot's
-        // own index (and so the `InputNote` / `SetTie` addresses below) valid.
-        if target.duration != armed {
-            commands.append(SetRestDuration(at: next, duration: armed))
-        }
-        commands.append(InputNote(at: restID, pitch: note.pitch, tpc: note.tpc))
-        commands.append(SetTie(
-            from: noteID,
-            to: NoteID(
-                staff: next.staff,
-                measureIndex: next.measureIndex,
-                voiceIndex: next.voiceIndex,
-                elementIndex: next.elementIndex,
-                noteIndexInChord: 0,
-            ),
-            sourceTieForward: 1,
-            targetTieBack: 1,
-        ))
-        return (commands, VoiceElementID(noteID))
+        return (
+            [
+                .inputNote(at: restID, pitch: note.pitch, tpc: note.tpc, duration: armed),
+                .setTie(from: noteID, to: head, sourceTieForward: 1, targetTieBack: 1),
+            ],
+            head,
+        )
     }
 
-    /// Adds the tie when absent (`SetTie` ... `sourceTieForward: 1, targetTieBack: 1`), removes it when present
+    /// Adds the tie when absent (`.setTie` … `sourceTieForward: 1, targetTieBack: 1`), removes it when present
     /// (nil / nil) — reads the selected note's `tieForward` to decide. No-op when there's no tie target.
     public func toggleTie() {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID],
               let targetID = TiePlanner.tieTarget(for: noteID, in: score)
         else { return }
         if note.tieForward != nil {
-            applyCommand(SetTie(from: noteID, to: targetID, sourceTieForward: nil, targetTieBack: nil))
+            apply(.setTie(from: noteID, to: targetID, sourceTieForward: nil, targetTieBack: nil))
         } else {
-            applyCommand(SetTie(from: noteID, to: targetID, sourceTieForward: 1, targetTieBack: 1))
+            apply(.setTie(from: noteID, to: targetID, sourceTieForward: 1, targetTieBack: 1))
         }
     }
 
@@ -218,7 +195,7 @@ extension EditorViewModel {
         // because the one slot you tried it on refused.
         armedTuplet = actualNotes
         guard let caretItem else { return }
-        applyCommand(CreateTuplet(
+        apply(.createTuplet(
             at: Self.tupletTarget(caretItem),
             actualNotes: actualNotes,
             normalNotes: Self.normalNotes(forActualNotes: actualNotes),
@@ -228,7 +205,7 @@ extension EditorViewModel {
     /// Collapses the tuplet containing the caret back into a single chord/rest of the same tick span.
     public func removeTuplet() {
         guard let caretItem else { return }
-        applyCommand(RemoveTuplet(at: Self.tupletTarget(caretItem)))
+        apply(.removeTuplet(at: Self.tupletTarget(caretItem)))
     }
 
     private static func tupletTarget(_ item: SheetMusicCore.ScoreItemID) -> VoiceElementID {
