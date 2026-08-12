@@ -20,7 +20,13 @@ extension EditorSessionCore {
         apply(.removeNoteFromChord(at: noteID))
     }
 
-    /// iPad +3度 / +8度 → `.addNoteToChord` with `IntervalPlanner`'s pitch.
+    /// Stacks a diatonic third or an octave onto the selected note — `.addNoteToChord` with `IntervalPlanner`'s
+    /// pitch.
+    ///
+    /// **Nothing calls this but its test.** It was the iPad palette card's `+3度` / `+8度` shortcuts, and that card
+    /// was removed for sitting permanently on the score to offer keys the pad already had (see `EditorChromeView`'s
+    /// doc comment). The op is kept because reinstating the shortcuts anywhere — the pad, a context menu, Android —
+    /// is then a view-only change.
     public func addIntervalNote(_ interval: DiatonicInterval) {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
         let keySig = score.activeKey(at: noteID)
