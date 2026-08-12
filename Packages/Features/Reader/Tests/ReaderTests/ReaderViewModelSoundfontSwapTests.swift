@@ -67,6 +67,42 @@ struct ReaderViewModelSoundfontSwapTests {
         #expect(controller.reloadSoundfontCount == 1)
     }
 
+    /// The swap re-prepares the loaded score, so the mixer has to re-read the engine's strips afterwards. Anchoring
+    /// the refresh to the load paths alone would leave the mixer describing the pre-swap engine for the rest of the
+    /// session.
+    @Test func `a soundfont swap refreshes the mixer's strips`() async {
+        let item = Self.makeItem()
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let controller = FakePlaybackController()
+        let provider = FakeMuseScoreGeneralProvider(downloadState: .idle)
+        let vm = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: Self.makeScore()),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
+            museScoreGeneralProvider: provider,
+        )
+        await vm.load()
+        // Nothing to report at load time, so the mixer starts empty and only the swap can fill it.
+        await vm.playbackSession.prepareForPlayback()
+        vm.playbackSession.startObservingCursor()
+        vm.playbackSession.startObservingSoundfontDownload()
+        #expect(vm.mixerModel.strips.isEmpty)
+
+        let strip = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+        controller.strips = [
+            MixerStrip(
+                id: strip, partName: "Vn", instrumentName: "Vn",
+                defaultVolume: 1, defaultProgram: 40, isDrums: false,
+            ),
+        ]
+        provider.downloadState = .downloaded
+        await yieldForObservation(until: { !vm.mixerModel.strips.isEmpty })
+
+        #expect(controller.reloadSoundfontCount == 1)
+        #expect(vm.mixerModel.strips.map(\.id) == [strip])
+    }
+
     @Test func `download finishing while playing defers reload until pause`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()

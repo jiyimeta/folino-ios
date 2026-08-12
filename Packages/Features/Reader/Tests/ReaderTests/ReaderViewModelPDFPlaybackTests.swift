@@ -133,25 +133,38 @@ struct ReaderViewModelPDFPlaybackTests {
         #expect(vm.pdfPlaybackData == nil)
     }
 
-    @Test func `the mixer addresses the parsed score's staves once the PDF is playable`() async {
+    @Test func `the mixer draws the parsed score's strips once the PDF is playable`() async {
         let controller = FakePlaybackController()
+        let violin = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+        let piano = MixerStripID(partIndex: 1, instrumentOrdinal: 0)
+        controller.strips = [
+            MixerStrip(
+                id: violin, partName: "Vn", instrumentName: "Vn",
+                defaultVolume: 1, defaultProgram: 40, isDrums: false,
+            ),
+            MixerStrip(
+                id: piano, partName: "Pno", instrumentName: "Pno",
+                defaultVolume: 1, defaultProgram: 0, isDrums: false,
+            ),
+        ]
         let vm = makeVM(
             parser: StubPDFPlaybackParser(result: sampleResult(score: parsedScore())),
             controller: controller,
         )
-        let pianoTop = StaffAddress(partIndex: 1, staffIndexInPart: 0)
 
-        // Before the parse there is no playable score, so the mixer has no staff to address and reaches no engine.
-        await vm.mixerModel.setStaffProgram(6, for: pianoTop)
-        #expect(controller.staffInstrumentCalls.isEmpty)
+        // Before the parse nothing is prepared, so the mixer has no strips to draw.
+        #expect(vm.mixerModel.strips.isEmpty)
 
+        // Parsing primes the engine, which is where the strips come from — for a playable PDF exactly as for a
+        // natively loaded score.
         await vm.parsePDFForPlayback(url: URL(filePath: "/tmp/whatever.pdf"))
-        await vm.mixerModel.setStaffProgram(6, for: pianoTop)
 
-        // Violin takes flat index 0, so the piano's upper staff is 1.
-        #expect(controller.staffInstrumentCalls.map(\.staff) == [1])
-        #expect(controller.staffInstrumentCalls.map(\.program) == [6])
-        #expect(vm.mixerModel.effectiveProgram(forPartIndex: 0) == 40)
+        #expect(vm.mixerModel.strips.map(\.id) == [violin, piano])
+        #expect(vm.mixerModel.effectiveProgram(for: violin) == 40)
+
+        await vm.mixerModel.setProgram(6, for: piano)
+        #expect(controller.stripPrograms.map(\.strip) == [piano])
+        #expect(controller.stripPrograms.map(\.program) == [6])
     }
 
     @Test func `repeat endpoints snap against the parsed PDF score`() async {

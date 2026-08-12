@@ -179,6 +179,10 @@ public final class ReaderPreferencesBridge {
         mutate { ReaderPreferencesReducer.setClef($0, part: Int(part), staff: Int(staff), rawType: rawType) }
     }
 
+    // PARITY(android): mixer strips — Android's mixer is still addressed per staff. Its writes land on the part's
+    //   tick-0 strip and its reads come back at staff 0, so a multi-staff part's second row shows the score's
+    //   default while the first shows the stored value. Following iOS means reading the strip list from the
+    //   Android engine (never re-deriving the dedup rule in Kotlin) and drawing one row per strip.
     @WireletExpose
     public func setStaffProgram(part: Int32, staff: Int32, program: Int32) {
         mutate {
@@ -211,12 +215,21 @@ public final class ReaderPreferencesBridge {
         }
     }
 
+    /// One entry per strip, at staff 0. The bridge has the preferences but not the score, so it cannot enumerate a
+    /// part's staves to repeat the value across them — which means a multi-staff part's second Compose row reads the
+    /// score's default while the first shows the stored value. Nothing sounds different (those rows always drove one
+    /// channel); the value appears to move. A one-line Kotlin fallback — read `(part, staff)`, else `(part, 0)` —
+    /// removes it, and is the first thing to do when Android's mixer is next opened.
     @WireletExpose
     public func programOverrides() -> [ProgramOverrideWire] {
-        prefs.staffProgramOverrides.map {
+        // Every entry is projected at `staffIndexInPart: 0` (see the type doc), so two strips of the same part
+        // (`instrumentOrdinal` 0 and 1) would otherwise collide on one wire key and Kotlin's map rebuild would pick
+        // a winner by unspecified `Dictionary` iteration order. Unreachable today — Android's own reducer only ever
+        // writes ordinal 0 — but the filter makes the collision structurally impossible rather than merely unlikely.
+        prefs.stripProgramOverrides.filter { $0.key.instrumentOrdinal == 0 }.map {
             ProgramOverrideWire(
                 partIndex: Int32($0.key.partIndex),
-                staffIndexInPart: Int32($0.key.staffIndexInPart),
+                staffIndexInPart: 0,
                 program: Int32($0.value),
             )
         }
@@ -224,10 +237,11 @@ public final class ReaderPreferencesBridge {
 
     @WireletExpose
     public func volumeOverrides() -> [VolumeOverrideWire] {
-        prefs.staffVolumeOverrides.map {
+        // See the matching comment in `programOverrides()` — same collision, same fix.
+        prefs.stripVolumeOverrides.filter { $0.key.instrumentOrdinal == 0 }.map {
             VolumeOverrideWire(
                 partIndex: Int32($0.key.partIndex),
-                staffIndexInPart: Int32($0.key.staffIndexInPart),
+                staffIndexInPart: 0,
                 volume: $0.value,
             )
         }

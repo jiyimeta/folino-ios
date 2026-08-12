@@ -1847,6 +1847,40 @@
         }
       }
     },
+    "reader.inspector.staffVisibility.numbered %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staff %lld visibility"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譜表 %lld の表示/非表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "보표 %lld 표시/숨기기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "谱表 %lld 显示或隐藏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譜表 %lld 顯示或隱藏"
+          }
+        }
+      }
+    },
     "reader.inspector.transpose" : {
       "localizations" : {
         "en" : {

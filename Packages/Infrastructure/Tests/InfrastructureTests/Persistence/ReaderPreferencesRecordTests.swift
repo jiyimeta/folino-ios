@@ -98,17 +98,17 @@ struct ReaderPreferencesRecordTests {
     }
 
     @Test func `program overrides round trip through domain`() throws {
-        let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let strip1 = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+        let strip2 = MixerStripID(partIndex: 1, instrumentOrdinal: 1)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffProgramOverrides: [address1: 6, address2: 40],
+            stripProgramOverrides: [strip1: 6, strip2: 40],
         )
         let record = ReaderPreferencesRecord(domain: prefs)
         let restored = try record.toDomain()
-        #expect(restored.staffProgramOverrides == [address1: 6, address2: 40])
+        #expect(restored.stripProgramOverrides == [strip1: 6, strip2: 40])
     }
 
     @Test func `honor layout breaks round trips through domain`() throws {
@@ -228,17 +228,17 @@ struct ReaderPreferencesRecordTests {
     }
 
     @Test func `volume overrides round trip through domain`() throws {
-        let address1 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let strip1 = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+        let strip2 = MixerStripID(partIndex: 1, instrumentOrdinal: 1)
         let prefs = ReaderPreferences(
             scoreItemID: ScoreItemID(),
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address1: 0.25, address2: 0.75],
+            stripVolumeOverrides: [strip1: 0.25, strip2: 0.75],
         )
         let record = ReaderPreferencesRecord(domain: prefs)
         let restored = try record.toDomain()
-        #expect(restored.staffVolumeOverrides == [address1: 0.25, address2: 0.75])
+        #expect(restored.stripVolumeOverrides == [strip1: 0.25, strip2: 0.75])
     }
 
     @Test func `empty clef overrides encodes as empty JSON`() {

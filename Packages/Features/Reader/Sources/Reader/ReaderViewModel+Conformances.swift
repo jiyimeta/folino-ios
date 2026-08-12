@@ -4,20 +4,11 @@ import ScoreUI
 // MARK: - PlaybackMixerHost conformance
 
 extension ReaderViewModel: PlaybackMixerHost {
-    /// Required by `PlaybackMixerHost`. Reads through `playbackSession` so `PlaybackMixerModel` can check whether
-    /// playback is active (e.g. to decide whether to show a mute indicator).
-    var isPlaying: Bool {
-        playbackSession.isPlaying
-    }
-
     /// Required by `PlaybackMixerHost`. Reads through `playbackSession` so `PlaybackMixerModel` can forward volume,
     /// mute, and program changes to the active controller without holding a direct reference to the session.
     var playbackController: (any PlaybackController)? {
         playbackSession.controller
     }
-
-    // `playbackScore` — the third `PlaybackMixerHost` requirement — is declared in `ReaderViewModel+PDFPlayback.swift`
-    // alongside the rest of the PDF-playback surface, and satisfies the conformance from there.
 }
 
 // MARK: - ScoreInfoEditing conformance

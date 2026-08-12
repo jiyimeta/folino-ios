@@ -17,23 +17,21 @@ public struct ChordPath: Hashable, Sendable, Codable {
     }
 }
 
-/// Mixer settings for one staff in the engraved score. `gmBank` follows the MIDI convention (0 = melodic, 128 = drum);
-/// `gmProgram` is the General MIDI program number (0…127).
-public struct StaffMixerState: Hashable, Sendable, Codable {
-    public let staffIndex: Int
-    public var volume: Double
-    public var isMuted: Bool
-    public var isSolo: Bool
-    public var gmBank: Int
-    public var gmProgram: Int
+/// One strip's SAVED OVERRIDES — not its resolved settings. Absent means the user never chose, and the engine's
+/// own seeding (the score's authored CC 7 and program, applied when it prepared the score) stands.
+///
+/// `isMuted` / `isSolo` are not here: mute and solo are session-only and were always written `false`.
+public struct StripMixerState: Hashable, Sendable, Codable {
+    public let strip: MixerStripID
+    /// `nil` = no override.
+    public var volume: Double?
+    /// `nil` = no override. NOT a program of `0`, which is Acoustic Grand Piano.
+    public var gmProgram: Int?
 
-    public init(staffIndex: Int, volume: Double, isMuted: Bool, isSolo: Bool, gmBank: Int, gmProgram: Int) {
-        self.staffIndex = staffIndex
-        self.volume = min(max(volume, 0), 1)
-        self.isMuted = isMuted
-        self.isSolo = isSolo
-        self.gmBank = max(0, gmBank)
-        self.gmProgram = min(max(gmProgram, 0), 127)
+    public init(strip: MixerStripID, volume: Double?, gmProgram: Int?) {
+        self.strip = strip
+        self.volume = volume.map { min(max($0, 0), 1) }
+        self.gmProgram = gmProgram.map { min(max($0, 0), 127) }
     }
 }
 
@@ -53,7 +51,7 @@ public struct ABRepeatRange: Hashable, Sendable, Codable {
 public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
     public let id: PlaybackPreferencesID
     public let scoreItemID: ScoreItemID
-    public var perStaff: [StaffMixerState]
+    public var perStrip: [StripMixerState]
     public var tempoMultiplier: Double
     public var abRepeat: ABRepeatRange?
     /// Master output volume seeded into the engine on load. `1.0` is unity; clamped to `[0, 3]` (300%). Mirrors
@@ -71,7 +69,7 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
     public init(
         id: PlaybackPreferencesID = PlaybackPreferencesID(),
         scoreItemID: ScoreItemID,
-        perStaff: [StaffMixerState],
+        perStrip: [StripMixerState],
         tempoMultiplier: Double,
         abRepeat: ABRepeatRange?,
         masterVolume: Double = 1.0,
@@ -80,7 +78,7 @@ public struct PlaybackPreferences: Hashable, Sendable, Codable, Identifiable {
     ) {
         self.id = id
         self.scoreItemID = scoreItemID
-        self.perStaff = perStaff
+        self.perStrip = perStrip
         self.tempoMultiplier = min(max(tempoMultiplier, 0.5), 2.0)
         self.abRepeat = abRepeat
         self.masterVolume = min(max(masterVolume, 0), 3)

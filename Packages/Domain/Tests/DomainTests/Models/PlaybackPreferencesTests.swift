@@ -19,20 +19,24 @@ struct ChordPathTests {
     }
 }
 
-struct StaffMixerStateTests {
+struct StripMixerStateTests {
     @Test func `volume is clamped to unit interval`() {
-        let state = StaffMixerState(staffIndex: 0, volume: 1.5, isMuted: false, isSolo: false, gmBank: 0, gmProgram: 0)
+        let state = StripMixerState(strip: MixerStripID(partIndex: 0, instrumentOrdinal: 0), volume: 1.5, gmProgram: 0)
         #expect(state.volume == 1)
-        let state2 = StaffMixerState(
-            staffIndex: 0, volume: -0.1, isMuted: false, isSolo: false, gmBank: 0, gmProgram: 0,
+        let state2 = StripMixerState(
+            strip: MixerStripID(partIndex: 0, instrumentOrdinal: 0), volume: -0.1, gmProgram: 0,
         )
         #expect(state2.volume == 0)
     }
 
     @Test func `gm program is clamped to 0 through 127`() {
-        let state = StaffMixerState(staffIndex: 0, volume: 1, isMuted: false, isSolo: false, gmBank: 0, gmProgram: 200)
+        let state = StripMixerState(
+            strip: MixerStripID(partIndex: 0, instrumentOrdinal: 0), volume: 1, gmProgram: 200,
+        )
         #expect(state.gmProgram == 127)
-        let state2 = StaffMixerState(staffIndex: 0, volume: 1, isMuted: false, isSolo: false, gmBank: 0, gmProgram: -1)
+        let state2 = StripMixerState(
+            strip: MixerStripID(partIndex: 0, instrumentOrdinal: 0), volume: 1, gmProgram: -1,
+        )
         #expect(state2.gmProgram == 0)
     }
 }
@@ -48,11 +52,32 @@ struct ABRepeatRangeTests {
 }
 
 struct PlaybackPreferencesTests {
+    /// Both fields are independently optional because volume and program are separate override dictionaries: a
+    /// strip can carry one and not the other. A non-optional `gmProgram` would need a filler, and the obvious
+    /// one — 0 — is Acoustic Grand Piano, so saving a volume would silently retune the strip.
+    @Test func `a strip state can carry a volume with no program`() {
+        let state = StripMixerState(
+            strip: MixerStripID(partIndex: 0, instrumentOrdinal: 0), volume: 0.4, gmProgram: nil,
+        )
+
+        #expect(state.volume == 0.4)
+        #expect(state.gmProgram == nil)
+    }
+
+    @Test func `a strip state clamps the values it does carry`() {
+        let state = StripMixerState(
+            strip: MixerStripID(partIndex: 0, instrumentOrdinal: 0), volume: 3, gmProgram: 999,
+        )
+
+        #expect(state.volume == 1)
+        #expect(state.gmProgram == 127)
+    }
+
     @Test func `tempo multiplier is clamped to half through two`() {
         let prefs = PlaybackPreferences(
             id: PlaybackPreferencesID(),
             scoreItemID: ScoreItemID(),
-            perStaff: [],
+            perStrip: [],
             tempoMultiplier: 5.0,
             abRepeat: nil,
         )
@@ -60,7 +85,7 @@ struct PlaybackPreferencesTests {
         let prefs2 = PlaybackPreferences(
             id: PlaybackPreferencesID(),
             scoreItemID: ScoreItemID(),
-            perStaff: [],
+            perStrip: [],
             tempoMultiplier: 0.1,
             abRepeat: nil,
         )
@@ -68,11 +93,11 @@ struct PlaybackPreferencesTests {
     }
 
     @Test func roundTripsThroughCodable() throws {
-        let mixer = StaffMixerState(staffIndex: 0, volume: 0.8, isMuted: false, isSolo: true, gmBank: 0, gmProgram: 4)
+        let mixer = StripMixerState(strip: MixerStripID(partIndex: 0, instrumentOrdinal: 0), volume: 0.8, gmProgram: 4)
         let prefs = PlaybackPreferences(
             id: PlaybackPreferencesID(),
             scoreItemID: ScoreItemID(),
-            perStaff: [mixer],
+            perStrip: [mixer],
             tempoMultiplier: 1.0,
             abRepeat: ABRepeatRange(
                 start: ChordPath(systemIndex: 0, measureIndex: 0, voiceIndex: 0, chordIndex: 0),

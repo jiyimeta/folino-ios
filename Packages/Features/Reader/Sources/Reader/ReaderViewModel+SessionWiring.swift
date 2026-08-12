@@ -29,6 +29,11 @@ extension ReaderViewModel {
         playbackSession.onReadyForLoopForward = { [weak self] in
             await self?.repeatModel.forwardLoopRangeToController()
         }
+        // The mixer draws what the engine holds, so its strip list is re-read at every path that leaves a score
+        // prepared — both loads and the soundfont hot-swap — rather than being derived from the score here.
+        playbackSession.onEnginePrepared = { [weak self] in
+            await self?.mixerModel.refreshStrips()
+        }
         playbackSession.onReachedEnd = { [weak self] in
             await self?.handlePlaybackReachedEnd()
         }

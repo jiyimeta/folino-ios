@@ -2,22 +2,26 @@ import Domain
 import SheetMusicAudio
 import SwiftUI
 
-/// Per-Part program override Menu shown in the Reader Inspector's Playback tab header. Lives outside
-/// `PlaybackInspectorScreen` so the screen file stays under length limits — semantics match the prior inline
-/// `programPicker` exactly.
+/// Program override Menu for one mixer strip — a (part × distinct instrument) pair — shown on that strip's row in the
+/// Reader Inspector's Playback tab. Lives outside `PlaybackInspectorScreen` so the screen file stays under length
+/// limits.
 ///
-/// `isDrums` selects which catalog drives the menu: GM Level 1 melodic instruments for pitched parts, or `GMDrumKit`
-/// (the kits actually shipped by the SF2 split resolver) for percussion parts. The override-set / reset /
-/// cache-hit-miss machinery underneath is shared — `PlaybackMixerModel.setPartProgram` already pulls `isDrums` from the
-/// part's `useDrumset` flag.
+/// `strip.isDrums` selects which catalog drives the menu: GM Level 1 melodic instruments for pitched strips, or
+/// `GMDrumKit` (the kits actually shipped by the SF2 split resolver) for percussion. Drum-ness is that flag and never
+/// "the strip reports no program" — since swift-sheet-music 1.12.0 a drum strip reports its KIT's program, and a nil
+/// program means the metronome, which is never a strip. The override-set / reset / cache-hit-miss machinery underneath
+/// is shared.
 struct ProgramPicker: View {
     let mixerModel: PlaybackMixerModel
-    let partIndex: Int
-    let isDrums: Bool
+    let strip: MixerStrip
+
+    private var isDrums: Bool {
+        strip.isDrums
+    }
 
     var body: some View {
-        let program = mixerModel.effectiveProgram(forPartIndex: partIndex)
-        let hasOverride = mixerModel.hasProgramOverride(forPartIndex: partIndex)
+        let program = mixerModel.effectiveProgram(for: strip.id)
+        let hasOverride = mixerModel.hasProgramOverride(for: strip.id)
         Menu {
             if hasOverride {
                 resetButton
@@ -58,11 +62,7 @@ struct ProgramPicker: View {
             Section(family.rawValue) {
                 ForEach(family.programs) { instrument in
                     Button {
-                        Task {
-                            await mixerModel.setPartProgram(
-                                Int(instrument.program), forPartIndex: partIndex,
-                            )
-                        }
+                        Task { await mixerModel.setProgram(Int(instrument.program), for: strip.id) }
                     } label: {
                         Text(instrument.name)
                     }
@@ -76,11 +76,7 @@ struct ProgramPicker: View {
             Section(family.rawValue) {
                 ForEach(family.kits) { kit in
                     Button {
-                        Task {
-                            await mixerModel.setPartProgram(
-                                Int(kit.program), forPartIndex: partIndex,
-                            )
-                        }
+                        Task { await mixerModel.setProgram(Int(kit.program), for: strip.id) }
                     } label: {
                         Text(kit.name)
                     }
@@ -91,7 +87,7 @@ struct ProgramPicker: View {
 
     private var resetButton: some View {
         Button {
-            Task { await mixerModel.clearPartProgramOverride(forPartIndex: partIndex) }
+            Task { await mixerModel.clearProgramOverride(for: strip.id) }
         } label: {
             Label {
                 Text("reader.preferences.resetDefault", bundle: .module)

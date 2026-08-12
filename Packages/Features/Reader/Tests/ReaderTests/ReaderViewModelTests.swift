@@ -6,6 +6,9 @@ import Testing
 
 @MainActor
 struct ReaderViewModelTests {
+    /// The single-instrument fixture score's one mixer strip.
+    private static let strip = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+
     private static func makeItem() -> ScoreItem {
         ScoreItem(
             title: "Test", composer: nil, instrumentationSummary: nil,
@@ -197,24 +200,22 @@ struct ReaderViewModelTests {
         #expect(vm.layoutModel.hiddenStaves.isEmpty)
     }
 
-    @Test func `volume falls back to one when load state has no parts`() {
+    @Test func `volume falls back to one when the engine has no strips`() {
         let vm = makeVMNoLoad()
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 1)
-        #expect(vm.mixerModel.volume(for: address) == 1.0)
+        #expect(vm.mixerModel.volume(for: Self.strip) == 1.0)
     }
 
     @Test func `set volume clamps out of range values`() {
         let vm = makeVMNoLoad()
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-        vm.mixerModel.setVolume(-0.5, for: address)
-        #expect(vm.mixerModel.liveStaffVolumes[address] == 0)
+        vm.mixerModel.setVolume(-0.5, for: Self.strip)
+        #expect(vm.mixerModel.liveVolumes[Self.strip] == 0)
 
-        vm.mixerModel.setVolume(2.0, for: address)
-        #expect(vm.mixerModel.liveStaffVolumes[address] == 1)
+        vm.mixerModel.setVolume(2.0, for: Self.strip)
+        #expect(vm.mixerModel.liveVolumes[Self.strip] == 1)
     }
 
-    @Test func `volume uses score CC 7 when no override`() async {
+    @Test func `volume uses the engine's strip level when no override`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -229,6 +230,14 @@ struct ReaderViewModelTests {
             ],
             metaTags: [:],
         )
+        let controller = FakePlaybackController()
+        // What the engine reports for the score's CC 7 of 64.
+        controller.strips = [
+            MixerStrip(
+                id: Self.strip, partName: "Vn", instrumentName: "Vn",
+                defaultVolume: 64.0 / 127.0, defaultProgram: 40, isDrums: false,
+            ),
+        ]
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo,
             gateway: FakeScoreFileGateway(loadScoreResult: .success((
@@ -240,10 +249,11 @@ struct ReaderViewModelTests {
             ))),
             scoresDirectory: URL(filePath: "/tmp"),
             defaultStaffSize: 14,
+            playbackController: controller,
         )
         await vm.load()
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let value = vm.mixerModel.volume(for: address)
+        await vm.playbackSession.prepareForPlayback()
+        let value = vm.mixerModel.volume(for: Self.strip)
         #expect(abs(value - 64.0 / 127.0) < 0.0001)
     }
 
@@ -251,12 +261,11 @@ struct ReaderViewModelTests {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
             scoreItemID: item.id,
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 0.3],
+            stripVolumeOverrides: [Self.strip: 0.3],
         )
         let score = Score(
             division: 480,
@@ -282,7 +291,7 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        #expect(vm.mixerModel.volume(for: address) == 0.3)
+        #expect(vm.mixerModel.volume(for: Self.strip) == 0.3)
     }
 
     @Test func `reset zoom returns to unit`() {
@@ -338,7 +347,6 @@ struct ReaderViewModelTests {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let score = Score(
             division: 480,
             parts: [
@@ -365,11 +373,11 @@ struct ReaderViewModelTests {
         await vm.load()
         let savesBefore = repo.savedReaderPreferences.count
 
-        vm.mixerModel.setVolume(0.4, for: address)
+        vm.mixerModel.setVolume(0.4, for: Self.strip)
 
-        #expect(vm.mixerModel.liveStaffVolumes[address] == 0.4)
-        #expect(vm.mixerModel.volume(for: address) == 0.4)
-        #expect(vm.mixerModel.staffVolumeOverrides[address] == nil)
+        #expect(vm.mixerModel.liveVolumes[Self.strip] == 0.4)
+        #expect(vm.mixerModel.volume(for: Self.strip) == 0.4)
+        #expect(vm.mixerModel.volumeOverrides[Self.strip] == nil)
         #expect(repo.savedReaderPreferences.count == savesBefore)
     }
 
@@ -377,7 +385,6 @@ struct ReaderViewModelTests {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let score = Score(
             division: 480,
             parts: [
@@ -402,14 +409,14 @@ struct ReaderViewModelTests {
             defaultStaffSize: 14,
         )
         await vm.load()
-        vm.mixerModel.setVolume(0.4, for: address)
+        vm.mixerModel.setVolume(0.4, for: Self.strip)
         let savesBefore = repo.savedReaderPreferences.count
 
-        await vm.mixerModel.commitVolume(0.4, for: address)
+        await vm.mixerModel.commitVolume(0.4, for: Self.strip)
 
-        #expect(vm.mixerModel.staffVolumeOverrides[address] == 0.4)
-        #expect(vm.mixerModel.liveStaffVolumes[address] == nil)
-        #expect(vm.mixerModel.volume(for: address) == 0.4)
+        #expect(vm.mixerModel.volumeOverrides[Self.strip] == 0.4)
+        #expect(vm.mixerModel.liveVolumes[Self.strip] == nil)
+        #expect(vm.mixerModel.volume(for: Self.strip) == 0.4)
         #expect(repo.savedReaderPreferences.count == savesBefore + 1)
     }
 
@@ -417,7 +424,6 @@ struct ReaderViewModelTests {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let score = Score(
             division: 480,
             parts: [
@@ -442,11 +448,11 @@ struct ReaderViewModelTests {
         )
         await vm.load()
 
-        await vm.mixerModel.commitVolume(-0.5, for: address)
-        #expect(vm.mixerModel.staffVolumeOverrides[address] == 0)
+        await vm.mixerModel.commitVolume(-0.5, for: Self.strip)
+        #expect(vm.mixerModel.volumeOverrides[Self.strip] == 0)
 
-        await vm.mixerModel.commitVolume(2.0, for: address)
-        #expect(vm.mixerModel.staffVolumeOverrides[address] == 1)
+        await vm.mixerModel.commitVolume(2.0, for: Self.strip)
+        #expect(vm.mixerModel.volumeOverrides[Self.strip] == 1)
     }
 
     private func makeVMNoLoad() -> ReaderViewModel {

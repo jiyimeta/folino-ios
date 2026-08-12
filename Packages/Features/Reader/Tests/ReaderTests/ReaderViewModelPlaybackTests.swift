@@ -6,6 +6,9 @@ import Testing
 
 @MainActor
 struct ReaderViewModelPlaybackTests {
+    private static let violinStrip = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+    private static let pianoStrip = MixerStripID(partIndex: 1, instrumentOrdinal: 0)
+
     private static func makeItem() -> ScoreItem {
         ScoreItem(
             title: "Test", composer: nil, instrumentationSummary: nil,
@@ -24,6 +27,16 @@ struct ReaderViewModelPlaybackTests {
                 lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             ),
         )))
+    }
+
+    /// A strip as the engine would report it, so a test can stand a prepared engine up without one.
+    private static func strip(
+        _ id: MixerStripID, name: String, volume: Double = 1.0, program: Int,
+    ) -> MixerStrip {
+        MixerStrip(
+            id: id, partName: name, instrumentName: name,
+            defaultVolume: volume, defaultProgram: program, isDrums: false,
+        )
     }
 
     @Test func `playback cursor mirrors controller stream`() {
@@ -146,7 +159,39 @@ struct ReaderViewModelPlaybackTests {
         #expect(!vm.playbackSession.isPlaying)
     }
 
-    @Test func `toggle staff solo flips membership and forwards to controller`() async {
+    /// The mixer's strips are the engine's, so they only exist once a load has landed — and they arrive by BOTH load
+    /// paths, `prepareForPlayback` and the `togglePlayback` fallback that runs when the first never completed.
+    @Test func `the mixer's strips arrive by whichever load path ran`() async {
+        for usesPrepare in [true, false] {
+            let item = Self.makeItem()
+            let repo = FakeScoreLibraryRepository()
+            repo.scoreItems = [item]
+            let score = Score(
+                division: 480,
+                parts: [Part(id: "P0", trackName: "Vn", instrument: Instrument(id: "v"), staves: [Staff()])],
+                metaTags: [:],
+            )
+            let controller = FakePlaybackController()
+            controller.strips = [Self.strip(Self.violinStrip, name: "Vn", program: 40)]
+            let vm = ReaderViewModel(
+                scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+                scoresDirectory: URL(filePath: "/tmp"),
+                playbackController: controller,
+            )
+            await vm.load()
+            #expect(vm.mixerModel.strips.isEmpty)
+
+            if usesPrepare {
+                await vm.playbackSession.prepareForPlayback()
+            } else {
+                await vm.playbackSession.togglePlayback()
+            }
+
+            #expect(vm.mixerModel.strips.map(\.id) == [Self.violinStrip])
+        }
+    }
+
+    @Test func `toggle solo flips membership and forwards to controller`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -166,24 +211,25 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        // Piano top staff → flat index 1 (Vn=0, Pno-top=1, Pno-bottom=2).
-        let pianoTop = StaffAddress(partIndex: 1, staffIndexInPart: 0)
-        vm.mixerModel.toggleStaffSolo(pianoTop)
-        #expect(vm.mixerModel.soloStaves == [pianoTop])
+        vm.mixerModel.toggleSolo(Self.pianoStrip)
+        #expect(vm.mixerModel.soloStrips == [Self.pianoStrip])
         for _ in 0 ..< 5 {
             await Task.yield()
         }
-        #expect(controller.staffSoloStates[1] == true)
+        #expect(controller.stripSolos.map(\.strip) == [Self.pianoStrip])
+        #expect(controller.stripSolos.map(\.isSolo) == [true])
 
-        vm.mixerModel.toggleStaffSolo(pianoTop)
-        #expect(vm.mixerModel.soloStaves.isEmpty)
+        vm.mixerModel.toggleSolo(Self.pianoStrip)
+        #expect(vm.mixerModel.soloStrips.isEmpty)
         for _ in 0 ..< 5 {
             await Task.yield()
         }
-        #expect(controller.staffSoloStates[1] == false)
+        #expect(controller.stripSolos.map(\.isSolo) == [true, false])
     }
 
-    @Test func `toggle staff solo is no op when score not loaded`() async {
+    /// Addressing no longer goes through the score, so there is nothing left to resolve before forwarding: the strip
+    /// id goes straight to the controller, which is the only thing that knows whether a score is prepared.
+    @Test func `toggle solo forwards even before a score is prepared`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -194,53 +240,54 @@ struct ReaderViewModelPlaybackTests {
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
         )
-        // No load: flat index lookup fails, controller is never called, but the in-memory set still tracks the user's
-        // intent.
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        vm.mixerModel.toggleStaffSolo(address)
-        #expect(vm.mixerModel.soloStaves == [address])
+        // No load.
+        vm.mixerModel.toggleSolo(Self.violinStrip)
+        #expect(vm.mixerModel.soloStrips == [Self.violinStrip])
         for _ in 0 ..< 5 {
             await Task.yield()
         }
-        #expect(controller.staffSoloStates.isEmpty)
+        #expect(controller.stripSolos.map(\.strip) == [Self.violinStrip])
     }
 
-    @Test func `effective program falls back to score instrument channel`() async {
+    @Test func `effective program falls back to the strip's score program`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
-        let violinChannel = InstrumentChannel(program: 40) // GM 40 = Violin
-        let pianoChannel = InstrumentChannel(program: 0) // GM 0 = Piano
         let score = Score(
             division: 480,
             parts: [
                 Part(
                     id: "P0", trackName: "Vn",
-                    instrument: Instrument(id: "v", channels: [violinChannel]),
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
                     staves: [Staff()],
                 ),
                 Part(
                     id: "P1", trackName: "Pno",
-                    instrument: Instrument(id: "p", channels: [pianoChannel]),
+                    instrument: Instrument(id: "p", channels: [InstrumentChannel(program: 0)]),
                     staves: [Staff(), Staff()],
                 ),
             ],
             metaTags: [:],
         )
+        let controller = FakePlaybackController()
+        controller.strips = [
+            Self.strip(Self.violinStrip, name: "Vn", program: 40), // GM 40 = Violin
+            Self.strip(Self.pianoStrip, name: "Pno", program: 0), // GM 0 = Piano
+        ]
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller,
         )
         await vm.load()
+        await vm.playbackSession.prepareForPlayback()
 
-        let violinAddress = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let pianoTopAddress = StaffAddress(partIndex: 1, staffIndexInPart: 0)
-        #expect(vm.mixerModel.effectiveProgram(for: violinAddress) == 40)
-        #expect(vm.mixerModel.effectiveProgram(for: pianoTopAddress) == 0)
-        #expect(!vm.mixerModel.hasProgramOverride(for: violinAddress))
+        #expect(vm.mixerModel.effectiveProgram(for: Self.violinStrip) == 40)
+        #expect(vm.mixerModel.effectiveProgram(for: Self.pianoStrip) == 0)
+        #expect(!vm.mixerModel.hasProgramOverride(for: Self.violinStrip))
     }
 
-    @Test func `set staff program persists override and forwards to controller`() async {
+    @Test func `set program persists override and forwards to controller`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -256,29 +303,29 @@ struct ReaderViewModelPlaybackTests {
             metaTags: [:],
         )
         let controller = FakePlaybackController()
+        controller.strips = [Self.strip(Self.violinStrip, name: "Vn", program: 40)]
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
         )
         await vm.load()
+        await vm.playbackSession.prepareForPlayback()
 
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        await vm.mixerModel.setStaffProgram(6, for: address) // Harpsichord
-        #expect(vm.mixerModel.effectiveProgram(for: address) == 6)
-        #expect(vm.mixerModel.hasProgramOverride(for: address))
-        #expect(vm.mixerModel.staffProgramOverrides[address] == 6)
+        await vm.mixerModel.setProgram(6, for: Self.violinStrip) // Harpsichord
+        #expect(vm.mixerModel.effectiveProgram(for: Self.violinStrip) == 6)
+        #expect(vm.mixerModel.hasProgramOverride(for: Self.violinStrip))
+        #expect(vm.mixerModel.programOverrides[Self.violinStrip] == 6)
         // Saved to repository.
         let saved = try? #require(repo.savedReaderPreferences.last)
-        #expect(saved?.staffProgramOverrides[address] == 6)
-        // Forwarded to the controller with bank 0.
-        let call = try? #require(controller.staffInstrumentCalls.last)
-        #expect(call?.staff == 0)
-        #expect(call?.bank == 0)
+        #expect(saved?.stripProgramOverrides[Self.violinStrip] == 6)
+        // Forwarded to the controller.
+        let call = try? #require(controller.stripPrograms.last)
+        #expect(call?.strip == Self.violinStrip)
         #expect(call?.program == 6)
     }
 
-    @Test func `clear staff program override reverts to score default`() async {
+    @Test func `clear program override reverts to the strip's score program`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -294,32 +341,97 @@ struct ReaderViewModelPlaybackTests {
             metaTags: [:],
         )
         let controller = FakePlaybackController()
+        controller.strips = [Self.strip(Self.violinStrip, name: "Vn", program: 40)]
         let vm = ReaderViewModel(
             scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
             scoresDirectory: URL(filePath: "/tmp"),
             playbackController: controller,
         )
         await vm.load()
+        await vm.playbackSession.prepareForPlayback()
 
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        await vm.mixerModel.setStaffProgram(6, for: address)
-        await vm.mixerModel.clearStaffProgramOverride(for: address)
+        await vm.mixerModel.setProgram(6, for: Self.violinStrip)
+        await vm.mixerModel.clearProgramOverride(for: Self.violinStrip)
 
-        #expect(!vm.mixerModel.hasProgramOverride(for: address))
-        #expect(vm.mixerModel.effectiveProgram(for: address) == 40)
-        #expect(vm.mixerModel.staffProgramOverrides[address] == nil)
-        let lastCall = try? #require(controller.staffInstrumentCalls.last)
-        #expect(lastCall?.program == 40) // reset call uses score default
+        #expect(!vm.mixerModel.hasProgramOverride(for: Self.violinStrip))
+        #expect(vm.mixerModel.effectiveProgram(for: Self.violinStrip) == 40)
+        #expect(vm.mixerModel.programOverrides[Self.violinStrip] == nil)
+        let lastCall = try? #require(controller.stripPrograms.last)
+        #expect(lastCall?.program == 40) // reset call uses the score's program
     }
 
-    @Test func `initial playback preferences use overrides and score defaults`() async throws {
+    /// The override outlives the session because it is persisted by strip and read back by strip — and the engine is
+    /// seeded with it on the next load, so playback actually uses it.
+    @Test func `a program override survives an app relaunch`() async {
+        let item = Self.makeItem()
+        // One repository stands in for the on-disk store across both "launches".
+        let repo = FakeScoreLibraryRepository()
+        repo.scoreItems = [item]
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "P0", trackName: "Vn",
+                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
+                    staves: [Staff()],
+                ),
+                Part(
+                    id: "P1", trackName: "Pno",
+                    instrument: Instrument(id: "p", channels: [InstrumentChannel(program: 0)]),
+                    staves: [Staff(), Staff()],
+                ),
+            ],
+            metaTags: [:],
+        )
+        let strips = [
+            Self.strip(Self.violinStrip, name: "Vn", program: 40),
+            Self.strip(Self.pianoStrip, name: "Pno", program: 0),
+        ]
+
+        // Session 1: choose Harpsichord (program 6) for the piano strip.
+        let controller1 = FakePlaybackController()
+        controller1.strips = strips
+        let vm1 = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller1,
+        )
+        await vm1.load()
+        await vm1.playbackSession.prepareForPlayback()
+        await vm1.mixerModel.setProgram(6, for: Self.pianoStrip)
+
+        // The choice was written through to persistence.
+        #expect(repo.storedReaderPreferences[item.id]?.stripProgramOverrides[Self.pianoStrip] == 6)
+
+        // Session 2 (app relaunch): a brand-new view model + mixer over the same store.
+        let controller2 = FakePlaybackController()
+        controller2.strips = strips
+        let vm2 = ReaderViewModel(
+            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
+            scoresDirectory: URL(filePath: "/tmp"),
+            playbackController: controller2,
+        )
+        await vm2.load()
+        await vm2.playbackSession.prepareForPlayback()
+
+        // The mixer shows the override again — and only on the strip that carries it.
+        #expect(vm2.mixerModel.effectiveProgram(for: Self.pianoStrip) == 6)
+        #expect(vm2.mixerModel.hasProgramOverride(for: Self.pianoStrip))
+        #expect(vm2.mixerModel.effectiveProgram(for: Self.violinStrip) == 40)
+
+        // …and the engine was seeded with it on load.
+        let seeded = controller2.lastLoadedPreferences?.perStrip ?? []
+        #expect(seeded.first { $0.strip == Self.pianoStrip }?.gmProgram == 6)
+        #expect(!seeded.contains { $0.strip == Self.violinStrip })
+    }
+
+    @Test func `initial playback preferences carry only the saved overrides`() async throws {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
-        let address2 = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
             scoreItemID: item.id, staffSize: 14, hiddenStaves: [],
-            staffProgramOverrides: [address2: 24], // Acoustic Guitar
+            stripProgramOverrides: [Self.pianoStrip: 24], // Acoustic Guitar
         )
         let score = Score(
             division: 480,
@@ -347,11 +459,12 @@ struct ReaderViewModelPlaybackTests {
         await vm.playbackSession.togglePlayback()
 
         let prefs = try #require(controller.lastLoadedPreferences)
-        #expect(prefs.perStaff[0].gmProgram == 40) // violin uses score default
-        #expect(prefs.perStaff[1].gmProgram == 24) // piano uses override
+        // The violin has no override, so nothing is sent for it — the engine's own seeding from the score stands.
+        #expect(prefs.perStrip.map(\.strip) == [Self.pianoStrip])
+        #expect(prefs.perStrip.first?.gmProgram == 24)
     }
 
-    @Test func `set volume forwards to controller by flat staff index`() async {
+    @Test func `set volume forwards to controller by strip`() async {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -371,57 +484,22 @@ struct ReaderViewModelPlaybackTests {
         )
         await vm.load()
 
-        // Piano's lower staff is at (partIndex: 1, staffIndexInPart: 1) → flat staff index 2 (Vn=0, Pno-top=1,
-        // Pno-bottom=2).
-        let pianoBottom = StaffAddress(partIndex: 1, staffIndexInPart: 1)
-        vm.mixerModel.setVolume(0.3, for: pianoBottom)
+        vm.mixerModel.setVolume(0.3, for: Self.pianoStrip)
         await Task.yield()
         await Task.yield()
-        #expect(controller.staffVolumes[2] == 0.3)
-    }
-
-    @Test func `set part program updates override and fans out to engine`() async {
-        let item = Self.makeItem()
-        let repo = FakeScoreLibraryRepository()
-        repo.scoreItems = [item]
-        let score = Score(
-            division: 480,
-            parts: [
-                Part(
-                    id: "P0", trackName: "Vn",
-                    instrument: Instrument(id: "v", channels: [InstrumentChannel(program: 40)]),
-                    staves: [Staff()],
-                ),
-            ],
-            metaTags: [:],
-        )
-        let controller = FakePlaybackController()
-        let vm = ReaderViewModel(
-            scoreItem: item, repository: repo, gateway: Self.makeGateway(score: score),
-            scoresDirectory: URL(filePath: "/tmp"),
-            playbackController: controller,
-        )
-        await vm.load()
-
-        await vm.mixerModel.setPartProgram(6, forPartIndex: 0)
-
-        let calls = controller.staffInstrumentCalls.filter { $0.program == 6 }
-        #expect(calls.count == 1)
-        #expect(vm.mixerModel.staffProgramOverrides[
-            StaffAddress(partIndex: 0, staffIndexInPart: 0),
-        ] == 6)
+        #expect(controller.stripVolumes.map(\.strip) == [Self.pianoStrip])
+        #expect(controller.stripVolumes.map(\.volume) == [0.3])
     }
 
     @Test func `engine seed uses persisted override over mscx`() async throws {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
-        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         repo.storedReaderPreferences[item.id] = ReaderPreferences(
             scoreItemID: item.id,
             staffSize: 14,
             hiddenStaves: [],
-            staffVolumeOverrides: [address: 0.3],
+            stripVolumeOverrides: [Self.violinStrip: 0.3],
         )
         let score = Score(
             division: 480,
@@ -444,11 +522,13 @@ struct ReaderViewModelPlaybackTests {
         await vm.playbackSession.prepareForPlayback()
 
         let seeded = try #require(controller.lastLoadedPreferences)
-        let staff0 = try #require(seeded.perStaff.first { $0.staffIndex == 0 })
-        #expect(staff0.volume == 0.3)
+        let violin = try #require(seeded.perStrip.first { $0.strip == Self.violinStrip })
+        #expect(violin.volume == 0.3)
     }
 
-    @Test func `engine seed uses mscx when no override`() async throws {
+    /// With nothing overridden there is nothing to seed: the engine already applied the score's own CC 7 when it
+    /// prepared, and re-sending it would only risk contradicting what the score authored.
+    @Test func `engine seed is empty when nothing was overridden`() async throws {
         let item = Self.makeItem()
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = [item]
@@ -473,7 +553,6 @@ struct ReaderViewModelPlaybackTests {
         await vm.playbackSession.prepareForPlayback()
 
         let seeded = try #require(controller.lastLoadedPreferences)
-        let staff0 = try #require(seeded.perStaff.first { $0.staffIndex == 0 })
-        #expect(abs(staff0.volume - 80.0 / 127.0) < 0.0001)
+        #expect(seeded.perStrip.isEmpty)
     }
 }

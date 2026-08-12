@@ -21,7 +21,7 @@ struct ReaderViewModelPDFRereadTests {
         #expect(vm.reReadNeedsConfirmation)
     }
 
-    @Test func `staff-bound settings alone need confirmation`() async throws {
+    @Test func `score-bound settings alone need confirmation`() async throws {
         let vm = try PDFReaderTestRig(converted: true).makeViewModel()
         await vm.load()
         await vm.mutatePreferences { $0.staffClefOverrides = [StaffAddress(partIndex: 0, staffIndexInPart: 0): "F"] }
@@ -29,7 +29,7 @@ struct ReaderViewModelPDFRereadTests {
         #expect(vm.reReadNeedsConfirmation)
     }
 
-    @Test func `a successful re-read rewrites the score and resets staff-bound settings`() async throws {
+    @Test func `a successful re-read rewrites the score and resets score-bound settings`() async throws {
         let rig = try PDFReaderTestRig(converted: true, edited: true)
         let vm = rig.makeViewModel()
         await vm.load()

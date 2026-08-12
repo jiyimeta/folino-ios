@@ -5,7 +5,7 @@ struct PDFReparsePolicyTests {
     @Test func `nothing to lose needs no confirmation`() {
         #expect(!PDFReparsePolicy.needsConfirmation(
             isScoreEdited: false,
-            hasStaffBoundPreferences: false,
+            hasScoreBoundPreferences: false,
             hasMusicalAnnotations: false,
         ))
     }
@@ -13,15 +13,15 @@ struct PDFReparsePolicyTests {
     @Test func `an edited score needs confirmation`() {
         #expect(PDFReparsePolicy.needsConfirmation(
             isScoreEdited: true,
-            hasStaffBoundPreferences: false,
+            hasScoreBoundPreferences: false,
             hasMusicalAnnotations: false,
         ))
     }
 
-    @Test func `staff-bound settings alone need confirmation`() {
+    @Test func `score-bound settings alone need confirmation`() {
         #expect(PDFReparsePolicy.needsConfirmation(
             isScoreEdited: false,
-            hasStaffBoundPreferences: true,
+            hasScoreBoundPreferences: true,
             hasMusicalAnnotations: false,
         ))
     }
@@ -29,7 +29,7 @@ struct PDFReparsePolicyTests {
     @Test func `notation-anchored ink alone needs confirmation`() {
         #expect(PDFReparsePolicy.needsConfirmation(
             isScoreEdited: false,
-            hasStaffBoundPreferences: false,
+            hasScoreBoundPreferences: false,
             hasMusicalAnnotations: true,
         ))
     }

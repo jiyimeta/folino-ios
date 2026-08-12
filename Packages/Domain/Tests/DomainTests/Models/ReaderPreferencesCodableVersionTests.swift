@@ -4,7 +4,7 @@ import Testing
 
 /// The Android JSON-blob store has no migration runner, so the Codable layer carries the v16 conversion: a blob
 /// without `schemaVersion` is legacy and its stored defaults are reclassified as untouched, exactly once in effect —
-/// every re-encode stamps `schemaVersion: 2`, after which present values are authoritative.
+/// every re-encode stamps `schemaVersion: 3`, after which present values are authoritative.
 struct ReaderPreferencesCodableVersionTests {
     private let scoreID = ScoreItemID()
 
@@ -51,7 +51,7 @@ struct ReaderPreferencesCodableVersionTests {
         #expect(!decoded.hiddenStaves.isEmpty)
     }
 
-    @Test func `v2 blob keeps an explicit default value as some`() throws {
+    @Test func `v3 blob keeps an explicit default value as some`() throws {
         let original = ReaderPreferences(
             scoreItemID: scoreID, staffSize: 14, hiddenStaves: [],
             honorLayoutBreaks: true, masterVolume: 1.0, transposeSemitones: 0,
@@ -65,7 +65,7 @@ struct ReaderPreferencesCodableVersionTests {
         #expect(decoded.transposeSemitones == 0)
     }
 
-    @Test func `v2 blob round-trips nil as nil`() throws {
+    @Test func `v3 blob round-trips nil as nil`() throws {
         let original = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [])
         let decoded = try JSONDecoder().decode(
             ReaderPreferences.self, from: JSONEncoder().encode(original),
@@ -102,12 +102,12 @@ struct ReaderPreferencesCodableVersionTests {
     @Test func `every encode stamps the current schema version`() throws {
         let data = try JSONEncoder().encode(ReaderPreferences(scoreItemID: scoreID, hiddenStaves: []))
         let dict = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(dict["schemaVersion"] as? Int == 2)
+        #expect(dict["schemaVersion"] as? Int == 3)
     }
 
-    /// A v2 blob is authoritative about provenance: an absent `authoredHiddenStaves` means the score authored nothing
+    /// A v3 blob is authoritative about provenance: an absent `authoredHiddenStaves` means the score authored nothing
     /// hidden, so it must NOT be back-seeded from `hiddenStaves` the way a legacy blob is.
-    @Test func `v2 blob does not seed authored hidden from hidden staves`() throws {
+    @Test func `v3 blob does not seed authored hidden from hidden staves`() throws {
         let base = ReaderPreferences(scoreItemID: scoreID, hiddenStaves: [])
         var dict = try #require(
             try JSONSerialization.jsonObject(with: JSONEncoder().encode(base)) as? [String: Any],

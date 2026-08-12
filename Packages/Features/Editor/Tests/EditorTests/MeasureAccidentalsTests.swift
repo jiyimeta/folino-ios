@@ -1,6 +1,7 @@
 import Domain
 @testable import Editor
 import Foundation
+import SheetMusicCore
 import Testing
 
 /// Key-signature-aware note input and the accidental glyphs that go with it. D major (`key: 2`) is the working
