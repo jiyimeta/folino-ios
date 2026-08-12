@@ -219,7 +219,11 @@ class EditSessionRelay(
         }
         appliedSinceCheck = 0
         isOpen = true
-        if (verifyOrResync()) host.requestRelayout()
+        // Unconditional: the case that matters most is exactly the one where verifyOrResync() found the two
+        // copies disagreeing and swapped the handle out from under the host — that is when a redraw is needed,
+        // not when it can be skipped.
+        verifyOrResync()
+        host.requestRelayout()
         return if (isOpen) OpenResult.OPENED else OpenResult.RESYNC_FAILED
     }
 

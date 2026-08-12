@@ -20,6 +20,10 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
+    // EditSessionRelay logs on its resync path (android.util.Log, unmocked on the JVM); JVM unit tests need
+    // Log calls to no-op rather than throw so EditSessionRelayTest can exercise that path off-device.
+    testOptions { unitTests.isReturnDefaultValues = true }
+
     // Prebuilt libFolinoEditorJNI.so + libSwiftJava.so + Swift runtime live here,
     // staged by Scripts/android-build-editor-libs.sh before any Gradle task that
     // consumes them. swift-java jextract output (Java bindings) is staged into
