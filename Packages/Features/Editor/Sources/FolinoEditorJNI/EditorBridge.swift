@@ -7,6 +7,14 @@ import SheetMusicEditWire
 import SheetMusicMSCX
 import WireletObservable
 
+// swiftlint:disable file_length
+// The op vocabulary and the projection both have to live in this one class body, in this one file: swift-wirelet's
+// `ObservableSchemaParser` (the Kotlin/JNI codegen behind `@WireletObservable`) reads `@WireletExpose` methods and
+// stored properties only from the literal `class` declaration's own member list, and Swift has no partial classes
+// — an `extension EditorBridge` in a second file is invisible to it, so every op declared there would silently
+// vanish from `EditorBridgeViewModel.kt` and its native JNI bridges. `swift-sheet-music`'s `LayoutBridge.swift`
+// carries the identical disable for the identical reason (a jextract-facing bridge type that cannot be split).
+
 /// Android's face of one editing session: the authoritative `EditorSessionCore`, plus the projection Compose reads
 /// and the intent frames Kotlin relays to the mirror.
 ///
@@ -37,6 +45,56 @@ public final class EditorBridge {
     // swiftformat:disable redundantType
     public internal(set) var isSessionActive: Bool = false
     // swiftformat:enable redundantType
+
+    // MARK: - The projection Compose reads
+    //
+    // Counters first, for the same reason `EditorViewModel` keeps them: `revision` bumps on apply/undo/redo and is
+    // what a relayout keys off; `appliedIntentCount` bumps ONLY on a genuine apply; `selectionRevision` bumps on
+    // every placement, changed or not, so a repeat placement is not silently swallowed.
+    public internal(set) var revision: Int32 = 0
+    public internal(set) var appliedIntentCount: Int32 = 0
+    public internal(set) var selectionRevision: Int32 = 0
+
+    // The explicit `: Bool` on every property below is load-bearing, not decorative: jextract's `missingTypeAnnotation`
+    // diagnostic silently drops a `Bool` property from the generated Kotlin bindings without it (see
+    // `isSessionActive`'s identical note above), and SwiftFormat would otherwise strip it as redundant.
+    // swiftformat:disable redundantType
+    public internal(set) var canUndo: Bool = false
+    public internal(set) var canRedo: Bool = false
+
+    public internal(set) var hasEditTarget: Bool = false
+    public internal(set) var isNoteSelected: Bool = false
+    public internal(set) var hasSelectionCallout: Bool = false
+    public internal(set) var canWriteRest: Bool = false
+    public internal(set) var canTie: Bool = false
+    public internal(set) var isSelectionTied: Bool = false
+    public internal(set) var canAppendTiedNote: Bool = false
+    public internal(set) var isCaretInTuplet: Bool = false
+    // swiftformat:enable redundantType
+
+    /// The armed length as `NoteDurationWire`'s discriminator (1 = whole … 9 = 256th, 10 = measure, 11 = fraction),
+    /// or 0 for "nothing armed". Deliberately ssm's numbering rather than a second one of our own: the same integer
+    /// already crosses this process inside every relayed intent, and two spellings of one enum is exactly the drift
+    /// spec §5.4 exists to prevent.
+    public internal(set) var armedDurationKind: Int32 = 0
+    public internal(set) var armedDots: Int32 = 0
+    // swiftformat:disable redundantType
+    public internal(set) var isAddToChordArmed: Bool = false
+    // swiftformat:enable redundantType
+    public internal(set) var armedTuplet: Int32 = 3
+
+    /// The SELECTED element's own length, in the same numbering — what the callout shows. Distinct from the armed
+    /// length, which describes the next note rather than this one.
+    public internal(set) var calloutDurationKind: Int32 = 0
+    public internal(set) var calloutDots: Int32 = 0
+
+    /// Mirrored both ways: Kotlin sets it from the voice selector, the core reads it when planning input.
+    public internal(set) var activeVoice: Int32 = 0
+
+    /// Task 4 fills in the mapping; the stored property exists now so `sync()` compiles.
+    public internal(set) var selectedItemFrame: EditBytesWire?
+    /// Task 4 fills in the mapping; the stored property exists now so `sync()` compiles.
+    public internal(set) var caretItemFrame: EditBytesWire?
 
     public init(files: EditorHostFiles) {
         self.files = files
@@ -72,8 +130,14 @@ public final class EditorBridge {
     /// `nativeBeginEditSession` in that case — begin/end are paired across both sides, and a mirror opened against
     /// an authoritative session that never opened would answer `false` to the first relayed undo while the
     /// authoritative score had already moved (SP0's finding).
+    ///
+    /// Ends any already-open session first, so a caller that begins twice without an intervening `endSession()`
+    /// still gets "one session, or none" rather than a leaked one: without this, a parse failure on the second
+    /// call would return `false` while the first session stayed open and `isSessionActive` stayed `true`, breaking
+    /// the caller's "`false` means no session" inference.
     @WireletExpose
     public func beginSession(scorePath: String, scoresDirectory: String, scoreId: String) -> Bool {
+        if core != nil { endSession() }
         guard let score = Self.parseScore(atPath: scorePath) else { return false }
         let localFileName = URL(fileURLWithPath: scorePath).lastPathComponent
         let item = Self.stubRowPendingSave(id: scoreId, localFileName: localFileName)
@@ -108,6 +172,9 @@ public final class EditorBridge {
     /// Library's export path only ever picks `.v3` on an explicit user "save as MuseScore 3" choice, and a resync
     /// has no such choice to consult. `MSCZWriter` has a `Data`-returning overload for exactly this shape (no
     /// temp-file round trip needed — see `MSCZWriter.swift`'s `write(score:options:mainFileName:) throws -> Data`).
+    ///
+    /// Empty bytes mean failure — either there is no open session, or the encode itself threw — and the caller must
+    /// treat both the same way: there is no score here to resync with.
     @WireletExpose
     public func encodeScore() -> EditBytesWire {
         guard let score = core?.score,
@@ -118,13 +185,296 @@ public final class EditorBridge {
         return EditBytesWire(bytes: data)
     }
 
+    // MARK: - The op vocabulary Compose calls
+    //
+    // One method per key, and every one of them is "ask the core, then re-read the core" — the decisions all live
+    // in `EditorSessionCore`, shared with iOS.
+    //
+    // **Nothing here may branch on score content.** A conditional in this file is a rule that exists on Android and
+    // not on iOS, which is precisely what the repo's parity rule forbids; if a key needs to decide something, the
+    // decision belongs in `EditorCore` where both platforms get it.
+
+    // MARK: Pad keys
+
+    /// A letter key C…B. `letter` is a one-character string because the wire has no `Character`; a longer string
+    /// takes its first character, and an empty one is inert.
+    @WireletExpose
+    public func inputPitch(letter: String) {
+        guard let character = letter.first else { return }
+        core?.inputPitch(letter: character)
+        sync()
+    }
+
+    @WireletExpose
+    public func deleteSelection() {
+        core?.deleteSelection()
+        sync()
+    }
+
+    @WireletExpose
+    public func writeRest() {
+        core?.writeRest()
+        sync()
+    }
+
+    /// Arms a length by `NoteDurationWire`'s discriminator (see `durationKind`). Unknown values are ignored rather
+    /// than defaulted — arming the wrong length silently is worse than not arming.
+    @WireletExpose
+    public func armDuration(kind: Int32) {
+        guard let duration = Self.duration(fromKind: kind) else { return }
+        core?.setDuration(duration)
+        sync()
+    }
+
+    @WireletExpose
+    public func toggleArmedDot() {
+        core?.toggleArmedDot()
+        sync()
+    }
+
+    /// Named `armDots` rather than iOS's `setArmedDots` (see `EditorViewModel+Ops.setArmedDots`): jextract derives a
+    /// native setter for every `internal(set)` projection property from its name — `armedDots` already produces
+    /// `Java_..._setArmedDots`, and an op of that exact name is a duplicate JNI symbol, not a Swift overload, so it
+    /// fails the link. The two platforms stay the same shape; only this one symbol's spelling is forced apart.
+    @WireletExpose
+    public func armDots(_ dots: Int32) {
+        core?.setArmedDots(Int(dots))
+        sync()
+    }
+
+    // MARK: Callout keys (the selected element's own length)
+
+    @WireletExpose
+    public func setSelectionDuration(kind: Int32) {
+        guard let duration = Self.duration(fromKind: kind) else { return }
+        core?.setSelectionDuration(duration)
+        sync()
+    }
+
+    @WireletExpose
+    public func setSelectionDots(_ dots: Int32) {
+        core?.setSelectionDots(Int(dots))
+        sync()
+    }
+
+    @WireletExpose
+    public func toggleSelectionDot() {
+        core?.toggleSelectionDot()
+        sync()
+    }
+
+    // MARK: Pitch
+
+    @WireletExpose
+    public func shiftPitch(bySemitones delta: Int32) {
+        core?.shiftPitch(bySemitones: Int(delta))
+        sync()
+    }
+
+    @WireletExpose
+    public func shiftOctave(by octaves: Int32) {
+        core?.shiftOctave(by: Int(octaves))
+        sync()
+    }
+
+    /// `raw` is the accidental's raw value, or the empty string for "none" (natural is its own raw value, and is not
+    /// the same thing as none — none removes the accidental, natural writes one).
+    @WireletExpose
+    public func setAccidental(raw: String) {
+        core?.setAccidental(raw.isEmpty ? nil : Accidental(rawValue: raw))
+        sync()
+    }
+
+    // MARK: Chord, tie, tuplet (second pass in the UI; the ops exist from the start)
+
+    @WireletExpose
+    public func toggleAddToChord() {
+        core?.toggleAddToChord()
+        sync()
+    }
+
+    @WireletExpose
+    public func removeSelectedNoteFromChord() {
+        core?.removeSelectedNoteFromChord()
+        sync()
+    }
+
+    @WireletExpose
+    public func toggleTie() {
+        core?.toggleTie()
+        sync()
+    }
+
+    @WireletExpose
+    public func appendTiedNote() {
+        core?.appendTiedNote()
+        sync()
+    }
+
+    @WireletExpose
+    public func createTuplet(actualNotes: Int32) {
+        core?.createTuplet(actualNotes: Int(actualNotes))
+        sync()
+    }
+
+    @WireletExpose
+    public func removeTuplet() {
+        core?.removeTuplet()
+        sync()
+    }
+
+    // MARK: Navigation and voice
+
+    @WireletExpose
+    public func selectPreviousElement() {
+        core?.selectPreviousElement()
+        sync()
+    }
+
+    @WireletExpose
+    public func selectNextElement() {
+        core?.selectNextElement()
+        sync()
+    }
+
+    /// Named `setVoice` rather than `setActiveVoice`: the `activeVoice` projection property already produces a
+    /// jextract-generated native setter named `Java_..._setActiveVoice` (see `armDots`'s note above for why), which
+    /// a same-named op would collide with at link time.
+    @WireletExpose
+    public func setVoice(_ voice: Int32) {
+        core?.activeVoice = Int(voice)
+        sync()
+    }
+
+    /// Mirrored in from the transport. The core drops the selection when playback starts — the playhead, not the
+    /// selection, is where the music is from that moment.
+    @WireletExpose
+    public func setPlaybackActive(_ active: Bool) {
+        core?.isPlaybackActive = active
+        sync()
+    }
+
+    // MARK: Undo / redo
+    //
+    // These do NOT produce relay frames: the mirror keeps its own stacks, fed the same intents, so the host drives
+    // them with `nativeEditUndo` / `nativeEditRedo`. Replaying an inverse as an intent would put the two stacks out
+    // of step immediately.
+
+    @WireletExpose
+    public func undo() {
+        core?.undo()
+        sync()
+    }
+
+    @WireletExpose
+    public func redo() {
+        core?.redo()
+        sync()
+    }
+
+    // MARK: The relay queue
+
+    /// Takes the intent frames produced since the last call, in order. The host relays each one to the mirror with
+    /// `nativeApplyEditIntent`, in the same order, before anything reads the mirror's layout.
+    @WireletExpose
+    public func takeRelayFrames() -> [EditBytesWire] {
+        defer { relayFrames.removeAll() }
+        return relayFrames
+    }
+
+    /// `NoteDuration` → `NoteDurationWire`'s discriminator. Kept here rather than reaching into ssm's wire struct so
+    /// the projection has no dependency on a type whose Kotlin model is not generated for this module; the numbering
+    /// is the contract, and the tests in `EditIntentCodecTests` are what pin it.
+    static func durationKind(_ duration: NoteDuration?) -> Int32 {
+        switch duration {
+        case .none: 0
+        case .whole: 1
+        case .half: 2
+        case .quarter: 3
+        case .eighth: 4
+        case .sixteenth: 5
+        case .thirtySecond: 6
+        case .sixtyFourth: 7
+        case .oneTwentyEighth: 8
+        case .twoFiftySixth: 9
+        case .measure: 10
+        case .fraction: 11
+        }
+    }
+
+    static func duration(fromKind kind: Int32) -> NoteDuration? {
+        switch kind {
+        case 1: .whole
+        case 2: .half
+        case 3: .quarter
+        case 4: .eighth
+        case 5: .sixteenth
+        case 6: .thirtySecond
+        case 7: .sixtyFourth
+        case 8: .oneTwentyEighth
+        case 9: .twoFiftySixth
+        case 10: .measure
+        default: nil
+        }
+    }
+
     // MARK: - The mirror
 
     /// Re-reads everything the core owns and queues whatever it applied. The Android counterpart of
-    /// `EditorViewModel.syncFromCore()`; Task 3 fills in the rest of the projection.
+    /// `EditorViewModel.syncFromCore()` — call an op, then re-read everything in one place, so it is impossible for
+    /// an op to mutate the score without also queueing its relay frames.
     func sync() {
         isSessionActive = core?.isSessionActive ?? false
-        guard let core else { return }
+        guard let core else {
+            // Reset EVERYTHING the session owned. An asymmetric reset — clearing the booleans but leaving the armed
+            // length and the counters behind — reads as a bug even where it is inert, and one of these is not inert:
+            // Compose keeps collecting these StateFlows after a session ends, so a stale `armedDurationKind` lights
+            // a pad key for a session that no longer exists. `armedTuplet` is the one exception and stays put: the
+            // core deliberately survives `beginSession` with it, because it is a preference about how you are
+            // writing rather than state about one score.
+            revision = 0
+            appliedIntentCount = 0
+            selectionRevision = 0
+            canUndo = false
+            canRedo = false
+            hasEditTarget = false
+            isNoteSelected = false
+            hasSelectionCallout = false
+            canWriteRest = false
+            canTie = false
+            isSelectionTied = false
+            canAppendTiedNote = false
+            isCaretInTuplet = false
+            armedDurationKind = 0
+            armedDots = 0
+            isAddToChordArmed = false
+            calloutDurationKind = 0
+            calloutDots = 0
+            activeVoice = 0
+            selectedItemFrame = nil
+            caretItemFrame = nil
+            return
+        }
+        revision = Int32(core.revision)
+        appliedIntentCount = Int32(core.appliedIntentCount)
+        selectionRevision = Int32(core.selectionRevision)
+        canUndo = core.canUndo
+        canRedo = core.canRedo
+        hasEditTarget = core.hasEditTarget
+        isNoteSelected = core.isNoteSelected
+        hasSelectionCallout = core.hasSelectionCallout
+        canWriteRest = core.canWriteRest
+        canTie = core.canTie
+        isSelectionTied = core.isSelectionTied
+        canAppendTiedNote = core.canAppendTiedNote
+        isCaretInTuplet = core.isCaretInTuplet
+        armedDurationKind = Self.durationKind(core.armedDuration)
+        armedDots = Int32(core.armedDots)
+        isAddToChordArmed = core.isAddToChordArmed
+        armedTuplet = Int32(core.armedTuplet)
+        calloutDurationKind = Self.durationKind(core.selectedDuration?.base)
+        calloutDots = Int32(core.selectedDuration?.dots ?? 0)
+        activeVoice = Int32(core.activeVoice)
         relayFrames.append(contentsOf: core.takeRelayIntents().map {
             EditBytesWire(bytes: EditIntentCodec.encode($0))
         })
