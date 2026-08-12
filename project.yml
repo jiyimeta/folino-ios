@@ -277,6 +277,13 @@ schemes:
       targets:
         Folino: all
         FolinoTests: [test]
+        # Built by the test action only, and never run from this scheme: FolinoScreenshot compiles the same App
+        # sources against the Feature packages, so it is the one place a removed Feature API shows up as a compile
+        # error. Nothing else builds it — the app target doesn't depend on it and no package test links it — so
+        # removing a Feature API used to leave every suite green while `Scripts/capture-screenshots.sh` failed to
+        # compile, which surfaces only when App Store deliverables are needed, i.e. at the release itself. Kept out
+        # of run/archive so the daily build loop and `ios-release` are unchanged.
+        FolinoScreenshot: [test]
     run:
       config: Debug
     test:
