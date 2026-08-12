@@ -77,10 +77,20 @@ public protocol PlaybackController: Sendable {
     /// (use `A4Reference.cents(forHz:)`). Playback only — notation is unchanged.
     func setMasterTuning(cents: Double) async
 
-    func setStaffVolume(staff: Int, volume: Double) async
-    func setStaffMute(staff: Int, isMuted: Bool) async
-    func setStaffSolo(staff: Int, isSolo: Bool) async
-    func setStaffInstrument(staff: Int, bank: Int, program: Int) async
+    /// Mixer setters, addressed by strip. `bank` is gone with the staff index: the engine's program setter takes
+    /// no bank and the adapter had always discarded the argument.
+    func setStripVolume(strip: MixerStripID, volume: Double) async
+    func setStripMute(strip: MixerStripID, isMuted: Bool) async
+    func setStripSolo(strip: MixerStripID, isSolo: Bool) async
+    func setStripInstrument(strip: MixerStripID, program: Int) async
+
+    /// The strips of the currently prepared score, in the engine's own order — by part, then by ordinal. Empty
+    /// before a score is prepared and after the engine is released; the mixer draws nothing then, because a mixer
+    /// describes a prepared engine.
+    ///
+    /// Values are the SCORE's, not the user's: the adapter snapshots them before seeding the engine with saved
+    /// preferences, so `defaultVolume` stays a reset target rather than becoming a copy of the current setting.
+    func mixerStrips() async -> [MixerStrip]
 
     /// Register a handler invoked synchronously on every cursor change emitted by the engine. Replaces any previously
     /// registered handler. Receives `nil` when playback stops. `ScoreCursor` is re-exported from `SheetMusicCore` so

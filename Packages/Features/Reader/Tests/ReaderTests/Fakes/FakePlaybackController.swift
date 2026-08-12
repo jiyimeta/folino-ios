@@ -10,9 +10,12 @@ final class FakePlaybackController: PlaybackController {
     private(set) var pauseCount = 0
     private(set) var lastLoadedPreferences: PlaybackPreferences?
     private(set) var lastLoadedDisplayTitle: String?
-    private(set) var staffVolumes: [Int: Double] = [:]
-    private(set) var staffSoloStates: [Int: Bool] = [:]
-    private(set) var staffInstrumentCalls: [(staff: Int, bank: Int, program: Int)] = []
+    private(set) var stripVolumes: [(strip: MixerStripID, volume: Double)] = []
+    private(set) var stripMutes: [(strip: MixerStripID, isMuted: Bool)] = []
+    private(set) var stripSolos: [(strip: MixerStripID, isSolo: Bool)] = []
+    private(set) var stripPrograms: [(strip: MixerStripID, program: Int)] = []
+    /// What `mixerStrips()` returns. Set it in a test to stand in for a prepared engine.
+    var strips: [MixerStrip] = []
     private(set) var recordedSetCursorCalls: [ScoreCursor] = []
     private(set) var loopRangeCalls: [ABRepeatRange?] = []
     private(set) var tempoMultiplierCalls: [Double] = []
@@ -84,10 +87,6 @@ final class FakePlaybackController: PlaybackController {
         reloadSoundfontCount += 1
     }
 
-    func setStaffVolume(staff: Int, volume: Double) {
-        staffVolumes[staff] = volume
-    }
-
     func setCursor(to cursor: ScoreCursor) {
         recordedSetCursorCalls.append(cursor)
     }
@@ -130,12 +129,23 @@ final class FakePlaybackController: PlaybackController {
         masterTuningCentsCalls.append(cents)
     }
 
-    func setStaffMute(staff _: Int, isMuted _: Bool) {}
-    func setStaffSolo(staff: Int, isSolo: Bool) {
-        staffSoloStates[staff] = isSolo
+    func setStripVolume(strip: MixerStripID, volume: Double) {
+        stripVolumes.append((strip, volume))
     }
 
-    func setStaffInstrument(staff: Int, bank: Int, program: Int) {
-        staffInstrumentCalls.append((staff: staff, bank: bank, program: program))
+    func setStripMute(strip: MixerStripID, isMuted: Bool) {
+        stripMutes.append((strip, isMuted))
+    }
+
+    func setStripSolo(strip: MixerStripID, isSolo: Bool) {
+        stripSolos.append((strip, isSolo))
+    }
+
+    func setStripInstrument(strip: MixerStripID, program: Int) {
+        stripPrograms.append((strip, program))
+    }
+
+    func mixerStrips() -> [MixerStrip] {
+        strips
     }
 }

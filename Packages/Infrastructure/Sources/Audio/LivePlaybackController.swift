@@ -183,9 +183,13 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // Re-seat every per-staff engine channel from the saved preferences. Runs on a fresh load() after a
         // relaunch and on a mid-session soundfont hot-swap, so volume / mute / solo / program are all re-asserted
         // here: prepare(score:) otherwise leaves the channel on the score's authored program, silently dropping the
-        // user's instrument override. Bank is fixed at prepare time; mirrors the live setStaffInstrument(...) path.
+        // user's instrument override. Bank is fixed at prepare time; mirrors the live setStripInstrument(...) path.
         for state in preferences.perStaff {
-            guard let channel = channel(forStaff: state.staffIndex) else { continue }
+            // replaced in Task 4: perStaff becomes per-strip preferences, at which point this maps a MixerStripID
+            // straight onto the channel instead of re-deriving a part index from a flattened staff index.
+            guard let staves = loadedScore?.allStaves, staves.indices.contains(state.staffIndex) else { continue }
+            let partIndex = staves[state.staffIndex].address.partIndex
+            let channel = MixerChannel.Kind.instrument(partIndex: partIndex, ordinal: 0)
             engine.setVolume(forChannel: channel, to: Float(state.volume))
             engine.setMuted(forChannel: channel, to: state.isMuted)
             engine.setSoloed(forChannel: channel, to: state.isSolo)
@@ -238,37 +242,28 @@ public final class LivePlaybackController: Domain.PlaybackController {
         publishNowPlayingInfo(seeking: true)
     }
 
-    /// The engine strip a flattened staff index drives.
-    ///
-    /// swift-sheet-music 1.10.0 replaced `MixerChannel.Kind.staff(Int)` with `.instrument(partIndex:ordinal:)`: a
-    /// strip is a (part × distinct instrument) pair now, not a staff. folino's mixer is still addressed per staff, so
-    /// this maps each staff onto its part's strip — meaning a grand staff's two rows currently drive ONE strip, and a
-    /// part that changes instrument mid-score is only reachable at its tick-0 instrument (`ordinal: 0`). Both fall
-    /// out once the mixer itself becomes per-instrument, which is the point of the ssm change; this adapter is the
-    /// narrowest thing that keeps the existing per-staff surface working until then.
-    private func channel(forStaff staff: Int) -> MixerChannel.Kind? {
-        guard let staves = loadedScore?.allStaves, staves.indices.contains(staff) else { return nil }
-        return .instrument(partIndex: staves[staff].address.partIndex, ordinal: 0)
+    private func channel(_ strip: MixerStripID) -> MixerChannel.Kind {
+        .instrument(partIndex: strip.partIndex, ordinal: strip.instrumentOrdinal)
     }
 
-    public func setStaffVolume(staff: Int, volume: Double) {
-        guard let channel = channel(forStaff: staff) else { return }
-        engine.setVolume(forChannel: channel, to: Float(volume))
+    public func setStripVolume(strip: MixerStripID, volume: Double) {
+        engine.setVolume(forChannel: channel(strip), to: Float(volume))
     }
 
-    public func setStaffMute(staff: Int, isMuted: Bool) {
-        guard let channel = channel(forStaff: staff) else { return }
-        engine.setMuted(forChannel: channel, to: isMuted)
+    public func setStripMute(strip: MixerStripID, isMuted: Bool) {
+        engine.setMuted(forChannel: channel(strip), to: isMuted)
     }
 
-    public func setStaffSolo(staff: Int, isSolo: Bool) {
-        guard let channel = channel(forStaff: staff) else { return }
-        engine.setSoloed(forChannel: channel, to: isSolo)
+    public func setStripSolo(strip: MixerStripID, isSolo: Bool) {
+        engine.setSoloed(forChannel: channel(strip), to: isSolo)
     }
 
-    public func setStaffInstrument(staff: Int, bank _: Int, program: Int) {
-        guard let channel = channel(forStaff: staff) else { return }
-        engine.setProgram(forChannel: channel, to: UInt8(clamping: program))
+    public func setStripInstrument(strip: MixerStripID, program: Int) {
+        engine.setProgram(forChannel: channel(strip), to: UInt8(clamping: program))
+    }
+
+    public func mixerStrips() -> [MixerStrip] {
+        []
     }
 
     public func setMetronomeEnabled(_ enabled: Bool) {

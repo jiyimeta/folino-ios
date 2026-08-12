@@ -10,9 +10,9 @@ final class FakePlaybackController: PlaybackController {
     private(set) var pauseCount = 0
     private(set) var lastLoadedPreferences: PlaybackPreferences?
     private(set) var lastLoadedDisplayTitle: String?
-    private(set) var staffVolumes: [Int: Double] = [:]
-    private(set) var staffSoloStates: [Int: Bool] = [:]
-    private(set) var staffInstrumentCalls: [(staff: Int, bank: Int, program: Int)] = []
+    private(set) var stripVolumes: [MixerStripID: Double] = [:]
+    private(set) var stripSoloStates: [MixerStripID: Bool] = [:]
+    private(set) var stripInstrumentCalls: [(strip: MixerStripID, program: Int)] = []
     private(set) var recordedSetCursorCalls: [ScoreCursor] = []
     private(set) var loopRangeCalls: [ABRepeatRange?] = []
     private(set) var tempoMultiplierCalls: [Double] = []
@@ -84,8 +84,8 @@ final class FakePlaybackController: PlaybackController {
         reloadSoundfontCount += 1
     }
 
-    func setStaffVolume(staff: Int, volume: Double) {
-        staffVolumes[staff] = volume
+    func setStripVolume(strip: MixerStripID, volume: Double) {
+        stripVolumes[strip] = volume
     }
 
     func setCursor(to cursor: ScoreCursor) {
@@ -130,12 +130,17 @@ final class FakePlaybackController: PlaybackController {
         masterTuningCentsCalls.append(cents)
     }
 
-    func setStaffMute(staff _: Int, isMuted _: Bool) {}
-    func setStaffSolo(staff: Int, isSolo: Bool) {
-        staffSoloStates[staff] = isSolo
+    func setStripMute(strip _: MixerStripID, isMuted _: Bool) {}
+    func setStripSolo(strip: MixerStripID, isSolo: Bool) {
+        stripSoloStates[strip] = isSolo
     }
 
-    func setStaffInstrument(staff: Int, bank: Int, program: Int) {
-        staffInstrumentCalls.append((staff: staff, bank: bank, program: program))
+    func setStripInstrument(strip: MixerStripID, program: Int) {
+        stripInstrumentCalls.append((strip: strip, program: program))
+    }
+
+    var strips: [MixerStrip] = []
+    func mixerStrips() -> [MixerStrip] {
+        strips
     }
 }

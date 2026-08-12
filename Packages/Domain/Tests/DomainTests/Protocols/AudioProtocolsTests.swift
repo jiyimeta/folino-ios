@@ -52,10 +52,13 @@ private final class FakePlaybackController: PlaybackController {
     func setMasterVolume(_ value: Double) {}
     func setMasterTuning(cents _: Double) {}
 
-    func setStaffVolume(staff: Int, volume: Double) {}
-    func setStaffMute(staff: Int, isMuted: Bool) {}
-    func setStaffSolo(staff: Int, isSolo: Bool) {}
-    func setStaffInstrument(staff: Int, bank: Int, program: Int) {}
+    func setStripVolume(strip _: MixerStripID, volume _: Double) {}
+    func setStripMute(strip _: MixerStripID, isMuted _: Bool) {}
+    func setStripSolo(strip _: MixerStripID, isSolo _: Bool) {}
+    func setStripInstrument(strip _: MixerStripID, program _: Int) {}
+    func mixerStrips() -> [MixerStrip] {
+        []
+    }
 }
 
 struct AudioProtocolsTests {

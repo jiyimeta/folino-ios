@@ -57,10 +57,12 @@ final class PlaybackMixerModel {
     func setVolume(_ value: Double, for address: StaffAddress) {
         let clamped = min(max(value, 0), 1)
         liveStaffVolumes[address] = clamped
-        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+        guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
         else { return }
+        // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+        let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
         Task { [weak self] in
-            await self?.host?.playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
+            await self?.host?.playbackController?.setStripVolume(strip: strip, volume: clamped)
         }
     }
 
@@ -71,9 +73,11 @@ final class PlaybackMixerModel {
         staffVolumeOverrides[address] = clamped
         liveStaffVolumes[address] = nil
         await onChange?()
-        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+        guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
         else { return }
-        await host?.playbackController?.setStaffVolume(staff: flatIndex, volume: clamped)
+        // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+        let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
+        await host?.playbackController?.setStripVolume(strip: strip, volume: clamped)
     }
 
     func toggleStaffMute(_ address: StaffAddress) {
@@ -82,11 +86,13 @@ final class PlaybackMixerModel {
         } else {
             mutedStaves.insert(address)
         }
-        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+        guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
         else { return }
         let isMuted = mutedStaves.contains(address)
+        // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+        let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
         Task { [weak self] in
-            await self?.host?.playbackController?.setStaffMute(staff: flatIndex, isMuted: isMuted)
+            await self?.host?.playbackController?.setStripMute(strip: strip, isMuted: isMuted)
         }
     }
 
@@ -96,11 +102,13 @@ final class PlaybackMixerModel {
         } else {
             soloStaves.insert(address)
         }
-        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+        guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
         else { return }
         let isSolo = soloStaves.contains(address)
+        // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+        let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
         Task { [weak self] in
-            await self?.host?.playbackController?.setStaffSolo(staff: flatIndex, isSolo: isSolo)
+            await self?.host?.playbackController?.setStripSolo(strip: strip, isSolo: isSolo)
         }
     }
 
@@ -122,23 +130,22 @@ final class PlaybackMixerModel {
     func setStaffProgram(_ program: Int, for address: StaffAddress) async {
         staffProgramOverrides[address] = program
         await onChange?()
-        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+        guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
         else { return }
-        await host?.playbackController?.setStaffInstrument(
-            staff: flatIndex,
-            bank: host?.playbackScore?.gmBank(at: address) ?? 0,
-            program: program,
-        )
+        // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+        let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
+        await host?.playbackController?.setStripInstrument(strip: strip, program: program)
     }
 
     func clearStaffProgramOverride(for address: StaffAddress) async {
         staffProgramOverrides.removeValue(forKey: address)
         await onChange?()
-        guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+        guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
         else { return }
-        await host?.playbackController?.setStaffInstrument(
-            staff: flatIndex,
-            bank: host?.playbackScore?.gmBank(at: address) ?? 0,
+        // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+        let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
+        await host?.playbackController?.setStripInstrument(
+            strip: strip,
             program: host?.playbackScore?.gmProgram(at: address) ?? 0,
         )
     }
@@ -173,13 +180,11 @@ final class PlaybackMixerModel {
         }
         await onChange?()
         for address in addresses {
-            guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+            guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
             else { continue }
-            await host?.playbackController?.setStaffInstrument(
-                staff: flatIndex,
-                bank: host?.playbackScore?.gmBank(at: address) ?? 0,
-                program: program,
-            )
+            // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+            let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
+            await host?.playbackController?.setStripInstrument(strip: strip, program: program)
         }
     }
 
@@ -191,11 +196,12 @@ final class PlaybackMixerModel {
         }
         await onChange?()
         for address in addresses {
-            guard let flatIndex = host?.playbackScore?.flattenedStaffIndex(of: address)
+            guard host?.playbackScore?.flattenedStaffIndex(of: address) != nil
             else { continue }
-            await host?.playbackController?.setStaffInstrument(
-                staff: flatIndex,
-                bank: host?.playbackScore?.gmBank(at: address) ?? 0,
+            // re-keyed in Task 9: strip should be looked up from the score's mixer strips, not synthesized here.
+            let strip = MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0)
+            await host?.playbackController?.setStripInstrument(
+                strip: strip,
                 program: host?.playbackScore?.gmProgram(at: address) ?? 0,
             )
         }
