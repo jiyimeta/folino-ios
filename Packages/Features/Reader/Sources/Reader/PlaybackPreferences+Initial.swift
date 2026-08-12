@@ -3,37 +3,30 @@ import Foundation
 import SheetMusicCore
 
 extension PlaybackPreferences {
-    /// Builds the initial `PlaybackPreferences` to hand the playback engine when a score is first loaded into the
-    /// controller: per-staff mixer states keyed by flattened staff index, with volume and program drawn from the user's
-    /// `ReaderPreferences` overrides where set and from the score's authored channel values otherwise.
+    /// The user's saved overrides, keyed by strip, for the engine to apply on top of what it already seeded from
+    /// the score. There is deliberately no score walk here: the strip list only exists once the engine has
+    /// prepared the score, and a resolved per-strip list would re-send what `prepare` had just applied.
     static func initial(
-        for score: Score,
+        for _: Score,
         readerPreferences: ReaderPreferences,
         scoreItemID: Domain.ScoreItemID,
-        defaultVolume: Double,
     ) -> PlaybackPreferences {
-        let states = score.allStaves.enumerated().map { idx, entry in
-            let bank = score.gmBank(at: entry.address) ?? 0
-            let program = readerPreferences.staffProgramOverrides[entry.address]
-                ?? score.gmProgram(at: entry.address)
-                ?? 0
-            let volume = readerPreferences.staffVolumeOverrides[entry.address]
-                ?? score.initialStaffVolume(at: entry.address)
-                ?? defaultVolume
-            return StaffMixerState(
-                staffIndex: idx,
-                volume: volume,
-                isMuted: false,
-                isSolo: false,
-                gmBank: bank,
-                gmProgram: program,
+        let strips = Set(readerPreferences.stripVolumeOverrides.keys)
+            .union(readerPreferences.stripProgramOverrides.keys)
+        let states = strips.sorted {
+            ($0.partIndex, $0.instrumentOrdinal) < ($1.partIndex, $1.instrumentOrdinal)
+        }.map { strip in
+            StripMixerState(
+                strip: strip,
+                volume: readerPreferences.stripVolumeOverrides[strip],
+                gmProgram: readerPreferences.stripProgramOverrides[strip],
             )
         }
         let globalA4 = UserDefaults.standard.object(forKey: ReaderGlobalSettingsKey.a4ReferenceHz) as? Double
             ?? A4Reference.standardHz
         return PlaybackPreferences(
             scoreItemID: scoreItemID,
-            perStaff: states,
+            perStrip: states,
             tempoMultiplier: readerPreferences.tempoMultiplier ?? 1.0,
             abRepeat: readerPreferences.abRepeat,
             masterVolume: readerPreferences.effectiveMasterVolume,

@@ -160,7 +160,6 @@ final class ReaderPlaybackSession {
             for: score,
             readerPreferences: prefs,
             scoreItemID: scoreItem.id,
-            defaultVolume: ReaderViewModel.defaultStaffVolume,
         )
         let task = Task<Void, Error> { [scoreItem] in
             try await controller.load(
@@ -205,7 +204,6 @@ final class ReaderPlaybackSession {
                 for: score,
                 readerPreferences: prefs,
                 scoreItemID: scoreItem.id,
-                defaultVolume: ReaderViewModel.defaultStaffVolume,
             )
             let task = preloadTask ?? Task<Void, Error> { [scoreItem] in
                 try await controller.load(

@@ -19,8 +19,8 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// a setLoop / clearLoop.
     var loadedScore: Score?
     /// Cached preferences from the most recent `load(...)` — replayed against the engine during `reloadSoundfont()` so
-    /// per-staff volumes / mutes / solos / programs and tempo survive the soundfont swap. Internal so the +Reload
-    /// extension can reach it.
+    /// the user's saved per-strip volume / program overrides and tempo survive the soundfont swap. Internal so the
+    /// +Reload extension can reach it.
     var loadedPreferences: PlaybackPreferences?
     /// Cursor the user picked while the engine's sequencer wasn't yet built (it's lazy — first `play(from:in:)` builds
     /// it). `seek` early-outs in that state, so we stash the request here and apply it on the next `play()` via
@@ -180,20 +180,21 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// `metronomeEnabled` declared above plus `applyPreferences` / `publishNowPlayingInfo` below, but is otherwise
     /// self-contained.
     func applyPreferences(_ preferences: PlaybackPreferences) {
-        // Re-seat every per-staff engine channel from the saved preferences. Runs on a fresh load() after a
-        // relaunch and on a mid-session soundfont hot-swap, so volume / mute / solo / program are all re-asserted
-        // here: prepare(score:) otherwise leaves the channel on the score's authored program, silently dropping the
-        // user's instrument override. Bank is fixed at prepare time; mirrors the live setStripInstrument(...) path.
-        for state in preferences.perStaff {
-            // replaced in Task 4: perStaff becomes per-strip preferences, at which point this maps a MixerStripID
-            // straight onto the channel instead of re-deriving a part index from a flattened staff index.
-            guard let staves = loadedScore?.allStaves, staves.indices.contains(state.staffIndex) else { continue }
-            let partIndex = staves[state.staffIndex].address.partIndex
-            let channel = MixerChannel.Kind.instrument(partIndex: partIndex, ordinal: 0)
-            engine.setVolume(forChannel: channel, to: Float(state.volume))
-            engine.setMuted(forChannel: channel, to: state.isMuted)
-            engine.setSoloed(forChannel: channel, to: state.isSolo)
-            engine.setProgram(forChannel: channel, to: UInt8(clamping: state.gmProgram))
+        // Re-seat only the user's saved overrides. Runs on a fresh load() after a relaunch and on a mid-session
+        // soundfont hot-swap. prepare(score:) has already seeded every strip from the score's authored CC 7 and
+        // program, so an absent field here means "leave the engine's own value alone" — mute and solo are
+        // session-only and are not sent from here at all, which is what prepare leaves them at.
+        for state in preferences.perStrip {
+            let channel = MixerChannel.Kind.instrument(
+                partIndex: state.strip.partIndex, ordinal: state.strip.instrumentOrdinal,
+            )
+            // Only what the user actually chose. `prepare(score:)` has already seeded every strip from the
+            // score, so an absent field means "leave the engine's own value alone" — sending a filler here
+            // would overwrite the score with a default.
+            if let volume = state.volume { engine.setVolume(forChannel: channel, to: Float(volume)) }
+            if let program = state.gmProgram {
+                engine.setProgram(forChannel: channel, to: UInt8(clamping: program))
+            }
         }
         engine.setRate(Float(preferences.tempoMultiplier))
         applyMasterVolume(preferences.masterVolume)
