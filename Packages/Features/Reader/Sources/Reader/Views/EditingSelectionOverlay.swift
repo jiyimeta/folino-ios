@@ -99,15 +99,17 @@ struct EditingSelectionOverlay: View {
         }
     }
 
-    /// The caret's column, narrowed to `caretItem`'s own staff band. `nil` when `caretItem` is unset, doesn't
-    /// resolve to a laid-out frame (e.g. a stale ID right after an edit reflows the document), or names a
-    /// staff/measure this document doesn't contain.
+    /// The caret's column: the engine's cursor frame for the item (`CursorFrame.swift:13` — its Y spans the whole
+    /// system) narrowed to `caretItem`'s own staff band, one `sp` clear above and below the staff's drawn lines.
+    /// Narrowed, unlike the playback head, because editing happens in one staff at a time. `nil` when `caretItem` is
+    /// unset, doesn't resolve to a laid-out frame (e.g. a stale ID right after an edit reflows the document), or
+    /// names a staff/measure this document doesn't contain.
     ///
-    /// The band math — one `sp` above the staff top to one `sp` below its bottom, so 6 sp for a 4 sp staff — is
-    /// `LayoutDocument.editingCaretRect`'s as of swift-sheet-music 1.11.0, shared with Android rather than computed
-    /// here twice. `minimumWidth` is the only thing the two call sites above ever disagreed about.
+    /// The band comes from the engine rather than being measured here: it depends on the staff's own line count —
+    /// a 1-line percussion staff has no height of its own to hang 6 sp from — and Android's host needs the same
+    /// answer.
     private var caretRect: CGRect? {
         guard let item = host.displayCaretItem else { return nil }
-        return document.editingCaretRect(for: item, in: score, minimumWidth: 2)
+        return document.editingCaretRect(for: item, in: score)
     }
 }

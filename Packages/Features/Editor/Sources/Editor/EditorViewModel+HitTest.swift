@@ -6,7 +6,8 @@ import Foundation
 import SheetMusicCore
 import SheetMusicLayout
 
-/// Maps a tap point (in the Reader's score-surface / `LayoutDocument` coordinate space) to a selection.
+/// Maps a tap point (in the Reader's score-surface / `LayoutDocument` coordinate space) to a selection. Task 16
+/// reuses the same resolution, unmutated, for the Pencil hover pre-highlight.
 ///
 /// The policy itself — the hit-test ladder, the 44-point slop box, the active-voice preference and the on-staff gate
 /// that makes a tap on empty paper mean "nothing" — lives in `LayoutDocument.editingHitTest(at:activeVoice:)` as of
@@ -52,11 +53,15 @@ extension EditorViewModel {
         resolvedItem(at: point)
     }
 
-    /// The hit is addressed against the RENDERED document, which may be a staff-filtered rendition of the score this
-    /// view model edits — so the result is re-stamped into source addressing before it leaves
-    /// (`displayToSourceItem`, identity when nothing is filtered).
+    /// Shared resolver behind `handleTap(at:)` and `hoverItem(at:)`. The policy — which targets are selectable, the
+    /// 44x44 slop box, the active-voice preference (spec §5.5) and the on-staff gate that makes a tap on empty paper
+    /// mean "nothing" — lives in `LayoutDocument.editingHitTest(at:activeVoice:)`, so Android's host runs the same
+    /// one rather than a Kotlin retelling of it.
+    ///
+    /// What stays here is the addressing: the engine answers against the RENDERED document, which may be a
+    /// staff-filtered rendition of the score this view model edits, so the result is re-stamped into source
+    /// addressing before it leaves (`displayToSourceItem`, identity when nothing is filtered).
     private func resolvedItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {
-        guard let document = documentProvider() else { return nil }
-        return document.editingHitTest(at: point, activeVoice: activeVoice).flatMap(displayToSourceItem)
+        documentProvider()?.editingHitTest(at: point, activeVoice: activeVoice).flatMap(displayToSourceItem)
     }
 }
