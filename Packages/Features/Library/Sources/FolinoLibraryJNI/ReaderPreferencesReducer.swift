@@ -22,8 +22,8 @@ enum ReaderPreferencesReducer {
         ReaderPreferences(
             id: p.id, scoreItemID: p.scoreItemID, staffSize: p.staffSize,
             hiddenStaves: p.hiddenStaves, authoredHiddenStaves: p.authoredHiddenStaves,
-            staffProgramOverrides: p.staffProgramOverrides,
-            staffVolumeOverrides: p.staffVolumeOverrides, staffClefOverrides: p.staffClefOverrides,
+            stripProgramOverrides: p.stripProgramOverrides,
+            stripVolumeOverrides: p.stripVolumeOverrides, staffClefOverrides: p.staffClefOverrides,
             tempoMultiplier: p.tempoMultiplier, honorLayoutBreaks: p.honorLayoutBreaks,
             repeatMode: p.repeatMode, abRepeat: p.abRepeat, masterVolume: p.masterVolume,
             transposeSemitones: p.transposeSemitones, a4ReferenceHz: p.a4ReferenceHz,
@@ -112,15 +112,17 @@ enum ReaderPreferencesReducer {
         return reseat(c)
     }
 
-    static func setStaffProgram(_ p: ReaderPreferences, part: Int, staff: Int, program: Int) -> ReaderPreferences {
+    static func setStaffProgram(_ p: ReaderPreferences, part: Int, staff _: Int, program: Int) -> ReaderPreferences {
         var c = p
-        c.staffProgramOverrides[StaffAddress(partIndex: part, staffIndexInPart: staff)] = program
+        // Android's mixer is still addressed per staff. Every staff of a part drove one channel even before
+        // strips, so a write from any of its rows lands on the part's tick-0 strip.
+        c.stripProgramOverrides[MixerStripID(partIndex: part, instrumentOrdinal: 0)] = program
         return reseat(c)
     }
 
-    static func setStaffVolume(_ p: ReaderPreferences, part: Int, staff: Int, volume: Double) -> ReaderPreferences {
+    static func setStaffVolume(_ p: ReaderPreferences, part: Int, staff _: Int, volume: Double) -> ReaderPreferences {
         var c = p
-        c.staffVolumeOverrides[StaffAddress(partIndex: part, staffIndexInPart: staff)] = volume
+        c.stripVolumeOverrides[MixerStripID(partIndex: part, instrumentOrdinal: 0)] = volume
         return reseat(c)
     }
 

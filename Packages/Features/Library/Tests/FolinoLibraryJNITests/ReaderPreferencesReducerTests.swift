@@ -28,12 +28,22 @@ struct ReaderPreferencesReducerTests {
 
     @Test func `set staff program updates addressed entry only`() {
         let p = ReaderPreferencesReducer.setStaffProgram(base(), part: 0, staff: 1, program: 40)
-        #expect(p.staffProgramOverrides[StaffAddress(partIndex: 0, staffIndexInPart: 1)] == 40)
+        #expect(p.stripProgramOverrides[MixerStripID(partIndex: 0, instrumentOrdinal: 0)] == 40)
     }
 
     @Test func `set staff volume updates addressed entry only`() {
         let p = ReaderPreferencesReducer.setStaffVolume(base(), part: 1, staff: 0, volume: 0.25)
-        #expect(p.staffVolumeOverrides[StaffAddress(partIndex: 1, staffIndexInPart: 0)] == 0.25)
+        #expect(p.stripVolumeOverrides[MixerStripID(partIndex: 1, instrumentOrdinal: 0)] == 0.25)
+    }
+
+    /// Android's mixer is still addressed per staff, but every staff of a part always drove one channel — so a
+    /// write from any of a part's rows (here staff 1) must land on the part's tick-0 strip, and must not fan out
+    /// into a second stored entry.
+    @Test func `a write from any staff lands on the part's first strip`() {
+        let p = ReaderPreferencesReducer.setStaffVolume(base(), part: 1, staff: 1, volume: 0.25)
+
+        #expect(p.stripVolumeOverrides[MixerStripID(partIndex: 1, instrumentOrdinal: 0)] == 0.25)
+        #expect(p.stripVolumeOverrides.count == 1)
     }
 
     @Test func `set staff hidden toggles membership`() {
