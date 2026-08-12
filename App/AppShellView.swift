@@ -414,9 +414,6 @@ private struct ReadyShell: View {
     private func makeReader(
         item: ScoreItem,
         playlistID: PlaylistID?,
-        onBack: (() -> Void)? = nil,
-        hidesBackButton: Bool = false,
-        leadingIsSidebarToggle: Bool = false,
     ) -> some View {
         EditableReaderScreen(
             item: item,
@@ -444,9 +441,6 @@ private struct ReadyShell: View {
                 // Finer-grained sources (favorites/tag/recents/search) would require threading the source through
                 // the navigation values.
                 openedFrom: playlistID != nil ? .playlist : .libraryAll,
-                onBack: onBack,
-                hidesBackButton: hidesBackButton,
-                leadingIsSidebarToggle: leadingIsSidebarToggle,
                 editingHost: host,
                 editingChrome: chrome,
             )
@@ -456,19 +450,14 @@ private struct ReadyShell: View {
     @ViewBuilder
     private var detail: some View {
         if let item = detailScoreItem {
-            makeReader(
-                item: item,
-                playlistID: detailPlaylistID,
-                onBack: { columnVisibility = .doubleColumn },
-                hidesBackButton: columnVisibility == .doubleColumn,
-                // Split-view detail: the leading affordance reveals the library sidebar column rather than
-                // popping a stack, so it reads as a sidebar toggle, not a back chevron. The compact
-                // NavigationStack path keeps the default (back); the sidebar's own control collapses it.
-                leadingIsSidebarToggle: true,
-            )
-            // Force a fresh view identity per score so ReaderRootScreen's @State (viewModel seeded from scoreItem in
-            // init) is rebuilt when the user opens a different score from the iPad sidebar.
-            .id(item.id)
+            // No leading affordance is passed down: the split view puts its own sidebar toggle in this column's
+            // navigation bar, and the Reader used to draw a second, identical one beside it — a leftover from when
+            // its chrome was a floating overlay over a hidden navigation bar and the system's toggle was invisible.
+            //
+            // `.id` forces a fresh view identity per score so ReaderRootScreen's @State (viewModel seeded from
+            // scoreItem in init) is rebuilt when the user opens a different score from the iPad sidebar.
+            makeReader(item: item, playlistID: detailPlaylistID)
+                .id(item.id)
         } else {
             emptyDetail
         }
