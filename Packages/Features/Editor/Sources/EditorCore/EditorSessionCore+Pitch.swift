@@ -5,7 +5,7 @@ import SheetMusicCore
 /// The pad's pitch operations — semitone/octave keys, staff-step drag, and accidentals — per spec §5.3/§11-5. All
 /// four act on a `.note` selection only (no-op otherwise) and, unlike `inputPitch`, never auto-advance the
 /// selection: the engine's post-mutation re-derivation keeps the caret on the same note.
-extension EditorViewModel {
+extension EditorSessionCore {
     /// ▴/▾ keys: ±1 semitone via `Note.shifted(bySemitones:in:)` (MuseScore arrow-key spelling). No auto-advance.
     public func shiftPitch(bySemitones delta: Int) {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
@@ -30,16 +30,16 @@ extension EditorViewModel {
     /// because `MidiRenderer` carries the head's through the chain. The chain walk and the "accidental on the head
     /// alone" rule both live in `ScoreEditSession` now, where Android reaches them too.
     private func retune(_ noteID: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
-        let generationBeforeShift = generation
+        let revisionBeforeShift = revision
         apply(.setNotePitch(at: noteID, pitch: pitch, tpc: tpc, accidental: accidental))
-        auditionSelectedNote(unlessStillAt: generationBeforeShift)
+        auditionSelectedNote(unlessStillAt: revisionBeforeShift)
     }
 
     /// ♭ ♮ ♯ (long-press 𝄫 𝄪) → `.setAccidental`. `nil` clears the glyph.
     public func setAccidental(_ accidental: Accidental?) {
         guard case let .note(noteID)? = selectedItem else { return }
-        let generationBeforeSet = generation
+        let revisionBeforeSet = revision
         apply(.setAccidental(at: noteID, accidental: accidental))
-        auditionSelectedNote(unlessStillAt: generationBeforeSet)
+        auditionSelectedNote(unlessStillAt: revisionBeforeSet)
     }
 }

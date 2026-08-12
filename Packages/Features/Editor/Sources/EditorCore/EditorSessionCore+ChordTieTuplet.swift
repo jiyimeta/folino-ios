@@ -5,7 +5,7 @@ import SheetMusicCore
 /// Chord building, ties, and tuplets — spec §5.4. Every operation reads the current `.note` (or, for tuplets, any)
 /// selection and no-ops when it doesn't match the shape the operation needs, or when the underlying engine command
 /// is refused.
-extension EditorViewModel {
+extension EditorSessionCore {
     // MARK: - Chord building
 
     /// ＋音: arms add-to-chord — the next pitch key / drag ADDS to the selected chord instead of replacing.
@@ -48,14 +48,14 @@ extension EditorViewModel {
     }
 
     /// Shared `.addNoteToChord` apply + select-the-added-note landing, used by both the chord-arm letter path and
-    /// the iPad interval shortcuts. A refused add (duplicate pitch) leaves `generation` and selection untouched.
+    /// the iPad interval shortcuts. A refused add (duplicate pitch) leaves `revision` and selection untouched.
     /// Auditions the newly added note on success (spec §5.6).
     private func addNoteToChord(at noteID: NoteID, pitch: Int, tpc: Int, keySig: Int) {
         let accidental = PitchSpelling.displayedAccidental(forTpc: tpc, in: keySig)
         let veID = VoiceElementID(noteID)
-        let generationBeforeAdd = generation
+        let revisionBeforeAdd = revision
         apply(.addNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental))
-        guard generation != generationBeforeAdd, let score, case let .chord(chord)? = score[veID] else { return }
+        guard revision != revisionBeforeAdd, let score, case let .chord(chord)? = score[veID] else { return }
         let addedNoteID = NoteID(
             staff: noteID.staff,
             measureIndex: noteID.measureIndex,

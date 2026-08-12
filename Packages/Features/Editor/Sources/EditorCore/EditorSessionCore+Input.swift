@@ -1,11 +1,9 @@
 import Domain
-import EditorCore
 import Foundation
 import SheetMusicCore
-import SheetMusicLayout // DurationInterpretation: splits a written duration back into base + dots
 
 /// The pad's core operations — note input, delete, duration change — per spec §5.3.
-extension EditorViewModel {
+extension EditorSessionCore {
     /// Letter key C…B — writes at the CARET. Rest at the caret → `.inputNote`; note at the caret → `.writeNote`.
     /// Both carry the armed length, and both re-time the slot to it in the same undo step. Either way the pitch is
     /// the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedPitch`) nearest the previous note: the
@@ -217,9 +215,9 @@ extension EditorViewModel {
             in: score,
         )
         else { return }
-        let generationBeforeInput = generation
+        let revisionBeforeInput = revision
         apply(.inputNote(at: restID, pitch: planned.pitch, tpc: planned.tpc, duration: armedInputDuration))
-        land(after: veID, unlessStillAt: generationBeforeInput)
+        land(after: veID, unlessStillAt: revisionBeforeInput)
     }
 
     /// A letter key on a slot that already holds a note: re-pitch it, and re-time it to the armed length too.
@@ -234,22 +232,22 @@ extension EditorViewModel {
                   forLetter: letter, nearestTo: note.pitch, at: veID, in: score,
               )
         else { return }
-        let generationBeforeInput = generation
+        let revisionBeforeInput = revision
         apply(.writeNote(at: veID, pitch: target.pitch, tpc: target.tpc, duration: armedInputDuration))
-        land(after: veID, unlessStillAt: generationBeforeInput)
+        land(after: veID, unlessStillAt: revisionBeforeInput)
     }
 
     /// Where input leaves the two markers: the selection on the note just written, the caret on the next timed
     /// element in voice order (spec §11-5: advance on after pitch-key input) — nil past the end of the staff. Both
     /// are placed in one go, before the audition, so the preview sounds the note that was actually written. A
-    /// refused edit (`generation` unmoved) leaves everything where it was.
+    /// refused edit (`revision` unmoved) leaves everything where it was.
     ///
     /// The caret advance walks from the END of a tie chain, not from `location`. A note whose armed length outran
     /// the bar is written as a tied chain occupying several slots — it lands AT `location` but does not end there,
     /// and the caret has to clear the whole chain rather than park inside it. The session reports the chain's head
     /// as the affected location and does not report its tail, so the tail is walked for here.
     private func land(after location: VoiceElementID, unlessStillAt previousGeneration: Int) {
-        guard generation != previousGeneration, let score else { return }
+        guard revision != previousGeneration, let score else { return }
         let written = SelectionRederivation.item(at: location, in: score, preferringNoteIndex: nil)
         let next = ElementNavigator.nextTimedElement(after: tailOfTie(from: location, in: score), in: score)
             .flatMap { SelectionRederivation.item(at: $0, in: score, preferringNoteIndex: nil) }

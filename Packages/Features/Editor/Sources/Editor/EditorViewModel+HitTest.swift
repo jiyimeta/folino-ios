@@ -1,3 +1,4 @@
+import EditorCore
 import Foundation
 
 // Imported by name because the `ScoreItemID`s below stay qualified: sibling files in this target import Domain,
@@ -33,7 +34,7 @@ extension EditorViewModel {
     /// starting blank. Ignores an item the current score doesn't contain: positional IDs go stale, and the score may
     /// have moved on between that tap and this session.
     public func selectItem(_ item: SheetMusicCore.ScoreItemID?) {
-        guard let item, let score, let slot = Self.slot(of: item), score[slot] != nil else {
+        guard let item, let score, let slot = EditorSessionCore.slot(of: item), score[slot] != nil else {
             select(nil)
             return
         }
