@@ -59,7 +59,7 @@ struct EditorViewModelPersistenceTests {
         try bytes.write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let facts = try EditorFileFacts.hashAndSize(of: url)
+        let facts = try EditorFileFacts().hashAndSize(of: url)
         #expect(facts.sizeBytes == 5)
         #expect(facts.contentHash == expectedHash)
     }

@@ -29,8 +29,8 @@ extension EditorViewModel {
         guard let score, isDirty else { return }
         let destination = Self.saveDestination(for: scoreItem, scoresDirectory: scoresDirectory)
         do {
-            try await gateway.saveScore(score, fileURL: destination.url, format: destination.format)
-            let facts = try EditorFileFacts.hashAndSize(of: destination.url)
+            try await writer.write(score, to: destination.url, format: destination.format)
+            let facts = try fileFacts.hashAndSize(of: destination.url)
             let newItem = ScoreItem(
                 id: scoreItem.id,
                 title: scoreItem.title,
@@ -53,7 +53,7 @@ extension EditorViewModel {
                 deletedAt: scoreItem.deletedAt,
                 museScoreMajorVersion: scoreItem.museScoreMajorVersion,
             )
-            try await repository.saveScoreItem(newItem)
+            try await writer.refreshRow(newItem)
             scoreItem = newItem
             if destination.isSiblingCopy {
                 didSaveAsSiblingMSCZ = true

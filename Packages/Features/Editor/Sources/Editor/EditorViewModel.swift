@@ -174,9 +174,12 @@ public final class EditorViewModel {
     /// tints the selected item, the second draws the insertion caret).
     public var onSelectionChanged: @MainActor (ScoreSelection, SheetMusicCore.ScoreItemID?) -> Void = { _, _ in }
 
-    @ObservationIgnored let gateway: any ScoreFileGateway
-    @ObservationIgnored let repository: any ScoreLibraryRepository
-    @ObservationIgnored let playback: (any PlaybackController)?
+    // The three seams the editing logic reaches its platform through (`EditorCore/EditorSeams.swift`). The
+    // initializer still takes the gateway / repository / controller the App composition root has, and narrows them
+    // here — the App is not this refactor's business, and the adapters are three lines each.
+    @ObservationIgnored let audition: (any NoteAuditioning)?
+    @ObservationIgnored let fileFacts: any FileFactsProviding
+    @ObservationIgnored let writer: any ScoreFileWriting
     /// Internal (not private) so `EditorViewModel+Persistence.swift` can replace it after a save refreshes the row.
     @ObservationIgnored var scoreItem: ScoreItem
     @ObservationIgnored let scoresDirectory: URL
@@ -190,9 +193,9 @@ public final class EditorViewModel {
     ) {
         self.scoreItem = scoreItem
         self.scoresDirectory = scoresDirectory
-        self.gateway = gateway
-        self.repository = repository
-        self.playback = playback
+        audition = playback.map(PlaybackAudition.init(controller:))
+        fileFacts = EditorFileFacts()
+        writer = GatewayScoreWriter(gateway: gateway, repository: repository)
     }
 
     public func beginSession(score: Score) {
