@@ -378,10 +378,13 @@ class EditSessionRelay(
          * How many applied intents may pass between fingerprint checks.
          *
          * `stableFingerprint` walks the whole value tree, so it is the one thing here whose cost grows with the
-         * score. Eight is the starting point the device test in Task 9 measures against: if one walk on the parity
-         * fixture costs more than about two milliseconds, raise this until the amortized cost per edit is under half
-         * a millisecond, and record the measurement in this comment. Session open, undo, redo and (from SP5) every
-         * save check unconditionally regardless of this number.
+         * score. Task 9's device test (`EditSessionParityTest.fingerprintWalkIsCheapEnoughToSample`) measured one
+         * walk on `parity.mscz` — a real 127-measure, 6-part arrangement — on a physical Pixel 8a at **~1.9ms**
+         * (1908us and 1911us across two runs), under the ~2ms line this comment used to guess at. At
+         * `FINGERPRINT_SAMPLE_EVERY = 8` that amortizes to ~239us per applied intent, comfortably under the
+         * half-millisecond budget, so eight stays unchanged. Raise it (recomputing the amortized cost against a
+         * fresh measurement) only if a future score/device combination pushes the walk itself past ~4ms. Session
+         * open, undo, redo and (from SP5) every save check unconditionally regardless of this number.
          */
         const val FINGERPRINT_SAMPLE_EVERY = 8
     }

@@ -24,6 +24,17 @@ android {
     // Log calls to no-op rather than throw so EditSessionRelayTest can exercise that path off-device.
     testOptions { unitTests.isReturnDefaultValues = true }
 
+    // This module's own staged Swift runtime (see the jniLibs comment below) and the
+    // sheet-music-android AAR both bundle the same Swift-runtime .so set (libBlocksRuntime.so,
+    // libswiftCore.so, …) — byte-identical Swift-runtime artefacts, same fix as :app's packaging
+    // block. Only the androidTest APK actually merges native libs for a library module, but the
+    // conflict is real the moment androidTest links against sheet-music-audio-android.
+    packaging {
+        jniLibs {
+            pickFirsts += setOf("**/libc++_shared.so", "**/*.so")
+        }
+    }
+
     // Prebuilt libFolinoEditorJNI.so + libSwiftJava.so + Swift runtime live here,
     // staged by Scripts/android-build-editor-libs.sh before any Gradle task that
     // consumes them. swift-java jextract output (Java bindings) is staged into

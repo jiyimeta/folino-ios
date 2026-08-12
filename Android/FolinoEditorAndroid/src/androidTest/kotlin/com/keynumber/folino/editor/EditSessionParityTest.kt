@@ -1,0 +1,198 @@
+package com.keynumber.folino.editor
+
+import androidx.test.platform.app.InstrumentationRegistry
+import com.keynumber.folino.editor.generated.EditorBridgeViewModel
+import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.RestID
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+
+/**
+ * The SP3 acceptance test: an editing session driven through the real funnel, with the two images' fingerprints
+ * compared after EVERY step rather than on the sampling interval.
+ *
+ * The sampling interval is a shipping compromise about cost; this test is about correctness, so it checks
+ * everything. A divergence that the shipped sampling would have caught eight edits later shows up here on the edit
+ * that caused it.
+ *
+ * The test encodes a `ScoreItemID` itself to seed the first selection. That is the one place Kotlin is allowed to
+ * speak this schema: `EditorSessionCore.selectNextElement()` is a no-op with nothing selected, so a cold session has
+ * no target, and here the test is standing in for SP4's tap. The shipping path still gets its bytes from
+ * `nativeEditingHitTest` and relays them without looking.
+ *
+ * All three `@Test` methods run in the SAME app process (androidx.test does not fork a fresh process per method), so
+ * every session opened here is tracked and torn down in [tearDown] — including on the path where an assertion
+ * fails and aborts the rest of the test method. Without that, a failed assertion mid-test skips the `relay.close()`
+ * / `nativeReleaseScore()` at the bottom of the method, leaking a still-open mirror session into whichever test runs
+ * next. Each test also uses its own `scoreId` / staged file name so no two sessions — even across different test
+ * methods — ever share either.
+ */
+class EditSessionParityTest {
+    private class TestHost(var handle: Long) : EditSessionHost {
+        var relayouts = 0
+        override fun scoreHandle() = handle
+        override fun replaceScoreHandle(handle: Long) { this.handle = handle }
+        override fun requestRelayout() { relayouts += 1 }
+    }
+
+    private class Rig(val bridge: GeneratedEditBridging, val host: TestHost, val relay: EditSessionRelay)
+
+    // Torn down in `tearDown()` regardless of whether the test method that populated them passed or threw.
+    // `hostsToRelease` is deduplicated by identity in `tearDown()`: `reopeningAfterAnUnsavedEditResyncsInsteadOfDiverging`
+    // opens a second session against the SAME `TestHost` as its first (that reuse is the point of the test), and
+    // releasing `host.handle` twice for one still-live handle would be a double-release.
+    private val relaysToClose = mutableListOf<EditSessionRelay>()
+    private val hostsToRelease = mutableListOf<TestHost>()
+
+    @After
+    fun tearDown() {
+        relaysToClose.forEach { it.close() }
+        relaysToClose.clear()
+        hostsToRelease.distinctBy { System.identityHashCode(it) }.forEach { host ->
+            if (host.handle != 0L) SheetMusicJNI.nativeReleaseScore(host.handle)
+        }
+        hostsToRelease.clear()
+    }
+
+    private fun openRig(file: File, scoresDir: File, scoreId: String): Rig {
+        val handle = SheetMusicJNI.nativeLoadScore(file.readBytes())
+        assertNotEquals(0L, handle)
+        val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+        val host = TestHost(handle)
+        val relay = EditSessionRelay(bridge, host, RealEditNatives)
+        relaysToClose.add(relay)
+        hostsToRelease.add(host)
+        assertEquals(OpenResult.OPENED, relay.open(file.path, scoresDir.path, scoreId))
+        return Rig(bridge, host, relay)
+    }
+
+    private fun stagedFixture(name: String): Pair<File, File> {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val scoresDir = File(context.filesDir, "Scores").apply { mkdirs() }
+        val file = File(scoresDir, "$name.mscz")
+        context.assets.open("parity.mscz").use { input -> file.outputStream().use { input.copyTo(it) } }
+        return file to scoresDir
+    }
+
+    @Test fun sessionsStayIdenticalThroughAScriptedEdit() {
+        val (file, scoresDir) = stagedFixture("parity-scripted")
+        val rig = openRig(file, scoresDir, "parity-scripted")
+        val relay = rig.relay
+        assertAgreed(rig, "after open")
+
+        // Stand in for SP4's tap: select the first rest of the first bar by its ID.
+        relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID())))
+        // The selection is carried to the mirror through the generated observable projection rather than the
+        // relay queue, and its native→Kotlin change notification is dispatched onto the main coroutine dispatcher
+        // rather than applied inline, so wait for that dispatch to drain before reading it back.
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        assertNotNull("the first selection must have taken", rig.bridge.vm.selectedItemFrame.value)
+        assertAgreed(rig, "after the first selection")
+
+        relay.armDuration(QUARTER)
+        relay.inputPitch("C")
+        assertAgreed(rig, "after writing C")
+
+        relay.inputPitch("E")
+        relay.inputPitch("G")
+        assertAgreed(rig, "after writing E and G")
+
+        relay.shiftPitch(1)
+        assertAgreed(rig, "after a semitone up")
+
+        relay.armDuration(EIGHTH)
+        relay.toggleArmedDot()
+        relay.inputPitch("A")
+        assertAgreed(rig, "after a dotted eighth")
+
+        relay.writeRest()
+        assertAgreed(rig, "after a rest")
+
+        relay.deleteSelection()
+        assertAgreed(rig, "after a delete")
+
+        repeat(4) { relay.undo(); assertAgreed(rig, "after undo $it") }
+        repeat(4) { relay.redo(); assertAgreed(rig, "after redo $it") }
+
+        assertEquals("no resync should have been needed", 0, relay.resyncCount)
+        assertTrue("the host should have been asked to redraw", rig.host.relayouts > 0)
+    }
+
+    /**
+     * Closing a session does not revert the mirror, and SP3 saves nothing — so a second session parses the unedited
+     * file while the handle still holds the edits. The fingerprint check in `open()` is what catches that, and this
+     * is the test that fails if someone removes it as redundant.
+     */
+    @Test fun reopeningAfterAnUnsavedEditResyncsInsteadOfDiverging() {
+        val (file, scoresDir) = stagedFixture("parity-reopen")
+        val first = openRig(file, scoresDir, "parity-reopen")
+        first.relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID())))
+        first.relay.armDuration(QUARTER)
+        first.relay.inputPitch("C")
+        assertAgreed(first, "after the first session's edit")
+        val editedFingerprint = SheetMusicJNI.nativeScoreFingerprint(first.host.handle)
+        first.relay.close()
+
+        // Same handle, same (untouched) file: exactly what the Reader does when edit mode is re-entered.
+        val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+        val relay = EditSessionRelay(bridge, first.host, RealEditNatives)
+        relaysToClose.add(relay)
+        assertEquals(OpenResult.OPENED, relay.open(file.path, scoresDir.path, "parity-reopen"))
+        assertEquals("open must have resynced", 1, relay.resyncCount)
+        assertEquals(
+            "the two copies must agree after the resync",
+            bridge.scoreFingerprint(),
+            SheetMusicJNI.nativeScoreFingerprint(first.host.handle),
+        )
+        assertNotEquals(
+            "the resync must have replaced the mirror's edited score, not adopted it",
+            editedFingerprint,
+            SheetMusicJNI.nativeScoreFingerprint(first.host.handle),
+        )
+    }
+
+    /** Measures one fingerprint walk, so `FINGERPRINT_SAMPLE_EVERY` is chosen against a number, not a guess. */
+    @Test fun fingerprintWalkIsCheapEnoughToSample() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bytes = context.assets.open("parity.mscz").use { it.readBytes() }
+        val handle = SheetMusicJNI.nativeLoadScore(bytes)
+        val started = System.nanoTime()
+        repeat(50) { SheetMusicJNI.nativeScoreFingerprint(handle) }
+        val perWalkMicros = (System.nanoTime() - started) / 50 / 1_000
+        android.util.Log.i("EditSessionParity", "stableFingerprint walk: ${perWalkMicros}us")
+        SheetMusicJNI.nativeReleaseScore(handle)
+        assertTrue("fingerprint walk unexpectedly slow: ${perWalkMicros}us", perWalkMicros < 2_000)
+    }
+
+    private fun assertAgreed(rig: Rig, step: String) {
+        assertEquals(step, rig.bridge.scoreFingerprint(), SheetMusicJNI.nativeScoreFingerprint(rig.host.handle))
+    }
+
+    private companion object {
+        const val QUARTER = 3
+        const val EIGHTH = 4
+
+        /**
+         * The fixture's first timed slot: `parity.mscz`'s staff 0 (part 0), measure 0, voice 0 opens with a
+         * `Clef` (index 0), `KeySig` (index 1) and `TimeSig` (index 2) as voice elements before the bar's
+         * whole-measure `Rest` at index 3 — confirmed against the raw MSCX and against
+         * `SheetMusicMSCX/Decoders/MSCXDecoder+Voice.swift`, which appends one `VoiceElement` per `Clef`/`KeySig`/
+         * `TimeSig`/`Rest` child and does NOT append one for `Tempo` (that is lifted onto `Score.systemMeasures`
+         * instead, so it does not consume an element index).
+         */
+        fun firstRestID() = RestID(
+            staff = StaffAddress(partIndex = 0, staffIndexInPart = 0),
+            measureIndex = 0,
+            voiceIndex = 0,
+            elementIndex = 3,
+        )
+    }
+}
