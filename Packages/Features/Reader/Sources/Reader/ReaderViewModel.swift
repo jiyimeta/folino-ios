@@ -241,20 +241,29 @@ final class ReaderViewModel {
                 // re-keyed in Task 9: collapse the still-staff-addressed mixer model onto one strip per part —
                 // the same `instrumentOrdinal: 0` stopgap `PlaybackMixerModel` already uses for the engine — until
                 // the real per-strip UI lands.
-                prefs.stripProgramOverrides = Dictionary(
-                    self.mixerModel.staffProgramOverrides.map { address, program in
-                        (MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0), program)
-                    },
-                    uniquingKeysWith: { first, _ in first },
-                )
-                prefs.stripVolumeOverrides = Dictionary(
-                    self.mixerModel.staffVolumeOverrides.map { address, volume in
-                        (MixerStripID(partIndex: address.partIndex, instrumentOrdinal: 0), volume)
-                    },
-                    uniquingKeysWith: { first, _ in first },
-                )
+                prefs.stripProgramOverrides = Self.collapsingToPartsFirstStaff(self.mixerModel.staffProgramOverrides)
+                prefs.stripVolumeOverrides = Self.collapsingToPartsFirstStaff(self.mixerModel.staffVolumeOverrides)
             }
         }
+    }
+
+    /// Interim collapse from the still-staff-addressed mixer model onto one strip per part, for the persistence
+    /// round-trip in `wireMixerModel()`. A strip-keyed dictionary cannot hold two staves' worth of independently-set
+    /// values, so this deterministically keeps the LOWEST `staffIndexInPart` per part — matching the canonical
+    /// choice `PlaybackMixerModel.sync(from:)` already reads back on the way in — rather than an unspecified
+    /// `Dictionary` iteration order, which would make the same user action persist differently between sessions.
+    /// Task 9 deletes this whole conversion along with the rest of `PlaybackMixerModel`'s staff addressing.
+    /// `internal` (not `private`) so `ReaderViewModelMixerCollapseTests` can pin the tie-break via `@testable import`.
+    static func collapsingToPartsFirstStaff<Value>(
+        _ overrides: [StaffAddress: Value],
+    ) -> [MixerStripID: Value] {
+        let addressesByPart = Dictionary(grouping: overrides.keys) { $0.partIndex }
+        var result: [MixerStripID: Value] = [:]
+        for (partIndex, addresses) in addressesByPart {
+            guard let lowest = addresses.min(by: { $0.staffIndexInPart < $1.staffIndexInPart }) else { continue }
+            result[MixerStripID(partIndex: partIndex, instrumentOrdinal: 0)] = overrides[lowest]
+        }
+        return result
     }
 
     private func wireLayoutModel() {
