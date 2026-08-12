@@ -134,10 +134,32 @@ public final class EditorSessionCore {
     /// drives the host's one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
 
+    /// The intents applied since the host last drained them, in the order they landed.
+    ///
+    /// Android only, and off unless asked for. An Android host is authoritative for the score and must replay every
+    /// landed intent into the mirror session behind ssm's score handle; iOS has no mirror and never drains, so
+    /// recording unconditionally would grow this array for the life of a session. Refused intents are absent by
+    /// construction — `apply` records only on the success path — which is the property the relay depends on: a
+    /// refusal that reached the mirror would diverge the two copies.
+    ///
+    /// Undo and redo are deliberately NOT recorded. The mirror keeps its own stacks (it was fed identical intents),
+    /// so they relay as `nativeEditUndo` / `nativeEditRedo`, not as replayed edits.
+    private var relayIntents: [EditIntent] = []
+
+    /// Whether this core records what it applies. Set once at construction by the Android bridge.
+    private let recordsRelayIntents: Bool
+
     /// Takes the pending preview, leaving none behind.
     public func takePendingAudition() -> NoteID? {
         defer { pendingAudition = nil }
         return pendingAudition
+    }
+
+    /// Takes the intents applied since the last call, leaving none behind. The Android bridge calls this after every
+    /// op and hands the frames to Kotlin to relay; see `EditorBridge.sync()`.
+    public func takeRelayIntents() -> [EditIntent] {
+        defer { relayIntents.removeAll() }
+        return relayIntents
     }
 
     /// Marks the score as saved. Called by `performSave` once the write and the row refresh have both landed.
@@ -159,11 +181,13 @@ public final class EditorSessionCore {
         scoresDirectory: URL,
         fileFacts: any FileFactsProviding,
         writer: any ScoreFileWriting,
+        recordsRelayIntents: Bool = false,
     ) {
         self.scoreItem = scoreItem
         self.scoresDirectory = scoresDirectory
         self.fileFacts = fileFacts
         self.writer = writer
+        self.recordsRelayIntents = recordsRelayIntents
     }
 
     // MARK: - Lifecycle
@@ -179,6 +203,7 @@ public final class EditorSessionCore {
         armedDots = 0
         isAddToChordArmed = false
         pendingAudition = nil
+        relayIntents.removeAll()
     }
 
     /// Tears the session down. The host flushes any pending save FIRST — the debounce is its timer, not this type's.
@@ -214,6 +239,7 @@ public final class EditorSessionCore {
         guard let session, session.apply(intent) else { return nil }
         revision += 1
         appliedIntentCount += 1
+        if recordsRelayIntents { relayIntents.append(intent) }
         rederiveSelection()
         isDirty = true
         return intent
