@@ -21,9 +21,13 @@ extension LivePlaybackController {
             try engine.prepare(score: score)
         } catch {
             logger.error("reloadSoundfont: prepare failed: \(String(describing: error), privacy: .public)")
+            // The teardown above already tore down the engine, so an empty list is the truthful answer rather
+            // than a stale snapshot from before the failed re-prepare.
+            snapshotStrips = []
             return
         }
         engine.pause()
+        snapshotStrips = stripsFromEngine()
         applyPreferences(preferences)
         // `prepare` resets the metronome channel's mute back to false — re-apply the user's preference.
         engine.setMuted(forChannel: .metronome, to: !metronomeEnabled)

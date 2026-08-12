@@ -28,6 +28,12 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// `play(in:)` with `state == .stopped` rewinds the sequencer. Internal so the +Reload extension can stash a
     /// pending cursor after re-prepare.
     var pendingCursor: ScoreCursor?
+    /// The engine's strip list as it stood at `prepare(score:)`, BEFORE `applyPreferences` wrote the user's
+    /// choices into it. `mixerChannels` is engine state and is mutated in place by the setters, so a late read
+    /// would report an override as the score's own level — and every "reset to what the score said" answer built
+    /// on it would reset to itself. Cleared wherever the prepared engine goes away. Internal so the +Reload
+    /// extension can reach it.
+    var snapshotStrips: [MixerStrip] = []
 
     private var cursorHandler: (@MainActor (ScoreCursor?) -> Void)?
     private var isPlayingHandler: (@MainActor (Bool) -> Void)?
@@ -169,6 +175,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // Pausing the engine here matches what `PlaybackEngine.pause()` does after a real pause — sequencer is still
         // nil (lazy), so this just stops the audio graph and parks `state` at `.paused`.
         engine.pause()
+        snapshotStrips = stripsFromEngine()
         loadedScore = score
         loadedPreferences = preferences
         pendingCursor = nil
@@ -224,6 +231,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         loadedScore = nil
         loadedPreferences = nil
         pendingCursor = nil
+        snapshotStrips = []
         lastObservedEngineTime = 0
         let session = AVAudioSession.sharedInstance()
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
@@ -263,8 +271,25 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine.setProgram(forChannel: channel(strip), to: UInt8(clamping: program))
     }
 
+    /// `mixerChannels` minus the metronome, which is not a part of the score and has no `MixerStripID` — it keeps
+    /// its own toggle and its own `setMetronomeEnabled(_:)` path. Internal (not private) so the +Reload extension
+    /// file can reach it, the same reason `loadedPreferences` is.
+    func stripsFromEngine() -> [MixerStrip] {
+        engine.mixerChannels.compactMap { channel in
+            guard case let .instrument(partIndex, ordinal) = channel.id else { return nil }
+            return MixerStrip(
+                id: MixerStripID(partIndex: partIndex, instrumentOrdinal: ordinal),
+                partName: channel.partName,
+                instrumentName: channel.instrumentName ?? channel.name,
+                defaultVolume: Double(channel.volume),
+                defaultProgram: Int(channel.program ?? 0),
+                isDrums: channel.isDrums,
+            )
+        }
+    }
+
     public func mixerStrips() -> [MixerStrip] {
-        []
+        snapshotStrips
     }
 
     public func setMetronomeEnabled(_ enabled: Bool) {
