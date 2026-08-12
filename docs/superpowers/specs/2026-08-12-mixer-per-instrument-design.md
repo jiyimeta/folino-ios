@@ -115,8 +115,12 @@ public struct MixerStrip: Hashable, Sendable {
     public let instrumentName: String
     /// The score's authored level for this strip, before any user override.
     public let defaultVolume: Double
-    /// `nil` for a drum strip, whose program is fixed.
-    public let defaultProgram: Int?
+    /// The score's authored program, before any user override. On a drum strip
+    /// this is the KIT. `nil` never occurs for a strip — only the metronome has
+    /// no program, and the metronome is not a strip.
+    public let defaultProgram: Int
+    /// Whether the program is a drum kit, so the picker offers that catalog.
+    public let isDrums: Bool
 }
 
 // PlaybackController
@@ -152,10 +156,14 @@ serves that snapshot. It is cleared wherever the prepared engine goes away:
 already tore the engine down before it failed, so an empty list is the truthful
 answer rather than a stale one.
 
-**This needs swift-sheet-music 1.11.0**, which folino re-pins to as the first step
-of the work — after the tag exists. 1.11.0 is written in that package's CHANGELOG
-and its `main` carries the API, but the tag is cut only once CI is green, so
-"re-pin to 1.11.0" is a step with a precondition, not a given. `mixerChannels`, the `.instrument` kind and the per-channel setters
+**This needs swift-sheet-music 1.11.0** — `partName`, `instrumentName`, `isDrums`,
+the `trackName`-first instrument name, and the drum-kit fix are all additions
+there. The tag does not exist yet: that package's Android module build is red for
+an unrelated reason (a wire refactor the Kotlin codegen has not followed), and
+tagging waits on it. **The work proceeds against a local path pin to ssm's `main`
+in the meantime**, and re-pins to `exact: "1.11.0"` once the tag is cut — a
+one-line change in five `Package.swift` files plus `project.yml`, which
+`ssm-local-pin.sh` performs. `mixerChannels`, the `.instrument` kind and the per-channel setters
 ship in 1.10.1, but `partName` / `instrumentName` — which §4's rows are built from
 — are 1.11.0 additions, as is the fix that makes `instrumentName` read MuseScore's
 `<trackName>` (the instrument) rather than `<longName>` (the part's own label).
@@ -300,6 +308,14 @@ every staff of the part and `effectiveProgram(forPartIndex:)` reads the first
 staff back). Its per-staff siblings — `setStaffProgram`,
 `clearStaffProgramOverride` — have no production caller and are deleted rather
 than re-keyed.
+
+The picker keeps both of its catalogs, and reads which to show from
+`MixerStrip.isDrums` rather than from the score's `useDrumset`. Until 1.11.0 a
+drum strip reported no program at all, on the reasoning that drums pick their
+sound by note pitch — which meant folino's drum-kit picker moved a value that
+never reached the synth, and the kit the score asked for was never applied
+either. 1.11.0 fixes the engine and reports the kit, so the picker becomes real
+rather than decorative, and `isDrums` is the flag it selects the catalog with.
 
 Mute and solo remain session-only, exactly as today — they are not fields of
 `ReaderPreferences` and this change does not make them persistent.
