@@ -81,23 +81,17 @@ struct PlaybackInspectorScreen: View {
             }
 
             CollapsibleSection(isExpanded: $partsExpanded) {
-                ForEach(Array(score.parts.enumerated()), id: \.element.id) { partIndex, part in
+                ForEach(mixerModel.strips.grouped(), id: \.partIndex) { group in
+                    let staves = staffAddresses(partIndex: group.partIndex)
                     VStack {
-                        HStack {
-                            Text(part.instrument.longName ?? part.trackName ?? "-")
-                                .font(.headline)
-
-                            ProgramPicker(
-                                mixerModel: mixerModel,
-                                partIndex: partIndex,
-                                isDrums: part.instrument.useDrumset,
-                            )
-                        }
-
-                        VStack {
-                            ForEach(staffAddresses(part, partIndex: partIndex), id: \.self) { address in
-                                staffRow(address: address, strip: Self.strip(forPartIndex: partIndex))
+                        if group.drawsHeader(staffCount: staves.count) {
+                            partHeader(group, staves: staves)
+                            ForEach(group.strips) { strip in
+                                stripRow(strip, label: group.rowLabel(for: strip), staves: [])
                             }
+                        } else {
+                            // One strip, one staff: everything on one row, the shape the mixer has always had.
+                            stripRow(group.strips[0], label: group.partName, staves: staves)
                         }
                     }
                     .verticalRowInsetCompat(8)
@@ -275,93 +269,64 @@ struct PlaybackInspectorScreen: View {
             }
         }
     }
-
-    /// Staff addresses for a part, used as the inner ForEach identity (stable per staff, unlike a position index).
-    private func staffAddresses(_ part: Part, partIndex: Int) -> [StaffAddress] {
-        part.staves.indices.map { StaffAddress(partIndex: partIndex, staffIndexInPart: $0) }
-    }
-
-    /// Which mixer strip a part's rows drive. Interim: this screen still walks the score's parts and staves, so it
-    /// addresses a part as its FIRST instrument. Task 10 replaces the whole parts section with a walk over
-    /// `mixerModel.strips`, at which point a part with several instruments gets a row per sound.
-    private static func strip(forPartIndex partIndex: Int) -> MixerStripID {
-        MixerStripID(partIndex: partIndex, instrumentOrdinal: 0)
-    }
-
-    @ViewBuilder
-    private func staffRow(address: StaffAddress, strip: MixerStripID) -> some View {
-        let volumeBinding = Binding<Double>(
-            get: { mixerModel.volume(for: strip) },
-            set: { mixerModel.setVolume($0, for: strip) },
-        )
-        let isMuted = mixerModel.mutedStrips.contains(strip)
-        let isSolo = mixerModel.soloStrips.contains(strip)
-        let isDisabled = isMuted || !mixerModel.soloStrips.isEmpty && !isSolo
-        let defaultVolume = mixerModel.defaultVolume(for: strip)
-        HStack {
-            Image(systemName: "speaker.wave.2.fill")
-                .foregroundStyle(isDisabled ? .gray.opacity(0.6) : .accentColor)
-
-            ResettableSlider(
-                value: volumeBinding,
-                range: 0 ... 1,
-                defaultValue: defaultVolume,
-                onEditingChanged: { editing in
-                    if !editing {
-                        let final = volumeBinding.wrappedValue
-                        ReaderHintCoordinator.shared.markUsed(.mixer)
-                        Task { await mixerModel.commitVolume(final, for: strip) }
-                    }
-                },
-                onReset: {
-                    ReaderHintCoordinator.shared.markUsed(.mixer)
-                    Task { await mixerModel.commitVolume(defaultVolume, for: strip) }
-                },
-            )
-            .tint(isDisabled ? .gray : Color.accentColor)
-            .disabled(isDisabled)
-
-            Button(String("S")) {
-                ReaderHintCoordinator.shared.markUsed(.mixer)
-                mixerModel.toggleSolo(strip)
-            }
-            .fontWeight(.medium)
-            .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isSolo))
-            .accessibilityLabel(Text("reader.inspector.staffSolo", bundle: .module))
-
-            Button(String("M")) {
-                ReaderHintCoordinator.shared.markUsed(.mixer)
-                mixerModel.toggleMute(strip)
-            }
-            .fontWeight(.medium)
-            .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isMuted))
-            .accessibilityLabel(Text("reader.inspector.staffMute", bundle: .module))
-
-            if showsStaffVisibility {
-                StaffVisibilityButton(layoutModel: layoutModel, address: address)
-            }
-        }
-    }
 }
 
 #if DEBUG
+/// Strips covering the three shapes the parts section can draw. Their `partIndex`es line up with the preview score's
+/// parts, so each group's staff count is the one the real inspector would see.
+private let previewMixerStrips: [MixerStrip] = [
+    // Part 0 — one strip over one staff: collapses to a single row carrying its own eye.
+    MixerStrip(
+        id: MixerStripID(partIndex: 0, instrumentOrdinal: 0),
+        partName: "Violin", instrumentName: "Violin",
+        defaultVolume: 0.8, defaultProgram: 40, isDrums: false,
+    ),
+    // Part 1 — one strip over TWO staves (a grand staff): a header with two eyes over one unlabelled row.
+    MixerStrip(
+        id: MixerStripID(partIndex: 1, instrumentOrdinal: 0),
+        partName: "Piano", instrumentName: "Piano",
+        defaultVolume: 0.8, defaultProgram: 0, isDrums: false,
+    ),
+    // Part 2 — TWO strips over one staff: a header with one eye over two labelled rows, the drum one offering the
+    // kit catalog rather than the melodic one.
+    MixerStrip(
+        id: MixerStripID(partIndex: 2, instrumentOrdinal: 0),
+        partName: "Percussion", instrumentName: "Drum Kit",
+        defaultVolume: 0.9, defaultProgram: 0, isDrums: true,
+    ),
+    MixerStrip(
+        id: MixerStripID(partIndex: 2, instrumentOrdinal: 1),
+        partName: "Percussion", instrumentName: "Timpani",
+        defaultVolume: 0.7, defaultProgram: 47, isDrums: false,
+    ),
+]
+
+/// Staff counts to match: one, two (a grand staff), one. The instruments here are only what a score would author —
+/// what the mixer draws comes from `previewMixerStrips`.
+private let previewMixerScore = Score(
+    division: 480,
+    parts: [
+        Part(
+            id: "P0", trackName: "Violin", // GM 40 = Violin
+            instrument: Instrument(id: "violin", channels: [InstrumentChannel(program: 40)]),
+            staves: [Staff()],
+        ),
+        Part(
+            id: "P1", trackName: "Piano", // GM 0 = Acoustic Grand Piano
+            instrument: Instrument(id: "piano", channels: [InstrumentChannel(program: 0)]),
+            staves: [Staff(), Staff()],
+        ),
+        Part(
+            id: "P2", trackName: "Percussion",
+            instrument: Instrument(id: "percussion", channels: [InstrumentChannel(program: 0)]),
+            staves: [Staff()],
+        ),
+    ],
+    metaTags: [:],
+)
+
 #Preview {
-    let score = Score(
-        division: 480,
-        parts: [
-            Part(
-                id: "P0", trackName: "Violin", // GM 40 = Violin
-                instrument: Instrument(id: "violin", channels: [InstrumentChannel(program: 40)]),
-                staves: [Staff()],
-            ),
-            Part(
-                id: "P1", trackName: "Piano", // GM 0 = Acoustic Grand Piano
-                instrument: Instrument(id: "piano", channels: [InstrumentChannel(program: 0)]),
-                staves: [Staff(), Staff()],
-            ),
-        ],
-        metaTags: [:],
-    )
+    let score = previewMixerScore
     let vm = ReaderViewModel(
         scoreItem: PreviewFakeRepository.sampleItem,
         repository: PreviewFakeRepository(),
@@ -372,7 +337,7 @@ struct PlaybackInspectorScreen: View {
         .task { await vm.load() }
         .sheet(isPresented: .constant(true)) {
             PlaybackInspectorScreen(
-                mixerModel: vm.mixerModel,
+                mixerModel: .previewModel(strips: previewMixerStrips),
                 layoutModel: vm.layoutModel,
                 tempoModel: vm.tempoModel,
                 masterVolumeModel: vm.masterVolumeModel,

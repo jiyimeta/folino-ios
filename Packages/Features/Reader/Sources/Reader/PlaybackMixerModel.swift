@@ -138,4 +138,15 @@ final class PlaybackMixerModel {
             program: strip(id)?.defaultProgram ?? 0,
         )
     }
+
+    #if DEBUG
+    /// Preview-only strip seeding. A `#Preview` has no prepared engine to publish a strip list, so the only way to
+    /// exercise the mixer's shape — collapsed rows, part headers, several strips under one part — is to hand it one.
+    /// Declared here because `strips` is `private(set)` to this file.
+    static func previewModel(strips: [MixerStrip]) -> PlaybackMixerModel {
+        let model = PlaybackMixerModel()
+        model.strips = strips
+        return model
+    }
+    #endif
 }

@@ -7,6 +7,10 @@ import SwiftUI
 struct StaffVisibilityButton: View {
     let layoutModel: LayoutSettingsModel
     let address: StaffAddress
+    /// 1-based position of the staff within its part, supplied only where SEVERAL of these buttons sit side by side —
+    /// the playback mixer's part header — so VoiceOver can tell them apart. Where a button stands alone next to the
+    /// thing it belongs to, it stays `nil` and keeps the unnumbered label.
+    var staffNumber: Int?
 
     var body: some View {
         let isVisible = !layoutModel.hiddenStaves.contains(address)
@@ -20,7 +24,14 @@ struct StaffVisibilityButton: View {
                 .frame(width: 18, height: 13)
         }
         .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isVisible))
-        .accessibilityLabel(Text("reader.inspector.staffVisibility", bundle: .module))
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: Text {
+        guard let staffNumber else {
+            return Text("reader.inspector.staffVisibility", bundle: .module)
+        }
+        return Text("reader.inspector.staffVisibility.numbered \(staffNumber)", bundle: .module)
     }
 }
 
