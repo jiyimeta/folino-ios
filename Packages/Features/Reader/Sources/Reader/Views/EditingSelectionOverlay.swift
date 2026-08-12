@@ -74,11 +74,8 @@ struct EditingSelectionOverlay: View {
     /// Reads `displaySelection`, not `selection`: the editor addresses the unfiltered score while `document` and
     /// `score` here are the staff-filtered rendition. See `ReaderEditingHost.displayItem(for:)`.
     private var selectionRect: CGRect? {
-        guard case let .single(item) = host.displaySelection,
-              let frame = document.cursorFrame(for: .item(item), in: score),
-              let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
-        else { return nil }
-        return CGRect(x: frame.minX, y: band.top, width: max(frame.width, 1), height: band.height)
+        guard case let .single(item) = host.displaySelection else { return nil }
+        return document.editingCaretRect(for: item, in: score, minimumWidth: 1)
     }
 
     /// The caret, drawn as the same translucent column the transport's playback head uses
@@ -102,27 +99,17 @@ struct EditingSelectionOverlay: View {
         }
     }
 
-    /// The caret's column (from `document.cursorFrame(for:in:)`, `CursorFrame.swift:13` — its Y spans the whole
-    /// system) narrowed to `caretItem`'s own staff band: one `sp` above the staff top to one `sp` below the staff
-    /// bottom (a staff is 4 sp tall, so the total band is 6 sp). Narrowed, unlike the playback head, because editing
-    /// happens in one staff at a time. `nil` when `caretItem` is unset, doesn't resolve to a laid-out frame (e.g. a
-    /// stale ID right after an edit reflows the document), or names a staff/measure this document doesn't contain.
+    /// The caret's column: the engine's cursor frame for the item (`CursorFrame.swift:13` — its Y spans the whole
+    /// system) narrowed to `caretItem`'s own staff band, one `sp` clear above and below the staff's drawn lines.
+    /// Narrowed, unlike the playback head, because editing happens in one staff at a time. `nil` when `caretItem` is
+    /// unset, doesn't resolve to a laid-out frame (e.g. a stale ID right after an edit reflows the document), or
+    /// names a staff/measure this document doesn't contain.
+    ///
+    /// The band comes from the engine rather than being measured here: it depends on the staff's own line count —
+    /// a 1-line percussion staff has no height of its own to hang 6 sp from — and Android's host needs the same
+    /// answer.
     private var caretRect: CGRect? {
-        guard let item = host.displayCaretItem,
-              let frame = document.cursorFrame(for: .item(item), in: score),
-              let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
-        else { return nil }
-        return CGRect(x: frame.minX, y: band.top, width: max(frame.width, 2), height: band.height)
-    }
-
-    /// Vertical band (document coords) spanning `staff`'s five lines, one `sp` clear on each side, within the
-    /// `LayoutSystem` that contains `measureIndex`. `nil` when the staff/measure can't be located.
-    private func staffBand(for staff: StaffAddress, measureIndex: Int) -> (top: CGFloat, height: CGFloat)? {
-        guard let system = document.systems.first(where: { candidate in
-            candidate.measures.contains { $0.measureIndex == measureIndex }
-        }), let flatIndex = system.flatIndex(for: staff) else { return nil }
-        let sp = document.metrics.sp
-        let staffTop = system.origin.y + system.staffOrigins[flatIndex].y
-        return (top: staffTop - sp, height: 6 * sp)
+        guard let item = host.displayCaretItem else { return nil }
+        return document.editingCaretRect(for: item, in: score)
     }
 }
