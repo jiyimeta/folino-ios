@@ -83,10 +83,14 @@ interface EditBridging {
  * Three adaptations here are wire-shape, not policy, so they stay inside "pure delegation":
  * - `revision()` / `appliedIntentCount()` read `.value` off the generated `StateFlow` properties.
  * - `encodeScore()` / `takeRelayFrames()` unwrap the generated `EditBytesWire` data class down to the `ByteArray` it
- *   wraps — `EditBytesWire` is jextract's wire envelope, not a decoded intent, so unwrapping it inspects nothing.
- * - `setArmedDots` / `setActiveVoice` call the generated `armDots` / `setVoice` — jextract already claimed the
- *   iOS-shaped names as property setters for `armedDots` / `activeVoice`, which is the whole reason this adapter
- *   class exists.
+ *   wraps — `EditBytesWire` is wirelet's wire envelope (`emit-wirelet-kotlin`), not a decoded intent, so unwrapping
+ *   it inspects nothing.
+ * - `setArmedDots` / `setActiveVoice` call the generated `armDots` / `setVoice` — those are just the Swift-side
+ *   `EditorBridge` method names, carried across unchanged by wirelet's codegen (`emit-wirelet-observable`). The
+ *   generated observable setters for the `armedDots` / `activeVoice` *projection* properties are a different,
+ *   already-distinct pair (`updateArmedDots` / `updateActiveVoice`), so there was never a name collision to avoid.
+ *   `EditBridging` chose the iOS-shaped op names (`setArmedDots`, `setActiveVoice`) for parity with the Swift
+ *   side, and this adapter is where that rename lives — the whole reason the class exists.
  */
 class GeneratedEditBridging(val vm: EditorBridgeViewModel) : EditBridging {
     override fun engineVersionStamp() = vm.engineVersionStamp()
@@ -125,8 +129,16 @@ class GeneratedEditBridging(val vm: EditorBridgeViewModel) : EditBridging {
     override fun redo() = vm.redo()
 }
 
-/** Why a session could not open. */
-enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRROR_REFUSED }
+/**
+ * Why `open()` did or did not leave the session usable.
+ *
+ * `RESYNC_FAILED` is the open-time counterpart of `resync()`'s own "close rather than leave open" rule (see its
+ * doc comment): the fingerprint check `open()` runs before returning found the two copies already diverged, and
+ * the resync meant to reconcile them could not complete. `open()` reports that explicitly rather than returning
+ * `OPENED` for a session it already had to close — the honest read-only signal SP4 needs to distinguish "editing
+ * is unavailable because the two engines disagree and could not be reconciled" from every other refusal.
+ */
+enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRROR_REFUSED, RESYNC_FAILED }
 
 /**
  * The single path from a user action to the score.
@@ -208,7 +220,7 @@ class EditSessionRelay(
         appliedSinceCheck = 0
         isOpen = true
         if (verifyOrResync()) host.requestRelayout()
-        return OpenResult.OPENED
+        return if (isOpen) OpenResult.OPENED else OpenResult.RESYNC_FAILED
     }
 
     /** Ends both sides. Safe to call twice; `nativeEndEditSession` is a no-op for a handle with no session. */
@@ -347,7 +359,11 @@ class EditSessionRelay(
         val stale = host.scoreHandle()
         host.replaceScoreHandle(fresh)
         natives.releaseScore(stale)
-        natives.beginEditSession(fresh)
+        if (!natives.beginEditSession(fresh)) {
+            Log.e(TAG, "resync failed: the fresh handle would not open a mirror session; closing the session")
+            close()
+            return
+        }
         appliedSinceCheck = 0
     }
 
