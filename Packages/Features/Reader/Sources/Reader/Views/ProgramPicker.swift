@@ -8,16 +8,21 @@ import SwiftUI
 ///
 /// `isDrums` selects which catalog drives the menu: GM Level 1 melodic instruments for pitched parts, or `GMDrumKit`
 /// (the kits actually shipped by the SF2 split resolver) for percussion parts. The override-set / reset /
-/// cache-hit-miss machinery underneath is shared — `PlaybackMixerModel.setPartProgram` already pulls `isDrums` from the
-/// part's `useDrumset` flag.
+/// cache-hit-miss machinery underneath is shared — the caller pulls `isDrums` from the part's `useDrumset` flag.
 struct ProgramPicker: View {
     let mixerModel: PlaybackMixerModel
     let partIndex: Int
     let isDrums: Bool
 
+    /// Interim: the picker still sits in a part header, so it addresses the part's FIRST instrument. Task 10 hands it
+    /// a `MixerStrip` instead, which also carries `isDrums`.
+    private var strip: MixerStripID {
+        MixerStripID(partIndex: partIndex, instrumentOrdinal: 0)
+    }
+
     var body: some View {
-        let program = mixerModel.effectiveProgram(forPartIndex: partIndex)
-        let hasOverride = mixerModel.hasProgramOverride(forPartIndex: partIndex)
+        let program = mixerModel.effectiveProgram(for: strip)
+        let hasOverride = mixerModel.hasProgramOverride(for: strip)
         Menu {
             if hasOverride {
                 resetButton
@@ -58,11 +63,7 @@ struct ProgramPicker: View {
             Section(family.rawValue) {
                 ForEach(family.programs) { instrument in
                     Button {
-                        Task {
-                            await mixerModel.setPartProgram(
-                                Int(instrument.program), forPartIndex: partIndex,
-                            )
-                        }
+                        Task { await mixerModel.setProgram(Int(instrument.program), for: strip) }
                     } label: {
                         Text(instrument.name)
                     }
@@ -76,11 +77,7 @@ struct ProgramPicker: View {
             Section(family.rawValue) {
                 ForEach(family.kits) { kit in
                     Button {
-                        Task {
-                            await mixerModel.setPartProgram(
-                                Int(kit.program), forPartIndex: partIndex,
-                            )
-                        }
+                        Task { await mixerModel.setProgram(Int(kit.program), for: strip) }
                     } label: {
                         Text(kit.name)
                     }
@@ -91,7 +88,7 @@ struct ProgramPicker: View {
 
     private var resetButton: some View {
         Button {
-            Task { await mixerModel.clearPartProgramOverride(forPartIndex: partIndex) }
+            Task { await mixerModel.clearProgramOverride(for: strip) }
         } label: {
             Label {
                 Text("reader.preferences.resetDefault", bundle: .module)

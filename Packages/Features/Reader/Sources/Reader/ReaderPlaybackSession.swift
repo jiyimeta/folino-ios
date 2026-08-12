@@ -128,6 +128,11 @@ final class ReaderPlaybackSession {
     var onPlayingChanged: (Bool) -> Void = { _ in }
     var onCursorChanged: () -> Void = {}
     var onReadyForLoopForward: () async -> Void = {}
+    /// Fired whenever the engine ends up holding a freshly prepared score: after each of the two load paths, and after
+    /// a soundfont hot-swap re-prepares it. The owner refreshes the mixer's strip list here — the strips are a product
+    /// of that preparation, so anchoring to only one of the load paths would leave the mixer empty for the whole
+    /// session whenever the other one ran.
+    var onEnginePrepared: () async -> Void = {}
 
     /// Fired exactly when the engine reports end-of-score (`cursor == nil` while playing). The owner decides whether to
     /// advance to the next playlist score. Not fired on manual pause/stop — only natural end.
@@ -177,6 +182,7 @@ final class ReaderPlaybackSession {
             // PlaybackPreferences carries `abRepeat` but the engine's load path doesn't consume it.
             // Push the active loop range now that the score is loaded.
             await onReadyForLoopForward()
+            await onEnginePrepared()
         } catch {
             // Cancellation or controller error — leave the slot clear so a subsequent toggle starts a
             // fresh attempt.
@@ -221,6 +227,7 @@ final class ReaderPlaybackSession {
             // Push the persisted repeat state now that the engine has the score — covers the case where
             // the user taps play before prepareForPlayback finished.
             await onReadyForLoopForward()
+            await onEnginePrepared()
             preloadTask = nil
         }
         if isPlaying {
@@ -276,7 +283,7 @@ final class ReaderPlaybackSession {
             setPlaying(playing)
             if !playing, pendingSoundfontSwap {
                 pendingSoundfontSwap = false
-                Task { await self.controller?.reloadSoundfont() }
+                Task { [weak self] in await self?.swapSoundfont() }
             }
         }
     }
@@ -488,7 +495,14 @@ final class ReaderPlaybackSession {
         if isPlaying {
             pendingSoundfontSwap = true
         } else {
-            Task { await controller?.reloadSoundfont() }
+            Task { [weak self] in await self?.swapSoundfont() }
         }
+    }
+
+    /// Hot-swap the engine's SF2. The swap re-prepares the loaded score, so the strips the mixer draws are rebuilt
+    /// with it — hence the `onEnginePrepared` fan-out at the end rather than at the two load paths alone.
+    private func swapSoundfont() async {
+        await controller?.reloadSoundfont()
+        await onEnginePrepared()
     }
 }

@@ -96,7 +96,7 @@ struct PlaybackInspectorScreen: View {
 
                         VStack {
                             ForEach(staffAddresses(part, partIndex: partIndex), id: \.self) { address in
-                                staffRow(address: address)
+                                staffRow(address: address, strip: Self.strip(forPartIndex: partIndex))
                             }
                         }
                     }
@@ -281,16 +281,23 @@ struct PlaybackInspectorScreen: View {
         part.staves.indices.map { StaffAddress(partIndex: partIndex, staffIndexInPart: $0) }
     }
 
+    /// Which mixer strip a part's rows drive. Interim: this screen still walks the score's parts and staves, so it
+    /// addresses a part as its FIRST instrument. Task 10 replaces the whole parts section with a walk over
+    /// `mixerModel.strips`, at which point a part with several instruments gets a row per sound.
+    private static func strip(forPartIndex partIndex: Int) -> MixerStripID {
+        MixerStripID(partIndex: partIndex, instrumentOrdinal: 0)
+    }
+
     @ViewBuilder
-    private func staffRow(address: StaffAddress) -> some View {
+    private func staffRow(address: StaffAddress, strip: MixerStripID) -> some View {
         let volumeBinding = Binding<Double>(
-            get: { mixerModel.volume(for: address) },
-            set: { mixerModel.setVolume($0, for: address) },
+            get: { mixerModel.volume(for: strip) },
+            set: { mixerModel.setVolume($0, for: strip) },
         )
-        let isMuted = mixerModel.mutedStaves.contains(address)
-        let isSolo = mixerModel.soloStaves.contains(address)
-        let isDisabled = isMuted || !mixerModel.soloStaves.isEmpty && !isSolo
-        let defaultVolume = mixerModel.defaultVolume(for: address)
+        let isMuted = mixerModel.mutedStrips.contains(strip)
+        let isSolo = mixerModel.soloStrips.contains(strip)
+        let isDisabled = isMuted || !mixerModel.soloStrips.isEmpty && !isSolo
+        let defaultVolume = mixerModel.defaultVolume(for: strip)
         HStack {
             Image(systemName: "speaker.wave.2.fill")
                 .foregroundStyle(isDisabled ? .gray.opacity(0.6) : .accentColor)
@@ -303,12 +310,12 @@ struct PlaybackInspectorScreen: View {
                     if !editing {
                         let final = volumeBinding.wrappedValue
                         ReaderHintCoordinator.shared.markUsed(.mixer)
-                        Task { await mixerModel.commitVolume(final, for: address) }
+                        Task { await mixerModel.commitVolume(final, for: strip) }
                     }
                 },
                 onReset: {
                     ReaderHintCoordinator.shared.markUsed(.mixer)
-                    Task { await mixerModel.commitVolume(defaultVolume, for: address) }
+                    Task { await mixerModel.commitVolume(defaultVolume, for: strip) }
                 },
             )
             .tint(isDisabled ? .gray : Color.accentColor)
@@ -316,7 +323,7 @@ struct PlaybackInspectorScreen: View {
 
             Button(String("S")) {
                 ReaderHintCoordinator.shared.markUsed(.mixer)
-                mixerModel.toggleStaffSolo(address)
+                mixerModel.toggleSolo(strip)
             }
             .fontWeight(.medium)
             .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isSolo))
@@ -324,7 +331,7 @@ struct PlaybackInspectorScreen: View {
 
             Button(String("M")) {
                 ReaderHintCoordinator.shared.markUsed(.mixer)
-                mixerModel.toggleStaffMute(address)
+                mixerModel.toggleMute(strip)
             }
             .fontWeight(.medium)
             .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isMuted))
