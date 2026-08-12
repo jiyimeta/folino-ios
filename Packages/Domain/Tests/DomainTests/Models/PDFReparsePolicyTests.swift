@@ -18,7 +18,7 @@ struct PDFReparsePolicyTests {
         ))
     }
 
-    @Test func `staff-bound settings alone need confirmation`() {
+    @Test func `score-bound settings alone need confirmation`() {
         #expect(PDFReparsePolicy.needsConfirmation(
             isScoreEdited: false,
             hasScoreBoundPreferences: true,

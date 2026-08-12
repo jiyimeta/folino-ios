@@ -1,17 +1,11 @@
 import Domain
 import Observation
-import SheetMusicCore
 
 /// Surface the mixer needs from its parent. Keeping it a protocol lets the mixer be tested with a hand-written fake
 /// host instead of a full `ReaderViewModel`.
 @MainActor
 protocol PlaybackMixerHost: AnyObject {
-    var isPlaying: Bool { get }
     var playbackController: (any PlaybackController)? { get }
-    /// The score the engine is actually playing — the natively loaded score, or a PDF's parsed-for-playback score once
-    /// its background OMR parse succeeds. The mixer itself no longer reads it (strips and their defaults come from the
-    /// engine), but it stays part of the host surface for the rest of the Reader's playback wiring.
-    var playbackScore: Score? { get }
 }
 
 /// Owns the Reader's playback-mixer surface: per-strip mute / solo / volume and GM program overrides. A strip is a

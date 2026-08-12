@@ -1,6 +1,5 @@
 import Domain
 @testable import Reader
-import SheetMusicCore
 import Testing
 
 /// `PlaybackMixerModel` addresses the engine's mixer strips — a (part × distinct instrument) pair — and takes its
@@ -83,13 +82,10 @@ struct PlaybackMixerModelStripTests {
 
 // MARK: - Fakes
 
-/// The parent surface `PlaybackMixerModel` reads, with no view model behind it. `playbackScore` is deliberately `nil`:
-/// nothing in the strip-addressed model consults the score any more, so a mixer works without one.
+/// The parent surface `PlaybackMixerModel` reads, with no view model behind it.
 @MainActor
 private final class FakeMixerHost: PlaybackMixerHost {
-    let isPlaying = false
     let playbackController: (any PlaybackController)?
-    let playbackScore: Score? = nil
 
     init(controller: any PlaybackController) {
         playbackController = controller

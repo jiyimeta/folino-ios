@@ -222,7 +222,11 @@ public final class ReaderPreferencesBridge {
     /// removes it, and is the first thing to do when Android's mixer is next opened.
     @WireletExpose
     public func programOverrides() -> [ProgramOverrideWire] {
-        prefs.stripProgramOverrides.map {
+        // Every entry is projected at `staffIndexInPart: 0` (see the type doc), so two strips of the same part
+        // (`instrumentOrdinal` 0 and 1) would otherwise collide on one wire key and Kotlin's map rebuild would pick
+        // a winner by unspecified `Dictionary` iteration order. Unreachable today — Android's own reducer only ever
+        // writes ordinal 0 — but the filter makes the collision structurally impossible rather than merely unlikely.
+        prefs.stripProgramOverrides.filter { $0.key.instrumentOrdinal == 0 }.map {
             ProgramOverrideWire(
                 partIndex: Int32($0.key.partIndex),
                 staffIndexInPart: 0,
@@ -233,7 +237,8 @@ public final class ReaderPreferencesBridge {
 
     @WireletExpose
     public func volumeOverrides() -> [VolumeOverrideWire] {
-        prefs.stripVolumeOverrides.map {
+        // See the matching comment in `programOverrides()` — same collision, same fix.
+        prefs.stripVolumeOverrides.filter { $0.key.instrumentOrdinal == 0 }.map {
             VolumeOverrideWire(
                 partIndex: Int32($0.key.partIndex),
                 staffIndexInPart: 0,

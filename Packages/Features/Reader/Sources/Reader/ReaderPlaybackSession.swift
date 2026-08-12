@@ -162,7 +162,6 @@ final class ReaderPlaybackSession {
               preloadTask == nil
         else { return }
         let initial = PlaybackPreferences.initial(
-            for: score,
             readerPreferences: prefs,
             scoreItemID: scoreItem.id,
         )
@@ -207,7 +206,6 @@ final class ReaderPlaybackSession {
         else { return }
         if !hasLoadedIntoPlayback {
             let initial = PlaybackPreferences.initial(
-                for: score,
                 readerPreferences: prefs,
                 scoreItemID: scoreItem.id,
             )

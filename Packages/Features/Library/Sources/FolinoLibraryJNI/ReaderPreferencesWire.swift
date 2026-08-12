@@ -40,8 +40,10 @@ public struct ReaderPreferencesStateWire: Equatable, Sendable {
     }
 }
 
-/// A per-staff GM program override projected to Compose. `partIndex`/`staffIndexInPart`
-/// mirror Domain `StaffAddress`; `program` is the 0…127 GM program.
+/// A per-strip GM program override projected to Compose. `partIndex` addresses the strip's part; `staffIndexInPart`
+/// is hardcoded to `0` by both `ReaderPreferencesBridge` getters that build this wire — Android's mixer is still
+/// staff-addressed (see the `PARITY(android)` note there), so this shape does NOT mirror Domain `StaffAddress`'s
+/// second field the way it once did. `program` is the 0…127 GM program.
 @WireFormat
 public struct ProgramOverrideWire: Equatable, Sendable {
     public var partIndex: Int32

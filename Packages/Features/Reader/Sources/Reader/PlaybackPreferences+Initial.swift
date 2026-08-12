@@ -1,13 +1,11 @@
 import Domain
 import Foundation
-import SheetMusicCore
 
 extension PlaybackPreferences {
     /// The user's saved overrides, keyed by strip, for the engine to apply on top of what it already seeded from
     /// the score. There is deliberately no score walk here: the strip list only exists once the engine has
     /// prepared the score, and a resolved per-strip list would re-send what `prepare` had just applied.
     static func initial(
-        for _: Score,
         readerPreferences: ReaderPreferences,
         scoreItemID: Domain.ScoreItemID,
     ) -> PlaybackPreferences {

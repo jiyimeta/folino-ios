@@ -80,24 +80,28 @@ struct PlaybackInspectorScreen: View {
                 Text("reader.inspector.section.general", bundle: .module)
             }
 
-            CollapsibleSection(isExpanded: $partsExpanded) {
-                ForEach(mixerModel.strips.grouped(), id: \.partIndex) { group in
-                    let staves = staffAddresses(partIndex: group.partIndex)
-                    VStack {
-                        if group.drawsHeader(staffCount: staves.count) {
-                            partHeader(group, staves: staves)
-                            ForEach(group.strips) { strip in
-                                stripRow(strip, label: group.rowLabel(for: strip), staves: [])
+            // Before a score is loaded (or once the engine's own prepare has failed) `mixerModel.strips` is empty and
+            // there is nothing to show — the section itself is withheld rather than drawn with a header over nothing.
+            if !mixerModel.strips.isEmpty {
+                CollapsibleSection(isExpanded: $partsExpanded) {
+                    ForEach(mixerModel.strips.grouped(), id: \.partIndex) { group in
+                        let staves = staffAddresses(partIndex: group.partIndex)
+                        VStack {
+                            if group.drawsHeader(staffCount: staves.count) {
+                                partHeader(group, staves: staves)
+                                ForEach(group.strips) { strip in
+                                    stripRow(strip, label: group.rowLabel(for: strip), staves: [])
+                                }
+                            } else {
+                                // One strip, one staff: everything on one row, the shape the mixer has always had.
+                                stripRow(group.strips[0], label: group.partName, staves: staves)
                             }
-                        } else {
-                            // One strip, one staff: everything on one row, the shape the mixer has always had.
-                            stripRow(group.strips[0], label: group.partName, staves: staves)
                         }
+                        .verticalRowInsetCompat(8)
                     }
-                    .verticalRowInsetCompat(8)
+                } header: {
+                    Text("reader.inspector.section.parts", bundle: .module)
                 }
-            } header: {
-                Text("reader.inspector.section.parts", bundle: .module)
             }
         }
         .contentMargins(.top, 4, for: .scrollContent)

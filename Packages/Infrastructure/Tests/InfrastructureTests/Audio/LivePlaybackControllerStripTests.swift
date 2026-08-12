@@ -77,6 +77,33 @@ struct LivePlaybackControllerStripTests {
 
         #expect(strip.defaultProgram == 40)
         #expect(abs(strip.defaultVolume - 100.0 / 127.0) < 0.01)
+        // The gap this closes: the snapshot alone doesn't prove the override reached the ENGINE at the matching
+        // channel — `engine.setVolume(forChannel:)` on the wrong or an unknown channel is a silent no-op, and the
+        // snapshot is read before `applyPreferences` writes anything. Read the engine's own live channel list
+        // (`@testable import Audio` exposes `controller.engine`, `internal` on `LivePlaybackController`) and check
+        // the override actually landed on `.instrument(partIndex: 0, ordinal: 0)`.
+        #expect(controller.engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) }?.volume == 0.1)
+    }
+
+    /// Closes the other half of the gap: not just that a loaded override reaches the matching engine channel, but
+    /// that the live `setStripVolume(strip:volume:)` path — the one every slider drag calls — moves that SAME
+    /// channel afterwards, rather than a channel `MixerStripID` merely happens to look like.
+    @Test func `setStripVolume moves the engine channel a loaded override landed on`() throws {
+        let controller = controller()
+        let strip = MixerStripID(partIndex: 0, instrumentOrdinal: 0)
+        try controller.load(
+            score: score(), displayTitle: nil,
+            preferences: PlaybackPreferences(
+                scoreItemID: ScoreItemID(),
+                perStrip: [StripMixerState(strip: strip, volume: 0.1, gmProgram: nil)],
+                tempoMultiplier: 1, abRepeat: nil,
+            ),
+        )
+        #expect(controller.engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) }?.volume == 0.1)
+
+        controller.setStripVolume(strip: strip, volume: 0.6)
+
+        #expect(controller.engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) }?.volume == 0.6)
     }
 
     @Test func `reports nothing once the engine is released`() throws {

@@ -22,7 +22,7 @@ extension ReaderViewModel {
     /// Read the original PDF again, replacing the notation with a fresh parse. Writes to a scratch file and swaps it
     /// in only on success, so a failed re-read leaves the score the user has exactly as it was.
     ///
-    /// Staff-bound settings are reset afterwards: a better parse can renumber staves, and a clef override or hidden
+    /// Score-bound settings are reset afterwards: a better parse can renumber staves, and a clef override or hidden
     /// staff pointing at a different staff than the user picked is worse than no override at all. Ink anchored to the
     /// notation is kept — it may shift, which the confirmation says, and erasing a user's annotations to spare them an
     /// offset is the worse failure.
@@ -61,7 +61,7 @@ extension ReaderViewModel {
         scoreItem = updated
         try? await repository.saveScoreItem(updated)
 
-        await resetStaffBoundPreferences()
+        await resetScoreBoundPreferences()
         // The geometry belongs to the parse we just replaced; the next switch to the original re-derives it.
         pdfPlayback = .idle
         setDisplaySource(.score)
@@ -83,7 +83,7 @@ extension ReaderViewModel {
         }
     }
 
-    private func resetStaffBoundPreferences() async {
+    private func resetScoreBoundPreferences() async {
         // Adopt the cleared value wholesale rather than copying field by field: `clearingScoreBoundOverrides` already
         // returns a copy of exactly this value, and enumerating the fields here silently drops any the Domain later
         // adds to the reset (`authoredHiddenStaves` was already being missed that way — leaving the old parse's

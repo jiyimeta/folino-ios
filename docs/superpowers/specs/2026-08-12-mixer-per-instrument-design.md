@@ -336,9 +336,12 @@ value]`, and `MixerStripID` encodes with the same two-integer key. The rule is
 therefore the same everywhere: **keep rows whose second integer is `0`, drop the
 rest.**
 
-- `staff_program_overrides` — lossless. The Reader has only ever written program
-  overrides for every staff of a part at once (`setPartProgram` is the sole
-  production caller), so the dropped rows duplicate the kept one.
+- `staff_program_overrides` — lossless for iOS's SQL store: `setPartProgram` is the
+  sole production caller there and fans out to every staff of a part at once, so the
+  dropped rows duplicate the kept one. Not lossless for an Android-written blob: its
+  bridge writes program overrides per touched staff (`setStaffProgram`), so a
+  staff-1-only override can exist there, and the collapse drops that row outright
+  rather than duplicating it.
 - `staff_volume_overrides` — a multi-staff part keeps its `staffIndexInPart == 0`
   value. There is a defensible alternative: the sound followed the *last* staff,
   so keeping that one instead would make the migration audibly invisible. Staff 0
