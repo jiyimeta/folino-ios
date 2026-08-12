@@ -95,7 +95,7 @@ and C depends on it.
 | Path | Responsibility |
 | --- | --- |
 | `Packages/Features/Editor/Sources/FolinoEditorJNI/EditorBridge.swift` | The `@WireletObservable` class: one `EditorSessionCore`, the session lifecycle, the projection Compose reads. |
-| `Packages/Features/Editor/Sources/FolinoEditorJNI/EditorBridge+Ops.swift` | The `@WireletExpose` op vocabulary (pad keys, callout keys, navigation, undo/redo) — each one op then one `sync()`. |
+| ~~`…/FolinoEditorJNI/EditorBridge+Ops.swift`~~ | **Does not exist — see the amendment note below.** swift-wirelet's `ObservableSchemaParser` visits only a class's own member list, never an extension, so `@WireletExpose` methods in a separate extension file are silently absent from the generated Kotlin. The op vocabulary lives in `EditorBridge.swift`'s class body, under its own `// MARK:` sections. |
 | `Packages/Features/Editor/Sources/FolinoEditorJNI/EditorBridgeWires.swift` | The two `@WireFormat` types this bridge declares: `EditBytesWire` (opaque frames, both directions) and nothing else that duplicates ssm. |
 | `Packages/Features/Editor/Sources/FolinoEditorJNI/EditorAndroidSeams.swift` | `@WireletProvided EditorHostFiles` (SHA-256 + Room row refresh) and the `FileFactsProviding` / `ScoreFileWriting` adapters over it. |
 | `Packages/Features/Editor/Sources/FolinoEditorJNI/swift-java.config` | jextract config, copied from `FolinoReaderJNI`'s. |
@@ -1137,8 +1137,10 @@ A tap is resolved by ssm (it owns the layout), applied by Folino (it owns the se
 rect ssm computes. All three legs move opaque `ScoreItemID` bytes, so this task is the codec plumbing at both ends.
 
 **Files:**
-- Modify: `Packages/Features/Editor/Sources/FolinoEditorJNI/EditorBridge.swift`
-- Modify: `Packages/Features/Editor/Sources/FolinoEditorJNI/EditorBridge+Ops.swift`
+- Modify: `Packages/Features/Editor/Sources/FolinoEditorJNI/EditorBridge.swift` (the only file — the ops extension
+  this plan originally called for does not exist; a `@WireletExpose` method outside the class body is invisible to
+  the Kotlin generator, so everything below goes in `EditorBridge.swift`, `selectItem` beside the other ops and the
+  two stored properties beside the rest of the projection)
 
 **Interfaces:**
 - Consumes: `SheetMusicEditWire.ScoreItemIDCodec.encode/decode`, `EditorSessionCore.select(_:)`.
@@ -1148,7 +1150,8 @@ rect ssm computes. All three legs move opaque `ScoreItemID` bytes, so this task 
 
 - [ ] **Step 1: The two mappings**
 
-In `EditorBridge.swift`:
+Task 3 already added `selectedItemFrame` / `caretItemFrame` as stored `EditBytesWire?` properties that `sync()` sets
+to `nil`. Replace the doc comment and the assignment with the real mapping:
 
 ```swift
     /// The selected item and the caret, as the same `ScoreItemID` bytes ssm speaks.
@@ -1164,7 +1167,7 @@ In `EditorBridge.swift`:
     }
 ```
 
-In `EditorBridge+Ops.swift`:
+And beside the other ops, in the same class body:
 
 ```swift
     /// A tap, already resolved to an item by `nativeEditingHitTest` — which is also where the hidden-staff
