@@ -1,4 +1,5 @@
 import Domain
+import EditorCore
 import Foundation
 import Observation
 import SheetMusicCore

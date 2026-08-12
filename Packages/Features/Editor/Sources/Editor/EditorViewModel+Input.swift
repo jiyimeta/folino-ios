@@ -1,4 +1,5 @@
 import Domain
+import EditorCore
 import Foundation
 import SheetMusicCore
 import SheetMusicLayout // DurationInterpretation: splits a written duration back into base + dots

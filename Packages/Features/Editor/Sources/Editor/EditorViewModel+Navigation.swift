@@ -1,4 +1,5 @@
 import Domain
+import EditorCore
 import SheetMusicCore
 
 /// The pad's ← / → keys. Tapping a notehead is the precise way to select; these step the selection along the voice
