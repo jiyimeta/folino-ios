@@ -57,16 +57,16 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         let sortedAuthored = prefs.authoredHiddenStaves.sorted()
         let authoredData = try? JSONEncoder().encode(sortedAuthored)
         authoredHiddenStaves = authoredData.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        let sortedOverrides = prefs.staffProgramOverrides
-            .sorted { $0.key < $1.key }
-            .map { Self.encodeTriple(address: $0.key, program: $0.value) }
+        let sortedOverrides = prefs.stripProgramOverrides
+            .sorted { Self.sortKey($0.key) < Self.sortKey($1.key) }
+            .map { Self.encodeTriple(id: $0.key, program: $0.value) }
         let overridesData = try? JSONEncoder().encode(sortedOverrides)
         staffProgramOverrides = overridesData.flatMap {
             String(data: $0, encoding: .utf8)
         } ?? "[]"
-        let sortedVolumeOverrides = prefs.staffVolumeOverrides
-            .sorted { $0.key < $1.key }
-            .map { Self.encodeVolumeTriple(address: $0.key, volume: $0.value) }
+        let sortedVolumeOverrides = prefs.stripVolumeOverrides
+            .sorted { Self.sortKey($0.key) < Self.sortKey($1.key) }
+            .map { Self.encodeVolumeTriple(id: $0.key, volume: $0.value) }
         let volumeOverridesData = try? JSONEncoder().encode(sortedVolumeOverrides)
         staffVolumeOverrides = volumeOverridesData.flatMap {
             String(data: $0, encoding: .utf8)
@@ -117,8 +117,8 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
             staffSize: staffSize,
             hiddenStaves: Self.decodeHidden(hiddenStaffIds),
             authoredHiddenStaves: Self.decodeHidden(authoredHiddenStaves),
-            staffProgramOverrides: Self.decodeProgramOverrides(staffProgramOverrides),
-            staffVolumeOverrides: Self.decodeVolumeOverrides(staffVolumeOverrides),
+            stripProgramOverrides: Self.decodeProgramOverrides(staffProgramOverrides),
+            stripVolumeOverrides: Self.decodeVolumeOverrides(staffVolumeOverrides),
             staffClefOverrides: Self.decodeClefOverrides(staffClefOverrides),
             tempoMultiplier: tempoMultiplier,
             honorLayoutBreaks: honorLayoutBreaks,
@@ -140,33 +140,33 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
 
     private static func decodeProgramOverrides(
         _ json: String,
-    ) -> [StaffAddress: Int] {
+    ) -> [MixerStripID: Int] {
         let triples = (try? JSONDecoder().decode(
             [[Int]].self, from: Data(json.utf8),
         )) ?? []
-        var result: [StaffAddress: Int] = [:]
+        var result: [MixerStripID: Int] = [:]
         for triple in triples where triple.count == 3 {
-            let address = StaffAddress(
-                partIndex: triple[0], staffIndexInPart: triple[1],
+            let stripID = MixerStripID(
+                partIndex: triple[0], instrumentOrdinal: triple[1],
             )
-            result[address] = triple[2]
+            result[stripID] = triple[2]
         }
         return result
     }
 
     private static func decodeVolumeOverrides(
         _ json: String,
-    ) -> [StaffAddress: Double] {
+    ) -> [MixerStripID: Double] {
         let triples = (try? JSONDecoder().decode(
             [[Double]].self, from: Data(json.utf8),
         )) ?? []
-        var result: [StaffAddress: Double] = [:]
+        var result: [MixerStripID: Double] = [:]
         for triple in triples where triple.count == 3 {
-            let address = StaffAddress(
+            let stripID = MixerStripID(
                 partIndex: Int(triple[0]),
-                staffIndexInPart: Int(triple[1]),
+                instrumentOrdinal: Int(triple[1]),
             )
-            result[address] = triple[2]
+            result[stripID] = triple[2]
         }
         return result
     }
@@ -193,12 +193,18 @@ struct ReaderPreferencesRecord: FetchableRecord, PersistableRecord, Codable {
         return result
     }
 
-    private static func encodeTriple(address: StaffAddress, program: Int) -> [Int] {
-        [address.partIndex, address.staffIndexInPart, program]
+    /// `(partIndex, instrumentOrdinal)` sort key — `MixerStripID` isn't `Comparable` (unlike `StaffAddress`), so the
+    /// two override dictionaries sort by this instead, ahead of JSON encoding.
+    private static func sortKey(_ id: MixerStripID) -> (Int, Int) {
+        (id.partIndex, id.instrumentOrdinal)
     }
 
-    private static func encodeVolumeTriple(address: StaffAddress, volume: Double) -> [Double] {
-        [Double(address.partIndex), Double(address.staffIndexInPart), volume]
+    private static func encodeTriple(id: MixerStripID, program: Int) -> [Int] {
+        [id.partIndex, id.instrumentOrdinal, program]
+    }
+
+    private static func encodeVolumeTriple(id: MixerStripID, volume: Double) -> [Double] {
+        [Double(id.partIndex), Double(id.instrumentOrdinal), volume]
     }
 
     private static func encodeClefTriple(
