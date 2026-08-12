@@ -3,6 +3,10 @@ import Domain
 import Foundation
 import Testing
 
+/// swift-sheet-music 1.11.0 promoted its own copies of these planners to `public` in `SheetMusicCore`, so the bare
+/// name is ambiguous wherever a test file sees both modules. These suites cover Folino's copy.
+private typealias MeasureAccidentals = Editor.MeasureAccidentals
+
 /// Key-signature-aware note input and the accidental glyphs that go with it. D major (`key: 2`) is the working
 /// example throughout: F and C are sharp, so a letter key that lands on either has to write the ALTERED pitch, and
 /// the glyphs have to say only what the reader can't already infer.

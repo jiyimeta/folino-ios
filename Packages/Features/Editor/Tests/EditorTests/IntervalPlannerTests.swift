@@ -2,6 +2,10 @@
 import SheetMusicCore
 import Testing
 
+/// swift-sheet-music 1.11.0 promoted its own copies of these planners to `public` in `SheetMusicCore`, so the bare
+/// name is ambiguous wherever a test file sees both modules. These suites cover Folino's copy.
+private typealias IntervalPlanner = Editor.IntervalPlanner
+
 @Suite("IntervalPlanner")
 struct IntervalPlannerTests {
     // MARK: - diatonicThirdAbove
