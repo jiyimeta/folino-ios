@@ -77,6 +77,13 @@ private class FakeNatives : EditNatives {
     var editUndoAnswer = true
     var editRedoAnswer = true
 
+    /**
+     * What `scoreFingerprint` answers once `loadScore` has replaced the mirror's score — i.e. after a resync.
+     * A real reload of the authoritative bytes converges on the authoritative digest, so the default matches
+     * [FakeBridge.fingerprint]; a test that wants a resync which completes and still disagrees moves it.
+     */
+    var fingerprintAfterLoad = 100L
+
     var begins = 0
     var ends = 0
     var loads = 0
@@ -122,6 +129,7 @@ private class FakeNatives : EditNatives {
 
     override fun loadScore(bytes: ByteArray): Long {
         loads += 1
+        fingerprint = fingerprintAfterLoad
         return loadAnswer
     }
 
@@ -340,6 +348,27 @@ class EditSessionRelayTest {
         val appliedBefore = f.natives.applied.size
         f.relay.inputPitch("C") // the session is closed; a subsequent op relays nothing.
         assertEquals(appliedBefore, f.natives.applied.size)
+    }
+
+    /**
+     * The encode/load/reopen can all answer success and still leave the two copies different — a lossy encoder is
+     * exactly what put this branch there once. A resync that does not converge is a failed resync.
+     */
+    @Test fun aResyncThatCompletesButDoesNotConvergeClosesTheSession() {
+        val f = Fixture(
+            natives = FakeNatives().apply {
+                fingerprint = 999L
+                fingerprintAfterLoad = 555L // the reload worked, and the copies still disagree.
+            },
+        )
+
+        val result = f.open()
+
+        assertEquals(OpenResult.RESYNC_FAILED, result)
+        assertEquals(1, f.relay.resyncCount)
+        assertFalse(f.bridge.opened)
+        // One resync, not a recursive cascade: the convergence check must not route back through verifyOrResync().
+        assertEquals(1, f.natives.loads)
     }
 
     // MARK: - close()

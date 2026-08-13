@@ -81,16 +81,28 @@ interface EditBridging {
  * Pure delegation over the generated view model. No policy, no branching — anything else belongs in the relay.
  *
  * Three adaptations here are wire-shape, not policy, so they stay inside "pure delegation":
- * - `revision()` / `appliedIntentCount()` read `.value` off the generated `StateFlow` properties.
+ * - `revision()` / `appliedIntentCount()` call the bridge's synchronous `revisionNow()` / `appliedIntentCountNow()`
+ *   ops rather than reading `.value` off the generated `StateFlow` properties of the same name. That is not a
+ *   preference: the generated view model republishes every projection property with
+ *   `viewModelScope.launch(Dispatchers.Main) { … }`, and `Dispatchers.Main` always posts to the Looper — it is not
+ *   `Dispatchers.Main.immediate`. On the relay's own thread (Compose's main thread) the posted update therefore
+ *   cannot run until the relay's op has already returned, so a StateFlow read inside `replay()` yields the value
+ *   from *before* the op every time. That is exactly how `undo()` / `redo()` came to be diagnosed as refused and
+ *   never relayed to the mirror at all. Every other read on this class was already a direct JNI call; these two
+ *   now are as well, and nothing here may go back to the flows.
  * - `encodeScore()` / `takeRelayFrames()` unwrap the generated `EditBytesWire` data class down to the `ByteArray` it
  *   wraps — `EditBytesWire` is wirelet's wire envelope (`emit-wirelet-kotlin`), not a decoded intent, so unwrapping
  *   it inspects nothing.
  * - `setArmedDots` / `setActiveVoice` call the generated `armDots` / `setVoice` — those are just the Swift-side
  *   `EditorBridge` method names, carried across unchanged by wirelet's codegen (`emit-wirelet-observable`). The
  *   generated observable setters for the `armedDots` / `activeVoice` *projection* properties are a different,
- *   already-distinct pair (`updateArmedDots` / `updateActiveVoice`), so there was never a name collision to avoid.
- *   `EditBridging` chose the iOS-shaped op names (`setArmedDots`, `setActiveVoice`) for parity with the Swift
- *   side, and this adapter is where that rename lives — the whole reason the class exists.
+ *   already-distinct pair (`updateArmedDots` / `updateActiveVoice`), so there is no name collision **in the
+ *   generated Kotlin**. The Swift-side spelling is still forced: jextract derives a native symbol
+ *   `Java_..._setArmedDots` from the projection property itself, so an `EditorBridge` op of that name fails the
+ *   arm64 link (see `EditorBridge.armDots`'s doc). Do not "restore parity" by renaming the Swift ops — the clash is
+ *   invisible from here and only surfaces when cross-compiling. `EditBridging` chose the iOS-shaped op names
+ *   (`setArmedDots`, `setActiveVoice`) for parity with the Swift side, and this adapter is where that rename lives
+ *   — the whole reason the class exists.
  */
 class GeneratedEditBridging(val vm: EditorBridgeViewModel) : EditBridging {
     override fun engineVersionStamp() = vm.engineVersionStamp()
@@ -99,8 +111,8 @@ class GeneratedEditBridging(val vm: EditorBridgeViewModel) : EditBridging {
     override fun scoreFingerprint() = vm.scoreFingerprint()
     override fun encodeScore(): ByteArray = vm.encodeScore().bytes
     override fun takeRelayFrames(): List<ByteArray> = vm.takeRelayFrames().map { it.bytes }
-    override fun revision() = vm.revision.value
-    override fun appliedIntentCount() = vm.appliedIntentCount.value
+    override fun revision() = vm.revisionNow()
+    override fun appliedIntentCount() = vm.appliedIntentCountNow()
 
     override fun selectItem(bytes: ByteArray) = vm.selectItem(EditBytesWire(bytes))
     override fun inputPitch(letter: String) = vm.inputPitch(letter)
@@ -310,8 +322,17 @@ class EditSessionRelay(
         val before = bridge.appliedIntentCount()
         val revisionBefore = bridge.revision()
         local()
-        // A refused undo/redo leaves the local revision where it was, and must not touch the mirror.
+        // A refused undo/redo leaves the local revision where it was, and must not touch the mirror. Both reads are
+        // synchronous ops on the bridge (see `GeneratedEditBridging`) — a projection read here would answer with the
+        // pre-op value on this thread and make every undo look refused.
         if (bridge.revision() == revisionBefore) return
+        // Now a real cross-image invariant rather than a comparison of two equally stale numbers: the counter is
+        // read on both sides of `local()` and reflects what the core actually did. It pins the assumption the whole
+        // undo design rests on — that an undo mutates the score WITHOUT emitting an intent (`EditorBridge`'s
+        // "Undo / redo" note). If one ever did, the frame would still be sitting in the relay queue, and the next
+        // resync would re-encode a score that already contains that edit and then apply it a second time. That is a
+        // broken contract in `EditorSessionCore`, shared with iOS and covered by its tests — not a runtime
+        // condition a user can reach — so it stays a `check`.
         check(bridge.appliedIntentCount() == before) { "undo/redo must not count as an applied intent" }
         if (!mirror(host.scoreHandle())) {
             resync()
@@ -346,6 +367,14 @@ class EditSessionRelay(
      * A resync that cannot complete closes the session rather than leaving it open: with the two copies known to
      * disagree and no way to reconcile them, every further op would re-trigger a failing resync, and the taps in
      * between would edit whatever the stale layout resolved to. SP4 surfaces that as dropping back to read-only.
+     *
+     * **"Cannot complete" includes "completed and still disagrees."** Encode → load → reopen can each answer
+     * success and still leave two different scores, because the round trip is only as faithful as the encoder: a
+     * gap in ssm's MSCX writer put this very branch in exactly that state for a full device-test cycle. Without the
+     * closing comparison below, that state is permanent and nearly silent — every eighth edit resyncs, each resync
+     * throws away the mirror's undo stack and swaps the host's handle, and the only trace is a log line. So the
+     * fingerprints are compared once more before returning, directly rather than through `verifyOrResync()`, which
+     * would call back into here and recurse.
      */
     private fun resync() {
         resyncCount += 1
@@ -368,6 +397,11 @@ class EditSessionRelay(
         natives.releaseScore(stale)
         if (!natives.beginEditSession(fresh)) {
             Log.e(TAG, "resync failed: the fresh handle would not open a mirror session; closing the session")
+            close()
+            return
+        }
+        if (bridge.scoreFingerprint() != natives.scoreFingerprint(fresh)) {
+            Log.e(TAG, "resync failed: the two copies still disagree after reloading; closing the session")
             close()
             return
         }

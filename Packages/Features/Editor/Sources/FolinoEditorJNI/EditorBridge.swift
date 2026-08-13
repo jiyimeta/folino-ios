@@ -125,6 +125,37 @@ public final class EditorBridge {
         core?.score?.stableFingerprint ?? 0
     }
 
+    // MARK: Synchronous reads of two projection counters
+    //
+    // `revision` and `appliedIntentCount` are also published as projection properties, and the relay needs both
+    // *the instant an op returns* — it decides whether an undo actually moved the score, and therefore whether to
+    // drive the mirror's stack, by comparing them across the call. The projection cannot answer that question:
+    // `@WireletObservable`'s generated view model republishes every property with
+    // `viewModelScope.launch(Dispatchers.Main) { … }`, and `Dispatchers.Main` is not the immediate dispatcher, so on
+    // Android's main thread — the thread the relay runs on — the new value is not visible until after the relay's
+    // whole op has returned. Reading the StateFlow there deterministically yields the PRE-op value, which read as
+    // "the undo was refused" and silently skipped the mirror entirely.
+    //
+    // So the relay reads these two through their own synchronous ops instead, exactly the way `scoreFingerprint()`
+    // already answers straight out of the core. The projection properties stay — Compose collects them — but they
+    // are for display, not for control flow.
+    //
+    // The `Now` suffix is forced, for the reason `armDots` is: jextract derives a native accessor for each
+    // projection property from its name, so an op literally named `revision` would be a duplicate JNI symbol rather
+    // than a Swift overload.
+
+    /// The core's `revision`, read synchronously. `0` outside a session, matching what `sync()` publishes.
+    @WireletExpose
+    public func revisionNow() -> Int32 {
+        Int32(core?.revision ?? 0)
+    }
+
+    /// The core's `appliedIntentCount`, read synchronously. `0` outside a session, matching what `sync()` publishes.
+    @WireletExpose
+    public func appliedIntentCountNow() -> Int32 {
+        Int32(core?.appliedIntentCount ?? 0)
+    }
+
     // MARK: - Lifecycle
 
     /// Opens a session over the score at `scorePath`, parsed in THIS image.
@@ -243,6 +274,11 @@ public final class EditorBridge {
     /// native setter for every `internal(set)` projection property from its name — `armedDots` already produces
     /// `Java_..._setArmedDots`, and an op of that exact name is a duplicate JNI symbol, not a Swift overload, so it
     /// fails the link. The two platforms stay the same shape; only this one symbol's spelling is forced apart.
+    ///
+    /// The constraint is jextract's *native symbol* table, one layer below Kotlin: wirelet's observable codegen
+    /// names the property's Kotlin setter `updateArmedDots`, so `GeneratedEditBridging` sees no clash at all and
+    /// says so in its own doc. Renaming this back to `setArmedDots` for parity therefore looks safe from the Kotlin
+    /// side and breaks the arm64 link — a failure that appears only when cross-compiling. Do not.
     @WireletExpose
     public func armDots(_ dots: Int32) {
         core?.setArmedDots(Int(dots))
@@ -365,8 +401,9 @@ public final class EditorBridge {
     }
 
     /// Named `setVoice` rather than `setActiveVoice`: the `activeVoice` projection property already produces a
-    /// jextract-generated native setter named `Java_..._setActiveVoice` (see `armDots`'s note above for why), which
-    /// a same-named op would collide with at link time.
+    /// jextract-generated native setter named `Java_..._setActiveVoice` (see `armDots`'s note above for why,
+    /// including why the generated Kotlin gives no hint of the clash), which a same-named op would collide with at
+    /// link time.
     @WireletExpose
     public func setVoice(_ voice: Int32) {
         core?.activeVoice = Int(voice)

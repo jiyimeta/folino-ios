@@ -34,6 +34,17 @@ import java.io.File
  * / `nativeReleaseScore()` at the bottom of the method, leaking a still-open mirror session into whichever test runs
  * next. Each test also uses its own `scoreId` / staged file name so no two sessions — even across different test
  * methods — ever share either.
+ *
+ * ## Everything that touches the relay runs on the main thread
+ *
+ * [onMain] is not ceremony. The relay's contract is "one thread, and on Android that thread is Compose's main
+ * thread" (see its doc), and the main thread is not interchangeable with the instrumentation thread here: the
+ * generated view model publishes its projection with `viewModelScope.launch(Dispatchers.Main)`, which *posts*.
+ * Driving the relay off-thread lets those posts run concurrently with the op, which is a race — and a race this
+ * test used to win, hiding a bug (`undo`/`redo` never reaching the mirror) that was deterministic in production.
+ * So every relay call, every bridge read and every teardown goes through [onMain], and only the assertions run out
+ * here. `waitForIdleSync()` stays where projection state is read back afterwards: those updates are still posted,
+ * and it must be called from *this* thread, never from inside [onMain].
  */
 class EditSessionParityTest {
     private class TestHost(var handle: Long) : EditSessionHost {
@@ -52,9 +63,28 @@ class EditSessionParityTest {
     private val relaysToClose = mutableListOf<EditSessionRelay>()
     private val hostsToRelease = mutableListOf<TestHost>()
 
+    /**
+     * Runs [body] on the app's main thread and rethrows anything it threw on this one.
+     *
+     * The rethrow is the point of the wrapper: an exception escaping `runOnMainSync`'s block is delivered to the
+     * main thread's uncaught handler and takes the whole app process down, which surfaces as an unrelated
+     * "instrumentation run failed" rather than as the assertion that actually failed.
+     */
+    private fun onMain(body: () -> Unit) {
+        var failure: Throwable? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            try {
+                body()
+            } catch (throwable: Throwable) {
+                failure = throwable
+            }
+        }
+        failure?.let { throw it }
+    }
+
     @After
     fun tearDown() {
-        relaysToClose.forEach { it.close() }
+        onMain { relaysToClose.forEach { it.close() } }
         relaysToClose.clear()
         hostsToRelease.distinctBy { System.identityHashCode(it) }.forEach { host ->
             if (host.handle != 0L) SheetMusicJNI.nativeReleaseScore(host.handle)
@@ -65,12 +95,20 @@ class EditSessionParityTest {
     private fun openRig(file: File, scoresDir: File, scoreId: String): Rig {
         val handle = SheetMusicJNI.nativeLoadScore(file.readBytes())
         assertNotEquals(0L, handle)
-        val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+        lateinit var bridge: GeneratedEditBridging
         val host = TestHost(handle)
-        val relay = EditSessionRelay(bridge, host, RealEditNatives)
-        relaysToClose.add(relay)
-        hostsToRelease.add(host)
-        assertEquals(OpenResult.OPENED, relay.open(file.path, scoresDir.path, scoreId))
+        lateinit var relay: EditSessionRelay
+        var opened: OpenResult? = null
+        onMain {
+            // The view model is created on the main thread too: its constructor registers the observation callbacks
+            // whose notifications are dispatched there.
+            bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+            relay = EditSessionRelay(bridge, host, RealEditNatives)
+            relaysToClose.add(relay)
+            hostsToRelease.add(host)
+            opened = relay.open(file.path, scoresDir.path, scoreId)
+        }
+        assertEquals(OpenResult.OPENED, opened)
         return Rig(bridge, host, relay)
     }
 
@@ -89,7 +127,7 @@ class EditSessionParityTest {
         assertAgreed(rig, "after open")
 
         // Stand in for SP4's tap: select the first rest of the first bar by its ID.
-        relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID())))
+        onMain { relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID()))) }
         // The selection is carried to the mirror through the generated observable projection rather than the
         // relay queue, and its native→Kotlin change notification is dispatched onto the main coroutine dispatcher
         // rather than applied inline, so wait for that dispatch to drain before reading it back.
@@ -97,30 +135,52 @@ class EditSessionParityTest {
         assertNotNull("the first selection must have taken", rig.bridge.vm.selectedItemFrame.value)
         assertAgreed(rig, "after the first selection")
 
-        relay.armDuration(QUARTER)
-        relay.inputPitch("C")
+        onMain {
+            relay.armDuration(QUARTER)
+            relay.inputPitch("C")
+        }
         assertAgreed(rig, "after writing C")
 
-        relay.inputPitch("E")
-        relay.inputPitch("G")
+        onMain {
+            relay.inputPitch("E")
+            relay.inputPitch("G")
+        }
         assertAgreed(rig, "after writing E and G")
 
-        relay.shiftPitch(1)
+        onMain { relay.shiftPitch(1) }
         assertAgreed(rig, "after a semitone up")
 
-        relay.armDuration(EIGHTH)
-        relay.toggleArmedDot()
-        relay.inputPitch("A")
+        onMain {
+            relay.armDuration(EIGHTH)
+            relay.toggleArmedDot()
+            relay.inputPitch("A")
+        }
         assertAgreed(rig, "after a dotted eighth")
 
-        relay.writeRest()
+        onMain { relay.writeRest() }
         assertAgreed(rig, "after a rest")
 
-        relay.deleteSelection()
+        onMain { relay.deleteSelection() }
         assertAgreed(rig, "after a delete")
 
-        repeat(4) { relay.undo(); assertAgreed(rig, "after undo $it") }
-        repeat(4) { relay.redo(); assertAgreed(rig, "after redo $it") }
+        // The undo/redo pass is what the main thread buys this test: driven from the instrumentation thread, the
+        // relay's before/after reads raced the projection's posted updates and could see the op as refused.
+        //
+        // The two fingerprints bracketing the pass are not decoration. `assertAgreed` alone cannot tell a working
+        // undo from an undo that did nothing at all on either side — both copies simply stay equal. That is the
+        // exact shape of the bug this test is now positioned to catch, so the pass has to prove the score moved and
+        // came back.
+        val beforeUndo = mirrorFingerprint(rig)
+        repeat(4) {
+            onMain { relay.undo() }
+            assertAgreed(rig, "after undo $it")
+        }
+        assertNotEquals("four undos must have moved the score", beforeUndo, mirrorFingerprint(rig))
+        repeat(4) {
+            onMain { relay.redo() }
+            assertAgreed(rig, "after redo $it")
+        }
+        assertEquals("four redos must land back where the undos started", beforeUndo, mirrorFingerprint(rig))
 
         assertEquals("no resync should have been needed", 0, relay.resyncCount)
         assertTrue("the host should have been asked to redraw", rig.host.relayouts > 0)
@@ -134,22 +194,30 @@ class EditSessionParityTest {
     @Test fun reopeningAfterAnUnsavedEditResyncsInsteadOfDiverging() {
         val (file, scoresDir) = stagedFixture("parity-reopen")
         val first = openRig(file, scoresDir, "parity-reopen")
-        first.relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID())))
-        first.relay.armDuration(QUARTER)
-        first.relay.inputPitch("C")
+        onMain {
+            first.relay.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID())))
+            first.relay.armDuration(QUARTER)
+            first.relay.inputPitch("C")
+        }
         assertAgreed(first, "after the first session's edit")
         val editedFingerprint = SheetMusicJNI.nativeScoreFingerprint(first.host.handle)
-        first.relay.close()
+        onMain { first.relay.close() }
 
         // Same handle, same (untouched) file: exactly what the Reader does when edit mode is re-entered.
-        val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
-        val relay = EditSessionRelay(bridge, first.host, RealEditNatives)
-        relaysToClose.add(relay)
-        assertEquals(OpenResult.OPENED, relay.open(file.path, scoresDir.path, "parity-reopen"))
-        assertEquals("open must have resynced", 1, relay.resyncCount)
+        var opened: OpenResult? = null
+        var localFingerprint = 0L
+        onMain {
+            val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+            val relay = EditSessionRelay(bridge, first.host, RealEditNatives)
+            relaysToClose.add(relay)
+            opened = relay.open(file.path, scoresDir.path, "parity-reopen")
+            assertEquals("open must have resynced", 1, relay.resyncCount)
+            localFingerprint = bridge.scoreFingerprint()
+        }
+        assertEquals(OpenResult.OPENED, opened)
         assertEquals(
             "the two copies must agree after the resync",
-            bridge.scoreFingerprint(),
+            localFingerprint,
             SheetMusicJNI.nativeScoreFingerprint(first.host.handle),
         )
         assertNotEquals(
@@ -159,7 +227,13 @@ class EditSessionParityTest {
         )
     }
 
-    /** Measures one fingerprint walk, so `FINGERPRINT_SAMPLE_EVERY` is chosen against a number, not a guess. */
+    /**
+     * Measures one fingerprint walk, so `FINGERPRINT_SAMPLE_EVERY` is chosen against a number, not a guess.
+     *
+     * The only test here that deliberately stays off the main thread: it drives no relay and no bridge — just fifty
+     * `nativeScoreFingerprint` calls against a handle of its own — so the threading rule has nothing to say about
+     * it, and pinning the main thread for fifty ~2ms walks would be inviting the watchdog for no gain.
+     */
     @Test fun fingerprintWalkIsCheapEnoughToSample() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val bytes = context.assets.open("parity.mscz").use { it.readBytes() }
@@ -172,8 +246,21 @@ class EditSessionParityTest {
         assertTrue("fingerprint walk unexpectedly slow: ${perWalkMicros}us", perWalkMicros < 2_000)
     }
 
+    /** The mirror's digest, read on the relay's own thread like every other bridge/handle read here. */
+    private fun mirrorFingerprint(rig: Rig): Long {
+        var mirror = 0L
+        onMain { mirror = SheetMusicJNI.nativeScoreFingerprint(rig.host.handle) }
+        return mirror
+    }
+
     private fun assertAgreed(rig: Rig, step: String) {
-        assertEquals(step, rig.bridge.scoreFingerprint(), SheetMusicJNI.nativeScoreFingerprint(rig.host.handle))
+        var local = 0L
+        var mirror = 0L
+        onMain {
+            local = rig.bridge.scoreFingerprint()
+            mirror = SheetMusicJNI.nativeScoreFingerprint(rig.host.handle)
+        }
+        assertEquals(step, local, mirror)
     }
 
     private companion object {
