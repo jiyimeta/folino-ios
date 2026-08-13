@@ -1,5 +1,1 @@
-- Added a setting to number every measure
-- Added playback support for scores where a part changes instrument
-- Added display support for staves with other than five lines
-- Fixed the feedback mail screen closing right after it opened
-- Fixed minor issues in score display, playback and editing
+- Minor improvements and bug fixes
