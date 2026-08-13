@@ -168,6 +168,9 @@ enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRRO
  * no-op: it means no session, corrupted bytes, a released handle, or two images that have already diverged. All four
  * call for a resync (SP0's finding, and the doc comment on `nativeApplyEditIntent` itself).
  */
+// PARITY(android): note editing — the session and the relay are here and proven on a physical device, but nothing
+//   drives them yet: the contextual app bar, pad, callout and caret overlay are SP4; the save path, autosave, the
+//   onPause flush and the sibling-.mscz policy are SP5. Delete this marker when SP5 lands.
 class EditSessionRelay(
     private val bridge: EditBridging,
     private val host: EditSessionHost,
