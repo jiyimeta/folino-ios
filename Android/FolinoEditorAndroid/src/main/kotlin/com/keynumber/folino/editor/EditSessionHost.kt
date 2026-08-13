@@ -15,6 +15,14 @@ interface EditSessionHost {
      * Swaps in a fresh handle after a resync. Everything downstream of the handle — MIDI render, timeline, cursor,
      * parts/staves — keys off it, so this is the one moment in a session when all of that re-fires. It is also why
      * a resync is the recovery path and not the mechanism.
+     *
+     * **The implementation must drop every use of the PREVIOUS handle synchronously, before returning.** The relay
+     * calls `nativeReleaseScore(stale)` on the line after this one: the old handle is a freed native score from the
+     * moment this method returns, and anything still holding it — a render pass queued onto another thread, a
+     * coroutine that will read it on the next frame, a cursor job posted to the main looper — is a use-after-free,
+     * not a stale read. Tearing down asynchronously and "letting it settle" is therefore not an option here. If the
+     * teardown genuinely cannot be synchronous, the implementation must take its own reference to the handle's
+     * lifetime rather than leave the window open.
      */
     fun replaceScoreHandle(handle: Long)
 
