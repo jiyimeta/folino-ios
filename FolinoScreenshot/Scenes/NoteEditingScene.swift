@@ -117,7 +117,6 @@ struct NoteEditingScene: View {
                         metadataReader: FixtureMetadataReader(),
                         annotationCoordinator: .fixture,
                         scoresDirectory: URL(filePath: NSTemporaryDirectory()),
-                        hidesBackButton: true,
                         editingHost: host,
                         editingChrome: chrome,
                     )

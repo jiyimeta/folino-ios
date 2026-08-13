@@ -4,8 +4,12 @@ import SheetMusicCore
 import SwiftUI
 import UtilityUI
 
-/// The Reader's navigation-bar toolbar: the leading affordance (back / sidebar / PDF badge) and the trailing score,
-/// editing, annotation and inspector actions.
+/// The Reader's navigation-bar toolbar: the leading PDF badge and the trailing score, editing, annotation and
+/// inspector actions.
+///
+/// Nothing here draws the leading affordance itself. The system owns that edge in both layouts — the back button in
+/// the compact `NavigationStack`, the split view's own sidebar toggle in the iPad detail column — and a hand-drawn
+/// copy of the latter is what put two identical sidebar buttons in the iPad Reader's top-left corner.
 ///
 /// This used to be a hand-rolled floating overlay (`ReaderTopOverlay`) drawn inside `ReaderRootScreen`'s `ZStack`,
 /// because on iOS 26.3.x devices the navigation bar's chrome could not be suppressed and would have covered the score.
@@ -15,15 +19,6 @@ import UtilityUI
 /// maximising the rendered staff area, which is core to the app's value proposition.
 struct ReaderToolbar: ToolbarContent {
     @Bindable var viewModel: ReaderViewModel
-
-    /// The leading affordance's action, or `nil` to leave the leading edge to the system back button. Non-nil only
-    /// where the system has nothing to offer: the iPad split-view detail, whose leading control reveals the library
-    /// column rather than popping a stack.
-    let leadingAction: (() -> Void)?
-
-    /// When `true`, `leadingAction` renders as a sidebar-reveal affordance (`sidebar.leading` icon, "show sidebar"
-    /// label) rather than a back chevron. Has no effect when `leadingAction` is `nil`.
-    var leadingIsSidebarToggle = false
 
     /// How much of the trailing row has to fold into a single overflow menu at the current width. Decided by
     /// `ReaderRootScreen` from the measured window width and `Metrics` below — a toolbar can't measure itself the way
@@ -50,7 +45,7 @@ struct ReaderToolbar: ToolbarContent {
 
     @ToolbarContentBuilder
     var body: some ToolbarContent {
-        leadingItems
+        pdfBadgeItem
         if viewModel.displaySource == .originalPDF {
             // Showing the original pages means the PDF chrome, even for an item folino read into notation: the
             // score-side actions (note input, the engraving inspector) have nothing to act on over a fixed-layout page.
@@ -66,27 +61,6 @@ struct ReaderToolbar: ToolbarContent {
             annotationItem
             inspectorItems
         }
-    }
-
-    // MARK: - Leading
-
-    @ToolbarContentBuilder
-    private var leadingItems: some ToolbarContent {
-        if let leadingAction {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: leadingAction) {
-                    Label {
-                        leadingIsSidebarToggle
-                            ? Text("reader.toolbar.showSidebar", bundle: .module)
-                            : Text("reader.toolbar.back", bundle: .module)
-                    } icon: {
-                        Image(systemName: leadingIsSidebarToggle ? "sidebar.leading" : "chevron.backward")
-                    }
-                    .labelStyle(.iconOnly)
-                }
-            }
-        }
-        pdfBadgeItem
     }
 
     // MARK: - Score actions
@@ -347,7 +321,6 @@ private struct ReaderToolbarPreviewHost: View {
                 .toolbar {
                     ReaderToolbar(
                         viewModel: viewModel,
-                        leadingAction: nil,
                         collapse: collapse,
                         onStartEditing: {},
                     )
@@ -367,21 +340,5 @@ private struct ReaderToolbarPreviewHost: View {
 
 #Preview("Narrower · note editing folded too") {
     ReaderToolbarPreviewHost(collapse: .noteEditing)
-}
-
-#Preview("iPad detail · sidebar toggle") {
-    NavigationStack {
-        Color(white: 0.97)
-            .ignoresSafeArea()
-            .navigationTitle("")
-            .floatingToolbarBackgroundCompat()
-            .toolbar {
-                ReaderToolbar(
-                    viewModel: previewViewModel(),
-                    leadingAction: {},
-                    leadingIsSidebarToggle: true,
-                )
-            }
-    }
 }
 #endif

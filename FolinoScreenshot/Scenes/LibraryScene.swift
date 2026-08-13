@@ -107,7 +107,6 @@ struct LibraryScene: View {
                 metadataReader: FixtureMetadataReader(),
                 annotationCoordinator: .fixture,
                 scoresDirectory: URL(filePath: NSTemporaryDirectory()),
-                hidesBackButton: true,
             )
         }
         .navigationSplitViewStyle(.prominentDetail)

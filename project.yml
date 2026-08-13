@@ -10,8 +10,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: 6.3
-    MARKETING_VERSION: 1.11.0
-    CURRENT_PROJECT_VERSION: "2112"
+    MARKETING_VERSION: 1.12.0
+    CURRENT_PROJECT_VERSION: "2169"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
@@ -47,7 +47,7 @@ packages:
     from: 7.0.0
   swift-sheet-music:
     url: https://github.com/jiyimeta/swift-sheet-music.git
-    exactVersion: 1.13.0
+    exactVersion: 1.13.1
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
     exactVersion: 0.63.2
@@ -277,6 +277,13 @@ schemes:
       targets:
         Folino: all
         FolinoTests: [test]
+        # Built by the test action only, and never run from this scheme: FolinoScreenshot compiles the same App
+        # sources against the Feature packages, so it is the one place a removed Feature API shows up as a compile
+        # error. Nothing else builds it — the app target doesn't depend on it and no package test links it — so
+        # removing a Feature API used to leave every suite green while `Scripts/capture-screenshots.sh` failed to
+        # compile, which surfaces only when App Store deliverables are needed, i.e. at the release itself. Kept out
+        # of run/archive so the daily build loop and `ios-release` are unchanged.
+        FolinoScreenshot: [test]
     run:
       config: Debug
     test:
