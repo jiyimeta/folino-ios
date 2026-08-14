@@ -40,33 +40,33 @@ public struct ReaderPreferencesStateWire: Equatable, Sendable {
     }
 }
 
-/// A per-strip GM program override projected to Compose. `partIndex` addresses the strip's part; `staffIndexInPart`
-/// is hardcoded to `0` by both `ReaderPreferencesBridge` getters that build this wire — Android's mixer is still
-/// staff-addressed (see the `PARITY(android)` note there), so this shape does NOT mirror Domain `StaffAddress`'s
-/// second field the way it once did. `program` is the 0…127 GM program.
+/// A per-strip GM program override projected to Compose. The two integers are Domain `MixerStripID` —
+/// `partIndex` plus `instrumentOrdinal`, the part's deduped instruments in order of first appearance — and NOT a
+/// `StaffAddress`: a grand staff is two staves and one strip, an instrument-change part one staff and several.
+/// `program` is the 0…127 GM program, or the bank-128 kit number on a drum strip.
 @WireFormat
 public struct ProgramOverrideWire: Equatable, Sendable {
     public var partIndex: Int32
-    public var staffIndexInPart: Int32
+    public var instrumentOrdinal: Int32
     public var program: Int32
 
-    public init(partIndex: Int32, staffIndexInPart: Int32, program: Int32) {
+    public init(partIndex: Int32, instrumentOrdinal: Int32, program: Int32) {
         self.partIndex = partIndex
-        self.staffIndexInPart = staffIndexInPart
+        self.instrumentOrdinal = instrumentOrdinal
         self.program = program
     }
 }
 
-/// A per-staff volume override (0…1) projected to Compose.
+/// A per-strip volume override (0…1) projected to Compose, addressed like `ProgramOverrideWire`.
 @WireFormat
 public struct VolumeOverrideWire: Equatable, Sendable {
     public var partIndex: Int32
-    public var staffIndexInPart: Int32
+    public var instrumentOrdinal: Int32
     public var volume: Double
 
-    public init(partIndex: Int32, staffIndexInPart: Int32, volume: Double) {
+    public init(partIndex: Int32, instrumentOrdinal: Int32, volume: Double) {
         self.partIndex = partIndex
-        self.staffIndexInPart = staffIndexInPart
+        self.instrumentOrdinal = instrumentOrdinal
         self.volume = volume
     }
 }
