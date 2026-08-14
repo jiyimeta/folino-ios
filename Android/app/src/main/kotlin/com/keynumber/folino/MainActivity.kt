@@ -62,6 +62,7 @@ import com.keynumber.folino.reader.ReaderDeviceDefaults
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
+import com.keynumber.folino.reader.MixerStripID
 import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
@@ -776,23 +777,24 @@ private fun LibraryNavGraph(
                         DrumKitCatalog.entries.map { DrumKitOption(it.program, it.displayName, it.familyIndex) }
                     },
                     drumKitFamilyNames = remember { DrumKitCatalog.familyNames },
-                    // Per-score mixer overrides: the bridge stores them by positional StaffAddress; the
-                    // Reader resolves address↔flat-staffIndex via its parts map for replay + persistence.
+                    // Per-score mixer overrides: the bridge stores them by mixer strip, which is the same
+                    // (partIndex, ordinal) pair the Android engine addresses channels by — so replay and
+                    // persistence both go straight through with nothing to resolve.
                     mixerProgramOverrides = {
                         prefsVm.programOverrides().map {
-                            ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.program
+                            MixerStripID(it.partIndex, it.instrumentOrdinal) to it.program
                         }
                     },
                     mixerVolumeOverrides = {
                         prefsVm.volumeOverrides().map {
-                            ReaderStaffAddress(it.partIndex, it.staffIndexInPart) to it.volume.toFloat()
+                            MixerStripID(it.partIndex, it.instrumentOrdinal) to it.volume.toFloat()
                         }
                     },
-                    persistStaffProgram = { addr, program ->
-                        prefsVm.setStaffProgram(addr.partIndex, addr.staffIndexInPart, program)
+                    persistStripProgram = { strip, program ->
+                        prefsVm.setStripProgram(strip.partIndex, strip.instrumentOrdinal, program)
                     },
-                    persistStaffVolume = { addr, volume ->
-                        prefsVm.setStaffVolume(addr.partIndex, addr.staffIndexInPart, volume.toDouble())
+                    persistStripVolume = { strip, volume ->
+                        prefsVm.setStripVolume(strip.partIndex, strip.instrumentOrdinal, volume.toDouble())
                     },
                     pipEnabled = pipEnabled,
                     keepScreenAwake = keepScreenAwake,

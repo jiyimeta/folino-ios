@@ -190,12 +190,12 @@ class ReaderPlaybackService : MediaSessionService() {
                 android.util.Log.e("ReaderPlayback", "soundfont reload prepare failed: ${ex.message}", ex)
                 return@launch
             }
-            // Restore per-staff mixer state (volume / mute / solo / program).
+            // Restore per-strip mixer state (volume / mute / solo / program).
             channels.forEach { ch ->
-                ch.program?.let { engine.setStaffProgram(ch.staffIndex, it) }
-                engine.setStaffVolume(ch.staffIndex, ch.volume)
-                if (ch.isMuted) engine.setStaffMuted(ch.staffIndex, true)
-                if (ch.isSoloed) engine.setStaffSoloed(ch.staffIndex, true)
+                ch.program?.let { engine.setStaffProgram(ch.partIndex, ch.ordinal, it) }
+                engine.setStaffVolume(ch.partIndex, ch.ordinal, ch.volume)
+                if (ch.isMuted) engine.setStaffMuted(ch.partIndex, ch.ordinal, true)
+                if (ch.isSoloed) engine.setStaffSoloed(ch.partIndex, ch.ordinal, true)
             }
             // Re-push view-model-owned prefs (master volume, metronome) the engine can't report back.
             onSoundfontReloaded?.invoke()

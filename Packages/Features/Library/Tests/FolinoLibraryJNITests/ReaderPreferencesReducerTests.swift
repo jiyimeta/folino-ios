@@ -26,24 +26,27 @@ struct ReaderPreferencesReducerTests {
         #expect(p.a4ReferenceHz == 432)
     }
 
-    @Test func `set staff program updates addressed entry only`() {
-        let p = ReaderPreferencesReducer.setStaffProgram(base(), part: 0, staff: 1, program: 40)
-        #expect(p.stripProgramOverrides[MixerStripID(partIndex: 0, instrumentOrdinal: 0)] == 40)
+    @Test func `set strip program updates addressed entry only`() {
+        let p = ReaderPreferencesReducer.setStripProgram(base(), part: 0, ordinal: 1, program: 40)
+        #expect(p.stripProgramOverrides[MixerStripID(partIndex: 0, instrumentOrdinal: 1)] == 40)
+        #expect(p.stripProgramOverrides.count == 1)
     }
 
-    @Test func `set staff volume updates addressed entry only`() {
-        let p = ReaderPreferencesReducer.setStaffVolume(base(), part: 1, staff: 0, volume: 0.25)
-        #expect(p.stripVolumeOverrides[MixerStripID(partIndex: 1, instrumentOrdinal: 0)] == 0.25)
-    }
-
-    /// Android's mixer is still addressed per staff, but every staff of a part always drove one channel — so a
-    /// write from any of a part's rows (here staff 1) must land on the part's tick-0 strip, and must not fan out
-    /// into a second stored entry.
-    @Test func `a write from any staff lands on the part's first strip`() {
-        let p = ReaderPreferencesReducer.setStaffVolume(base(), part: 1, staff: 1, volume: 0.25)
-
+    @Test func `set strip volume updates addressed entry only`() {
+        let p = ReaderPreferencesReducer.setStripVolume(base(), part: 1, ordinal: 0, volume: 0.25)
         #expect(p.stripVolumeOverrides[MixerStripID(partIndex: 1, instrumentOrdinal: 0)] == 0.25)
         #expect(p.stripVolumeOverrides.count == 1)
+    }
+
+    /// The two strips a part contributes when it changes instrument mid-score are independently addressable —
+    /// this is the whole point of keying by `instrumentOrdinal` rather than by staff, which collapsed them onto
+    /// one entry and made the second strip unreachable.
+    @Test func `a part's second strip does not disturb its first`() {
+        var p = ReaderPreferencesReducer.setStripVolume(base(), part: 1, ordinal: 0, volume: 0.25)
+        p = ReaderPreferencesReducer.setStripVolume(p, part: 1, ordinal: 1, volume: 0.75)
+
+        #expect(p.stripVolumeOverrides[MixerStripID(partIndex: 1, instrumentOrdinal: 0)] == 0.25)
+        #expect(p.stripVolumeOverrides[MixerStripID(partIndex: 1, instrumentOrdinal: 1)] == 0.75)
     }
 
     @Test func `set staff hidden toggles membership`() {

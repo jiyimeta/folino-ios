@@ -253,19 +253,19 @@ fun ReaderScreen(
     metronomeEnabled: Boolean = false,
     /** Writes the global metronome flag on user change. */
     onMetronomeChange: (Boolean) -> Unit = {},
-    /** Persisted per-score program overrides to replay on open, keyed by positional staff address. */
-    mixerProgramOverrides: () -> List<Pair<StaffAddress, Int>> = { emptyList() },
-    /** Persisted per-score volume overrides to replay on open, keyed by positional staff address. */
-    mixerVolumeOverrides: () -> List<Pair<StaffAddress, Float>> = { emptyList() },
+    /** Persisted per-score program overrides to replay on open, keyed by mixer strip. */
+    mixerProgramOverrides: () -> List<Pair<MixerStripID, Int>> = { emptyList() },
+    /** Persisted per-score volume overrides to replay on open, keyed by mixer strip. */
+    mixerVolumeOverrides: () -> List<Pair<MixerStripID, Float>> = { emptyList() },
     /** Persists a per-score program override after the live engine update. */
-    persistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    persistStripProgram: (MixerStripID, Int) -> Unit = { _, _ -> },
     /** Bank-128 drum kits for the mixer's percussion picker. Owned by shared Swift and injected by the
      * composition root, which is the only layer that sees both the JNI catalog and this screen. */
     drumKits: List<DrumKitOption> = emptyList(),
     /** Kit family display names, indexed by [DrumKitOption.familyIndex]. */
     drumKitFamilyNames: List<String> = emptyList(),
     /** Persists a per-score volume override after the live engine update. */
-    persistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
+    persistStripVolume: (MixerStripID, Float) -> Unit = { _, _ -> },
     /** When true, PiP is enabled in Settings: show the toolbar PiP button and allow auto-enter. */
     pipEnabled: Boolean = false,
     /** When true (SettingsPrefs default), the screen is kept from dimming/locking while the Reader
@@ -548,14 +548,7 @@ fun ReaderScreen(
     LaunchedEffect(countInEnabled, scoreHandle) {
         audioVm.setCountInEnabled(countInEnabled)
     }
-    // Parts descriptor → flat staffIndex map: the mixer addresses channels by a flat staffIndex, the
-    // ReaderPreferences bridge persists overrides by positional StaffAddress. This map (built from the
-    // same parts→staves enumeration the engine uses) bridges the two for both replay and persistence.
     val mixerParts by readerVm.parts.collectAsStateWithLifecycle()
-    val staffAddressByIndex = remember(mixerParts) { mixerParts.staffAddressByIndex() }
-    val addressToIndex = remember(staffAddressByIndex) {
-        staffAddressByIndex.entries.associate { (index, addr) -> addr to index }
-    }
     // Once the parts load, hand the file's authored-hidden staves (<Part><show>0</show>) to the app layer to
     // seed into the per-score hidden set. Re-firing with the SAME set is safe (the bridge reconciles and writes
     // nothing), which is why keying on mixerParts is fine.
@@ -568,18 +561,18 @@ fun ReaderScreen(
     LaunchedEffect(mixerParts) {
         if (mixerParts.isNotEmpty()) onAuthoredHiddenStavesReady(mixerParts.authoredHiddenStaffAddresses())
     }
-    // Replay persisted per-staff mixer overrides after each prepare. Resolve each saved StaffAddress to
-    // its current flat staffIndex via the parts map; skip any address that doesn't resolve (guards the
-    // channel-order assumption against a score whose part/staff layout changed since the override was
-    // saved). Solo / mute are session-only and intentionally not replayed.
-    LaunchedEffect(scoreHandle, addressToIndex) {
+    // Replay persisted per-strip mixer overrides after each prepare. The saved key is the strip id itself,
+    // so nothing has to be resolved here; a strip the current score no longer has (an override outliving a
+    // re-import that renumbered the parts) is inert — every engine setter no-ops on an unknown strip.
+    // Solo / mute are session-only and intentionally not replayed.
+    LaunchedEffect(scoreHandle) {
         audioVm.installOnPrepared {
             val engine = audioVm.engine.value ?: return@installOnPrepared
-            mixerProgramOverrides().forEach { (addr, program) ->
-                addressToIndex[addr]?.let { engine.setStaffProgram(it, program) }
+            mixerProgramOverrides().forEach { (strip, program) ->
+                engine.setStaffProgram(strip.partIndex, strip.instrumentOrdinal, program)
             }
-            mixerVolumeOverrides().forEach { (addr, volume) ->
-                addressToIndex[addr]?.let { engine.setStaffVolume(it, volume) }
+            mixerVolumeOverrides().forEach { (strip, volume) ->
+                engine.setStaffVolume(strip.partIndex, strip.instrumentOrdinal, volume)
             }
         }
     }
@@ -899,11 +892,10 @@ fun ReaderScreen(
             transposeSemitones = transposeSemitones,
             onTransposeChange = persistTranspose,
             onResetTranspose = persistTransposeReset,
-            staffAddressByIndex = staffAddressByIndex,
-            onPersistStaffProgram = persistStaffProgram,
+            onPersistStripProgram = persistStripProgram,
             drumKits = drumKits,
             drumKitFamilyNames = drumKitFamilyNames,
-            onPersistStaffVolume = persistStaffVolume,
+            onPersistStripVolume = persistStripVolume,
             partNames = mixerParts.map { it.name },
             isInPlaylist = playlistId != null,
             continuationModeWire = continuationModeWire,

@@ -119,17 +119,15 @@ fun PlaybackInspectorSheet(
      * iOS parity: `TransposeModel.reset`. Stepping to 0 with ± still records an explicit choice.
      */
     onResetTranspose: () -> Unit = { onTransposeChange(0) },
-    /** Flat mixer staffIndex -> positional StaffAddress, for persisting per-staff overrides. */
-    staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
-    /** Persists a per-score program override (by staff address) after the live engine update. */
-    onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    /** Persists a per-score program override (by mixer strip) after the live engine update. */
+    onPersistStripProgram: (MixerStripID, Int) -> Unit = { _, _ -> },
     /** Bank-128 kit catalog for percussion parts, supplied by the composition root (shared Swift owns
      * the list — see [DrumKitOption]). Empty means no kit picker is offered. */
     drumKits: List<DrumKitOption> = emptyList(),
     /** Family display names, indexed by [DrumKitOption.familyIndex]; used as dropdown section headers. */
     drumKitFamilyNames: List<String> = emptyList(),
-    /** Persists a per-score volume override (by staff address) after the live engine update. */
-    onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
+    /** Persists a per-score volume override (by mixer strip) after the live engine update. */
+    onPersistStripVolume: (MixerStripID, Float) -> Unit = { _, _ -> },
     /** True when this score is part of a playlist; shows the continuation-mode row. */
     isInPlaylist: Boolean = false,
     /** Wire string for the playlist continuation mode ("off" / "playThrough" / "loopPlaylist"). */
@@ -154,11 +152,10 @@ fun PlaybackInspectorSheet(
             transposeSemitones = transposeSemitones,
             onTransposeChange = onTransposeChange,
             onResetTranspose = onResetTranspose,
-            staffAddressByIndex = staffAddressByIndex,
-            onPersistStaffProgram = onPersistStaffProgram,
+            onPersistStripProgram = onPersistStripProgram,
             drumKits = drumKits,
             drumKitFamilyNames = drumKitFamilyNames,
-            onPersistStaffVolume = onPersistStaffVolume,
+            onPersistStripVolume = onPersistStripVolume,
             isInPlaylist = isInPlaylist,
             continuationModeWire = continuationModeWire,
             onContinuationModeChange = onContinuationModeChange,
@@ -191,14 +188,13 @@ fun PlaybackInspectorContent(
     transposeSemitones: Int = 0,
     onTransposeChange: (Int) -> Unit = {},
     onResetTranspose: () -> Unit = { onTransposeChange(0) },
-    staffAddressByIndex: Map<Int, StaffAddress> = emptyMap(),
-    onPersistStaffProgram: (StaffAddress, Int) -> Unit = { _, _ -> },
+    onPersistStripProgram: (MixerStripID, Int) -> Unit = { _, _ -> },
     /** Bank-128 kit catalog for percussion parts, supplied by the composition root (shared Swift owns
      * the list — see [DrumKitOption]). Empty means no kit picker is offered. */
     drumKits: List<DrumKitOption> = emptyList(),
     /** Family display names, indexed by [DrumKitOption.familyIndex]; used as dropdown section headers. */
     drumKitFamilyNames: List<String> = emptyList(),
-    onPersistStaffVolume: (StaffAddress, Float) -> Unit = { _, _ -> },
+    onPersistStripVolume: (MixerStripID, Float) -> Unit = { _, _ -> },
     isInPlaylist: Boolean = false,
     continuationModeWire: String = "playThrough",
     onContinuationModeChange: (String) -> Unit = {},
@@ -355,7 +351,7 @@ fun PlaybackInspectorContent(
             // ── Parts (per-part mixer, iOS parity) ─────────────────
             item { CollapsibleHeader(stringResource(R.string.reader_inspector_parts), mixerExpanded) { mixerExpanded = !mixerExpanded } }
             if (mixerExpanded) {
-                val groups = groupMixerByPart(mixerChannels, staffAddressByIndex, partNames)
+                val groups = groupMixerByPart(mixerChannels, partNames)
                 if (groups.isEmpty()) {
                     item { Text(stringResource(R.string.reader_mixer_empty), Modifier.padding(vertical = 4.dp)) }
                 } else {
@@ -367,17 +363,15 @@ fun PlaybackInspectorContent(
                                 gmInstruments = gmInstruments,
                                 drumKits = drumKits,
                                 drumKitFamilyNames = drumKitFamilyNames,
-                                onVolume = { idx, v ->
-                                    engine?.setStaffVolume(idx, v)
-                                    staffAddressByIndex[idx]?.let { onPersistStaffVolume(it, v) }
+                                onVolume = { strip, v ->
+                                    engine?.setStaffVolume(strip.partIndex, strip.instrumentOrdinal, v)
+                                    onPersistStripVolume(strip, v)
                                 },
-                                onMute = { idx, m -> engine?.setStaffMuted(idx, m) },
-                                onSolo = { idx, s -> engine?.setStaffSoloed(idx, s) },
-                                onProgram = { program ->
-                                    group.channels.forEach { ch ->
-                                        engine?.setStaffProgram(ch.staffIndex, program)
-                                        staffAddressByIndex[ch.staffIndex]?.let { onPersistStaffProgram(it, program) }
-                                    }
+                                onMute = { strip, m -> engine?.setStaffMuted(strip.partIndex, strip.instrumentOrdinal, m) },
+                                onSolo = { strip, s -> engine?.setStaffSoloed(strip.partIndex, strip.instrumentOrdinal, s) },
+                                onProgram = { strip, program ->
+                                    engine?.setStaffProgram(strip.partIndex, strip.instrumentOrdinal, program)
+                                    onPersistStripProgram(strip, program)
                                 },
                             )
                             HorizontalDivider(
@@ -662,6 +656,20 @@ private fun A4ReferenceRow(
     }
 }
 
+/**
+ * One part's mixer block: a title line carrying a name and the program picker, and a control line carrying
+ * the fader plus solo / mute — repeated per strip.
+ *
+ * The part's name and the strip's name have to say different things, and on real scores they usually cannot:
+ * a single-instrument part's `displayName` is its part name. So a part with **one** strip draws a single
+ * block titled with the part name (which is what every part of every score measured for the iOS design does,
+ * and is identical to what this sheet drew when rows were staves), and a part with **several** draws a part
+ * header followed by one block per strip, each titled with the strip's own name — `S` over `ピアノ` and
+ * `アコーディオン`. iOS reaches the same content through its own collapse rule; see §4 of the mixer
+ * per-instrument design.
+ *
+ * The picker sits on the strip, not the part: that is what makes an instrument-change strip selectable at all.
+ */
 @Composable
 private fun PartMixerSection(
     group: PartMixerGroup,
@@ -669,51 +677,72 @@ private fun PartMixerSection(
     gmInstruments: List<GMInstrument>,
     drumKits: List<DrumKitOption>,
     drumKitFamilyNames: List<String>,
-    onVolume: (Int, Float) -> Unit,
-    onMute: (Int, Boolean) -> Unit,
-    onSolo: (Int, Boolean) -> Unit,
-    onProgram: (Int) -> Unit,
+    onVolume: (MixerStripID, Float) -> Unit,
+    onMute: (MixerStripID, Boolean) -> Unit,
+    onSolo: (MixerStripID, Boolean) -> Unit,
+    onProgram: (MixerStripID, Int) -> Unit,
 ) {
+    val labelStripsIndividually = group.strips.size > 1
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        // Part header: instrument name + ONE program picker for the whole part (iOS parity).
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(group.partName, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-            // Which CATALOG the picker offers follows the part: bank-128 kits for percussion, GM Level 1
-            // patches otherwise — iOS `ProgramPicker(isDrums:)` splits the same way. A part with no
-            // program at all (nothing selectable) still falls back to the plain label.
-            val program = group.partProgram
-            when {
-                program == null ->
-                    Text(stringResource(R.string.reader_mixer_drums), Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
-                group.isDrums ->
-                    DrumKitPickerButton(
-                        program = program,
-                        enabled = enabled,
-                        kits = drumKits,
-                        familyNames = drumKitFamilyNames,
-                        modifier = Modifier.weight(1.6f),
-                        onProgram = onProgram,
-                    )
-                else ->
-                    ProgramPickerButton(program = program, enabled = enabled, gmInstruments = gmInstruments, modifier = Modifier.weight(1.6f), onProgram = onProgram)
-            }
+        if (labelStripsIndividually) {
+            Text(
+                group.partName,
+                Modifier.fillMaxWidth(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+            )
         }
-        // Per-staff volume + Solo/Mute.
-        group.channels.forEach { channel ->
+        group.strips.forEach { strip ->
+            val id = strip.stripID
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (labelStripsIndividually) strip.displayName else group.partName,
+                    Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                // Which CATALOG the picker offers follows the strip: bank-128 kits for percussion, GM Level 1
+                // patches otherwise — iOS `ProgramPicker(isDrums:)` splits the same way. A strip with no
+                // program at all (nothing selectable) still falls back to the plain label.
+                val program = strip.program
+                when {
+                    program == null ->
+                        Text(stringResource(R.string.reader_mixer_drums), Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
+                    strip.isDrums ->
+                        DrumKitPickerButton(
+                            program = program,
+                            enabled = enabled,
+                            kits = drumKits,
+                            familyNames = drumKitFamilyNames,
+                            modifier = Modifier.weight(1.6f),
+                            onProgram = { onProgram(id, it) },
+                        )
+                    else ->
+                        ProgramPickerButton(
+                            program = program,
+                            enabled = enabled,
+                            gmInstruments = gmInstruments,
+                            modifier = Modifier.weight(1.6f),
+                            onProgram = { onProgram(id, it) },
+                        )
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 ResettableSlider(
-                    value = channel.volume,
-                    onValueChange = { onVolume(channel.staffIndex, it) },
+                    value = strip.volume,
+                    onValueChange = { onVolume(id, it) },
                     // Default = the score's authored channel volume (CC7 → 0..1), seeded by the
                     // engine; double-tap restores it. Matches iOS PlaybackMixerModel.defaultVolume.
-                    defaultValue = channel.defaultVolume,
-                    onReset = { onVolume(channel.staffIndex, channel.defaultVolume) },
+                    defaultValue = strip.defaultVolume,
+                    onReset = { onVolume(id, strip.defaultVolume) },
                     valueRange = 0f..1f,
-                    enabled = enabled && !channel.effectiveMute,
+                    enabled = enabled && !strip.effectiveMute,
                     modifier = Modifier.weight(1f).height(InspectorSliderHeight),
                 )
-                SmallToggle("S", channel.isSoloed, enabled, "Solo") { onSolo(channel.staffIndex, !channel.isSoloed) }
-                SmallToggle("M", channel.isMuted, enabled, "Mute") { onMute(channel.staffIndex, !channel.isMuted) }
+                SmallToggle("S", strip.isSoloed, enabled, "Solo") { onSolo(id, !strip.isSoloed) }
+                SmallToggle("M", strip.isMuted, enabled, "Mute") { onMute(id, !strip.isMuted) }
             }
         }
     }

@@ -179,23 +179,24 @@ public final class ReaderPreferencesBridge {
         mutate { ReaderPreferencesReducer.setClef($0, part: Int(part), staff: Int(staff), rawType: rawType) }
     }
 
-    // PARITY(android): mixer strips — Android's mixer is still addressed per staff. Its writes land on the part's
-    //   tick-0 strip and its reads come back at staff 0, so a multi-staff part's second row shows the score's
-    //   default while the first shows the stored value. Following iOS means reading the strip list from the
-    //   Android engine (never re-deriving the dedup rule in Kotlin) and drawing one row per strip.
+    // MARK: - Per-strip mutators (Kotlin -> Swift)
+
+    /// `ordinal` is the strip's `instrumentOrdinal`, which Kotlin takes from the Android engine's own
+    /// `MixerChannel` list. The dedup rule that produces it lives in swift-sheet-music and is never re-derived
+    /// on either side of the bridge.
     @WireletExpose
-    public func setStaffProgram(part: Int32, staff: Int32, program: Int32) {
+    public func setStripProgram(part: Int32, ordinal: Int32, program: Int32) {
         mutate {
-            ReaderPreferencesReducer.setStaffProgram($0, part: Int(part), staff: Int(staff), program: Int(program))
+            ReaderPreferencesReducer.setStripProgram($0, part: Int(part), ordinal: Int(ordinal), program: Int(program))
         }
     }
 
     @WireletExpose
-    public func setStaffVolume(part: Int32, staff: Int32, volume: Double) {
-        mutate { ReaderPreferencesReducer.setStaffVolume($0, part: Int(part), staff: Int(staff), volume: volume) }
+    public func setStripVolume(part: Int32, ordinal: Int32, volume: Double) {
+        mutate { ReaderPreferencesReducer.setStripVolume($0, part: Int(part), ordinal: Int(ordinal), volume: volume) }
     }
 
-    // MARK: - Per-staff list getters (Swift -> Kotlin, for restore-on-open + display reflection)
+    // MARK: - List getters (Swift -> Kotlin, for restore-on-open + display reflection)
 
     @WireletExpose
     public func hiddenStaves() -> [HiddenStaffEntryWire] {
@@ -215,21 +216,14 @@ public final class ReaderPreferencesBridge {
         }
     }
 
-    /// One entry per strip, at staff 0. The bridge has the preferences but not the score, so it cannot enumerate a
-    /// part's staves to repeat the value across them — which means a multi-staff part's second Compose row reads the
-    /// score's default while the first shows the stored value. Nothing sounds different (those rows always drove one
-    /// channel); the value appears to move. A one-line Kotlin fallback — read `(part, staff)`, else `(part, 0)` —
-    /// removes it, and is the first thing to do when Android's mixer is next opened.
+    /// One entry per stored strip override, carrying the strip's own id. Kotlin rebuilds a map from it, so the
+    /// entries are unique by construction — `stripProgramOverrides` is itself keyed by `MixerStripID`.
     @WireletExpose
     public func programOverrides() -> [ProgramOverrideWire] {
-        // Every entry is projected at `staffIndexInPart: 0` (see the type doc), so two strips of the same part
-        // (`instrumentOrdinal` 0 and 1) would otherwise collide on one wire key and Kotlin's map rebuild would pick
-        // a winner by unspecified `Dictionary` iteration order. Unreachable today — Android's own reducer only ever
-        // writes ordinal 0 — but the filter makes the collision structurally impossible rather than merely unlikely.
-        prefs.stripProgramOverrides.filter { $0.key.instrumentOrdinal == 0 }.map {
+        prefs.stripProgramOverrides.map {
             ProgramOverrideWire(
                 partIndex: Int32($0.key.partIndex),
-                staffIndexInPart: 0,
+                instrumentOrdinal: Int32($0.key.instrumentOrdinal),
                 program: Int32($0.value),
             )
         }
@@ -237,11 +231,10 @@ public final class ReaderPreferencesBridge {
 
     @WireletExpose
     public func volumeOverrides() -> [VolumeOverrideWire] {
-        // See the matching comment in `programOverrides()` — same collision, same fix.
-        prefs.stripVolumeOverrides.filter { $0.key.instrumentOrdinal == 0 }.map {
+        prefs.stripVolumeOverrides.map {
             VolumeOverrideWire(
                 partIndex: Int32($0.key.partIndex),
-                staffIndexInPart: 0,
+                instrumentOrdinal: Int32($0.key.instrumentOrdinal),
                 volume: $0.value,
             )
         }

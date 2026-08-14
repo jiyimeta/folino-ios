@@ -112,17 +112,15 @@ enum ReaderPreferencesReducer {
         return reseat(c)
     }
 
-    static func setStaffProgram(_ p: ReaderPreferences, part: Int, staff _: Int, program: Int) -> ReaderPreferences {
+    static func setStripProgram(_ p: ReaderPreferences, part: Int, ordinal: Int, program: Int) -> ReaderPreferences {
         var c = p
-        // Android's mixer is still addressed per staff. Every staff of a part drove one channel even before
-        // strips, so a write from any of its rows lands on the part's tick-0 strip.
-        c.stripProgramOverrides[MixerStripID(partIndex: part, instrumentOrdinal: 0)] = program
+        c.stripProgramOverrides[MixerStripID(partIndex: part, instrumentOrdinal: ordinal)] = program
         return reseat(c)
     }
 
-    static func setStaffVolume(_ p: ReaderPreferences, part: Int, staff _: Int, volume: Double) -> ReaderPreferences {
+    static func setStripVolume(_ p: ReaderPreferences, part: Int, ordinal: Int, volume: Double) -> ReaderPreferences {
         var c = p
-        c.stripVolumeOverrides[MixerStripID(partIndex: part, instrumentOrdinal: 0)] = volume
+        c.stripVolumeOverrides[MixerStripID(partIndex: part, instrumentOrdinal: ordinal)] = volume
         return reseat(c)
     }
 

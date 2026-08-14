@@ -54,7 +54,6 @@ line of source represents. Keep each to a sentence and delete it when it closes.
 | settings_snapshot.show_all_measure_numbers | `Packages/Domain/Sources/Domain/Analytics/AnalyticsEvent+Factories.swift:226` | pass it from the AnalyticsBridge and drop the default here, so the parameter stops reading as "off" for every Android launch |
 | PDF-to-score conversion follow-up | `Packages/Domain/Sources/Domain/Models/PDFOriginState.swift:3` | consume this state on Android for the display-source switch, re-read-the-PDF action and the `readerPdfSourceNoticeDismissed` key (Android still reads the older `readerPdfPlaybackNoticeDismissed`). The decisions are all in Domain pure functions already, so Android wires UI and persistence only |
 | number every measure | `Packages/Domain/Sources/Domain/Models/ReaderLayoutMode.swift:44` | carry the policy on LayoutOptionsWire (the layout half is shared, so Android needs only the wire field, the SettingsPrefs key and a Compose toggle) |
-| mixer strips | `Packages/Features/Library/Sources/FolinoLibraryJNI/ReaderPreferencesBridge.swift:182` | Android's mixer is still addressed per staff. Its writes land on the part's tick-0 strip and its reads come back at staff 0, so a multi-staff part's second row shows the score's default while the first shows the stored value. Following iOS means reading the strip list from the Android engine (never re-deriving the dedup rule in Kotlin) and drawing one row per strip. |
 
 ### Owed to iOS
 
