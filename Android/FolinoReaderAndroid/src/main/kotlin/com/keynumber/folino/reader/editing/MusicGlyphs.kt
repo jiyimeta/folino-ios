@@ -134,4 +134,11 @@ object PadDuration {
         7, 8, 9 -> MusicGlyphs.REST_64TH
         else -> MusicGlyphs.REST_QUARTER
     }
+
+    /**
+     * The NOTE glyph for [kind] — [ordered]'s lookup counterpart to [restGlyph], for the callout's summary key
+     * (Task 8), which wears the SELECTED item's own length rather than one of the five keys' own. Falls back to
+     * the quarter note for a kind [ordered] has no key for, mirroring iOS `PadGlyphs.note(for:)`.
+     */
+    fun noteGlyph(kind: Int): Char = ordered.firstOrNull { it.kind == kind }?.noteGlyph ?: MusicGlyphs.NOTE_QUARTER_UP
 }

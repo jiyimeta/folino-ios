@@ -92,8 +92,10 @@ import com.keynumber.folino.editor.EditAvailability
 import com.keynumber.folino.editor.EditUiState
 import com.keynumber.folino.editor.caretRectMm
 import com.keynumber.folino.editor.editingHitTestForTap
+import com.keynumber.folino.reader.editing.EDIT_CALLOUT_MINIMUM_WIDTH_MM
 import com.keynumber.folino.reader.editing.EDIT_CARET_MINIMUM_WIDTH_MM
 import com.keynumber.folino.reader.editing.EditingBottomBar
+import com.keynumber.folino.reader.editing.EditingCallout
 import com.keynumber.folino.reader.editing.EditingCaretOverlay
 import com.keynumber.folino.reader.editing.EditingTopBarActions
 import com.keynumber.folino.reader.editing.EditingUnavailableDialog
@@ -1239,6 +1241,17 @@ private fun ReadyScore(
      * `!editing.isEditing`. */
     onSelectItem: (ByteArray?) -> Unit = {},
     /**
+     * Ops the callout's keys (Task 8) call directly on
+     * [com.keynumber.folino.editor.EditSessionController] — one per key group (length tray, dot, pitch step,
+     * octave step). Same inert-default seam as [onSelectItem]: every default here is a no-op until a caller
+     * wires the real controller through at this call site.
+     */
+    onSetSelectionDuration: (Int) -> Unit = {},
+    onSetSelectionDots: (Int) -> Unit = {},
+    onToggleSelectionDot: () -> Unit = {},
+    onShiftPitch: (Int) -> Unit = {},
+    onShiftOctave: (Int) -> Unit = {},
+    /**
      * [ReaderViewModel.layoutGeneration] — bumped once per successful layout recompute. The caret is positioned
      * against the LAYOUT rather than against the score model, so a reflow moves it even when `editing.caretItem` is
      * unchanged; this is the signal that re-resolves it, exactly as the annotation overlay's stroke placement uses
@@ -1275,6 +1288,11 @@ private fun ReadyScore(
     // Drives AnnotationDryOverlay's reflow-recompute gate (skip recompute mid-stroke). MVP leaves this
     // always false and relies on the dry overlay's own recompute-on-`drawings`-change instead.
     val isDrawing = false
+    // Gates the callout's keys (Task 8): the same rule the pad and the bottom bar's steppers already follow —
+    // nothing that mutates the score stays live while the transport runs, since a moving playback cursor would
+    // otherwise fight the callout for the same selection.
+    val playbackState by audioVm.state.collectAsStateWithLifecycle()
+    val isPlaybackActive = playbackState == PlaybackState.PLAYING
 
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -1592,6 +1610,35 @@ private fun ReadyScore(
                             .fillMaxSize()
                             .padding(vertical = with(density) { vPadPx.toDp() }),
                     )
+                    // The selection callout (Task 8). Resolved from the SELECTED item, not the caret item — see
+                    // `EditingCallout`'s own doc for why that distinction matters and why this must be mounted in
+                    // the same node as the caret overlay above. Gated on `hasSelectionCallout`, matching the
+                    // caret's own `caretItem` gate on `editing.isEditing`; there is no empty state to draw.
+                    val selectedItem = if (editing.isEditing) editing.selectedItem else null
+                    var calloutRect by remember { mutableStateOf<EditCaretFrame?>(null) }
+                    LaunchedEffect(handle, selectedItem, layoutGeneration) {
+                        calloutRect = selectedItem?.let { caretRectMm(handle, it, EDIT_CALLOUT_MINIMUM_WIDTH_MM) }
+                    }
+                    if (editing.isEditing && editing.hasSelectionCallout) {
+                        EditingCallout(
+                            rectMm = calloutRect,
+                            isNoteSelected = editing.isNoteSelected,
+                            durationKind = editing.calloutDurationKind,
+                            dots = editing.calloutDots,
+                            isPlaybackActive = isPlaybackActive,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            vPadPx = vPadPx,
+                            viewportPanPx = Offset(viewport.offsetX, viewport.offsetY),
+                            viewportSizePx = viewportSize,
+                            onSetDuration = onSetSelectionDuration,
+                            onSetDots = onSetSelectionDots,
+                            onToggleDot = onToggleSelectionDot,
+                            onShiftPitch = onShiftPitch,
+                            onShiftOctave = onShiftOctave,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
                         cursorFlow = audioVm.currentCursor,

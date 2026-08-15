@@ -93,4 +93,8 @@
     <string name="reader_editing_dot_double">Double augmentation dot</string>
     <string name="reader_editing_dot_triple">Triple augmentation dot</string>
     <string name="reader_editing_delete">Delete</string>
+    <string name="reader_editing_callout_note_length">Note length</string>
+    <string name="reader_editing_callout_rest_length">Rest length</string>
+    <string name="reader_editing_pitch_up">Raise pitch</string>
+    <string name="reader_editing_pitch_down">Lower pitch</string>
 </resources>

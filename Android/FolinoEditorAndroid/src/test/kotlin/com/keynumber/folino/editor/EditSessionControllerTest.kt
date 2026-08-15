@@ -183,6 +183,20 @@ class EditSessionControllerTest {
         assertTrue(a != differentCaret)
     }
 
+    @Test
+    fun `EditUiState's hand-written equals compares the callout display fields Task 8 added`() {
+        // Not a data class default: the hand-written equals()/hashCode() enumerate every field explicitly (see
+        // that method's own doc comment on why), so a field added to the constructor but forgotten in either
+        // method is silently excluded from equality — this pins calloutDurationKind against exactly that trap.
+        val a = EditUiState(calloutDurationKind = 3, calloutDots = 1, canTie = true, isSelectionTied = false)
+        val b = EditUiState(calloutDurationKind = 3, calloutDots = 1, canTie = true, isSelectionTied = false)
+        val differentDurationKind = a.copy(calloutDurationKind = 4)
+
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertTrue(a != differentDurationKind)
+    }
+
     // MARK: - Op delegation — each op method is a one-line forward to the relay
 
     @Test

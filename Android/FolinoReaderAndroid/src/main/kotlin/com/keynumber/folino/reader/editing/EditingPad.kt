@@ -271,7 +271,10 @@ private fun RowScope.RestKey(
 private fun RowScope.keyWidth(isFlexible: Boolean): Modifier =
     if (isFlexible) Modifier.weight(1f) else Modifier.width(KEY_MIN_WIDTH)
 
-private val DOT_CHOICES = listOf(
+/** `internal` (not `private`) so `EditingCallout.kt`'s own dot key — a selection-scoped counterpart to
+ * [DotKey], since the callout re-times what's already written rather than arming what comes next — can offer
+ * the same 1/2/3 choices instead of a second copy of this list. */
+internal val DOT_CHOICES = listOf(
     1 to R.string.reader_editing_dot_single,
     2 to R.string.reader_editing_dot_double,
     3 to R.string.reader_editing_dot_triple,
@@ -287,10 +290,15 @@ internal val PITCH_LETTERS = listOf('C', 'D', 'E', 'F', 'G', 'A', 'B')
  * platform's default ripple. [enabled] gates the click (through `combinedClickable`, which — unlike a stock
  * Material `Button` — applies NO dimming of its own) and is otherwise left to [content] to read for its own
  * color, exactly as iOS's `PadKeyChrome` pins every key's foreground to `.primary` / `.tertiary` off the same
- * `isEnabled` value rather than layering a second, container-level fade on top. */
+ * `isEnabled` value rather than layering a second, container-level fade on top.
+ *
+ * `internal` (not `private`), along with [MusicGlyph], [keyContentColor], [DotsGlyph], [PadDivider] and
+ * [DOT_CHOICES] below — the callout (`EditingCallout.kt`, Task 8) draws its own keys with this same chrome
+ * rather than a second copy of it, exactly as iOS's `EditorCalloutView` reuses `PadKeyStyle`/`PadKeyGlyph` from
+ * the pad it sits beside. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PadKey(
+internal fun PadKey(
     onClick: () -> Unit,
     enabled: Boolean,
     contentDescription: String,
@@ -317,14 +325,14 @@ private fun PadKey(
 /** A key's glyph/letter color: `.primary`-equivalent while [enabled], dimmed otherwise — the one place every key
  * reads the shared enabled-ness from, so the pad dims as a whole rather than key by key. */
 @Composable
-private fun keyContentColor(enabled: Boolean): Color =
+internal fun keyContentColor(enabled: Boolean): Color =
     if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
 /** A duration/rest key's glyph, drawn through a native `Canvas`/`Paint` rather than Compose `Text` — see
  * `rememberBravuraTypeface`'s doc for why — and centered on the box by deriving the baseline from
  * [Paint.getFontMetrics], the same technique `DisplayInspectorSheet`'s `ClefTile` uses for the same font. */
 @Composable
-private fun MusicGlyph(char: Char, typeface: Typeface, enabled: Boolean, modifier: Modifier = Modifier) {
+internal fun MusicGlyph(char: Char, typeface: Typeface, enabled: Boolean, modifier: Modifier = Modifier) {
     val colorArgb = keyContentColor(enabled).toArgb()
     Canvas(modifier.size(GLYPH_SIZE)) {
         val paint = Paint().apply {
@@ -346,7 +354,7 @@ private fun MusicGlyph(char: Char, typeface: Typeface, enabled: Boolean, modifie
  * enabled dimming) one when [count] is 0 — the key has to show what it offers even when it's off. Drawn as
  * shapes rather than `MusicGlyphs.AUGMENTATION_DOT`; see that constant's doc for why. */
 @Composable
-private fun DotsGlyph(count: Int, enabled: Boolean, modifier: Modifier = Modifier) {
+internal fun DotsGlyph(count: Int, enabled: Boolean, modifier: Modifier = Modifier) {
     val color = keyContentColor(enabled)
     val shown = count.coerceAtLeast(1)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(DOT_GAP)) {
@@ -358,7 +366,7 @@ private fun DotsGlyph(count: Int, enabled: Boolean, modifier: Modifier = Modifie
 
 /** The divider separating the pad's two job groups (arm/re-time vs. act) on the single-row layout. */
 @Composable
-private fun PadDivider() {
+internal fun PadDivider() {
     Box(
         Modifier
             .padding(horizontal = DIVIDER_HORIZONTAL_PADDING)

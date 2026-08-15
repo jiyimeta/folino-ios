@@ -34,6 +34,15 @@ data class EditUiState(
     val canWriteRest: Boolean = false,
     val armedDurationKind: Int = 0,
     val armedDots: Int = 0,
+    /** The SELECTED item's own length — what the callout's summary key wears (Task 8), as opposed to
+     * [armedDurationKind]/[armedDots], which describe what the NEXT note will be. */
+    val calloutDurationKind: Int = 0,
+    val calloutDots: Int = 0,
+    /** Whether the selection COULD be tied to its same-pitch neighbour, and whether it currently IS. The
+     * callout's tie key is second-pass (its brief leaves the slot undrawn), but the state is wired now so a
+     * later pass has nothing left to add to [EditUiState] itself. */
+    val canTie: Boolean = false,
+    val isSelectionTied: Boolean = false,
     val activeVoice: Int = 0,
     val isPadVisible: Boolean = false,
     val selectedItem: ByteArray? = null,
@@ -59,6 +68,10 @@ data class EditUiState(
             canWriteRest == other.canWriteRest &&
             armedDurationKind == other.armedDurationKind &&
             armedDots == other.armedDots &&
+            calloutDurationKind == other.calloutDurationKind &&
+            calloutDots == other.calloutDots &&
+            canTie == other.canTie &&
+            isSelectionTied == other.isSelectionTied &&
             activeVoice == other.activeVoice &&
             isPadVisible == other.isPadVisible &&
             selectedItem.contentEquals(other.selectedItem) &&
@@ -77,6 +90,10 @@ data class EditUiState(
         result = 31 * result + canWriteRest.hashCode()
         result = 31 * result + armedDurationKind.hashCode()
         result = 31 * result + armedDots.hashCode()
+        result = 31 * result + calloutDurationKind.hashCode()
+        result = 31 * result + calloutDots.hashCode()
+        result = 31 * result + canTie.hashCode()
+        result = 31 * result + isSelectionTied.hashCode()
         result = 31 * result + activeVoice.hashCode()
         result = 31 * result + isPadVisible.hashCode()
         result = 31 * result + selectedItem.contentHashCode()
@@ -119,6 +136,25 @@ private data class VoiceAndFrames(
     val selectedItem: ByteArray?,
     val caretItem: ByteArray?,
     val revision: Int,
+)
+
+/** The callout's own display fields (Task 8) — the SELECTED item's length and tie-ability, as opposed to
+ * [CalloutAndArming], which is about the NEXT note. Kept separate from that group rather than folded into it:
+ * `combine`'s typed overloads top out at 5 flows, and [CalloutAndArming] is already at 4. */
+private data class CalloutDisplay(
+    val calloutDurationKind: Int,
+    val calloutDots: Int,
+    val canTie: Boolean,
+    val isSelectionTied: Boolean,
+)
+
+/** The four grouped flows [EditSessionController.init] folds into one [EditUiState] tick — named fields rather
+ * than a `Quadruple` this file would otherwise have to invent. */
+private data class CombinedProjection(
+    val selection: SelectionAndCommands,
+    val callout: CalloutAndArming,
+    val voice: VoiceAndFrames,
+    val calloutDisplay: CalloutDisplay,
 )
 
 /**
@@ -178,10 +214,20 @@ class EditSessionController(
         ) { activeVoice, selectedItemFrame, caretItemFrame, revision ->
             VoiceAndFrames(activeVoice, selectedItemFrame?.bytes, caretItemFrame?.bytes, revision)
         }
+        val calloutDisplay = combine(
+            projection.calloutDurationKind,
+            projection.calloutDots,
+            projection.canTie,
+            projection.isSelectionTied,
+        ) { calloutDurationKind, calloutDots, canTie, isSelectionTied ->
+            CalloutDisplay(calloutDurationKind, calloutDots, canTie, isSelectionTied)
+        }
         scope.launch {
-            combine(selectionAndCommands, calloutAndArming, voiceAndFrames) { selection, callout, voice ->
-                Triple(selection, callout, voice)
-            }.collect { (selection, callout, voice) ->
+            combine(
+                selectionAndCommands, calloutAndArming, voiceAndFrames, calloutDisplay,
+            ) { selection, callout, voice, display ->
+                CombinedProjection(selection, callout, voice, display)
+            }.collect { (selection, callout, voice, display) ->
                 _ui.update {
                     it.copy(
                         canUndo = selection.canUndo,
@@ -192,6 +238,10 @@ class EditSessionController(
                         canWriteRest = callout.canWriteRest,
                         armedDurationKind = callout.armedDurationKind,
                         armedDots = callout.armedDots,
+                        calloutDurationKind = display.calloutDurationKind,
+                        calloutDots = display.calloutDots,
+                        canTie = display.canTie,
+                        isSelectionTied = display.isSelectionTied,
                         activeVoice = voice.activeVoice,
                         selectedItem = voice.selectedItem,
                         caretItem = voice.caretItem,

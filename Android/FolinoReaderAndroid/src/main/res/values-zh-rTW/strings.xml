@@ -88,4 +88,8 @@
     <string name="reader_editing_dot_double">雙附點</string>
     <string name="reader_editing_dot_triple">三附點</string>
     <string name="reader_editing_delete">刪除</string>
+    <string name="reader_editing_callout_note_length">音符時值</string>
+    <string name="reader_editing_callout_rest_length">休止符時值</string>
+    <string name="reader_editing_pitch_up">升高音高</string>
+    <string name="reader_editing_pitch_down">降低音高</string>
 </resources>

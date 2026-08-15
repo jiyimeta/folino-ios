@@ -88,4 +88,8 @@
     <string name="reader_editing_dot_double">겹점</string>
     <string name="reader_editing_dot_triple">세겹점</string>
     <string name="reader_editing_delete">삭제</string>
+    <string name="reader_editing_callout_note_length">음표 길이</string>
+    <string name="reader_editing_callout_rest_length">쉼표 길이</string>
+    <string name="reader_editing_pitch_up">음 높이기</string>
+    <string name="reader_editing_pitch_down">음 내리기</string>
 </resources>

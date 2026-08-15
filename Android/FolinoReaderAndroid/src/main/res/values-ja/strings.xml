@@ -88,4 +88,8 @@
     <string name="reader_editing_dot_double">複付点</string>
     <string name="reader_editing_dot_triple">複々付点</string>
     <string name="reader_editing_delete">削除</string>
+    <string name="reader_editing_callout_note_length">音符の長さ</string>
+    <string name="reader_editing_callout_rest_length">休符の長さ</string>
+    <string name="reader_editing_pitch_up">音を上げる</string>
+    <string name="reader_editing_pitch_down">音を下げる</string>
 </resources>
