@@ -433,12 +433,11 @@ class EditSessionRelay(
      *
      * **The superseded handle is handed to the host, not freed here.** `EditSessionHost.replaceScoreHandle`'s own doc
      * carries the reasoning: on Android the score behind that handle has also been given to the audio engine and to a
-     * bound service that outlives the Reader, so no host can prove it has stopped being read, and a
+     * bound service that outlives the Reader, so no host can prove it has stopped being read at this instant, and a
      * `nativeReleaseScore` on this line would be a use-after-free rather than a tidy-up. Ownership therefore sits
-     * entirely with the host, whose policy — matching the one it already applies to the score the playback engine
-     * holds — is to keep it alive for the process. That costs one leaked native score per resync, and resyncs are the
-     * rare recovery path (SP3's device test measured zero across a full scripted edit), which is why this trade is
-     * affordable where a dangling pointer would not be.
+     * entirely with the host — including the freeing, which it does once it can show no holder is left, rather than
+     * keeping the handle for the process. Nothing about that is this file's business beyond not pre-empting it: a
+     * release here would be doing it at the one moment it is provably unsafe.
      *
      * A resync that cannot complete closes the session rather than leaving it open: with the two copies known to
      * disagree and no way to reconcile them, every further op would re-trigger a failing resync, and the taps in

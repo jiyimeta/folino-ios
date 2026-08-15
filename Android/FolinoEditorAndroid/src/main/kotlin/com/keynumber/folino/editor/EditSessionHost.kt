@@ -24,14 +24,22 @@ interface EditSessionHost {
      * a bound `MediaSessionService` that deliberately outlives the Reader, so nothing on the Kotlin side can make the
      * engine let go of it synchronously, or observe when it has. The escape hatch this doc used to offer ("take its
      * own reference to the handle's lifetime") is therefore the only reachable answer, and it is now the rule rather
-     * than the fallback: the relay never calls `nativeReleaseScore`, and the superseded handle stays alive until the
-     * process ends. See `ReaderViewModel.replaceScoreHandle` for why that is the same bounded native leak this
-     * codebase already accepts for the score the playback engine holds.
+     * than the fallback: the relay never calls `nativeReleaseScore`.
      *
-     * What the implementation still owes is narrower, and is about correctness rather than safety: once this returns,
+     * **Taking a reference means ending it, and that half is the implementation's to build.** "Never freed" is not a
+     * correct reading of this contract and was briefly the shipped one: a resync is an automatic recovery path that
+     * can repeat inside a single session, so retaining every superseded handle for the process leaks one full parsed
+     * `Score` per resync. The implementation therefore has to hold each displaced handle until it can show no holder
+     * is left, and free it then. `ReaderViewModel` does this by draining under the same lock its layout calls take,
+     * from a point after the swap has already driven a layout, and by asking the audio side (which is the holder it
+     * cannot reason about from the outside) whether it still has the pointer — see `retiredHandlesToRelease` and
+     * `ReaderAudioViewModel.isPreparedWith` for the shape that takes.
+     *
+     * What the implementation still owes beyond that is about correctness rather than safety: once this returns,
      * anything that resolves positions against the score — hit-tests, caret rects, layout — must be reading the NEW
-     * handle, because the relay's next fingerprint check compares that one. A holder left on the previous handle is a
-     * stale read of a still-valid score, never a use-after-free.
+     * handle, because the relay's next fingerprint check compares that one. Until the implementation frees it, a
+     * holder left on the previous handle is a stale read of a still-valid score rather than a use-after-free — which
+     * is what buys the room to drain deliberately instead of synchronously, and is not a licence to leave it forever.
      */
     fun replaceScoreHandle(handle: Long)
 

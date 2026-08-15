@@ -164,15 +164,17 @@ internal fun needsLayoutBeforeTinting(cached: CachedLayoutKey?, wanted: CachedLa
  * Two holders decide the answer:
  * - [currentHandle] is live by definition and can never be in the list; it is passed only so a bug that put it
  *   there is dropped rather than freed.
- * - [isHeldElsewhere] is the audio engine (`ReaderAudioViewModel.isPreparedWith`), which decodes the score into
- *   the player and shares the same handle with a bound `MediaSessionService` for soundfont hot-swap. It keeps the
- *   pointer indefinitely, so a handle it still holds stays retired and is retried at the next drain.
+ * - [isHeldElsewhere] is the audio side (`ReaderAudioViewModel.isPreparedWith`): the score `prepare` decoded into
+ *   the player, which the bound `MediaSessionService` also keeps for soundfont hot-swap, plus any prepare still in
+ *   flight. It keeps a pointer indefinitely, so a handle it still holds stays retired and is retried at the next
+ *   drain.
  *
  * The caller supplies the third holder implicitly by only calling this while `layoutMutex` is held, from a point
  * after the new handle has already driven a layout — see [ReaderViewModel.computeLayoutLocked].
  *
- * Because the engine only ever holds ONE score, at most one entry can be refused, so the list is bounded at one
- * live retired handle rather than growing with the session. Pure, and `internal`, for the reason
+ * What can be refused is therefore bounded by what the audio side is really using — one prepared score plus the
+ * prepares that have launched and not finished — never by how many resyncs the session has seen. Pure, and
+ * `internal`, for the reason
  * [needsLayoutBeforeTinting] and [shouldSkipLayoutRecompute] are: this module's JVM test source set cannot build a
  * [ReaderViewModel] at all.
  */
@@ -1321,21 +1323,25 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * accounted for. Deferring to [onCleared] instead would have been deferral without ownership: a resync is an
      * automatic recovery path the user never sees and can repeat within one session, so one full parsed `Score` per
      * resync held until the ViewModel dies is unbounded in a way this class's OTHER accepted leaks are not (those
-     * retire one handle per `load` / retarget, bounded by navigation). Only one entry can ever be refused a release
-     * — the audio engine holds at most one score — so the list is bounded at one live retired handle.
+     * retire one handle per `load` / retarget, bounded by navigation). What the list can hold is bounded by what the
+     * audio side is actually using — one prepared score plus any prepare still in flight — not by how many resyncs
+     * a session has seen; every other entry is freed at the first compute after its swap.
      *
-     * A stale reader is meanwhile reading a live score whose CONTENT is identical to the fresh one — a resync only
-     * returns success when the two fingerprints agree — so holding the old handle costs nothing at the moment of
-     * the swap. It is not free forever, though, and the one holder where it shows is the audio engine: see
-     * [installPreparedHandleProbe] and the note on [ReaderAudioViewModel.isPreparedWith]. `preparePlayback` refreshes
-     * its cached handle on every swap, but the engine's own `prepare` is skipped while the transport is not STOPPED,
-     * so a resync during playback leaves the player decoding the pre-resync score. Nothing is audible at that
-     * instant (identical content), and edits are blocked while the transport runs — the pad, the steppers and the
-     * callout are all gated on `isPlaying` — so the two images cannot drift apart until playback stops. What a user
-     * could observe is narrow and needs that exact order: resync while playing, stop, edit further, play again, and
-     * hear the score as it stood before the resync rather than as edited. Re-preparing mid-playback to close it
-     * would stop the audio, which is a behavior change this task is not the place to invent; it is carried as a
-     * finding rather than fixed here.
+     * A stale reader is meanwhile usually reading a live score whose content matches the fresh one, since a resync
+     * that RETURNS SUCCESS compared the two fingerprints and found them equal. Not always, though: `resync()` swaps
+     * the handle in before that closing comparison, so a resync that fails it hands over a genuinely different score
+     * and then closes the session. The stale holder that matters is the audio engine — see
+     * [installPreparedHandleProbe] and [ReaderAudioViewModel.isPreparedWith]. `preparePlayback` refreshes its cached
+     * handle on every swap, but the engine's own `prepare` is skipped while the transport is not STOPPED, so a
+     * resync during playback leaves the player decoding the pre-resync score until something re-prepares it.
+     *
+     * What a user could observe, stated without the overclaim an earlier revision of this comment made: after a
+     * resync that happened while playing, stop, edit, and play again, and the audio is the score as it stood before
+     * the resync while the page shows it as edited. The two images can also drift DURING playback, contrary to what
+     * this comment used to say — the pad, the steppers and the callout are gated on `isPlaying`, but the app bar's
+     * undo and redo are gated only on `canUndo` / `canRedo`, so they still mutate the score with the transport
+     * running. Re-preparing mid-playback to close all of this would stop the audio, which is a behavior change this
+     * task is not the place to invent; it is carried as a finding rather than fixed here.
      *
      * What taking [layoutMutex] here still buys is correctness of the layout cache, not memory safety:
      * [startRecomputeLoop], [pagedProgramAndBreaks], [horizontalProgram] and [setEditSelection] all take this lock
@@ -1370,17 +1376,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * `finalize()` safety net never fires).
      */
     override fun replaceScoreHandle(handle: Long) {
-        // Take ownership BEFORE publishing, and unconditionally: both paths below (lock acquired, or the timeout
-        // fallback) supersede the same handle, and a retirement that only happened on the happy path would leak
-        // exactly on the path already known to be going wrong. `retiredLock`, not `layoutMutex` — the fallback
-        // publishes without the mutex by design.
-        _scoreHandle.value?.let { superseded ->
-            if (superseded != handle) synchronized(retiredLock) { retiredScoreHandles += superseded }
-        }
         runBlocking {
             val acquired = withTimeoutOrNull(REPLACE_SCORE_HANDLE_TIMEOUT_MS) {
                 layoutMutex.withLock {
-                    _scoreHandle.value = handle
+                    retireAndPublish(handle)
                 }
             }
             if (acquired == null) {
@@ -1406,8 +1405,30 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
                     "replaceScoreHandle timed out after ${REPLACE_SCORE_HANDLE_TIMEOUT_MS}ms waiting for " +
                         "layoutMutex; publishing without the lock rather than risking an ANR",
                 )
-                _scoreHandle.value = handle
+                retireAndPublish(handle)
             }
+        }
+    }
+
+    /**
+     * Publishes [handle] and takes ownership of the one it displaces, **in that order**.
+     *
+     * The order is the whole point (SP4 Task 9, fix round 2). Retiring first looked safer and was not: while this
+     * method waits on [layoutMutex], a compute already holding the lock reaches [releaseRetiredScoreHandles] with
+     * `_scoreHandle.value` still equal to the handle just added to the list, and [retiredHandlesToRelease]'s
+     * "never free the live handle" rule drops it permanently. Not a crash — a silent leak of exactly the score this
+     * machinery exists to reclaim, on exactly the interleaving the timeout comment above says to expect. Publishing
+     * first means any drain that sees the entry also sees the new handle as current, so the entry is eligible.
+     *
+     * Called from both of [replaceScoreHandle]'s paths. Under the lock the two writes cannot be observed apart at
+     * all, because a drain needs that same lock. On the timeout path a drain CAN land between them; that is
+     * harmless, since it simply does not see an entry that has not been added yet and the next compute picks it up.
+     */
+    private fun retireAndPublish(handle: Long) {
+        val superseded = _scoreHandle.value
+        _scoreHandle.value = handle
+        if (superseded != null && superseded != handle) {
+            synchronized(retiredLock) { retiredScoreHandles += superseded }
         }
     }
 
@@ -1431,10 +1452,11 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
         // in the Reader nav route (mirroring `ReaderPreferencesController`). Small per-instance size;
         // deferred as a tracked follow-up (final whole-branch review finding #1).
         //
-        // [retiredScoreHandles] is deliberately NOT drained here. By this point it holds at most one entry — the
-        // one the audio engine refused to let go of (see [retiredHandlesToRelease]) — and that is precisely the
-        // kind of handle the rule below already declines to free. Every other superseded handle was released at the
-        // first compute after its swap, so there is nothing left here that teardown could safely reclaim.
+        // [retiredScoreHandles] is deliberately NOT drained here. Whatever is left in it at teardown is precisely
+        // what the audio side refused to release (see [retiredHandlesToRelease]) — a score the engine decoded into
+        // the player, or one a prepare is still suspended on — which is exactly the kind of handle the rule below
+        // already declines to free. Every other superseded handle was released at the first compute after its swap,
+        // so there is nothing here that teardown could safely reclaim.
         //
         // Do NOT close `handle`: the same raw Long is used by the playback
         // engine (which outlives this ViewModel via the bound service).

@@ -1,11 +1,12 @@
 package com.keynumber.folino.reader
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [retiredHandlesToRelease] — who frees the score handle a resync displaced, and when.
+ * [retiredHandlesToRelease] and [isScoreHandleHeld] — who frees the score handle a resync displaced, and when.
  *
  * `EditSessionRelay` used to call `nativeReleaseScore` on the handle it superseded, which made every remaining
  * holder a use-after-free; SP4 Task 9 moved that ownership to `ReaderViewModel` because the audio engine and the
@@ -40,11 +41,25 @@ class RetiredScoreHandleTest {
 
     @Test
     fun `the engine holding one handle does not pin the others`() {
-        // Why the list is bounded at one live retired handle rather than growing with the session: the engine holds
-        // at most one score, so at most one entry can ever be refused a release.
+        // Why the list stays bounded by what the audio side is really using rather than growing with the session:
+        // only the handles it names are refused, and every other retirement drains on the first compute after it.
         val (release, keep) = retiredHandlesToRelease(listOf(1L, 2L, 3L), currentHandle = 9L) { it == 2L }
         assertEquals(listOf(1L, 3L), release)
         assertEquals(listOf(2L), keep)
+    }
+
+    @Test
+    fun `a handle retired after the swap is published is still eligible`() {
+        // The fix-round-2 regression. `replaceScoreHandle` publishes the incoming handle and only then records the
+        // one it displaced; a drain running in between sees the NEW handle as current, so the superseded entry must
+        // not be mistaken for the live one and dropped. Retiring before publishing put the old handle in the list
+        // while `_scoreHandle.value` still equalled it, and the "never free the live handle" rule below discarded it
+        // permanently — no crash, just the leak this machinery exists to prevent.
+        val superseded = 1L
+        val incoming = 2L
+        val (release, keep) = retiredHandlesToRelease(listOf(superseded), currentHandle = incoming) { false }
+        assertEquals(listOf(superseded), release)
+        assertTrue(keep.isEmpty())
     }
 
     @Test
@@ -70,5 +85,34 @@ class RetiredScoreHandleTest {
         val (release, keep) = retiredHandlesToRelease(emptyList(), currentHandle = 1L) { false }
         assertTrue(release.isEmpty())
         assertTrue(keep.isEmpty())
+    }
+
+    // MARK: - What counts as "the audio side is still holding it" ([isScoreHandleHeld])
+
+    @Test
+    fun `the score the engine prepared is held`() {
+        assertTrue(isScoreHandleHeld(1L, preparedHandle = 1L, pendingHandles = emptyList()))
+        assertFalse(isScoreHandleHeld(2L, preparedHandle = 1L, pendingHandles = emptyList()))
+    }
+
+    @Test
+    fun `a prepare still in flight holds its handle before the engine ever names it`() {
+        // The window the claim exists for: `preparePlayback` captures the handle, suspends waiting for the playback
+        // service to bind, and only names it as prepared afterwards. A resync landing inside that window would
+        // otherwise see nothing holding it and free the score the coroutine is about to dereference.
+        assertTrue(isScoreHandleHeld(2L, preparedHandle = 1L, pendingHandles = listOf(2L)))
+    }
+
+    @Test
+    fun `a newer prepare does not release the older one's claim`() {
+        // Why the claim is a list and not a single slot: a second prepare for a newer handle must not unpin the
+        // handle an earlier coroutine is still suspended on.
+        assertTrue(isScoreHandleHeld(2L, preparedHandle = null, pendingHandles = listOf(2L, 3L)))
+        assertTrue(isScoreHandleHeld(3L, preparedHandle = null, pendingHandles = listOf(2L, 3L)))
+    }
+
+    @Test
+    fun `nothing prepared and nothing pending holds nothing`() {
+        assertFalse(isScoreHandleHeld(1L, preparedHandle = null, pendingHandles = emptyList()))
     }
 }

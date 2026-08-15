@@ -242,14 +242,33 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     @Volatile
     private var preparedScoreHandle: Long? = null
 
+    // Handles claimed by a [preparePlayback] coroutine that has not finished. A prepare captures its handle by
+    // value and then SUSPENDS on `engine.filterNotNull().first()` — the engine only exists once the playback
+    // service binds — before dereferencing it, so between the launch and the prepare there is a window in which
+    // [preparedScoreHandle] does not yet name the handle but the coroutine is about to use it.
+    //
+    // A single slot would not do: a second `preparePlayback` for a newer handle would overwrite the claim while
+    // the first coroutine was still suspended on the old one, which is exactly the case this guards. A list is
+    // also how duplicates stay correct — two prepares for the same handle each add and each remove one entry.
+    // Cancelling the previous job instead was the other option and is NOT sufficient: cancellation is cooperative,
+    // so a coroutine already past its suspend runs on to `ScoreMetadata.fetch` / `prepare` regardless.
+    //
+    // Entries are added and removed on Main (`viewModelScope` dispatches `Main.immediate`) and read from the
+    // retirement drain on `Dispatchers.Default`, hence the explicit monitor rather than `@Volatile`.
+    private val pendingPrepareHandles = mutableListOf<Long>()
+    private val prepareLock = Any()
+
     /**
-     * Whether the audio engine (and the bound service it shares the handle with) is still holding [handle].
+     * Whether the audio engine, the bound service it shares the handle with, or a prepare still in flight is
+     * holding [handle].
      *
      * `ReaderViewModel.installPreparedHandleProbe` wires this in from the Reader screen, which is the only layer
      * that sees both view models. A `true` answer means a superseded handle must NOT be released yet — see
      * `ReaderViewModel.retiredHandlesToRelease` for the decision this feeds.
      */
-    fun isPreparedWith(handle: Long): Boolean = preparedScoreHandle == handle
+    fun isPreparedWith(handle: Long): Boolean = synchronized(prepareLock) {
+        isScoreHandleHeld(handle, preparedScoreHandle, pendingPrepareHandles)
+    }
 
     // Rehearsal marks for the prepared score, loaded once the handle is known (see
     // [loadRehearsalMarks]). The transport bar renders one pill per entry, positioned by its
@@ -455,48 +474,73 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         // that we know it. Both happen synchronously off the same handle the Reader supplies.
         this.scoreHandle = scoreHandle
         loadRehearsalMarks(scoreHandle)
+        // Claim the handle for the whole life of the coroutine below, BEFORE it can suspend. The coroutine captures
+        // `scoreHandle` by value and waits on `engine.filterNotNull().first()` — potentially a long wait, since the
+        // engine only appears once the playback service binds — and then dereferences it (`ScoreMetadata.fetch`,
+        // `e.prepare`). A resync landing inside that window would otherwise see `preparedScoreHandle != scoreHandle`,
+        // conclude nothing holds it, and free it under the suspended coroutine. See [pendingPrepareHandles].
+        synchronized(prepareLock) { pendingPrepareHandles += scoreHandle }
         viewModelScope.launch {
-            val e = engine.filterNotNull().first()
-            ScoreMetadata.fetch(scoreHandle)?.let { meta ->
-                serviceBinder?.updateMetadata(title = meta.title, composer = meta.composer)
-            }
-            if (e.state.value != PlaybackState.STOPPED) return@launch
-            // Apply the current A4 reference pitch before prepare so the engine's
-            // internal masterTuningCents is set even if the engine wasn't connected when
-            // setA4ReferenceHz was first called (engine was null at that point).
-            val cents = 1200.0 * log2(_a4ReferenceHz.value / 440.0)
-            e.setMasterTuning(cents)
             try {
-                e.prepare(scoreHandle)
-                hasLoadedIntoPlayback = true
-                // Record what the ENGINE now holds, as opposed to what this view model was last told about (see
-                // [preparedScoreHandle]). Set only on the path where `prepare` actually ran: the early return above
-                // leaves the engine on its previous score, and claiming otherwise here would let `ReaderViewModel`
-                // free a handle the player is still decoding from.
-                preparedScoreHandle = scoreHandle
-                // Re-apply the seeded per-score playback scalars: a freshly prepared player resets the
-                // synth's master volume and tempo (and metronome — re-pushed by the caller via the
-                // soundfont-reload hook). Master tuning was already applied above; rate + volume are
-                // restored here so a reopened score starts at the user's saved values.
-                e.setMasterVolume(_masterVolume.value)
-                e.setRate(_tempoSeed.value)
-                // Transpose is a tuning shift on the same melodic channels the A4 calibration above
-                // uses, and prepare cleared it with the rest; count-in is a plain flag the fresh engine
-                // starts with off. Re-push both so a reopened (or soundfont-swapped) score keeps them.
-                e.setTranspose(transposeSemitones)
-                e.countInEnabled = countInEnabled
-                // Re-apply the active loop now that a player is prepared (engine loop calls are
-                // no-ops before prepare). Restores a persisted A–B range or full-score loop.
-                _repeatController.value?.reapply()
-                // Replay persisted per-staff mixer overrides (program / volume). Runs after prepare so
-                // the engine has its mixer channels and the fresh player's defaults are overwritten.
-                onPrepared?.invoke()
-                // Record the handle so the service can re-prepare (hot-swap) the engine when a
-                // high-quality soundfont download completes.
-                serviceBinder?.notePreparedScore(scoreHandle)
-            } catch (ex: Exception) {
-                android.util.Log.e("ReaderAudioVM", "prepare failed: ${ex.message}", ex)
+                prepareLoadedScore(scoreHandle)
+            } finally {
+                // Every exit releases the claim: the early return below, a thrown prepare, and cancellation of
+                // `viewModelScope` when the Reader closes. A claim left behind would pin its score for the life of
+                // the ViewModel, turning the fix for one leak into another.
+                synchronized(prepareLock) { pendingPrepareHandles.remove(scoreHandle) }
             }
+        }
+    }
+
+    /**
+     * The body of [preparePlayback]'s coroutine, split out only so its caller can wrap it in the one `finally` that
+     * releases the [pendingPrepareHandles] claim on every exit — including `return@launch`, which would otherwise
+     * need repeating at each early return.
+     *
+     * [scoreHandle] is safe to dereference throughout precisely because that claim is held: `ReaderViewModel`'s
+     * retirement drain asks [isPreparedWith] before freeing a superseded handle, and a claimed one is refused.
+     */
+    private suspend fun prepareLoadedScore(scoreHandle: Long) {
+        val e = engine.filterNotNull().first()
+        ScoreMetadata.fetch(scoreHandle)?.let { meta ->
+            serviceBinder?.updateMetadata(title = meta.title, composer = meta.composer)
+        }
+        if (e.state.value != PlaybackState.STOPPED) return
+        // Apply the current A4 reference pitch before prepare so the engine's
+        // internal masterTuningCents is set even if the engine wasn't connected when
+        // setA4ReferenceHz was first called (engine was null at that point).
+        val cents = 1200.0 * log2(_a4ReferenceHz.value / 440.0)
+        e.setMasterTuning(cents)
+        try {
+            e.prepare(scoreHandle)
+            hasLoadedIntoPlayback = true
+            // Record what the ENGINE now holds, as opposed to what this view model was last told about (see
+            // [preparedScoreHandle]). Set only on the path where `prepare` actually ran: the early return above
+            // leaves the engine on its previous score, and claiming otherwise here would let `ReaderViewModel`
+            // free a handle the player is still decoding from.
+            preparedScoreHandle = scoreHandle
+            // Re-apply the seeded per-score playback scalars: a freshly prepared player resets the
+            // synth's master volume and tempo (and metronome — re-pushed by the caller via the
+            // soundfont-reload hook). Master tuning was already applied above; rate + volume are
+            // restored here so a reopened score starts at the user's saved values.
+            e.setMasterVolume(_masterVolume.value)
+            e.setRate(_tempoSeed.value)
+            // Transpose is a tuning shift on the same melodic channels the A4 calibration above
+            // uses, and prepare cleared it with the rest; count-in is a plain flag the fresh engine
+            // starts with off. Re-push both so a reopened (or soundfont-swapped) score keeps them.
+            e.setTranspose(transposeSemitones)
+            e.countInEnabled = countInEnabled
+            // Re-apply the active loop now that a player is prepared (engine loop calls are
+            // no-ops before prepare). Restores a persisted A–B range or full-score loop.
+            _repeatController.value?.reapply()
+            // Replay persisted per-staff mixer overrides (program / volume). Runs after prepare so
+            // the engine has its mixer channels and the fresh player's defaults are overwritten.
+            onPrepared?.invoke()
+            // Record the handle so the service can re-prepare (hot-swap) the engine when a
+            // high-quality soundfont download completes.
+            serviceBinder?.notePreparedScore(scoreHandle)
+        } catch (ex: Exception) {
+            android.util.Log.e("ReaderAudioVM", "prepare failed: ${ex.message}", ex)
         }
     }
 
@@ -562,6 +606,25 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
  * Current measure index of a playback cursor, or null. Every audio cursor variant carries a measure
  * index except a staff-default clef anchor (which is not a playback position).
  */
+/**
+ * Whether anything on the audio side is still holding [handle] — the decision behind
+ * [ReaderAudioViewModel.isPreparedWith], and therefore behind whether `ReaderViewModel` may free a score a resync
+ * superseded.
+ *
+ * Two holders, and both have to count. [preparedHandle] is what `prepare` actually decoded into the player, which
+ * the bound `MediaSessionService` also keeps for soundfont hot-swap — it can be re-dereferenced minutes later,
+ * after the Reader is gone. [pendingHandles] are prepares that have launched but not finished: each captured its
+ * handle by value and is suspended waiting for the engine to bind, so it will dereference a handle that
+ * [preparedHandle] does not yet name.
+ *
+ * Pure and `internal` so it can be pinned off-device: [ReaderAudioViewModel] is an `AndroidViewModel` and this
+ * module's JVM test source set has no `Application` to build one with (see `RecomputeSkipTest`'s own doc for the
+ * same constraint). Freeing too early here is a use-after-free on the audio render thread; never freeing is the
+ * leak the retirement drain exists to close, so both directions are worth a test.
+ */
+internal fun isScoreHandleHeld(handle: Long, preparedHandle: Long?, pendingHandles: List<Long>): Boolean =
+    preparedHandle == handle || pendingHandles.contains(handle)
+
 internal fun ScoreCursor.measureIndexOrNull(): Int? = when (this) {
     is ScoreCursor.Beat -> measureIndex
     is ScoreCursor.Item -> when (val id = arg0) {
