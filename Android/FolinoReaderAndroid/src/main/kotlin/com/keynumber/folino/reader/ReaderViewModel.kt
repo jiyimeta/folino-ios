@@ -1,6 +1,7 @@
 package com.keynumber.folino.reader
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.keynumber.folino.editor.EditSessionHost
@@ -29,6 +30,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 // A4 page height in millimetres, used as the layout canvas height. The layout WIDTH is no longer
@@ -41,22 +43,28 @@ private const val PAGE_HEIGHT_MM = 297.0
 // so rapid inspector edits (e.g. dragging staff size) coalesce into one compute.
 private const val RECOMPUTE_DEBOUNCE_MS = 120L
 
+// Bound on how long [ReaderViewModel.replaceScoreHandle] will wait for `layoutMutex` before giving up and
+// publishing without it (SP4 Task 3 review, Minor 2). Comfortably above any real layout compute, and
+// comfortably below Android's ANR window for a main-thread stall, so tripping this at all is itself a signal
+// something is wrong — see [ReaderViewModel.replaceScoreHandle]'s own doc.
+private const val REPLACE_SCORE_HANDLE_TIMEOUT_MS = 3_000L
+
+private const val TAG = "ReaderViewModel"
+
 /**
  * Inputs to the layout recompute loop, bundled so a single `combine(...)` can carry all five without a
  * generic quintuple. [pdfPlayback] carries the SAME `PdfPlaybackState` the `pdfPlayback` StateFlow does
  * (Task 12) — not a separate derived flag — precisely so there is only one field to keep in sync; see
  * [shouldSkipLayoutRecompute]'s own doc for why `Ready` must suppress this loop. [editRevision] (SP4) is
- * `EditSessionHost.requestRelayout()`'s counter: folding it into this `data class`, rather than tracking it
- * out-of-band, is what makes a bump on its own register as a change to this whole value via the
- * auto-generated `equals`/`hashCode` — see [ReaderEditHostTest] for the regression guard on exactly that,
- * which is what makes `combine` emit a fresh value and `startRecomputeLoop`'s `mapLatest` restart on an edit.
+ * `EditSessionHost.requestRelayout()`'s counter, folded in purely so [startRecomputeLoop] can see it
+ * alongside the other four inputs as one value.
  *
- * `internal`, not `private`, only so [ReaderEditHostTest] — a JVM test with no Robolectric and no Android
- * `Application` in this module's test source set (see `RecomputeSkipTest`'s own doc for the same
- * constraint) — can construct values of it directly, mirroring how [shouldSkipLayoutRecompute] is
- * `internal` for the same reason.
+ * This `data class`'s auto-generated `equals`/`hashCode` play NO role in driving the loop: `combine` here
+ * has no `distinctUntilChanged`, so every upstream emission reaches `mapLatest` regardless of whether the
+ * resulting [RecomputeInputs] would compare equal to the previous one. Whether a pass gets to skip
+ * RECOMPUTE_DEBOUNCE_MS is a separate, later decision — see [isEditDrivenRecompute].
  */
-internal data class RecomputeInputs(
+private data class RecomputeInputs(
     val scoreHandle: Long?,
     val options: LayoutOptions,
     val widthMm: Double?,
@@ -83,6 +91,25 @@ internal fun shouldSkipLayoutRecompute(
     layoutWidthMm: Double?,
     isPdfPlaybackReady: Boolean,
 ): Boolean = scoreHandle == null || layoutWidthMm == null || isPdfPlaybackReady
+
+/**
+ * Pure decision for [ReaderViewModel.startRecomputeLoop] (SP4 Task 3): true when [editRevision] —
+ * `EditSessionHost.requestRelayout()`'s counter — has advanced since [previousEditRevision], the value the
+ * loop last COMPLETED a compute for (deliberately not merely attempted; see
+ * [ReaderViewModel.previousEditRevision]'s own doc for why a cancelled attempt must not consume it). A
+ * `true` result is what lets a pass skip RECOMPUTE_DEBOUNCE_MS: an edit is one discrete user action, not the
+ * rapid successive settings changes that debounce exists to coalesce, so it alone earns the skip.
+ *
+ * This is unrelated to [RecomputeInputs]'s own `equals` — see that class's doc — which plays no part in
+ * driving the loop; this is the actual, separate gate that decides the debounce.
+ *
+ * `internal`, not `private`, so `ReaderEditHostTest` — a JVM test with no Robolectric and no Android
+ * `Application` in this module's test source set (see `RecomputeSkipTest`'s own doc for the same
+ * constraint) — can pin this decision directly, mirroring how [shouldSkipLayoutRecompute] is `internal` for
+ * the same reason.
+ */
+internal fun isEditDrivenRecompute(editRevision: Int, previousEditRevision: Int): Boolean =
+    editRevision != previousEditRevision
 
 /**
  * Two-stack undo/redo history over whole annotation-layer snapshots (`List<T>`), generic over the
@@ -191,6 +218,19 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
     private val _layoutGeneration = MutableStateFlow(0)
     val layoutGeneration: StateFlow<Int> = _layoutGeneration.asStateFlow()
 
+    // Set once, by [load]'s `.mscz` branch, and never read for its `.raw` value anywhere in this class (SP4
+    // Task 3 review, Critical 1 — [pagedProgramAndBreaks] and [horizontalProgram] used to read `handle?.raw`
+    // directly, which went stale forever after a resync since `replaceScoreHandle` only ever published
+    // `_scoreHandle`; both now read `_scoreHandle.value` instead, which `replaceScoreHandle` keeps current).
+    // This field still has to exist, though: `ScoreHandle` releases its native score from a `finalize()`
+    // safety net the moment the wrapper becomes unreachable (see `onCleared`'s "Do NOT close `handle`"
+    // comment for the established policy this continues), and `_scoreHandle` is a bare `Long` with no such
+    // hook — nothing else in this class keeps that Kotlin wrapper object alive. Holding a reference here is
+    // what keeps it reachable, and therefore un-finalized, for exactly as long as the class already commits
+    // to leaking it. A resync does NOT need to refresh this field to match: `ScoreHandle`'s only
+    // raw-wrapping constructor is `internal` to its own module (unreachable from here), and since nothing
+    // reads `.raw` off it anymore, the object merely being stale is harmless — it is pinning presence, not
+    // its `.raw` value, that this field is for.
     private var handle: ScoreHandle? = null
 
     // Serializes every native layout call (recompute loop, paged fetch, PiP, page breaks) on this VM.
@@ -256,11 +296,13 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
     // [loadedScoreId] immediately before publishing — mirrors [openPdf]'s own supersession guard).
     private var pdfParseJob: Job? = null
 
-    // The `editRevision` value [startRecomputeLoop]'s `mapLatest` last processed (or attempted to process).
-    // Read and written only from inside that block, which is a single-collector coroutine, so no
-    // synchronization is needed. Lets that loop tell an edit-driven pass — the revision advanced since the
-    // last one, the only thing [requestRelayout] ever does to it — apart from every other trigger, which
-    // still owes RECOMPUTE_DEBOUNCE_MS.
+    // The `editRevision` value [startRecomputeLoop]'s `mapLatest` last COMPLETED a compute for — updated
+    // ONLY on that block's success path, deliberately not at the top where a pass merely starts (SP4 Task 3
+    // review, Minor 1). If a non-edit input (e.g. a viewport resize) cancels an edit-driven pass before its
+    // compute lands, and `mapLatest` restarts with the SAME `editRevision`, updating this any earlier would
+    // make that restart look like a non-edit change and pay RECOMPUTE_DEBOUNCE_MS the original edit was
+    // still owed. Read and written only from inside that block, which is a single-collector coroutine, so no
+    // synchronization is needed. See [isEditDrivenRecompute] for the comparison this drives.
     private var previousEditRevision = 0
 
     init {
@@ -292,6 +334,13 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      *
      * Skips entirely per [shouldSkipLayoutRecompute] (Task 12) — see that function's own doc for why a
      * PDF's background-parsed score must never reach the native compute call below.
+     *
+     * The captured handle is re-verified against `_scoreHandle.value` under [layoutMutex] immediately before
+     * the native call, and the pass silently abandons — no error state, since a resync that invalidated it
+     * also bumps `_scoreHandle`, itself a `combine` input, so a fresh pass is already on its way — if a
+     * resync swapped the handle out from under this pass in that window. See [layoutMutex]'s own doc for why
+     * that window exists even with the lock in place, and [replaceScoreHandle]'s own doc for the guarantee
+     * this makes possible.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun startRecomputeLoop() {
@@ -313,20 +362,23 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
                     // both are non-null whenever this line is reached.
                     val handle = h ?: return@mapLatest
                     val width = widthMm ?: return@mapLatest
-                    // See this method's own doc: an edit-driven pass skips the debounce. `editDriven` is
-                    // decided by comparing THIS pass's revision to the one last processed — [requestRelayout]
-                    // is the only thing that ever advances it, so any other change leaves it unchanged.
-                    val editDriven = editRevision != previousEditRevision
-                    previousEditRevision = editRevision
-                    if (!editDriven) delay(RECOMPUTE_DEBOUNCE_MS)
+                    // See this method's own doc: an edit-driven pass skips the debounce.
+                    if (!isEditDrivenRecompute(editRevision, previousEditRevision)) delay(RECOMPUTE_DEBOUNCE_MS)
                     // Dispatch to Default BEFORE acquiring layoutMutex, and let the release happen there too
                     // — see that field's own doc for why this ordering, not the other way round, is what
                     // keeps [replaceScoreHandle]'s `runBlocking` a bounded stall instead of a deadlock.
                     val programBytes = withContext(Dispatchers.Default) {
                         layoutMutex.withLock {
+                            // Re-check against the CURRENT published handle, now that the lock is held:
+                            // `handle` was captured before this pass crossed `delay` and a dispatcher hop, and
+                            // a resync (`replaceScoreHandle`, which publishes under this SAME lock) can free
+                            // it in that window even though `mapLatest`'s cancellation is cooperative and may
+                            // not have caught up yet — see `layoutMutex`'s own doc. Abandon silently rather
+                            // than call native on a handle that may already be freed.
+                            if (_scoreHandle.value != handle) return@withLock null
                             SheetMusicJNI.nativeComputeLayout(handle, width, PAGE_HEIGHT_MM, opts.encode())
                         }
-                    }
+                    } ?: return@mapLatest
                     if (programBytes.isEmpty()) {
                         _state.value = ReaderState.Error("Layout produced no output")
                         return@mapLatest
@@ -339,6 +391,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
                     }
                     _state.value = ReaderState.Ready(program)
                     _layoutGeneration.value += 1
+                    // Only mark this revision COMPLETE now — see [previousEditRevision]'s own doc for why an
+                    // earlier assignment (e.g. before the native call) would wrongly consume the "still owed"
+                    // debounce skip if this pass got cancelled and had to be retried for the same edit.
+                    previousEditRevision = editRevision
                 }
                 .collect { }
         }
@@ -680,12 +736,19 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
         pageWidthMm: Double,
         pageHeightMm: Double,
     ): Pair<DrawProgram, DoubleArray>? {
-        val h = handle?.raw ?: return null
+        // `_scoreHandle.value`, not `handle?.raw` (SP4 Task 3 review, Critical 1) — `replaceScoreHandle`
+        // keeps the former current across a resync; see [handle]'s own field doc for why the latter would
+        // go stale forever after one.
+        val h = _scoreHandle.value ?: return null
         // Dispatch to Default BEFORE acquiring layoutMutex, and let the release happen there too — see that
         // field's own doc for why this ordering is what keeps `replaceScoreHandle`'s `runBlocking` a bounded
         // stall instead of a deadlock.
         return withContext(Dispatchers.Default) {
             layoutMutex.withLock {
+                // Re-check against the CURRENT published handle, now that the lock is held: `h` was captured
+                // before this suspended across a dispatch, and a resync (`replaceScoreHandle`, which
+                // publishes under this SAME lock) can free it in that window — see `layoutMutex`'s own doc.
+                if (_scoreHandle.value != h) return@withLock null
                 val optsBytes = layoutOptions.value.encode()
                 val programBytes = SheetMusicJNI.nativeComputeLayout(h, pageWidthMm, pageHeightMm, optsBytes)
                 if (programBytes.isEmpty()) return@withLock null
@@ -707,7 +770,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * also writes the shared `LayoutDocumentCache`.
      */
     suspend fun horizontalProgram(): DrawProgram? {
-        val h = handle?.raw ?: return null
+        // `_scoreHandle.value`, not `handle?.raw` — see `pagedProgramAndBreaks`'s identical fix and
+        // [handle]'s own field doc.
+        val h = _scoreHandle.value ?: return null
         val opts = layoutOptions.value.copy(mode = ReaderLayoutMode.HORIZONTAL)
         // Horizontal is a natural single-system layout (no wrapping), so the width arg is irrelevant here;
         // PAGE_WIDTH_MM is just a non-degenerate seed. (PiP also drives this path.)
@@ -716,10 +781,13 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
         // stall instead of a deadlock.
         val bytes = withContext(Dispatchers.Default) {
             layoutMutex.withLock {
+                // Re-check against the CURRENT published handle — see `pagedProgramAndBreaks`'s identical
+                // guard and `layoutMutex`'s own doc for why this closes the resync TOCTOU window.
+                if (_scoreHandle.value != h) return@withLock null
                 SheetMusicJNI.nativeComputeLayout(h, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, opts.encode())
             }
         }
-        if (bytes.isEmpty()) return null
+        if (bytes == null || bytes.isEmpty()) return null
         return try {
             DrawProgramReader.decode(bytes)
         } catch (e: Exception) {
@@ -938,14 +1006,29 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * pass queued onto another thread, or a coroutine that will read it on the next frame, is a
      * use-after-free, not a stale read. [startRecomputeLoop]'s `mapLatest` cancels an in-flight compute
      * cooperatively when a newer input arrives, which is NOT synchronous and does not by itself prove the
-     * old handle is no longer live — holding [layoutMutex] is what proves that: every native call that reads
-     * the handle takes it first, so once this thread holds the lock, nothing else can be mid-call.
+     * old handle is no longer live — holding [layoutMutex] WHILE RE-CHECKING `_scoreHandle.value` is what
+     * proves that, and only for the layout calls: [startRecomputeLoop], [pagedProgramAndBreaks], and
+     * [horizontalProgram] all take this lock immediately before their `nativeComputeLayout`/
+     * `nativePageBreaks` call and abandon the pass if the handle they captured no longer matches what is
+     * published — see [layoutMutex]'s own doc for why the capture and the native call can otherwise straddle
+     * a resync even with the lock in place.
+     *
+     * **This guarantee stops at the layout calls — it is an OPEN GAP, not something this method closes.**
+     * `TapToCursor.kt` and `AbBoundaryMarkersOverlay.kt` read `scoreHandle` per-recomposition (a narrow,
+     * self-correcting window), but `ReaderAudioViewModel` CACHES the raw handle in its own `scoreHandle:
+     * Long?` field (set once by `preparePlayback`) and hands it to the audio engine — that cached value is
+     * neither refreshed by this method nor proven safe by anything here. Deciding who owns that lifetime
+     * belongs to the task that wires the relay up end to end, where the composition root can see every
+     * holder at once; this paragraph exists so that decision isn't made blind.
      *
      * `runBlocking` is what makes taking that lock synchronous from this non-suspending method: a genuine
      * stall of the calling (main) thread while any in-flight `nativeComputeLayout`/`nativePageBreaks` call
      * finishes, rather than an async "settle later." This is a deliberate, already-weighed trade-off, not an
      * oversight — `replaceScoreHandle` only runs on a resync, and SP3's device test measured zero resyncs
-     * across a full scripted edit, so it is a rare recovery path rather than a per-keystroke cost.
+     * across a full scripted edit. That figure is SP3's, carried over rather than re-measured on this
+     * branch, but nothing here changes what triggers a resync, so it remains the best available evidence
+     * that this is a rare recovery path rather than a per-keystroke cost. [REPLACE_SCORE_HANDLE_TIMEOUT_MS]
+     * bounds the stall regardless, in case that evidence ever stops holding.
      *
      * That stall is bounded and safe rather than a deadlock ONLY because every [layoutMutex] critical
      * section in this class dispatches to `Dispatchers.Default` BEFORE acquiring the lock and releases it
@@ -954,10 +1037,32 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * stall: `runBlocking`'s own event loop does not pump the platform `Looper` the way `Dispatchers.Main`
      * needs, so a compute that could only release the lock by resuming onto Main would never get the chance
      * to while Main is parked here.
+     *
+     * Publishes only [_scoreHandle], not [handle] (the private `ScoreHandle` wrapper) — SP4 Task 3 review,
+     * Critical 1. [pagedProgramAndBreaks] and [horizontalProgram] used to read `handle?.raw`, which this
+     * method could not keep current: `ScoreHandle`'s only raw-wrapping constructor is `internal` to its own
+     * module, unreachable from here. Both functions were switched to read `_scoreHandle.value` instead — see
+     * their own docs and [handle]'s own field doc for why that field no longer needs to track a resync at
+     * all (nothing reads its `.raw` value anymore; it exists purely to keep the wrapper reachable so its
+     * `finalize()` safety net never fires).
      */
     override fun replaceScoreHandle(handle: Long) {
         runBlocking {
-            layoutMutex.withLock {
+            val acquired = withTimeoutOrNull(REPLACE_SCORE_HANDLE_TIMEOUT_MS) {
+                layoutMutex.withLock {
+                    _scoreHandle.value = handle
+                }
+            }
+            if (acquired == null) {
+                // Minor 2 (SP4 Task 3 review): giving up and publishing anyway turns a would-be ANR into a
+                // diagnosable report. Tripping this means either the dispatch-before-lock invariant above was
+                // violated somewhere, or a native layout call is genuinely still running past this bound —
+                // treat this log line as a bug report, not routine output.
+                Log.e(
+                    TAG,
+                    "replaceScoreHandle timed out after ${REPLACE_SCORE_HANDLE_TIMEOUT_MS}ms waiting for " +
+                        "layoutMutex; publishing without the lock rather than risking an ANR",
+                )
                 _scoreHandle.value = handle
             }
         }
