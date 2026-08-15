@@ -86,7 +86,10 @@ import androidx.ink.strokes.Stroke
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.editor.EditUiState
+import com.keynumber.folino.editor.caretRectMm
 import com.keynumber.folino.editor.editingHitTestForTap
+import com.keynumber.folino.reader.editing.EDIT_CARET_MINIMUM_WIDTH_MM
+import com.keynumber.folino.reader.editing.EditingCaretOverlay
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationLayers
@@ -104,6 +107,7 @@ import com.keynumber.folino.reader.pdf.PdfPlaybackState
 import com.keynumber.folino.reader.pdf.PdfVerticalScore
 import com.keynumber.folino.reader.swiftjava.FolinoReaderJNI
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.EditCaretFrame
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
@@ -814,6 +818,7 @@ fun ReaderScreen(
                         bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
                         annotation = annotationSurface,
                         autoFollowEnabled = autoFollowEnabled,
+                        layoutGeneration = layoutGeneration,
                     )
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
                         s, scoreHandle, fontProvider, audioVm, layoutOptions,
@@ -1114,6 +1119,13 @@ private fun ReadyScore(
     /** Reached with the hit-test result of an editing tap (Task 4), or null to deselect. Never called while
      * `!editing.isEditing`. */
     onSelectItem: (ByteArray?) -> Unit = {},
+    /**
+     * [ReaderViewModel.layoutGeneration] — bumped once per successful layout recompute. The caret is positioned
+     * against the LAYOUT rather than against the score model, so a reflow moves it even when `editing.caretItem` is
+     * unchanged; this is the signal that re-resolves it, exactly as the annotation overlay's stroke placement uses
+     * it. Defaults to 0 so a caller that has no edit session to show is unaffected by it never changing.
+     */
+    layoutGeneration: Int = 0,
 ) {
     val page = state.program.pages.first()
     // Armed only when a surface state was passed AND its tool is out; every gesture gate below reads
@@ -1434,6 +1446,33 @@ private fun ReadyScore(
                 val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                 val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                 scoreHandle?.let { handle ->
+                    // The insertion caret (Task 5). Sits here, a sibling of `BandedScorePage` inside the panning
+                    // `graphicsLayer`'s content box and using the same transform params as the three overlays below,
+                    // so pan and zoom move it WITH the score. It also has to be drawn AFTER the score for its
+                    // `BlendMode.Multiply` to have the notation to multiply into — see [EditingCaretOverlay]'s doc.
+                    //
+                    // The rect comes from a JNI read, so it is resolved in a LaunchedEffect rather than during
+                    // composition: a pinch recomposes this function every frame and must not pay for it. The keys
+                    // are the three things that actually move the answer — the handle, the caret item, and
+                    // `layoutGeneration` (a reflow moves the rect with the item unchanged; see that parameter's
+                    // own doc). Null caret item ⇒ null rect, which the overlay draws as nothing.
+                    val caretItem = if (editing.isEditing) editing.caretItem else null
+                    var caretRect by remember { mutableStateOf<EditCaretFrame?>(null) }
+                    LaunchedEffect(handle, caretItem, layoutGeneration) {
+                        caretRect = caretItem?.let { caretRectMm(handle, it, EDIT_CARET_MINIMUM_WIDTH_MM) }
+                    }
+                    EditingCaretOverlay(
+                        rectMm = caretRect,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset.Zero,
+                        // The same translucent accent column the playback head below uses, because it means the
+                        // same thing — "the music is here" (iOS parity: `EditingSelectionOverlay.caretLayer`).
+                        color = abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = with(density) { vPadPx.toDp() }),
+                    )
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
                         cursorFlow = audioVm.currentCursor,

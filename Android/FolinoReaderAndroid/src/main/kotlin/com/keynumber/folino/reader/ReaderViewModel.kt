@@ -14,6 +14,9 @@ import io.github.jiyimeta.sheetmusic.PartsStavesWireCodec
 import io.github.jiyimeta.sheetmusic.PdfScoreHandle
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.model.SelectionTint
+import io.github.jiyimeta.sheetmusic.audio.serialization.SelectionTintCodec
 import io.github.jiyimeta.sheetmusic.compose.draw.DrawProgramReader
 import io.github.jiyimeta.sheetmusic.compose.draw.model.DrawProgram
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +113,23 @@ internal fun shouldSkipLayoutRecompute(
  */
 internal fun isEditDrivenRecompute(editRevision: Int, previousEditRevision: Int): Boolean =
     editRevision != previousEditRevision
+
+/**
+ * The `SelectionTintCodec` payload [ReaderViewModel.setEditSelection] hands `nativeEncodeDrawProgram`: [argb] packed
+ * as ssm's own `SelectionTintWire` over [ids], which are full-score-addressed `ScoreItemID`s (the same values
+ * `nativeEditingHitTest` answers with). An EMPTY [ids] is not a degenerate case — it is how the selection is
+ * CLEARED, and ssm documents that an empty selection reproduces `nativeComputeLayout`'s bytes exactly, so tinting
+ * and untinting are one call.
+ *
+ * A one-line wrapper over the generated codec, on purpose. It exists as a named `internal` function, not inlined at
+ * the call site, for the same reason [shouldSkipLayoutRecompute] and [isEditDrivenRecompute] do: this module's JVM
+ * test source set has no Robolectric and no Android `Application`, so a test cannot construct a [ReaderViewModel] at
+ * all — pulling the payload out is what makes the one part of `setEditSelection` that is pure assertable off-device.
+ * Never hand-encode this blob: the wire format is ssm's, and a Kotlin second spelling of it would recolor the wrong
+ * notes with nothing at runtime noticing.
+ */
+internal fun selectionTintPayload(ids: List<ScoreItemID>, argb: UInt): ByteArray =
+    SelectionTintCodec.encode(SelectionTint(argb = argb, items = ids))
 
 /**
  * Two-stack undo/redo history over whole annotation-layer snapshots (`List<T>`), generic over the
@@ -792,6 +812,67 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
             DrawProgramReader.decode(bytes)
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Recolors [ids] in the CACHED layout (SP4 Task 5). `nativeEncodeDrawProgram` never relayouts — that is the whole
+     * reason this entry point exists: selecting a note must not re-engrave the score, both because re-engraving per
+     * tap is the cost this avoids and because it would move every rect the caret and the callout are positioned
+     * from. An empty [ids] reproduces `nativeComputeLayout`'s bytes exactly, so CLEARING the selection is this same
+     * call with an empty list, not a separate path.
+     *
+     * An empty RESULT is not an error and must not surface as one: it means no layout is cached for this handle yet
+     * — the recompute loop has not run for it, or (as of the pinned ssm branch) a relayout an edit overtook refused
+     * to cache rather than caching a stale document. Leave the current program alone and wait; the loop is already
+     * on its way, and its own publish will carry the selection once [requestRelayout] has driven it.
+     *
+     * **Handle safety.** This is a fourth native call site on the score handle, so it follows the same two-part
+     * pattern [startRecomputeLoop], [pagedProgramAndBreaks] and [horizontalProgram] do — see [layoutMutex]'s own doc
+     * for both halves. It dispatches to [Dispatchers.Default] BEFORE acquiring [layoutMutex] (acquiring on Main and
+     * releasing after hopping back would turn [replaceScoreHandle]'s `runBlocking` from a bounded stall into a
+     * deadlock), and it re-checks `_scoreHandle.value` as the first statement inside `withLock` (the lock alone
+     * proves only that no native call is RUNNING, not that none will START with a handle a resync already freed).
+     * Without both, an edit session resyncing mid-selection is a use-after-free, not a stale read.
+     *
+     * **Never clobbers a PDF.** The recompute loop is kept off a PDF by [shouldSkipLayoutRecompute] precisely so a
+     * PDF's background-parsed score — which flows through this SAME `_scoreHandle` — can't replace the document's
+     * own page pixels with reconstructed notation. This function bypasses that loop entirely, so it carries its own
+     * guard: it publishes only when `_state` is ALREADY [ReaderState.Ready], i.e. only when the surface is showing a
+     * draw program this call is entitled to replace. That is the direct form of the same rule and is strictly wider
+     * than testing `pdfPlayback` — it also declines to overwrite `Loading` and `Error`, neither of which has a
+     * program to re-encode either. The check is repeated immediately before the publish, not only on entry: the
+     * native call suspends across a dispatcher hop, and [load] can retarget to a PDF in that window. Both the
+     * re-check and the write run on Main (`viewModelScope` dispatches `Main.immediate`, and the `withContext` above
+     * resumes back onto it) with no suspension point between them, so they cannot tear against [load]'s own
+     * Main-thread writes.
+     */
+    fun setEditSelection(ids: List<ScoreItemID>, argb: UInt) {
+        viewModelScope.launch {
+            val h = _scoreHandle.value ?: return@launch
+            // Cheap early-out so a PDF (or a not-yet-laid-out score) never pays the JNI round trip at all. The
+            // authoritative check is the identical one below, after the hop — see this function's own doc.
+            if (_state.value !is ReaderState.Ready) return@launch
+            val selectionBytes = selectionTintPayload(ids, argb)
+            val programBytes = withContext(Dispatchers.Default) {
+                layoutMutex.withLock {
+                    if (_scoreHandle.value != h) return@withLock null
+                    SheetMusicJNI.nativeEncodeDrawProgram(h, selectionBytes)
+                }
+            } ?: return@launch
+            if (programBytes.isEmpty()) return@launch
+            val program = try {
+                DrawProgramReader.decode(programBytes)
+            } catch (e: Exception) {
+                // Deliberately NOT ReaderState.Error, unlike the recompute loop's identical decode: that loop owns
+                // the score's only program, so it has nothing to fall back on, whereas a selection re-encode that
+                // fails leaves a perfectly good untinted program on screen. Blanking the score to report that a
+                // highlight didn't apply would be the worse outcome.
+                Log.e(TAG, "Could not decode the tinted draw program: ${e.message}")
+                return@launch
+            }
+            if (_state.value !is ReaderState.Ready) return@launch
+            _state.value = ReaderState.Ready(program)
         }
     }
 
