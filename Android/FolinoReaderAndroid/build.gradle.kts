@@ -72,6 +72,10 @@ dependencies {
     // and hot-swaps the engine onto it via SoundfontController + the generated store view model.
     implementation(project(":FolinoSoundfontAndroid"))
 
+    // The edit session (SP3): the relay, its host contract, and the generated bridge. The Reader owns the
+    // score handle the mirror session lives beside, so it is what implements EditSessionHost.
+    api(project(":FolinoEditorAndroid"))
+
     // Runtime support for the swift-java-generated bindings under java-generated/
     // (FolinoReaderJNI → shared Domain scroll-follow logic). Locally published to
     // mavenLocal from Packages/Features/Settings/.build/checkouts/swift-java.
