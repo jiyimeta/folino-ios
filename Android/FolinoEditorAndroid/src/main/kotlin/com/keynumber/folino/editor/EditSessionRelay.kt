@@ -177,6 +177,47 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
 enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRROR_REFUSED, RESYNC_FAILED }
 
 /**
+ * The relay's own surface, behind an interface for the same reason `EditBridging` and `EditNatives` are:
+ * `EditSessionRelay` is a final class, so SP4's `EditSessionController` — the piece actually worth being sure
+ * about, since it is what maps a five-case `OpenResult` down to what the UI shows — would otherwise be testable
+ * only on a device. `EditSessionRelay` is a pure implementation of this interface; nothing here may branch on its
+ * behalf, and `EditSessionController` is written against this interface, never against the concrete class.
+ *
+ * Every member mirrors a method `EditSessionRelay` already exposes — `open`/`close` plus one entry per editing op —
+ * so add one here whenever the relay grows a new op the controller needs to reach.
+ */
+interface EditSessionOps {
+    fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult
+    fun close()
+
+    fun selectItem(bytes: ByteArray)
+    fun inputPitch(letter: String)
+    fun deleteSelection()
+    fun writeRest()
+    fun armDuration(kind: Int)
+    fun toggleArmedDot()
+    fun setArmedDots(dots: Int)
+    fun setSelectionDuration(kind: Int)
+    fun setSelectionDots(dots: Int)
+    fun toggleSelectionDot()
+    fun shiftPitch(semitones: Int)
+    fun shiftOctave(octaves: Int)
+    fun setAccidental(raw: String)
+    fun toggleAddToChord()
+    fun removeSelectedNoteFromChord()
+    fun toggleTie()
+    fun appendTiedNote()
+    fun createTuplet(actualNotes: Int)
+    fun removeTuplet()
+    fun selectPreviousElement()
+    fun selectNextElement()
+    fun setActiveVoice(voice: Int)
+    fun setPlaybackActive(active: Boolean)
+    fun undo()
+    fun redo()
+}
+
+/**
  * The single path from a user action to the score.
  *
  * Editing on Android has an authoritative score in Folino's `.so` and a rendering score behind ssm's handle
@@ -211,7 +252,7 @@ class EditSessionRelay(
     private val bridge: EditBridging,
     private val host: EditSessionHost,
     private val natives: EditNatives = RealEditNatives,
-) {
+) : EditSessionOps {
     /** Resyncs performed this session. Read by the tests, and by SP4's diagnostics. */
     var resyncCount: Int = 0
         private set
@@ -246,7 +287,7 @@ class EditSessionRelay(
      * file-parsed score into the handle, which is also the correct semantics: unsaved edits were never persisted, so
      * the file is the truth. The same check covers a failed save, a double open, and a file replaced underneath us.
      */
-    fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
+    override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
         if (isOpen) close()
         val handle = host.scoreHandle()
         if (handle == 0L) return OpenResult.NO_HANDLE
@@ -267,7 +308,7 @@ class EditSessionRelay(
     }
 
     /** Ends both sides. Safe to call twice; `nativeEndEditSession` is a no-op for a handle with no session. */
-    fun close() {
+    override fun close() {
         if (!isOpen) return
         natives.endEditSession(host.scoreHandle())
         bridge.endSession()
@@ -279,38 +320,38 @@ class EditSessionRelay(
     // One named method per op, each `relay { … }`. They exist so that `bridge` can stay private — see the class
     // doc. Nothing here may branch: a decision in this file is a rule Android has and iOS does not.
 
-    fun selectItem(bytes: ByteArray) = relay { bridge.selectItem(bytes) }
-    fun inputPitch(letter: String) = relay { bridge.inputPitch(letter) }
-    fun deleteSelection() = relay { bridge.deleteSelection() }
-    fun writeRest() = relay { bridge.writeRest() }
-    fun armDuration(kind: Int) = relay { bridge.armDuration(kind) }
-    fun toggleArmedDot() = relay { bridge.toggleArmedDot() }
-    fun setArmedDots(dots: Int) = relay { bridge.setArmedDots(dots) }
-    fun setSelectionDuration(kind: Int) = relay { bridge.setSelectionDuration(kind) }
-    fun setSelectionDots(dots: Int) = relay { bridge.setSelectionDots(dots) }
-    fun toggleSelectionDot() = relay { bridge.toggleSelectionDot() }
-    fun shiftPitch(semitones: Int) = relay { bridge.shiftPitch(semitones) }
-    fun shiftOctave(octaves: Int) = relay { bridge.shiftOctave(octaves) }
-    fun setAccidental(raw: String) = relay { bridge.setAccidental(raw) }
-    fun toggleAddToChord() = relay { bridge.toggleAddToChord() }
-    fun removeSelectedNoteFromChord() = relay { bridge.removeSelectedNoteFromChord() }
-    fun toggleTie() = relay { bridge.toggleTie() }
-    fun appendTiedNote() = relay { bridge.appendTiedNote() }
-    fun createTuplet(actualNotes: Int) = relay { bridge.createTuplet(actualNotes) }
-    fun removeTuplet() = relay { bridge.removeTuplet() }
-    fun selectPreviousElement() = relay { bridge.selectPreviousElement() }
-    fun selectNextElement() = relay { bridge.selectNextElement() }
-    fun setActiveVoice(voice: Int) = relay { bridge.setActiveVoice(voice) }
-    fun setPlaybackActive(active: Boolean) = relay { bridge.setPlaybackActive(active) }
+    override fun selectItem(bytes: ByteArray) = relay { bridge.selectItem(bytes) }
+    override fun inputPitch(letter: String) = relay { bridge.inputPitch(letter) }
+    override fun deleteSelection() = relay { bridge.deleteSelection() }
+    override fun writeRest() = relay { bridge.writeRest() }
+    override fun armDuration(kind: Int) = relay { bridge.armDuration(kind) }
+    override fun toggleArmedDot() = relay { bridge.toggleArmedDot() }
+    override fun setArmedDots(dots: Int) = relay { bridge.setArmedDots(dots) }
+    override fun setSelectionDuration(kind: Int) = relay { bridge.setSelectionDuration(kind) }
+    override fun setSelectionDots(dots: Int) = relay { bridge.setSelectionDots(dots) }
+    override fun toggleSelectionDot() = relay { bridge.toggleSelectionDot() }
+    override fun shiftPitch(semitones: Int) = relay { bridge.shiftPitch(semitones) }
+    override fun shiftOctave(octaves: Int) = relay { bridge.shiftOctave(octaves) }
+    override fun setAccidental(raw: String) = relay { bridge.setAccidental(raw) }
+    override fun toggleAddToChord() = relay { bridge.toggleAddToChord() }
+    override fun removeSelectedNoteFromChord() = relay { bridge.removeSelectedNoteFromChord() }
+    override fun toggleTie() = relay { bridge.toggleTie() }
+    override fun appendTiedNote() = relay { bridge.appendTiedNote() }
+    override fun createTuplet(actualNotes: Int) = relay { bridge.createTuplet(actualNotes) }
+    override fun removeTuplet() = relay { bridge.removeTuplet() }
+    override fun selectPreviousElement() = relay { bridge.selectPreviousElement() }
+    override fun selectNextElement() = relay { bridge.selectNextElement() }
+    override fun setActiveVoice(voice: Int) = relay { bridge.setActiveVoice(voice) }
+    override fun setPlaybackActive(active: Boolean) = relay { bridge.setPlaybackActive(active) }
 
     /**
      * Undo and redo drive the mirror's OWN stacks rather than replaying an inverse: it was fed identical intents, so
      * it has an identical stack. They are also always fingerprint-checked, because they are the two operations whose
      * effect on the mirror is inferred rather than transmitted.
      */
-    fun undo() = replay(natives::editUndo) { bridge.undo() }
+    override fun undo() = replay(natives::editUndo) { bridge.undo() }
 
-    fun redo() = replay(natives::editRedo) { bridge.redo() }
+    override fun redo() = replay(natives::editRedo) { bridge.redo() }
 
     // MARK: - The funnel
 
