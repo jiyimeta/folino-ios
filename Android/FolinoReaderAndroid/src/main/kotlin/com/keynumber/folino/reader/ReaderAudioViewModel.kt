@@ -470,23 +470,30 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun preparePlayback(scoreHandle: Long) {
+        // Claim the handle FIRST — before anything in this function reads it, not merely before the coroutine can
+        // suspend. `loadRehearsalMarks` below is already a dereference (`nativeRehearsalMarks`), and this function
+        // does not suspend, so `LaunchedEffect(scoreHandle)`'s cooperative cancellation cannot stop a
+        // `preparePlayback(A)` that has already entered: the `Dispatchers.Default` retirement drain can be freeing A
+        // at that moment. Claiming here makes the claim's scope the whole function, which is what its own doc
+        // promises. It also covers the long window the coroutine needs it for: that captures `scoreHandle` by value,
+        // waits on `engine.filterNotNull().first()` — potentially a long wait, since the engine only appears once
+        // the playback service binds — and only then dereferences it (`ScoreMetadata.fetch`, `e.prepare`). See
+        // [pendingPrepareHandles].
+        synchronized(prepareLock) { pendingPrepareHandles += scoreHandle }
         // Stash the handle for the rehearsal-mark / measure-step JNI calls, and load the marks now
         // that we know it. Both happen synchronously off the same handle the Reader supplies.
         this.scoreHandle = scoreHandle
         loadRehearsalMarks(scoreHandle)
-        // Claim the handle for the whole life of the coroutine below, BEFORE it can suspend. The coroutine captures
-        // `scoreHandle` by value and waits on `engine.filterNotNull().first()` — potentially a long wait, since the
-        // engine only appears once the playback service binds — and then dereferences it (`ScoreMetadata.fetch`,
-        // `e.prepare`). A resync landing inside that window would otherwise see `preparedScoreHandle != scoreHandle`,
-        // conclude nothing holds it, and free it under the suspended coroutine. See [pendingPrepareHandles].
-        synchronized(prepareLock) { pendingPrepareHandles += scoreHandle }
         viewModelScope.launch {
             try {
                 prepareLoadedScore(scoreHandle)
             } finally {
-                // Every exit releases the claim: the early return below, a thrown prepare, and cancellation of
-                // `viewModelScope` when the Reader closes. A claim left behind would pin its score for the life of
-                // the ViewModel, turning the fix for one leak into another.
+                // Every exit of the BLOCK releases the claim: the early return inside, a thrown prepare, and
+                // cancellation while it is suspended. The one case this does not cover is `viewModelScope` being
+                // already cancelled when `launch` runs — the block never starts, so this never runs, and the claim
+                // is stranded. Deliberately not handled: that is reachable only after `onCleared`, by which point
+                // the drain is gone too, and a stranded claim can only make a drain refuse a release, never free
+                // early. Adding machinery for it would buy nothing over the leak it already degrades to.
                 synchronized(prepareLock) { pendingPrepareHandles.remove(scoreHandle) }
             }
         }
