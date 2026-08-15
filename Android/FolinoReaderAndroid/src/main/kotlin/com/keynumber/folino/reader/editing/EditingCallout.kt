@@ -47,13 +47,72 @@ import kotlin.math.roundToInt
 internal const val EDIT_CALLOUT_MINIMUM_WIDTH_MM = 1.0
 
 /** Gap between the selection and the card, and how close to the viewport's own edges the card may go — the
- * Android counterpart of iOS `SelectionCalloutLayer`'s `noteGap` / `edgeInset`, without that layer's draggable
- * above/below placement (see the class doc: placement here is Android's own). */
+ * Android counterpart of iOS `SelectionCalloutLayer`'s `noteGap` / `edgeInset`, without that layer's persisted
+ * placement preference or drag gesture (see the class doc: placement here is Android's own, though the
+ * prefer-above/fall-back-below RULE itself is not). */
 private val CALLOUT_GAP = 12.dp
 private val CALLOUT_EDGE_INSET = 8.dp
 
 private val SUMMARY_KEY_WIDTH = 60.dp
 private val CHEVRON_SIZE = 14.dp
+
+// MARK: Placement
+
+/** Which side of the selection the callout card parks on — the two options [resolveCalloutPlacement] chooses
+ * between. Android's own reduction of iOS `SelectionCalloutLayer`'s identically-named `CalloutSide`: that file
+ * additionally persists a preference and lets the reader drag between the two, neither of which this file does
+ * (see [EditingCallout]'s class doc). */
+internal enum class CalloutSide { ABOVE, BELOW }
+
+/** The resolved placement [resolveCalloutPlacement] returns: which [side] the card parks on, and its final
+ * top-left [offset] in the same local px space the selection rect is given in. */
+internal data class CalloutPlacement(val offset: IntOffset, val side: CalloutSide)
+
+/**
+ * Resolves where the callout card sits beside a selection — a pure function of already-resolved primitives (the
+ * mm→px conversion, the live pinch scale/pan, the viewport's own px size), extracted for exactly the reason
+ * `EditingPad.kt`'s `singleRowRequiredWidthDp` was: a plain JVM test ([CalloutPlacementTest]) can pin this
+ * arithmetic directly, no Compose runtime required, and this class of bug (an off-by-a-clamp overlap) is
+ * precisely the kind static reading misses and a test catches.
+ *
+ * **Prefers [CalloutSide.ABOVE]; falls back to [CalloutSide.BELOW] only when there is not enough room above
+ * within the current viewport** — i.e. the unclamped above position would run past the viewport's own top edge.
+ * Mirrors iOS's `SelectionCalloutLayer.availableSides` / `resolved(side:)` rule (prefer above, fall back below,
+ * never overlap the selection), minus that file's persisted preference and drag gesture.
+ *
+ * The Y position is NOT clamped across a shared top/bottom range the way the first cut of this function was —
+ * that is what let a top-of-viewport selection's card get pinned down onto the very note it describes. Once a
+ * side is chosen, Y is fixed to exactly [gapPx] off the selection on THAT side (above: `selTopPx - gapPx -
+ * cardHeightPx`; below: `selTopPx + selHeightPx + gapPx`), so the card can never be clamped back toward the
+ * selection it sits beside. X clamps across the full viewport width regardless of side, since sliding sideways
+ * never risks covering the selection.
+ */
+internal fun resolveCalloutPlacement(
+    selLeftPx: Float,
+    selTopPx: Float,
+    selWidthPx: Float,
+    selHeightPx: Float,
+    cardWidthPx: Float,
+    cardHeightPx: Float,
+    gapPx: Float,
+    edgeInsetPx: Float,
+    viewportPanPx: Offset,
+    viewportSizePx: IntSize,
+): CalloutPlacement {
+    val minX = viewportPanPx.x + edgeInsetPx
+    val maxX = (viewportPanPx.x + viewportSizePx.width - cardWidthPx - edgeInsetPx).coerceAtLeast(minX)
+    val rawX = selLeftPx + selWidthPx / 2f - cardWidthPx / 2f
+    val x = rawX.coerceIn(minX, maxX)
+
+    val viewportTopPx = viewportPanPx.y + edgeInsetPx
+    val aboveY = selTopPx - gapPx - cardHeightPx
+    val belowY = selTopPx + selHeightPx + gapPx
+
+    val side = if (aboveY >= viewportTopPx) CalloutSide.ABOVE else CalloutSide.BELOW
+    val y = if (side == CalloutSide.ABOVE) aboveY else belowY
+
+    return CalloutPlacement(IntOffset(x.roundToInt(), y.roundToInt()), side)
+}
 
 /**
  * The contextual callout: a small card that floats beside the selected note or rest, carrying its length (behind
@@ -64,9 +123,11 @@ private val CHEVRON_SIZE = 14.dp
  * the pitch steps ([isNoteSelected] is the switch) — there is no pitch to step and, since the tie key is
  * second-pass anyway (see below), nothing else a rest has no answer for.
  *
- * Placement is Android's own, not a port of iOS's draggable above/below layer (`SelectionCalloutLayer.swift`):
- * parked above the selection with [CALLOUT_GAP] of clearance, then clamped into the current viewport so a
- * selection near an edge does not push the card off-screen. [rectMm] is the SELECTION's own caret-shaped rect —
+ * Placement is not a port of iOS's draggable above/below layer (`SelectionCalloutLayer.swift`) — no persisted
+ * preference, no drag gesture — but it DOES follow that layer's own above/below RULE: prefer above the
+ * selection, fall back to below when there is not enough room above within the current viewport, and clamp
+ * horizontally into the viewport either way. See [resolveCalloutPlacement], the pure function this composable
+ * delegates the decision to. [rectMm] is the SELECTION's own caret-shaped rect —
  * `caretRectMm(handle, selectedItemBytes, EDIT_CALLOUT_MINIMUM_WIDTH_MM)`, never the caret's own — converted to
  * px with the same `mm * pxPerMM * scale` arithmetic [EditingCaretOverlay] draws with, so this composable must be
  * mounted in the SAME node: a sibling of the score, inside the panning `graphicsLayer`'s content box, so pan and
@@ -117,22 +178,20 @@ fun EditingCallout(
             val selLeftPx = rectMm.xMm.toFloat() * pxPerMM * scale
             val selTopPx = vPadPx + rectMm.yMm.toFloat() * pxPerMM * scale
             val selWidthPx = rectMm.widthMm.toFloat() * pxPerMM * scale
-            val cardW = cardSize.width.toFloat()
-            val cardH = cardSize.height.toFloat()
+            val selHeightPx = rectMm.heightMm.toFloat() * pxPerMM * scale
 
-            // Parked above the selection, centered on it — no above/below flip (iOS's draggable layer has one;
-            // this file's brief scopes to clamping only, see the class doc).
-            val rawX = selLeftPx + selWidthPx / 2f - cardW / 2f
-            val rawY = selTopPx - gapPx - cardH
-
-            // Clamped against the CURRENTLY VISIBLE window in this node's own (panned but unclamped) local
-            // coordinate space: `viewportPanPx` is where that window's top-left corner currently sits.
-            val minX = viewportPanPx.x + edgeInsetPx
-            val maxX = (viewportPanPx.x + viewportSizePx.width - cardW - edgeInsetPx).coerceAtLeast(minX)
-            val minY = viewportPanPx.y + edgeInsetPx
-            val maxY = (viewportPanPx.y + viewportSizePx.height - cardH - edgeInsetPx).coerceAtLeast(minY)
-
-            IntOffset(rawX.coerceIn(minX, maxX).roundToInt(), rawY.coerceIn(minY, maxY).roundToInt())
+            resolveCalloutPlacement(
+                selLeftPx = selLeftPx,
+                selTopPx = selTopPx,
+                selWidthPx = selWidthPx,
+                selHeightPx = selHeightPx,
+                cardWidthPx = cardSize.width.toFloat(),
+                cardHeightPx = cardSize.height.toFloat(),
+                gapPx = gapPx,
+                edgeInsetPx = edgeInsetPx,
+                viewportPanPx = viewportPanPx,
+                viewportSizePx = viewportSizePx,
+            ).offset
         },
     ) {
         EditingCalloutCard(
