@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.snapshotFlow
@@ -1119,6 +1120,15 @@ private fun ReadyScore(
     // this rather than the nullable bundle.
     val annotationMode = annotation?.annotationMode == true
 
+    // The gesture `pointerInput` below is keyed on `editing.isEditing`/`editing.activeVoice`, not on
+    // `onSelectItem` itself: restarting the running gesture-detector coroutine on every lambda-identity
+    // change would drop a tap already in flight, which is exactly what `pointerInput`'s key list exists to
+    // avoid doing for anything that isn't a real input to the gesture. `rememberUpdatedState` is the
+    // escape hatch — the coroutine reads `currentOnSelectItem.value` at call time, so a caller that passes
+    // a fresh lambda every recomposition (the later task wiring in `EditSessionController` will) still
+    // reaches the latest callback without the handler restarting.
+    val currentOnSelectItem by rememberUpdatedState(onSelectItem)
+
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     // `deferRaster = true`: this surface's score is ONE page as tall as the whole document, so following
     // the live scale would re-record every draw command in it on each frame of a pinch. The bands stay
@@ -1308,7 +1318,7 @@ private fun ReadyScore(
                             activeVoice = editing.activeVoice,
                             layoutOptionsBytes = optionsBytes,
                         )
-                        onSelectItem(bytes)
+                        currentOnSelectItem(bytes)
                         return@detectTapGestures
                     }
                     val cursor = nearestCursorForTap(
