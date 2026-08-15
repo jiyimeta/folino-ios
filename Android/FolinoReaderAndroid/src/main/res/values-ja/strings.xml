@@ -78,6 +78,7 @@
     <string name="reader_editing_voice">声部 %1$d</string>
     <string name="reader_editing_unavailable_version">編集を利用できません。この楽譜は別のバージョンのエンジンで描画されています。</string>
     <string name="reader_editing_unavailable_diverged">この楽譜は現在編集できません。</string>
+    <string name="reader_editing_unavailable_layout_mode">音符の編集は「縦スクロール」表示でのみ行えます。表示設定でレイアウトを切り替えてください。</string>
     <string name="reader_editing_duration_whole">全音符</string>
     <string name="reader_editing_duration_half">2分音符</string>
     <string name="reader_editing_duration_quarter">4分音符</string>

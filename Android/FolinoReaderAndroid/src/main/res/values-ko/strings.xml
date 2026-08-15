@@ -78,6 +78,7 @@
     <string name="reader_editing_voice">성부 %1$d</string>
     <string name="reader_editing_unavailable_version">편집을 사용할 수 없습니다. 이 악보는 다른 버전의 엔진으로 렌더링되고 있습니다.</string>
     <string name="reader_editing_unavailable_diverged">지금은 이 악보를 편집할 수 없습니다.</string>
+    <string name="reader_editing_unavailable_layout_mode">음표 편집은 세로 스크롤 레이아웃에서만 가능합니다. 표시 설정에서 레이아웃을 변경하세요.</string>
     <string name="reader_editing_duration_whole">온음표</string>
     <string name="reader_editing_duration_half">2분음표</string>
     <string name="reader_editing_duration_quarter">4분음표</string>

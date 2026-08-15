@@ -1,5 +1,6 @@
 package com.keynumber.folino.reader
 
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
@@ -74,6 +75,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -97,6 +99,8 @@ import com.keynumber.folino.reader.editing.EDIT_CARET_MINIMUM_WIDTH_MM
 import com.keynumber.folino.reader.editing.EditingBottomBar
 import com.keynumber.folino.reader.editing.EditingCallout
 import com.keynumber.folino.reader.editing.EditingCaretOverlay
+import com.keynumber.folino.reader.editing.EditingLayoutModeDialog
+import com.keynumber.folino.reader.editing.EditingPad
 import com.keynumber.folino.reader.editing.EditingTopBarActions
 import com.keynumber.folino.reader.editing.EditingUnavailableDialog
 import com.keynumber.folino.reader.editing.editingUnavailableReasonFor
@@ -187,6 +191,9 @@ private fun Color.toRgbaLong(): Long {
  * when it is not rendering into the PiP window (`pipFit == false`).
  */
 internal const val ON_SCREEN_CURSOR_ALPHA = 0.6f
+
+/** logcat tag for this screen. `ReaderViewModel` owns "ReaderViewModel"; this one is the Compose side. */
+private const val READER_TAG = "ReaderScreen"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -358,6 +365,27 @@ fun ReaderScreen(
     onTogglePad: () -> Unit = {},
     onSelectPreviousElement: () -> Unit = {},
     onSelectNextElement: () -> Unit = {},
+    /**
+     * The result of an editing tap on the score, or `null` when the tap hit paper.
+     *
+     * Null is a real answer and the composition root maps it to `EditSessionController.selectItem(ByteArray(0))` —
+     * empty bytes are the shared core's explicit deselect (`EditorBridge.selectItem`), so a tap on paper clears the
+     * selection rather than doing nothing. This screen only reports the tap; see [ReadyScore]'s matching parameter.
+     */
+    onSelectItem: (ByteArray?) -> Unit = {},
+    /** The note pad's keys ([com.keynumber.folino.reader.editing.EditingPad]) — one per key group. The pad is
+     * mounted above the transport for the duration of a session and disclosed by the bottom bar's toggle. */
+    onArmDuration: (Int) -> Unit = {},
+    onSetArmedDots: (Int) -> Unit = {},
+    onToggleArmedDot: () -> Unit = {},
+    onInputPitch: (String) -> Unit = {},
+    onWriteRest: () -> Unit = {},
+    /** The selection callout's keys, forwarded to [ReadyScore] — see its own matching parameters. */
+    onSetSelectionDuration: (Int) -> Unit = {},
+    onSetSelectionDots: (Int) -> Unit = {},
+    onToggleSelectionDot: () -> Unit = {},
+    onShiftPitch: (Int) -> Unit = {},
+    onShiftOctave: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
     val fontProvider = remember(context) { bundledFontProvider(context) }
@@ -757,6 +785,47 @@ fun ReaderScreen(
         editingUnavailableReason = editingUnavailableReasonFor(editing.availability, editing.isEditing)
     }
 
+    // Whether "Edit notes" is offered at all. A PDF has no editable `Score` behind it — its background OMR parse
+    // produces one for PLAYBACK, never something the user may write into — so the action is not shown, exactly as
+    // iOS does not show it. That is also why `EditAvailability.UNAVAILABLE_NO_SCORE` deliberately maps to no
+    // dialog (see `EditingUnavailableDialog`): with the action absent whenever there is no editable score, that
+    // refusal is unreachable from a tap, and a message for it would be dead copy in five languages. `Ready` is the
+    // Reader's own state for "a `.mscz` score is laid out", so it is the whole condition — `Loading` and `Error`
+    // have nothing to edit either.
+    val canOfferEditing = state is ReaderState.Ready
+    // Editing is wired on the vertical surface only (see the PARITY marker at the `HorizontalScore` call site).
+    // The action is still OFFERED in page / horizontal mode rather than hidden, because "page" is the default
+    // layout preference — hiding it there would make the feature invisible to most users — and tapping it explains
+    // the one thing the user can do about it instead of silently doing nothing.
+    var showEditingLayoutModeNotice by remember { mutableStateOf(false) }
+    val canEditInThisLayoutMode = layoutMode == ReaderLayoutMode.VERTICAL
+
+    // The selection tint (Task 5's `ReaderViewModel.setEditSelection`). `EditUiState.selectedItem` is the raw
+    // `ScoreItemID` wire the shared core published; decode it with ssm's own generated codec — a Kotlin second
+    // spelling of that format would recolor the wrong notes with nothing at runtime noticing. An undecodable blob
+    // is treated as no selection rather than crashing the Reader: it can only mean the two sides disagree about the
+    // wire, which the session's own fingerprint check is what exists to catch.
+    val selectionTintArgb = MaterialTheme.colorScheme.primary.toArgb().toUInt()
+    // Suppresses the "clear the tint" call until there is something to clear, so opening a score that is never
+    // edited pays no JNI round trip at all.
+    var hasTintedSelection by remember { mutableStateOf(false) }
+    // Keyed on `layoutGeneration` as well as the selection: every recompute republishes an UNTINTED program (the
+    // loop knows nothing about selections), so the tint has to be re-applied after each one — including the
+    // recompute an edit itself triggers, which is why re-selecting the same item is not enough of a signal.
+    LaunchedEffect(editing.isEditing, editing.selectedItem, layoutGeneration, selectionTintArgb) {
+        val selected = editing.selectedItem
+        val ids = if (editing.isEditing) decodeSelectedItems(selected) else emptyList()
+        // The one case worth a line in logcat: bytes arrived and decoded to nothing, which can only mean this
+        // build's ssm and the one the session published from disagree about the wire. `decodeSelectedItems` stays
+        // pure so it can be unit-tested (see its own doc), so the report belongs here.
+        if (editing.isEditing && selected != null && selected.isNotEmpty() && ids.isEmpty()) {
+            Log.e(READER_TAG, "The edit session published a selected item this build could not decode")
+        }
+        if (ids.isEmpty() && !hasTintedSelection) return@LaunchedEffect
+        hasTintedSelection = ids.isNotEmpty()
+        readerVm.setEditSelection(ids, selectionTintArgb)
+    }
+
     if (pipActive) {
         ReaderPipContent(readerVm = readerVm, audioVm = audioVm)
         return
@@ -779,11 +848,19 @@ fun ReaderScreen(
                 isPdf = isPdf,
                 onShowPdfNotice = { showPdfNotice = true },
                 editing = editing,
+                canEdit = canOfferEditing,
                 onStartEditing = {
-                    onStartEditing()
-                    // Forces the unavailable-dialog effect above to re-run even when the resulting
-                    // `editing.availability` is identical to before (see that effect's own comment).
-                    editingAttempt++
+                    if (canEditInThisLayoutMode) {
+                        onStartEditing()
+                        // Forces the unavailable-dialog effect above to re-run even when the resulting
+                        // `editing.availability` is identical to before (see that effect's own comment).
+                        editingAttempt++
+                    } else {
+                        // Refused, not ignored: the surface this mode renders has no hit-test, caret or tint of
+                        // its own (see the PARITY marker at the `HorizontalScore` call site), so opening a session
+                        // here would leave every tap inert with nothing to explain it.
+                        showEditingLayoutModeNotice = true
+                    }
                 },
                 onUndo = onUndo,
                 onRedo = onRedo,
@@ -793,6 +870,26 @@ fun ReaderScreen(
         bottomBar = {
             if (editing.isEditing) {
                 Column {
+                    // Above the fixed row that discloses it, not below: the toggle, the voice selector and the
+                    // steppers keep their place on screen as the pad opens and closes, so the control the user just
+                    // pressed does not move out from under the finger that pressed it.
+                    if (editing.isPadVisible) {
+                        EditingPad(
+                            armedDurationKind = editing.armedDurationKind,
+                            armedDots = editing.armedDots,
+                            canWriteRest = editing.canWriteRest,
+                            hasEditTarget = editing.hasEditTarget,
+                            // Same rule the steppers and the callout follow: nothing that writes to the score stays
+                            // live while the transport runs.
+                            isPlaybackActive = isPlaying,
+                            onArmDuration = onArmDuration,
+                            onSetArmedDots = onSetArmedDots,
+                            onToggleArmedDot = onToggleArmedDot,
+                            onInputPitch = onInputPitch,
+                            onWriteRest = onWriteRest,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
                     EditingBottomBar(
                         activeVoice = editing.activeVoice,
                         isPadVisible = editing.isPadVisible,
@@ -906,7 +1003,19 @@ fun ReaderScreen(
                         annotation = annotationSurface,
                         autoFollowEnabled = autoFollowEnabled,
                         layoutGeneration = layoutGeneration,
+                        editing = editing,
+                        onSelectItem = onSelectItem,
+                        onSetSelectionDuration = onSetSelectionDuration,
+                        onSetSelectionDots = onSetSelectionDots,
+                        onToggleSelectionDot = onToggleSelectionDot,
+                        onShiftPitch = onShiftPitch,
+                        onShiftOctave = onShiftOctave,
                     )
+                    // PARITY(android): note editing in page mode — editing is offered on the vertical surface only.
+                    //   iOS edits in every layout mode (`ReaderRootScreen` has no mode gate); Android's
+                    //   horizontal/page surface routes its taps through a separate paged-fetch path that would need
+                    //   its own hit-test, caret and tint wiring. Entering edit mode from page mode is refused rather
+                    //   than silently doing nothing.
                     ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
                         s, scoreHandle, fontProvider, audioVm, layoutOptions,
                         autoFollowEnabled = autoFollowEnabled,
@@ -971,6 +1080,9 @@ fun ReaderScreen(
     }
     editingUnavailableReason?.let { reason ->
         EditingUnavailableDialog(reason = reason, onDismiss = { editingUnavailableReason = null })
+    }
+    if (showEditingLayoutModeNotice) {
+        EditingLayoutModeDialog(onDismiss = { showEditingLayoutModeNotice = false })
     }
     if (showInspector) {
         val openingQuarterBpm by readerVm.openingQuarterBpm.collectAsStateWithLifecycle()
@@ -1081,6 +1193,16 @@ fun ReaderTopBar(
      * gesture). Defaults to an inert `EditUiState()` so this bar reads exactly as it did before editing
      * existed. */
     editing: EditUiState = EditUiState(),
+    /**
+     * Whether the "Edit notes" action appears in the reading-mode row at all.
+     *
+     * False for anything with no editable score behind it — a PDF above all, whose background OMR parse produces a
+     * score for PLAYBACK and never one the user may write into. The action is HIDDEN rather than shown disabled,
+     * following the same reading the note pad's own doc gives: a visibly dead control reads as broken, not as
+     * unavailable-for-a-reason. Hiding it is also what lets `EditAvailability.UNAVAILABLE_NO_SCORE` stay
+     * message-less — see [EditingUnavailableDialog].
+     */
+    canEdit: Boolean = true,
     /** Opens an edit session; the "Edit notes" action in the reading-mode row. No-op by default. */
     onStartEditing: () -> Unit = {},
     onUndo: () -> Unit = {},
@@ -1146,11 +1268,13 @@ fun ReaderTopBar(
                         contentDescription = stringResource(R.string.reader_display_settings),
                     )
                 }
-                IconButton(onClick = onStartEditing) {
-                    Icon(
-                        Icons.Outlined.EditNote,
-                        contentDescription = stringResource(R.string.reader_editing_start),
-                    )
+                if (canEdit) {
+                    IconButton(onClick = onStartEditing) {
+                        Icon(
+                            Icons.Outlined.EditNote,
+                            contentDescription = stringResource(R.string.reader_editing_start),
+                        )
+                    }
                 }
                 FilledIconToggleButton(
                     checked = annotationMode,

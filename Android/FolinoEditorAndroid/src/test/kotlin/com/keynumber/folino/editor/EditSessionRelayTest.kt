@@ -99,7 +99,6 @@ private class FakeNatives : EditNatives {
     var begins = 0
     var ends = 0
     var loads = 0
-    var releases = 0
     var editUndoCalls = 0
     var editRedoCalls = 0
     val applied = mutableListOf<ByteArray>()
@@ -144,8 +143,6 @@ private class FakeNatives : EditNatives {
         fingerprint = fingerprintAfterLoad
         return loadAnswer
     }
-
-    override fun releaseScore(handle: Long) { releases += 1 }
 }
 
 private class FakeHost : EditSessionHost {

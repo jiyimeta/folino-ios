@@ -83,6 +83,7 @@
     <string name="reader_editing_voice">Voice %1$d</string>
     <string name="reader_editing_unavailable_version">Editing is unavailable: this score is being rendered by a different engine build.</string>
     <string name="reader_editing_unavailable_diverged">Editing is unavailable for this score right now.</string>
+    <string name="reader_editing_unavailable_layout_mode">Notes can be edited in the Vertical layout. Switch the layout in display settings to edit this score.</string>
     <string name="reader_editing_duration_whole">Whole note</string>
     <string name="reader_editing_duration_half">Half note</string>
     <string name="reader_editing_duration_quarter">Quarter note</string>

@@ -18,7 +18,6 @@ interface EditNatives {
     fun endEditSession(handle: Long)
     fun scoreFingerprint(handle: Long): Long
     fun loadScore(bytes: ByteArray): Long
-    fun releaseScore(handle: Long)
 }
 
 object RealEditNatives : EditNatives {
@@ -30,7 +29,6 @@ object RealEditNatives : EditNatives {
     override fun endEditSession(handle: Long) = SheetMusicJNI.nativeEndEditSession(handle)
     override fun scoreFingerprint(handle: Long) = SheetMusicJNI.nativeScoreFingerprint(handle)
     override fun loadScore(bytes: ByteArray) = SheetMusicJNI.nativeLoadScore(bytes)
-    override fun releaseScore(handle: Long) = SheetMusicJNI.nativeReleaseScore(handle)
 }
 
 /**
@@ -433,6 +431,15 @@ class EditSessionRelay(
      * relaying them afterwards would apply each one twice — the one way a resync could make things worse than the
      * divergence it is repairing.
      *
+     * **The superseded handle is handed to the host, not freed here.** `EditSessionHost.replaceScoreHandle`'s own doc
+     * carries the reasoning: on Android the score behind that handle has also been given to the audio engine and to a
+     * bound service that outlives the Reader, so no host can prove it has stopped being read, and a
+     * `nativeReleaseScore` on this line would be a use-after-free rather than a tidy-up. Ownership therefore sits
+     * entirely with the host, whose policy — matching the one it already applies to the score the playback engine
+     * holds — is to keep it alive for the process. That costs one leaked native score per resync, and resyncs are the
+     * rare recovery path (SP3's device test measured zero across a full scripted edit), which is why this trade is
+     * affordable where a dangling pointer would not be.
+     *
      * A resync that cannot complete closes the session rather than leaving it open: with the two copies known to
      * disagree and no way to reconcile them, every further op would re-trigger a failing resync, and the taps in
      * between would edit whatever the stale layout resolved to. SP4 surfaces that as dropping back to read-only.
@@ -461,9 +468,7 @@ class EditSessionRelay(
             close()
             return
         }
-        val stale = host.scoreHandle()
         host.replaceScoreHandle(fresh)
-        natives.releaseScore(stale)
         if (!natives.beginEditSession(fresh)) {
             Log.e(TAG, "resync failed: the fresh handle would not open a mirror session; closing the session")
             close()

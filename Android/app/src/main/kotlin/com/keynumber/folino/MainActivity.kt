@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +49,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.keynumber.folino.editor.EditSessionController
+import com.keynumber.folino.editor.EditSessionRelay
+import com.keynumber.folino.editor.EditorRoomFiles
+import com.keynumber.folino.editor.GeneratedEditBridging
+import com.keynumber.folino.editor.generated.EditorBridgeViewModel
 import com.keynumber.folino.export.ScoreShareLauncher
 import com.keynumber.folino.library.HiddenStaffEntryWire
 import com.keynumber.folino.library.ReaderPreferencesController
@@ -68,6 +74,7 @@ import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
 import com.keynumber.folino.reader.DrumKitOption
 import com.keynumber.folino.reader.ReaderScreen
+import com.keynumber.folino.reader.ReaderViewModel
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
@@ -650,6 +657,42 @@ private fun LibraryNavGraph(
                 var lastTransposeForAnalytics by remember(currentScoreId) {
                     mutableStateOf(prefsState.transposeSemitones)
                 }
+
+                // ── The note-editing session (SP4) ────────────────────────────────────────────────────
+                // This route is the only layer that sees both the editor's JNI bridge and the Reader, so it is
+                // where the chain is assembled: EditorRoomFiles -> the generated bridge view model ->
+                // GeneratedEditBridging -> EditSessionRelay(bridge, readerVm) -> EditSessionController. Nothing
+                // below constructs a bridge — the Reader receives the controller's state and its ops and no more,
+                // which is what keeps an intent from being applied outside the relay (see EditSessionRelay's own
+                // class doc for why there is no way in from the outside).
+                //
+                // `readerVm` is resolved HERE and passed to ReaderScreen explicitly rather than left to its
+                // `viewModel()` default: the relay's host has to be the very instance the Reader renders from,
+                // since that instance owns the score handle the mirror session is kept identical to. Both resolve
+                // against this back-stack entry's store, so it is the same object either way — passing it makes
+                // that a fact instead of a coincidence.
+                val readerVm: ReaderViewModel = viewModel()
+                val editBridgeVm: EditorBridgeViewModel = viewModel(factory = EditorBridgeVMFactory)
+                val editScope = rememberCoroutineScope()
+                val editController = remember(editBridgeVm, readerVm, editScope) {
+                    val bridging = GeneratedEditBridging(editBridgeVm)
+                    EditSessionController(EditSessionRelay(bridging, readerVm), bridging, editScope)
+                }
+                val editing by editController.ui.collectAsState()
+                // A session must not outlive the screen that opened it: leaving the Reader, or an Activity
+                // recreate, ends both halves rather than leaving the authoritative session open against a bridge
+                // whose UI is gone. The bridge view model itself is scoped to the entry and outlives a recreate,
+                // so without this the Swift side would still believe a session was open while `EditUiState` had
+                // reset to "not editing" — the exact divergence `open()`'s fingerprint check exists to catch, but
+                // reached by a route it should never have to.
+                DisposableEffect(editController) { onDispose { editController.end() } }
+                // A retarget (playlist auto-advance) swaps the score under the Reader; the session belongs to the
+                // score it was opened for, so it ends with it. One bridge view model serves the whole entry —
+                // `beginSession` takes the score id — rather than one per score, so a long playlist does not
+                // accumulate native bridges.
+                LaunchedEffect(currentScoreId) { editController.end() }
+                val scoresDir = remember(context) { java.io.File(context.filesDir, "Scores") }
+
                 ScreenViewEffect("reader")
                 ReaderScreen(
                     scoreId = currentScoreId,
@@ -869,6 +912,38 @@ private fun LibraryNavGraph(
                     onAnalyticsTransportNext = { AndroidAnalytics.log(AndroidAnalytics.bridge.transportNext()) },
                     onAnalyticsSeek = { AndroidAnalytics.log(AndroidAnalytics.bridge.seek()) },
                     onBack = { nav.popBackStackIfResumed() },
+                    readerVm = readerVm,
+                    // ── Note editing ──────────────────────────────────────────────────────────────────
+                    editing = editing,
+                    onStartEditing = {
+                        editController.begin(
+                            scorePath = java.io.File(scoresDir, currentLocalFileName).path,
+                            scoresDirectory = scoresDir.path,
+                            scoreId = currentScoreId,
+                        )
+                    },
+                    onEndEditing = { editController.end() },
+                    onUndo = { editController.undo() },
+                    onRedo = { editController.redo() },
+                    onSetVoice = { voice -> editController.setActiveVoice(voice) },
+                    onTogglePad = { editController.setPadVisible(!editing.isPadVisible) },
+                    onSelectPreviousElement = { editController.selectPreviousElement() },
+                    onSelectNextElement = { editController.selectNextElement() },
+                    // A null hit-test result means the tap landed on paper, and EMPTY bytes are how the shared
+                    // core spells "deselect" (`EditorBridge.selectItem` — deliberate iOS parity, not an
+                    // Android convention). Mapping the two here is what makes a tap on paper clear the
+                    // selection instead of leaving the last note lit with no way to unpick it.
+                    onSelectItem = { bytes -> editController.selectItem(bytes ?: ByteArray(0)) },
+                    onArmDuration = { kind -> editController.armDuration(kind) },
+                    onSetArmedDots = { dots -> editController.setArmedDots(dots) },
+                    onToggleArmedDot = { editController.toggleArmedDot() },
+                    onInputPitch = { letter -> editController.inputPitch(letter) },
+                    onWriteRest = { editController.writeRest() },
+                    onSetSelectionDuration = { kind -> editController.setSelectionDuration(kind) },
+                    onSetSelectionDots = { dots -> editController.setSelectionDots(dots) },
+                    onToggleSelectionDot = { editController.toggleSelectionDot() },
+                    onShiftPitch = { semitones -> editController.shiftPitch(semitones) },
+                    onShiftOctave = { octaves -> editController.shiftOctave(octaves) },
                 )
                 if (showShareSheet) {
                     ExportFormatSheet(
@@ -1013,6 +1088,20 @@ private fun ScreenViewEffect(token: String) {
     LaunchedEffect(Unit) {
         AndroidAnalytics.log(AndroidAnalytics.bridge.screen(token))
     }
+}
+
+/**
+ * Scopes the editor's generated bridge view model to the Reader's back-stack entry.
+ *
+ * It needs no `Context`: [EditorRoomFiles] is plain `java.io.File` I/O over paths the caller supplies, which is the
+ * whole reason the editor module has no Android dependency to inject. The generated view model releases the Swift
+ * `EditorBridge` from its own `onCleared`, so scoping it here — rather than remembering it in the composition — is
+ * what makes the native side's lifetime the entry's rather than a recomposition's.
+ */
+internal object EditorBridgeVMFactory : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T =
+        EditorBridgeViewModel.create(EditorRoomFiles()) as T
 }
 
 internal class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {

@@ -5,6 +5,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.RestID
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.SelectionTint
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.SelectionTintCodec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -63,6 +64,24 @@ class EditSelectionTintTest {
         val decoded = SelectionTintCodec.decode(payload)
         assertTrue("an empty selection must carry no items", decoded.items.isEmpty())
         assertEquals(SelectionTint(argb = argb, items = emptyList()), decoded)
+    }
+
+    @Test
+    fun `decodes the selected item the session published`() {
+        // The wiring's other half: `EditUiState.selectedItem` arrives as the raw wire and has to come back through
+        // ssm's own codec, never a hand-rolled parse (see `decodeSelectedItems`'s doc).
+        assertEquals(listOf(note), decodeSelectedItems(ScoreItemIDCodec.encode(note)))
+        assertEquals(listOf(rest), decodeSelectedItems(ScoreItemIDCodec.encode(rest)))
+    }
+
+    @Test
+    fun `no selection, an explicit deselect, and a corrupt blob all tint nothing`() {
+        // Null is "nothing selected"; EMPTY is the shared core's explicit deselect (`EditorBridge.selectItem`), which
+        // is what a tap on paper sends; garbage can only be a wire disagreement, and blanking the tint beats
+        // crashing the Reader over a highlight.
+        assertTrue(decodeSelectedItems(null).isEmpty())
+        assertTrue(decodeSelectedItems(ByteArray(0)).isEmpty())
+        assertTrue(decodeSelectedItems(byteArrayOf(0x7f, 0x7f, 0x7f, 0x7f)).isEmpty())
     }
 
     @Test

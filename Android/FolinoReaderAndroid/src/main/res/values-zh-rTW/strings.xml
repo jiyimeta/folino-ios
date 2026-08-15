@@ -78,6 +78,7 @@
     <string name="reader_editing_voice">聲部 %1$d</string>
     <string name="reader_editing_unavailable_version">無法編輯：此樂譜正由不同版本的引擎繪製。</string>
     <string name="reader_editing_unavailable_diverged">此樂譜目前無法編輯。</string>
+    <string name="reader_editing_unavailable_layout_mode">音符編輯僅在垂直捲動版面下可用。請在顯示設定中切換版面。</string>
     <string name="reader_editing_duration_whole">全音符</string>
     <string name="reader_editing_duration_half">二分音符</string>
     <string name="reader_editing_duration_quarter">四分音符</string>

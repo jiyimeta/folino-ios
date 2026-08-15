@@ -78,6 +78,7 @@
     <string name="reader_editing_voice">声部 %1$d</string>
     <string name="reader_editing_unavailable_version">无法编辑：此乐谱正由不同版本的引擎渲染。</string>
     <string name="reader_editing_unavailable_diverged">此乐谱目前无法编辑。</string>
+    <string name="reader_editing_unavailable_layout_mode">音符编辑仅在垂直滚动布局下可用。请在显示设置中切换布局。</string>
     <string name="reader_editing_duration_whole">全音符</string>
     <string name="reader_editing_duration_half">二分音符</string>
     <string name="reader_editing_duration_quarter">四分音符</string>
