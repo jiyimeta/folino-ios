@@ -78,14 +78,19 @@ internal data class CalloutPlacement(val offset: IntOffset, val side: CalloutSid
  * **Prefers [CalloutSide.ABOVE]; falls back to [CalloutSide.BELOW] only when there is not enough room above
  * within the current viewport** — i.e. the unclamped above position would run past the viewport's own top edge.
  * Mirrors iOS's `SelectionCalloutLayer.availableSides` / `resolved(side:)` rule (prefer above, fall back below,
- * never overlap the selection), minus that file's persisted preference and drag gesture.
+ * never overlap the selection when either side has room), minus that file's persisted preference and drag
+ * gesture. The decision itself is never rescued by a clamp — the SIDE is chosen first, purely from which one
+ * avoids overlap, exactly as iOS's `availableSides` decides before `position(for:in:side:)` ever clamps
+ * anything.
  *
- * The Y position is NOT clamped across a shared top/bottom range the way the first cut of this function was —
- * that is what let a top-of-viewport selection's card get pinned down onto the very note it describes. Once a
- * side is chosen, Y is fixed to exactly [gapPx] off the selection on THAT side (above: `selTopPx - gapPx -
- * cardHeightPx`; below: `selTopPx + selHeightPx + gapPx`), so the card can never be clamped back toward the
- * selection it sits beside. X clamps across the full viewport width regardless of side, since sliding sideways
- * never risks covering the selection.
+ * **Once a side is chosen, Y clamps into the FULL viewport as a last resort** — matching iOS's
+ * `position(for:in:side:)`, which clamps `rawY` into `[topLimit, bottomLimit]` unconditionally, regardless of
+ * which side was picked. In the ordinary case this clamp is inert: the side was chosen precisely because its
+ * unclamped position already sits inside the viewport, so the clamp changes nothing. It only engages in the
+ * degenerate case — a viewport too short to fit the card on EITHER side — where iOS's own comment on
+ * `availableSides` states the trade explicitly ("keep both and let the clamp ... decide"): a card the reader
+ * cannot see at all is worse than one that overlaps the note, so staying on screen wins. X clamps across the
+ * full viewport width regardless of side, since sliding sideways never risks covering the selection.
  */
 internal fun resolveCalloutPlacement(
     selLeftPx: Float,
@@ -105,11 +110,19 @@ internal fun resolveCalloutPlacement(
     val x = rawX.coerceIn(minX, maxX)
 
     val viewportTopPx = viewportPanPx.y + edgeInsetPx
+    val viewportBottomPx = viewportPanPx.y + viewportSizePx.height - edgeInsetPx
     val aboveY = selTopPx - gapPx - cardHeightPx
     val belowY = selTopPx + selHeightPx + gapPx
 
+    // The side decision itself sees the UNCLAMPED positions only — no clamp rescues a bad choice here.
     val side = if (aboveY >= viewportTopPx) CalloutSide.ABOVE else CalloutSide.BELOW
-    val y = if (side == CalloutSide.ABOVE) aboveY else belowY
+    val rawY = if (side == CalloutSide.ABOVE) aboveY else belowY
+
+    // Last-resort containment, applied AFTER the side is picked and regardless of which side it was — see the
+    // doc above for why this has to be unconditional rather than scoped to one side.
+    val minY = viewportTopPx
+    val maxY = (viewportBottomPx - cardHeightPx).coerceAtLeast(minY)
+    val y = rawY.coerceIn(minY, maxY)
 
     return CalloutPlacement(IntOffset(x.roundToInt(), y.roundToInt()), side)
 }

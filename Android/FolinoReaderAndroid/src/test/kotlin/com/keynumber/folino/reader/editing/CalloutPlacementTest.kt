@@ -7,15 +7,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Guards against the class of bug review caught in Task 8's fix round 1: the first cut of
- * [resolveCalloutPlacement] (then inline in [EditingCallout]'s own `Modifier.offset` block) clamped Y across a
- * SHARED top/bottom range regardless of which side the card was parked on, so a note near the top of the
- * viewport got its card's fixed-above position pinned back down onto the note itself — the callout covering the
- * exact thing it describes.
+ * Guards against two related bugs, both caught in review across Task 8's two fix rounds.
  *
- * These tests assert the OUTCOME that matters — the card's resulting rect does not overlap the selection rect —
- * not just that the function returns whatever numbers it happens to compute, which is why each test rebuilds
- * both rects from the returned [CalloutPlacement] and checks them geometrically.
+ * **Fix round 1:** the first cut of [resolveCalloutPlacement] (then inline in [EditingCallout]'s own
+ * `Modifier.offset` block) clamped Y across a SHARED top/bottom range regardless of which side the card was
+ * parked on, so a note near the top of the viewport got its card's fixed-above position pinned back down onto
+ * the note itself — the callout covering the exact thing it describes. Fixed by deciding the side from the
+ * UNCLAMPED positions only.
+ *
+ * **Fix round 2:** the round-1 fix over-corrected by removing the Y clamp entirely, so a viewport too short to
+ * fit the card on EITHER side let the card render off-screen rather than merely overlapping — the opposite of
+ * iOS's own `position(for:in:side:)`, which clamps unconditionally once a side is picked, accepting overlap as
+ * the lesser evil to staying fully off-screen. Fixed by restoring an unconditional last-resort clamp AFTER the
+ * side decision, which the last test below exercises directly.
+ *
+ * Most of these tests assert the OUTCOME that matters — the card's resulting rect does not overlap the
+ * selection rect — not just that the function returns whatever numbers it happens to compute, which is why
+ * each test rebuilds both rects from the returned [CalloutPlacement] and checks them geometrically. The last
+ * test asserts the opposite (deliberate overlap, full containment) for the one case where that is correct.
  */
 class CalloutPlacementTest {
     // A representative selection and card size, reused by the cases that don't need to vary them: a caret-shaped
@@ -171,6 +180,77 @@ class CalloutPlacementTest {
 
         assertEquals(CalloutSide.BELOW, placement.side)
         assertNoOverlap(placement, selLeftPx, selTopPx, cardWidthPx, cardHeightPx)
+    }
+
+    /**
+     * DELIBERATE overlap: a viewport short enough (100px) that the card (80px tall) does not fit on EITHER
+     * side without clipping past an edge — above would run off the top, below would run off the bottom — but
+     * still tall enough that the card itself CAN fit somewhere inside it. This is the degenerate case fix round
+     * 2 restores: iOS's `position(for:in:side:)` clamps `rawY` into the viewport unconditionally, even when the
+     * chosen side's own unclamped position doesn't fit, on the stated rationale that a card the reader cannot
+     * see at all is worse than one sitting over its note. The overlap asserted below is that trade, not a
+     * regression of the top-of-viewport fix (finding 1 of fix round 1) — see that fix's own tests above, none
+     * of which exercise a viewport this short.
+     */
+    @Test
+    fun `a viewport too short for the card on either side clamps fully on-screen and is allowed to overlap`() {
+        val shortViewportPx = IntSize(400, 100)
+        val selLeftPx = 190f
+        val selTopPx = 45f
+        val selHeightPxHere = 10f
+
+        val placement = resolveCalloutPlacement(
+            selLeftPx = selLeftPx,
+            selTopPx = selTopPx,
+            selWidthPx = selWidthPx,
+            selHeightPx = selHeightPxHere,
+            cardWidthPx = cardWidthPx,
+            cardHeightPx = cardHeightPx,
+            gapPx = gapPx,
+            edgeInsetPx = edgeInsetPx,
+            viewportPanPx = Offset.Zero,
+            viewportSizePx = shortViewportPx,
+        )
+
+        // Neither side's unclamped position fits: above would start at 45 - 12 - 80 = -47 (off the top);
+        // below would end at 45 + 10 + 12 + 80 = 147 (off the bottom of a 100px-tall viewport). The side
+        // decision still runs first and picks BELOW (the closer miss), then the clamp pulls it fully on-screen.
+        assertEquals(CalloutSide.BELOW, placement.side)
+
+        val cardLeft = placement.offset.x.toFloat()
+        val cardTop = placement.offset.y.toFloat()
+        val cardRight = cardLeft + cardWidthPx
+        val cardBottom = cardTop + cardHeightPx
+        assertTrue(
+            "card left [$cardLeft] must not be left of the viewport's own edge inset",
+            cardLeft >= edgeInsetPx - 0.5f,
+        )
+        assertTrue(
+            "card right [$cardRight] must not run past the viewport's right edge inset",
+            cardRight <= shortViewportPx.width - edgeInsetPx + 0.5f,
+        )
+        assertTrue(
+            "card top [$cardTop] must not be above the viewport's own top edge inset",
+            cardTop >= edgeInsetPx - 0.5f,
+        )
+        assertTrue(
+            "card bottom [$cardBottom] must not run past the viewport's bottom edge inset",
+            cardBottom <= shortViewportPx.height - edgeInsetPx + 0.5f,
+        )
+
+        // The point of this test: containment was bought by tolerating overlap, not by magically finding room
+        // that doesn't exist. Asserting the OPPOSITE of assertNoOverlap's condition makes that trade explicit
+        // rather than leaving it as an unstated side effect a future reader might "fix" back into finding 1.
+        val selRight = selLeftPx + selWidthPx
+        val selBottom = selTopPx + selHeightPxHere
+        val overlapsSelection =
+            cardLeft < selRight && cardRight > selLeftPx && cardTop < selBottom && cardBottom > selTopPx
+        assertTrue(
+            "expected the degenerate case to overlap the selection (containment over non-overlap) — if this " +
+                "is false, either the scenario no longer reproduces the degenerate case or a later change " +
+                "regressed the clamp",
+            overlapsSelection,
+        )
     }
 
     /** Fails with the two rects' coordinates if the card's placed rect and the selection's own rect intersect —
