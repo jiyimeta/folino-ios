@@ -135,7 +135,7 @@ private data class PadActions(
 private fun SingleRow(arming: PadArming, actions: PadActions, enabled: Boolean, typeface: Typeface) {
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(SINGLE_ROW_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DurationKeys(arming, actions, enabled, typeface, isFlexible = false)
@@ -277,7 +277,9 @@ private val DOT_CHOICES = listOf(
     3 to R.string.reader_editing_dot_triple,
 )
 
-private val PITCH_LETTERS = listOf('C', 'D', 'E', 'F', 'G', 'A', 'B')
+/** `internal` (not `private`) so `PadSingleRowWidthTest` can pin [SINGLE_ROW_KEY_COUNT] against this list's real
+ * size rather than a copy of "7". */
+internal val PITCH_LETTERS = listOf('C', 'D', 'E', 'F', 'G', 'A', 'B')
 
 // MARK: One key
 
@@ -359,8 +361,8 @@ private fun DotsGlyph(count: Int, enabled: Boolean, modifier: Modifier = Modifie
 private fun PadDivider() {
     Box(
         Modifier
-            .padding(horizontal = 2.dp)
-            .width(1.dp)
+            .padding(horizontal = DIVIDER_HORIZONTAL_PADDING)
+            .width(DIVIDER_LINE_WIDTH)
             .height(DIVIDER_HEIGHT)
             .background(MaterialTheme.colorScheme.outlineVariant),
     )
@@ -368,16 +370,74 @@ private fun PadDivider() {
 
 // MARK: Sizing
 
-/** Below this measured width the single row does not fit — see the class doc for why that has to be measured
- * rather than read off the window-size class. Comfortably clears five duration keys + the dot key + a divider +
- * seven pitch keys + the rest key, all at [KEY_MIN_WIDTH], with room for the row's own spacing. */
-private val SINGLE_ROW_MIN_WIDTH: Dp = 640.dp
-private val KEY_MIN_WIDTH: Dp = 44.dp
 private val KEY_HEIGHT: Dp = 48.dp
 private val GLYPH_SIZE: Dp = 22.dp
 private val DIVIDER_HEIGHT: Dp = 28.dp
+private val DIVIDER_LINE_WIDTH: Dp = 1.dp
+private val DIVIDER_HORIZONTAL_PADDING: Dp = 2.dp
 private val DOT_DIAMETER: Dp = 4.dp
 private val DOT_GAP: Dp = 3.dp
+
+/** A key's fixed width on the single-row layout. `internal` (not `private`) so `PadSingleRowWidthTest` can pin
+ * [SINGLE_ROW_MIN_WIDTH] against the exact value [SingleRow] uses, not a second copy of the number. */
+internal val KEY_MIN_WIDTH: Dp = 44.dp
+
+/** The gap `SingleRow`'s own `Arrangement.spacedBy` uses — `internal` for the same reason as [KEY_MIN_WIDTH]. */
+internal val SINGLE_ROW_GAP: Dp = 6.dp
+
+/** [PadDivider]'s total footprint on the row: the line's own width plus the padding wrapped around both sides
+ * of it (see [PadDivider]) — what a fixed-width sibling actually costs the row, not just the line's width. */
+internal val DIVIDER_FOOTPRINT_WIDTH: Dp = DIVIDER_LINE_WIDTH + DIVIDER_HORIZONTAL_PADDING * 2
+
+/**
+ * How many individual keys [SingleRow] lays out today: [PadDuration.ordered]'s duration keys, the dot key, the
+ * seven [PITCH_LETTERS] pitch keys, and the rest key — the same counts [DurationKeys]/[DotKey]/[PitchKeys]/
+ * [RestKey] actually emit, not a copy of the number. **When the tuplet/tie keys land** (see the class doc — they
+ * are second-pass and not drawn yet), whoever adds them to [SingleRow] must add their count here too, or this
+ * value silently undercounts again exactly as [SINGLE_ROW_MIN_WIDTH] once did.
+ */
+internal val SINGLE_ROW_KEY_COUNT: Int
+    get() = PadDuration.ordered.size + 1 + PITCH_LETTERS.size + 1
+
+/**
+ * Below this measured width the single row does not fit — see the class doc for why that has to be measured
+ * rather than read off the window-size class.
+ *
+ * **Derived, not hand-picked.** [SingleRow] lays out [SINGLE_ROW_KEY_COUNT] keys at [KEY_MIN_WIDTH] plus one
+ * divider at [DIVIDER_FOOTPRINT_WIDTH], all separated by [SINGLE_ROW_GAP] — `Arrangement.spacedBy` puts a gap
+ * between every pair of ADJACENT children, so `(children - 1)` gaps for `(SINGLE_ROW_KEY_COUNT + 1)` children
+ * (the `+ 1` is the divider). [singleRowRequiredWidthDp] is that arithmetic, pulled out into a plain function so
+ * `PadSingleRowWidthTest` can pin it without a Compose/Robolectric dependency.
+ *
+ * A hand-computed constant here previously undercounted the row (640.dp against an actual ~705.dp requirement,
+ * caught in review) — any measured card width in that gap picked the single-row layout and it ran off the card,
+ * unscrollable and unclipped. Deriving this from the same values [SingleRow] uses is what makes that class of
+ * bug impossible rather than merely fixed once.
+ */
+internal val SINGLE_ROW_MIN_WIDTH: Dp
+    get() = singleRowRequiredWidthDp(
+        keyCount = SINGLE_ROW_KEY_COUNT,
+        keyWidthDp = KEY_MIN_WIDTH.value,
+        gapDp = SINGLE_ROW_GAP.value,
+        dividerFootprintDp = DIVIDER_FOOTPRINT_WIDTH.value,
+    ).dp
+
+/**
+ * The width (in dp magnitude, not [Dp]) that [SingleRow] needs to lay out [keyCount] fixed-width keys plus one
+ * divider, all separated by [gapDp] gaps. Plain `Float` arithmetic rather than [Dp] so it has no
+ * Compose-runtime dependency and `PadSingleRowWidthTest` can call it directly from a plain JVM test (this
+ * module's unit tests have no Robolectric — see the module's other tests for why).
+ */
+internal fun singleRowRequiredWidthDp(
+    keyCount: Int,
+    keyWidthDp: Float,
+    gapDp: Float,
+    dividerFootprintDp: Float,
+): Float {
+    val childCount = keyCount + 1 // the divider is one more child than the keys alone
+    val gapCount = childCount - 1
+    return keyCount * keyWidthDp + dividerFootprintDp + gapCount * gapDp
+}
 
 // MARK: Previews
 
@@ -388,6 +448,31 @@ private fun EditingPadStackedPreview() {
         EditingPad(
             armedDurationKind = 3,
             armedDots = 1,
+            canWriteRest = true,
+            hasEditTarget = true,
+            isPlaybackActive = false,
+            onArmDuration = {},
+            onSetArmedDots = {},
+            onToggleArmedDot = {},
+            onInputPitch = {},
+            onWriteRest = {},
+        )
+    }
+}
+
+/**
+ * 680 dp: inside the old, hand-picked `SINGLE_ROW_MIN_WIDTH` (640.dp) but under the row's real ~705.dp
+ * requirement — exactly the gap that ran the single row off the card (see [SINGLE_ROW_MIN_WIDTH]'s doc). Now
+ * that the threshold is derived rather than hand-picked, this width falls below it and renders stacked; if it
+ * ever renders single-row and overflows again, this is the preview that would show it.
+ */
+@Preview(name = "Editing pad - guard band (680 dp)", showBackground = true)
+@Composable
+private fun EditingPadGuardBandPreview() {
+    Box(Modifier.width(680.dp).padding(8.dp)) {
+        EditingPad(
+            armedDurationKind = 3,
+            armedDots = 0,
             canWriteRest = true,
             hasEditTarget = true,
             isPlaybackActive = false,
