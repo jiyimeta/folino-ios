@@ -203,6 +203,10 @@ class EditSessionParityTest {
 
         assertEquals("no resync should have been needed", 0, relay.resyncCount)
         assertTrue("the host should have been asked to redraw", rig.host.relayouts > 0)
+        // The lifetime half of the same statement: no resync means no handle was ever superseded, so the host must
+        // be holding exactly the one it opened with. A retirement appearing here would mean a swap happened that
+        // `resyncCount` did not account for.
+        assertTrue("a session with no resync must retire no handles", rig.host.retired.isEmpty())
     }
 
     /**
@@ -243,6 +247,18 @@ class EditSessionParityTest {
             "the resync must have replaced the mirror's edited score, not adopted it",
             editedFingerprint,
             SheetMusicJNI.nativeScoreFingerprint(first.host.handle),
+        )
+        // The lifetime assertion this test exists to carry (SP4 Task 9). A resync loads a FRESH score and hands the
+        // one it displaced to the host, which is the only party that may free it — so the single resync above must
+        // have produced exactly one retirement, and that handle must not be the one still in use. Asserting the
+        // count rather than merely draining it in [tearDown] is what makes this a gate: a relay that went back to
+        // releasing the handle itself, or a host contract that stopped handing it over, both show up right here
+        // instead of as a leak nobody measures.
+        assertEquals("one resync must retire exactly one handle", 1, first.host.retired.size)
+        assertNotEquals(
+            "the retired handle must be the SUPERSEDED one, never the live one",
+            first.host.handle,
+            first.host.retired.single(),
         )
     }
 
