@@ -78,4 +78,14 @@
     <string name="reader_editing_voice">声部 %1$d</string>
     <string name="reader_editing_unavailable_version">編集を利用できません。この楽譜は別のバージョンのエンジンで描画されています。</string>
     <string name="reader_editing_unavailable_diverged">この楽譜は現在編集できません。</string>
+    <string name="reader_editing_duration_whole">全音符</string>
+    <string name="reader_editing_duration_half">2分音符</string>
+    <string name="reader_editing_duration_quarter">4分音符</string>
+    <string name="reader_editing_duration_eighth">8分音符</string>
+    <string name="reader_editing_duration_sixteenth">16分音符</string>
+    <string name="reader_editing_dot">付点</string>
+    <string name="reader_editing_dot_single">付点</string>
+    <string name="reader_editing_dot_double">複付点</string>
+    <string name="reader_editing_dot_triple">複々付点</string>
+    <string name="reader_editing_delete">削除</string>
 </resources>

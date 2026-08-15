@@ -78,4 +78,14 @@
     <string name="reader_editing_voice">聲部 %1$d</string>
     <string name="reader_editing_unavailable_version">無法編輯：此樂譜正由不同版本的引擎繪製。</string>
     <string name="reader_editing_unavailable_diverged">此樂譜目前無法編輯。</string>
+    <string name="reader_editing_duration_whole">全音符</string>
+    <string name="reader_editing_duration_half">二分音符</string>
+    <string name="reader_editing_duration_quarter">四分音符</string>
+    <string name="reader_editing_duration_eighth">八分音符</string>
+    <string name="reader_editing_duration_sixteenth">十六分音符</string>
+    <string name="reader_editing_dot">附點</string>
+    <string name="reader_editing_dot_single">附點</string>
+    <string name="reader_editing_dot_double">雙附點</string>
+    <string name="reader_editing_dot_triple">三附點</string>
+    <string name="reader_editing_delete">刪除</string>
 </resources>
