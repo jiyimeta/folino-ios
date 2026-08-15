@@ -585,6 +585,14 @@ fun ReaderScreen(
             }
         }
     }
+    // A resync hands `ReaderViewModel` ownership of the handle it displaced, and it can only free one once nothing
+    // is still reading it. The audio engine is the holder it cannot see for itself — `prepare` decodes the score
+    // into the player and the same handle goes to the bound service for soundfont hot-swap — so this screen, which
+    // is the only layer holding both view models, wires the two together. Without it the Reader defaults to "assume
+    // held" and simply never frees.
+    LaunchedEffect(readerVm, audioVm) {
+        readerVm.installPreparedHandleProbe(audioVm::isPreparedWith)
+    }
     LaunchedEffect(scoreHandle) {
         scoreHandle?.let {
             // Seed the per-score playback scalars (master volume / tempo / A4) before prepare, so the

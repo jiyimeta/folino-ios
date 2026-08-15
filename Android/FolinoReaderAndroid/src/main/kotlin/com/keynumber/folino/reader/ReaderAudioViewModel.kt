@@ -231,6 +231,26 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     @Volatile
     private var scoreHandle: Long? = null
 
+    // The handle the ENGINE was actually prepared with — deliberately NOT the same field as [scoreHandle], which
+    // [preparePlayback] refreshes unconditionally while the prepare itself is skipped whenever the transport is not
+    // STOPPED. The two diverge exactly there, and the difference is what [isPreparedWith] answers.
+    //
+    // It exists because `ReaderViewModel` cannot free a score handle a resync superseded until it knows nothing is
+    // still reading it, and this class is the one holder it cannot see: `prepare` decodes the score into the
+    // player, and `notePreparedScore` hands the same handle to the bound `MediaSessionService` so it can hot-swap
+    // the engine when a soundfont download lands. Both keep the pointer for as long as this stays set.
+    @Volatile
+    private var preparedScoreHandle: Long? = null
+
+    /**
+     * Whether the audio engine (and the bound service it shares the handle with) is still holding [handle].
+     *
+     * `ReaderViewModel.installPreparedHandleProbe` wires this in from the Reader screen, which is the only layer
+     * that sees both view models. A `true` answer means a superseded handle must NOT be released yet — see
+     * `ReaderViewModel.retiredHandlesToRelease` for the decision this feeds.
+     */
+    fun isPreparedWith(handle: Long): Boolean = preparedScoreHandle == handle
+
     // Rehearsal marks for the prepared score, loaded once the handle is known (see
     // [loadRehearsalMarks]). The transport bar renders one pill per entry, positioned by its
     // notated-time fraction; tapping a pill seeks the engine to that entry's cursor.
@@ -449,6 +469,11 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 e.prepare(scoreHandle)
                 hasLoadedIntoPlayback = true
+                // Record what the ENGINE now holds, as opposed to what this view model was last told about (see
+                // [preparedScoreHandle]). Set only on the path where `prepare` actually ran: the early return above
+                // leaves the engine on its previous score, and claiming otherwise here would let `ReaderViewModel`
+                // free a handle the player is still decoding from.
+                preparedScoreHandle = scoreHandle
                 // Re-apply the seeded per-score playback scalars: a freshly prepared player resets the
                 // synth's master volume and tempo (and metronome — re-pushed by the caller via the
                 // soundfont-reload hook). Master tuning was already applied above; rate + volume are

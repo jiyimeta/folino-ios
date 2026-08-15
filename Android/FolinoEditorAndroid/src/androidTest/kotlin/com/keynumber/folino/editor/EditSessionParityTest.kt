@@ -47,10 +47,25 @@ import java.io.File
  * and it must be called from *this* thread, never from inside [onMain].
  */
 class EditSessionParityTest {
+    /**
+     * Mirrors the production host's OWNERSHIP, not just its state.
+     *
+     * `EditSessionHost.replaceScoreHandle` gives the host the handle it displaced and the relay never frees it, so
+     * a fake that merely overwrote its field would exercise a lifetime no real host has — and this test is the
+     * acceptance gate for the relay design, so it is the one place a lifetime regression would be caught.
+     * [retired] collects the superseded handles exactly as `ReaderViewModel.retiredScoreHandles` does; [tearDown]
+     * releases them. There is no equivalent of the audio engine here to refuse a release, so this fake's drain is
+     * unconditional where production's consults a probe — the property under test is that the relay leaves the
+     * freeing to the host, which both spellings share.
+     */
     private class TestHost(var handle: Long) : EditSessionHost {
         var relayouts = 0
+        val retired = mutableListOf<Long>()
         override fun scoreHandle() = handle
-        override fun replaceScoreHandle(handle: Long) { this.handle = handle }
+        override fun replaceScoreHandle(handle: Long) {
+            if (this.handle != 0L && this.handle != handle) retired += this.handle
+            this.handle = handle
+        }
         override fun requestRelayout() { relayouts += 1 }
     }
 
@@ -87,6 +102,10 @@ class EditSessionParityTest {
         onMain { relaysToClose.forEach { it.close() } }
         relaysToClose.clear()
         hostsToRelease.distinctBy { System.identityHashCode(it) }.forEach { host ->
+            // The handles a resync displaced are the host's to free (see [TestHost]) — releasing only
+            // `host.handle` would leak one full parsed score per resync for the rest of the process.
+            host.retired.forEach { SheetMusicJNI.nativeReleaseScore(it) }
+            host.retired.clear()
             if (host.handle != 0L) SheetMusicJNI.nativeReleaseScore(host.handle)
         }
         hostsToRelease.clear()
