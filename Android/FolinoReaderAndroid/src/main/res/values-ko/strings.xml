@@ -70,4 +70,12 @@
     <string name="reader_pdf_playback_notice_body">folino는 PDF를 분석해 재생하고 커서로 따라갑니다. 분석이 항상 완벽하지는 않으며, MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다.</string>
     <string name="reader_pdf_playback_unavailable_body">이 PDF는 재생용으로 분석할 수 없습니다. 재생은 MuseScore나 folino에서 내보낸 PDF에서 가장 잘 작동합니다.</string>
     <string name="reader_pdf_playback_notice_dismiss">다시 표시 안 함</string>
+    <string name="reader_editing_start">음표 편집</string>
+    <string name="reader_editing_done">완료</string>
+    <string name="reader_editing_undo">실행 취소</string>
+    <string name="reader_editing_redo">다시 실행</string>
+    <string name="reader_editing_pad">음표 패드</string>
+    <string name="reader_editing_voice">성부 %1$d</string>
+    <string name="reader_editing_unavailable_version">편집을 사용할 수 없습니다. 이 악보는 다른 버전의 엔진으로 렌더링되고 있습니다.</string>
+    <string name="reader_editing_unavailable_diverged">지금은 이 악보를 편집할 수 없습니다.</string>
 </resources>

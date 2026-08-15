@@ -70,4 +70,12 @@
     <string name="reader_pdf_playback_notice_body">folino 会解析 PDF 以进行播放并用光标跟随。解析并非总是完美，使用从 MuseScore 或 folino 导出的 PDF 效果最佳。</string>
     <string name="reader_pdf_playback_unavailable_body">folino 无法解析此 PDF 进行播放。播放使用从 MuseScore 或 folino 导出的 PDF 效果最佳。</string>
     <string name="reader_pdf_playback_notice_dismiss">不再显示</string>
+    <string name="reader_editing_start">编辑音符</string>
+    <string name="reader_editing_done">完成</string>
+    <string name="reader_editing_undo">撤销</string>
+    <string name="reader_editing_redo">重做</string>
+    <string name="reader_editing_pad">音符面板</string>
+    <string name="reader_editing_voice">声部 %1$d</string>
+    <string name="reader_editing_unavailable_version">无法编辑：此乐谱正由不同版本的引擎渲染。</string>
+    <string name="reader_editing_unavailable_diverged">此乐谱目前无法编辑。</string>
 </resources>

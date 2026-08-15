@@ -75,4 +75,12 @@
     <string name="reader_pdf_playback_notice_body">folino reads the PDF to play it and follow along with a cursor. The result isn\'t always perfect — it works best with PDFs exported from MuseScore or folino.</string>
     <string name="reader_pdf_playback_unavailable_body">folino couldn\'t read this PDF for playback. Playback works best with PDFs exported from MuseScore or folino.</string>
     <string name="reader_pdf_playback_notice_dismiss">Don\'t show again</string>
+    <string name="reader_editing_start">Edit notes</string>
+    <string name="reader_editing_done">Done</string>
+    <string name="reader_editing_undo">Undo</string>
+    <string name="reader_editing_redo">Redo</string>
+    <string name="reader_editing_pad">Note pad</string>
+    <string name="reader_editing_voice">Voice %1$d</string>
+    <string name="reader_editing_unavailable_version">Editing is unavailable: this score is being rendered by a different engine build.</string>
+    <string name="reader_editing_unavailable_diverged">Editing is unavailable for this score right now.</string>
 </resources>

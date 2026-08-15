@@ -70,4 +70,12 @@
     <string name="reader_pdf_playback_notice_body">folino は PDF を解析して再生し、カーソルで追従します。解析は常に完璧とは限らず、MuseScore や folino から書き出した PDF で最もうまく動作します。</string>
     <string name="reader_pdf_playback_unavailable_body">この PDF は再生用に解析できませんでした。再生は MuseScore や folino から書き出した PDF で最もうまく動作します。</string>
     <string name="reader_pdf_playback_notice_dismiss">次回から表示しない</string>
+    <string name="reader_editing_start">音符を編集</string>
+    <string name="reader_editing_done">完了</string>
+    <string name="reader_editing_undo">取り消す</string>
+    <string name="reader_editing_redo">やり直す</string>
+    <string name="reader_editing_pad">音符パッド</string>
+    <string name="reader_editing_voice">声部 %1$d</string>
+    <string name="reader_editing_unavailable_version">編集を利用できません。この楽譜は別のバージョンのエンジンで描画されています。</string>
+    <string name="reader_editing_unavailable_diverged">この楽譜は現在編集できません。</string>
 </resources>

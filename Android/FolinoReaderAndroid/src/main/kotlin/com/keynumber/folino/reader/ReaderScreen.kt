@@ -1,6 +1,7 @@
 package com.keynumber.folino.reader
 
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledIconToggleButton
@@ -85,11 +87,15 @@ import androidx.compose.ui.unit.dp
 import androidx.ink.strokes.Stroke
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.keynumber.folino.editor.EditAvailability
 import com.keynumber.folino.editor.EditUiState
 import com.keynumber.folino.editor.caretRectMm
 import com.keynumber.folino.editor.editingHitTestForTap
 import com.keynumber.folino.reader.editing.EDIT_CARET_MINIMUM_WIDTH_MM
+import com.keynumber.folino.reader.editing.EditingBottomBar
 import com.keynumber.folino.reader.editing.EditingCaretOverlay
+import com.keynumber.folino.reader.editing.EditingTopBarActions
+import com.keynumber.folino.reader.editing.EditingUnavailableDialog
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationLayers
@@ -327,6 +333,27 @@ fun ReaderScreen(
     onAnalyticsTransportPrevious: () -> Unit = {},
     onAnalyticsTransportNext: () -> Unit = {},
     onAnalyticsSeek: () -> Unit = {},
+    /** The note-editing session's live state (Task 2's `EditSessionController.ui`). Defaults to an inert
+     * `EditUiState()` (`isEditing = false`) so this screen behaves exactly as it did before editing existed
+     * until a caller wires the real controller through — see [ReadyScore]'s matching parameter, which this
+     * same value must also reach once that wiring lands (a later task's job; see that parameter's doc). */
+    editing: EditUiState = EditUiState(),
+    /** Opens an edit session for this score. No-op by default; the composition root wires this to
+     * `EditSessionController.begin` and is the layer that refuses it for a PDF (spec §7, §8.1). */
+    onStartEditing: () -> Unit = {},
+    /** Ends the edit session — the app-bar ✓, the back arrow while editing, and the system back gesture
+     * (via `BackHandler` below) all funnel through this one callback. Flushes nothing on its own; a pending
+     * save is a later task's concern (spec §8.4). */
+    onEndEditing: () -> Unit = {},
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
+    /** Sets the voice (zero-indexed, 0..3) that new input writes into. */
+    onSetVoice: (Int) -> Unit = {},
+    /** Shows or hides the note pad; the controller owns whether it's currently visible
+     * ([EditUiState.isPadVisible]), this callback only toggles it. */
+    onTogglePad: () -> Unit = {},
+    onSelectPreviousElement: () -> Unit = {},
+    onSelectNextElement: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val fontProvider = remember(context) { bundledFontProvider(context) }
@@ -703,6 +730,26 @@ fun ReaderScreen(
     val inspectorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val displaySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // System back ends an edit session instead of leaving the Reader — the same rule the app-bar's own
+    // back arrow follows (ReaderTopBar, below). Disabled while not editing so ordinary back-navigation is
+    // untouched.
+    BackHandler(enabled = editing.isEditing) { onEndEditing() }
+
+    // `EditUiState.availability` only turns into a failure value as the RESULT of an `onStartEditing()`
+    // attempt (`EditSessionController.begin`): it starts at `AVAILABLE` and stays there until a real
+    // controller's `begin()` sets it. So "not editing, and availability reads as a refusal" is exactly a
+    // just-failed attempt, and is what drives this dialog — keyed on the availability value itself (like
+    // the PDF notice above), so a repeat of the SAME refusal doesn't reopen a dialog the user already
+    // dismissed, but a fresh one (or a different failure) does.
+    var editingUnavailableReason by remember { mutableStateOf<EditAvailability?>(null) }
+    LaunchedEffect(editing.availability, editing.isEditing) {
+        if (editing.isEditing) return@LaunchedEffect
+        editingUnavailableReason = when (editing.availability) {
+            EditAvailability.UNAVAILABLE_VERSION_SKEW, EditAvailability.UNAVAILABLE_DIVERGED -> editing.availability
+            EditAvailability.AVAILABLE, EditAvailability.UNAVAILABLE_NO_SCORE -> null
+        }
+    }
+
     if (pipActive) {
         ReaderPipContent(readerVm = readerVm, audioVm = audioVm)
         return
@@ -724,10 +771,38 @@ fun ReaderScreen(
                 onToggleAnnotate = readerVm::toggleAnnotationMode,
                 isPdf = isPdf,
                 onShowPdfNotice = { showPdfNotice = true },
+                editing = editing,
+                onStartEditing = onStartEditing,
+                onUndo = onUndo,
+                onRedo = onRedo,
+                onEndEditing = onEndEditing,
             )
         },
         bottomBar = {
-            if (annotationMode) {
+            if (editing.isEditing) {
+                Column {
+                    EditingBottomBar(
+                        activeVoice = editing.activeVoice,
+                        isPadVisible = editing.isPadVisible,
+                        onSetVoice = onSetVoice,
+                        onTogglePad = onTogglePad,
+                        onSelectPreviousElement = onSelectPreviousElement,
+                        onSelectNextElement = onSelectNextElement,
+                        // Stepping the selection would fight a moving playback cursor for the same caret
+                        // — mirrors iOS's `navigationPill.disabled(viewModel.isPlaybackActive)`.
+                        steppersEnabled = !isPlaying,
+                    )
+                    if (showSeekBar) {
+                        TransportBar(
+                            audioVm = audioVm,
+                            enabled = canPlayNow,
+                            onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
+                            onAnalyticsTransportNext = onAnalyticsTransportNext,
+                            onAnalyticsSeek = onAnalyticsSeek,
+                        )
+                    }
+                }
+            } else if (annotationMode) {
                 AnnotationToolbar(
                     state = toolState,
                     presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
@@ -882,6 +957,9 @@ fun ReaderScreen(
             },
         )
     }
+    editingUnavailableReason?.let { reason ->
+        EditingUnavailableDialog(reason = reason, onDismiss = { editingUnavailableReason = null })
+    }
     if (showInspector) {
         val openingQuarterBpm by readerVm.openingQuarterBpm.collectAsStateWithLifecycle()
         PlaybackInspectorSheet(
@@ -982,6 +1060,21 @@ fun ReaderTopBar(
     isPdf: Boolean = false,
     /** Re-presents the PDF-playback caveat; invoked by the "PDF" label. */
     onShowPdfNotice: () -> Unit = {},
+    /** The note-editing session's live state. While [EditUiState.isEditing] is true, this bar's `actions`
+     * are REPLACED by [EditingTopBarActions] (undo / redo / done) rather than joined to the reading set —
+     * the same full swap [annotationMode] does NOT do (annotate only adds a toggle to the existing row);
+     * see [EditingTopBarActions]'s own doc for why editing gets the stronger treatment. The back arrow
+     * swaps behavior too: it ends the session instead of navigating away, matching the ✓ and the
+     * `BackHandler` for system back ([ReaderScreen] owns that one, since only it can observe the system
+     * gesture). Defaults to an inert `EditUiState()` so this bar reads exactly as it did before editing
+     * existed. */
+    editing: EditUiState = EditUiState(),
+    /** Opens an edit session; the "Edit notes" action in the reading-mode row. No-op by default. */
+    onStartEditing: () -> Unit = {},
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
+    /** Ends the edit session — the back arrow while editing and the ✓ action both call this. */
+    onEndEditing: () -> Unit = {},
 ) {
     TopAppBar(
         modifier = modifier,
@@ -1006,38 +1099,54 @@ fun ReaderTopBar(
             }
         },
         navigationIcon = {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = { if (editing.isEditing) onEndEditing() else onBack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         },
         actions = {
-            IconButton(onClick = onShare) {
-                Icon(
-                    Icons.Filled.Share,
-                    contentDescription = stringResource(R.string.reader_share),
+            if (editing.isEditing) {
+                EditingTopBarActions(
+                    canUndo = editing.canUndo,
+                    canRedo = editing.canRedo,
+                    onUndo = onUndo,
+                    onRedo = onRedo,
+                    onEndEditing = onEndEditing,
                 )
-            }
-            IconButton(onClick = onEditInfo) {
-                Icon(
-                    Icons.Outlined.Info,
-                    contentDescription = stringResource(R.string.reader_edit_info),
-                )
-            }
-            IconButton(onClick = onPlaybackControls) {
-                Icon(Icons.Default.Tune, contentDescription = "Playback controls")
-            }
-            IconButton(onClick = onDisplaySettings) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ViewList,
-                    contentDescription = stringResource(R.string.reader_display_settings),
-                )
-            }
-            FilledIconToggleButton(
-                checked = annotationMode,
-                onCheckedChange = { onToggleAnnotate() },
-                enabled = annotationEnabled,
-            ) {
-                Icon(Icons.Filled.Edit, contentDescription = "Annotate")
+            } else {
+                IconButton(onClick = onShare) {
+                    Icon(
+                        Icons.Filled.Share,
+                        contentDescription = stringResource(R.string.reader_share),
+                    )
+                }
+                IconButton(onClick = onEditInfo) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = stringResource(R.string.reader_edit_info),
+                    )
+                }
+                IconButton(onClick = onPlaybackControls) {
+                    Icon(Icons.Default.Tune, contentDescription = "Playback controls")
+                }
+                IconButton(onClick = onDisplaySettings) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ViewList,
+                        contentDescription = stringResource(R.string.reader_display_settings),
+                    )
+                }
+                IconButton(onClick = onStartEditing) {
+                    Icon(
+                        Icons.Outlined.EditNote,
+                        contentDescription = stringResource(R.string.reader_editing_start),
+                    )
+                }
+                FilledIconToggleButton(
+                    checked = annotationMode,
+                    onCheckedChange = { onToggleAnnotate() },
+                    enabled = annotationEnabled,
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = "Annotate")
+                }
             }
         },
     )
