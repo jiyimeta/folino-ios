@@ -57,6 +57,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,6 +97,7 @@ import com.keynumber.folino.reader.editing.EditingBottomBar
 import com.keynumber.folino.reader.editing.EditingCaretOverlay
 import com.keynumber.folino.reader.editing.EditingTopBarActions
 import com.keynumber.folino.reader.editing.EditingUnavailableDialog
+import com.keynumber.folino.reader.editing.editingUnavailableReasonFor
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationLayers
@@ -738,16 +740,19 @@ fun ReaderScreen(
     // `EditUiState.availability` only turns into a failure value as the RESULT of an `onStartEditing()`
     // attempt (`EditSessionController.begin`): it starts at `AVAILABLE` and stays there until a real
     // controller's `begin()` sets it. So "not editing, and availability reads as a refusal" is exactly a
-    // just-failed attempt, and is what drives this dialog — keyed on the availability value itself (like
-    // the PDF notice above), so a repeat of the SAME refusal doesn't reopen a dialog the user already
-    // dismissed, but a fresh one (or a different failure) does.
+    // just-failed attempt, and is what drives this dialog.
+    //
+    // NOT keyed on `editing.availability` / `editing.isEditing` alone: `begin()` writes through a
+    // `MutableStateFlow`, which conflates equal emissions at the source — so tapping "Edit notes" twice in
+    // a row and getting the SAME refusal both times produces a byte-identical `EditUiState` the second
+    // time, and neither value would change. `editingAttempt` — bumped on every "Edit notes" tap, below —
+    // is what forces this effect to re-run for a repeat, independent of whether the derived values moved;
+    // `editingUnavailableReasonFor` is then free to be a pure function of the CURRENT values, repeat or
+    // not, since re-deriving "version skew" from "version skew" is the correct answer either way.
+    var editingAttempt by remember { mutableIntStateOf(0) }
     var editingUnavailableReason by remember { mutableStateOf<EditAvailability?>(null) }
-    LaunchedEffect(editing.availability, editing.isEditing) {
-        if (editing.isEditing) return@LaunchedEffect
-        editingUnavailableReason = when (editing.availability) {
-            EditAvailability.UNAVAILABLE_VERSION_SKEW, EditAvailability.UNAVAILABLE_DIVERGED -> editing.availability
-            EditAvailability.AVAILABLE, EditAvailability.UNAVAILABLE_NO_SCORE -> null
-        }
+    LaunchedEffect(editingAttempt, editing.availability, editing.isEditing) {
+        editingUnavailableReason = editingUnavailableReasonFor(editing.availability, editing.isEditing)
     }
 
     if (pipActive) {
@@ -772,7 +777,12 @@ fun ReaderScreen(
                 isPdf = isPdf,
                 onShowPdfNotice = { showPdfNotice = true },
                 editing = editing,
-                onStartEditing = onStartEditing,
+                onStartEditing = {
+                    onStartEditing()
+                    // Forces the unavailable-dialog effect above to re-run even when the resulting
+                    // `editing.availability` is identical to before (see that effect's own comment).
+                    editingAttempt++
+                },
                 onUndo = onUndo,
                 onRedo = onRedo,
                 onEndEditing = onEndEditing,

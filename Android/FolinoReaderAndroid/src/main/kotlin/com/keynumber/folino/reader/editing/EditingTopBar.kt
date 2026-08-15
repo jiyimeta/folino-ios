@@ -52,6 +52,29 @@ fun EditingTopBarActions(
 }
 
 /**
+ * Whether an unavailable-refusal dialog should show right now, and for which reason — pure, so it is
+ * unit-testable without a Compose harness (this module has none; see `EditSessionControllerTest`'s own
+ * host tests for the availability enum's producing side).
+ *
+ * The caller MUST NOT rely on [availability] alone changing value to decide when to re-derive this: a
+ * repeat of the SAME refusal (tap "Edit notes", dismiss, tap again, get the same version-skew result)
+ * leaves [EditUiState.availability][com.keynumber.folino.editor.EditUiState.availability] byte-identical
+ * to what it already was — `MutableStateFlow` conflates equal emissions at the source, so a
+ * `LaunchedEffect` keyed only on `editing.availability` / `editing.isEditing` never re-runs for the second
+ * attempt. The fix is at the CALL SITE (key the effect on a per-tap counter too, so the effect re-runs on
+ * every "Edit notes" tap regardless of whether the resulting value differs from before) — this function
+ * only answers "given the current values, what should show", which is correct to call on every re-run,
+ * repeat or not.
+ */
+internal fun editingUnavailableReasonFor(availability: EditAvailability, isEditing: Boolean): EditAvailability? {
+    if (isEditing) return null
+    return when (availability) {
+        EditAvailability.UNAVAILABLE_VERSION_SKEW, EditAvailability.UNAVAILABLE_DIVERGED -> availability
+        EditAvailability.AVAILABLE, EditAvailability.UNAVAILABLE_NO_SCORE -> null
+    }
+}
+
+/**
  * The two [EditAvailability] failure cases a user can actually hit by tapping "Edit notes" — a version-skew
  * refusal (Folino's compiled-in engine stamp doesn't match the `.so` behind the score handle; spec §8.1) and a
  * diverged-session refusal (a resync couldn't reconcile the two copies of the score; spec §8.3) — each get their
