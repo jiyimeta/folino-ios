@@ -84,6 +84,8 @@ import androidx.compose.ui.unit.dp
 import androidx.ink.strokes.Stroke
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.keynumber.folino.editor.EditUiState
+import com.keynumber.folino.editor.editingHitTestForTap
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationLayers
@@ -1099,6 +1101,18 @@ private fun ReadyScore(
     /** User opt-out for continuous-playback auto-scroll (SettingsPrefs `autoFollow` / the display
      * inspector row). See [shouldAutoFollow]. */
     autoFollowEnabled: Boolean = true,
+    /**
+     * Edit-session presentation state and the deselect/select callback for this surface's tap.
+     *
+     * Defaults to an inert `EditUiState()` (`isEditing = false`) and a no-op [onSelectItem] so this surface
+     * behaves exactly as it did before editing existed until a caller wires the real
+     * [com.keynumber.folino.editor.EditSessionController] through. That wiring is a later task's job — see
+     * the tap branch below.
+     */
+    editing: EditUiState = EditUiState(),
+    /** Reached with the hit-test result of an editing tap (Task 4), or null to deselect. Never called while
+     * `!editing.isEditing`. */
+    onSelectItem: (ByteArray?) -> Unit = {},
 ) {
     val page = state.program.pages.first()
     // Armed only when a surface state was passed AND its tool is out; every gesture gate below reads
@@ -1263,18 +1277,40 @@ private fun ReadyScore(
         Modifier
             .fillMaxSize()
             .onSizeChanged { viewportSize = it }
-            // Tap-to-seek + audition. Lives in its own pointerInput so it coexists with the viewport
-            // gestures below: `detectTapGestures` only fires on a tap, while the viewport loop consumes
-            // moves past touch slop — neither steals the other's events. The tap point is in this outer
-            // (viewport) px space; fold the offsets and the fixed vertical padding into the content offset
-            // so the helper's divide yields document-mm. Disabled while annotating: a single-finger tap
-            // there is the wet overlay's to consume, not a seek.
-            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, annotationMode) {
+            // Tap-to-seek + audition, or (while editing) tap-to-select. Lives in its own pointerInput so it
+            // coexists with the viewport gestures below: `detectTapGestures` only fires on a tap, while the
+            // viewport loop consumes moves past touch slop — neither steals the other's events. The tap
+            // point is in this outer (viewport) px space; fold the offsets and the fixed vertical padding
+            // into the content offset so the helper's divide yields document-mm. Disabled while annotating:
+            // a single-finger tap there is the wet overlay's to consume, not a seek/select.
+            .pointerInput(
+                scoreHandle,
+                fitPxPerMM,
+                layoutOptions,
+                annotationMode,
+                editing.isEditing,
+                editing.activeVoice,
+            ) {
                 if (annotationMode) return@pointerInput
                 val handle = scoreHandle ?: return@pointerInput
                 if (fitPxPerMM <= 0f) return@pointerInput
                 val optionsBytes = layoutOptions.encode()
                 detectTapGestures { offset ->
+                    if (editing.isEditing) {
+                        // Editing replaces tap-to-seek on this surface: the same tap cannot both move the
+                        // playhead and pick an element to edit, and iOS makes the same choice.
+                        val bytes = editingHitTestForTap(
+                            tap = offset,
+                            contentOffsetPx = Offset(-viewport.offsetX, vPadPx - viewport.offsetY),
+                            pxPerMM = fitPxPerMM,
+                            scale = viewport.scale,
+                            scoreHandle = handle,
+                            activeVoice = editing.activeVoice,
+                            layoutOptionsBytes = optionsBytes,
+                        )
+                        onSelectItem(bytes)
+                        return@detectTapGestures
+                    }
                     val cursor = nearestCursorForTap(
                         tap = offset,
                         contentOffsetPx = Offset(-viewport.offsetX, vPadPx - viewport.offsetY),
