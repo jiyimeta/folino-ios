@@ -40,7 +40,51 @@ data class EditUiState(
     val caretItem: ByteArray? = null,
     /** Bumped by the relay's own revision; the render surface keys its re-encode off this. */
     val revision: Int = 0,
-)
+) {
+    // A data class over ByteArray compares those fields by identity, not content — the default generated equals()
+    // would call two ticks unequal even when selectedItem/caretItem hold the same bytes, and this state is what
+    // drives recomposition: MutableStateFlow conflates only equal values, so every such tick would reach every
+    // collector (the caret overlay and the callout, Tasks 5/8) for no real change. Override with contentEquals() /
+    // contentHashCode() for the two array fields and the data class's own field-by-field comparison for the rest.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is EditUiState) return false
+        return isEditing == other.isEditing &&
+            availability == other.availability &&
+            canUndo == other.canUndo &&
+            canRedo == other.canRedo &&
+            hasEditTarget == other.hasEditTarget &&
+            isNoteSelected == other.isNoteSelected &&
+            hasSelectionCallout == other.hasSelectionCallout &&
+            canWriteRest == other.canWriteRest &&
+            armedDurationKind == other.armedDurationKind &&
+            armedDots == other.armedDots &&
+            activeVoice == other.activeVoice &&
+            isPadVisible == other.isPadVisible &&
+            selectedItem.contentEquals(other.selectedItem) &&
+            caretItem.contentEquals(other.caretItem) &&
+            revision == other.revision
+    }
+
+    override fun hashCode(): Int {
+        var result = isEditing.hashCode()
+        result = 31 * result + availability.hashCode()
+        result = 31 * result + canUndo.hashCode()
+        result = 31 * result + canRedo.hashCode()
+        result = 31 * result + hasEditTarget.hashCode()
+        result = 31 * result + isNoteSelected.hashCode()
+        result = 31 * result + hasSelectionCallout.hashCode()
+        result = 31 * result + canWriteRest.hashCode()
+        result = 31 * result + armedDurationKind.hashCode()
+        result = 31 * result + armedDots.hashCode()
+        result = 31 * result + activeVoice.hashCode()
+        result = 31 * result + isPadVisible.hashCode()
+        result = 31 * result + selectedItem.contentHashCode()
+        result = 31 * result + caretItem.contentHashCode()
+        result = 31 * result + revision.hashCode()
+        return result
+    }
+}
 
 /** Maps `open()`'s five-case answer down to what the UI has to show. Pure, so it needs no coroutine to test. */
 private fun OpenResult.toAvailability(): EditAvailability = when (this) {
@@ -50,7 +94,8 @@ private fun OpenResult.toAvailability(): EditAvailability = when (this) {
     // routine second session over any score reaches this, not an exotic one, and it must read as read-only, not as
     // a live session whose every op would silently no-op against a closed relay.
     OpenResult.RESYNC_FAILED -> EditAvailability.UNAVAILABLE_DIVERGED
-    OpenResult.NO_HANDLE, OpenResult.SCORE_UNREADABLE, OpenResult.MIRROR_REFUSED -> EditAvailability.UNAVAILABLE_NO_SCORE
+    OpenResult.NO_HANDLE, OpenResult.SCORE_UNREADABLE, OpenResult.MIRROR_REFUSED ->
+        EditAvailability.UNAVAILABLE_NO_SCORE
 }
 
 /** The [EditProjection] fields the presentation combine below folds into [EditUiState], grouped to stay within

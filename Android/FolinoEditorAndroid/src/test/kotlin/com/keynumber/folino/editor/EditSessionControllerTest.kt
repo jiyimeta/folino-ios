@@ -166,6 +166,23 @@ class EditSessionControllerTest {
         assertFalse(controller.ui.value.isPadVisible)
     }
 
+    // MARK: - EditUiState's ByteArray equality override
+
+    @Test
+    fun `EditUiState compares selectedItem and caretItem by content, not identity`() {
+        val a = EditUiState(selectedItem = byteArrayOf(1, 2, 3), caretItem = byteArrayOf(4, 5))
+        // Distinct array instances, same bytes — a fresh EditBytesWire built from identical content on the next
+        // tick must still compare equal, or MutableStateFlow would push a no-op emission to every collector.
+        val b = EditUiState(selectedItem = byteArrayOf(1, 2, 3), caretItem = byteArrayOf(4, 5))
+        val differentSelected = EditUiState(selectedItem = byteArrayOf(9), caretItem = byteArrayOf(4, 5))
+        val differentCaret = EditUiState(selectedItem = byteArrayOf(1, 2, 3), caretItem = byteArrayOf(9))
+
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertTrue(a != differentSelected)
+        assertTrue(a != differentCaret)
+    }
+
     // MARK: - Op delegation — each op method is a one-line forward to the relay
 
     @Test
