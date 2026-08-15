@@ -480,10 +480,20 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         // the playback service binds — and only then dereferences it (`ScoreMetadata.fetch`, `e.prepare`). See
         // [pendingPrepareHandles].
         synchronized(prepareLock) { pendingPrepareHandles += scoreHandle }
-        // Stash the handle for the rehearsal-mark / measure-step JNI calls, and load the marks now
-        // that we know it. Both happen synchronously off the same handle the Reader supplies.
-        this.scoreHandle = scoreHandle
-        loadRehearsalMarks(scoreHandle)
+        // Everything from here to the `launch` is inside the claim's scope but OUTSIDE the coroutine's own
+        // `finally`, so a throw here — `loadRehearsalMarks` decodes a JNI payload — would strand the claim for the
+        // life of this view model and make the retirement drain refuse that handle forever. Releasing on the way out
+        // costs one `catch`; the claim is NOT released on the success path, because from the `launch` onward the
+        // coroutine's `finally` owns it.
+        try {
+            // Stash the handle for the rehearsal-mark / measure-step JNI calls, and load the marks now
+            // that we know it. Both happen synchronously off the same handle the Reader supplies.
+            this.scoreHandle = scoreHandle
+            loadRehearsalMarks(scoreHandle)
+        } catch (t: Throwable) {
+            synchronized(prepareLock) { pendingPrepareHandles.remove(scoreHandle) }
+            throw t
+        }
         viewModelScope.launch {
             try {
                 prepareLoadedScore(scoreHandle)
@@ -521,10 +531,22 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         try {
             e.prepare(scoreHandle)
             hasLoadedIntoPlayback = true
-            // Record what the ENGINE now holds, as opposed to what this view model was last told about (see
-            // [preparedScoreHandle]). Set only on the path where `prepare` actually ran: the early return above
-            // leaves the engine on its previous score, and claiming otherwise here would let `ReaderViewModel`
-            // free a handle the player is still decoding from.
+            // The two holders this class publishes move as ONE step, service first (SP4 whole-branch review), and
+            // immediately after the `prepare` that made them true.
+            //
+            // `notePreparedScore` hands the bound `MediaSessionService` the handle it re-prepares from when a
+            // soundfont download lands (`reloadSoundfont`). `preparedScoreHandle` is what `isPreparedWith` — and
+            // through it `ReaderViewModel`'s retirement drain — reads to decide whether a superseded handle may be
+            // freed, so moving it to the FRESH handle is also what declares the PREVIOUS one free. While that
+            // assignment ran several statements ahead of `notePreparedScore`, a drain landing in that window freed
+            // a pointer the service was still about to be handed and would later re-dereference. In this order
+            // there is no moment when a live holder is reported as free.
+            //
+            // Both are on the path where `prepare` actually ran: the early return above leaves the engine on its
+            // previous score, and claiming otherwise here would let `ReaderViewModel` free a handle the player is
+            // still decoding from. Both are also ahead of the scalar re-application below, so a throw in any of
+            // that cannot leave the engine holding a score neither holder names.
+            serviceBinder?.notePreparedScore(scoreHandle)
             preparedScoreHandle = scoreHandle
             // Re-apply the seeded per-score playback scalars: a freshly prepared player resets the
             // synth's master volume and tempo (and metronome — re-pushed by the caller via the
@@ -543,9 +565,6 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             // Replay persisted per-staff mixer overrides (program / volume). Runs after prepare so
             // the engine has its mixer channels and the fresh player's defaults are overwritten.
             onPrepared?.invoke()
-            // Record the handle so the service can re-prepare (hot-swap) the engine when a
-            // high-quality soundfont download completes.
-            serviceBinder?.notePreparedScore(scoreHandle)
         } catch (ex: Exception) {
             android.util.Log.e("ReaderAudioVM", "prepare failed: ${ex.message}", ex)
         }

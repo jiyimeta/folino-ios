@@ -358,6 +358,17 @@ fun ReaderScreen(
     onEndEditing: () -> Unit = {},
     onUndo: () -> Unit = {},
     onRedo: () -> Unit = {},
+    /**
+     * Mirrors the transport into the shared edit session — the composition root wires this to
+     * `EditSessionController.setPlaybackActive`, which reaches `EditorSessionCore.isPlaybackActive`, the same
+     * property iOS's `EditorViewModel` mirrors from its own host.
+     *
+     * What that property DOES is the shared core's business and is deliberately not restated here: starting playback
+     * drops the selection (and with it the caret, the tint and the callout), because the transport seeks to the
+     * selected note and the playhead is where the music is from then on. This screen only reports the transition —
+     * see the `LaunchedEffect` below. No-op by default, like every other editing callback.
+     */
+    onPlaybackActiveChange: (Boolean) -> Unit = {},
     /** Sets the voice (zero-indexed, 0..3) that new input writes into. */
     onSetVoice: (Int) -> Unit = {},
     /** Shows or hides the note pad; the controller owns whether it's currently visible
@@ -664,6 +675,18 @@ fun ReaderScreen(
     // Gates the top-bar annotation toggle: disabled while playing (parity w/ iOS).
     val isPlaying = playbackState == PlaybackState.PLAYING
 
+    // Mirror the transport into the shared edit session (SP4 whole-branch review). `EditorSessionCore` — the code
+    // BOTH platforms run — owns what starting playback does to an edit session: it drops the selection, because the
+    // transport seeks to the selected note and from that moment the playhead, not a stale highlight, is where the
+    // music is. That rule cannot be restated in Kotlin (it would be a second implementation of shared behavior), so
+    // the only Android job is to tell the core when the transport moves; everything visible follows from the state
+    // the core then publishes — the tint clears, the caret and the callout go with it.
+    //
+    // Keyed on `editing.isEditing` as well, so a session opened WHILE the score is playing is told so at once
+    // instead of starting out believing the transport is idle. Calling this with no session open is a no-op
+    // (`EditSessionRelay.relay` returns early when it is closed), so the effect needs no gate of its own.
+    LaunchedEffect(isPlaying, editing.isEditing) { onPlaybackActiveChange(isPlaying) }
+
     // Mutual exclusion: annotation is strictly VERTICAL + not-playing. Auto-exit whenever either
     // condition stops holding (layout mode switches away from VERTICAL, or playback starts) so
     // annotation mode never lingers active behind a layout that has no overlay/gating support for it.
@@ -806,6 +829,12 @@ fun ReaderScreen(
     // layout preference — hiding it there would make the feature invisible to most users — and tapping it explains
     // the one thing the user can do about it instead of silently doing nothing.
     var showEditingLayoutModeNotice by remember { mutableStateOf(false) }
+    // Gates ENTRY only, and needs nothing to end a session on a later change, because `layoutMode` cannot move while
+    // one is open: the only in-app way to change it is the display inspector, whose top-bar action — like every
+    // other reading action — is replaced by the editing set for the duration of a session (see `ReaderTopBar`), and
+    // it is a modal sheet, so it can neither be open while "Edit notes" is tapped nor be reached afterwards. Every
+    // other route out of this screen ends the session first: both back paths call `onEndEditing`, a playlist
+    // retarget ends it on `currentScoreId`, and an Activity recreate disposes the controller.
     val canEditInThisLayoutMode = layoutMode == ReaderLayoutMode.VERTICAL
 
     // The selection tint (Task 5's `ReaderViewModel.setEditSelection`). `EditUiState.selectedItem` is the raw
@@ -887,8 +916,11 @@ fun ReaderScreen(
                             armedDots = editing.armedDots,
                             canWriteRest = editing.canWriteRest,
                             hasEditTarget = editing.hasEditTarget,
-                            // Same rule the steppers and the callout follow: nothing that writes to the score stays
-                            // live while the transport runs.
+                            // Presentation, not policy: the keys go grey while the transport runs, exactly as iOS
+                            // greys them (`EditorPadView`'s `.disabled(viewModel.isPlaybackActive || …)`). It is
+                            // not redundant with the core dropping the selection — a tap mid-playback selects
+                            // again, and this is what keeps the keys inert afterwards. The one value the whole
+                            // screen derives, so the steppers and the callout below say the same thing once.
                             isPlaybackActive = isPlaying,
                             onArmDuration = onArmDuration,
                             onSetArmedDots = onSetArmedDots,
@@ -1004,6 +1036,7 @@ fun ReaderScreen(
                         scoreHandle = scoreHandle,
                         fontProvider = fontProvider,
                         audioVm = audioVm,
+                        readerVm = readerVm,
                         layoutOptions = layoutOptions,
                         // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
                         // is off) so the last system can scroll out from under the floating play FAB.
@@ -1011,6 +1044,7 @@ fun ReaderScreen(
                         annotation = annotationSurface,
                         autoFollowEnabled = autoFollowEnabled,
                         layoutGeneration = layoutGeneration,
+                        isPlaybackActive = isPlaying,
                         editing = editing,
                         onSelectItem = onSelectItem,
                         onSetSelectionDuration = onSetSelectionDuration,
@@ -1353,6 +1387,10 @@ private fun ReadyScore(
     scoreHandle: Long?,
     fontProvider: io.github.jiyimeta.sheetmusic.compose.render.FontProvider,
     audioVm: ReaderAudioViewModel,
+    /** The Reader's own view model — the same instance the caller renders from. Every read of the engine's cached
+     * layout this surface performs (the editing hit test, the caret and callout frames) goes through its
+     * [ReaderViewModel.withVerticalLayout] guard rather than calling ssm directly; see the tap branch below. */
+    readerVm: ReaderViewModel,
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
     /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation on this surface. */
@@ -1390,6 +1428,15 @@ private fun ReadyScore(
      * it. Defaults to 0 so a caller that has no edit session to show is unaffected by it never changing.
      */
     layoutGeneration: Int = 0,
+    /**
+     * Whether the transport is running. Derived ONCE by [ReaderScreen] and passed down rather than re-collected
+     * here — it gates the callout's keys exactly as the pad's and the bottom bar's steppers are gated one level up,
+     * and one screen should read "playing" from one place. The gate itself is presentation, and iOS spells it the
+     * same three times (`EditorPadView`, `EditorCalloutView` and `EditorChromeView` each carry
+     * `.disabled(viewModel.isPlaybackActive)`); the RULE that starting playback drops the selection belongs to the
+     * shared core and is driven from the composition root — see [ReaderScreen]'s `onPlaybackActiveChange` effect.
+     */
+    isPlaybackActive: Boolean = false,
 ) {
     val page = state.program.pages.first()
     // Armed only when a surface state was passed AND its tool is out; every gesture gate below reads
@@ -1420,11 +1467,6 @@ private fun ReadyScore(
     // Drives AnnotationDryOverlay's reflow-recompute gate (skip recompute mid-stroke). MVP leaves this
     // always false and relies on the dry overlay's own recompute-on-`drawings`-change instead.
     val isDrawing = false
-    // Gates the callout's keys (Task 8): the same rule the pad and the bottom bar's steppers already follow —
-    // nothing that mutates the score stays live while the transport runs, since a moving playback cursor would
-    // otherwise fight the callout for the same selection.
-    val playbackState by audioVm.state.collectAsStateWithLifecycle()
-    val isPlaybackActive = playbackState == PlaybackState.PLAYING
 
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -1590,16 +1632,40 @@ private fun ReadyScore(
                     if (editing.isEditing) {
                         // Editing replaces tap-to-seek on this surface: the same tap cannot both move the
                         // playhead and pick an element to edit, and iOS makes the same choice.
-                        val bytes = editingHitTestForTap(
-                            tap = offset,
-                            contentOffsetPx = Offset(-viewport.offsetX, vPadPx - viewport.offsetY),
-                            pxPerMM = fitPxPerMM,
-                            scale = viewport.scale,
-                            scoreHandle = handle,
-                            activeVoice = editing.activeVoice,
-                            layoutOptionsBytes = optionsBytes,
-                        )
-                        currentOnSelectItem(bytes)
+                        //
+                        // `nativeEditingHitTest` resolves the tap against the document the engine has CACHED for
+                        // this handle, which PiP can have overwritten with a horizontal layout while the app was
+                        // backgrounded (see `ReaderViewModel.withVerticalLayout`). Answering from that document
+                        // names a real but DIFFERENT element, which then becomes the target of the next pad key —
+                        // so the read goes through the view model's guard rather than calling ssm directly.
+                        //
+                        // Two paths, because this lambda cannot suspend and a tap must not cost a frame: the fast
+                        // one runs inline whenever the cache is already this surface's and no other layout call
+                        // holds the lock, which is every ordinary tap, so selection stays as immediate as it was.
+                        // Only the rare tap that needs a repair (or arrives while a compute is running) hops onto
+                        // a coroutine — the repair is a full relayout and must never run on the main thread.
+                        val hitTest: (Long) -> ByteArray? = { h ->
+                            editingHitTestForTap(
+                                tap = offset,
+                                contentOffsetPx = Offset(-viewport.offsetX, vPadPx - viewport.offsetY),
+                                pxPerMM = fitPxPerMM,
+                                scale = viewport.scale,
+                                scoreHandle = h,
+                                activeVoice = editing.activeVoice,
+                                layoutOptionsBytes = optionsBytes,
+                            )
+                        }
+                        val immediate = readerVm.tryWithVerticalLayout(hitTest)
+                        if (immediate != null) {
+                            currentOnSelectItem(immediate.value)
+                        } else {
+                            scope.launch {
+                                // Only a guarded answer is reported: a `null` from the guard itself means the tap
+                                // could not be resolved at all, and mapping that to "deselect" would clear the
+                                // selection for a reason the user never gave.
+                                readerVm.withVerticalLayout(hitTest)?.let { currentOnSelectItem(it.value) }
+                            }
+                        }
                         return@detectTapGestures
                     }
                     val cursor = nearestCursorForTap(
@@ -1725,10 +1791,20 @@ private fun ReadyScore(
                     // are the three things that actually move the answer — the handle, the caret item, and
                     // `layoutGeneration` (a reflow moves the rect with the item unchanged; see that parameter's
                     // own doc). Null caret item ⇒ null rect, which the overlay draws as nothing.
+                    //
+                    // `nativeEditingCaretFrame` measures the CACHED layout, so like the tap hit test above it goes
+                    // through `ReaderViewModel.withVerticalLayout` — a PiP pass's horizontal document would put the
+                    // caret somewhere the notation is not. This one is already inside a coroutine, so it can simply
+                    // suspend on the guard; there is no fast path to keep and nothing on screen moves in the
+                    // meantime (the previous rect stays drawn until this resolves).
                     val caretItem = if (editing.isEditing) editing.caretItem else null
                     var caretRect by remember { mutableStateOf<EditCaretFrame?>(null) }
                     LaunchedEffect(handle, caretItem, layoutGeneration) {
-                        caretRect = caretItem?.let { caretRectMm(handle, it, EDIT_CARET_MINIMUM_WIDTH_MM) }
+                        caretRect = caretItem?.let { item ->
+                            readerVm.withVerticalLayout { h ->
+                                caretRectMm(h, item, EDIT_CARET_MINIMUM_WIDTH_MM)
+                            }?.value
+                        }
                     }
                     EditingCaretOverlay(
                         rectMm = caretRect,
@@ -1749,7 +1825,11 @@ private fun ReadyScore(
                     val selectedItem = if (editing.isEditing) editing.selectedItem else null
                     var calloutRect by remember { mutableStateOf<EditCaretFrame?>(null) }
                     LaunchedEffect(handle, selectedItem, layoutGeneration) {
-                        calloutRect = selectedItem?.let { caretRectMm(handle, it, EDIT_CALLOUT_MINIMUM_WIDTH_MM) }
+                        calloutRect = selectedItem?.let { item ->
+                            readerVm.withVerticalLayout { h ->
+                                caretRectMm(h, item, EDIT_CALLOUT_MINIMUM_WIDTH_MM)
+                            }?.value
+                        }
                     }
                     if (editing.isEditing && editing.hasSelectionCallout) {
                         EditingCallout(

@@ -32,6 +32,13 @@ fun tapToDocumentMmOrNull(tap: Offset, contentOffsetPx: Offset, pxPerMM: Float, 
  * band, and iOS uses exactly that to mean "deselect". An empty array also comes back when the layout is not
  * cached — which, since ssm 1.14.x, is what a relayout overtaken by an edit deliberately leaves behind. Treat it
  * the same way: the tap does nothing and the recompute already in flight will make the next one work.
+ *
+ * **Call this only through the Reader's layout guard** (`ReaderViewModel.withVerticalLayout` /
+ * `tryWithVerticalLayout`), never directly from Compose. `nativeEditingHitTest` resolves the tap against whatever
+ * document the engine has cached for this handle, and the Reader has writers — the Picture-in-Picture pass above
+ * all — that can leave a HORIZONTAL layout there while an edit session is open on the vertical surface. The answer
+ * is then a real `ScoreItemID` naming a different element, which becomes the target of the next pad key: a wrong
+ * edit with nothing at runtime to notice it.
  */
 fun editingHitTestForTap(
     tap: Offset,
@@ -51,6 +58,10 @@ fun editingHitTestForTap(
  * The insertion-caret rect (document/mm) for [itemBytes] within the cached layout of [scoreHandle], or null when
  * ssm answers empty — an unknown handle, an uncached layout, undecodable bytes, or a stale ID a reflow already
  * overtook (see [editingHitTestForTap]'s doc comment: the same "empty is a real answer" rule applies here).
+ *
+ * Goes through the Reader's layout guard for the same reason [editingHitTestForTap] does — see its doc. Measured
+ * against a foreign cached document, this returns a rect that is somewhere the notation is not, and the caret or
+ * the callout is drawn there.
  */
 fun caretRectMm(scoreHandle: Long, itemBytes: ByteArray, minimumWidthMm: Double): EditCaretFrame? {
     val bytes = SheetMusicJNI.nativeEditingCaretFrame(scoreHandle, itemBytes, minimumWidthMm)

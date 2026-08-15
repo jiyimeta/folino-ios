@@ -925,6 +925,11 @@ private fun LibraryNavGraph(
                     onEndEditing = { editController.end() },
                     onUndo = { editController.undo() },
                     onRedo = { editController.redo() },
+                    // The transport, mirrored into the shared core. `EditorSessionCore.isPlaybackActive` is what
+                    // decides the consequences (it drops the selection when playback starts — iOS's
+                    // `EditorViewModel` mirrors the identical property from its own host); the Reader only reports
+                    // the transition, and this route is the layer that can see both it and the controller.
+                    onPlaybackActiveChange = { active -> editController.setPlaybackActive(active) },
                     onSetVoice = { voice -> editController.setActiveVoice(voice) },
                     onTogglePad = { editController.setPadVisible(!editing.isPadVisible) },
                     onSelectPreviousElement = { editController.selectPreviousElement() },

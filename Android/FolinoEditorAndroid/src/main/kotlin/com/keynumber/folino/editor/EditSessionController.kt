@@ -47,8 +47,6 @@ data class EditUiState(
     val isPadVisible: Boolean = false,
     val selectedItem: ByteArray? = null,
     val caretItem: ByteArray? = null,
-    /** Bumped by the relay's own revision; the render surface keys its re-encode off this. */
-    val revision: Int = 0,
 ) {
     // A data class over ByteArray compares those fields by identity, not content — the default generated equals()
     // would call two ticks unequal even when selectedItem/caretItem hold the same bytes, and this state is what
@@ -75,8 +73,7 @@ data class EditUiState(
             activeVoice == other.activeVoice &&
             isPadVisible == other.isPadVisible &&
             selectedItem.contentEquals(other.selectedItem) &&
-            caretItem.contentEquals(other.caretItem) &&
-            revision == other.revision
+            caretItem.contentEquals(other.caretItem)
     }
 
     override fun hashCode(): Int {
@@ -98,7 +95,6 @@ data class EditUiState(
         result = 31 * result + isPadVisible.hashCode()
         result = 31 * result + selectedItem.contentHashCode()
         result = 31 * result + caretItem.contentHashCode()
-        result = 31 * result + revision.hashCode()
         return result
     }
 }
@@ -135,7 +131,6 @@ private data class VoiceAndFrames(
     val activeVoice: Int,
     val selectedItem: ByteArray?,
     val caretItem: ByteArray?,
-    val revision: Int,
 )
 
 /** The callout's own display fields (Task 8) — the SELECTED item's length and tie-ability, as opposed to
@@ -206,13 +201,18 @@ class EditSessionController(
         ) { hasSelectionCallout, canWriteRest, armedDurationKind, armedDots ->
             CalloutAndArming(hasSelectionCallout, canWriteRest, armedDurationKind, armedDots)
         }
+        // `projection.revision` is deliberately NOT folded in. It used to ride along as a fourth field of
+        // [EditUiState], documented as what the render surface keyed its re-encode off — which was never true: the
+        // selection tint keys on `ReaderViewModel.layoutGeneration`, since a re-encode has to follow the RELAYOUT an
+        // edit causes, not the edit itself. Nothing read it, so it is gone rather than left as a field whose comment
+        // described a wiring that did not exist. The relay still reads the revision where it genuinely matters, via
+        // the synchronous `EditSessionOps.revision()` (see `EditSessionRelay.replay`).
         val voiceAndFrames = combine(
             projection.activeVoice,
             projection.selectedItemFrame,
             projection.caretItemFrame,
-            projection.revision,
-        ) { activeVoice, selectedItemFrame, caretItemFrame, revision ->
-            VoiceAndFrames(activeVoice, selectedItemFrame?.bytes, caretItemFrame?.bytes, revision)
+        ) { activeVoice, selectedItemFrame, caretItemFrame ->
+            VoiceAndFrames(activeVoice, selectedItemFrame?.bytes, caretItemFrame?.bytes)
         }
         val calloutDisplay = combine(
             projection.calloutDurationKind,
@@ -245,7 +245,6 @@ class EditSessionController(
                         activeVoice = voice.activeVoice,
                         selectedItem = voice.selectedItem,
                         caretItem = voice.caretItem,
-                        revision = voice.revision,
                     )
                 }
             }
