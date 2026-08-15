@@ -132,7 +132,7 @@ class EditSessionParityTest {
         // relay queue, and its native→Kotlin change notification is dispatched onto the main coroutine dispatcher
         // rather than applied inline, so wait for that dispatch to drain before reading it back.
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-        assertNotNull("the first selection must have taken", rig.bridge.vm.selectedItemFrame.value)
+        assertNotNull("the first selection must have taken", rig.bridge.selectedItemFrame.value)
         assertAgreed(rig, "after the first selection")
 
         onMain {

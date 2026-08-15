@@ -3,6 +3,7 @@ package com.keynumber.folino.editor
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -18,6 +19,12 @@ private class FakeBridge : EditBridging {
     var appliedIntentCount = 0
     var encoded = byteArrayOf(1, 2, 3)
     var refuseUndo = false
+
+    /**
+     * When set, [undo] behaves like a violated `EditorBridge` contract: it moves the revision AND emits an intent
+     * frame, the way a real undo never should. Exercises `replay()`'s drain-and-resync answer to that disagreement.
+     */
+    var strandFrameOnUndo = false
     private val framesToEmit = mutableListOf<ByteArray>()
 
     override fun engineVersionStamp() = stamp
@@ -28,7 +35,12 @@ private class FakeBridge : EditBridging {
     override fun takeRelayFrames(): List<ByteArray> = framesToEmit.toList().also { framesToEmit.clear() }
     override fun revision() = revision
     override fun appliedIntentCount() = appliedIntentCount
-    override fun undo() { if (!refuseUndo) revision += 1 }
+
+    override fun undo() {
+        if (refuseUndo) return
+        if (strandFrameOnUndo) willApply(1) else revision += 1
+    }
+
     override fun redo() { revision += 1 }
 
     /** Stands in for one op that applies `count` intents — what a pad key does through the bridge. */
@@ -307,6 +319,22 @@ class EditSessionRelayTest {
 
         assertEquals(0, f.natives.editUndoCalls)
         assertEquals(0, f.relay.resyncCount)
+    }
+
+    @Test fun anUndoThatStrandsAFrameResyncsInsteadOfCrashing() {
+        val f = Fixture()
+        f.open()
+
+        // The contract `replay()` guards: an undo must move the revision WITHOUT emitting an intent. Break it.
+        f.bridge.strandFrameOnUndo = true
+        val resyncsBefore = f.relay.resyncCount
+
+        f.relay.undo()
+
+        assertEquals(resyncsBefore + 1, f.relay.resyncCount)
+        // The mirror must never see the undo at all — the stranded frame is dropped, not replayed.
+        assertEquals(0, f.natives.editUndoCalls)
+        assertTrue(f.bridge.takeRelayFrames().isEmpty())
     }
 
     // MARK: - resync()'s own rules

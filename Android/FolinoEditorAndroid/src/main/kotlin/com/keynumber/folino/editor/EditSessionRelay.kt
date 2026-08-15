@@ -104,7 +104,7 @@ interface EditBridging {
  *   (`setArmedDots`, `setActiveVoice`) for parity with the Swift side, and this adapter is where that rename lives
  *   — the whole reason the class exists.
  */
-class GeneratedEditBridging(val vm: EditorBridgeViewModel) : EditBridging {
+class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridging, EditProjection {
     override fun engineVersionStamp() = vm.engineVersionStamp()
     override fun beginSession(path: String, dir: String, id: String) = vm.beginSession(path, dir, id)
     override fun endSession() = vm.endSession()
@@ -139,6 +139,30 @@ class GeneratedEditBridging(val vm: EditorBridgeViewModel) : EditBridging {
     override fun setPlaybackActive(active: Boolean) = vm.setPlaybackActive(active)
     override fun undo() = vm.undo()
     override fun redo() = vm.redo()
+
+    // EditProjection — everything Compose reads, and nothing it can write. See that interface's doc comment.
+    override val isSessionActive get() = vm.isSessionActive
+    override val revision get() = vm.revision
+    override val selectionRevision get() = vm.selectionRevision
+    override val canUndo get() = vm.canUndo
+    override val canRedo get() = vm.canRedo
+    override val hasEditTarget get() = vm.hasEditTarget
+    override val isNoteSelected get() = vm.isNoteSelected
+    override val hasSelectionCallout get() = vm.hasSelectionCallout
+    override val canWriteRest get() = vm.canWriteRest
+    override val canTie get() = vm.canTie
+    override val isSelectionTied get() = vm.isSelectionTied
+    override val canAppendTiedNote get() = vm.canAppendTiedNote
+    override val isCaretInTuplet get() = vm.isCaretInTuplet
+    override val armedDurationKind get() = vm.armedDurationKind
+    override val armedDots get() = vm.armedDots
+    override val isAddToChordArmed get() = vm.isAddToChordArmed
+    override val armedTuplet get() = vm.armedTuplet
+    override val calloutDurationKind get() = vm.calloutDurationKind
+    override val calloutDots get() = vm.calloutDots
+    override val activeVoice get() = vm.activeVoice
+    override val selectedItemFrame get() = vm.selectedItemFrame
+    override val caretItemFrame get() = vm.caretItemFrame
 }
 
 /**
@@ -326,14 +350,18 @@ class EditSessionRelay(
         // synchronous ops on the bridge (see `GeneratedEditBridging`) — a projection read here would answer with the
         // pre-op value on this thread and make every undo look refused.
         if (bridge.revision() == revisionBefore) return
-        // Now a real cross-image invariant rather than a comparison of two equally stale numbers: the counter is
-        // read on both sides of `local()` and reflects what the core actually did. It pins the assumption the whole
-        // undo design rests on — that an undo mutates the score WITHOUT emitting an intent (`EditorBridge`'s
-        // "Undo / redo" note). If one ever did, the frame would still be sitting in the relay queue, and the next
-        // resync would re-encode a score that already contains that edit and then apply it a second time. That is a
-        // broken contract in `EditorSessionCore`, shared with iOS and covered by its tests — not a runtime
-        // condition a user can reach — so it stays a `check`.
-        check(bridge.appliedIntentCount() == before) { "undo/redo must not count as an applied intent" }
+        // An undo must move the score WITHOUT emitting an intent (`EditorBridge`'s "Undo / redo" note). If one
+        // ever did, the frame would sit in the queue and the next resync — which re-encodes an authoritative score
+        // that already contains that edit — would apply it a second time. Answer it the way every other
+        // cross-image disagreement in this file is answered: drop what is stranded and rebuild the mirror. A
+        // `check` here would instead crash the app in release, over an invariant the user cannot influence.
+        val stranded = bridge.takeRelayFrames()
+        if (stranded.isNotEmpty()) {
+            Log.w(TAG, "undo/redo emitted ${stranded.size} intent frame(s); resyncing rather than replaying them")
+            resync()
+            host.requestRelayout()
+            return
+        }
         if (!mirror(host.scoreHandle())) {
             resync()
         } else {
