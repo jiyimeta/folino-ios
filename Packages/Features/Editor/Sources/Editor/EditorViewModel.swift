@@ -46,9 +46,12 @@ public final class EditorViewModel {
     // where the NEXT note lands; the selection is the note the editing keys act on. Writing a run of notes moves the
     // caret on after each one while the selection stays on the note just written — so ♯ / ♭ / ⌫ keep addressing what
     // you just played rather than the empty slot ahead of it.
-    public private(set) var selection: ScoreSelection = .none
-    public private(set) var selectedItem: SheetMusicCore.ScoreItemID?
-    public private(set) var caretItem: SheetMusicCore.ScoreItemID?
+    // internal(set), not private(set): `EditorViewModel+Revert.swift` clears all three directly to tear a session
+    // down without routing through `place(selection:caret:)` (which would fire `onSelectionChanged` and re-arm from
+    // a selection that no longer exists once the editor is gone).
+    public internal(set) var selection: ScoreSelection = .none
+    public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
+    public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
 
     /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
     /// into and no item to edit, so every key is inert (there is nothing for one to mean).
@@ -166,6 +169,11 @@ public final class EditorViewModel {
     /// Fired whenever the selection or the caret changes (App mirrors both into the Reader seam: the first argument
     /// tints the selected item, the second draws the insertion caret).
     public var onSelectionChanged: @MainActor (ScoreSelection, SheetMusicCore.ScoreItemID?) -> Void = { _, _ in }
+    /// Fired after a successful revert with the rebuilt row. The App mirrors it into the Reader, which reloads the
+    /// score from disk — the Editor cannot reach the Reader directly.
+    public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
+    /// Set when a revert failed, for the chrome to surface. Cleared at the start of each attempt.
+    public internal(set) var revertError: String?
 
     @ObservationIgnored let gateway: any ScoreFileGateway
     @ObservationIgnored let repository: any ScoreLibraryRepository

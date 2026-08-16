@@ -103,7 +103,11 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
 
     func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) throws -> ScoreItem {
         revertCalls.append((item, restoringScoreInfo))
-        return item
+        var cleared = item
+        cleared.originalFileName = nil
+        cleared.originalContentHash = nil
+        cleared.originalProvenance = nil
+        return cleared
     }
 
     func discardOriginal(for item: ScoreItem) throws -> ScoreItem {
