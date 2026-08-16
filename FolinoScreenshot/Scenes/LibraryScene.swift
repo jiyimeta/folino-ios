@@ -116,6 +116,7 @@ struct LibraryScene: View {
     private func makeLibraryViewModel() -> LibraryViewModel {
         LibraryViewModel(
             repository: FixtureScoreRepository(),
+            originalStore: FixtureOriginalStore(),
             importer: FixtureImporter(),
             gateway: FixtureGateway(),
             shareService: FixtureShareService(),

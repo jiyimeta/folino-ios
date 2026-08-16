@@ -26,7 +26,10 @@ struct LibraryViewModelTests {
         let metadataReader: FakeScoreMetadataReading
     }
 
-    private static func makeVM(scoreItems: [ScoreItem] = []) -> VMFixture {
+    private static func makeVM(
+        scoreItems: [ScoreItem] = [],
+        originalStore: any ScoreOriginalStore = FakeScoreOriginalStore(),
+    ) -> VMFixture {
         let repo = FakeScoreLibraryRepository()
         repo.scoreItems = scoreItems
         let importer = FakeScoreFileImporter()
@@ -34,7 +37,7 @@ struct LibraryViewModelTests {
         let share = FakeScoreShareService()
         let metadataReader = FakeScoreMetadataReading()
         let vm = LibraryViewModel(
-            repository: repo, importer: importer, gateway: gateway,
+            repository: repo, originalStore: originalStore, importer: importer, gateway: gateway,
             shareService: share, metadataReader: metadataReader,
         )
         return VMFixture(

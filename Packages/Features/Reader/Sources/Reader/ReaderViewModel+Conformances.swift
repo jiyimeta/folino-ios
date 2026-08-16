@@ -34,4 +34,16 @@ extension ReaderViewModel: ScoreInfoEditing {
             // Non-fatal: keep the in-memory item; no Reader error banner yet.
         }
     }
+
+    func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) async {
+        // Errors are swallowed, matching `saveMetadata` right above: the Reader has no error banner yet, and the
+        // score on disk is untouched when the store throws.
+        guard let reverted = try? await originalStore.revertToOriginal(
+            item,
+            restoringScoreInfo: restoringScoreInfo,
+        ) else { return }
+        try? await repository.saveScoreItem(reverted)
+        scoreItem = reverted
+        await load()
+    }
 }

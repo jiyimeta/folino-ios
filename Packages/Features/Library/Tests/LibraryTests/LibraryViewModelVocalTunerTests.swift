@@ -23,6 +23,7 @@ struct LibraryViewModelVocalTunerTests {
         let analytics = SpyAnalytics()
         let vm = LibraryViewModel(
             repository: FakeScoreLibraryRepository(),
+            originalStore: FakeScoreOriginalStore(),
             importer: FakeScoreFileImporter(),
             gateway: FakeScoreFileGateway(),
             shareService: share,

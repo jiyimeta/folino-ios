@@ -38,7 +38,8 @@ struct LibraryAnalyticsTests {
         let analytics = SpyAnalytics()
         let crashReporter = SpyCrashReporter()
         let vm = LibraryViewModel(
-            repository: repo, importer: importer, gateway: FakeScoreFileGateway(),
+            repository: repo, originalStore: FakeScoreOriginalStore(), importer: importer,
+            gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(), metadataReader: FakeScoreMetadataReading(),
             analytics: analytics, crashReporter: crashReporter,
         )

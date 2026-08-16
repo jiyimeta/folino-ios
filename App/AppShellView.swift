@@ -165,6 +165,7 @@ private struct ReadyShell: View {
         _libraryVM = State(
             wrappedValue: LibraryViewModel(
                 repository: repository,
+                originalStore: originalStore,
                 importer: importer,
                 gateway: gateway,
                 shareService: shareService,
