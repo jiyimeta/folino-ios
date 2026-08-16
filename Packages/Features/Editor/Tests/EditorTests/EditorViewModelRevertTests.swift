@@ -98,8 +98,9 @@ struct EditorViewModelRevertTests {
 
     /// The bug this guards: `revertToOriginal` used to clear `isDirty` before attempting the revert, so a failure
     /// left the session open with a live edit the view model no longer believed needed protecting — a later flush
-    /// (scene going inactive, say) would silently drop it.
-    @Test func `a failed revert keeps the session open and reschedules the autosave`() async {
+    /// (scene going inactive, say) would silently drop it. Here the STORE call is the one that throws, so the file
+    /// was never touched — the pre-revert edit is exactly as live as before, and must stay protected.
+    @Test func `a failed store revert keeps the session open and reschedules the autosave`() async {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let gateway = FakeScoreFileGateway()
@@ -119,6 +120,41 @@ struct EditorViewModelRevertTests {
         // the gateway rather than finding nothing to save.
         await vm.flushPendingSave()
         #expect(gateway.savedCalls.count == 1)
+    }
+
+    /// The bug this guards: a naive fix rescheduled the autosave on ANY thrown error, including this one — where the
+    /// STORE call already succeeded (the file on disk is genuinely the original) and only the ROW save failed. A
+    /// rescheduled autosave there would fire a couple seconds later and silently write the in-memory EDITED score
+    /// back over the file this just restored, with no sidecar left to recover the original from. Nothing may
+    /// schedule a write for the rest of this session once the store call has returned.
+    @Test func `a failed row save after a successful store revert tears down without resaving the edit`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let gateway = FakeScoreFileGateway()
+        let repository = FakeScoreLibraryRepository()
+        repository.saveError = DomainError.persistenceFailed(reason: "test")
+        let vm = makeViewModel(
+            item: capturedItem(),
+            originalStore: FakeScoreOriginalStore(),
+            gateway: gateway,
+            repository: repository,
+            directory: dir,
+        )
+        var notified: ScoreItem?
+        vm.onRevertCompleted = { notified = $0 }
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+
+        await vm.revertToOriginal()
+
+        #expect(vm.canUndo == false)
+        #expect(vm.revertError != nil)
+        #expect(notified != nil)
+
+        // The assertion that matters: the store already reverted the file, so a subsequent flush must find nothing
+        // to save. If it reaches the gateway, the in-memory edit just got written back over the restored original.
+        await vm.flushPendingSave()
+        #expect(gateway.savedCalls.isEmpty)
     }
 
     @Test func `a legacy original carries its caveat into the warnings`() {

@@ -45,10 +45,13 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     var playlists: [Playlist] = []
 
     var savedScoreItems: [ScoreItem] = []
+    /// When set, `saveScoreItem` throws this instead of succeeding — exercises the Editor's row-persist-failure path.
+    var saveError: Error?
 
     func refresh() throws {}
 
     func saveScoreItem(_ item: ScoreItem) throws {
+        if let saveError { throw saveError }
         savedScoreItems.append(item)
         if let idx = scoreItems.firstIndex(where: { $0.id == item.id }) {
             scoreItems[idx] = item
