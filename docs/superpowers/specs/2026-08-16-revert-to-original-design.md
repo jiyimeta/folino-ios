@@ -47,7 +47,10 @@ them on request.
   is the one exception, and only when the user asks for it explicitly — see
   "Entry points".
 - Partial revert (a measure range, one staff). Whole score only.
-- The Library row menu. Revert is reachable from the reader, not from a list.
+- **A dedicated revert item on the Library's row menu itself.** That list gains
+  no new entry. The score-info sheet — itself reachable from that same row
+  menu, via the existing "楽曲情報" item — does carry revert; see "Entry
+  points".
 
 **A follow-up spec** will route iOS editing through swift-sheet-music's
 `EditIntent` and persist the intent log, giving undo/redo that survives a
