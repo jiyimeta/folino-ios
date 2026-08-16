@@ -89,6 +89,8 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
     var captureCalls: [ScoreItem] = []
     var revertCalls: [(ScoreItem, Bool)] = []
     var eventLog: FakeEventLog?
+    /// When set, `revertToOriginal` throws this instead of succeeding — exercises the Editor's revert-failure path.
+    var revertError: Error?
 
     func captureOriginalIfNeeded(for item: ScoreItem) throws -> ScoreItem {
         eventLog?.record("capture")
@@ -103,6 +105,7 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
 
     func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) throws -> ScoreItem {
         revertCalls.append((item, restoringScoreInfo))
+        if let revertError { throw revertError }
         var cleared = item
         cleared.originalFileName = nil
         cleared.originalContentHash = nil

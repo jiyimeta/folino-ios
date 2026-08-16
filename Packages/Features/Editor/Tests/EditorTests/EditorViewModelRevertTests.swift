@@ -96,6 +96,31 @@ struct EditorViewModelRevertTests {
         #expect(vm.canUndo == false)
     }
 
+    /// The bug this guards: `revertToOriginal` used to clear `isDirty` before attempting the revert, so a failure
+    /// left the session open with a live edit the view model no longer believed needed protecting — a later flush
+    /// (scene going inactive, say) would silently drop it.
+    @Test func `a failed revert keeps the session open and reschedules the autosave`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let gateway = FakeScoreFileGateway()
+        let store = FakeScoreOriginalStore()
+        store.revertError = DomainError.persistenceFailed(reason: "test")
+        let vm = makeViewModel(item: capturedItem(), originalStore: store, gateway: gateway, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+
+        await vm.revertToOriginal()
+
+        #expect(vm.canUndo)
+        #expect(vm.revertError != nil)
+        #expect(vm.isDirty)
+
+        // The debounce this rescheduled on failure is what protects the surviving edit — a flush must still reach
+        // the gateway rather than finding nothing to save.
+        await vm.flushPendingSave()
+        #expect(gateway.savedCalls.count == 1)
+    }
+
     @Test func `a legacy original carries its caveat into the warnings`() {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
