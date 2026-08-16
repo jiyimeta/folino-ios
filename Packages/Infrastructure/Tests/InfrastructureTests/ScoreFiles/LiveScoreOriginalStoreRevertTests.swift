@@ -111,8 +111,10 @@ struct LiveScoreOriginalStoreRevertTests {
     @Test func `an original whose bytes no longer match its recorded hash is refused`() async throws {
         let dir = makeDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
-        try Data("corrupted".utf8).write(to: dir.appending(path: "ID.original.mscz"))
-        try Data("edited".utf8).write(to: dir.appending(path: "ID.mscz"))
+        let corrupted = Data("corrupted".utf8)
+        let edited = Data("edited".utf8)
+        try corrupted.write(to: dir.appending(path: "ID.original.mscz"))
+        try edited.write(to: dir.appending(path: "ID.mscz"))
         let store = LiveScoreOriginalStore(scoresDirectory: dir, gateway: StubGateway())
         var subject = item(localFileName: "ID.mscz", originalFileName: "ID.original.mscz")
         subject.originalContentHash = hex(Data("imported".utf8))
@@ -120,6 +122,31 @@ struct LiveScoreOriginalStoreRevertTests {
         await #expect(throws: DomainError.self) {
             _ = try await store.revertToOriginal(subject, restoringScoreInfo: false)
         }
+        // The hash check must run before the sidecar is written over the score, not after: a mismatch caught only
+        // once the edit is already overwritten and the sidecar already deleted destroys the edit and recovers
+        // nothing.
+        #expect(try Data(contentsOf: dir.appending(path: "ID.mscz")) == edited)
+        #expect(try Data(contentsOf: dir.appending(path: "ID.original.mscz")) == corrupted)
+    }
+
+    @Test func `an adopted source whose bytes no longer match its recorded hash is refused`() async throws {
+        let dir = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let corrupted = Data("corrupted".utf8)
+        let edited = Data("edited".utf8)
+        try corrupted.write(to: dir.appending(path: "ID.musicxml"))
+        try edited.write(to: dir.appending(path: "ID.mscz"))
+        let store = LiveScoreOriginalStore(scoresDirectory: dir, gateway: StubGateway())
+        var subject = item(localFileName: "ID.mscz", originalFileName: "ID.musicxml")
+        subject.originalContentHash = hex(Data("<score-partwise/>".utf8))
+
+        await #expect(throws: DomainError.self) {
+            _ = try await store.revertToOriginal(subject, restoringScoreInfo: false)
+        }
+        // Same ordering requirement as the sidecar branch: the sibling `.mscz` must not be deleted until the
+        // adopt-target's hash has been confirmed.
+        #expect(try Data(contentsOf: dir.appending(path: "ID.mscz")) == edited)
+        #expect(try Data(contentsOf: dir.appending(path: "ID.musicxml")) == corrupted)
     }
 
     @Test func `credits come back from the file when asked for`() async throws {

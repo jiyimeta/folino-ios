@@ -95,10 +95,12 @@ public struct LiveScoreOriginalStore: ScoreOriginalStore {
     ///
     /// The file swap, hash, and hash check run off the caller's actor via `Task.detached` — same reasoning as
     /// `captureOriginalIfNeeded`: a whole-file copy plus a SHA-256 is comparable, non-trivial work, and the
-    /// callers named on `ScoreOriginalStore` (the Reader, the score-info sheet) are `@MainActor`. `restoreFile`
-    /// is `static` so `self` and the `gateway` never cross the boundary; `gateway.loadFileMetadata` is called
-    /// back on the caller's actor afterward rather than from inside the detached closure — it is already its own
-    /// suspension point, and it is the one piece of this method that is not plain file I/O.
+    /// callers named on `ScoreOriginalStore` (the Reader, the score-info sheet) are `@MainActor`. `restoreFile` is
+    /// `static` so `self` never crosses the boundary. `gateway.loadFileMetadata` is called back on the caller's
+    /// actor afterward rather than from inside the detached closure — not because `gateway` couldn't safely cross
+    /// (`ScoreFileGateway: Sendable`, so it could), but because it is already its own suspension point and it is
+    /// the one piece of this method that parses rather than just moving bytes; keeping the detached closure to
+    /// plain file I/O keeps its shape identical to `captureOriginalIfNeeded`'s.
     public func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) async throws -> ScoreItem {
         let scoresDirectory = scoresDirectory
         let restoredFacts = try await Task.detached(priority: .userInitiated) {
@@ -120,6 +122,12 @@ public struct LiveScoreOriginalStore: ScoreOriginalStore {
 
     /// Performs the file plan from `RevertPolicy.filePlan(for:)` and returns the restored file's identity and hash.
     /// Static so it never captures `self` crossing the `Task.detached` boundary in `revertToOriginal`.
+    ///
+    /// Verifies the source's hash — the sidecar, or the adopt-target — before touching anything. The whole promise
+    /// of this feature is that the bytes coming back are the bytes that went in, so a corrupted original must be
+    /// refused with the edit and its only backup both still intact, not discovered only after they are gone: the
+    /// copy or adoption that follows is byte-for-byte, so hashing the source proves exactly what hashing the
+    /// result would have proven.
     private static func restoreFile(
         for item: ScoreItem,
         in scoresDirectory: URL,
@@ -127,36 +135,39 @@ public struct LiveScoreOriginalStore: ScoreOriginalStore {
         guard let plan = RevertPolicy.filePlan(for: item) else {
             throw DomainError.scoreWriteFailed(reason: "no original recorded for \(item.localFileName)")
         }
-        let restoredFileName: String
         switch plan {
         case let .restoreSidecar(sidecarFileName, over):
             let sidecar = scoresDirectory.appending(path: sidecarFileName)
             guard FileManager.default.fileExists(atPath: sidecar.path) else {
                 throw DomainError.scoreFileNotFound(name: sidecarFileName)
             }
+            let facts = try verifiedHashAndSize(of: sidecar, against: item.originalContentHash, name: sidecarFileName)
             try swapIn(sidecar, over: scoresDirectory.appending(path: over))
             try? FileManager.default.removeItem(at: sidecar)
-            restoredFileName = over
+            return (over, facts.contentHash, facts.sizeBytes)
         case let .adoptExistingFile(originalFileName, deleting):
-            guard FileManager.default.fileExists(atPath: scoresDirectory.appending(path: originalFileName).path)
-            else {
+            let source = scoresDirectory.appending(path: originalFileName)
+            guard FileManager.default.fileExists(atPath: source.path) else {
                 throw DomainError.scoreFileNotFound(name: originalFileName)
             }
+            let facts = try verifiedHashAndSize(of: source, against: item.originalContentHash, name: originalFileName)
             try? FileManager.default.removeItem(at: scoresDirectory.appending(path: deleting))
-            restoredFileName = originalFileName
+            return (originalFileName, facts.contentHash, facts.sizeBytes)
         }
+    }
 
-        let restored = scoresDirectory.appending(path: restoredFileName)
-        let facts = try hashAndSize(of: restored)
-        // The whole promise of this feature is that the bytes coming back are the bytes that went in. Check it
-        // rather than adopting whatever turned up: a sidecar corrupted by a failed copy would otherwise be
-        // recorded as the item's content, hash and all, with nothing left to compare against.
-        if let expected = item.originalContentHash, expected != facts.contentHash {
-            throw DomainError.scoreWriteFailed(
-                reason: "restored original does not match its recorded hash (\(restoredFileName))",
-            )
+    /// Hashes `url` and, when `expectedHash` is non-`nil`, throws before returning if it disagrees — the check the
+    /// caller must run before mutating anything.
+    private static func verifiedHashAndSize(
+        of url: URL,
+        against expectedHash: String?,
+        name: String,
+    ) throws -> (contentHash: String, sizeBytes: Int64) {
+        let facts = try hashAndSize(of: url)
+        if let expected = expectedHash, expected != facts.contentHash {
+            throw DomainError.scoreWriteFailed(reason: "restored original does not match its recorded hash (\(name))")
         }
-        return (restoredFileName, facts.contentHash, facts.sizeBytes)
+        return facts
     }
 
     /// Copies `source` over `destination` through a scratch file, so a failure part-way cannot leave the score
