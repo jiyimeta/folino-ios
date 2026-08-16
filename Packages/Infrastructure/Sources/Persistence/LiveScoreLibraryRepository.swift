@@ -14,7 +14,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     public private(set) var playlists: [Playlist] = []
 
     @ObservationIgnored
-    private let database: AppDatabase
+    let database: AppDatabase
     @ObservationIgnored
     private let scoresDirectory: URL
     @ObservationIgnored
@@ -241,11 +241,16 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
 
     /// Every file in the scores directory that belongs to a row. Usually just the score, but an item folino read out
     /// of a PDF also owns the original sidecar — leaving that behind would silently retain the largest file of an
-    /// item the user deleted.
-    private nonisolated static func filesBackingRow(_ row: ScoreItemRecord) -> [String] {
+    /// item the user deleted — and an edited item owns the copy of the bytes it was imported with.
+    nonisolated static func filesBackingRow(_ row: ScoreItemRecord) -> [String] {
         var names = [row.localFileName]
         if let sidecar = row.sourcePDFFileName, sidecar != row.localFileName {
             names.append(sidecar)
+        }
+        // For a MusicXML / MIDI import the original IS a file the row already names elsewhere in the general case,
+        // so de-duplicate rather than assuming a distinct sidecar.
+        if let original = row.originalFileName, !names.contains(original) {
+            names.append(original)
         }
         return names
     }
@@ -360,36 +365,6 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 try ReaderPreferencesRecord.fetchAll(db)
             }
             return try records.map { try $0.toDomain() }
-        } catch {
-            throw DomainError.persistenceFailed(reason: "\(error)")
-        }
-    }
-
-    public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {
-        do {
-            return try await database.pool.read { db in
-                // Trashed rows are excluded so duplicate detection treats them as gone. The original PDF's hash counts
-                // too: once a PDF has been read into notation the row's own `content_hash` is the `.mscz`'s, so
-                // matching only that would let the same PDF be imported a second time.
-                let records = try ScoreItemRecord
-                    .filter(
-                        (
-                            Column("content_hash") == contentHash
-                                || Column("source_pdf_content_hash") == contentHash
-                        )
-                            && Column("deleted_at") == nil,
-                    )
-                    .fetchAll(db)
-                return try records.map { rec -> ScoreItem in
-                    let tagRows = try ScoreItemTagRecord
-                        .filter(Column("score_item_id") == rec.id)
-                        .fetchAll(db)
-                    let tagIDs = Set(tagRows.compactMap {
-                        UUID(uuidString: $0.tagID).map(TagID.init(rawValue:))
-                    })
-                    return try rec.toDomain(tagIDs: tagIDs)
-                }
-            }
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }

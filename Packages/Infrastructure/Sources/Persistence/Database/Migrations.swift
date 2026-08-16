@@ -1,7 +1,8 @@
 import GRDB
 
 /// Migration bodies live here, one `migrateVn` per version, except where a version is large enough to warrant its own
-/// file — v16 (the first table rebuild) is in `Migrations+V16.swift`, v17 in `Migrations+V17.swift`. The `upToVn`
+/// file — v16 (the first table rebuild) is in `Migrations+V16.swift`, v17 in `Migrations+V17.swift`, v18 in
+/// `Migrations+V18.swift`. The `upToVn`
 /// test-support migrators live in `Migrations+TestSupport.swift`. Per-version migrators are `internal` (not
 /// `private`) only so those other files can reach them.
 enum AppMigrations {
@@ -27,6 +28,7 @@ enum AppMigrations {
         m.registerMigration("v15", migrate: migrateV15)
         m.registerMigration("v16", migrate: migrateV16)
         m.registerMigration("v17", migrate: migrateV17)
+        m.registerMigration("v18", migrate: migrateV18)
         return m
     }()
 
