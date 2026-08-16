@@ -27,6 +27,25 @@ struct NoopScoreMetadataReading: ScoreMetadataReading {
     }
 }
 
+/// Inert default for `ReaderViewModel.originalStore`. Previews and tests that don't exercise revert / discard get
+/// this; production injects the real `LiveScoreOriginalStore` from the App composition root.
+struct NoopScoreOriginalStore: ScoreOriginalStore {
+    // swiftlint:disable:next async_without_await
+    func captureOriginalIfNeeded(for item: ScoreItem) async throws -> ScoreItem {
+        item
+    }
+
+    // swiftlint:disable:next async_without_await
+    func revertToOriginal(_ item: ScoreItem, restoringScoreInfo _: Bool) async throws -> ScoreItem {
+        item
+    }
+
+    // swiftlint:disable:next async_without_await
+    func discardOriginal(for item: ScoreItem) async throws -> ScoreItem {
+        item
+    }
+}
+
 /// Inert backing store for the default `ReaderViewModel.annotationCoordinator`. Production injects
 /// `LiveAnnotationStore` (which conforms to `AnnotationBlobStore`) from the App composition root; previews and tests
 /// that don't exercise annotations get this no-op, so the coordinator has a valid store with nothing behind it.

@@ -134,10 +134,12 @@ final class ReaderViewModel {
     var shareTarget: ScoreShareTarget?
     var isPreparingShare = false
 
-    // `repository` / `metadataReader` / `gateway` are internal (not private) so the `ScoreInfoEditing` conformance and
-    // the `ReaderViewModel+Load.swift` load paths (same-type extensions in other files) can reach them; Swift `private`
-    // would not.
+    /// `repository` / `metadataReader` / `gateway` are internal (not private) so the `ScoreInfoEditing` conformance
+    /// and the `ReaderViewModel+Load.swift` load paths (same-type extensions in other files) can reach them; Swift
+    /// `private` would not.
     @ObservationIgnored let repository: any ScoreLibraryRepository
+    /// Internal so `ReaderViewModel+PDFReread.swift` can discard the captured original on re-read.
+    @ObservationIgnored let originalStore: any ScoreOriginalStore
     @ObservationIgnored let gateway: any ScoreFileGateway
     /// Internal so the share methods in `ReaderViewModel+Sharing.swift` can reach it.
     @ObservationIgnored let shareService: any ScoreShareService
@@ -180,6 +182,7 @@ final class ReaderViewModel {
     init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore = NoopScoreOriginalStore(),
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService = NoopScoreShareService(),
         vocalTunerHandoff: any VocalTunerHandoff = NoopVocalTunerHandoff(),
@@ -199,6 +202,7 @@ final class ReaderViewModel {
         self.scoreItem = scoreItem
         self.playlistID = playlistID
         self.repository = repository
+        self.originalStore = originalStore
         self.gateway = gateway
         self.shareService = shareService
         self.vocalTunerHandoff = vocalTunerHandoff

@@ -189,9 +189,22 @@ public struct LiveScoreOriginalStore: ScoreOriginalStore {
         }
     }
 
-    // swiftlint:disable:next async_without_await
-    public func discardOriginal(for item: ScoreItem) async throws -> ScoreItem {
-        // Implemented in Task 8.
-        item
+    /// Forgets the original.
+    ///
+    /// Only a sidecar folino copied is deleted. When the original is the source file itself — a MusicXML import
+    /// whose editor save went to a sibling `.mscz` — that file is the item's own history, and a re-read cannot
+    /// happen for it anyway (re-read only exists for PDF-origin items).
+    public func discardOriginal(
+        for item: ScoreItem,
+    ) async throws -> ScoreItem { // swiftlint:disable:this async_without_await
+        guard let originalFileName = item.originalFileName else { return item }
+        if originalFileName == item.originalSidecarFileName {
+            try? FileManager.default.removeItem(at: scoresDirectory.appending(path: originalFileName))
+        }
+        var cleared = item
+        cleared.originalFileName = nil
+        cleared.originalContentHash = nil
+        cleared.originalProvenance = nil
+        return cleared
     }
 }

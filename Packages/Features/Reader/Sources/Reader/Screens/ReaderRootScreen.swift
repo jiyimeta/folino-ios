@@ -149,6 +149,7 @@ public struct ReaderRootScreen: View {
     public init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore,
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         vocalTunerHandoff: any VocalTunerHandoff,
@@ -174,6 +175,7 @@ public struct ReaderRootScreen: View {
             wrappedValue: ReaderViewModel(
                 scoreItem: scoreItem,
                 repository: repository,
+                originalStore: originalStore,
                 gateway: gateway,
                 shareService: shareService,
                 vocalTunerHandoff: vocalTunerHandoff,

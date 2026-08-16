@@ -58,8 +58,11 @@ extension ReaderViewModel {
             sourcePDFFileName: sidecarName,
             sourcePDFContentHash: scoreItem.originalPDFContentHash,
         )
-        scoreItem = updated
-        try? await repository.saveScoreItem(updated)
+        // The captured original was the baseline of the parse this just replaced, so it is no longer the original of
+        // anything on screen. Drop it; the next edit captures the new conversion's output.
+        let cleared = await (try? originalStore.discardOriginal(for: updated)) ?? updated
+        scoreItem = cleared
+        try? await repository.saveScoreItem(cleared)
 
         await resetScoreBoundPreferences()
         // The geometry belongs to the parse we just replaced; the next switch to the original re-derives it.

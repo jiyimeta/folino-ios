@@ -193,3 +193,70 @@ private struct StubGateway: ScoreFileGateway {
         primaryKey: "F",
     )
 }
+
+@Suite("LiveScoreOriginalStore discard")
+struct LiveScoreOriginalStoreDiscardTests {
+    private func makeDirectory() -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appending(path: "original-discard-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func item(localFileName: String, originalFileName: String?) -> ScoreItem {
+        var item = ScoreItem(
+            title: "t",
+            composer: nil,
+            instrumentationSummary: nil,
+            localFileName: localFileName,
+            contentHash: "c",
+            sizeBytes: 1,
+            lengthBeats: 1,
+            defaultTempoBpm: 60,
+            primaryKey: nil,
+            addedAt: Date(timeIntervalSince1970: 0),
+            lastOpenedAt: nil,
+            tagIDs: [],
+            isFavorite: false,
+        )
+        item.originalFileName = originalFileName
+        item.originalContentHash = originalFileName == nil ? nil : "o"
+        item.originalProvenance = originalFileName == nil ? nil : .conversionOutput
+        return item
+    }
+
+    @Test func `discarding removes the sidecar and clears the columns`() async throws {
+        let dir = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("baseline".utf8).write(to: dir.appending(path: "ID.original.mscz"))
+        let store = LiveScoreOriginalStore(scoresDirectory: dir, gateway: StubGateway())
+
+        let cleared = try await store.discardOriginal(
+            for: item(localFileName: "ID.mscz", originalFileName: "ID.original.mscz"),
+        )
+
+        #expect(cleared.originalFileName == nil)
+        #expect(cleared.originalContentHash == nil)
+        #expect(cleared.originalProvenance == nil)
+        #expect(FileManager.default.fileExists(atPath: dir.appending(path: "ID.original.mscz").path) == false)
+    }
+
+    @Test func `discarding never deletes a file the item still uses`() async throws {
+        let dir = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("source".utf8).write(to: dir.appending(path: "ID.musicxml"))
+        let store = LiveScoreOriginalStore(scoresDirectory: dir, gateway: StubGateway())
+
+        _ = try await store.discardOriginal(for: item(localFileName: "ID.mscz", originalFileName: "ID.musicxml"))
+
+        #expect(FileManager.default.fileExists(atPath: dir.appending(path: "ID.musicxml").path))
+    }
+
+    @Test func `discarding an item with no original is a no-op`() async throws {
+        let dir = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LiveScoreOriginalStore(scoresDirectory: dir, gateway: StubGateway())
+        let subject = item(localFileName: "ID.mscz", originalFileName: nil)
+        #expect(try await store.discardOriginal(for: subject) == subject)
+    }
+}

@@ -431,6 +431,7 @@ private struct ReadyShell: View {
             ReaderRootScreen(
                 scoreItem: item,
                 repository: repository,
+                originalStore: originalStore,
                 gateway: gateway,
                 shareService: shareService,
                 vocalTunerHandoff: vocalTunerHandoff,
