@@ -16,6 +16,7 @@ struct CrossBarInputTests {
             scoresDirectory: URL(filePath: "/tmp"),
             gateway: FakeScoreFileGateway(),
             repository: FakeScoreLibraryRepository(),
+            originalStore: FakeScoreOriginalStore(),
             playback: nil,
         )
     }

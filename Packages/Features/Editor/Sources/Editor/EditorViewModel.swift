@@ -11,7 +11,7 @@ import SheetMusicUI
 @MainActor
 @Observable
 public final class EditorViewModel {
-    public private(set) var editor: ScoreEditor?
+    public internal(set) var editor: ScoreEditor?
     /// The editor's live score, or nil outside a session. Views and the Reader seam render THIS score while editing.
     ///
     /// The `generation` read is load-bearing, not decoration. `ScoreEditor` is a plain class, so mutating the score
@@ -170,6 +170,11 @@ public final class EditorViewModel {
     @ObservationIgnored let gateway: any ScoreFileGateway
     @ObservationIgnored let repository: any ScoreLibraryRepository
     @ObservationIgnored let playback: (any PlaybackController)?
+    @ObservationIgnored let originalStore: any ScoreOriginalStore
+    /// Mirrors `scoreItem.canRevertToOriginal` as an OBSERVED property. `scoreItem` is `@ObservationIgnored`, so a
+    /// toolbar reading it directly would not re-evaluate when the session's first autosave captures the original —
+    /// the `⋯` item would not appear until the chrome happened to rebuild for some other reason.
+    public internal(set) var hasCapturedOriginal: Bool
     /// Internal (not private) so `EditorViewModel+Persistence.swift` can replace it after a save refreshes the row.
     @ObservationIgnored var scoreItem: ScoreItem
     @ObservationIgnored let scoresDirectory: URL
@@ -179,13 +184,16 @@ public final class EditorViewModel {
         scoresDirectory: URL,
         gateway: any ScoreFileGateway,
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore,
         playback: (any PlaybackController)?,
     ) {
         self.scoreItem = scoreItem
         self.scoresDirectory = scoresDirectory
         self.gateway = gateway
         self.repository = repository
+        self.originalStore = originalStore
         self.playback = playback
+        hasCapturedOriginal = scoreItem.canRevertToOriginal
     }
 
     public func beginSession(score: Score) {

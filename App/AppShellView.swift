@@ -25,6 +25,7 @@ struct AppShellView: View {
             if let repository = bootstrap.repository,
                let importer = bootstrap.importer,
                let gateway = bootstrap.gateway,
+               let originalStore = bootstrap.originalStore,
                let shareService = bootstrap.shareService,
                let metadataReader = bootstrap.metadataReader,
                let annotationCoordinator = bootstrap.annotationCoordinator,
@@ -35,6 +36,7 @@ struct AppShellView: View {
                     repository: repository,
                     importer: importer,
                     gateway: gateway,
+                    originalStore: originalStore,
                     shareService: shareService,
                     metadataReader: metadataReader,
                     vocalTunerHandoff: LiveVocalTunerHandoff(),
@@ -105,6 +107,7 @@ private struct ReadyShell: View {
     let repository: any ScoreLibraryRepository
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
+    let originalStore: any ScoreOriginalStore
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
     let vocalTunerHandoff: any VocalTunerHandoff
@@ -140,6 +143,7 @@ private struct ReadyShell: View {
         repository: any ScoreLibraryRepository,
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
+        originalStore: any ScoreOriginalStore,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
         vocalTunerHandoff: any VocalTunerHandoff,
@@ -151,6 +155,7 @@ private struct ReadyShell: View {
         self.repository = repository
         self.importer = importer
         self.gateway = gateway
+        self.originalStore = originalStore
         self.shareService = shareService
         self.metadataReader = metadataReader
         self.vocalTunerHandoff = vocalTunerHandoff
@@ -420,6 +425,7 @@ private struct ReadyShell: View {
             scoresDirectory: scoresDirectory,
             gateway: gateway,
             repository: repository,
+            originalStore: originalStore,
             playbackController: bootstrap.playbackController,
         ) { host, chrome in
             ReaderRootScreen(

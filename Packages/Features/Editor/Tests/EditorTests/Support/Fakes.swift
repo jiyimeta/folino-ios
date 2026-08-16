@@ -70,3 +70,29 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
         []
     }
 }
+
+/// Records what the view model asked for and hands back an item stamped as captured, so the save path's ordering
+/// can be asserted without touching the file system.
+final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
+    var captureCalls: [ScoreItem] = []
+    var revertCalls: [(ScoreItem, Bool)] = []
+
+    func captureOriginalIfNeeded(for item: ScoreItem) throws -> ScoreItem {
+        captureCalls.append(item)
+        guard item.originalFileName == nil else { return item }
+        return item.capturingOriginal(
+            fileName: item.originalSidecarFileName,
+            contentHash: "captured-hash",
+            provenance: .importTime,
+        )
+    }
+
+    func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) throws -> ScoreItem {
+        revertCalls.append((item, restoringScoreInfo))
+        return item
+    }
+
+    func discardOriginal(for item: ScoreItem) throws -> ScoreItem {
+        item
+    }
+}

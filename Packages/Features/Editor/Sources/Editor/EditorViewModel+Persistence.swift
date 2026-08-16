@@ -28,33 +28,47 @@ extension EditorViewModel {
     private func performSave() async {
         guard let score, isDirty else { return }
         let destination = Self.saveDestination(for: scoreItem, scoresDirectory: scoresDirectory)
+        // BEFORE the write, and only here: this is the last moment the file still holds the bytes the score was
+        // imported with. Editing metadata does not touch the file, so nothing earlier can have moved them. A capture
+        // that fails returns the item unchanged rather than throwing, so a full disk costs the original, not the edit.
+        let itemToSave = await (try? originalStore.captureOriginalIfNeeded(for: scoreItem)) ?? scoreItem
         do {
             try await gateway.saveScore(score, fileURL: destination.url, format: destination.format)
             let facts = try EditorFileFacts.hashAndSize(of: destination.url)
             let newItem = ScoreItem(
-                id: scoreItem.id,
-                title: scoreItem.title,
-                subtitle: scoreItem.subtitle,
-                composer: scoreItem.composer,
-                arranger: scoreItem.arranger,
-                lyricist: scoreItem.lyricist,
-                copyright: scoreItem.copyright,
-                instrumentationSummary: scoreItem.instrumentationSummary,
-                localFileName: destination.isSiblingCopy ? destination.url.lastPathComponent : scoreItem.localFileName,
+                id: itemToSave.id,
+                title: itemToSave.title,
+                subtitle: itemToSave.subtitle,
+                composer: itemToSave.composer,
+                arranger: itemToSave.arranger,
+                lyricist: itemToSave.lyricist,
+                copyright: itemToSave.copyright,
+                instrumentationSummary: itemToSave.instrumentationSummary,
+                localFileName: destination.isSiblingCopy
+                    ? destination.url.lastPathComponent
+                    : itemToSave.localFileName,
                 contentHash: facts.contentHash,
                 sizeBytes: facts.sizeBytes,
-                lengthBeats: scoreItem.lengthBeats,
-                defaultTempoBpm: scoreItem.defaultTempoBpm,
-                primaryKey: scoreItem.primaryKey,
-                addedAt: scoreItem.addedAt,
-                lastOpenedAt: scoreItem.lastOpenedAt,
-                tagIDs: scoreItem.tagIDs,
-                isFavorite: scoreItem.isFavorite,
-                deletedAt: scoreItem.deletedAt,
-                museScoreMajorVersion: scoreItem.museScoreMajorVersion,
+                lengthBeats: itemToSave.lengthBeats,
+                defaultTempoBpm: itemToSave.defaultTempoBpm,
+                primaryKey: itemToSave.primaryKey,
+                addedAt: itemToSave.addedAt,
+                lastOpenedAt: itemToSave.lastOpenedAt,
+                tagIDs: itemToSave.tagIDs,
+                isFavorite: itemToSave.isFavorite,
+                deletedAt: itemToSave.deletedAt,
+                museScoreMajorVersion: itemToSave.museScoreMajorVersion,
+                sourcePDFFileName: itemToSave.sourcePDFFileName,
+                sourcePDFContentHash: itemToSave.sourcePDFContentHash,
+                pdfDerivedContentHash: itemToSave.pdfDerivedContentHash,
+                pdfConversionFailed: itemToSave.pdfConversionFailed,
+                originalFileName: itemToSave.originalFileName,
+                originalContentHash: itemToSave.originalContentHash,
+                originalProvenance: itemToSave.originalProvenance,
             )
             try await repository.saveScoreItem(newItem)
             scoreItem = newItem
+            hasCapturedOriginal = newItem.canRevertToOriginal
             if destination.isSiblingCopy {
                 didSaveAsSiblingMSCZ = true
             }
