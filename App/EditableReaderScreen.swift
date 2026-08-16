@@ -43,6 +43,7 @@ struct EditableReaderScreen: View {
             AnyView(EditorChromeView(
                 viewModel: editorViewModel,
                 bottomTransportClearance: context.bottomTransportClearance,
+                hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
                 onDone: { [editingHost] in editingHost.requestExit() },
                 onClusterInsetsChange: { [editingHost] top, bottom in
                     editingHost.editingChromeTopInset = top
@@ -96,6 +97,11 @@ struct EditableReaderScreen: View {
         }
         host.onTapOutsideScore = { [weak vm] in
             vm?.deselect()
+        }
+        // The other half of a completed revert: the Editor rewrote the file and the row, but has no way to make the
+        // Reader — which is still drawing the edited score it already had in memory — notice.
+        vm.onRevertCompleted = { [host] item in
+            host.requestReloadAfterRevert(item)
         }
         // Straight from the Reader's overlay into the view model, with no SwiftUI body in between: this fires on every
         // scroll and zoom frame, and anything that read it in a body would re-render the score at that rate.

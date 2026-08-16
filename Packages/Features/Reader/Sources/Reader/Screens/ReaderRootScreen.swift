@@ -306,6 +306,11 @@ public struct ReaderRootScreen: View {
             editingHost?.hiddenStavesProvider = { [weak viewModel] in
                 viewModel?.layoutModel.hiddenStaves ?? []
             }
+            // Split out (`ReaderRootScreen+RevertWiring.swift`) to keep this closure — and the struct's primary
+            // declaration — under SwiftLint's body-length budgets.
+            if let editingHost {
+                wireRevertReload(host: editingHost, viewModel: viewModel)
+            }
             viewModel.playbackSession.startCursorProvider = { [weak editingHost] in
                 guard let host = editingHost, host.isEditing,
                       case let .single(item) = host.selection
