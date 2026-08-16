@@ -1,3 +1,4 @@
+import Domain
 import SheetMusicCore
 import SwiftUI
 
@@ -62,5 +63,22 @@ private func previewChromeHost(viewModel: EditorViewModel) -> some View {
     return previewChromeHost(viewModel: previewChromeViewModel(select: noteItem))
         .frame(width: 1180, height: 820)
         .environment(\.horizontalSizeClass, .regular)
+}
+
+// Task 10 verification: the item has a captured original, so `canRevertToOriginal` is true and the `⋯` overflow
+// item (`EditorChromeView+Revert.swift`) should appear ahead of undo — without displacing undo / redo / 完了 into a
+// system overflow menu of their own.
+#Preview("chrome · revert available") {
+    let restItem = SheetMusicCore.ScoreItemID.rest(
+        RestID(staff: previewStaff, measureIndex: 0, voiceIndex: 0, elementIndex: 2),
+    )
+    let viewModel = previewChromeViewModel(select: restItem)
+    viewModel.scoreItem = viewModel.scoreItem.capturingOriginal(
+        fileName: "preview.original.mscx", contentHash: "preview-original", provenance: .importTime,
+    )
+    viewModel.hasCapturedOriginal = true
+    return previewChromeHost(viewModel: viewModel)
+        .frame(width: 390, height: 844)
+        .environment(\.horizontalSizeClass, .compact)
 }
 #endif

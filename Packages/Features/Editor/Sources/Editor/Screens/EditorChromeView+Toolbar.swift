@@ -14,12 +14,16 @@ import UIKit
 extension EditorChromeView {
     /// Voice + pad toggle lead, undo / redo / 完了 trail. Five items with the back button hidden for the session, so
     /// the width budget that forces the Reader's own toolbar to fold (see `ReaderToolbar.Metrics`) has room to spare
-    /// here.
+    /// here. A sixth, the `⋯` overflow menu (`EditorChromeView+Revert.swift`), appears ahead of undo only once the
+    /// item has a captured original to revert to.
     @ToolbarContentBuilder
     var editingToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) { voiceMenu }
         leadingGroupSeparator
         ToolbarItem(placement: .topBarLeading) { padToggleButton }
+        if viewModel.canRevertToOriginal {
+            ToolbarItem(placement: .topBarTrailing) { overflowMenu }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             toolbarIconButton(system: "arrow.uturn.backward", label: "editor.chrome.undo", enabled: viewModel.canUndo) {
                 viewModel.undo()

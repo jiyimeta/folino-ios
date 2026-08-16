@@ -26,6 +26,9 @@ public struct EditorChromeView: View {
     @Bindable var viewModel: EditorViewModel
     /// Room the reader's bottom transport occupies, so a bottom-docked pad parks above it instead of over it.
     private let bottomTransportClearance: CGFloat
+    /// Whether the score currently has annotations anchored to the notation, so the revert confirmation can warn
+    /// that they may shift. Internal, not private: `EditorChromeView+Revert.swift` reads it and is a different file.
+    let hasMusicalAnnotations: Bool
     let onDone: () -> Void
     private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
     /// Reports where the pad toggle sits among the chrome's LEADING bar items (and `nil` when the chrome goes away),
@@ -67,15 +70,21 @@ public struct EditorChromeView: View {
     @AppStorage("editorSiblingMSCZNoticeShown") private var siblingMSCZNoticeShown = false
     @State private var showsSiblingNotice = false
 
+    /// Drives the revert confirmation dialog. Internal, not private: `EditorChromeView+Revert.swift` sets it and
+    /// binds to it, and is a different file.
+    @State var isConfirmingRevert = false
+
     public init(
         viewModel: EditorViewModel,
         bottomTransportClearance: CGFloat,
+        hasMusicalAnnotations: Bool = false,
         onDone: @escaping () -> Void,
         onClusterInsetsChange: @escaping (_ top: CGFloat, _ bottom: CGFloat) -> Void = { _, _ in },
         onNoteInputBarOrderChange: @escaping (Int?) -> Void = { _ in },
     ) {
         self.viewModel = viewModel
         self.bottomTransportClearance = bottomTransportClearance
+        self.hasMusicalAnnotations = hasMusicalAnnotations
         self.onDone = onDone
         self.onClusterInsetsChange = onClusterInsetsChange
         self.onNoteInputBarOrderChange = onNoteInputBarOrderChange
@@ -91,6 +100,13 @@ public struct EditorChromeView: View {
     }
 
     public var body: some View {
+        revertConfirmation(on: chromeContent)
+    }
+
+    /// The chrome itself, before the revert confirmation is layered on top. Split out so `body` reads as the single
+    /// `revertConfirmation(on:)` wrap the brief asks for, rather than burying that wrap under this view's own
+    /// modifier chain.
+    private var chromeContent: some View {
         ZStack(alignment: .topTrailing) {
             navigationPill
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
