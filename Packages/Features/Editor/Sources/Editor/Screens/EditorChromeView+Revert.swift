@@ -42,6 +42,28 @@ extension EditorChromeView {
             } message: {
                 Text(revertMessage)
             }
+            // A revert that fails silently is worse than the dialog it replaced: the confirmation closes either way,
+            // so without this the user has no way to tell "reverted" apart from "the store threw and nothing
+            // happened". `revertError` is cleared on dismiss so a later successful revert can't re-show a stale alert.
+            .alert(
+                Text("editor.revert.failed", bundle: .module),
+                isPresented: isRevertErrorPresented,
+            ) {
+                Button {
+                    viewModel.revertError = nil
+                } label: {
+                    Text("editor.revert.failed.dismiss", bundle: .module)
+                }
+            }
+    }
+
+    private var isRevertErrorPresented: Binding<Bool> {
+        Binding(
+            get: { viewModel.revertError != nil },
+            set: { isPresented in
+                if !isPresented { viewModel.revertError = nil }
+            },
+        )
     }
 
     private var revertMessage: String {
