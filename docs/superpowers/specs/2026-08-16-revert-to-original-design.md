@@ -290,8 +290,27 @@ worse state: a row claiming the original while the file still holds the edits.
 Start-up reconciliation is not worth building for this.
 
 The sibling case needs no swap at all — the original file has been sitting
-untouched since import. Update the row, then delete the `.mscz`. A crash leaves
-an orphaned `.mscz`, which is the same harmless state the app already tolerates.
+untouched since import.
+
+**As shipped, the order is the other way round: `LiveScoreOriginalStore`
+deletes the `.mscz` inside `restoreFile` — before the caller (the Editor, the
+Reader, or the Library) writes the row.** A crash between the delete and the
+row write leaves the row still naming the deleted `.mscz` as
+`localFileName`, pointing at nothing. This is the same direction of failure
+the in-place case's "doing the row first" paragraph above calls worse — a row
+claiming a state the file does not yet reflect — but here it is the shipped
+behavior for the sibling case, not a hypothetical being rejected. It was
+ruled acceptable to leave as shipped, for two reasons: the state is
+recoverable rather than terminal (retrying the revert re-runs
+`RevertPolicy.filePlan(for:)` against the still-unchanged row, resolves the
+same `adoptExistingFile` plan, finds the adopt-target still on disk, and
+succeeds — deleting an already-deleted `.mscz` is a no-op), and reordering
+`LiveScoreOriginalStore.revertToOriginal` to return the restored facts
+*before* deleting the sibling, so every caller writes the row first, is an
+API-shape change this feature's final fix wave judged riskier than the
+narrow, recoverable window it would close. A future change to
+`LiveScoreOriginalStore` that touches this path should close the gap
+properly rather than re-affirm it.
 
 ## Provenance
 

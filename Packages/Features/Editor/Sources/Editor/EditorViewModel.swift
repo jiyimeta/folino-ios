@@ -131,6 +131,15 @@ public final class EditorViewModel {
     // Stored autosave state (Task 10) — declared HERE (extensions cannot add stored properties).
     @ObservationIgnored var autosaveTask: Task<Void, Never>?
     @ObservationIgnored var isDirty = false
+    /// True from the moment `revertToOriginal()` commits to reverting until the session ends. `performSave()`
+    /// honours it both at entry and again after its one suspension point, so a debounce or scene-background flush
+    /// that lands mid-revert finds nothing to do instead of racing the store's file swap (Critical 2 review fix).
+    @ObservationIgnored var isReverting = false
+    /// The `Task` wrapping whichever `performSave()` call is currently running, from either trigger site below —
+    /// so `revertToOriginal()` can wait for it to finish before touching the file itself. `performSave()` is a
+    /// plain `async` method with two call sites, neither of which is itself a `Task`, so this is the one handle
+    /// common to both (Critical 2 review fix).
+    @ObservationIgnored var inFlightSaveTask: Task<Void, Never>?
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
     /// it drives the Task 16 one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false

@@ -727,6 +727,40 @@
         }
       }
     },
+    "scoreUI.revert.action.pdf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revert to How folino Read It"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino が読み取った状態に戻す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino가 읽어들인 상태로 되돌리기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复到 folino 读取时的状态"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還原至 folino 讀取時的狀態"
+          }
+        }
+      }
+    },
     "scoreUI.revert.confirm.body" : {
       "localizations" : {
         "en" : {
@@ -965,6 +999,40 @@
         }
       }
     },
+    "scoreUI.revert.confirm.title.pdf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revert to How folino Read It?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino が読み取った状態に戻しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino가 읽어들인 상태로 되돌릴까요?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要恢复到 folino 读取时的状态吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要還原至 folino 讀取時的狀態嗎？"
+          }
+        }
+      }
+    },
     "scoreUI.revert.footer" : {
       "localizations" : {
         "en" : {
@@ -995,6 +1063,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "還原至 folino 匯入時的檔案。手寫、標籤和播放設定將保留。"
+          }
+        }
+      }
+    },
+    "scoreUI.revert.footer.pdf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goes back to the score as folino first read the PDF. Handwriting, tags and playback settings are kept."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino が PDF を最初に読み取ったときの楽譜に戻します。手書き・タグ・再生設定はそのまま残ります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folino가 PDF를 처음 읽어들였을 때의 악보로 되돌립니다. 손글씨, 태그, 재생 설정은 그대로 유지됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复到 folino 首次读取 PDF 时的乐谱。手写、标签和播放设置将保留。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還原至 folino 首次讀取 PDF 時的樂譜。手寫、標籤和播放設定將保留。"
           }
         }
       }

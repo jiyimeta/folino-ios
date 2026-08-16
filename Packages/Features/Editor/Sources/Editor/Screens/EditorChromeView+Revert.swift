@@ -11,7 +11,14 @@ extension EditorChromeView {
                 isConfirmingRevert = true
             } label: {
                 Label {
-                    Text("editor.revert.action", bundle: .module)
+                    // A PDF-origin sidecar is the conversion's output, not the file the user imported — the imported
+                    // PDF is a separate original sitting in the same sheet, so this must not call the sidecar "the
+                    // original" a second time (design spec, "Two originals must never be called the same thing";
+                    // Important 5 review fix).
+                    Text(
+                        viewModel.revertsToConversionOutput ? "editor.revert.action.pdf" : "editor.revert.action",
+                        bundle: .module,
+                    )
                 } icon: {
                     Image(systemName: "arrow.counterclockwise")
                 }
@@ -27,7 +34,11 @@ extension EditorChromeView {
     func revertConfirmation(on content: some View) -> some View {
         content
             .confirmationDialog(
-                Text("editor.revert.confirm.title", bundle: .module),
+                Text(
+                    viewModel.revertsToConversionOutput
+                        ? "editor.revert.confirm.title.pdf" : "editor.revert.confirm.title",
+                    bundle: .module,
+                ),
                 isPresented: $isConfirmingRevert,
                 titleVisibility: .visible,
             ) {
@@ -54,6 +65,11 @@ extension EditorChromeView {
                 } label: {
                     Text("editor.revert.failed.dismiss", bundle: .module)
                 }
+            } message: {
+                // Without this, `revertError`'s localized string is computed and stored but never shown — the alert
+                // reads identically to a successful revert's silence, undoing the point of surfacing an error at
+                // all (Minor review fix).
+                Text(viewModel.revertError ?? "")
             }
     }
 

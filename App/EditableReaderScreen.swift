@@ -17,6 +17,10 @@ struct EditableReaderScreen: View {
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
     private let readerBuilder: (ReaderEditingHost, @escaping ChromeBuilder) -> ReaderRootScreen
+    /// Kept only so `wireOnce()` can re-read this instance's row before every edit session (Critical 1 review fix)
+    /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
+    /// live cache already carries whatever that Reader (or the Library, via the same shared repository) last wrote.
+    private let repository: any ScoreLibraryRepository
 
     init(
         item: ScoreItem,
@@ -35,6 +39,7 @@ struct EditableReaderScreen: View {
             originalStore: originalStore,
             playback: playbackController,
         ))
+        self.repository = repository
         self.readerBuilder = readerBuilder
     }
 
@@ -77,8 +82,21 @@ struct EditableReaderScreen: View {
         isWired = true
         let host = editingHost
         let vm = editorViewModel
-        host.onBeginEditing = { [weak vm, weak host] score in
+        host.onBeginEditing = { [weak vm, weak host, repository] score in
             guard let vm else { return }
+            // Re-seed the row before acting on it. `editorViewModel` is created once and reused for every edit
+            // session this screen opens, so without this its `scoreItem` is whatever it was at `init` (or its own
+            // last save) — stale the moment a revert lands through the score-info sheet, which writes through the
+            // Reader's or the Library's OWN copy of the row, never this one. A stale `scoreItem` still names a
+            // sidecar the store has already deleted, so the next autosave's capture step sees "already captured"
+            // and skips it, silently overwriting the just-restored original with no backup (Critical 1 review fix).
+            // `repository` is the same live instance passed into `readerBuilder`'s `ReaderRootScreen`, so its
+            // observed cache already carries whatever was last written by the time the user gets back into edit
+            // mode. This also fixes the milder pre-existing bug where a title edited in the sheet was clobbered by
+            // this view model's next save.
+            if let freshRow = repository.scoreItems.first(where: { $0.id == vm.scoreItemID }) {
+                vm.refreshRow(freshRow)
+            }
             vm.beginSession(score: score)
             // Carry the reader's last tap into the session: the note under the playhead is almost always the one the
             // user came here to change.

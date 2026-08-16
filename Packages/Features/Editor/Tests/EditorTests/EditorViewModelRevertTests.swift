@@ -157,6 +157,88 @@ struct EditorViewModelRevertTests {
         #expect(gateway.savedCalls.isEmpty)
     }
 
+    /// Critical 1: `EditorViewModel` is created once and reused for every edit session a Reader screen opens, so
+    /// nothing but an explicit refresh ever updates `scoreItem` between sessions. A revert performed through the
+    /// score-info sheet writes through a DIFFERENT view model's copy of the row, so without `refreshRow(_:)` this
+    /// instance would still believe an original is captured under a sidecar the store has already deleted — the
+    /// next save's capture step would see "already captured" and silently skip it, destroying the original a
+    /// second time with no backup. `refreshRow(_:)` is the fix's seam (wired in production by
+    /// `EditableReaderScreen.wireOnce()`'s `onBeginEditing`, before `beginSession`); this test exercises it
+    /// directly, one layer below the App composition root.
+    @Test func `a fresh row adopted after an external revert re-enables capture on the next save`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let gateway = FakeScoreFileGateway()
+        let store = FakeScoreOriginalStore()
+        let vm = makeViewModel(item: capturedItem(), originalStore: store, gateway: gateway, directory: dir)
+
+        // Simulate the score-info sheet reverting this same row through ITS OWN copy: the Editor's own `scoreItem`
+        // never sees it unless something refreshes it.
+        var revertedElsewhere = capturedItem()
+        revertedElsewhere.originalFileName = nil
+        revertedElsewhere.originalContentHash = nil
+        revertedElsewhere.originalProvenance = nil
+        vm.refreshRow(revertedElsewhere)
+
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        await vm.flushPendingSave()
+
+        #expect(store.captureCalls.count == 1)
+        #expect(gateway.savedCalls.count == 1)
+        #expect(vm.canRevertToOriginal)
+    }
+
+    /// A `refreshRow(_:)` naming a DIFFERENT item's id must be ignored — adopting it would silently start acting on
+    /// the wrong score's row.
+    @Test func `refreshRow ignores an item for a different id`() {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let vm = makeViewModel(item: capturedItem(), originalStore: FakeScoreOriginalStore(), directory: dir)
+        var other = EditorFixtures.sampleItem()
+        other.originalFileName = nil
+        #expect(other.id != vm.scoreItemID)
+
+        vm.refreshRow(other)
+
+        #expect(vm.canRevertToOriginal)
+    }
+
+    /// Critical 2: `performSave()`'s one real suspension is inside `captureOriginalIfNeeded` (the live store runs
+    /// it `Task.detached`), so cancelling `autosaveTask` — which `revertToOriginal()` does up front — cannot reach
+    /// a save already past the entry guard and suspended there. Without the fix, that save resumes once the gate
+    /// opens and runs straight through to `gateway.saveScore`, landing the edit back over whatever the concurrent
+    /// revert just restored, with the sidecar already gone. `flushPendingSave()` stands in for either real trigger
+    /// (the debounce firing mid-confirmation, or `EditableReaderScreen`'s scene-background flush) — both funnel
+    /// through the same `performSave()` choke point this guards.
+    @Test func `an in-flight save is serialized against a concurrent revert and never reaches the gateway`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let gateway = FakeScoreFileGateway()
+        let store = FakeScoreOriginalStore()
+        let gate = CaptureGate()
+        store.captureGate = gate
+        let vm = makeViewModel(item: capturedItem(), originalStore: store, gateway: gateway, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+
+        // Drive the save ourselves (bypassing the 2 s debounce) — the same choke point either real trigger uses.
+        let saveTask = Task { await vm.flushPendingSave() }
+        // Don't race the view model's own Task scheduling: wait until the save is actually inside
+        // `captureOriginalIfNeeded`, past `performSave()`'s entry guard, before starting the revert.
+        await gate.waitUntilEntered()
+        // Opens the gate from a SEPARATE Task so `revertToOriginal()` can be awaited directly below, on this test's
+        // own task: that runs its synchronous prefix (setting `isReverting`) immediately and deterministically —
+        // no scheduling race — before anything can resume the still-suspended save.
+        let openerTask = Task { await gate.open() }
+        await vm.revertToOriginal()
+        await saveTask.value
+        await openerTask.value
+
+        #expect(gateway.savedCalls.isEmpty)
+        #expect(store.revertCalls.count == 1)
+    }
+
     @Test func `a legacy original carries its caveat into the warnings`() {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }

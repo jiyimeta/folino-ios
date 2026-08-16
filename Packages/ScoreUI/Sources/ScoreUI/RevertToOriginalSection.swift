@@ -19,6 +19,14 @@ struct RevertToOriginalSection: View {
 
     @State private var isChoosingScope = false
 
+    /// Whether the sidecar this section reverts to is the PDF conversion's output rather than the file the user
+    /// actually imported. A PDF-origin item's imported PDF is a separate, distinct original sitting in the same
+    /// sheet, so the action/footer/title below must not call the sidecar "the original" a second time (design spec,
+    /// "Two originals must never be called the same thing"; Important 5 review fix).
+    private var revertsToConversionOutput: Bool {
+        item.originalProvenance == .conversionOutput
+    }
+
     var body: some View {
         Section {
             // The dialog hangs off the BUTTON, not off the `Section`. A presentation modifier on a Section is
@@ -27,10 +35,16 @@ struct RevertToOriginalSection: View {
             Button(role: .destructive) {
                 isChoosingScope = true
             } label: {
-                Text("scoreUI.revert.action", bundle: .module)
+                Text(
+                    revertsToConversionOutput ? "scoreUI.revert.action.pdf" : "scoreUI.revert.action",
+                    bundle: .module,
+                )
             }
             .confirmationDialog(
-                Text("scoreUI.revert.confirm.title", bundle: .module),
+                Text(
+                    revertsToConversionOutput ? "scoreUI.revert.confirm.title.pdf" : "scoreUI.revert.confirm.title",
+                    bundle: .module,
+                ),
                 isPresented: $isChoosingScope,
                 titleVisibility: .visible,
             ) {
@@ -52,7 +66,10 @@ struct RevertToOriginalSection: View {
     }
 
     private var footer: String {
-        String(localized: "scoreUI.revert.footer", bundle: .module)
+        String(
+            localized: revertsToConversionOutput ? "scoreUI.revert.footer.pdf" : "scoreUI.revert.footer",
+            bundle: .module,
+        )
     }
 
     /// `hasMusicalAnnotations: true` unconditionally — see the note in the protocol step. The ink line is worded as
@@ -74,5 +91,15 @@ struct RevertToOriginalSection: View {
             await model.revertToOriginal(item, restoringScoreInfo: restoringScoreInfo)
             onCompleted()
         }
+    }
+}
+
+extension RevertToOriginalSection {
+    /// Whether the sheet has anything to show for this item — hoisted out of `EditScoreInfoSheet`'s body so the
+    /// gating decision is testable on its own, without hosting SwiftUI (Important 6 review fix). Deliberately not
+    /// just `item.canRevertToOriginal`: that Domain property is already covered by `RevertPolicyTests`, and a test
+    /// suite that only re-asserted it would stay green even if `EditScoreInfoSheet` stopped calling this at all.
+    static func shouldShow(_ item: ScoreItem) -> Bool {
+        item.canRevertToOriginal
     }
 }

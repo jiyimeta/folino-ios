@@ -94,10 +94,16 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
     var eventLog: FakeEventLog?
     /// When set, `revertToOriginal` throws this instead of succeeding — exercises the Editor's revert-failure path.
     var revertError: Error?
+    /// When set, `captureOriginalIfNeeded` suspends here before returning — the real store's own one suspension
+    /// point (`Task.detached`), which a plain synchronous fake can't otherwise reproduce. Lets a test land a
+    /// concurrent `revertToOriginal()` call while a save is already past `performSave()`'s entry guard, mid-capture
+    /// (Critical 2 review fix).
+    var captureGate: CaptureGate?
 
-    func captureOriginalIfNeeded(for item: ScoreItem) throws -> ScoreItem {
+    func captureOriginalIfNeeded(for item: ScoreItem) async throws -> ScoreItem {
         eventLog?.record("capture")
         captureCalls.append(item)
+        await captureGate?.enter()
         guard item.originalFileName == nil else { return item }
         return item.capturingOriginal(
             fileName: item.originalSidecarFileName,
@@ -118,5 +124,39 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
 
     func discardOriginal(for item: ScoreItem) throws -> ScoreItem {
         item
+    }
+}
+
+/// A two-stage rendezvous for `FakeScoreOriginalStore.captureOriginalIfNeeded`: `enter()` (the fake) suspends until
+/// `open()` (the test) releases it, and `waitUntilEntered()` (the test) suspends until `enter()` has actually been
+/// called — so a test can deterministically land other work while a save is suspended mid-capture, without racing
+/// its own setup against the view model's Task scheduling.
+actor CaptureGate {
+    private var hasEntered = false
+    private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+    private var openWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func enter() async {
+        hasEntered = true
+        for waiter in enteredWaiters {
+            waiter.resume()
+        }
+        enteredWaiters = []
+        guard !isOpen else { return }
+        await withCheckedContinuation { openWaiters.append($0) }
+    }
+
+    func waitUntilEntered() async {
+        guard !hasEntered else { return }
+        await withCheckedContinuation { enteredWaiters.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        for waiter in openWaiters {
+            waiter.resume()
+        }
+        openWaiters = []
     }
 }

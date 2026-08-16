@@ -39,7 +39,7 @@ public struct EditScoreInfoSheet: View {
             Form {
                 creditsSection
                 infoSection
-                if item.canRevertToOriginal {
+                if RevertToOriginalSection.shouldShow(item) {
                     RevertToOriginalSection(model: model, item: item) { dismiss() }
                 }
             }

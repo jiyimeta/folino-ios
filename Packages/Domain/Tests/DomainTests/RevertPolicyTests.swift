@@ -170,4 +170,15 @@ struct RevertPolicyTests {
         #expect(reverted.isFavorite)
         #expect(reverted.addedAt == Date(timeIntervalSince1970: 0))
     }
+
+    /// Unlike `rebuilt` (PDF conversion), reverting a MusicXML import back to its own file must land on `nil`, not
+    /// keep the version the `.mscz` the editor wrote over it was stamped with. `facts.summary.museScoreMajorVersion`
+    /// is `nil` (a MusicXML source), so a stray `?? museScoreMajorVersion` fallback would leak the old `.mscz`
+    /// version straight through undetected.
+    @Test func `the restored MuseScore version has no fallback to the edited file's version`() {
+        var subject = item(localFileName: "ID.mscz", originalFileName: "ID.musicxml")
+        subject.museScoreMajorVersion = 4
+        let reverted = subject.adoptingRevertedOriginal(facts, restoringScoreInfo: false)
+        #expect(reverted.museScoreMajorVersion == nil)
+    }
 }

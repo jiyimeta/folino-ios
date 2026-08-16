@@ -149,6 +149,27 @@ struct LiveScoreOriginalStoreRevertTests {
         #expect(try Data(contentsOf: dir.appending(path: "ID.musicxml")) == corrupted)
     }
 
+    /// Every other test in this suite leaves `originalContentHash` `nil`, so they only ever exercise
+    /// `verifiedHashAndSize`'s no-expectation branch — a real revert always has a hash recorded, and tightening the
+    /// comparison (the wrong field, say) would break every one of them with nothing here to catch it (Important 7
+    /// review fix).
+    @Test func `a hash that matches the recorded original is accepted`() async throws {
+        let dir = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let original = Data("imported".utf8)
+        try original.write(to: dir.appending(path: "ID.original.mscz"))
+        try Data("edited".utf8).write(to: dir.appending(path: "ID.mscz"))
+        let store = LiveScoreOriginalStore(scoresDirectory: dir, gateway: StubGateway())
+        var subject = item(localFileName: "ID.mscz", originalFileName: "ID.original.mscz")
+        subject.originalContentHash = hex(original)
+
+        let reverted = try await store.revertToOriginal(subject, restoringScoreInfo: false)
+
+        #expect(try Data(contentsOf: dir.appending(path: "ID.mscz")) == original)
+        #expect(FileManager.default.fileExists(atPath: dir.appending(path: "ID.original.mscz").path) == false)
+        #expect(reverted.contentHash == hex(original))
+    }
+
     @Test func `credits come back from the file when asked for`() async throws {
         let dir = makeDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }

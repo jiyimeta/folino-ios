@@ -11,7 +11,7 @@ extension EditorViewModel {
         autosaveTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             if Task.isCancelled { return }
-            await self?.performSave()
+            await self?.runSave()
         }
     }
 
@@ -20,18 +20,36 @@ extension EditorViewModel {
     public func flushPendingSave() async {
         autosaveTask?.cancel()
         autosaveTask = nil
-        await performSave()
+        await runSave()
+    }
+
+    /// Wraps `performSave()` in a tracked `Task`, from either trigger site, so `revertToOriginal()` can await
+    /// whatever save is already running before it does anything to the file itself (Critical 2 review fix):
+    /// cancelling `autosaveTask` does not reach a call already past `performSave()`'s entry guard.
+    private func runSave() async {
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await performSave()
+        }
+        inFlightSaveTask = task
+        await task.value
     }
 
     /// Single choke point for writing the score to disk and refreshing the `ScoreItem` row. A no-op when there is
-    /// nothing to save (`isDirty == false`) so a stray flush after a prior successful save costs nothing.
+    /// nothing to save (`isDirty == false`) or once a revert has started (`isReverting`) — so a stray flush after a
+    /// prior successful save, or one that lands mid-revert, costs nothing.
     private func performSave() async {
-        guard let score, isDirty else { return }
+        guard let score, isDirty, !isReverting else { return }
         let destination = Self.saveDestination(for: scoreItem, scoresDirectory: scoresDirectory)
         // BEFORE the write, and only here: this is the last moment the file still holds the bytes the score was
         // imported with. Editing metadata does not touch the file, so nothing earlier can have moved them. A capture
         // that fails returns the item unchanged rather than throwing, so a full disk costs the original, not the edit.
         let itemToSave = await (try? originalStore.captureOriginalIfNeeded(for: scoreItem)) ?? scoreItem
+        // `captureOriginalIfNeeded` is the method's one real suspension point (Infrastructure runs it detached), so
+        // a `revertToOriginal()` that started while this call was suspended there is invisible to the guard above.
+        // Re-check here, before the write that would race the store's own file swap: if a revert won that race, we
+        // must not now overwrite the original it just restored (Critical 2 review fix).
+        guard !isReverting else { return }
         do {
             try await gateway.saveScore(score, fileURL: destination.url, format: destination.format)
             let facts = try EditorFileFacts.hashAndSize(of: destination.url)
@@ -91,5 +109,34 @@ extension EditorViewModel {
         let stem = URL(fileURLWithPath: item.localFileName).deletingPathExtension().lastPathComponent
         let siblingURL = scoresDirectory.appending(path: "\(stem).mscz")
         return (siblingURL, .mscz, true)
+    }
+}
+
+// MARK: - External row refresh (Critical 1 review fix)
+
+extension EditorViewModel {
+    /// Stable identity of the row this session's saves and captures act on — safe to read from outside the module
+    /// without exposing the whole (frequently stale, `@ObservationIgnored`) row itself.
+    public var scoreItemID: ScoreItemID {
+        scoreItem.id
+    }
+
+    /// Re-seeds the row this session's next capture/save will act on with whatever the caller's own
+    /// `ScoreLibraryRepository` cache currently holds for this id. Call before `beginSession`.
+    ///
+    /// Needed because `scoreItem` is seeded once at `init` and this view model is reused for every edit session a
+    /// Reader screen opens — nothing else here ever touches it between sessions. A revert performed through the
+    /// score-info sheet shares the store but writes through the Reader's or the Library's OWN copy of the row,
+    /// never this one, so without a refresh this instance keeps believing an original is captured under a sidecar
+    /// name the store has already deleted. `OriginalCapture.plan` decides purely from that stale belief, so the
+    /// next edit's autosave would write straight over the just-restored file with no backup, and the row would
+    /// keep naming a sidecar that no longer exists. The same staleness also clobbers a plain title edit made from
+    /// the sheet, which is why this refreshes the whole row rather than only the original-tracking fields.
+    ///
+    /// Ignores an item for a different id — that is a caller bug, not a different score's row to adopt.
+    public func refreshRow(_ item: ScoreItem) {
+        guard item.id == scoreItem.id else { return }
+        scoreItem = item
+        hasCapturedOriginal = item.canRevertToOriginal
     }
 }

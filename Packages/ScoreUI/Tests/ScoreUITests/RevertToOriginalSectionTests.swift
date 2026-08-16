@@ -25,11 +25,15 @@ struct RevertToOriginalSectionTests {
         return item
     }
 
+    /// Exercises `RevertToOriginalSection.shouldShow(_:)` — the gate `EditScoreInfoSheet` actually calls — rather
+    /// than the Domain property it happens to be built from. `ScoreItem.canRevertToOriginal` is already covered by
+    /// `RevertPolicyTests`; asserting it again here (as this suite used to) would stay green even if
+    /// `EditScoreInfoSheet` stopped calling `shouldShow` at all (Important 6 review fix).
     @Test func `the section is hidden for a score that was never edited`() {
-        #expect(item(originalFileName: nil).canRevertToOriginal == false)
+        #expect(RevertToOriginalSection.shouldShow(item(originalFileName: nil)) == false)
     }
 
     @Test func `the section is shown once an original exists`() {
-        #expect(item(originalFileName: "ID.original.mscz").canRevertToOriginal)
+        #expect(RevertToOriginalSection.shouldShow(item(originalFileName: "ID.original.mscz")))
     }
 }

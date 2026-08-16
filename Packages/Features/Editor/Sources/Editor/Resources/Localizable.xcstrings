@@ -1055,6 +1055,40 @@
         }
       }
     },
+    "editor.revert.action.pdf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revert My Edits"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編集を元に戻す"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "편집 내용 되돌리기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复我的编辑"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還原我的編輯"
+          }
+        }
+      }
+    },
     "editor.revert.confirm.action": {
       "localizations": {
         "en": {
@@ -1255,6 +1289,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "要還原至原始版本嗎？"
+          }
+        }
+      }
+    },
+    "editor.revert.confirm.title.pdf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revert My Edits?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編集を元に戻しますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "편집 내용을 되돌릴까요?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要恢复我的编辑吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要還原我的編輯嗎？"
           }
         }
       }

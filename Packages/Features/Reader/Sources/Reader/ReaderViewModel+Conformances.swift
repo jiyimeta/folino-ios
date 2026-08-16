@@ -43,6 +43,16 @@ extension ReaderViewModel: ScoreInfoEditing {
             restoringScoreInfo: restoringScoreInfo,
         ) else { return }
         try? await repository.saveScoreItem(reverted)
+        // Stop playback before the file underneath the engine changes — mirrors `advance(to:)` and
+        // `adoptEditedScore`, and the Editor's own revert path (which does this explicitly, citing this repo's
+        // history of render-thread crashes from tearing down or swapping a live engine). This entry point is
+        // reached from the score-info sheet, opened from either the Reader or the Library, so it had no sibling to
+        // copy this from directly (Important 3 review fix).
+        await playbackSession.releaseEngine()
+        // Unlike `saveMetadata` above, this assigns unconditionally even though the row save just above can throw
+        // and is swallowed. By this point the FILE on disk genuinely is the original — the store's write already
+        // happened — so the UI must show it regardless of whether the row write landed; a stale row here is the
+        // same benign, self-correcting mismatch the design doc's "Atomicity" section already accepts elsewhere.
         scoreItem = reverted
         await load()
     }
