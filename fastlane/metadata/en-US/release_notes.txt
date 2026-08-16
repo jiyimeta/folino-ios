@@ -1,4 +1,1 @@
-- Improved behavior while another app is playing audio
-- Changed playback to pause when headphones are unplugged
-- Fixed the display of key signatures and chord symbols
-- Fixed the count-in occasionally not sounding
+- Fixed playback issues
