@@ -13,7 +13,9 @@ extension EditorViewModel {
     /// separate, distinct original sitting in the same sheet (design spec, "Two originals must never be called the
     /// same thing"; Important 5 review fix). Read alongside `canRevertToOriginal` in the same body pass that
     /// recomputes it, so the `@ObservationIgnored` read below is never stale when it matters.
-    public var revertsToConversionOutput: Bool {
+    ///
+    /// Internal, not `public`: only `EditorChromeView+Revert.swift`, in this same module, reads it (re-review fix).
+    var revertsToConversionOutput: Bool {
         scoreItem.originalProvenance == .conversionOutput
     }
 
@@ -68,7 +70,7 @@ extension EditorViewModel {
         do {
             reverted = try await originalStore.revertToOriginal(scoreItem, restoringScoreInfo: false)
         } catch {
-            revertError = String(localized: "editor.revert.failed", bundle: .module)
+            revertError = String(localized: "editor.revert.failed.message", bundle: .module)
             // The session stays open and live edits still need protecting, so the guard set above must not
             // outlive this failed attempt.
             isReverting = false
@@ -87,7 +89,7 @@ extension EditorViewModel {
         do {
             try await repository.saveScoreItem(reverted)
         } catch {
-            revertError = String(localized: "editor.revert.failed", bundle: .module)
+            revertError = String(localized: "editor.revert.failed.message", bundle: .module)
         }
         // Drop the editor last: `canUndo` reads through it, so the toolbar goes inert only once the score on disk is
         // actually the original.

@@ -170,11 +170,14 @@ struct EditorViewModelRevertTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let gateway = FakeScoreFileGateway()
         let store = FakeScoreOriginalStore()
-        let vm = makeViewModel(item: capturedItem(), originalStore: store, gateway: gateway, directory: dir)
+        // Must be the SAME id as the row the score-info sheet reverted, or `refreshRow` rejects it at the id guard
+        // and the rest of this test would silently exercise the stale, un-refreshed item instead.
+        let item = capturedItem()
+        let vm = makeViewModel(item: item, originalStore: store, gateway: gateway, directory: dir)
 
         // Simulate the score-info sheet reverting this same row through ITS OWN copy: the Editor's own `scoreItem`
         // never sees it unless something refreshes it.
-        var revertedElsewhere = capturedItem()
+        var revertedElsewhere = item
         revertedElsewhere.originalFileName = nil
         revertedElsewhere.originalContentHash = nil
         revertedElsewhere.originalProvenance = nil
@@ -184,6 +187,11 @@ struct EditorViewModelRevertTests {
         vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
         await vm.flushPendingSave()
 
+        // The discriminating assertion: `captureOriginalIfNeeded` must have been called with the REFRESHED item —
+        // `originalFileName == nil` — not the stale one `vm` was constructed with. This is the exact field
+        // `OriginalCapture.plan` reads to decide "already captured"; without a working refresh this stays non-nil
+        // and the other three expectations below hold identically regardless of whether `refreshRow` did anything.
+        #expect(store.captureCalls.first?.originalFileName == nil)
         #expect(store.captureCalls.count == 1)
         #expect(gateway.savedCalls.count == 1)
         #expect(vm.canRevertToOriginal)

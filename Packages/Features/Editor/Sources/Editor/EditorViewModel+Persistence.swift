@@ -26,8 +26,16 @@ extension EditorViewModel {
     /// Wraps `performSave()` in a tracked `Task`, from either trigger site, so `revertToOriginal()` can await
     /// whatever save is already running before it does anything to the file itself (Critical 2 review fix):
     /// cancelling `autosaveTask` does not reach a call already past `performSave()`'s entry guard.
+    ///
+    /// Chained onto the PREVIOUS `inFlightSaveTask`, not just overwriting it: without the chain, a `runSave()`
+    /// starting while an earlier one is still suspended in `captureOriginalIfNeeded` would drop that earlier
+    /// handle, and `revertToOriginal()` — which only ever reads the latest one — would join just the newer call.
+    /// Chaining keeps `inFlightSaveTask` at any moment a handle whose completion implies every save queued before
+    /// it has also finished (Minor review fix).
     private func runSave() async {
+        let previous = inFlightSaveTask
         let task = Task { [weak self] in
+            await previous?.value
             guard let self else { return }
             await performSave()
         }
