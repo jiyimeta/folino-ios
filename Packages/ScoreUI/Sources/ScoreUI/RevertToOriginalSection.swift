@@ -1,6 +1,12 @@
 import Domain
 import SwiftUI
 
+// PARITY(android): Revert to original — Android needs the same two entry points and confirmations, plus the three
+//   `original_*` columns in its Room schema and the v18 pre-stamp rule. Every decision is already a Domain pure
+//   function (OriginalCapture, RevertPolicy, ScoreItem+Original) and the seam is ScoreOriginalStore, so Android
+//   wires UI, persistence, and a Kotlin-side implementation of that protocol; the capture call goes at its own save
+//   choke point when note editing lands there (SP4).
+
 /// The score-info sheet's way back to the original. Shown only once an original exists — a score nobody has edited
 /// has nothing to revert, and an inert row would just raise the question.
 ///

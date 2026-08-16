@@ -212,7 +212,14 @@ row into agreement with them.
 ### What changes
 
 - **`contentHash`, `sizeBytes`** — recomputed from the restored file (or taken
-  from `original_content_hash`, which must match; a mismatch aborts the revert).
+  from `original_content_hash`, which must match; a mismatch aborts the
+  revert). **This check runs before any file is created, overwritten, moved,
+  or deleted** — the sidecar (or the adopt-target, in the sibling case) is
+  hashed and compared against `original_content_hash` first, and only once it
+  agrees does the swap-in / sibling-delete happen. Checking after the
+  destructive step would mean a corrupted sidecar is discovered only once the
+  user's edit and the backup were both already gone — the exact failure this
+  feature exists to prevent, restated as its own implementation bug.
 - **`localFileName`, for a MusicXML / MXL / MIDI item** — restored to
   `<id>.musicxml` (etc.), and the sibling `<id>.mscz` is deleted. Restoring the
   actual source file is the only byte-exact answer; re-encoding it back through
@@ -319,9 +326,16 @@ Capture therefore resolves provenance as: keep a value the migration already
 wrote; otherwise `conversionOutput` when `pdfOriginState == .converted`, and
 `importTime` for everything else.
 
-The migration needs one directory scan to find orphans. It runs once, and the
-scores directory holds one file per item, so the cost is bounded by library
-size.
+**Orphan recovery happens at capture time, not in the migration.** Migrations
+run from `AppDatabase.init(databaseURL:)`, which receives only a `Database` —
+it has no scores directory to scan. So the second bullet above (`.mscz` with an
+orphan `.musicxml` / `.mxl` / `.mid` sibling) is not a migration-time scan at
+all: it is folded into the same lookup the lazy capture already does. When
+`performSave()`'s capture step runs, the caller offers any same-stem
+non-MuseScore source file it finds on disk, and adopting one is treated as
+authoritative evidence of `importTime`, exactly as if the migration had
+pre-stamped it. The migration itself only ever pre-stamps the fourth group
+(`legacyUnknown` on `.mscx` / `.mscz` imports); it performs no directory I/O.
 
 ## Duplicate detection
 
@@ -345,10 +359,17 @@ its note editing grows a save choke point (SP4):
 Infrastructure does the file I/O and the row write. The iOS UI carries a
 `// PARITY(android):` marker.
 
-Wiring note: revert belongs beside `reReadPDF` in the Reader, but one entry
-point is the editing toolbar, which lives in the Editor package. Feature →
-Feature is forbidden, so it is wired the way the Editor's other host callbacks
-already are — a closure seam the App composition root connects.
+Wiring note: revert does **not** live beside `reReadPDF` in the Reader. It
+lives in Infrastructure (`LiveScoreOriginalStore`) behind the Domain protocol
+`ScoreOriginalStore`, and both the Reader and the Library conform their own
+view models to the relevant sheet-facing protocol against that same store.
+The reason is the score-info sheet: it is presented from the Library as well
+as the Reader, so putting the operation on `ReaderViewModel` would either
+duplicate it or make the sheet behave differently depending on where it was
+opened. The editing toolbar's entry point (which *does* live only in the
+Reader-hosted Editor) reaches the same store through a closure seam the App
+composition root connects — the same pattern the Editor's other host
+callbacks already use, because Feature → Feature is forbidden.
 
 ## Entry points
 
@@ -362,6 +383,37 @@ adds the provenance caveat for `legacyUnknown`.
 — the same action, plus a choice of whether score info is restored from the
 original file too. For a PDF-origin item this sits beside the existing "read the
 PDF again", each with wording that says which of the two originals it means.
+Because this sheet is presented from wherever `ScoreInfoEditing` is wired —
+the Reader and the Library both — the entry point appears in both places
+score info can be opened, including from the Library's row menu. The Library
+*row menu's list view* still has no revert item of its own; that remains out
+of scope, per "What this covers, and what it does not" above. And because the
+Library does not load annotations, the sheet's confirmation cannot know
+whether ink actually exists to be affected — its warning is worded as a
+possibility ("handwriting anchored to the notation *may* move") rather than
+measured, unlike the editing toolbar's confirmation, which is presented from
+the Reader and therefore does know.
+
+## Known limitations
+
+**iPad split view.** The score-info sheet's entry point being reachable from
+both the Library and the Reader (see "Entry points") creates one case this
+design does not close: on iPad, the Library and the detail Reader can be
+showing the same score at once in split view. Reverting from the Library's
+score-info sheet writes the file and the row correctly, but the Reader
+instance already has that score loaded in memory — its copy may still include
+the edits the revert just discarded. If the user then starts editing from
+that stale Reader, the Editor's own capture would take the *restored*
+original as its new baseline and then immediately overwrite it on save with
+the stale in-memory score, quietly re-creating the edits the user just
+reverted. The Reader picks up the restored file correctly the next time it is
+opened fresh; the hazard is confined to a Reader instance that was already
+open across the revert.
+
+Closing this properly needs a change-notification path from the repository to
+an open Reader instance, which does not exist today and is a larger change
+than this feature. It is recorded here as known, deliberately deferred
+behavior rather than a bug to fix as part of this design.
 
 ## Testing
 
