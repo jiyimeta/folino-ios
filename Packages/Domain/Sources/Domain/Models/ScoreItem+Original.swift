@@ -37,3 +37,66 @@ extension ScoreItem {
         return copy
     }
 }
+
+/// What a restored original turned out to be on disk, plus a fresh parse of it.
+public struct RevertedOriginalFacts: Hashable, Sendable {
+    public let localFileName: String
+    public let contentHash: String
+    public let sizeBytes: Int64
+    public let summary: ScoreFileSummary
+
+    public init(localFileName: String, contentHash: String, sizeBytes: Int64, summary: ScoreFileSummary) {
+        self.localFileName = localFileName
+        self.contentHash = contentHash
+        self.sizeBytes = sizeBytes
+        self.summary = summary
+    }
+}
+
+extension ScoreItem {
+    /// The row once the original's bytes are back.
+    ///
+    /// Content-derived fields are *replaced*, not merged — unlike `adoptingPDFConversion`, which keeps a field the
+    /// conversion couldn't supply. Here the file is authoritative by definition: leaving `lengthBeats` describing the
+    /// edited version would simply be wrong. Credits are the user's, so they move only when asked, and even then a
+    /// file with no title cannot blank a title the item is required to have. Tags, favourite, the trash stamp, the
+    /// date added and every PDF-origin field are untouched; reverting to a conversion's output restores
+    /// `contentHash == pdfDerivedContentHash` on its own.
+    public func adoptingRevertedOriginal(
+        _ facts: RevertedOriginalFacts,
+        restoringScoreInfo: Bool,
+    ) -> ScoreItem {
+        let credits = restoringScoreInfo ? facts.summary : nil
+        return ScoreItem(
+            id: id,
+            title: credits?.title ?? title,
+            subtitle: restoringScoreInfo ? credits?.subtitle : subtitle,
+            composer: restoringScoreInfo ? credits?.composer : composer,
+            arranger: restoringScoreInfo ? credits?.arranger : arranger,
+            lyricist: restoringScoreInfo ? credits?.lyricist : lyricist,
+            copyright: restoringScoreInfo ? credits?.copyright : copyright,
+            instrumentationSummary: facts.summary.instrumentationSummary,
+            localFileName: facts.localFileName,
+            contentHash: facts.contentHash,
+            sizeBytes: facts.sizeBytes,
+            lengthBeats: facts.summary.lengthBeats,
+            defaultTempoBpm: facts.summary.defaultTempoBpm,
+            primaryKey: facts.summary.primaryKey,
+            addedAt: addedAt,
+            lastOpenedAt: lastOpenedAt,
+            tagIDs: tagIDs,
+            isFavorite: isFavorite,
+            deletedAt: deletedAt,
+            // No `?? museScoreMajorVersion` fallback, unlike `rebuilt`: reverting a MusicXML import back to its own
+            // file must land on `nil`, not keep the version of the `.mscz` the editor wrote over it.
+            museScoreMajorVersion: facts.summary.museScoreMajorVersion,
+            sourcePDFFileName: sourcePDFFileName,
+            sourcePDFContentHash: sourcePDFContentHash,
+            pdfDerivedContentHash: pdfDerivedContentHash,
+            pdfConversionFailed: pdfConversionFailed,
+            originalFileName: nil,
+            originalContentHash: nil,
+            originalProvenance: nil,
+        )
+    }
+}
