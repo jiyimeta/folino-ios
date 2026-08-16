@@ -13,42 +13,49 @@ public struct LiveScoreOriginalStore: ScoreOriginalStore {
         self.gateway = gateway
     }
 
-    // Conforms to an async protocol requirement, but every operation here — FileManager, FileHandle — is
-    // synchronous, so the body never awaits.
-    // swiftlint:disable:next async_without_await
+    /// Runs entirely off the caller's actor: `copyItem`/`moveItem`/the whole-file SHA-256 in `hashAndSize` are
+    /// synchronous and can be non-trivial (a large score's bytes), and the first caller (`EditorViewModel.
+    /// performSave()`) is `@MainActor`. Same shape as `LiveScoreFileGateway.loadScore` / `saveScore`.
     public func captureOriginalIfNeeded(for item: ScoreItem) async throws -> ScoreItem {
-        let plan = OriginalCapture.plan(for: item, adoptableSourceFileName: adoptableSourceFileName(for: item))
-        switch plan {
-        case .none:
-            return item
-        case let .adopt(fileName, provenance):
-            guard let facts = try? Self.hashAndSize(of: scoresDirectory.appending(path: fileName)) else {
+        let scoresDirectory = scoresDirectory
+        return await Task.detached(priority: .userInitiated) {
+            let plan = OriginalCapture.plan(
+                for: item,
+                adoptableSourceFileName: Self.adoptableSourceFileName(for: item, in: scoresDirectory),
+            )
+            switch plan {
+            case .none:
                 return item
+            case let .adopt(fileName, provenance):
+                guard let facts = try? Self.hashAndSize(of: scoresDirectory.appending(path: fileName)) else {
+                    return item
+                }
+                return item.capturingOriginal(
+                    fileName: fileName,
+                    contentHash: facts.contentHash,
+                    provenance: provenance,
+                )
+            case let .copy(sidecarFileName, provenance):
+                let source = scoresDirectory.appending(path: item.localFileName)
+                let destination = scoresDirectory.appending(path: sidecarFileName)
+                // The sidecar's existence is the marker, so re-check it here rather than trusting the row: a
+                // capture whose row update was lost must find the file and adopt it, not copy the edited bytes
+                // over it.
+                if !FileManager.default.fileExists(atPath: destination.path) {
+                    guard (try? Self.copyAtomically(from: source, to: destination)) != nil else { return item }
+                }
+                guard let facts = try? Self.hashAndSize(of: destination) else { return item }
+                return item.capturingOriginal(
+                    fileName: sidecarFileName,
+                    contentHash: facts.contentHash,
+                    provenance: provenance,
+                )
             }
-            return item.capturingOriginal(
-                fileName: fileName,
-                contentHash: facts.contentHash,
-                provenance: provenance,
-            )
-        case let .copy(sidecarFileName, provenance):
-            let source = scoresDirectory.appending(path: item.localFileName)
-            let destination = scoresDirectory.appending(path: sidecarFileName)
-            // The sidecar's existence is the marker, so re-check it here rather than trusting the row: a capture
-            // whose row update was lost must find the file and adopt it, not copy the edited bytes over it.
-            if !FileManager.default.fileExists(atPath: destination.path) {
-                guard (try? Self.copyAtomically(from: source, to: destination)) != nil else { return item }
-            }
-            guard let facts = try? Self.hashAndSize(of: destination) else { return item }
-            return item.capturingOriginal(
-                fileName: sidecarFileName,
-                contentHash: facts.contentHash,
-                provenance: provenance,
-            )
-        }
+        }.value
     }
 
     /// The first candidate that is actually on disk — an untouched import file left beside an edited `.mscz`.
-    private func adoptableSourceFileName(for item: ScoreItem) -> String? {
+    private static func adoptableSourceFileName(for item: ScoreItem, in scoresDirectory: URL) -> String? {
         item.adoptableSourceFileNames.first {
             FileManager.default.fileExists(atPath: scoresDirectory.appending(path: $0).path)
         }
