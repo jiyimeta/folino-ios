@@ -2,8 +2,19 @@ import Domain
 import Foundation
 import Observation
 
+/// Shared ordered event log two different fakes can append to, so a test can prove ONE fake's call happened before
+/// ANOTHER's — something neither fake's own call-recording array can show on its own. `nil` (the default) for every
+/// test that doesn't care about cross-fake ordering.
+final class FakeEventLog: @unchecked Sendable {
+    private(set) var events: [String] = []
+    func record(_ event: String) {
+        events.append(event)
+    }
+}
+
 final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     var savedCalls: [(Score, URL, ScoreFormat)] = []
+    var eventLog: FakeEventLog?
 
     func detectFormat(fileName: String) -> ScoreFormat? {
         ScoreFormat.detect(filename: fileName)
@@ -18,6 +29,7 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     }
 
     func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
+        eventLog?.record("save")
         savedCalls.append((score, fileURL, format))
         // Write real bytes so callers that hash the saved file (Task 10's EditorFileFacts) see deterministic content.
         try Data("saved".utf8).write(to: fileURL)
@@ -76,8 +88,10 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
 final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
     var captureCalls: [ScoreItem] = []
     var revertCalls: [(ScoreItem, Bool)] = []
+    var eventLog: FakeEventLog?
 
     func captureOriginalIfNeeded(for item: ScoreItem) throws -> ScoreItem {
+        eventLog?.record("capture")
         captureCalls.append(item)
         guard item.originalFileName == nil else { return item }
         return item.capturingOriginal(

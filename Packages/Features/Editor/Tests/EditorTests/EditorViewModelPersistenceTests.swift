@@ -209,14 +209,21 @@ struct EditorViewModelPersistenceTests {
         #expect(saved.originalFileName == "score.original.mscz")
         #expect(saved.originalContentHash == "captured-hash")
         #expect(vm.scoreItem.originalFileName == "score.original.mscz")
+        #expect(vm.hasCapturedOriginal == true)
     }
 
     @Test func `the capture is asked for before the gateway writes`() async {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
+        // A shared log both fakes append to: the only way to prove ONE fake's call happened before the OTHER's,
+        // rather than merely happening before `scoreItem` was reassigned — which passes identically whether the
+        // capture ran before or after the write, and would not catch a regression that swapped the two calls.
+        let eventLog = FakeEventLog()
         let gateway = FakeScoreFileGateway()
+        gateway.eventLog = eventLog
         let repository = FakeScoreLibraryRepository()
         let originalStore = FakeScoreOriginalStore()
+        originalStore.eventLog = eventLog
         let vm = EditorViewModel(
             scoreItem: EditorFixtures.sampleItem(),
             scoresDirectory: dir,
@@ -230,9 +237,7 @@ struct EditorViewModelPersistenceTests {
 
         await vm.flushPendingSave()
 
-        // The store saw an item that had not been written yet; the gateway ran afterwards.
-        #expect(originalStore.captureCalls.first?.originalFileName == nil)
-        #expect(gateway.savedCalls.count == 1)
+        #expect(eventLog.events == ["capture", "save"])
     }
 
     @Test func `a clean flush never asks for a capture`() async {
