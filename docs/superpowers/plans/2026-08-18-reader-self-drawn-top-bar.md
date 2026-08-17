@@ -15,7 +15,9 @@
 - Deployment target is **iOS 18.0**. Anything newer needs `if #available`.
 - Strict layered SPM modules. Features never import Infrastructure, another Feature, or `swift-sheet-music`. The Reader and the Editor stay mutually unaware; the App composition root connects them by closure. See `docs/engineering/module-architecture.md`.
 - Dependency injection is constructor-only.
-- The user-facing brand name is lowercase `folino`. Localization keys follow `module.feature.thing`. The string catalogs carry exactly five locales — `en`, `ja`, `ko`, `zh-Hans`, `zh-Hant`. **There is no `es`.**
+- The user-facing brand name is lowercase `folino`, and internal feature names (`Reader`, `Editor`, …) never appear in user-facing copy. Localization keys follow `module.feature.thing`, and `String(localized:)` in a Feature package **needs `bundle: .module`**. The string catalogs carry exactly five locales — `en`, `ja`, `ko`, `zh-Hans`, `zh-Hant`. **There is no `es`.**
+- Shared action words (Cancel / OK / Done / More / …) are not per-feature keys: they live in `UtilityUI`'s catalog as `common.action.*` and are read through `L10n.Common.*`. Reach for those before adding a new key.
+- SwiftUI views split by whether they hold a view model: `Screens/` when they do, `Views/` when they take Domain values and closures only, and a `Views/` file always ships a `#Preview`. Use `git mv` so history follows a moved file.
 - New tests use Swift Testing (`@Suite`, `@Test`, `#expect`) — never XCTest.
 - **`swift test` does not work in this repo.** Tests run only via `xcodebuild test -scheme <Name> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -parallel-testing-enabled NO`, from the package directory. Multi-product packages take a `-Package` suffix (`Infrastructure-Package`). The app builds from the repo root with `-scheme Folino`, and **`-scheme FolinoScreenshot` must also build.**
 - **Always pass `-parallel-testing-enabled NO`** — this environment's test runner crashes under parallel testing and reports random unrelated failures. Re-run serially before believing any failure.
@@ -50,9 +52,10 @@ Two things are broken *between* tasks, by design. Neither is a regression to cha
 
 | File | Responsibility |
 | --- | --- |
-| `Screens/ReaderTopBarLayout.swift` | Create. Pure height arithmetic — the contract, and the only thing tested about it. |
-| `Screens/ReaderTopBar.swift` | Create. The strip: hosts either the Reader's controls or the injected editing row, applies the height contract and the glass. |
-| `Screens/ReaderTopBarControls.swift` | Create. The Reader's own controls and the `ViewThatFits` ladder. |
+| `Screens/ReaderTopBarLayout.swift` | Create. Pure height arithmetic — the contract, and the only thing tested about it. Not a view, so the `Screens/` ⁄ `Views/` split does not apply; it lives beside the bar that uses it. |
+| `Views/ReaderTopBar.swift` | Create. The control tier's container. A pure view — takes a `@ViewBuilder` slot and no view model — so `Views/`, with a `#Preview`. |
+| `Views/ReaderCutoutTier.swift` | Create. The tier drawn inside the reserved band. Also pure, also `Views/`, also with a `#Preview`. |
+| `Screens/ReaderTopBarControls.swift` | Create. The Reader's own controls and the `ViewThatFits` ladder. Holds `ReaderViewModel`, so `Screens/` — the same call the repo's convention records for the inspector, the containers and the old toolbar. |
 | `Screens/ReaderToolbar.swift` | **Delete.** |
 | `Screens/ReaderToolbarCollapse.swift` | **Delete.** |
 | `Screens/ReaderRootScreen.swift` | Modify. Attach the strip, hide the nav bar, hide the status bar while editing, take the two new closures. |
