@@ -197,6 +197,14 @@ private struct ReadyShell: View {
         )
     }
 
+    /// Pops the compact stack's `NavigationPath` one level — the Reader's `onBack`. Guarded: `removeLast()` traps on
+    /// an empty path, and a double-tap on the chevron during the pop transition, before the button itself is torn
+    /// down, can reach this twice.
+    private func popCompactPath() {
+        guard !compactPath.isEmpty else { return }
+        compactPath.removeLast()
+    }
+
     /// Snap the user back to library root before an incoming-URL import starts. Called from both the warm-reentry
     /// handler and the cold-launch task so the UI matches the "import in flight" state immediately, rather than waiting
     /// for the import to finish.
@@ -237,14 +245,10 @@ private struct ReadyShell: View {
                     path: $compactPath,
                     onOpenScore: { compactPath.append($0) },
                     readerDestination: { item in
-                        makeReader(item: item, playlistID: nil, onBack: { compactPath.removeLast() })
+                        makeReader(item: item, playlistID: nil, onBack: popCompactPath)
                     },
                     playlistReaderDestination: { route in
-                        makeReader(
-                            item: route.scoreItem,
-                            playlistID: route.playlistID,
-                            onBack: { compactPath.removeLast() },
-                        )
+                        makeReader(item: route.scoreItem, playlistID: route.playlistID, onBack: popCompactPath)
                     },
                     onOpenInPlaylist: { item, playlistID in
                         compactPath.append(PlaylistReaderRoute(scoreItem: item, playlistID: playlistID))

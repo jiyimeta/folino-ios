@@ -38,10 +38,18 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
         /// at the root). Put back on teardown — leaving ours installed after this screen is gone would strip those
         /// guards from every other screen in the same stack.
         private weak var previousDelegate: UIGestureRecognizerDelegate?
+        /// The deferred `install` work, kept so a render that lands right before a pop can't re-poison the delegate
+        /// after `restore()` has already run — see `install(from:)`.
+        private var pendingInstall: DispatchWorkItem?
 
         func install(from controller: UIViewController) {
-            // Deferred: the controller has no parent chain on the first layout pass.
-            DispatchQueue.main.async { [weak self, weak controller] in
+            pendingInstall?.cancel()
+            // Deferred: the controller has no parent chain on the first layout pass. `updateUIViewController`
+            // re-triggers this on every re-render, so a render just before a pop can leave a block queued that would
+            // otherwise run AFTER `restore()` but before the popped controller detaches from its navigation
+            // controller — `controller?.navigationController` still resolves in that window, which would silently
+            // undo the restore. `restore()` cancels this work item, so a stale block is a no-op instead.
+            let workItem = DispatchWorkItem { [weak self, weak controller] in
                 guard let self, let navigation = controller?.navigationController else { return }
                 navigationController = navigation
                 guard let recognizer = navigation.interactivePopGestureRecognizer else { return }
@@ -49,9 +57,13 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
                 recognizer.delegate = self
                 recognizer.isEnabled = true
             }
+            pendingInstall = workItem
+            DispatchQueue.main.async(execute: workItem)
         }
 
         func restore() {
+            pendingInstall?.cancel()
+            pendingInstall = nil
             guard let recognizer = navigationController?.interactivePopGestureRecognizer,
                   recognizer.delegate === self
             else { return }
@@ -60,14 +72,6 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
 
         public func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
             (navigationController?.viewControllers.count ?? 0) > 1
-        }
-
-        /// Lets the swipe coexist with the score's own pan/zoom gestures rather than cancelling them outright.
-        public func gestureRecognizer(
-            _: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer,
-        ) -> Bool {
-            false
         }
     }
 }
