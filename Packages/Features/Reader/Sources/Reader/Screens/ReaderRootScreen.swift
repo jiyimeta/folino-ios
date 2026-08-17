@@ -1,6 +1,8 @@
 // swiftlint:disable file_length
+// swiftlint:disable type_body_length
 // ReaderRootScreen composes the score/PDF content, the self-drawn top strip, transport control, and the note-editing
-// chrome/lifecycle seam (`ReaderEditingHost`, spec §9); that breadth keeps it just over the file_length budget.
+// chrome/lifecycle seam (`ReaderEditingHost`, spec §9); that breadth keeps it just over the file_length and
+// type_body_length budgets.
 
 import Domain
 import ScoreUI
@@ -26,6 +28,10 @@ public struct ReaderRootScreen: View {
     /// Builds the Editor feature's chrome (score-info bar, keyboard, 完了 button) from the current selection. Supplied
     /// by the App alongside `editingHost`; `nil` hides the chrome overlay (mirrors `editingHost == nil`).
     private let editingChrome: ((ReaderEditingChromeContext) -> AnyView)?
+    /// Pops back to the library. Supplied only by the compact stack; `nil` elsewhere, which hides the chevron.
+    private let onBack: (@MainActor () -> Void)?
+    /// Reveals or collapses the library sidebar. Supplied only in the regular split view; `nil` elsewhere.
+    private let onToggleSidebar: (@MainActor () -> Void)?
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
@@ -164,6 +170,8 @@ public struct ReaderRootScreen: View {
         playlistID: PlaylistID? = nil,
         analytics: any Analytics = NoopAnalytics(),
         openedFrom: AnalyticsSource = .libraryAll,
+        onBack: (@MainActor () -> Void)? = nil,
+        onToggleSidebar: (@MainActor () -> Void)? = nil,
         scoreContentOverride: AnyView? = nil,
         editingHost: ReaderEditingHost? = nil,
         editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
@@ -197,6 +205,8 @@ public struct ReaderRootScreen: View {
         self.scoreContentOverride = scoreContentOverride
         self.editingHost = editingHost
         self.editingChrome = editingChrome
+        self.onBack = onBack
+        self.onToggleSidebar = onToggleSidebar
     }
 
     public var body: some View {
@@ -247,6 +257,10 @@ public struct ReaderRootScreen: View {
         // unconditionally — capture mode and editing are handled by what `topBarContent` renders, not by toggling
         // the system bar.
         .toolbarVisibility(.hidden, for: .navigationBar)
+        // Hiding the navigation bar above also strips its back button, and with it UIKit's own
+        // `interactivePopGestureRecognizer` — the compact stack drew a chevron to replace the button, but the
+        // edge-swipe gesture doesn't come back on its own. This restores it.
+        .restoresInteractivePopGesture()
         // The Reader is a light-appearance screen whatever the system is set to, because its content is: the paper is
         // `Color.white` (both the engraved score and a PDF's pages), and ink is resolved against a light trait before
         // it is even stored (`InkStrokePencilKitBridge.rgba(from:)`). Everything floating over that paper has to match
@@ -462,6 +476,8 @@ public struct ReaderRootScreen: View {
                         anchorsInspectorPopovers: anchorsInspectorPopovers,
                         onConfirmReReadPDF: { isReReadConfirmPresented = true },
                         onStartEditing: editingHost == nil ? nil : { startEditing() },
+                        onBack: onBack,
+                        onToggleSidebar: onToggleSidebar,
                     )
                 }
             }
@@ -677,6 +693,8 @@ public struct ReaderRootScreen: View {
         return (host.editingChromeTopInset, host.editingChromeBottomInset)
     }
 }
+
+// swiftlint:enable type_body_length
 
 #if DEBUG
 /// Documents the shape of a real Score fixture. Not used by the previews below — building a `ReaderRootScreen` preview

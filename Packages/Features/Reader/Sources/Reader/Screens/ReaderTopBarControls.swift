@@ -3,8 +3,8 @@ import ScoreUI
 import SwiftUI
 import UtilityUI
 
-/// The Reader's own controls, drawn into `ReaderTopBar`'s control tier: the PDF badge, score actions, note editing,
-/// annotation, and the paired inspectors.
+/// The Reader's own controls, drawn into `ReaderTopBar`'s control tier: the leading back/sidebar affordance and PDF
+/// badge (`ReaderTopBarControls+Leading.swift`), score actions, note editing, annotation, and the paired inspectors.
 ///
 /// This used to be a `ToolbarContent` (`ReaderToolbar`, deleted alongside `ReaderToolbar+PDF` and
 /// `ReaderToolbarCollapse`) folded by arithmetic because a `ToolbarContent` cannot measure itself. Now that the strip
@@ -28,6 +28,15 @@ struct ReaderTopBarControls: View {
     /// Invoked when the user taps the "edit notes" button. `nil` hides the button entirely — the default, so previews
     /// and PDF readers (which never wire an `editingHost`) are unaffected.
     var onStartEditing: (() -> Void)?
+
+    /// Pops back to the library. Mirrors `ReaderRootScreen.onBack` — `nil` outside the compact stack, which hides the
+    /// chevron. See `leadingAffordance` (`ReaderTopBarControls+Leading.swift`) for why it loses to `onToggleSidebar`
+    /// rather than the two ever showing together.
+    var onBack: (@MainActor () -> Void)?
+
+    /// Reveals or collapses the library sidebar. Mirrors `ReaderRootScreen.onToggleSidebar` — `nil` outside the
+    /// regular split view.
+    var onToggleSidebar: (@MainActor () -> Void)?
 
     /// How much of the trailing row has to fold into a single overflow menu, in the order the row gives things up.
     /// Ordered least to most aggressive, so `collapse >= .noteEditing` reads "note editing has folded". The order IS
@@ -66,6 +75,7 @@ struct ReaderTopBarControls: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            leadingAffordance
             pdfBadgeButton
             // `minLength: 0` is what lets `ViewThatFits` fold at all: a greedy spacer would make every candidate
             // report that it fits, and the fold would silently never trigger. Carried across from the old overlay.
@@ -103,66 +113,6 @@ struct ReaderTopBarControls: View {
                 .interactiveGlassCompat()
         case nil:
             EmptyView()
-        }
-    }
-
-    // MARK: - PDF badge
-
-    /// The "PDF" badge, shown only while the original pages are on screen — that is the one place it says something
-    /// the user can't already see. It stays a badge, not a button: no border, no tint, nothing that reads as a
-    /// control. It is tappable all the same, and opens the two actions that belong to a PDF-derived item.
-    @ViewBuilder
-    private var pdfBadgeButton: some View {
-        if viewModel.displaySource == .originalPDF, ScorePresentation.showsPDFBadge(for: viewModel.scoreItem) {
-            Menu {
-                showScoreMenuEntry
-                reReadMenuEntry
-            } label: {
-                PDFBadge()
-            }
-            .buttonStyle(.plain)
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-        }
-    }
-
-    /// Switches back to the notation folino read out of the PDF. One-directional on purpose: this lives in a menu
-    /// that only exists while the original pages are showing, so there is no state in which it would mean the
-    /// reverse.
-    @ViewBuilder
-    private var showScoreMenuEntry: some View {
-        if viewModel.canShowOriginalPDF {
-            Button {
-                viewModel.setDisplaySource(.score)
-            } label: {
-                Label {
-                    Text("reader.displaySource.showScore", bundle: .module)
-                } icon: {
-                    Image(systemName: "music.note.list")
-                }
-            }
-        }
-    }
-
-    /// Re-reads the original PDF, replacing the notation with a fresh parse. It is rarely wanted, and on an edited
-    /// score it throws work away — hence the destructive role and the confirmation, taken exactly when there is
-    /// something to lose.
-    @ViewBuilder
-    private var reReadMenuEntry: some View {
-        if viewModel.canReReadPDF {
-            Button(role: viewModel.reReadNeedsConfirmation ? .destructive : nil) {
-                if viewModel.reReadNeedsConfirmation {
-                    onConfirmReReadPDF()
-                } else {
-                    Task { await viewModel.reReadPDF() }
-                }
-            } label: {
-                Label {
-                    Text("reader.pdf.reread.action", bundle: .module)
-                } icon: {
-                    Image(systemName: "arrow.clockwise")
-                }
-            }
         }
     }
 
@@ -349,9 +299,9 @@ struct ReaderTopBarControls: View {
 
     // MARK: - Shared button shape
 
-    /// The standalone icon-only button shared by every control in the strip. Task 3 calls this by name when it adds
-    /// the leading affordance.
-    private func topBarButton(systemImage: String, label: Text, action: @escaping () -> Void) -> some View {
+    /// The standalone icon-only button shared by every control in the strip, including the leading affordance drawn
+    /// in `ReaderTopBarControls+Leading.swift` — not `private` for that reason.
+    func topBarButton(systemImage: String, label: Text, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             topBarIcon(systemImage)
         }

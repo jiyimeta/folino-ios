@@ -237,10 +237,14 @@ private struct ReadyShell: View {
                     path: $compactPath,
                     onOpenScore: { compactPath.append($0) },
                     readerDestination: { item in
-                        makeReader(item: item, playlistID: nil)
+                        makeReader(item: item, playlistID: nil, onBack: { compactPath.removeLast() })
                     },
                     playlistReaderDestination: { route in
-                        makeReader(item: route.scoreItem, playlistID: route.playlistID)
+                        makeReader(
+                            item: route.scoreItem,
+                            playlistID: route.playlistID,
+                            onBack: { compactPath.removeLast() },
+                        )
                     },
                     onOpenInPlaylist: { item, playlistID in
                         compactPath.append(PlaylistReaderRoute(scoreItem: item, playlistID: playlistID))
@@ -420,6 +424,8 @@ private struct ReadyShell: View {
     private func makeReader(
         item: ScoreItem,
         playlistID: PlaylistID?,
+        onBack: (@MainActor () -> Void)? = nil,
+        onToggleSidebar: (@MainActor () -> Void)? = nil,
     ) -> some View {
         EditableReaderScreen(
             item: item,
@@ -449,6 +455,8 @@ private struct ReadyShell: View {
                 // Finer-grained sources (favorites/tag/recents/search) would require threading the source through
                 // the navigation values.
                 openedFrom: playlistID != nil ? .playlist : .libraryAll,
+                onBack: onBack,
+                onToggleSidebar: onToggleSidebar,
                 editingHost: host,
                 editingChrome: chrome,
             )
@@ -458,14 +466,21 @@ private struct ReadyShell: View {
     @ViewBuilder
     private var detail: some View {
         if let item = detailScoreItem {
-            // No leading affordance is passed down: the split view puts its own sidebar toggle in this column's
-            // navigation bar, and the Reader used to draw a second, identical one beside it — a leftover from when
-            // its chrome was a floating overlay over a hidden navigation bar and the system's toggle was invisible.
+            // The detail column's navigation bar IS the Reader's own, and that is now hidden (Task 2) — so there is
+            // no system sidebar toggle left in it. The Reader draws its own instead and flips `columnVisibility`
+            // directly; it shows whenever this closure is supplied, in both directions, so it can also collapse an
+            // already-open sidebar.
             //
             // `.id` forces a fresh view identity per score so ReaderRootScreen's @State (viewModel seeded from
             // scoreItem in init) is rebuilt when the user opens a different score from the iPad sidebar.
-            makeReader(item: item, playlistID: detailPlaylistID)
-                .id(item.id)
+            makeReader(
+                item: item,
+                playlistID: detailPlaylistID,
+                onToggleSidebar: {
+                    columnVisibility = columnVisibility == .detailOnly ? .doubleColumn : .detailOnly
+                },
+            )
+            .id(item.id)
         } else {
             emptyDetail
         }
