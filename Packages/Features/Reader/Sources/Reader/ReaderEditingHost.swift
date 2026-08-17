@@ -145,16 +145,14 @@ public final class ReaderEditingHost {
     public var editingChromeTopInset: CGFloat = 0
     public var editingChromeBottomInset: CGFloat = 0
 
-    /// Where the chrome's note-input (pad open/close) button sits among the navigation bar's LEADING items, or `nil`
-    /// when the chrome isn't up. Written by the App from the Editor's chrome, read by the Reader's coach-mark overlay
-    /// — which has to point at a control it neither draws nor can measure.
+    /// Where the chrome's note-input (pad open/close) button is on screen, in WINDOW coordinates, or `nil` when the
+    /// chrome isn't up. Written by the App from the Editor's chrome, read by the Reader's coach-mark overlay — which
+    /// has to point at a control it does not draw.
     ///
-    /// A position in a sequence rather than a frame, because a bar item cannot report a frame: measured on iOS 26,
-    /// everything hosted by the navigation bar reports its own bounds centred on the origin. The Reader matches this
-    /// ordinal against the bar's rendered items (`ReaderBarItemLocator`); the Editor is the only side that knows
-    /// where in its own leading sequence the button sits, so that is what crosses the seam. Counted from the leading
-    /// edge of what the CHROME contributes — the Reader hides its own back button for the session, so the two agree.
-    public var noteInputBarLeadingOrder: Int?
+    /// A frame rather than a position in a sequence: the chrome is rendered inside the Reader's own view tree now, so
+    /// both sides share a window coordinate space and the button can simply say where it is. It could not, while the
+    /// button was hosted by the navigation bar.
+    public var noteInputAnchorFrame: CGRect?
 
     /// Asks the editing chrome to reveal the note-input pad. Wired by the App to the Editor's view model; called when
     /// the user taps the note-input coach mark, so the bubble opens the pad it is pointing at rather than just naming

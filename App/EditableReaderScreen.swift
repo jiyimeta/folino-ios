@@ -54,9 +54,10 @@ struct EditableReaderScreen: View {
                     editingHost.editingChromeTopInset = top
                     editingHost.editingChromeBottomInset = bottom
                 },
-                onNoteInputBarOrderChange: { [editingHost] order in
-                    editingHost.noteInputBarLeadingOrder = order
-                },
+                // Stubbed: the Editor's chrome has no drawing surface yet (it lost the navigation bar it filled and
+                // gets its own strip in a later task), so it cannot report a frame for `noteInputAnchorFrame` — this
+                // callback still fires with a bar ordinal, which is no longer meaningful, and is ignored.
+                onNoteInputBarOrderChange: { _ in },
             ))
         }
         .onAppear { wireOnce() }

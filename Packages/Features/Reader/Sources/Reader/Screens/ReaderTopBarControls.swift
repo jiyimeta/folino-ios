@@ -194,15 +194,15 @@ struct ReaderTopBarControls: View {
     // MARK: - Editing / annotation
 
     /// The note-editing entry point, shown standalone until it folds into the score-actions overflow menu. The hint
-    /// anchor is declared only here, not on the overflow-menu copy: a folded button is not one of the strip's items
-    /// to count.
+    /// anchor is declared only here, not on the overflow-menu copy: a folded button isn't drawn, so it never reports
+    /// a frame for the hint to point at.
     private func noteEditingButton(action: @escaping () -> Void) -> some View {
         topBarButton(
             systemImage: "square.and.pencil",
             label: Text("reader.toolbar.edit.start", bundle: .module),
             action: action,
         )
-        .readerHintBarAnchor(.noteEditingButton)
+        .readerHintAnchor(.noteEditingButton)
     }
 
     private func noteEditingMenuRow(action: @escaping () -> Void) -> some View {
@@ -235,7 +235,7 @@ struct ReaderTopBarControls: View {
             ReaderHintCoordinator.shared.markUsed(.annotation)
             viewModel.toggleAnnotation()
         }
-        .readerHintBarAnchor(.annotationButton)
+        .readerHintAnchor(.annotationButton)
         .disabled(viewModel.playbackSession.isPlaying)
         .animation(.easeOut(duration: 0.2), value: viewModel.playbackSession.isPlaying)
     }
@@ -276,7 +276,7 @@ struct ReaderTopBarControls: View {
         ) {
             viewModel.isPlaybackInspectorPresented.toggle()
         }
-        .readerHintBarAnchor(.playbackInspectorButton)
+        .readerHintAnchor(.playbackInspectorButton)
         .inspectorPopover(
             isPresented: $viewModel.isPlaybackInspectorPresented,
             anchored: anchorsInspectorPopovers,
@@ -290,7 +290,7 @@ struct ReaderTopBarControls: View {
         ) {
             viewModel.isVisualInspectorPresented.toggle()
         }
-        .readerHintBarAnchor(.visualInspectorButton)
+        .readerHintAnchor(.visualInspectorButton)
         .inspectorPopover(
             isPresented: $viewModel.isVisualInspectorPresented,
             anchored: anchorsInspectorPopovers,

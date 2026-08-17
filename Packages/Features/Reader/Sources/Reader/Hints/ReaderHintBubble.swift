@@ -7,13 +7,11 @@ import UtilityUI
 // window-level `UITapGestureRecognizer` with `cancelsTouchesInView = false`). No × — the bubble times itself out.
 //
 // What differs from synclick: anchors arrive as rects through `ReaderHintCoordinator` rather than as SwiftUI
-// `Anchor<CGRect>` preferences. Every control hinted here is now in the Reader's own view tree (`ReaderTopBarControls`
-// draws the strip itself, no `ToolbarItem`s left), but `readerHintBarAnchor` and the ordinal-counting
-// `ReaderBarItemLocator` it feeds still assume a navigation bar to measure — a later task replaces that with frames
-// reported directly by each control, at which point bar-anchored hints will resolve again. Those rects are in WINDOW
-// coordinates (`onWindowFrameChange`), which is not a detail: SwiftUI's own `.global` is resolved against the hosting
-// view a measurement is taken in, so a bar button measured that way reports its position inside its own item-sized
-// host — a few points from the origin, which is precisely where every toolbar-anchored bubble used to land.
+// `Anchor<CGRect>` preferences. Every control hinted here is in the Reader's own view tree (`ReaderTopBarControls`
+// draws the strip itself, no `ToolbarItem`s left) and reports its own WINDOW frame directly (`onWindowFrameChange`),
+// which is not a detail: SwiftUI's own `.global` is resolved against the hosting view a measurement is taken in, so a
+// control planted in a navigation bar's `ToolbarItem` reports its position inside its own item-sized host — a few
+// points from the origin, no matter where the bar itself sits.
 
 // MARK: - Anchor plumbing
 
@@ -26,16 +24,6 @@ extension View {
     /// transport's "swipe right to shrink it") stays out of the rotation in the other.
     func readerHintAnchor(_ target: ReaderHintTarget, isActive: Bool = true) -> some View {
         modifier(ReaderHintAnchorModifier(target: target, isActive: isActive))
-    }
-
-    /// Declares that a NAVIGATION-BAR control is currently on screen, so the hint pointing at it can be matched to one
-    /// of the bar's measured items.
-    ///
-    /// Bar items get this instead of `readerHintAnchor` for a measured reason: nothing hosted by the bar can report
-    /// where it is (see `ReaderBarItemLocator`). Attaching it is a statement of presence, not of position — which is
-    /// all the Reader is in a position to know, and all the matching needs.
-    func readerHintBarAnchor(_ target: ReaderHintTarget) -> some View {
-        modifier(ReaderHintBarAnchorModifier(target: target))
     }
 
     /// Installs the hint overlay. Attach to the Reader's root, above the score and the transport. `onActivate` runs
@@ -63,16 +51,6 @@ private struct ReaderHintAnchorModifier: ViewModifier {
                 if !active { ReaderHintCoordinator.shared.clearAnchor(for: target) }
             }
             .onDisappear { ReaderHintCoordinator.shared.clearAnchor(for: target) }
-    }
-}
-
-private struct ReaderHintBarAnchorModifier: ViewModifier {
-    let target: ReaderHintTarget
-
-    func body(content: Content) -> some View {
-        content
-            .onAppear { ReaderHintCoordinator.shared.registerBarTarget(target, slot: target.barSlot) }
-            .onDisappear { ReaderHintCoordinator.shared.registerBarTarget(target, slot: nil) }
     }
 }
 
@@ -127,11 +105,8 @@ private struct ReaderHintOverlay: View {
                 }
             }
         }
-        // Doubles as the Reader's own position report: on iPad two navigation bars can be on screen at once, and this
-        // is what tells the bar locator which of them belongs to the Reader asking.
         .onWindowFrameChange { frame in
             windowOrigin = frame.origin
-            coordinator.setReaderRegion(frame)
         }
         .animation(.easeOut(duration: 0.2), value: coordinator.presentedHint)
     }

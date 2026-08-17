@@ -62,9 +62,9 @@ enum ReaderFeatureHint: String, CaseIterable {
 }
 
 /// A control a hint can be anchored to. Reported in WINDOW coordinates rather than through `anchorPreference`: the
-/// toolbar's items are hosted by the navigation bar in a separate hosting controller, so SwiftUI preferences never
-/// reach the Reader's own view tree — and neither does SwiftUI's `.global`, which is resolved per hosting context.
-/// The window is the one coordinate space both sides genuinely share (`onWindowFrameChange`).
+/// note-input toggle is drawn by App-injected Editor code, so SwiftUI preferences never reach the Reader's own view
+/// tree — and neither does SwiftUI's `.global`, which is resolved per hosting context. The window is the one
+/// coordinate space both sides genuinely share (`onWindowFrameChange`).
 ///
 /// The transport is two targets rather than one because each of its two states teaches a different swipe, and the
 /// state a hint's copy describes has to be the state the user is looking at. Only one of the two is ever anchored.
@@ -78,28 +78,6 @@ enum ReaderHintTarget: String, Hashable {
     /// The editing chrome's pad open/close button. Lives in App-injected Editor code, so its frame is relayed through
     /// `ReaderEditingHost.noteInputAnchorFrame` instead of a `readerHintAnchor` the Reader attaches itself.
     case noteInputToggle
-
-    /// Where this control sits among the navigation bar's items, or `nil` for the ones the Reader draws itself.
-    ///
-    /// A bar-hosted control cannot report its own position (see `ReaderBarItemLocator`), so it declares its PLACE in
-    /// the bar instead and is matched to a measured item by counting. `order` is the control's position in the
-    /// sequence its screen states — the Reader's own trailing sequence for the toolbar, the editing chrome's leading
-    /// sequence for the pad toggle — and gaps are fine: what matters is the relative order of the items that are
-    /// actually on screen, which is what the counting uses.
-    var barSlot: ReaderBarSlot? {
-        switch self {
-        // `ReaderToolbar`'s trailing sequence: score info (0), share (1), then these.
-        case .noteEditingButton: .trailing(order: 2)
-        case .annotationButton: .trailing(order: 3)
-        case .playbackInspectorButton: .trailing(order: 4)
-        case .visualInspectorButton: .trailing(order: 5)
-        // The pad toggle is drawn by App-injected Editor code, which is the only side that knows where it sits in the
-        // editing chrome's own leading sequence — so its slot arrives through the seam
-        // (`ReaderEditingHost.noteInputBarLeadingOrder`) rather than being stated here.
-        case .noteInputToggle: nil
-        case .transportExpanded, .transportCompact: nil
-        }
-    }
 
     /// Where the bubble sits relative to its anchor. Top-of-screen controls drop below (caret up); the bottom-docked
     /// transport floats above (caret down).
@@ -116,14 +94,4 @@ enum ReaderHintTarget: String, Hashable {
 enum ReaderHintPlacement {
     case above
     case below
-}
-
-/// Which end of the navigation bar a hinted control is pinned to, and how far along it sits.
-///
-/// Counting is done from the control's OWN end — trailing items from the right, leading items from the left — because
-/// that is the end whose ordering survives: iOS folds a crowded bar from the inside out, so an item's distance from
-/// the edge it is pinned to stays put while the middle collapses.
-enum ReaderBarSlot: Equatable {
-    case leading(order: Int)
-    case trailing(order: Int)
 }

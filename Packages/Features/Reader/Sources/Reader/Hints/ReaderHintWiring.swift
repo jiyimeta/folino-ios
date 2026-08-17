@@ -37,10 +37,14 @@ struct ReaderHintWiring: ViewModifier {
             // `blocksOffer` here rather than inside the task is what makes the retry see current state — this closure
             // is rebuilt along with the modifier on every render.
             .onChange(of: blocksOffer) { _, _ in attemptOffer() }
-            // The note-input coach mark points at a button the Editor draws, so where it sits in the bar arrives
-            // through the seam rather than from a `readerHintBarAnchor` this feature could attach itself.
-            .onChange(of: editingHost?.noteInputBarLeadingOrder, initial: true) { _, order in
-                hints.registerBarTarget(.noteInputToggle, slot: order.map { .leading(order: $0) })
+            // The note-input coach mark points at a button the Editor draws, so its frame arrives through the seam
+            // rather than from a `readerHintAnchor` this feature could attach itself.
+            .onChange(of: editingHost?.noteInputAnchorFrame, initial: true) { _, frame in
+                if let frame {
+                    hints.setAnchor(frame, for: .noteInputToggle)
+                } else {
+                    hints.clearAnchor(for: .noteInputToggle)
+                }
             }
             // Entering edit mode always offers the pad hint (once per launch, until the pad has actually been used) —
             // independent of the rotation's own per-launch budget. Deferred a beat so the chrome has laid out and
