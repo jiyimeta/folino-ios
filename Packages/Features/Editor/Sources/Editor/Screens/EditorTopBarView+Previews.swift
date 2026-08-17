@@ -2,7 +2,8 @@ import SheetMusicCore
 import SwiftUI
 
 // Previews for `EditorTopBarView`, split out to keep that file within the line budget — mirrors
-// `EditorChromeView+Previews.swift`.
+// `EditorChromeView+Previews.swift`. The cutout tier itself (完了 / revert) is NOT shown here — it's the Reader's
+// own `ReaderCutoutTier`, previewed alongside that type, not this one (review Important 4).
 
 #if DEBUG
 @MainActor
@@ -17,37 +18,36 @@ private func previewViewModel(canRevert: Bool) -> EditorViewModel {
     return viewModel
 }
 
-#Preview("Cutout tier · iPhone 17 Pro Max") {
-    VStack(spacing: 0) {
-        EditorTopBarView(
-            viewModel: previewViewModel(canRevert: true),
-            hasMusicalAnnotations: false,
-            hasCutoutTier: true,
-            topSafeAreaInset: 59,
-            onDone: {},
-            onNoteInputAnchorFrameChange: { _ in },
-        )
-        .padding(.top, 59)
-        .frame(height: 52)
-        Spacer()
-    }
-    .frame(width: 440, height: 956)
+// With a cutout tier: 完了 and revert live there instead, so the control tier is a fixed 4-item row that never
+// folds.
+#Preview("Cutout-tier device · control tier only") {
+    EditorTopBarView(
+        viewModel: previewViewModel(canRevert: true),
+        hasMusicalAnnotations: false,
+        hasCutoutTier: true,
+        onDone: {},
+        onNoteInputAnchorFrameChange: { _ in },
+    )
+    .frame(width: 440, height: 52)
+    .border(.red)
+    .padding(.vertical, 40)
     .background(Color(white: 0.97))
 }
 
-// No cutout tier: 完了 and revert join the control tier, five controls wide.
+// No cutout tier: 完了 and revert join the control tier, five controls wide, and fold together into `⋯` below
+// `narrow`'s width (see `EditorTopBarView.Collapse`).
 #Preview("No cutout tier · widths") {
     let narrow = previewViewModel(canRevert: true)
     let wide = previewViewModel(canRevert: true)
     return VStack(spacing: 24) {
         EditorTopBarView(
-            viewModel: narrow, hasMusicalAnnotations: false, hasCutoutTier: false, topSafeAreaInset: 0,
+            viewModel: narrow, hasMusicalAnnotations: false, hasCutoutTier: false,
             onDone: {}, onNoteInputAnchorFrameChange: { _ in },
         )
         .frame(width: 320, height: 52)
         .border(.red)
         EditorTopBarView(
-            viewModel: wide, hasMusicalAnnotations: false, hasCutoutTier: false, topSafeAreaInset: 0,
+            viewModel: wide, hasMusicalAnnotations: false, hasCutoutTier: false,
             onDone: {}, onNoteInputAnchorFrameChange: { _ in },
         )
         .frame(width: 440, height: 52)

@@ -183,6 +183,9 @@ public final class EditorViewModel {
     public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
     /// Set when a revert failed, for the chrome to surface. Cleared at the start of each attempt.
     public internal(set) var revertError: String?
+    /// Drives the revert confirmation dialog. On the view model, not view-local `@State`, so `EditorRevertButton`
+    /// (cutout tier OR `EditorTopBarView`'s row) and the dialog (always on `EditorTopBarView`'s root) share it.
+    public var isConfirmingRevert = false
 
     @ObservationIgnored let gateway: any ScoreFileGateway
     @ObservationIgnored let repository: any ScoreLibraryRepository

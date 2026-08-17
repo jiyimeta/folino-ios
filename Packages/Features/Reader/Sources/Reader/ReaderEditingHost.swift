@@ -215,18 +215,29 @@ public struct ReaderEditingChromeContext {
 
     /// Whether this device's top safe-area inset is wide enough to host a control — see
     /// `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`. Precomputed here rather than exposing
-    /// `ReaderTopBarLayout` itself, which is package-internal: the editing top bar (Task 5) needs the answer to
-    /// place 完了 / revert without this package's layout internals crossing the Reader/Editor seam.
+    /// `ReaderTopBarLayout` itself, which is package-internal: `editingTopBar` needs the answer to decide whether
+    /// 完了 / revert belong in its own row or the cutout tier, without this package's layout internals crossing the
+    /// Reader/Editor seam. Defaulted to `false` so the pad-overlay builder, which never reads it, doesn't have to
+    /// supply it.
     public let hasCutoutTier: Bool
 
-    /// The reserved band's height, for sizing and centering whatever the editing top bar draws into it. Meaningless
-    /// when `hasCutoutTier` is false. Defaulted to 0 so the pad-overlay builder, which never reads either of these
-    /// two properties, doesn't have to supply them.
-    public let topSafeAreaInset: CGFloat
-
-    public init(bottomTransportClearance: CGFloat, hasCutoutTier: Bool = false, topSafeAreaInset: CGFloat = 0) {
+    public init(bottomTransportClearance: CGFloat, hasCutoutTier: Bool = false) {
         self.bottomTransportClearance = bottomTransportClearance
         self.hasCutoutTier = hasCutoutTier
-        self.topSafeAreaInset = topSafeAreaInset
+    }
+}
+
+/// The cutout tier's editing-session content — 完了 leading, revert trailing — supplied by the App and drawn by the
+/// Reader's OWN `ReaderCutoutTier`, not a re-implementation of it (`ReaderRootScreen.editingCutoutTier`; review
+/// Important 4). Two pieces, not one combined view, because `ReaderCutoutTier` places its `leading` and `trailing`
+/// parameters at opposite ends of the reserved band with its own `Spacer` between them — collapsing them into a
+/// single view here would lose that placement and the padding that comes with it.
+public struct ReaderEditingCutoutTierContent {
+    public let leading: AnyView
+    public let trailing: AnyView
+
+    public init(leading: AnyView, trailing: AnyView) {
+        self.leading = leading
+        self.trailing = trailing
     }
 }

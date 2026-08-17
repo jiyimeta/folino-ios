@@ -28,9 +28,13 @@ public struct ReaderRootScreen: View {
     /// Builds the Editor feature's chrome (score-info bar, keyboard, 完了 button) from the current selection. Supplied
     /// by the App alongside `editingHost`; `nil` hides the chrome overlay (mirrors `editingHost == nil`).
     private let editingChrome: ((ReaderEditingChromeContext) -> AnyView)?
-    /// The editing row the App injects into the top strip while a session runs. `nil` in a Reader with no editing
-    /// seam.
+    /// The editing row the App injects into the top strip's control tier while a session runs. `nil` in a Reader
+    /// with no editing seam.
     private let editingTopBar: ((ReaderEditingChromeContext) -> AnyView)?
+    /// The editing session's cutout-tier content (完了 leading, revert trailing), drawn by this screen's own
+    /// `ReaderCutoutTier` rather than by whatever `editingTopBar` returns — see the `.overlay` below and review
+    /// Important 4. `nil` alongside `editingTopBar` in a Reader with no editing seam.
+    private let editingCutoutTier: ((ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent)?
     /// Pops back to the library. Supplied only by the compact stack; `nil` elsewhere, which hides the chevron.
     private let onBack: (@MainActor () -> Void)?
     /// Reveals or collapses the library sidebar. Supplied only in the regular split view; `nil` elsewhere.
@@ -179,6 +183,7 @@ public struct ReaderRootScreen: View {
         editingHost: ReaderEditingHost? = nil,
         editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
         editingTopBar: ((ReaderEditingChromeContext) -> AnyView)? = nil,
+        editingCutoutTier: ((ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent)? = nil,
     ) {
         // Seed the device-class defaults at construction time. The view model only uses these if no persisted record
         // exists — a stored value, including one equal to the default, always wins.
@@ -210,6 +215,7 @@ public struct ReaderRootScreen: View {
         self.editingHost = editingHost
         self.editingChrome = editingChrome
         self.editingTopBar = editingTopBar
+        self.editingCutoutTier = editingCutoutTier
         self.onBack = onBack
         self.onToggleSidebar = onToggleSidebar
     }
@@ -236,14 +242,16 @@ public struct ReaderRootScreen: View {
         .safeAreaInset(edge: .top) { topBarContent }
         // The cutout tier flanks the display cutout; drawn only where one exists (see
         // `ReaderTopBarLayout.hasCutoutTier`) and only on the overlay so it contributes nothing to the score's inset
-        // — the system reserves that band regardless. Empty until a later task gives it a leading/trailing pair to
-        // draw (the editing session's 完了/revert).
+        // — the system reserves that band regardless. Empty outside an edit session; while editing, filled with the
+        // App-supplied `editingCutoutTier` content (完了 leading, revert trailing) — computed once per pass so both
+        // slots read the same value rather than invoking the builder twice.
         .overlay(alignment: .top) {
             if !isCaptureMode, ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset) {
+                let editingCutoutContent = isEditing ? editingCutoutTier?(topBarEditingContext) : nil
                 ReaderCutoutTier(topSafeAreaInset: topSafeAreaInset) {
-                    EmptyView()
+                    if let editingCutoutContent { editingCutoutContent.leading }
                 } trailing: {
-                    EmptyView()
+                    if let editingCutoutContent { editingCutoutContent.trailing }
                 }
                 .ignoresSafeArea(edges: .top)
             }
@@ -501,14 +509,13 @@ public struct ReaderRootScreen: View {
         }
     }
 
-    /// The context handed to `editingTopBar` — same type `editingChrome` (the pad overlay) takes, but this call site
-    /// is the one that fills in `hasCutoutTier` / `topSafeAreaInset`: only the strip needs to know where the cutout
-    /// tier is.
+    /// The context handed to `editingTopBar` and `editingCutoutTier` — same type `editingChrome` (the pad overlay)
+    /// takes, but this call site is the one that fills in `hasCutoutTier`: only the strip and the cutout tier need
+    /// to know which one currently owns 完了 / revert.
     private var topBarEditingContext: ReaderEditingChromeContext {
         ReaderEditingChromeContext(
             bottomTransportClearance: bottomControlContentHeight,
             hasCutoutTier: ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset),
-            topSafeAreaInset: topSafeAreaInset,
         )
     }
 
@@ -568,11 +575,10 @@ public struct ReaderRootScreen: View {
         return true
     }
 
-    /// The App-injected editing chrome (note pad, callout, and — via its own `.toolbar`, currently unwired to
-    /// anything visible now that the navigation bar is hidden; a later task gives it the strip — the controls this
-    /// screen's own strip vacates while editing), shown only while `editingHost.isEditing` and a builder was
-    /// supplied. `nil` on either side leaves this an empty overlay — the default, so every existing
-    /// `ReaderRootScreen` call site (which passes neither) is unaffected.
+    /// The App-injected editing chrome (note pad, callout — the fixed controls this screen's own strip vacates
+    /// while editing are `editingTopBar` / `editingCutoutTier` instead, not this overlay), shown only while
+    /// `editingHost.isEditing` and a builder was supplied. `nil` on either side leaves this an empty overlay — the
+    /// default, so every existing `ReaderRootScreen` call site (which passes neither) is unaffected.
     @ViewBuilder
     private var editingChromeOverlay: some View {
         if let host = editingHost, host.isEditing, let editingChrome {

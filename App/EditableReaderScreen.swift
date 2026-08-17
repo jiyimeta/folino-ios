@@ -10,17 +10,22 @@ import SwiftUI
 @MainActor
 struct EditableReaderScreen: View {
     /// Builds the Editor feature's chrome overlay from the current seam context (score-info bar, keyboard, 完了),
-    /// or its top-strip row (voice, pad toggle, undo / redo / 完了, revert) — same context type, two different
-    /// slots in the Reader's tree.
+    /// or its top-strip row (voice, pad toggle, undo / redo, and — where there is no cutout tier — 完了 / revert
+    /// too) — same context type, two different slots in the Reader's tree.
     typealias ChromeBuilder = (ReaderEditingChromeContext) -> AnyView
+    /// Builds the cutout tier's editing-session content (完了 leading, revert trailing) for the Reader's OWN
+    /// `ReaderCutoutTier` to draw — see `ReaderRootScreen.editingCutoutTier` and review Important 4. A distinct
+    /// return type from `ChromeBuilder` because `ReaderCutoutTier` needs the leading and trailing pieces kept apart,
+    /// not one combined, type-erased view.
+    typealias CutoutTierBuilder = (ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent
 
     @State private var editingHost = ReaderEditingHost()
     @State private var editorViewModel: EditorViewModel
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
-    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay.
+    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is last.
     private let readerBuilder: (
-        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder,
+        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
     ) -> ReaderRootScreen
     /// Kept only so `wireOnce()` can re-read this instance's row before every edit session (Critical 1 review fix)
     /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
@@ -35,7 +40,7 @@ struct EditableReaderScreen: View {
         originalStore: any ScoreOriginalStore,
         playbackController: (any PlaybackController)?,
         readerBuilder: @escaping (
-            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder,
+            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
         ) -> ReaderRootScreen,
     ) {
         _editorViewModel = State(wrappedValue: EditorViewModel(
@@ -65,10 +70,14 @@ struct EditableReaderScreen: View {
                 viewModel: editorViewModel,
                 hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
                 hasCutoutTier: context.hasCutoutTier,
-                topSafeAreaInset: context.topSafeAreaInset,
                 onDone: { editingHost.requestExit() },
                 onNoteInputAnchorFrameChange: { editingHost.noteInputAnchorFrame = $0 },
             ))
+        }, { [editingHost] _ in
+            ReaderEditingCutoutTierContent(
+                leading: AnyView(EditorDoneButton(onDone: { editingHost.requestExit() })),
+                trailing: AnyView(EditorRevertButton(viewModel: editorViewModel)),
+            )
         })
         .onAppear { wireOnce() }
         // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go inert

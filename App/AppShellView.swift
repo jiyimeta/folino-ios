@@ -438,7 +438,7 @@ private struct ReadyShell: View {
             repository: repository,
             originalStore: originalStore,
             playbackController: bootstrap.playbackController,
-        ) { host, chrome, topBar in
+        ) { host, chrome, topBar, cutoutTier in
             ReaderRootScreen(
                 scoreItem: item,
                 repository: repository,
@@ -464,6 +464,7 @@ private struct ReadyShell: View {
                 editingHost: host,
                 editingChrome: chrome,
                 editingTopBar: topBar,
+                editingCutoutTier: cutoutTier,
             )
         }
     }

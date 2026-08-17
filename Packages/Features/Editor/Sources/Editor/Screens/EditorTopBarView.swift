@@ -2,107 +2,66 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// The editing session's own content for the Reader's top strip (`ReaderRootScreen.editingTopBar`, Task 5). Ported
-/// from `EditorChromeView+Toolbar.swift`'s navigation-bar items (voice, pad toggle, undo, redo, 完了) and
-/// `EditorChromeView+Revert.swift`'s revert control, now drawn as plain views instead of `ToolbarContent` — the
-/// Reader's own strip replaced the navigation bar these used to fill.
+/// The editing session's control tier (`ReaderRootScreen.editingTopBar`) — voice picker, pad toggle, undo, redo,
+/// and, where there is no cutout tier, 完了 and revert too. Ported from `EditorChromeView+Toolbar.swift`'s
+/// navigation-bar items and `EditorChromeView+Revert.swift`'s revert control, now drawn as plain views instead of
+/// `ToolbarContent` — the Reader's own strip replaced the navigation bar these used to fill.
 ///
-/// Two tiers, matching the Reader's own (`ReaderTopBarLayout`, which this package cannot import — Feature → Feature
-/// is forbidden — so the App precomputes `hasCutoutTier` / `topSafeAreaInset` from the Reader's own measurement and
-/// hands them down through `ReaderEditingChromeContext`):
+/// **The cutout tier is NOT drawn here.** Where one exists, 完了 and revert are mounted by the Reader's own
+/// `ReaderCutoutTier` instead (`ReaderRootScreen.editingCutoutTier`, using the shared `EditorDoneButton` /
+/// `EditorRevertButton` views) — review Important 4: an earlier draft re-declared `ReaderCutoutTier`'s
+/// `offset`/`ignoresSafeArea` shape locally (this package cannot import `Reader` to reuse the type itself), which
+/// left two independently-positioned mechanisms both claiming the same band, exactly what the design spec warns
+/// against. Reusing the Reader's real layout code makes that structurally impossible instead of merely unlikely.
 ///
-/// * **Cutout tier**, where there is one: 完了 leading, revert trailing — the two controls that end the session, in
-///   the two spots Photos uses for the same purpose. `cutoutTierOverlay` draws it by escaping this view's own
-///   control-tier box (fixed at `ReaderTopBarLayout.controlTierHeight` by `ReaderTopBar`) into the reserved band
-///   above it, exactly as `ReaderCutoutTier` escapes the Reader's own strip — this package just cannot reuse that
-///   type, so the same `offset` / `ignoresSafeArea` shape is re-declared locally.
-/// * **Control tier**: the voice picker and pad toggle lead, undo and redo trail. Where there is no cutout tier,
-///   完了 and revert join this row — five controls wide — and the whole thing folds with `ViewThatFits`, the same
-///   ladder the Reader's own row uses. Fold order: revert first, then 完了, into an overflow menu — they're the two
-///   that have a home in the cutout tier on other devices, so folding them here costs nothing they don't already
-///   give up somewhere.
+/// **Control tier**: the voice picker and pad toggle lead, undo and redo trail. Where there is no cutout tier, 完了
+/// and revert join this row — five controls wide — and the whole thing folds with `ViewThatFits`, the same ladder
+/// shape the Reader's own row uses (`Collapse`, `Spacer(minLength: 0)`, fixed icon frames).
 public struct EditorTopBarView: View {
     @Bindable var viewModel: EditorViewModel
     let hasMusicalAnnotations: Bool
     /// Whether this device's top safe-area inset is wide enough to host a control — see
-    /// `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`, computed by the App and handed down as a plain value.
+    /// `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`, computed by the App and handed down as a plain value
+    /// (this package cannot import `Reader` to read `ReaderTopBarLayout` itself).
     let hasCutoutTier: Bool
-    /// The reserved band's height, used only to size and center the cutout tier — see `cutoutTierOverlay`.
-    let topSafeAreaInset: CGFloat
     let onDone: () -> Void
     /// Reports the pad-toggle button's window frame — the coach-mark anchor `ReaderEditingHost.noteInputAnchorFrame`
     /// points at — or `nil` once the button leaves the screen.
     let onNoteInputAnchorFrameChange: (CGRect?) -> Void
 
-    /// Drives the revert confirmation dialog. Moved here (Task 5) from `EditorChromeView`: the button that raises it
-    /// now lives in this view, in a different part of the tree, and the dialog has to anchor to it to read correctly
-    /// as a popover on iPad.
-    @State private var isConfirmingRevert = false
     /// Mirrors `EditorChromeView.isPadVisible` through the same `UserDefaults` key. The pad toggle lives here now;
     /// the pad itself still lives in `EditorChromeView`. `@AppStorage` keeps two declarations of the same key in
     /// sync without either view needing to see the other's state.
     @AppStorage("editorPadVisible") private var isPadVisible = false
 
-    /// How much the control tier gives up as width tightens, when 完了 and revert are IN it (no cutout tier). Fold
-    /// order: revert first, then 完了.
-    enum Collapse: Int, CaseIterable, Comparable {
+    /// How much the control tier gives up as width tightens, when 完了 and revert are IN it (no cutout tier).
+    ///
+    /// Only two rungs, not three: a `.revert`-only middle rung (revert alone folded into `⋯`, 完了 still a
+    /// standalone text button) measures IDENTICAL to `.expanded` whenever revert is showing — swapping one 44×44
+    /// icon (`revertButton`) for another (the `⋯` menu) saves nothing, so `ViewThatFits` could never actually pick
+    /// it (review Important 2). `doneButton`'s `minWidth: 60` is what makes `.folded` unconditionally narrower than
+    /// `.expanded` — see the comment there.
+    enum Collapse {
         case expanded
-        case revert
-        case done
-
-        static func < (lhs: Self, rhs: Self) -> Bool {
-            lhs.rawValue < rhs.rawValue
-        }
+        case folded
     }
 
     public init(
         viewModel: EditorViewModel,
         hasMusicalAnnotations: Bool,
         hasCutoutTier: Bool,
-        topSafeAreaInset: CGFloat,
         onDone: @escaping () -> Void,
         onNoteInputAnchorFrameChange: @escaping (CGRect?) -> Void,
     ) {
         self.viewModel = viewModel
         self.hasMusicalAnnotations = hasMusicalAnnotations
         self.hasCutoutTier = hasCutoutTier
-        self.topSafeAreaInset = topSafeAreaInset
         self.onDone = onDone
         self.onNoteInputAnchorFrameChange = onNoteInputAnchorFrameChange
     }
 
     public var body: some View {
-        revertConfirmation(on: content)
-    }
-
-    private var content: some View {
-        controlTierRow
-            .overlay(alignment: .top) {
-                if hasCutoutTier {
-                    cutoutTierOverlay
-                }
-            }
-    }
-
-    // MARK: - Cutout tier
-
-    /// 完了 leading, revert trailing — escaped from this view's own (fixed-height) box up into the reserved band
-    /// above it. The base sits right below the true device inset (that's what `ReaderTopBar`'s own doc comment means
-    /// by "the system's own top inset is already below the strip's content"), so offsetting up by exactly that
-    /// amount lands this at the true top of the screen — the same band `ReaderCutoutTier` draws into for the
-    /// Reader's own (non-editing) strip.
-    private var cutoutTierOverlay: some View {
-        HStack {
-            doneButton
-            Spacer(minLength: 0)
-            if viewModel.canRevertToOriginal {
-                revertButton
-            }
-        }
-        .frame(height: topSafeAreaInset, alignment: .center)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .offset(y: -topSafeAreaInset)
-        .ignoresSafeArea(edges: .top)
+        revertConfirmation(on: controlTierRow)
     }
 
     // MARK: - Control tier
@@ -123,43 +82,42 @@ public struct EditorTopBarView: View {
             // spacer would make every candidate report that it fits, and the fold would silently never trigger.
             ViewThatFits(in: .horizontal) {
                 row(collapse: .expanded)
-                row(collapse: .revert)
-                row(collapse: .done)
+                row(collapse: .folded)
             }
         }
     }
 
-    /// One candidate row for `ViewThatFits`, used only where there is no cutout tier — 完了 and revert are folded
-    /// into an overflow menu (in that order) as `collapse` increases.
+    /// One candidate row for `ViewThatFits`, used only where there is no cutout tier.
     private func row(collapse: Collapse) -> some View {
         HStack(spacing: 12) {
             voiceMenu
             padToggleButton
             Spacer(minLength: 0)
-            if collapse < .revert, viewModel.canRevertToOriginal {
-                revertButton
-            }
             undoButton
             redoButton
-            if collapse < .done {
+            switch collapse {
+            case .expanded:
+                // `EditorRevertButton` already self-guards on `canRevertToOriginal`, but an EMPTY child still
+                // claims its `HStack` spacing on both sides — an invisible button would still push `doneButton`
+                // an extra 12pt away from `redoButton`. Guarding here too keeps it out of the layout entirely
+                // when there's nothing to revert to (the common state early in a session).
+                if viewModel.canRevertToOriginal {
+                    EditorRevertButton(viewModel: viewModel)
+                }
                 doneButton
-            }
-            if collapse >= .revert, viewModel.canRevertToOriginal || collapse >= .done {
-                overflowMenu(collapse: collapse)
+            case .folded:
+                overflowMenu
             }
         }
     }
 
-    /// Narrow-width stand-in for the revert / 完了 controls once they've folded. Never shown for both at once and
-    /// empty at the same time — see the guard at the call site.
-    private func overflowMenu(collapse: Collapse) -> some View {
+    /// Narrow-width stand-in for revert (if available) and 完了 once they've folded together.
+    private var overflowMenu: some View {
         Menu {
             if viewModel.canRevertToOriginal {
                 revertMenuRow
             }
-            if collapse >= .done {
-                doneMenuRow
-            }
+            doneMenuRow
         } label: {
             topBarIcon("ellipsis")
         }
@@ -244,15 +202,18 @@ public struct EditorTopBarView: View {
             .frame(width: 44, height: 44)
     }
 
-    // MARK: - 完了
+    // MARK: - 完了 / revert
 
+    /// `EditorDoneButton` pinned to a `minWidth` comfortably above the 44pt icon it folds into — deliberately, NOT
+    /// left to the localized "Done"/"完了"/"완료" text's own intrinsic width. That text can render narrower than
+    /// 44pt in some locales, which would make `.folded` WIDER than `.expanded` in exactly the (common) case where
+    /// revert isn't available yet and 完了 is the only thing folding — the same dead-rung failure mode as review
+    /// Important 2, just hiding in a different corner. Pinning the wide form's minimum width above the folded
+    /// form's fixed width makes the saving positive by construction, not by hoping a given locale's text is long
+    /// enough.
     private var doneButton: some View {
-        Button(action: onDone) {
-            Text("editor.chrome.done", bundle: .module)
-                .fontWeight(.semibold)
-                .frame(height: 44)
-        }
-        .tint(.primary)
+        EditorDoneButton(onDone: onDone)
+            .frame(minWidth: 60, minHeight: 44)
     }
 
     private var doneMenuRow: some View {
@@ -265,26 +226,9 @@ public struct EditorTopBarView: View {
         }
     }
 
-    // MARK: - Revert
-
-    /// A top-level control now, not folded into a permanent `⋯` menu — see the type's own doc comment. Destructive:
-    /// raises the confirmation rather than acting immediately.
-    private var revertButton: some View {
-        Button(role: .destructive) {
-            isConfirmingRevert = true
-        } label: {
-            topBarIcon("arrow.counterclockwise")
-        }
-        .tint(.primary)
-        .accessibilityLabel(Text(
-            viewModel.revertsToConversionOutput ? "editor.revert.action.pdf" : "editor.revert.action",
-            bundle: .module,
-        ))
-    }
-
     private var revertMenuRow: some View {
         Button(role: .destructive) {
-            isConfirmingRevert = true
+            viewModel.isConfirmingRevert = true
         } label: {
             Label {
                 // A PDF-origin sidecar is the conversion's output, not the file the user imported — the imported
@@ -302,6 +246,14 @@ public struct EditorTopBarView: View {
 
     /// The confirmation. Destructive and not undoable, so it names what goes and what stays, and adds the caveat for
     /// an item whose recorded original predates the feature.
+    ///
+    /// Attached to `controlTierRow` — this view's OWN root, not the specific `EditorRevertButton` that raised it.
+    /// The brief asked for the opposite (anchor to the button, for a precise iPad popover source), but that button
+    /// is mounted inside a `ViewThatFits` candidate (or, on a cutout-tier device, in the Reader's `ReaderCutoutTier`
+    /// entirely outside this view), and both can be torn down and remounted by a refold or a device rotation. A
+    /// dialog anchored to a view that disappears mid-interaction is a worse defect than an arrow pointing at the row
+    /// instead of the icon — this repo has already shipped that exact presentation-teardown bug once. Do not "fix"
+    /// this back to a per-button anchor without re-solving that problem first (review Important 3 ruling).
     private func revertConfirmation(on content: some View) -> some View {
         content
             .confirmationDialog(
@@ -310,7 +262,7 @@ public struct EditorTopBarView: View {
                         ? "editor.revert.confirm.title.pdf" : "editor.revert.confirm.title",
                     bundle: .module,
                 ),
-                isPresented: $isConfirmingRevert,
+                isPresented: $viewModel.isConfirmingRevert,
                 titleVisibility: .visible,
             ) {
                 Button(role: .destructive) {

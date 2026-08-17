@@ -109,7 +109,7 @@ struct NoteEditingScene: View {
                     repository: repository,
                     originalStore: FixtureOriginalStore(),
                     playbackController: nil,
-                ) { host, chrome, topBar in
+                ) { host, chrome, topBar, cutoutTier in
                     ReaderRootScreen(
                         scoreItem: Fixture.items[0],
                         repository: repository,
@@ -123,6 +123,7 @@ struct NoteEditingScene: View {
                         editingHost: host,
                         editingChrome: chrome,
                         editingTopBar: topBar,
+                        editingCutoutTier: cutoutTier,
                     )
                 }
             }
