@@ -68,7 +68,7 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // AUMIDISynth steals voices under dense polyphony, dropping notes mid-passage (the App Store playback-dropout
         // regression); SwiftySynth renders every voice through its own source node with no stealing. The engine hands
         // it the same GM SoundFont the resolver already serves, and pushes A4 calibration / transpose / rate onto it.
-        // The offline export path (`LiveScoreAudioExporter`) stays on AUMIDISynth — it ignores an injected backend.
+        // The offline export path (`LiveScoreAudioExporter`) injects a backend of its own, for the same reasons.
         // `.mixUntilPlay`: the Reader loads a score into the engine the moment it opens, and under the engine's
         // default policy that load takes the audio session exclusively — silencing whatever the user had playing in
         // another app before they have asked folino for a single note. Deferring the exclusive claim to the first
@@ -355,28 +355,13 @@ public final class LivePlaybackController: Domain.PlaybackController {
         engine.setMasterTuning(cents: cents)
     }
 
-    /// Output calibration for the SwiftySynth backend, applied on top of the user's master volume.
-    ///
-    /// SwiftySynth measures ~14 dB below the AUMIDISynth path folino shipped through 1.7.x, which users hear as
-    /// playback being far too quiet. The gap is not a defect in either synth: the old path peaked *above* full scale
-    /// on a single note and leaned on the master limiter, so matching it exactly would mean reproducing distortion,
-    /// and avoiding those artifacts is why we moved backends. What the right playback level is, though, is a product
-    /// question about how folino should sound — not something the engine can decide — so the calibration lives here
-    /// rather than in `swift-sheet-music`.
-    ///
-    /// 5× (+14 dB) restores parity with what users are used to. The engine's peak limiter still catches the loudest
-    /// passages. This deliberately does NOT touch `ReaderPreferences.masterVolume`, whose contract stays "1.0 = the
-    /// score's authored level, boostable to 300%" — that value is persisted per score, so folding calibration into it
-    /// would both corrupt saved preferences and leave already-opened scores behind.
-    private static let backendOutputCalibration: Double = 5
-
-    /// Forward master output volume to the engine's gain stage, scaled by `backendOutputCalibration`. The user-facing
-    /// value is `[0, 3]` with `1.0` = unity; the engine sees `[0, 15]` and imposes no ceiling of its own (ssm 1.2.4).
-    /// Called on load, every slider write (`setMasterVolume`), and after a soundfont swap (`reloadSoundfont` via
-    /// `applyPreferences`).
+    /// Forward master output volume to the engine's gain stage, scaled by `BackendOutputCalibration.gain`. The
+    /// user-facing value is `[0, 3]` with `1.0` = unity; the engine sees `[0, 15]` and imposes no ceiling of its own
+    /// (ssm 1.2.4). Called on load, every slider write (`setMasterVolume`), and after a soundfont swap
+    /// (`reloadSoundfont` via `applyPreferences`).
     func applyMasterVolume(_ value: Double) {
         let userVolume = min(max(value, 0), 3)
-        engine.setMasterGain(Float(userVolume * Self.backendOutputCalibration))
+        engine.setMasterGain(Float(userVolume * BackendOutputCalibration.gain))
     }
 
     // MARK: - Now Playing / Remote Commands
