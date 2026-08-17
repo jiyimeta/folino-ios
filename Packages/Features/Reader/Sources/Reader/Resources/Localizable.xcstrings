@@ -4009,7 +4009,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "사이드바 표시 전환"
+            "value" : "사이드바 표시/숨기기"
           }
         },
         "zh-Hans" : {
