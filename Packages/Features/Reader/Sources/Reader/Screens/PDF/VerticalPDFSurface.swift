@@ -16,8 +16,8 @@ struct VerticalPDFSurface: View {
     let viewport: CGSize
     let pageGap: CGFloat
     let pageSizes: [CGSize]
-    /// Blank content-space height above the first page, so it clears the toolbar the scroll slides under. Every
-    /// content-space y in this view starts from it.
+    /// Blank content-space height above the first page, so it clears the Reader's self-drawn top bar the scroll
+    /// slides under. Every content-space y in this view starts from it.
     let topInset: CGFloat
 
     var body: some View {

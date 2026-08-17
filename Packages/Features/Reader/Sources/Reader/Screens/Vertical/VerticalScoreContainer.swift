@@ -77,7 +77,7 @@ struct VerticalScoreContainer: View {
     @State private var pinchSession: VerticalPinchSession?
     @State private var pendingScroll: ScoreScrollCommand?
     @State private var contentInsetTop: CGFloat = 0
-    /// Total top chrome inset: the system safe area plus the navigation bar the Reader's toolbar lives in. The
+    /// Total top chrome inset: the system safe area plus the Reader's self-drawn top bar (`ReaderTopBar`). The
     /// continuous scroll slides underneath both, so the scroll content pads its top by exactly this much to put the
     /// first system clear of them. Measured rather than assumed — the bar's height varies with orientation and device.
     @State private var topChromeInset: CGFloat = 0
@@ -152,7 +152,7 @@ struct VerticalScoreContainer: View {
         }
         .background {
             // Sibling reader extending beyond safe area (the main GR sits inside it and reports zero), so its reported
-            // top inset is the whole chrome the scroll slides under: status bar plus navigation bar.
+            // top inset is the whole chrome the scroll slides under: status bar plus the self-drawn top bar.
             Color.clear
                 .ignoresSafeArea()
                 .onGeometryChange(for: CGFloat.self) { proxy in
@@ -399,8 +399,8 @@ struct VerticalScoreContainer: View {
         if let lookaheadCursor, let lookRect = doc.cursorFrame(for: lookaheadCursor, in: score) {
             // Playback: pin the playing cursor's system to the top, re-scrolling only when that system or the
             // lookahead (a couple beats ahead) leaves the viewport — so the cursor drifts down between scrolls.
-            // The pinned system top lands `chromeClearance` points below the screen top — clear of the navigation bar
-            // the Reader's toolbar lives in, which `topChromeInset` measures. This is a SCREEN-space distance (not
+            // The pinned system top lands `chromeClearance` points below the screen top — clear of the Reader's
+            // self-drawn top bar, which `topChromeInset` measures. This is a SCREEN-space distance (not
             // zoom-scaled): `contentOffset` shares the scaled-content point space, so the system top appears at
             // screen-y == `chromeClearance` regardless of zoom. The 8 pt gap keeps the staff off the toolbar's glass.
             let lookMaxY = (lookRect.maxY + topPad) * zoom

@@ -21,12 +21,14 @@ extension ReaderTopBarControls {
                 label: Text("reader.toolbar.toggleSidebar", bundle: .module),
                 action: onToggleSidebar,
             )
+            .interactiveGlassCompat()
         } else if let onBack {
             topBarButton(
                 systemImage: "chevron.backward",
                 label: Text("reader.toolbar.back", bundle: .module),
                 action: onBack,
             )
+            .interactiveGlassCompat()
         }
     }
 

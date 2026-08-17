@@ -27,6 +27,11 @@ public struct EditorDoneButton: View {
                 .fontWeight(.semibold)
         }
         .tint(.primary)
+        // Own minimum hit target rather than relying on a caller's `.frame` — `EditorTopBarView`'s control-tier
+        // mount adds `minWidth: 60, minHeight: 44`, but `ReaderRootScreen.editingCutoutTier`'s cutout-tier mount
+        // uses this button raw. Without this, 完了 there sits under the 44pt minimum, in the band that's hardest to
+        // hit (review Minor 1).
+        .frame(minHeight: 44)
     }
 }
 

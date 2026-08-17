@@ -101,9 +101,21 @@ inset. Its height does not depend on the device, on the cutout tier's presence,
 or on whether an edit session is running.
 
 **The height contract, which is the reason this design is shaped this way:** the
-inset the strip contributes is the control tier's height and nothing else — a
-constant. So **entering or leaving an edit session cannot move a paged score's
-page breaks**, and neither can a device having a cutout.
+inset the *top strip* contributes is the control tier's height and nothing else —
+a constant. So **the top strip's own contribution cannot move a paged score's
+page breaks on entering or leaving an edit session**, and neither can a device
+having a cutout.
+
+That is a narrower claim than "editing cannot move a page break," and the
+difference is deliberate, not an oversight: the *bottom* transport still shrinks
+on entering an edit session (`ReaderRootScreen.showsSeekBarNow` forces the seek
+bar off while editing, dropping `bottomControlContentHeight` from expanded to
+collapsed), which does change `bottomControlInset` and, in page mode, the page
+height — a paged score with the seek bar enabled re-paginates for the edit
+session regardless of what this contract holds constant. That is pre-existing
+behavior this design does not touch, and Task 6's device checklist should be
+read with the seek bar turned off, or it will fail for a reason unrelated to
+this feature (review Important 3).
 
 Stating it this way is what makes it hold. The first draft of this design had the
 control tier *absorb* the status bar's height while editing, on the premise that

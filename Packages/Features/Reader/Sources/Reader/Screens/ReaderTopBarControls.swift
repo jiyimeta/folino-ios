@@ -80,12 +80,26 @@ struct ReaderTopBarControls: View {
             // `minLength: 0` is what lets `ViewThatFits` fold at all: a greedy spacer would make every candidate
             // report that it fits, and the fold would silently never trigger. Carried across from the old overlay.
             Spacer(minLength: 0)
+            // `layoutPriority(1)` guards against a real risk in this shape, so don't remove it as decoration.
+            // `ViewThatFits` sits here as a SIBLING of the `Spacer` above (and of `inspectorGroup` below) rather
+            // than wrapping the whole row the way the old overlay's did — that inversion is what lets the inspector
+            // pair stay a stable sibling outside the ladder, so their popovers survive a refold (see the type's doc
+            // comment). Without a priority hint, an `HStack` sizes same-tier children least-flexible-first, which in
+            // practice already gives `ViewThatFits` the width left after the fixed-width `leadingAffordance` /
+            // `inspectorGroup` — a headless `UIHostingController.sizeThatFits` diagnostic against this exact sibling
+            // shape (fixed 44pt / 88pt neighbors, a `Spacer(minLength: 0)`, and a four-candidate `ViewThatFits`)
+            // picked the same, correctly-folding candidate with and without this modifier at every width tried
+            // (350 / 393 / 440pt). `layoutPriority(1)` is still kept — explicitly pinning "the ladder is sized
+            // before the `Spacer`" is cheap, matches the old overlay's outer-`ViewThatFits` intent, and removes any
+            // dependence on that least-flexible-first tie-breaking continuing to favor `ViewThatFits` over `Spacer`
+            // as this row's content changes.
             ViewThatFits(in: .horizontal) {
                 row(collapse: .expanded)
                 row(collapse: .scoreActions)
                 row(collapse: .noteEditing)
                 row(collapse: .annotation)
             }
+            .layoutPriority(1)
             inspectorGroup
         }
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)

@@ -490,7 +490,7 @@ public struct ReaderRootScreen: View {
     @ViewBuilder
     private var topBarContent: some View {
         if !isCaptureMode {
-            ReaderTopBar {
+            ReaderTopBar(topSafeAreaInset: topSafeAreaInset, isEditing: isEditing) {
                 if isEditing {
                     if let editingTopBar {
                         editingTopBar(topBarEditingContext)

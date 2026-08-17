@@ -62,6 +62,9 @@ public struct EditorTopBarView: View {
 
     public var body: some View {
         revertConfirmation(on: controlTierRow)
+            // Matches `ReaderTopBarControls`' shadow so the reading and editing strips read as the same physical
+            // surface — see review Important 2.
+                .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
     // MARK: - Control tier
@@ -71,11 +74,9 @@ public struct EditorTopBarView: View {
         if hasCutoutTier {
             // 完了 and revert live in the cutout tier; four controls never risk running out of room, so no fold.
             HStack(spacing: 12) {
-                voiceMenu
-                padToggleButton
+                leadingGroup
                 Spacer(minLength: 0)
-                undoButton
-                redoButton
+                trailingGroup
             }
         } else {
             // `Spacer(minLength: 0)` inside `row(collapse:)` is what lets `ViewThatFits` fold at all — a greedy
@@ -90,25 +91,53 @@ public struct EditorTopBarView: View {
     /// One candidate row for `ViewThatFits`, used only where there is no cutout tier.
     private func row(collapse: Collapse) -> some View {
         HStack(spacing: 12) {
-            voiceMenu
-            padToggleButton
+            leadingGroup
             Spacer(minLength: 0)
-            undoButton
-            redoButton
+            trailingGroup
             switch collapse {
             case .expanded:
-                // `EditorRevertButton` already self-guards on `canRevertToOriginal`, but an EMPTY child still
-                // claims its `HStack` spacing on both sides — an invisible button would still push `doneButton`
-                // an extra 12pt away from `redoButton`. Guarding here too keeps it out of the layout entirely
-                // when there's nothing to revert to (the common state early in a session).
-                if viewModel.canRevertToOriginal {
-                    EditorRevertButton(viewModel: viewModel)
-                }
-                doneButton
+                endGroup
             case .folded:
                 overflowMenu
+                    .interactiveGlassCompat()
             }
         }
+    }
+
+    /// Voice picker + pad toggle, sharing one glass pill — matches `ReaderTopBarControls`' per-cluster glass
+    /// treatment (review Important 2). Bare glyphs need something behind them to stay legible over arbitrary score
+    /// content; before this branch that came from the standard toolbar's own background.
+    private var leadingGroup: some View {
+        HStack(spacing: 0) {
+            voiceMenu
+            padToggleButton
+        }
+        .interactiveGlassCompat()
+    }
+
+    /// Undo + redo, sharing one glass pill.
+    private var trailingGroup: some View {
+        HStack(spacing: 0) {
+            undoButton
+            redoButton
+        }
+        .interactiveGlassCompat()
+    }
+
+    /// Revert (if available) + 完了, sharing one glass pill — the `.expanded` counterpart to `overflowMenu`, which
+    /// carries its own glass at its own call site since it's a single control, not a pair.
+    private var endGroup: some View {
+        HStack(spacing: 0) {
+            // `EditorRevertButton` already self-guards on `canRevertToOriginal`, so this `if` is redundant for
+            // WIDTH (spacing is 0 either side of an empty conditional slot) — kept anyway so an absent revert
+            // doesn't leave a stray accessibility element in the glass pill when there's nothing to revert to (the
+            // common state early in a session).
+            if viewModel.canRevertToOriginal {
+                EditorRevertButton(viewModel: viewModel)
+            }
+            doneButton
+        }
+        .interactiveGlassCompat()
     }
 
     /// Narrow-width stand-in for revert (if available) and 完了 once they've folded together.

@@ -93,7 +93,7 @@ struct ReaderHintWiring: ViewModifier {
 
     /// Waits until the Reader has settled, then marks the offer due and tries to spend it.
     ///
-    /// The wait is not cosmetic: hint selection asks the anchors which controls are on screen, and the toolbar only
+    /// The wait is not cosmetic: hint selection asks the anchors which controls are on screen, and the top bar only
     /// reports those after the score has loaded and the bar has laid out. Offering earlier would see an empty anchor
     /// set and silently pick nothing — so this waits for the first anchor (bounded, so a score that never loads
     /// doesn't spin), then lets the scene settle so the bubble doesn't land on the score's first paint.

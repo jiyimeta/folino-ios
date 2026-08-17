@@ -8,14 +8,29 @@ import UtilityUI
 /// any call site subtracting a constant. **It carries no `padding(.top:)` and no `ignoresSafeArea`.** The system's
 /// own top inset is already below the strip's content; adding the safe-area height back as padding would count it
 /// twice, and `ignoresSafeArea` on a fixed-height child shifts it rather than extending it.
+///
+/// The height is read from `ReaderTopBarLayout.contributedInset(topSafeAreaInset:isEditing:)` — the same contract
+/// function `ReaderTopBarLayoutTests` pins — rather than `controlTierHeight` directly, so this, the production call
+/// site, and the test all agree on ONE source. Reading the raw constant here would let the two drift silently: the
+/// test would still pass if this view's actual height diverged from what the contract promises (an `if isEditing`
+/// branch, a stray `.padding(.vertical)`, a `safeAreaInset(spacing:)` other than the default), because nothing
+/// would ever call the contract function with the values THIS view actually uses.
 struct ReaderTopBar<Content: View>: View {
+    /// Forwarded straight into `ReaderTopBarLayout.contributedInset` — see that function's own doc comment for why
+    /// the contract takes parameters it then ignores: a signature that took nothing would make the invariant
+    /// unfalsifiable.
+    var topSafeAreaInset: CGFloat = 0
+    var isEditing = false
     @ViewBuilder let content: Content
 
     var body: some View {
         content
             .padding(.horizontal)
             .frame(maxWidth: .infinity)
-            .frame(height: ReaderTopBarLayout.controlTierHeight)
+            .frame(height: ReaderTopBarLayout.contributedInset(
+                topSafeAreaInset: topSafeAreaInset,
+                isEditing: isEditing,
+            ))
     }
 }
 

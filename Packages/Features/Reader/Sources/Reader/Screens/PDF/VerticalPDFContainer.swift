@@ -38,11 +38,11 @@ struct VerticalPDFContainer: View {
     /// Vertical gap between stacked pages, in unzoomed content points.
     private let pageGap: CGFloat = 8
 
-    /// Height of the chrome the scroll slides under — status bar plus the navigation bar the toolbar lives in — in
+    /// Height of the chrome the scroll slides under — status bar plus the Reader's self-drawn top bar — in
     /// SCREEN points. Measured rather than assumed; it varies with orientation and device.
     @State private var topChromeInset: CGFloat = 0
 
-    /// `topChromeInset` expressed in unzoomed content points, so the first page clears the toolbar instead of running
+    /// `topChromeInset` expressed in unzoomed content points, so the first page clears the top bar instead of running
     /// under it — the same courtesy the score reader's vertical mode extends.
     ///
     /// Divided by the fit factor because a PDF's content space is its mediaBox (a 595pt-wide page fitted into a 430pt

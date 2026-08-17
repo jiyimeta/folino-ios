@@ -16,7 +16,7 @@ struct VerticalZoomedSurface: View {
     let horizontalPadding: CGFloat
     let scoreTopPadding: CGFloat
     let scoreBottomPadding: CGFloat
-    /// Total top chrome inset — status bar plus the navigation bar the Reader's toolbar lives in. See
+    /// Total top chrome inset — status bar plus the Reader's self-drawn top bar (`ReaderTopBar`). See
     /// `VerticalScoreContainer.topChromeInset`.
     let topChromeInset: CGFloat
     let scoreOptions: ScoreViewOptions
