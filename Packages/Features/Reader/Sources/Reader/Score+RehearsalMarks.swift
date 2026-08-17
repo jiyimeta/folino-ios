@@ -48,13 +48,21 @@ struct ReaderSeekTimeline {
     }
 
     /// One walk of the score, feeding the whole table. Mirrors `Score.notatedDurationSeconds`' own arithmetic — the
-    /// measure's tick length at the quarter-BPM governing its downbeat — so the totals agree exactly.
+    /// measure's tick length, plus whatever its fermatas hold it for, at the quarter-BPM governing its downbeat — so
+    /// the totals agree exactly. `ReaderSeekTimelineTests` pins that agreement against the engine's own API.
     init(score: Score) {
         let ticks = score.effectiveMeasureDurations().map { $0.ticks(division: score.division) }
+        // A fermata adds no ticks to its bar but does add time to it. Bucket each hold's extra ticks onto its measure
+        // so the bar's own tempo converts both parts the same way — leaving it out is what made the seek bar's total
+        // (and every elapsed readout drawn from it) run short by the sum of every hold.
+        var holdTicks = [Double](repeating: 0, count: ticks.count)
+        for hold in score.fermataHolds() where holdTicks.indices.contains(hold.measureIndex) {
+            holdTicks[hold.measureIndex] += hold.extraTicks
+        }
         let seconds = ticks.enumerated().map { index, measureTicks -> Double in
             let bpm = max(1, score.effectiveQuarterBpm(at: .beat(measureIndex: index, tickInMeasure: 0)))
             let secondsPerTick = (60.0 / bpm) / Double(max(1, score.division))
-            return Double(measureTicks) * secondsPerTick
+            return (Double(measureTicks) + holdTicks[index]) * secondsPerTick
         }
         self.init(marks: score.readerRehearsalMarks(), measureTicks: ticks, measureSeconds: seconds)
     }

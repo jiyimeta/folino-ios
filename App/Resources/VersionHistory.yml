@@ -1,3 +1,32 @@
+- version: 1.12.3
+  descriptions:
+    - en: Fixed playback issues
+      ja: 再生に関する不具合を修正
+      ko: 재생 관련 문제 수정
+      zh-Hans: 修复播放相关的问题
+      zh-Hant: 修正播放相關的問題
+- version: 1.12.2
+  descriptions:
+    - en: Improved behavior while another app is playing audio
+      ja: 他のアプリで音楽を再生しているときの動作を改善
+      ko: 다른 앱에서 음악을 재생 중일 때의 동작 개선
+      zh-Hans: 改进其他应用正在播放音乐时的行为
+      zh-Hant: 改進其他應用程式正在播放音樂時的行為
+    - en: Changed playback to pause when headphones are unplugged
+      ja: イヤホンを外したときに再生を一時停止するよう変更
+      ko: 이어폰을 뽑았을 때 재생을 일시정지하도록 변경
+      zh-Hans: 拔出耳机时改为暂停播放
+      zh-Hant: 拔出耳機時改為暫停播放
+    - en: Fixed the display of key signatures and chord symbols
+      ja: 調号とコードの表示を修正
+      ko: 조표와 코드 표시 수정
+      zh-Hans: 修复调号与和弦的显示
+      zh-Hant: 修正調號與和弦的顯示
+    - en: Fixed the count-in occasionally not sounding
+      ja: 稀にカウントインが鳴らない問題を修正
+      ko: 드물게 카운트인이 울리지 않는 문제 수정
+      zh-Hans: 修复偶尔预备拍不发声的问题
+      zh-Hant: 修正偶爾預備拍不發聲的問題
 - version: 1.12.1
   descriptions:
     - en: Minor improvements and bug fixes

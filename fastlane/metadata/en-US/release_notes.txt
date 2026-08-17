@@ -1,1 +1,1 @@
-- Minor improvements and bug fixes
+- Fixed playback issues

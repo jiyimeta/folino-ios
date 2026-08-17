@@ -55,6 +55,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// resets the engine's metronome to its default of enabled, so `reloadSoundfont()` re-applies this. Internal so
     /// the +Reload extension can read it.
     var metronomeEnabled = true
+    /// Pauses playback when the user's output device disconnects (headphones unplugged). Held for the controller's
+    /// lifetime; it unregisters itself when released. See `OutputRouteDisconnectWatcher`.
+    private var routeDisconnectWatcher: OutputRouteDisconnectWatcher?
     let logger = Logger(subsystem: "com.KeyNumber.Folino", category: "PlaybackController")
 
     public init(
@@ -66,13 +69,25 @@ public final class LivePlaybackController: Domain.PlaybackController {
         // regression); SwiftySynth renders every voice through its own source node with no stealing. The engine hands
         // it the same GM SoundFont the resolver already serves, and pushes A4 calibration / transpose / rate onto it.
         // The offline export path (`LiveScoreAudioExporter`) stays on AUMIDISynth — it ignores an injected backend.
+        // `.mixUntilPlay`: the Reader loads a score into the engine the moment it opens, and under the engine's
+        // default policy that load takes the audio session exclusively — silencing whatever the user had playing in
+        // another app before they have asked folino for a single note. Deferring the exclusive claim to the first
+        // `play()` means opening a score, and auditioning a tapped note, both mix over that other audio; pressing play
+        // is what interrupts it.
         engine = PlaybackEngine(
             soundfontResolver: soundfontResolver,
             metronomeClickProvider: metronomeClickProvider,
             backend: SwiftySynthBackend(),
+            audioSessionPolicy: .mixUntilPlay,
         )
         startObservingEngine()
         configureRemoteCommands()
+        // Unplugging headphones reroutes to the built-in speaker rather than stopping, so a score would carry on out
+        // loud in a room the user chose headphones for. Pause instead, as every media app does.
+        routeDisconnectWatcher = OutputRouteDisconnectWatcher { [weak self] in
+            guard let self, engine.state == .playing else { return }
+            pause()
+        }
     }
 
     deinit {
