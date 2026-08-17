@@ -2,8 +2,8 @@
 
 2026-08-18. Takes the Reader's top chrome — and the editing chrome that shares
 it — out of the system navigation bar and back into a view we draw, so that a
-control can say where it is and the bar can occupy the status bar's space while
-editing.
+control can say where it is and the bar can reach into the band the display
+cutout already reserves.
 
 ## The problem
 
@@ -28,8 +28,21 @@ inside the bar's width budget is arithmetic instead of layout:
 observations on real devices (402pt overflowed six buttons; 393pt must still fit
 five), and it must be re-derived by hand whenever a button is added.
 
-On top of both, the bar cannot be moved into the status bar's space, which is
-where Photos puts Revert while editing — the shape this feature was reaching for.
+On top of both, the bar cannot be drawn into the top safe area, which is where
+Photos puts Revert while editing — the shape this feature was reaching for.
+
+That third point needs stating precisely, because the obvious reading of it is
+wrong. **Hiding the status bar does not shrink the top safe-area inset on a
+notched or Dynamic Island device.** The inset belongs to the cutout, and the
+system keeps reserving it. Photos gains no height by hiding the status bar. What
+it gains is a *place*: the cutout is centred, so the band's leading and trailing
+ends are free, and Photos draws its close button and its Revert pill there,
+flanking the island, with a second row of controls below. Hiding the status bar
+is what stops the clock and the battery from sitting in exactly those two spots.
+
+So the prize is not a larger score. It is **two rows of controls for the price of
+one row of inset** — the upper row is free, because it occupies space the system
+reserves whether we use it or not.
 
 ## Scope
 
@@ -73,21 +86,40 @@ instead. The system navigation bar is hidden for the duration
 own overflow menu — the mechanism whose contents and priority we cannot
 influence, and which reliably swallowed the inspectors first.
 
-**The height contract, which is the reason this design is shaped this way:**
-the strip always occupies *status-bar height + control-row height*. While
-editing, the status bar is hidden and the control row grows by exactly the
-status-bar height. The total top inset is therefore identical in both states, so
-**entering or leaving an edit session cannot move a paged score's page breaks**.
+The strip has **two tiers**, and only one of them costs anything.
 
-The hide applies in both size classes, so there is one height rule rather than
-two. Reclaiming the strip matters less on an iPad than on a phone, and if it
-reads wrong there the hide can be made compact-only without touching anything
-else — the contract is stated in terms of the total, which holds either way.
+**The cutout tier** is drawn inside the top safe area, flanking the cutout, and
+adds nothing to the score's inset — the system reserves that band regardless. It
+exists only on devices whose top safe-area inset is at least 44pt, which is a
+tappable control's height: notched and Dynamic Island iPhones in portrait. An SE,
+an iPad, and any phone in landscape report 20-24pt or nothing, so there is no
+room for a control and **no cutout tier is drawn there**. That branch is
+deliberate and is the price of the Photos shape.
+
+**The control tier** sits below the safe area and is the only thing that adds
+inset. Its height does not depend on the device, on the cutout tier's presence,
+or on whether an edit session is running.
+
+**The height contract, which is the reason this design is shaped this way:** the
+inset the strip contributes is the control tier's height and nothing else — a
+constant. So **entering or leaving an edit session cannot move a paged score's
+page breaks**, and neither can a device having a cutout.
+
+Stating it this way is what makes it hold. The first draft of this design had the
+control tier *absorb* the status bar's height while editing, on the premise that
+hiding the status bar reclaimed it. It does not, on exactly the devices the
+feature was aimed at; the contract would have been an identity that only held on
+an SE. Nothing is absorbed here — the two tiers are independent, and the one that
+varies by device is the one that costs nothing.
 
 That invariant is why the strip is owned by one view rather than negotiated
 between two. Today the Reader keeps its navigation bar mounted-but-empty during
 editing for the same reason, achieving it by accident of the bar's presence; here
 it is stated, computed in one place, and testable.
+
+**The status bar is hidden while the cutout tier is in use** — that is, while
+editing on a device that has one — because the clock and the battery occupy the
+two spots the tier wants. It is shown otherwise. Hiding it changes no height.
 
 **The fold** returns to `ViewThatFits` over a list of candidate rows written in
 priority order — the same ladder the old overlay used, and the same priority the
@@ -146,7 +178,13 @@ the fold level to decide eligibility.
 
 ## The editing strip
 
-Leading: the voice picker and the pad toggle. Trailing: revert, undo, redo, 完了.
+**Cutout tier**, where there is one: 完了 at the leading end, revert at the
+trailing end — the two the user reaches for to end the session, in the two spots
+Photos uses for the same purpose.
+
+**Control tier**: the voice picker and the pad toggle leading, undo and redo
+trailing. On a device with no cutout tier, 完了 and revert join this row, which
+is then five controls wide and folds like any other.
 
 **The `⋯` overflow menu is removed.** It holds exactly one item — revert — and
 exists only because a sixth item risked the standard bar folding undo, redo and
@@ -155,12 +193,22 @@ revert becomes a top-level control, which is also the shape this feature was
 after: visible at the top of the editing screen, the way Photos shows Revert.
 The confirmation dialog in front of it is unchanged.
 
+**The editing row folds too.** It has the same `ViewThatFits` ladder as the
+Reader's own row — on a narrow width (an iPad Slide Over, a 320pt column) the
+device without a cutout tier is carrying five controls, and nothing about being
+the editing row exempts it from running out of room.
+
 ## Testing
 
-- **The height contract.** A unit test asserting the strip's total top inset is
-  equal in the editing and non-editing states, across the status-bar heights of
-  a notch device, a Dynamic Island device, and one without either. This does not
-  exist today and is the invariant the whole design turns on.
+- **The height contract.** A unit test asserting the inset the strip contributes
+  is the control tier's height alone — equal whether or not an edit session is
+  running, and equal across every top safe-area inset that ships (0 in landscape,
+  20 on an SE, 24 on an iPad, 44-59 for cutouts). This does not exist today and
+  is the invariant the whole design turns on. It must be a test of what is
+  *contributed*, not of a total that includes the system's own inset; the first
+  draft asserted the latter and would have passed while the real inset moved.
+- **The cutout-tier rule.** Which safe-area insets get a cutout tier, at the 44pt
+  boundary and either side of it.
 - **The fold.** Which candidate row `ViewThatFits` selects at representative
   widths, replacing the deleted breakpoint tests.
 - Deleted: the `Metrics` breakpoint tests and the `ReaderBarItemLocator`
@@ -174,9 +222,15 @@ The confirmation dialog in front of it is unchanged.
 - **Edge-swipe restoration is a UIKit touch point.** It replaces a larger one,
   and it uses no private API, but it is a place a future iOS can change under
   us. It is isolated in `UtilityUI` so a failure is one file.
-- **The strip's height must track the status bar across rotation and Dynamic
-  Island states.** The contract makes this checkable; the test above is what
-  keeps it honest.
+- **The layout branches on device category.** A cutout tier exists on some
+  devices and not others, and rotating a phone removes it mid-session. The
+  contract confines the damage — the contributed inset does not change either way
+  — but the two-tier and one-tier arrangements are genuinely different screens
+  and both need looking at.
+- **The cutout's width is not ours to know.** The tier's two clusters flank a
+  centred cutout whose width varies by model. Anything placed there must be
+  small, pinned to its own edge, and must not assume how much room the middle
+  has.
 - **Accessibility and Liquid Glass are ours now.** The old overlay's treatment is
   the starting point, but VoiceOver ordering and the glass behind the row are no
   longer supplied.
@@ -184,10 +238,11 @@ The confirmation dialog in front of it is unchanged.
 ## Implementation order
 
 1. `ReaderTopBar` with the height contract and the `ViewThatFits` fold, drawing
-   the Reader's own controls; navigation bar hidden; `ReaderToolbar` and
-   `ReaderToolbarCollapse` deleted.
+   the Reader's own controls; navigation bar hidden; `ReaderToolbar`,
+   `ReaderToolbar+PDF` and `ReaderToolbarCollapse` deleted.
 2. Leading affordances: chevron plus edge-swipe restoration, and the
    bidirectional iPad sidebar toggle.
 3. Anchoring: frames replace ordinals; `ReaderBarItemLocator` and its
    surrounding machinery deleted; the seam becomes `noteInputAnchorFrame`.
-4. The editing strip: status-bar absorption, revert promoted out of `⋯`.
+4. The editing strip: the cutout tier, revert promoted out of `⋯`, the status bar
+   hidden while the tier is in use.
