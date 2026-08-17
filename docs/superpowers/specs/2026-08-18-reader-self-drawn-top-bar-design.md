@@ -193,10 +193,39 @@ revert becomes a top-level control, which is also the shape this feature was
 after: visible at the top of the editing screen, the way Photos shows Revert.
 The confirmation dialog in front of it is unchanged.
 
+*(As shipped, the fold has its own `⋯` overflow — see "The editing row folds
+too" below — which is a different mechanism from the one this paragraph
+removes: this one is a `ViewThatFits` candidate that only appears on a device
+with no cutout tier that has also run out of width, not the standard bar's
+own overflow menu of undo/redo/完了/revert.)*
+
 **The editing row folds too.** It has the same `ViewThatFits` ladder as the
 Reader's own row — on a narrow width (an iPad Slide Over, a 320pt column) the
 device without a cutout tier is carrying five controls, and nothing about being
 the editing row exempts it from running out of room.
+
+**As shipped (added after Task 5's review round): the fold is two rungs, not
+three.** `ViewThatFits` can only select a candidate that is measurably narrower
+than the one above it. A middle rung — revert first, then 完了, as this
+paragraph's "the same ladder" comparison to the Reader's graduated fold might
+suggest — swapped one fixed 44×44 icon (revert) for another (完了 as an
+overflow trigger) and so measured identical to the row above it whenever
+revert was showing, and identical again when it wasn't: a candidate
+`ViewThatFits` can never select is not a fold level, it is dead code that reads
+as safety. The shipped ladder is `.expanded` → `.folded`, where `.folded`
+collapses revert and 完了 into the `⋯` overflow menu together in one step, with
+`doneButton` pinned to `.frame(minWidth: 60)` so `.folded` is measurably
+narrower than `.expanded` by construction — in every locale and every
+`canRevertToOriginal` state, not only the ones where a particular localized
+label happens to be short.
+
+**Also as shipped: the confirmation dialog's anchor moved off the revert
+button.** It attaches to the editing strip's own stable root, not to the
+revert control itself, deliberately: a button inside a `ViewThatFits` ladder is
+exactly the kind of anchor a refold can tear an open presentation out from
+under, and this codebase has shipped that failure mode before. The trade is
+that on iPad the dialog's popover arrow indicates the strip rather than the
+revert icon specifically.
 
 ## Testing
 
@@ -213,6 +242,16 @@ the editing row exempts it from running out of room.
   widths, replacing the deleted breakpoint tests.
 - Deleted: the `Metrics` breakpoint tests and the `ReaderBarItemLocator`
   clustering tests.
+- **As shipped: the fold has no automated replacement.** `ViewThatFits`
+  resolves candidates through SwiftUI's own layout pass, which is not
+  something a unit test can drive the way the deleted arithmetic tests drove
+  `Metrics`, and no Xcode MCP tooling was available during this plan's
+  execution to render and measure a preview at representative widths either.
+  The bullet above was the intent; the "no automated means exists here" gap
+  is recorded in the plan's per-task notes rather than closed. The fold is
+  verified by the device checklist instead (Task 6), which names the widths
+  and the expected give-way order and states plainly what a failed fold looks
+  like: nothing, until a narrow device overflows its row.
 - Anchoring is wired, not computed, so the tests cover that a control's frame
   reaches the coordinator; the coordinates themselves belong to the device
   checklist.
