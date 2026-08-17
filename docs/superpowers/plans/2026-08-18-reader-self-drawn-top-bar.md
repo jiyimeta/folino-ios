@@ -4,7 +4,7 @@
 
 **Goal:** Take the Reader's top chrome — and the editing chrome that shares it — out of the system navigation bar and into a view we draw, so a control can report where it is and the bar can occupy the status bar's space while editing.
 
-**Architecture:** One `ReaderTopBar` view, attached with `safeAreaInset(edge: .top)`, owns the strip. It always occupies *status-bar height + control-row height*; while editing the status bar hides and the control row grows by exactly that height, so the total top inset never changes and a paged score's page breaks cannot move. The system navigation bar is hidden throughout. Every control is then in the Reader's own view tree, so coach marks anchor to real window frames instead of counting items in a UIKit hierarchy.
+**Architecture:** The strip has two tiers. A **cutout tier** is drawn inside the top safe area, flanking the display cutout, and contributes nothing to the score's inset because the system reserves that band regardless — it exists only where a 44pt control fits, which is a notched or Dynamic Island iPhone in portrait. A **control tier**, attached with `safeAreaInset(edge: .top)`, is the only thing that adds inset, and its height never varies. So the inset the strip contributes is constant and a paged score's page breaks cannot move. The system navigation bar is hidden throughout, and every control is then in the Reader's own view tree, so coach marks anchor to real window frames instead of counting items in a UIKit hierarchy.
 
 **Tech Stack:** Swift 6.3, SwiftUI, iOS 18 deployment target.
 
@@ -36,6 +36,13 @@ git show f3cdbd94^:Packages/Features/Reader/Sources/Reader/Screens/ReaderTopOver
 **Do not copy its height handling.** It exposed `nonisolated static let height: CGFloat = 52` and call sites subtracted it from the safe area; every one of them broke when the standard bar arrived, and `f3cdbd94`'s message records removing it. Task 1 replaces that constant with a contract.
 
 ---
+
+## Known transitional states
+
+Two things are broken *between* tasks, by design. Neither is a regression to chase.
+
+- **Bar coach marks are dead from Task 2 until Task 4.** Task 2 hides the navigation bar, so `ReaderBarItemLocator` finds nothing to measure; Task 4 is what replaces it. The build is fine throughout.
+- **The editing chrome is unusable from Task 2 until Task 5.** Task 2 hides the bar that `EditorChromeView`'s `.toolbar` was filling, so the editing controls — 完了 included — have nowhere to draw. Task 5 gives them the strip. If you open an edit session on a build from Tasks 2-4 you will not be able to leave it.
 
 ## File Structure
 
@@ -87,9 +94,11 @@ git show f3cdbd94^:Packages/Features/Reader/Sources/Reader/Screens/ReaderTopOver
 - Test: `Packages/Features/Reader/Tests/ReaderTests/ReaderTopBarLayoutTests.swift`
 
 **Interfaces:**
-- Produces: `enum ReaderTopBarLayout` with `static let baseControlRowHeight: CGFloat`, `static func controlRowHeight(statusBarHeight:isEditing:) -> CGFloat`, and `static func stripHeight(statusBarHeight:isEditing:) -> CGFloat`.
+- Produces: `enum ReaderTopBarLayout` with `static let controlTierHeight: CGFloat`, `static let minimumCutoutTierHeight: CGFloat`, `static func hasCutoutTier(topSafeAreaInset:) -> Bool`, and `static func contributedInset(topSafeAreaInset:isEditing:) -> CGFloat`.
 
 This is the invariant the whole design turns on, and nothing tests it today. It is a pure function precisely so it can be tested without a device.
+
+**Read the spec's "The strip" section before writing this.** The contract is *not* that some total height stays constant — it is that **the inset this strip contributes is the control tier's height and nothing else**, independent of the device's own safe area, of whether a cutout tier is drawn, and of whether an edit session is running. The cutout tier lives inside the safe area the system already reserves, so it contributes nothing by construction.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -100,45 +109,50 @@ Create `Packages/Features/Reader/Tests/ReaderTests/ReaderTopBarLayoutTests.swift
 import SwiftUI
 import Testing
 
-/// The strip's height is the one thing this whole design exists to keep constant: if the top inset changes when an
-/// edit session starts, a paged score re-paginates under the user mid-edit.
+/// What the strip contributes to the score's top inset is the one thing this design exists to keep constant: if it
+/// changes when an edit session starts, a paged score re-paginates under the user mid-edit.
+///
+/// Note what is asserted and what is not. These test the inset the strip CONTRIBUTES, never a total that includes the
+/// system's own safe area. An earlier draft of this design asserted the total and would have passed while the real
+/// inset moved, because it assumed hiding the status bar shrinks the safe area — which it does not do on any device
+/// with a display cutout.
 @Suite("Reader top bar layout")
 struct ReaderTopBarLayoutTests {
-    /// Status-bar heights that actually ship: a pre-notch device, a notched device, and a Dynamic Island device.
-    private static let statusBarHeights: [CGFloat] = [20, 44, 54, 59]
+    /// Every top safe-area inset that ships: landscape, an SE, an iPad, and the cutout devices.
+    private static let safeAreaInsets: [CGFloat] = [0, 20, 24, 44, 47, 54, 59]
 
-    @Test func `the strip is the same height whether or not an edit session is running`() {
-        for height in Self.statusBarHeights {
+    @Test func `the contributed inset is the control tier and nothing else`() {
+        for inset in Self.safeAreaInsets {
+            for isEditing in [false, true] {
+                #expect(
+                    ReaderTopBarLayout.contributedInset(topSafeAreaInset: inset, isEditing: isEditing)
+                        == ReaderTopBarLayout.controlTierHeight,
+                )
+            }
+        }
+    }
+
+    @Test func `the contributed inset does not move when an edit session starts`() {
+        for inset in Self.safeAreaInsets {
             #expect(
-                ReaderTopBarLayout.stripHeight(statusBarHeight: height, isEditing: false)
-                    == ReaderTopBarLayout.stripHeight(statusBarHeight: height, isEditing: true),
+                ReaderTopBarLayout.contributedInset(topSafeAreaInset: inset, isEditing: false)
+                    == ReaderTopBarLayout.contributedInset(topSafeAreaInset: inset, isEditing: true),
             )
         }
     }
 
-    @Test func `the control row absorbs exactly the status bar while editing`() {
-        for height in Self.statusBarHeights {
-            let resting = ReaderTopBarLayout.controlRowHeight(statusBarHeight: height, isEditing: false)
-            let editing = ReaderTopBarLayout.controlRowHeight(statusBarHeight: height, isEditing: true)
-            #expect(editing - resting == height)
-        }
+    @Test func `a cutout tier exists only where a control fits in the reserved band`() {
+        #expect(ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: 0) == false)
+        #expect(ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: 20) == false)
+        #expect(ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: 24) == false)
+        #expect(ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: 47))
+        #expect(ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: 59))
     }
 
-    @Test func `the resting control row does not depend on the status bar`() {
-        let heights = Self.statusBarHeights.map {
-            ReaderTopBarLayout.controlRowHeight(statusBarHeight: $0, isEditing: false)
-        }
-        #expect(Set(heights).count == 1)
-        #expect(heights[0] == ReaderTopBarLayout.baseControlRowHeight)
-    }
-
-    /// A device that reports no status bar at all (an iPad in some configurations) must not produce a negative or
-    /// zero-height strip.
-    @Test func `a zero status bar still leaves a full control row`() {
-        #expect(ReaderTopBarLayout.stripHeight(statusBarHeight: 0, isEditing: false)
-            == ReaderTopBarLayout.baseControlRowHeight)
-        #expect(ReaderTopBarLayout.stripHeight(statusBarHeight: 0, isEditing: true)
-            == ReaderTopBarLayout.baseControlRowHeight)
+    @Test func `the cutout tier boundary is the minimum tappable height`() {
+        let boundary = ReaderTopBarLayout.minimumCutoutTierHeight
+        #expect(ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: boundary))
+        #expect(ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: boundary - 0.5) == false)
     }
 }
 ```
@@ -160,32 +174,48 @@ Create `Packages/Features/Reader/Sources/Reader/Screens/ReaderTopBarLayout.swift
 ```swift
 import CoreGraphics
 
-/// How tall the Reader's top strip is, and how that height is divided between the status bar and the control row.
+/// How the Reader's top strip divides into tiers, and what it costs the score.
 ///
-/// The contract, and the reason this is a type of its own rather than three expressions inside a view: **the strip
-/// occupies the same total height whether or not an edit session is running.** While editing, the status bar is
-/// hidden and the control row grows by exactly the height the status bar gave up. The score's top inset therefore
-/// never moves, which is what stops a paged score from re-paginating the moment the user starts editing.
+/// The strip has two tiers and only one of them is paid for:
+///
+/// * the **cutout tier** is drawn inside the top safe area, flanking the display cutout, and adds nothing to the
+///   score's inset — the system reserves that band whether or not anything is in it. It exists only where a tappable
+///   control fits, which means a notched or Dynamic Island iPhone in portrait;
+/// * the **control tier** sits below the safe area and is the only thing that adds inset.
+///
+/// The contract, and the reason this is a type rather than a few expressions inside a view: **the inset this strip
+/// contributes is the control tier's height and nothing else** — independent of the device's safe area, of whether a
+/// cutout tier is drawn, and of whether an edit session is running. That is what stops a paged score from
+/// re-paginating when the user starts editing.
+///
+/// The contract is deliberately NOT "some total height stays constant". An earlier draft said that, on the premise
+/// that hiding the status bar reclaims its height and the control tier can absorb it. It does not: on a device with a
+/// display cutout the top inset belongs to the cutout, and the system keeps reserving it whether the status bar is
+/// showing or not. That identity would have held only on an SE.
 ///
 /// The Reader used to draw this chrome itself and exposed a flat `height: CGFloat = 52` that call sites subtracted
-/// from the safe area. Every one of those broke when the standard toolbar replaced it. This is the replacement:
-/// callers ask for a height rather than knowing one.
+/// from the safe area. Every one of those broke when the standard toolbar replaced it. Callers ask here rather than
+/// knowing a number.
 enum ReaderTopBarLayout {
-    /// The control row's own height, ignoring the status bar. One row of 44pt controls plus the breathing room the
-    /// old overlay used above and below them.
-    static let baseControlRowHeight: CGFloat = 52
+    /// The control tier's height: one row of 44pt controls plus the breathing room the old overlay used around them.
+    static let controlTierHeight: CGFloat = 52
 
-    /// How tall the row of controls is drawn. While editing it also covers the space the status bar vacated, so the
-    /// controls sit where the clock was — the shape Photos uses for its editing chrome.
-    static func controlRowHeight(statusBarHeight: CGFloat, isEditing: Bool) -> CGFloat {
-        baseControlRowHeight + (isEditing ? statusBarHeight : 0)
+    /// The least top safe-area inset that can host a control. Below this the reserved band is a sliver — an SE's
+    /// 20pt, an iPad's 24pt, nothing at all in landscape — and no cutout tier is drawn.
+    static let minimumCutoutTierHeight: CGFloat = 44
+
+    /// Whether this device, in this orientation, reserves enough at the top to put controls there.
+    static func hasCutoutTier(topSafeAreaInset: CGFloat) -> Bool {
+        topSafeAreaInset >= minimumCutoutTierHeight
     }
 
-    /// The whole strip, status bar included when it is showing. Constant across `isEditing` by construction — the two
-    /// terms trade against each other.
-    static func stripHeight(statusBarHeight: CGFloat, isEditing: Bool) -> CGFloat {
-        let visibleStatusBar = isEditing ? 0 : statusBarHeight
-        return visibleStatusBar + controlRowHeight(statusBarHeight: statusBarHeight, isEditing: isEditing)
+    /// What the strip adds to the score's top inset. Constant by construction: the cutout tier is drawn inside space
+    /// the system already reserved, so it is not part of this.
+    ///
+    /// The parameters are here because callers naturally have them and because the test asserts the result ignores
+    /// them — a signature that took nothing would make the invariant unfalsifiable.
+    static func contributedInset(topSafeAreaInset _: CGFloat, isEditing _: Bool) -> CGFloat {
+        controlTierHeight
     }
 }
 ```
@@ -209,9 +239,12 @@ git commit -m "feat(reader): state the top strip's height contract"
 - Create: `Packages/Features/Reader/Sources/Reader/Screens/ReaderTopBar.swift`
 - Create: `Packages/Features/Reader/Sources/Reader/Screens/ReaderTopBarControls.swift`
 - Delete: `Packages/Features/Reader/Sources/Reader/Screens/ReaderToolbar.swift`
+- Delete: `Packages/Features/Reader/Sources/Reader/Screens/ReaderToolbar+PDF.swift`
 - Delete: `Packages/Features/Reader/Sources/Reader/Screens/ReaderToolbarCollapse.swift`
-- Delete: the `ReaderToolbarCollapse` breakpoint tests (find them with `grep -rln "ReaderToolbar" Packages/Features/Reader/Tests`)
+- Delete: `Packages/Features/Reader/Tests/ReaderTests/ReaderToolbarCollapseTests.swift`
 - Modify: `Packages/Features/Reader/Sources/Reader/Screens/ReaderRootScreen.swift`
+
+**`ReaderToolbar+PDF.swift` is easy to miss and will break the build if you do.** It is an `extension ReaderToolbar` holding the PDF badge's menu — "show the score" and "read the PDF again" — plus the `displaySource == .originalPDF` branch that renders a reduced row. None of it exists in the old overlay, which had a PDF badge that only opened a notice, so **port it forward from the current file rather than looking for it in the prior art.** `PDFBadge` itself lives in `ReaderToolbar.swift` and also needs moving.
 
 **Interfaces:**
 - Consumes: `ReaderTopBarLayout` from Task 1.
@@ -236,31 +269,49 @@ import UtilityUI
 /// The Reader's top strip. Hosts whatever controls belong on screen right now — the Reader's own, or the editing row
 /// the App injects — and owns the height both cases have to agree on.
 ///
-/// The strip is attached with `safeAreaInset(edge: .top)` rather than floated in a `ZStack`, so the score's own safe
-/// area accounts for it without any call site subtracting a constant.
+/// The control tier is attached with `safeAreaInset(edge: .top)`, so the score's safe area accounts for it without
+/// any call site subtracting a constant. **It carries no `padding(.top:)` and no `ignoresSafeArea`.** The system's
+/// own top inset is already below the strip's content; adding the safe-area height back as padding would count it
+/// twice, and `ignoresSafeArea` on a fixed-height child shifts it rather than extending it.
 struct ReaderTopBar<Content: View>: View {
-    let statusBarHeight: CGFloat
-    let isEditing: Bool
     @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .frame(
-                height: ReaderTopBarLayout.controlRowHeight(
-                    statusBarHeight: statusBarHeight,
-                    isEditing: isEditing,
-                ),
-                alignment: .bottom,
-            )
             .padding(.horizontal)
-            // While editing the row reaches up into the space the status bar vacated; at rest it starts below it.
-            .padding(.top, isEditing ? 0 : statusBarHeight)
             .frame(maxWidth: .infinity)
-            .background(alignment: .top) { Color.clear }
-            .ignoresSafeArea(edges: .top)
+            .frame(height: ReaderTopBarLayout.controlTierHeight)
     }
 }
 ```
+
+The cutout tier is **not** part of this view, because anything inside a `safeAreaInset` contributes inset by definition. It is a separate overlay on the Reader's root:
+
+```swift
+/// The tier drawn inside the top safe area, flanking the display cutout. An overlay rather than a `safeAreaInset`
+/// precisely so it contributes nothing: the band it occupies is reserved by the system either way.
+///
+/// The two clusters are pinned to their own edges and nothing is placed in the middle — the cutout's width varies by
+/// model and is not ours to know.
+struct ReaderCutoutTier<Leading: View, Trailing: View>: View {
+    let topSafeAreaInset: CGFloat
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
+
+    var body: some View {
+        HStack {
+            leading
+            Spacer(minLength: 0)
+            trailing
+        }
+        .padding(.horizontal)
+        .frame(height: topSafeAreaInset, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+}
+```
+
+Attach it with `.overlay(alignment: .top) { … }.ignoresSafeArea(edges: .top)` **on the overlay only**, and render it only when `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`.
 
 - [ ] **Step 3: Write the Reader's controls with a four-rung fold**
 
@@ -279,6 +330,10 @@ Keep the four rungs and their order — score info and share fold first, then no
 
 **Attach `.sheet` and `.popover` outside the `ViewThatFits`**, as `ReaderTopOverlay` did — a candidate swap on rotation or a split-view resize must not tear down an open presentation.
 
+**Two details are what make the fold work at all. Do not change them.** `ViewThatFits` measures each candidate's *ideal* size, so the row's trailing `Spacer` must be `Spacer(minLength: 0)` — a greedy spacer would make every candidate report that it fits, and the fold would silently never trigger. And every button keeps a fixed frame, so what a candidate needs is a function of how many buttons it has. The old overlay's `row(collapsesScoreActions:)` says both in its own comments; carry them across.
+
+Name the shared button helper `topBarButton(systemImage:label:action:)`. Task 3 calls it by that name.
+
 - [ ] **Step 4: Attach the strip and hide the navigation bar**
 
 In `ReaderRootScreen.swift`:
@@ -286,8 +341,10 @@ In `ReaderRootScreen.swift`:
 - read the status-bar height once with a `GeometryReader`-free proxy — `Color.clear.ignoresSafeArea()` inside `.background { }` reporting `safeAreaInsets.top` via `onGeometryChange`, which is the same technique the file already uses for chrome measurement;
 - attach `.safeAreaInset(edge: .top) { ReaderTopBar(statusBarHeight:isEditing:) { … } }`;
 - replace `.toolbar { readerToolbar }` with nothing, and add `.toolbarVisibility(.hidden, for: .navigationBar)`;
-- delete `.toolbarRole(.editor)`, `.navigationBarBackButtonHidden(isEditing)` and `.toolbarColorScheme(.light, for: .navigationBar)` — all three configure a bar that is no longer shown;
+- delete `.toolbarRole(.editor)`, `.navigationBarBackButtonHidden(isEditing)`, `.toolbarColorScheme(.light, for: .navigationBar)` and `.floatingToolbarBackgroundCompat()` — all four configure a bar that is no longer shown. Leave the `floatingToolbarBackgroundCompat` *definition* in `UtilityUI`; other screens use it;
 - delete the window-width measurement that fed `ReaderToolbar.collapse(availableWidth:…)` and the `collapse` state it wrote.
+
+Fix the stale comments that now describe a world that no longer exists: `ReaderInspectorDestinations.swift:10` (references `ReaderToolbar.Metrics` / `.Collapse`), `ScoreContentView.swift:13`, and `ReaderHintBubble.swift`'s opening paragraph about toolbar items. `ReaderToolbar.Collapse` has no users outside this package — the apparent hits in `ReaderHintCopy` / `ReaderFeatureHint` / `ReaderHintWiring` are the unrelated `transportCollapse` case.
 
 Leave the `isCaptureMode` branch behaving as it does today: capture mode draws no chrome, so it renders no strip.
 
@@ -354,17 +411,34 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
         context.coordinator.install(from: controller)
     }
 
+    public static func dismantleUIViewController(_: UIViewController, coordinator: Coordinator) {
+        coordinator.restore()
+    }
+
     public final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         private weak var navigationController: UINavigationController?
+        /// The navigation controller's own delegate, which enforces the standard guards (no pop mid-transition, none
+        /// at the root). Put back on teardown — leaving ours installed after this screen is gone would strip those
+        /// guards from every other screen in the same stack.
+        private weak var previousDelegate: UIGestureRecognizerDelegate?
 
         func install(from controller: UIViewController) {
             // Deferred: the controller has no parent chain on the first layout pass.
             DispatchQueue.main.async { [weak self, weak controller] in
                 guard let self, let navigation = controller?.navigationController else { return }
                 navigationController = navigation
-                navigation.interactivePopGestureRecognizer?.delegate = self
-                navigation.interactivePopGestureRecognizer?.isEnabled = true
+                guard let recognizer = navigation.interactivePopGestureRecognizer else { return }
+                if recognizer.delegate !== self { previousDelegate = recognizer.delegate }
+                recognizer.delegate = self
+                recognizer.isEnabled = true
             }
+        }
+
+        func restore() {
+            guard let recognizer = navigationController?.interactivePopGestureRecognizer,
+                  recognizer.delegate === self
+            else { return }
+            recognizer.delegate = previousDelegate
         }
 
         public func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
@@ -409,7 +483,18 @@ if let onToggleSidebar {
 }
 ```
 
-The old `reader.toolbar.showSidebar` key names one direction only. Add `reader.toolbar.toggleSidebar` in all five locales — English `Show or Hide Sidebar`, Japanese `サイドバーの表示切り替え` — and supply `ko` / `zh-Hans` / `zh-Hant` matching the register of the neighbouring strings. Remove `reader.toolbar.showSidebar` if nothing else uses it.
+**Both closures have to be added — neither exists today.** `f3cdbd94` removed the overlay's `onBack` / `leadingIsSidebarToggle` when the system took the leading edge over. Add to `ReaderRootScreen.init`, both defaulting to `nil` so the six `FolinoScreenshot` scenes that construct a Reader keep compiling:
+
+```swift
+    /// Pops back to the library. Supplied only by the compact stack; `nil` elsewhere, which hides the chevron.
+    let onBack: (@MainActor () -> Void)?
+    /// Reveals or collapses the library sidebar. Supplied only in the regular split view; `nil` elsewhere.
+    let onToggleSidebar: (@MainActor () -> Void)?
+```
+
+Do **not** call `@Environment(\.dismiss)` directly from the Reader instead: the `FolinoScreenshot` scenes host the Reader as a stack root, and a chevron would appear there with nothing to pop. `AppShellView.makeReader` serves both layouts from one function, so it decides which of the two to pass.
+
+**Both localization keys are gone and must be re-added.** `reader.toolbar.back` and `reader.toolbar.showSidebar` were deleted along with the overlay in `f3cdbd94`; the current catalog has neither. Add `reader.toolbar.back` (English `Back`, Japanese `戻る`) and `reader.toolbar.toggleSidebar` (English `Show or Hide Sidebar`, Japanese `サイドバーの表示切り替え`), each in all five locales, supplying `ko` / `zh-Hans` / `zh-Hant` in the register of their neighbours. There is nothing to remove.
 
 - [ ] **Step 3: Wire the closures**
 
@@ -452,10 +537,11 @@ git commit -m "feat(reader): draw the back and sidebar affordances, keep edge-sw
 
 **Files:**
 - Delete: `Packages/Features/Reader/Sources/Reader/Hints/ReaderBarItemLocator.swift`
-- Delete: its tests (`grep -rln "ReaderBarItemLocator" Packages/Features/Reader/Tests`)
+- Delete: `Packages/Features/Reader/Tests/ReaderTests/ReaderBarItemLocatorTests.swift`
 - Modify: `Hints/ReaderFeatureHint.swift`, `Hints/ReaderHintCoordinator.swift`, `Hints/ReaderHintBubble.swift`, `Hints/ReaderHintWiring.swift`
 - Modify: `ReaderEditingHost.swift`
 - Modify: `Screens/ReaderTopBarControls.swift`
+- Modify: `App/EditableReaderScreen.swift`
 
 **Interfaces:**
 - Produces: `ReaderEditingHost.noteInputAnchorFrame: CGRect?` replacing `noteInputBarLeadingOrder: Int?`.
@@ -468,7 +554,7 @@ In `ReaderTopBarControls.swift`, change every `.readerHintBarAnchor(.someTarget)
 
 - `Hints/ReaderBarItemLocator.swift` and its tests: delete outright.
 - `Hints/ReaderFeatureHint.swift`: delete `enum ReaderBarSlot` and `ReaderHintTarget.barSlot`.
-- `Hints/ReaderHintCoordinator.swift`: delete `barTargets`, `registerBarTarget`, `refreshBarAnchors`, `assign`, `setReaderRegion`, `readerRegion`, and `scheduleBarRefresh` with its 0/120/320/700/1400 ms resampling. Keep `anchors`, `setAnchor`, `clearAnchor` and everything that reads them.
+- `Hints/ReaderHintCoordinator.swift`: delete `barTargets`, `registerBarTarget`, `refreshBarAnchors`, `assign`, `setReaderRegion`, `readerRegion`, `barRefreshTask`, and `scheduleBarRefresh` with its 0/120/320/700/1400 ms resampling. Keep `anchors`, `setAnchor`, `clearAnchor` and everything that reads them.
 - `Hints/ReaderHintBubble.swift`: delete `readerHintBarAnchor` and `ReaderHintBarAnchorModifier`.
 - Anywhere `setReaderRegion` was called, delete the call.
 
@@ -499,7 +585,13 @@ In `Hints/ReaderHintWiring.swift`, replace the ordinal `onChange`:
             }
 ```
 
-- [ ] **Step 4: Run the Reader suite**
+- [ ] **Step 4: Keep the App compiling**
+
+Renaming the seam breaks `App/EditableReaderScreen.swift`, which writes `editingHost.noteInputBarLeadingOrder` from the chrome's `onNoteInputBarOrderChange` callback. The Reader package alone still builds, so its test scheme will not catch this — the App target goes red at this commit unless you fix it here.
+
+The Editor's chrome does not report a frame until Task 5, so stub the App side for now: pass `onNoteInputBarOrderChange: { _ in }` and leave `noteInputAnchorFrame` unwritten. Task 5 replaces the callback and wires the frame.
+
+- [ ] **Step 5: Run the Reader suite and build the app**
 
 From `Packages/Features/Reader`:
 
@@ -507,12 +599,18 @@ From `Packages/Features/Reader`:
 xcodebuild test -scheme Reader -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -parallel-testing-enabled NO
 ```
 
-Expected: PASS. The deleted locator tests must be gone, not failing.
+Then from the repo root:
 
-- [ ] **Step 5: Commit**
+```
+xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation build
+```
+
+Expected: PASS / BUILD SUCCEEDED. The deleted locator tests must be gone, not failing.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add Packages/Features/Reader
+git add Packages/Features/Reader App
 git commit -m "refactor(reader): anchor coach marks to frames instead of counting bar items"
 ```
 
@@ -536,8 +634,11 @@ git commit -m "refactor(reader): anchor coach marks to frames instead of countin
 
 Create `EditorTopBarView.swift`, porting `EditorChromeView+Toolbar.swift`'s `voiceMenu`, `padToggleButton` and the undo / redo / 完了 buttons into a plain `HStack`. Two changes:
 
-- **Revert is a top-level trailing button, and the `⋯` menu is gone.** It held exactly one item and existed only because a sixth item risked the standard bar folding undo, redo and 完了 into a system menu of its own choosing. `ViewThatFits` removes that risk. Keep the confirmation dialog and the failure alert from `EditorChromeView+Revert.swift` exactly as they are; only the control that raises the dialog moves.
-- **The pad toggle reports its frame.** Replace `onNoteInputBarOrderChange(1)` / `onNoteInputBarOrderChange(nil)` with `.onWindowFrameChange { onNoteInputAnchorFrameChange($0) }` on the button, and `nil` it on disappear.
+- **Two tiers, matching the Reader's.** Where `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)` is true, 完了 goes to the cutout tier's leading end and revert to its trailing end — the two controls that end the session, in the two spots Photos uses. The voice picker and pad toggle lead the control tier; undo and redo trail it. Where there is no cutout tier, 完了 and revert join the control tier, making it five controls wide.
+- **The control tier folds.** Give it the same `ViewThatFits` ladder as the Reader's row, with the same `Spacer(minLength: 0)` and fixed button frames. Five controls in an iPad Slide Over or a 320pt column will not fit, and nothing about being the editing row exempts it. Fold order: revert first, then 完了, into an overflow menu — they are the two that have a home in the cutout tier on other devices.
+- **Revert is a top-level control and the `⋯` menu is gone** on any width that fits it. It held exactly one item and existed only because a sixth item risked the standard bar folding undo, redo and 完了 into a system menu of its own choosing.
+- **The confirmation dialog and the failure alert move with the button.** They cannot stay in `EditorChromeView+Revert.swift`: `isConfirmingRevert` is `@State` on `EditorChromeView`, and the revert button now lives in a different view in a different part of the tree. Move `isConfirmingRevert`, the `.confirmationDialog`, the `.alert` bound to `revertError`, and the `revertMessage` composition into `EditorTopBarView`. Anchoring the dialog to the button that raises it is also what makes it read correctly as a popover on iPad.
+- **The pad toggle reports its frame.** Replace `onNoteInputBarOrderChange(1)` / `onNoteInputBarOrderChange(nil)` with `.onWindowFrameChange { onNoteInputAnchorFrameChange($0) }` on the button, and `nil` it on disappear. Remove the `onNoteInputBarOrderChange` parameter from `EditorChromeView.init` and its argument at the `EditableReaderScreen` call site.
 
 Delete the now-unused `editor.chrome.more` key from the catalog, and delete `overflowMenu` from `EditorChromeView+Revert.swift`.
 
@@ -554,9 +655,17 @@ Add to `ReaderRootScreen.init`:
 
 In the `safeAreaInset` added in Task 2, render the injected row instead of `ReaderTopBarControls` while `editingHost?.isEditing == true` and a builder was supplied.
 
-- [ ] **Step 3: Hide the status bar while editing**
+- [ ] **Step 3: Hide the status bar while the cutout tier is in use**
 
-On the Reader's root: `.statusBarHidden(editingHost?.isEditing == true)`.
+On the Reader's root:
+
+```swift
+.statusBarHidden(editingHost?.isEditing == true && ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset))
+```
+
+Only then — the clock and the battery sit in exactly the two spots the tier wants, and on a device with no tier there is nothing to clear and no reason to take the clock away.
+
+**Hiding it changes no height.** It does not shrink the safe area on a cutout device; the inset is the cutout's. Do not add or subtract anything on the strength of this call.
 
 `statusBarHidden(_:)` is the iOS API and is current on iOS 18; the `ToolbarPlacement.statusBar` visibility form is iOS 27 only and is not used here.
 
@@ -604,13 +713,15 @@ If the implementation diverged from the spec anywhere, correct the spec — a do
 
 Compile, into your report, a checklist a human runs on a physical device. It must cover at minimum:
 
-1. **The invariant.** Open a paged score, note where a page breaks, enter note editing, confirm the break is in the same place, leave editing, confirm it again. This is the whole point of the design and no automated test reaches it.
-2. **Edge-swipe back** from the Reader on an iPhone, and that the chevron works too.
-3. **iPad sidebar toggle in both directions** — collapse an open sidebar and reopen it.
-4. **The fold** at 375pt, 393pt, 402pt and 440pt widths, plus iPad Slide Over: which buttons give way, in the documented order, with nothing overflowing off-screen.
-5. **Coach marks** point at their buttons — every bar hint, plus the note-input pad hint during editing.
-6. **The editing strip** occupies the status bar's space, with revert visible at the trailing end and no `⋯`.
-7. **Rotation and Dynamic Island** — the strip's height stays correct across a rotation on a notched device and on one with an island.
+1. **The invariant, on a cutout device.** Open a paged score, note where a page breaks, enter note editing, confirm the break is in the same place, leave editing, confirm it again. This is the whole point of the design and no automated test reaches it.
+2. **The invariant, on a device with no cutout tier** — an SE or an iPad, where the layout is one tier and the status bar never hides. Same walk.
+3. **Rotate mid-session on a cutout device.** Landscape has no cutout tier, so the layout changes tiers underneath an open edit session. The page break may move (the width changed), but the chrome must not end up doubled, clipped, or behind the clock.
+4. **Edge-swipe back** from the Reader on an iPhone, and that the chevron works too. Then push and pop another screen in the same stack to confirm the standard guards came back — the gesture delegate is restored on teardown, and a regression here is silent.
+5. **iPad sidebar toggle in both directions** — collapse an open sidebar and reopen it.
+6. **The fold** at 375pt, 393pt, 402pt and 440pt widths, plus iPad Slide Over: which buttons give way, in the documented order, with nothing overflowing off-screen. **Do the editing row too**, which is the one carrying five controls where there is no cutout tier.
+7. **Coach marks** point at their buttons — every bar hint, plus the note-input pad hint during editing.
+8. **The cutout tier** shows 完了 and revert flanking the island, with the clock and battery gone, and nothing colliding with the cutout on the widest and narrowest models you have.
+9. **Screenshots.** Re-run `Scripts/capture-screenshots.sh --devices iphone --locales en --scenes NoteEditing` and look at the result — that scene draws the editing chrome, and the screenshot harness reports a zero safe area, so it exercises the no-cutout-tier branch.
 
 - [ ] **Step 4: Commit**
 
@@ -625,5 +736,5 @@ git commit -m "docs: reconcile the top-bar spec with the implementation"
 
 - **Spec coverage.** The strip and its height contract → Tasks 1, 2. The fold via `ViewThatFits` → Task 2. Navigation bar hidden and appearance ours → Task 2. Leading affordances and edge swipe → Task 3. Anchoring, deletions and the seam → Task 4. The editing strip, status-bar absorption, revert promoted → Task 5. Testing → Tasks 1, 2 and 6. Prior-art reuse → Task 2 Step 1. The 52pt warning → Task 1's implementation comment.
 - **The one spec line with no task** is the "Risks" section, which is narrative rather than work; its three items are covered by Task 6's checklist.
-- **Naming consistency:** `ReaderTopBarLayout.baseControlRowHeight` / `.controlRowHeight(statusBarHeight:isEditing:)` / `.stripHeight(statusBarHeight:isEditing:)`, `ReaderTopBar`, `ReaderTopBarControls`, `restoresInteractivePopGesture()`, `noteInputAnchorFrame`, `editingTopBar`, `onToggleSidebar`.
+- **Naming consistency:** `ReaderTopBarLayout.controlTierHeight` / `.minimumCutoutTierHeight` / `.hasCutoutTier(topSafeAreaInset:)` / `.contributedInset(topSafeAreaInset:isEditing:)`, `ReaderTopBar`, `ReaderCutoutTier`, `ReaderTopBarControls`, `topBarButton(systemImage:label:action:)`, `restoresInteractivePopGesture()`, `noteInputAnchorFrame`, `editingTopBar`, `onBack`, `onToggleSidebar`.
 - **Deliberately not planned:** an Android parity marker. The Android app draws its own Compose chrome and shares no code with this.
