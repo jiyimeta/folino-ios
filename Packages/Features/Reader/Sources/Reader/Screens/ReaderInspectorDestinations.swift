@@ -3,15 +3,13 @@ import SheetMusicCore
 import SwiftUI
 
 /// The Reader's two inspector destinations — playback settings and display settings — resolved from the view model in
-/// one place, so whoever presents them cannot drift apart about what a given toolbar button opens.
+/// one place, so whoever presents them cannot drift apart about what a given button opens.
 ///
-/// They used to be `.popover`s hanging off the toolbar buttons themselves. They are not any more, because the
-/// navigation bar can decide on its own to move trailing items into an overflow menu it builds (see
-/// `ReaderToolbar.Metrics` for why that must never happen, and `ReaderToolbar.Collapse` for how we keep ahead of it).
-/// A button carrying a presentation modifier has no representation inside such a menu, so the menu comes out empty —
-/// and an empty menu does not open. That is exactly how a too-narrow bar turned into an `…` that did nothing at all
-/// when tapped. Every toolbar button is a bare `Button` now, and the presentation lives on the screen; the anchored
-/// popover survives only at regular width, where it is worth having and where the bar has room to spare anyway.
+/// Regular width anchors a `.popover` directly to the inspector button in `ReaderTopBarControls`, which is safe there
+/// because that button lives OUTSIDE the `ViewThatFits` fold — it never folds into the overflow menu, so it never
+/// carries a presentation modifier into content that has no representation once folded. Compact width can't use the
+/// same popover — it degrades to a full-screen sheet anyway — so `ReaderRootScreen` presents the identical content as
+/// a `.sheet` instead (`inspectorSheet` below), keeping the two in exact sync via this one type.
 @MainActor
 struct ReaderInspectorDestinations {
     let viewModel: ReaderViewModel
@@ -124,7 +122,7 @@ extension View {
         }
     }
 
-    /// The compact-width counterpart of `inspectorPopover`: the screen presents what the toolbar button can't.
+    /// The compact-width counterpart of `inspectorPopover`: the screen presents what the strip's button can't.
     @ViewBuilder
     func inspectorSheet(
         isPresented: Binding<Bool>,

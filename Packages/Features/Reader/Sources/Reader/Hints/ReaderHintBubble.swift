@@ -7,12 +7,13 @@ import UtilityUI
 // window-level `UITapGestureRecognizer` with `cancelsTouchesInView = false`). No × — the bubble times itself out.
 //
 // What differs from synclick: anchors arrive as rects through `ReaderHintCoordinator` rather than as SwiftUI
-// `Anchor<CGRect>` preferences, because half the controls hinted here are `ToolbarItem`s hosted by the navigation bar,
-// and preferences do not cross that hosting boundary. Those rects are in WINDOW coordinates (`onWindowFrameChange`),
-// which is not a detail: SwiftUI's own `.global` is resolved against the hosting view a measurement is taken in, so a
-// bar button measured that way reports its position inside its own item-sized host — a few points from the origin,
-// which is precisely where every toolbar-anchored bubble used to land. The window is the only space the bar's hosting
-// context and the Reader's own tree agree on.
+// `Anchor<CGRect>` preferences. Every control hinted here is now in the Reader's own view tree (`ReaderTopBarControls`
+// draws the strip itself, no `ToolbarItem`s left), but `readerHintBarAnchor` and the ordinal-counting
+// `ReaderBarItemLocator` it feeds still assume a navigation bar to measure — a later task replaces that with frames
+// reported directly by each control, at which point bar-anchored hints will resolve again. Those rects are in WINDOW
+// coordinates (`onWindowFrameChange`), which is not a detail: SwiftUI's own `.global` is resolved against the hosting
+// view a measurement is taken in, so a bar button measured that way reports its position inside its own item-sized
+// host — a few points from the origin, which is precisely where every toolbar-anchored bubble used to land.
 
 // MARK: - Anchor plumbing
 
