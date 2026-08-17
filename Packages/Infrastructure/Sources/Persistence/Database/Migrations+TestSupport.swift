@@ -139,4 +139,12 @@ extension AppMigrations {
         m.registerMigration("v16", migrate: migrateV16)
         return m
     }()
+
+    /// Migrator that registers v1 … v17 only — useful for tests that want to exercise the v18 upgrade against rows
+    /// already inserted at the previous schema.
+    static let upToV17: DatabaseMigrator = {
+        var m = upToV16
+        m.registerMigration("v17", migrate: migrateV17)
+        return m
+    }()
 }

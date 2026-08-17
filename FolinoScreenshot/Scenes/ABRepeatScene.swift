@@ -77,6 +77,7 @@ struct ABRepeatScene: View {
                 ReaderRootScreen(
                     scoreItem: Fixture.items[0],
                     repository: repository,
+                    originalStore: FixtureOriginalStore(),
                     gateway: FixtureGateway(),
                     shareService: FixtureShareService(),
                     vocalTunerHandoff: NoopVocalTunerHandoff(),

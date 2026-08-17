@@ -208,6 +208,7 @@ enum PreviewEditorFactory {
             scoresDirectory: URL(filePath: "/tmp"),
             gateway: NoopScoreFileGateway(),
             repository: NoopScoreLibraryRepository(),
+            originalStore: NoopScoreOriginalStore(),
             playback: nil,
         )
         if let armedDuration {

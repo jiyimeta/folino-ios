@@ -37,6 +37,7 @@ final class AppBootstrap {
     private(set) var annotationCoordinator: AnnotationSaveCoordinator?
     private(set) var repository: LiveScoreLibraryRepository?
     private(set) var gateway: LiveScoreFileGateway?
+    private(set) var originalStore: LiveScoreOriginalStore?
     private(set) var importer: LiveScoreFileImporter?
     private(set) var playbackController: LivePlaybackController?
     /// Stateless PDF → playable-score parser (ssm OMR). Always available on Apple, no async setup, so
@@ -98,6 +99,7 @@ final class AppBootstrap {
                 playlistsIndexPublisher: writer,
             )
             let gateway = LiveScoreFileGateway(crashReporter: crashReporter ?? NoopCrashReporter())
+            let originalStore = LiveScoreOriginalStore(scoresDirectory: AppPaths.scoresDirectory, gateway: gateway)
             pdfScoreConversion = makePDFScoreConversion(gateway: gateway)
             let importer = LiveScoreFileImporter(
                 gateway: gateway,
@@ -123,6 +125,7 @@ final class AppBootstrap {
             annotationCoordinator = AnnotationSaveCoordinator(store: annotationStore)
             self.repository = repository
             self.gateway = gateway
+            self.originalStore = originalStore
             self.importer = importer
             incomingShareCoordinator = shareCoordinator
             installAudioStack(gateway: gateway)

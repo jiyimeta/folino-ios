@@ -198,3 +198,18 @@ struct FixtureMetadataReader: ScoreMetadataReading {
         )
     }
 }
+
+/// No-op `ScoreOriginalStore`: revert / discard are never exercised in screenshot scenes.
+struct FixtureOriginalStore: ScoreOriginalStore {
+    func captureOriginalIfNeeded(for item: ScoreItem) -> ScoreItem {
+        item
+    }
+
+    func revertToOriginal(_ item: ScoreItem, restoringScoreInfo _: Bool) -> ScoreItem {
+        item
+    }
+
+    func discardOriginal(for item: ScoreItem) -> ScoreItem {
+        item
+    }
+}

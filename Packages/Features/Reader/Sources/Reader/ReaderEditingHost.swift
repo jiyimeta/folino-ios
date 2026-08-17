@@ -1,3 +1,4 @@
+import Domain
 import Observation
 import SheetMusicCore
 import SheetMusicLayout
@@ -127,6 +128,14 @@ public final class ReaderEditingHost {
     /// are working on without leaving edit mode — but every key that would mutate the score has to go inert while
     /// the cursor is running, since an edit mid-playback would reflow the score out from under it.
     public internal(set) var isPlaying = false
+
+    /// Answers whether any ink is anchored to the notation, so the Editor's confirmation can say whether reverting
+    /// will move it. A provider rather than a stored mirror, matching `hiddenStavesProvider`: the answer changes as
+    /// the user draws, and a value copied at wiring time would be stale by the time the dialog opens.
+    public var hasMusicalAnnotationsProvider: @MainActor () -> Bool = { false }
+    /// Filled by the Reader. The App calls it when a revert lands; the Reader adopts the rebuilt row, leaves the
+    /// editing session, stops playback and reloads the score from disk.
+    public var requestReloadAfterRevert: @MainActor (ScoreItem) -> Void = { _ in }
 
     /// Written by the App (measured from the editing chrome), read by the Reader: how much vertical room the editing
     /// cluster occupies at the top and bottom of the screen. The score containers turn these into SCROLL PADDING, not

@@ -39,6 +39,9 @@ public struct EditScoreInfoSheet: View {
             Form {
                 creditsSection
                 infoSection
+                if RevertToOriginalSection.shouldShow(item) {
+                    RevertToOriginalSection(model: model, item: item) { dismiss() }
+                }
             }
             .navigationTitle(Text("scoreUI.editInfo.title", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
@@ -190,6 +193,9 @@ private struct PreviewInfoEditing: ScoreInfoEditing {
 
     // swiftlint:disable:next async_without_await
     func saveMetadata(_: ScoreItem, fields _: EditableScoreInfo) async {}
+
+    // swiftlint:disable:next async_without_await
+    func revertToOriginal(_: ScoreItem, restoringScoreInfo _: Bool) async {}
 }
 
 #Preview {
@@ -206,5 +212,21 @@ private struct PreviewInfoEditing: ScoreInfoEditing {
             tagIDs: [], isFavorite: false,
         ),
     )
+}
+
+#Preview("With an original to revert to") {
+    var item = ScoreItem(
+        title: "Clair de Lune", subtitle: "Suite bergamasque",
+        composer: nil, arranger: nil, lyricist: nil, copyright: nil,
+        instrumentationSummary: "Piano",
+        localFileName: "\(UUID().uuidString).mscz",
+        contentHash: String(repeating: "0", count: 64),
+        sizeBytes: 4096, lengthBeats: 256, defaultTempoBpm: 66, primaryKey: nil,
+        addedAt: Date(timeIntervalSince1970: 1_700_000_000), lastOpenedAt: nil,
+        tagIDs: [], isFavorite: false,
+    )
+    item.originalFileName = "\(UUID().uuidString).original.mscz"
+    item.originalProvenance = .importTime
+    return EditScoreInfoSheet(model: PreviewInfoEditing(), item: item)
 }
 #endif

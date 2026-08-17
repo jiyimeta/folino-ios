@@ -11,7 +11,7 @@ import SheetMusicUI
 @MainActor
 @Observable
 public final class EditorViewModel {
-    public private(set) var editor: ScoreEditor?
+    public internal(set) var editor: ScoreEditor?
     /// The editor's live score, or nil outside a session. Views and the Reader seam render THIS score while editing.
     ///
     /// The `generation` read is load-bearing, not decoration. `ScoreEditor` is a plain class, so mutating the score
@@ -46,9 +46,12 @@ public final class EditorViewModel {
     // where the NEXT note lands; the selection is the note the editing keys act on. Writing a run of notes moves the
     // caret on after each one while the selection stays on the note just written — so ♯ / ♭ / ⌫ keep addressing what
     // you just played rather than the empty slot ahead of it.
-    public private(set) var selection: ScoreSelection = .none
-    public private(set) var selectedItem: SheetMusicCore.ScoreItemID?
-    public private(set) var caretItem: SheetMusicCore.ScoreItemID?
+    // internal(set), not private(set): `EditorViewModel+Revert.swift` clears all three directly to tear a session
+    // down without routing through `place(selection:caret:)` (which would fire `onSelectionChanged` and re-arm from
+    // a selection that no longer exists once the editor is gone).
+    public internal(set) var selection: ScoreSelection = .none
+    public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
+    public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
 
     /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
     /// into and no item to edit, so every key is inert (there is nothing for one to mean).
@@ -128,6 +131,15 @@ public final class EditorViewModel {
     // Stored autosave state (Task 10) — declared HERE (extensions cannot add stored properties).
     @ObservationIgnored var autosaveTask: Task<Void, Never>?
     @ObservationIgnored var isDirty = false
+    /// True from the moment `revertToOriginal()` commits to reverting until the session ends. `performSave()`
+    /// honours it both at entry and again after its one suspension point, so a debounce or scene-background flush
+    /// that lands mid-revert finds nothing to do instead of racing the store's file swap (Critical 2 review fix).
+    @ObservationIgnored var isReverting = false
+    /// The `Task` wrapping whichever `performSave()` call is currently running, from either trigger site below —
+    /// so `revertToOriginal()` can wait for it to finish before touching the file itself. `performSave()` is a
+    /// plain `async` method with two call sites, neither of which is itself a `Task`, so this is the one handle
+    /// common to both (Critical 2 review fix).
+    @ObservationIgnored var inFlightSaveTask: Task<Void, Never>?
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
     /// it drives the Task 16 one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
@@ -166,10 +178,20 @@ public final class EditorViewModel {
     /// Fired whenever the selection or the caret changes (App mirrors both into the Reader seam: the first argument
     /// tints the selected item, the second draws the insertion caret).
     public var onSelectionChanged: @MainActor (ScoreSelection, SheetMusicCore.ScoreItemID?) -> Void = { _, _ in }
+    /// Fired after a successful revert with the rebuilt row. The App mirrors it into the Reader, which reloads the
+    /// score from disk — the Editor cannot reach the Reader directly.
+    public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
+    /// Set when a revert failed, for the chrome to surface. Cleared at the start of each attempt.
+    public internal(set) var revertError: String?
 
     @ObservationIgnored let gateway: any ScoreFileGateway
     @ObservationIgnored let repository: any ScoreLibraryRepository
     @ObservationIgnored let playback: (any PlaybackController)?
+    @ObservationIgnored let originalStore: any ScoreOriginalStore
+    /// Mirrors `scoreItem.canRevertToOriginal` as an OBSERVED property. `scoreItem` is `@ObservationIgnored`, so a
+    /// toolbar reading it directly would not re-evaluate when the session's first autosave captures the original —
+    /// the `⋯` item would not appear until the chrome happened to rebuild for some other reason.
+    public internal(set) var hasCapturedOriginal: Bool
     /// Internal (not private) so `EditorViewModel+Persistence.swift` can replace it after a save refreshes the row.
     @ObservationIgnored var scoreItem: ScoreItem
     @ObservationIgnored let scoresDirectory: URL
@@ -179,13 +201,16 @@ public final class EditorViewModel {
         scoresDirectory: URL,
         gateway: any ScoreFileGateway,
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore,
         playback: (any PlaybackController)?,
     ) {
         self.scoreItem = scoreItem
         self.scoresDirectory = scoresDirectory
         self.gateway = gateway
         self.repository = repository
+        self.originalStore = originalStore
         self.playback = playback
+        hasCapturedOriginal = scoreItem.canRevertToOriginal
     }
 
     public func beginSession(score: Score) {

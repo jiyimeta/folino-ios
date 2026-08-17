@@ -106,11 +106,13 @@ struct NoteEditingScene: View {
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     gateway: FixtureGateway(),
                     repository: repository,
+                    originalStore: FixtureOriginalStore(),
                     playbackController: nil,
                 ) { host, chrome in
                     ReaderRootScreen(
                         scoreItem: Fixture.items[0],
                         repository: repository,
+                        originalStore: FixtureOriginalStore(),
                         gateway: FixtureGateway(),
                         shareService: FixtureShareService(),
                         vocalTunerHandoff: NoopVocalTunerHandoff(),

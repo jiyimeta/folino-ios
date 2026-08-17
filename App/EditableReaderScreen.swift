@@ -17,12 +17,17 @@ struct EditableReaderScreen: View {
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
     private let readerBuilder: (ReaderEditingHost, @escaping ChromeBuilder) -> ReaderRootScreen
+    /// Kept only so `wireOnce()` can re-read this instance's row before every edit session (Critical 1 review fix)
+    /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
+    /// live cache already carries whatever that Reader (or the Library, via the same shared repository) last wrote.
+    private let repository: any ScoreLibraryRepository
 
     init(
         item: ScoreItem,
         scoresDirectory: URL,
         gateway: any ScoreFileGateway,
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore,
         playbackController: (any PlaybackController)?,
         readerBuilder: @escaping (ReaderEditingHost, @escaping ChromeBuilder) -> ReaderRootScreen,
     ) {
@@ -31,8 +36,10 @@ struct EditableReaderScreen: View {
             scoresDirectory: scoresDirectory,
             gateway: gateway,
             repository: repository,
+            originalStore: originalStore,
             playback: playbackController,
         ))
+        self.repository = repository
         self.readerBuilder = readerBuilder
     }
 
@@ -41,6 +48,7 @@ struct EditableReaderScreen: View {
             AnyView(EditorChromeView(
                 viewModel: editorViewModel,
                 bottomTransportClearance: context.bottomTransportClearance,
+                hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
                 onDone: { [editingHost] in editingHost.requestExit() },
                 onClusterInsetsChange: { [editingHost] top, bottom in
                     editingHost.editingChromeTopInset = top
@@ -74,8 +82,21 @@ struct EditableReaderScreen: View {
         isWired = true
         let host = editingHost
         let vm = editorViewModel
-        host.onBeginEditing = { [weak vm, weak host] score in
+        host.onBeginEditing = { [weak vm, weak host, repository] score in
             guard let vm else { return }
+            // Re-seed the row before acting on it. `editorViewModel` is created once and reused for every edit
+            // session this screen opens, so without this its `scoreItem` is whatever it was at `init` (or its own
+            // last save) — stale the moment a revert lands through the score-info sheet, which writes through the
+            // Reader's or the Library's OWN copy of the row, never this one. A stale `scoreItem` still names a
+            // sidecar the store has already deleted, so the next autosave's capture step sees "already captured"
+            // and skips it, silently overwriting the just-restored original with no backup (Critical 1 review fix).
+            // `repository` is the same live instance passed into `readerBuilder`'s `ReaderRootScreen`, so its
+            // observed cache already carries whatever was last written by the time the user gets back into edit
+            // mode. This also fixes the milder pre-existing bug where a title edited in the sheet was clobbered by
+            // this view model's next save.
+            if let freshRow = repository.scoreItems.first(where: { $0.id == vm.scoreItemID }) {
+                vm.refreshRow(freshRow)
+            }
             vm.beginSession(score: score)
             // Carry the reader's last tap into the session: the note under the playhead is almost always the one the
             // user came here to change.
@@ -94,6 +115,11 @@ struct EditableReaderScreen: View {
         }
         host.onTapOutsideScore = { [weak vm] in
             vm?.deselect()
+        }
+        // The other half of a completed revert: the Editor rewrote the file and the row, but has no way to make the
+        // Reader — which is still drawing the edited score it already had in memory — notice.
+        vm.onRevertCompleted = { [weak host] item in
+            host?.requestReloadAfterRevert(item)
         }
         // Straight from the Reader's overlay into the view model, with no SwiftUI body in between: this fires on every
         // scroll and zoom frame, and anything that read it in a body would re-render the score at that rate.

@@ -149,6 +149,7 @@ public struct ReaderRootScreen: View {
     public init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore,
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         vocalTunerHandoff: any VocalTunerHandoff,
@@ -174,6 +175,7 @@ public struct ReaderRootScreen: View {
             wrappedValue: ReaderViewModel(
                 scoreItem: scoreItem,
                 repository: repository,
+                originalStore: originalStore,
                 gateway: gateway,
                 shareService: shareService,
                 vocalTunerHandoff: vocalTunerHandoff,
@@ -303,6 +305,11 @@ public struct ReaderRootScreen: View {
             }
             editingHost?.hiddenStavesProvider = { [weak viewModel] in
                 viewModel?.layoutModel.hiddenStaves ?? []
+            }
+            // Split out (`ReaderRootScreen+RevertWiring.swift`) to keep this closure — and the struct's primary
+            // declaration — under SwiftLint's body-length budgets.
+            if let editingHost {
+                wireRevertReload(host: editingHost, viewModel: viewModel)
             }
             viewModel.playbackSession.startCursorProvider = { [weak editingHost] in
                 guard let host = editingHost, host.isEditing,

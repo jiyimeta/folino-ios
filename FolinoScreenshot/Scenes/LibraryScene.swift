@@ -101,6 +101,7 @@ struct LibraryScene: View {
             ReaderRootScreen(
                 scoreItem: Fixture.items[0],
                 repository: FixtureScoreRepository(),
+                originalStore: FixtureOriginalStore(),
                 gateway: FixtureGateway(),
                 shareService: FixtureShareService(),
                 vocalTunerHandoff: NoopVocalTunerHandoff(),
@@ -115,6 +116,7 @@ struct LibraryScene: View {
     private func makeLibraryViewModel() -> LibraryViewModel {
         LibraryViewModel(
             repository: FixtureScoreRepository(),
+            originalStore: FixtureOriginalStore(),
             importer: FixtureImporter(),
             gateway: FixtureGateway(),
             shareService: FixtureShareService(),

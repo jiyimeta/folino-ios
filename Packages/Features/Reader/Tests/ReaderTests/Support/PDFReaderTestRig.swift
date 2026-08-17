@@ -21,6 +21,7 @@ final class PDFReaderTestRig {
     let scoresDirectory: URL
     private(set) var item: ScoreItem
     let repository: FakeScoreLibraryRepository
+    let originalStore: any ScoreOriginalStore
     private(set) var conversionCallCount = 0
 
     private let conversion: Conversion
@@ -28,8 +29,16 @@ final class PDFReaderTestRig {
     /// - Parameters:
     ///   - converted: build the rig with the PDF already read into notation (the state after import).
     ///   - edited: mark the notation as edited since the conversion wrote it.
-    init(conversion: Conversion = .succeeds, converted: Bool = false, edited: Bool = false) throws {
+    ///   - originalStore: the store the built view model discards / reverts through. Defaults to a fresh
+    ///     `FakeScoreOriginalStore` so tests that don't care about it need no extra argument.
+    init(
+        conversion: Conversion = .succeeds,
+        converted: Bool = false,
+        edited: Bool = false,
+        originalStore: any ScoreOriginalStore = FakeScoreOriginalStore(),
+    ) throws {
         self.conversion = conversion
+        self.originalStore = originalStore
         let source = try #require(Bundle.module.url(forResource: "sample", withExtension: "pdf"))
         let id = ScoreItemID()
         scoresDirectory = FileManager.default.temporaryDirectory
@@ -114,6 +123,7 @@ final class PDFReaderTestRig {
         ReaderViewModel(
             scoreItem: item,
             repository: repository,
+            originalStore: originalStore,
             gateway: FakeScoreFileGateway(),
             scoresDirectory: scoresDirectory,
             pdfPlaybackParser: CountingPDFParser(rig: self),

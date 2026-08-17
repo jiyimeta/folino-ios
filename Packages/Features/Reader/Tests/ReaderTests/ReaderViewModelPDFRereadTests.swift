@@ -79,4 +79,22 @@ struct ReaderViewModelPDFRereadTests {
         #expect(!vm.scoreItem.pdfConversionFailed)
         #expect(vm.scoreItem.pdfOriginState == .converted)
     }
+
+    @Test func `re-reading the pdf forgets the captured original`() async throws {
+        let store = FakeScoreOriginalStore()
+        let rig = try PDFReaderTestRig(converted: true, originalStore: store)
+        let vm = rig.makeViewModel()
+        await vm.load()
+        var item = vm.scoreItem
+        item.originalFileName = "\(item.id.rawValue.uuidString).original.mscz"
+        item.originalContentHash = "orig"
+        item.originalProvenance = .conversionOutput
+        vm.scoreItem = item
+
+        await vm.reReadPDF()
+
+        #expect(store.discardCalls.count == 1)
+        #expect(store.discardCalls.first?.originalFileName == "\(item.id.rawValue.uuidString).original.mscz")
+        #expect(vm.scoreItem.originalFileName == nil)
+    }
 }
