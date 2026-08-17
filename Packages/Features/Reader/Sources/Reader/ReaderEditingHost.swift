@@ -213,7 +213,20 @@ public struct ReaderEditingChromeContext {
     /// it. The transport stays anchored to the bottom edge and stays the Reader's to draw; only the pad moves.
     public let bottomTransportClearance: CGFloat
 
-    public init(bottomTransportClearance: CGFloat) {
+    /// Whether this device's top safe-area inset is wide enough to host a control — see
+    /// `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`. Precomputed here rather than exposing
+    /// `ReaderTopBarLayout` itself, which is package-internal: the editing top bar (Task 5) needs the answer to
+    /// place 完了 / revert without this package's layout internals crossing the Reader/Editor seam.
+    public let hasCutoutTier: Bool
+
+    /// The reserved band's height, for sizing and centering whatever the editing top bar draws into it. Meaningless
+    /// when `hasCutoutTier` is false. Defaulted to 0 so the pad-overlay builder, which never reads either of these
+    /// two properties, doesn't have to supply them.
+    public let topSafeAreaInset: CGFloat
+
+    public init(bottomTransportClearance: CGFloat, hasCutoutTier: Bool = false, topSafeAreaInset: CGFloat = 0) {
         self.bottomTransportClearance = bottomTransportClearance
+        self.hasCutoutTier = hasCutoutTier
+        self.topSafeAreaInset = topSafeAreaInset
     }
 }

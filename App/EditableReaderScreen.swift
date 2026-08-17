@@ -9,14 +9,19 @@ import SwiftUI
 /// unaware (module-architecture Option 1). This is the ONLY place the Editor and Reader features meet.
 @MainActor
 struct EditableReaderScreen: View {
-    /// Builds the Editor feature's chrome overlay from the current seam context (score-info bar, keyboard, 完了).
+    /// Builds the Editor feature's chrome overlay from the current seam context (score-info bar, keyboard, 完了),
+    /// or its top-strip row (voice, pad toggle, undo / redo / 完了, revert) — same context type, two different
+    /// slots in the Reader's tree.
     typealias ChromeBuilder = (ReaderEditingChromeContext) -> AnyView
 
     @State private var editingHost = ReaderEditingHost()
     @State private var editorViewModel: EditorViewModel
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
-    private let readerBuilder: (ReaderEditingHost, @escaping ChromeBuilder) -> ReaderRootScreen
+    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay.
+    private let readerBuilder: (
+        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder,
+    ) -> ReaderRootScreen
     /// Kept only so `wireOnce()` can re-read this instance's row before every edit session (Critical 1 review fix)
     /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
     /// live cache already carries whatever that Reader (or the Library, via the same shared repository) last wrote.
@@ -29,7 +34,9 @@ struct EditableReaderScreen: View {
         repository: any ScoreLibraryRepository,
         originalStore: any ScoreOriginalStore,
         playbackController: (any PlaybackController)?,
-        readerBuilder: @escaping (ReaderEditingHost, @escaping ChromeBuilder) -> ReaderRootScreen,
+        readerBuilder: @escaping (
+            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder,
+        ) -> ReaderRootScreen,
     ) {
         _editorViewModel = State(wrappedValue: EditorViewModel(
             scoreItem: item,
@@ -44,22 +51,25 @@ struct EditableReaderScreen: View {
     }
 
     var body: some View {
-        readerBuilder(editingHost) { context in
+        readerBuilder(editingHost, { [editingHost] context in
             AnyView(EditorChromeView(
                 viewModel: editorViewModel,
                 bottomTransportClearance: context.bottomTransportClearance,
-                hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
-                onDone: { [editingHost] in editingHost.requestExit() },
-                onClusterInsetsChange: { [editingHost] top, bottom in
+                onClusterInsetsChange: { top, bottom in
                     editingHost.editingChromeTopInset = top
                     editingHost.editingChromeBottomInset = bottom
                 },
-                // Stubbed: the Editor's chrome has no drawing surface yet (it lost the navigation bar it filled and
-                // gets its own strip in a later task), so it cannot report a frame for `noteInputAnchorFrame` — this
-                // callback still fires with a bar ordinal, which is no longer meaningful, and is ignored.
-                onNoteInputBarOrderChange: { _ in },
             ))
-        }
+        }, { [editingHost] context in
+            AnyView(EditorTopBarView(
+                viewModel: editorViewModel,
+                hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
+                hasCutoutTier: context.hasCutoutTier,
+                topSafeAreaInset: context.topSafeAreaInset,
+                onDone: { editingHost.requestExit() },
+                onNoteInputAnchorFrameChange: { editingHost.noteInputAnchorFrame = $0 },
+            ))
+        })
         .onAppear { wireOnce() }
         // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go inert
         // while the cursor moves. Mirrored here because neither feature imports the other.

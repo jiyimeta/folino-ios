@@ -438,7 +438,7 @@ private struct ReadyShell: View {
             repository: repository,
             originalStore: originalStore,
             playbackController: bootstrap.playbackController,
-        ) { host, chrome in
+        ) { host, chrome, topBar in
             ReaderRootScreen(
                 scoreItem: item,
                 repository: repository,
@@ -463,6 +463,7 @@ private struct ReadyShell: View {
                 onToggleSidebar: onToggleSidebar,
                 editingHost: host,
                 editingChrome: chrome,
+                editingTopBar: topBar,
             )
         }
     }

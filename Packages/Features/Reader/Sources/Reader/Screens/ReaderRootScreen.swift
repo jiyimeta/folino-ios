@@ -28,6 +28,9 @@ public struct ReaderRootScreen: View {
     /// Builds the Editor feature's chrome (score-info bar, keyboard, 完了 button) from the current selection. Supplied
     /// by the App alongside `editingHost`; `nil` hides the chrome overlay (mirrors `editingHost == nil`).
     private let editingChrome: ((ReaderEditingChromeContext) -> AnyView)?
+    /// The editing row the App injects into the top strip while a session runs. `nil` in a Reader with no editing
+    /// seam.
+    private let editingTopBar: ((ReaderEditingChromeContext) -> AnyView)?
     /// Pops back to the library. Supplied only by the compact stack; `nil` elsewhere, which hides the chevron.
     private let onBack: (@MainActor () -> Void)?
     /// Reveals or collapses the library sidebar. Supplied only in the regular split view; `nil` elsewhere.
@@ -175,6 +178,7 @@ public struct ReaderRootScreen: View {
         scoreContentOverride: AnyView? = nil,
         editingHost: ReaderEditingHost? = nil,
         editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
+        editingTopBar: ((ReaderEditingChromeContext) -> AnyView)? = nil,
     ) {
         // Seed the device-class defaults at construction time. The view model only uses these if no persisted record
         // exists — a stored value, including one equal to the default, always wins.
@@ -205,6 +209,7 @@ public struct ReaderRootScreen: View {
         self.scoreContentOverride = scoreContentOverride
         self.editingHost = editingHost
         self.editingChrome = editingChrome
+        self.editingTopBar = editingTopBar
         self.onBack = onBack
         self.onToggleSidebar = onToggleSidebar
     }
@@ -257,6 +262,13 @@ public struct ReaderRootScreen: View {
         // unconditionally — capture mode and editing are handled by what `topBarContent` renders, not by toggling
         // the system bar.
         .toolbarVisibility(.hidden, for: .navigationBar)
+        // The clock and the battery sit in exactly the two spots the cutout tier wants (leading/trailing, flanking
+        // the cutout), so they're cleared only while that tier is actually in use — editing, on a device that has
+        // one. On a device with no tier there is nothing to clear and no reason to take the clock away. Hiding the
+        // status bar changes no height: the top inset belongs to the cutout and the system keeps reserving it either
+        // way (`ReaderTopBarLayout`'s own doc comment). `statusBarHidden(_:)` is the iOS API and is current on iOS
+        // 18; the `ToolbarPlacement.statusBar` visibility form is iOS 27 only and is not used here.
+        .statusBarHidden(isEditing && ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset))
         // Hiding the navigation bar above also strips its back button, and with it UIKit's own
         // `interactivePopGestureRecognizer` — the compact stack drew a chevron to replace the button, but the
         // edge-swipe gesture doesn't come back on its own. This restores it.
@@ -464,13 +476,18 @@ public struct ReaderRootScreen: View {
     /// score, matching what the standard toolbar did today (`toolbarVisibility(.hidden, ...)` removed its inset
     /// contribution entirely). `EmptyView` has no size, so an empty `ReaderTopBar` would still reserve its fixed
     /// control-tier inset per `ReaderTopBarLayout`'s contract — capture mode skips the strip itself, not just its
-    /// content, to avoid that. While editing (a later task fills this slot with the App's own chrome), the strip
-    /// stays mounted but empty: its inset must not move when an edit session starts.
+    /// content, to avoid that. While editing, the App's injected row (`editingTopBar`) renders instead of the
+    /// Reader's own controls — `nil` (a Reader with no editing seam) leaves the strip mounted but empty, so its inset
+    /// still doesn't move when an edit session starts.
     @ViewBuilder
     private var topBarContent: some View {
         if !isCaptureMode {
             ReaderTopBar {
-                if !isEditing {
+                if isEditing {
+                    if let editingTopBar {
+                        editingTopBar(topBarEditingContext)
+                    }
+                } else {
                     ReaderTopBarControls(
                         viewModel: viewModel,
                         anchorsInspectorPopovers: anchorsInspectorPopovers,
@@ -482,6 +499,17 @@ public struct ReaderRootScreen: View {
                 }
             }
         }
+    }
+
+    /// The context handed to `editingTopBar` — same type `editingChrome` (the pad overlay) takes, but this call site
+    /// is the one that fills in `hasCutoutTier` / `topSafeAreaInset`: only the strip needs to know where the cutout
+    /// tier is.
+    private var topBarEditingContext: ReaderEditingChromeContext {
+        ReaderEditingChromeContext(
+            bottomTransportClearance: bottomControlContentHeight,
+            hasCutoutTier: ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset),
+            topSafeAreaInset: topSafeAreaInset,
+        )
     }
 
     /// The bottom transport, faded out (opacity + `allowsHitTesting`) while annotating so the reader's mounted playback

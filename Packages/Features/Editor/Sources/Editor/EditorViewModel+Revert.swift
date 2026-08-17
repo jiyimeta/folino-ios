@@ -14,7 +14,7 @@ extension EditorViewModel {
     /// same thing"; Important 5 review fix). Read alongside `canRevertToOriginal` in the same body pass that
     /// recomputes it, so the `@ObservationIgnored` read below is never stale when it matters.
     ///
-    /// Internal, not `public`: only `EditorChromeView+Revert.swift`, in this same module, reads it (re-review fix).
+    /// Internal, not `public`: only `EditorTopBarView.swift`, in this same module, reads it (re-review fix).
     var revertsToConversionOutput: Bool {
         scoreItem.originalProvenance == .conversionOutput
     }
