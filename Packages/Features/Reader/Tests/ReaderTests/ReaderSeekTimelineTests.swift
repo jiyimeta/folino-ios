@@ -69,6 +69,35 @@ struct ReaderSeekTimelineTests {
         #expect(abs(timeline.fraction(measureIndex: 1, tickInMeasure: 0) - 0.5 / 2.5) < 1e-9)
     }
 
+    /// A fermata adds no ticks to its bar but does add time to it, and the table has to add that
+    /// time the same way `Score` does or the seek bar's total runs short by every hold in the piece.
+    @Test func `a fermata holds the bar in the table exactly as it does in the score`() {
+        let heldVoice = Voice(elements: [
+            .fermata(Fermata(subtype: "fermataAbove")),
+            .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .half, notes: [Note(pitch: 62, tpc: 16)])),
+        ])
+        let plainVoice = Voice(elements: (0 ..< 4).map { i in
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 64 + i, tpc: 18)]))
+        })
+        let held = Measure(voices: [heldVoice])
+        let plain = Measure(voices: [plainVoice])
+        let part = Part(
+            id: "P0",
+            instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+            staves: [Staff(measures: [held, plain])],
+        )
+        let score = Score(division: 480, parts: [part], systemMeasures: [], metaTags: [:])
+        let timeline = ReaderSeekTimeline(score: score)
+
+        // 4 s of notated content at 120 BPM plus 0.5 s of hold (a standard fermata stretches the
+        // held half note by 1.5x).
+        #expect(abs(timeline.durationSeconds - 4.5) < 1e-9)
+        #expect(abs(timeline.durationSeconds - score.notatedDurationSeconds) < 1e-9)
+        let placed = timeline.fraction(measureIndex: 1, tickInMeasure: 0)
+        #expect(abs(placed - score.seconds(at: .beat(measureIndex: 1, tickInMeasure: 0)) / 4.5) < 1e-9)
+    }
+
     @Test func `the ends of the timeline are exactly the ends of the bar`() {
         let timeline = ReaderSeekTimeline(score: Self.score(measures: 2, tempos: [0: 120]))
         #expect(timeline.fraction(measureIndex: 0, tickInMeasure: 0) == 0)
