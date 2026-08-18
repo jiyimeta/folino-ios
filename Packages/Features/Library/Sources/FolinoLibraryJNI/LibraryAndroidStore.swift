@@ -13,7 +13,8 @@ import UtilityCore // AnalyticsEvent (shared catalog type, for the analytics eve
 // SheetMusicMIDI (MidiRenderer/MidiWriter) is used directly rather than the umbrella `SheetMusic`, which
 // `@_exported import`s SheetMusicCore and would make `ScoreItemID` ambiguous with Domain's.
 import SheetMusicMIDI // MidiRenderer.render(score:), MidiWriter.write(_:)
-import SheetMusicMSCX // MSCZReader.parse(contentsOf:), MSCZWriter, MSCXEncoderOptions
+import SheetMusicMSCX // MSCZReader.parse(contentsOf:), MSCXParser.parse(_:), MSCZWriter, MSCXEncoderOptions
+import SheetMusicMusicXML // MusicXMLParser.parse(_:) / .parse(mxlData:)
 import SheetMusicPDF // PDFImporter.summaryUsingSwiftReader(pdfData:) -> PDFDocumentSummary?
 import Wirelet
 import WireletObservable
@@ -1063,12 +1064,45 @@ enum SingleFileImport {
             fields = ScorePresentation.displayFields(sourceFilename: displayFilename)
             format = .pdf
         } else {
-            // Android otherwise only parses MuseScore containers, so any other accepted extension fails to parse
-            // here → parse_failed.
-            guard let score = try? MSCZReader.parse(contentsOf: url) else { return .parseFailed }
+            // One branch per readable format, mirroring iOS's `LiveScoreFileGateway` — the same importers, in the
+            // same order, over the same `ScoreFormat`. This used to send everything non-PDF to `MSCZReader`, which
+            // opens a ZIP container, so every accepted format that is not a MuseScore container died at
+            // parse: a picked `.musicxml` or `.mscx` was copied into the cache and then reported as a generic
+            // "import failed". Nothing about the platform required that — ssm parses all of these on Android, and
+            // the Reader's own loader already sniffs the bytes rather than trusting the extension — it was only
+            // ever this function's missing branches.
+            //
+            // `nil` (no extension folino claims) keeps the historical behaviour of trying the MuseScore container,
+            // since the acceptance gate upstream never lets an unknown extension through anyway.
+            let detected = ScoreFormat.detect(filename: displayFilename) ?? .mscz
+            guard let data = try? Data(contentsOf: url) else { return .parseFailed }
+            let parsed: Score? = switch detected {
+            case .mscx:
+                try? MSCXParser.parse(data)
+            case .mscz:
+                try? MSCZReader.parse(data)
+            case .musicXML:
+                try? MusicXMLParser.parse(data)
+            case .mxl:
+                try? MusicXMLParser.parse(mxlData: data)
+            case .midi:
+                // Title falls back to the source filename when the SMF carries no Track-Name meta, exactly as the
+                // iOS gateway asks for it.
+                try? MidiImporter.parse(
+                    data,
+                    options: .init(),
+                    sourceFilename: url.deletingPathExtension().lastPathComponent,
+                )
+            case .pdf:
+                // Unreachable: handled by the branch above. Present to keep the switch exhaustive.
+                nil
+            }
+            guard let score = parsed else { return .parseFailed }
             // Shared Domain presenter — identical title/subtitle/composer rules as iOS.
             fields = ScorePresentation.displayFields(sourceFilename: displayFilename, score: score)
-            format = .mscz
+            // Keep the format the user actually picked rather than relabelling everything `.mscz`: the stored
+            // file's extension is derived from it, and a `.mid` filed as `.mscz` would be a lie on disk.
+            format = detected
         }
         let id = UUID().uuidString
         // Shared iOS naming convention: "<id>.<canonicalExtension>". The extension is what tells the Reader which
