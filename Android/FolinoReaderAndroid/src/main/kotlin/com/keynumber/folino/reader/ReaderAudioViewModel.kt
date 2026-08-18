@@ -205,12 +205,28 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
      */
     fun resumePlaybackFollow() = applyFollowEvent(PlaybackFollowEvent.ManualCursorSet)
 
-    val currentTimeSeconds: StateFlow<Double> = _engine
-        .flatMapLatest { it?.currentTimeSeconds ?: emptyFlow() }
+    /**
+     * Whether the Reader currently holds a score this engine can play. False before the first prepare
+     * and again whenever the Reader moves to an item that has no playable score — a PDF.
+     *
+     * The engine is a bound service that outlives any one score, and nothing "unprepares" it, so its
+     * own readouts go on describing the last score prepared. That is correct for the engine and wrong
+     * for the UI: a PDF opened after a score would otherwise show that score's duration under a
+     * transport it cannot use. Gating here rather than tearing the engine down keeps the fix in the
+     * layer that knows what is on screen.
+     */
+    private val _hasPlayableScore = MutableStateFlow(false)
+
+    val currentTimeSeconds: StateFlow<Double> = combine(
+        _hasPlayableScore,
+        _engine.flatMapLatest { it?.currentTimeSeconds ?: emptyFlow() },
+    ) { hasPlayableScore, seconds -> if (hasPlayableScore) seconds else 0.0 }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
 
-    val totalTimeSeconds: StateFlow<Double> = _engine
-        .flatMapLatest { it?.totalTimeSeconds ?: emptyFlow() }
+    val totalTimeSeconds: StateFlow<Double> = combine(
+        _hasPlayableScore,
+        _engine.flatMapLatest { it?.totalTimeSeconds ?: emptyFlow() },
+    ) { hasPlayableScore, seconds -> if (hasPlayableScore) seconds else 0.0 }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
 
     val mixerChannels: StateFlow<List<MixerChannel>> = _engine
@@ -490,6 +506,7 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
             // that we know it. Both happen synchronously off the same handle the Reader supplies.
             this.scoreHandle = scoreHandle
             loadRehearsalMarks(scoreHandle)
+            _hasPlayableScore.value = true
         } catch (t: Throwable) {
             synchronized(prepareLock) { pendingPrepareHandles.remove(scoreHandle) }
             throw t
@@ -531,6 +548,7 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         try {
             e.prepare(scoreHandle)
             hasLoadedIntoPlayback = true
+            preparedScoreFingerprint = SheetMusicJNI.nativeScoreFingerprint(scoreHandle)
             // The two holders this class publishes move as ONE step, service first (SP4 whole-branch review), and
             // immediately after the `prepare` that made them true.
             //
@@ -577,6 +595,68 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
      */
     fun loadRehearsalMarks(scoreHandle: Long) {
         _rehearsalMarks.value = RehearsalMarkCodec.decode(SheetMusicJNI.nativeRehearsalMarks(scoreHandle))
+    }
+
+    /**
+     * Forget the score-derived transport state, for a Reader item that has no playable score — a PDF.
+     *
+     * Everything the transport row shows is per-score, but only [preparePlayback] ever replaced it, and
+     * a PDF never reaches that. So a PDF inherited whatever the previous score left behind: its
+     * duration in the readout and its rehearsal marks in the pill row, under a transport correctly
+     * greyed out. Worse in a playlist, where an auto-advance into a PDF made the leftovers look like
+     * the PDF's own.
+     *
+     * Deliberately does not stop or unprepare the engine. Reaching a PDF by auto-advance means playback
+     * already ended, and the engine is a bound service shared with the notification transport — the
+     * stale readouts are a presentation problem, so the repair belongs in what is published, not in the
+     * audio graph's lifetime.
+     */
+    /**
+     * Re-prepare the engine against a score that was edited in place, so playback sounds what the page shows.
+     *
+     * An edit mutates the score behind the SAME handle, so nothing the audio side watches changes: the Reader's
+     * handle-keyed prepare never fires again and the player keeps the sequence it decoded when the score opened.
+     * Editing a note and pressing play gave you the note you replaced. iOS answers this in
+     * `ReaderViewModel.adoptEditedScore`, whose doc names the identical failure ("the engine's sequencer still
+     * holds the pre-edit score") and releases the engine before re-preparing; this is the Android shape of that.
+     *
+     * **The `stop()` is not optional, it is the whole reason a plain [preparePlayback] does not work here.** Once a
+     * score is prepared the engine sits at `PREPARED`, and [preparePlayback] declines anything that is not
+     * `STOPPED` — the same guard [onCleared] documents from the other side. Without stopping first, this call
+     * would be a silent no-op, which is exactly what the bug already was.
+     *
+     * Clearing [hasLoadedIntoPlayback] before stopping matters for the same reason it does in [onCleared]: `stop()`
+     * nils the cursor, and a nil cursor while a score is loaded is what the Reader reads as end-of-score. Left set,
+     * re-preparing after an edit would fire the playlist auto-advance and jump to the next item.
+     *
+     * Declines while PLAYING rather than cutting the audio off mid-phrase. The caller re-evaluates on every
+     * transport change, so an edit made during playback — undo/redo stay enabled then — is adopted as soon as the
+     * transport leaves PLAYING. The playhead returns to the start, which is inherent to re-preparing and is what
+     * iOS does too.
+     */
+    fun reprepareForEditedScore(scoreHandle: Long) {
+        val e = engine.value ?: return
+        if (e.state.value == PlaybackState.PLAYING) return
+        // Compare the CONTENT, not the handle: an edit mutates the score behind an unchanged handle, so the handle
+        // cannot tell these apart. The edit session also bumps its revision for ops that change nothing the player
+        // can hear — opening a session is one — and re-preparing for those would send the playhead back to the
+        // start every time the user entered edit mode.
+        val fingerprint = SheetMusicJNI.nativeScoreFingerprint(scoreHandle)
+        if (fingerprint == preparedScoreFingerprint) return
+        hasLoadedIntoPlayback = false
+        e.stop()
+        preparePlayback(scoreHandle)
+    }
+
+    // Fingerprint of the score the engine was last prepared against. Written where the prepare actually succeeded,
+    // never on the way in: `preparePlayback` can decline (non-STOPPED engine) or throw, and recording it early
+    // would make [reprepareForEditedScore] believe a prepare happened that did not.
+    private var preparedScoreFingerprint: Long? = null
+
+    fun clearPlayableScore() {
+        _hasPlayableScore.value = false
+        _rehearsalMarks.value = emptyList()
+        scoreHandle = null
     }
 
     /** Steps the playback cursor back one measure (shared `Score.cursorSteppingMeasure` semantics). */

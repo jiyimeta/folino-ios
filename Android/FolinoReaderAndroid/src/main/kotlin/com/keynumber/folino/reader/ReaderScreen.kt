@@ -324,15 +324,17 @@ fun ReaderScreen(
     persistRepeatMode: (RepeatMode) -> Unit = {},
     /** Non-null only when the Reader was opened from a playlist; enables the continuation control + auto-advance. */
     playlistId: String? = null,
-    /** Live, position-ordered (score id, localFileName) pairs of the current playlist (re-derived
-     * each call; never a frozen snapshot). localFileName rides alongside the id the same way it
-     * does everywhere else in this screen — the host resolves it, the Reader is only ever told it. */
-    playlistQueueProvider: suspend () -> List<Pair<String, String>> = { emptyList() },
+    /** Live, position-ordered entries of the current playlist (re-derived each call; never a frozen
+     * snapshot). Everything the Reader needs to move to another entry rides along with the id the
+     * same way it does everywhere else in this screen — the host resolves it, the Reader is only
+     * ever told it. */
+    playlistQueueProvider: suspend () -> List<PlaylistEntry> = { emptyList() },
     /** The global sticky continuation mode (re-read each end-of-score so a Settings change is picked up). */
     continuationModeProvider: suspend () -> PlaylistContinuationMode = { PlaylistContinuationMode.PLAY_THROUGH },
-    /** Asks the host to retarget the Reader to (scoreId, localFileName) in place (host sets its
-     * currentScoreId / currentLocalFileName). */
-    onRetargetScore: (String, String) -> Unit = { _, _ -> },
+    /** Asks the host to retarget the Reader to another entry in place (host swaps its currentScoreId /
+     * currentLocalFileName / title). Every displayed field of the outgoing score has to move together:
+     * an auto-advance that carried only the id left the app bar naming the score that just finished. */
+    onRetargetScore: (PlaylistEntry) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
     // Analytics seams. The Reader module cannot import the analytics library, so the app layer passes
@@ -582,7 +584,7 @@ fun ReaderScreen(
 
             if (playlistId == null) return@collect
             val queue = playlistQueueProvider()
-            val index = queue.indexOfFirst { it.first == scoreId }
+            val index = queue.indexOfFirst { it.id == scoreId }
             if (index < 0) return@collect
             val next = com.keynumber.folino.reader.swiftjava.FolinoReaderJNI.nativePlaylistNextAction(
                 index.toLong(),
@@ -592,7 +594,7 @@ fun ReaderScreen(
             ).toInt()
             if (next in queue.indices) {
                 pendingAutoplay = true
-                onRetargetScore(queue[next].first, queue[next].second)
+                onRetargetScore(queue[next])
             }
         }
     }
@@ -605,18 +607,29 @@ fun ReaderScreen(
         readerVm.installPreparedHandleProbe(audioVm::isPreparedWith)
     }
     LaunchedEffect(scoreHandle) {
-        scoreHandle?.let {
-            // Seed the per-score playback scalars (master volume / tempo / A4) before prepare, so the
-            // engine re-syncs to the user's saved values once the player is prepared. The global A4 is
-            // also stored so the inspector can show the per-score value's cents offset.
-            audioVm.seedPlaybackScalars(
-                masterVolume = initialMasterVolume,
-                tempoMultiplier = initialTempoMultiplier,
-                a4ReferenceHz = initialA4ReferenceHz,
-                globalA4ReferenceHz = globalA4ReferenceHz,
-            )
-            audioVm.preparePlayback(it)
+        val handle = scoreHandle
+        if (handle == null) {
+            // No handle to play. This is the ONLY signal the audio view model gets that the Reader
+            // moved off a score: `preparePlayback` is the sole thing that replaces the transport's
+            // per-score state, and a PDF never reaches it, so without this a PDF goes on showing the
+            // previous score's duration and rehearsal marks.
+            //
+            // It also fires for the brief handle-less gap `ReaderViewModel.load` opens between two
+            // NOTATION scores, which is wanted for the same reason: during the swap the outgoing
+            // score's marks would otherwise sit under the incoming one. The next publish re-prepares.
+            audioVm.clearPlayableScore()
+            return@LaunchedEffect
         }
+        // Seed the per-score playback scalars (master volume / tempo / A4) before prepare, so the
+        // engine re-syncs to the user's saved values once the player is prepared. The global A4 is
+        // also stored so the inspector can show the per-score value's cents offset.
+        audioVm.seedPlaybackScalars(
+            masterVolume = initialMasterVolume,
+            tempoMultiplier = initialTempoMultiplier,
+            a4ReferenceHz = initialA4ReferenceHz,
+            globalA4ReferenceHz = globalA4ReferenceHz,
+        )
+        audioVm.preparePlayback(handle)
     }
     // Metronome is global (SettingsPrefs). Push the current global value into the engine + VM so the
     // soundfont-reload re-push keeps it, and re-push whenever the global flag changes.
@@ -674,6 +687,34 @@ fun ReaderScreen(
     val playbackState by audioVm.state.collectAsStateWithLifecycle()
     // Gates the top-bar annotation toggle: disabled while playing (parity w/ iOS).
     val isPlaying = playbackState == PlaybackState.PLAYING
+
+    // Re-prepare the engine against an edited score. An edit mutates the score IN PLACE under the same handle, so
+    // `LaunchedEffect(scoreHandle)` above — the only thing that ever prepares playback — never fires again, and the
+    // player goes on sounding the sequence it decoded when the score opened. Editing a note and pressing play gave
+    // you the note you replaced. `EditSessionHost.requestRelayout()` refreshes the picture and nothing else; there
+    // was no path at all from an edit to the audio graph.
+    //
+    // iOS solved this with `ReaderViewModel.adoptEditedScore`, whose own doc names the same failure ("the engine's
+    // sequencer still holds the pre-edit score") and answers it by releasing and re-preparing. This is that, wired
+    // where Android can wire it: `ReaderScreen` is the only layer holding both view models.
+    //
+    // Keyed on `playbackState` as well as the revision, and that is not belt-and-braces. Undo/redo in the app bar
+    // stay enabled while playing, so an edit CAN land mid-playback; `reprepareForEditedScore` declines then rather
+    // than cutting the audio off, and this effect re-runs on the next transport change to adopt it. Without that
+    // half, an edit made while playing would stay unheard until the score was reopened.
+    //
+    // Note the state to skip is PLAYING, not "anything but STOPPED": once a score is prepared the engine sits at
+    // PREPARED, so a STOPPED-only gate would never fire at all. That was this fix's own first version, and the
+    // device said so — `rev=1 prepared=0 state=PREPARED` with nothing re-prepared.
+    var preparedEditRevision by remember(scoreHandle) { mutableIntStateOf(0) }
+    val editRevision by readerVm.editRevision.collectAsStateWithLifecycle()
+    LaunchedEffect(editRevision, playbackState, scoreHandle) {
+        val handle = scoreHandle ?: return@LaunchedEffect
+        if (editRevision == preparedEditRevision) return@LaunchedEffect
+        if (playbackState == PlaybackState.PLAYING) return@LaunchedEffect
+        preparedEditRevision = editRevision
+        audioVm.reprepareForEditedScore(handle)
+    }
 
     // Mirror the transport into the shared edit session (SP4 whole-branch review). `EditorSessionCore` — the code
     // BOTH platforms run — owns what starting playback does to an edit session: it drops the selection, because the

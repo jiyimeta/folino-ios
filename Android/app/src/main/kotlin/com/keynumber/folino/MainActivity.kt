@@ -69,6 +69,7 @@ import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.MixerStripID
+import com.keynumber.folino.reader.PlaylistEntry
 import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
@@ -558,7 +559,7 @@ private fun LibraryNavGraph(
                 ),
             ) { entry ->
                 val navId = entry.arguments?.getString("id") ?: ""
-                val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+                val navTitle = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
                 val navLocalFileName =
                     URLDecoder.decode(entry.arguments?.getString("localFileName").orEmpty(), "UTF-8")
                 val playlistId = entry.arguments?.getString("playlistId")
@@ -569,6 +570,10 @@ private fun LibraryNavGraph(
                 // which file to open. Seeded from the nav arg; the auto-advance path below re-seeds it
                 // from a Room lookup rather than a Reader-side one (see onRetargetScore).
                 var currentLocalFileName by rememberSaveable(navId) { mutableStateOf(navLocalFileName) }
+                // Also part of the same retarget event. The nav arg only ever describes the score the
+                // Reader was ENTERED on, so reading it directly left the app bar naming the previous
+                // score for the whole of every auto-advanced one.
+                var currentTitle by rememberSaveable(navId) { mutableStateOf(navTitle) }
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
@@ -697,7 +702,7 @@ private fun LibraryNavGraph(
                 ReaderScreen(
                     scoreId = currentScoreId,
                     localFileName = currentLocalFileName,
-                    title = title,
+                    title = currentTitle,
                     onEditInfo = {
                         AndroidAnalytics.log(AndroidAnalytics.bridge.scoreInfoOpened("readerOverlay"))
                         nav.navigate("editInfo/$currentScoreId")
@@ -870,24 +875,32 @@ private fun LibraryNavGraph(
                     // inside ReaderScreen). The continuation-mode wire value is shown in the inspector;
                     // the auto-advance handler re-reads it fresh from DataStore at each end-of-score.
                     playlistId = playlistId,
-                    // Pairs each queue entry's score id with its real on-disk file name so a playlist
-                    // auto-advance can retarget the Reader (below) the same way the initial open does —
-                    // via a value it's handed, not a lookup the Reader module performs itself.
+                    // Carries every per-score field the Reader displays, so a playlist auto-advance can
+                    // retarget the Reader (below) the same way the initial open does — via values it's
+                    // handed, not lookups the Reader module performs itself. The record fetched here
+                    // already has all of them, so widening this costs nothing.
                     playlistQueueProvider = {
                         playlistId?.let { pid ->
                             withContext(Dispatchers.IO) {
                                 val ids = abRepeatStore.orderedLivePlaylistScoreIds(pid)
                                 val byId = abRepeatStore.loadAll().associateBy { it.id }
-                                ids.map { id -> id to (byId[id]?.localFileName.orEmpty()) }
+                                ids.map { id ->
+                                    PlaylistEntry(
+                                        id = id,
+                                        localFileName = byId[id]?.localFileName.orEmpty(),
+                                        title = byId[id]?.title.orEmpty(),
+                                    )
+                                }
                             }
                         } ?: emptyList()
                     },
                     continuationModeProvider = {
                         PlaylistContinuationMode.fromWire(prefs.playlistContinuationMode.first())
                     },
-                    onRetargetScore = { next, nextLocalFileName ->
-                        currentScoreId = next
-                        currentLocalFileName = nextLocalFileName
+                    onRetargetScore = { next ->
+                        currentScoreId = next.id
+                        currentLocalFileName = next.localFileName
+                        currentTitle = next.title
                     },
                     continuationModeWire = continuationModeWire,
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
