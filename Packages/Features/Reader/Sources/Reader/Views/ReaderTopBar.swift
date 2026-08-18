@@ -50,7 +50,7 @@ struct ReaderCutoutTier<Leading: View, Trailing: View>: View {
             Spacer(minLength: 0)
             trailing
         }
-        .padding(.horizontal)
+        .padding(.horizontal, ReaderTopBarLayout.cutoutTierHorizontalInset)
         .frame(height: topSafeAreaInset, alignment: .center)
         .frame(maxWidth: .infinity, alignment: .top)
     }

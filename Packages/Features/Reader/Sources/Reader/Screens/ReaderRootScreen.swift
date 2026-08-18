@@ -39,6 +39,16 @@ public struct ReaderRootScreen: View {
     private let onBack: (@MainActor () -> Void)?
     /// Reveals or collapses the library sidebar. Supplied only in the regular split view; `nil` elsewhere.
     private let onToggleSidebar: (@MainActor () -> Void)?
+    /// Asks the App to hide or show the status bar. A closure rather than `statusBarHidden(_:)` applied here, because
+    /// applied here it does nothing: measured on an iPhone 16 Pro, the Reader requesting the hide reported
+    /// `hideStatusBar=true` while the window scene's own `statusBarManager.isStatusBarHidden` stayed `false` and the
+    /// clock stayed on screen. The same modifier on `AppShellView`'s root hides it — including over a pushed Reader —
+    /// so the preference is not surviving the trip out of a `navigationDestination`. The status bar belongs to the
+    /// window either way, and the window is the App's; this screen only decides.
+    ///
+    /// The App is told `false` again on disappear: a Reader popped mid-edit would otherwise leave the whole app
+    /// without a clock.
+    private let onStatusBarHiddenChange: (@MainActor (Bool) -> Void)?
 
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
@@ -106,6 +116,14 @@ public struct ReaderRootScreen: View {
 
     private var layoutMode: ReaderLayoutMode {
         ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
+    }
+
+    /// The clock and the battery sit in exactly the two spots the cutout tier wants, so they're cleared only while
+    /// that tier is actually in use — editing, on a device that has one. On a device with no tier there is nothing to
+    /// clear and no reason to take the clock away. Hiding the status bar changes no height: the top inset belongs to
+    /// the cutout and the system keeps reserving it either way (`ReaderTopBarLayout`'s own doc comment).
+    private var statusBarShouldHide: Bool {
+        isEditing && ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset)
     }
 
     /// Screenshot-capture mode (launch arg `-readerCaptureMode 1`): hides the top chrome and bottom transport so a real
@@ -179,6 +197,7 @@ public struct ReaderRootScreen: View {
         openedFrom: AnalyticsSource = .libraryAll,
         onBack: (@MainActor () -> Void)? = nil,
         onToggleSidebar: (@MainActor () -> Void)? = nil,
+        onStatusBarHiddenChange: (@MainActor (Bool) -> Void)? = nil,
         scoreContentOverride: AnyView? = nil,
         editingHost: ReaderEditingHost? = nil,
         editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
@@ -218,6 +237,7 @@ public struct ReaderRootScreen: View {
         self.editingCutoutTier = editingCutoutTier
         self.onBack = onBack
         self.onToggleSidebar = onToggleSidebar
+        self.onStatusBarHiddenChange = onStatusBarHiddenChange
     }
 
     public var body: some View {
@@ -232,13 +252,12 @@ public struct ReaderRootScreen: View {
             bottomChrome
             editingChromeOverlay
         }
-        // Measured BEFORE `.safeAreaInset(edge: .top)` below in this chain, so it reports the system's own inset
-        // (status bar / display cutout) rather than one already inflated by the strip we add.
-        .background {
-            Color.clear
-                .ignoresSafeArea()
-                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { topSafeAreaInset = $0 }
-        }
+        // The WINDOW's inset, not one read from a geometry proxy. A proxy is measured inside this view, and this view
+        // adds to its own safe area on the very next line — so the proxy reports the system's band plus the strip we
+        // just attached, and because the strip's height feeds `hasCutoutTier` the two chase each other upward.
+        // Measured on an iPhone 16 Pro before this was fixed: 62, then 114, then 122, which drew a 62pt cutout band
+        // 122pt tall on top of the control tier. See `onWindowTopSafeAreaChange`.
+        .onWindowTopSafeAreaChange { topSafeAreaInset = $0 }
         .safeAreaInset(edge: .top) { topBarContent }
         // The cutout tier flanks the display cutout; drawn only where one exists (see
         // `ReaderTopBarLayout.hasCutoutTier`) and only on the overlay so it contributes nothing to the score's inset
@@ -276,7 +295,8 @@ public struct ReaderRootScreen: View {
         // status bar changes no height: the top inset belongs to the cutout and the system keeps reserving it either
         // way (`ReaderTopBarLayout`'s own doc comment). `statusBarHidden(_:)` is the iOS API and is current on iOS
         // 18; the `ToolbarPlacement.statusBar` visibility form is iOS 27 only and is not used here.
-        .statusBarHidden(isEditing && ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset))
+        .onChange(of: statusBarShouldHide, initial: true) { _, hide in onStatusBarHiddenChange?(hide) }
+        .onDisappear { onStatusBarHiddenChange?(false) }
         // Hiding the navigation bar above also strips its back button, and with it UIKit's own
         // `interactivePopGestureRecognizer` — the compact stack drew a chevron to replace the button, but the
         // edge-swipe gesture doesn't come back on its own. This restores it.

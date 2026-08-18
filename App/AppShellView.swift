@@ -134,6 +134,12 @@ private struct ReadyShell: View {
     @State private var columnVisibility: NavigationSplitViewVisibility
     @State private var navStateStore = NavigationStateStore()
     @State private var drainBannerMessage: String?
+    /// Driven by whichever Reader is on screen (`onStatusBarHiddenChange`), applied here because this is where it
+    /// works: the same modifier inside the Reader's own `navigationDestination` is silently dropped — the window
+    /// scene kept reporting the status bar visible while the Reader asked for it to go. See that closure's doc
+    /// comment on `ReaderRootScreen`. The Reader hands back `false` on disappear, so a pop can't strand the app
+    /// without a clock.
+    @State private var readerHidesStatusBar = false
     #if DEBUG
     @State private var isDebugMenuPresented = false
     #endif
@@ -258,120 +264,123 @@ private struct ReadyShell: View {
                 )
             }
         }
+        .statusBarHidden(readerHidesStatusBar)
         #if DEBUG
-        .debugMenu(isPresented: $isDebugMenuPresented)
+            .debugMenu(isPresented: $isDebugMenuPresented)
         #endif
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet(
-                provider: bootstrap.museScoreGeneralProvider,
-                onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
-                crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
-                analytics: bootstrap.analytics ?? NoopAnalytics(),
-            ) {
-                LicenseListView()
+            .sheet(isPresented: $isSettingsPresented) {
+                SettingsSheet(
+                    provider: bootstrap.museScoreGeneralProvider,
+                    onVersionHistoryViewed: { versionHistoryPresenter.markCurrentVersionAsSeen() },
+                    crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
+                    analytics: bootstrap.analytics ?? NoopAnalytics(),
+                ) {
+                    LicenseListView()
+                }
             }
-        }
-        .onChange(of: libraryVM.pendingScoreToOpen?.id) { _, newID in
-            guard let newID,
-                  let item = libraryVM.pendingScoreToOpen,
-                  item.id == newID else { return }
-            libraryVM.pendingScoreToOpen = nil
-            if layoutIsRegular {
-                sidebarPath = NavigationPath()
-                detailPlaylistID = nil
-                detailScoreItem = item
-                columnVisibility = .detailOnly
-            } else {
-                compactPath = NavigationPath()
-                compactPath.append(item)
+            .onChange(of: libraryVM.pendingScoreToOpen?.id) { _, newID in
+                guard let newID,
+                      let item = libraryVM.pendingScoreToOpen,
+                      item.id == newID else { return }
+                libraryVM.pendingScoreToOpen = nil
+                if layoutIsRegular {
+                    sidebarPath = NavigationPath()
+                    detailPlaylistID = nil
+                    detailScoreItem = item
+                    columnVisibility = .detailOnly
+                } else {
+                    compactPath = NavigationPath()
+                    compactPath.append(item)
+                }
             }
-        }
-        .task {
-            // Cold-launch: drain a URL that .onOpenURL queued before this view appeared.
-            if let url = bootstrap.consumePendingIncomingURL() {
+            .task {
+                // Cold-launch: drain a URL that .onOpenURL queued before this view appeared.
+                if let url = bootstrap.consumePendingIncomingURL() {
+                    resetNavigationForIncomingURL()
+                    await libraryVM.startImport(from: url)
+                }
+            }
+            .onChange(of: bootstrap.pendingIncomingURL) { _, newValue in
+                // Warm re-entry: a URL arrived while the app was already running. Fire-and-forget so the import
+                // isn't tied to the view's task lifecycle — `.task(id:)` would cancel its current body when the
+                // slot is cleared, surfacing as a persistenceFailed alert.
+                guard newValue != nil,
+                      let url = bootstrap.consumePendingIncomingURL() else { return }
                 resetNavigationForIncomingURL()
-                await libraryVM.startImport(from: url)
+                Task { await libraryVM.startImport(from: url) }
             }
-        }
-        .onChange(of: bootstrap.pendingIncomingURL) { _, newValue in
-            // Warm re-entry: a URL arrived while the app was already running. Fire-and-forget so the import isn't tied
-            // to the view's task lifecycle — `.task(id:)` would cancel its current body when the slot is cleared,
-            // surfacing as a persistenceFailed alert.
-            guard newValue != nil,
-                  let url = bootstrap.consumePendingIncomingURL() else { return }
-            resetNavigationForIncomingURL()
-            Task { await libraryVM.startImport(from: url) }
-        }
-        .task {
-            // Cold-launch: drain a token queued before the view appeared.
-            if let (_, openAfter) = bootstrap.consumePendingShareToken(),
-               let coordinator = bootstrap.incomingShareCoordinator
-            {
+            .task {
+                // Cold-launch: drain a token queued before the view appeared.
+                if let (_, openAfter) = bootstrap.consumePendingShareToken(),
+                   let coordinator = bootstrap.incomingShareCoordinator
+                {
+                    resetNavigationForIncomingURL()
+                    await runDrain(coordinator: coordinator, openAfter: openAfter)
+                }
+            }
+            .onChange(of: bootstrap.pendingShareToken) { _, newValue in
+                guard newValue != nil,
+                      let (_, openAfter) = bootstrap.consumePendingShareToken(),
+                      let coordinator = bootstrap.incomingShareCoordinator else { return }
                 resetNavigationForIncomingURL()
-                await runDrain(coordinator: coordinator, openAfter: openAfter)
+                Task { await runDrain(coordinator: coordinator, openAfter: openAfter) }
             }
-        }
-        .onChange(of: bootstrap.pendingShareToken) { _, newValue in
-            guard newValue != nil,
-                  let (_, openAfter) = bootstrap.consumePendingShareToken(),
-                  let coordinator = bootstrap.incomingShareCoordinator else { return }
-            resetNavigationForIncomingURL()
-            Task { await runDrain(coordinator: coordinator, openAfter: openAfter) }
-        }
-        .task {
-            // Cold-launch cross-app hand-off: import whatever a sibling app staged in the shared container — the
-            // token `.onOpenURL` queued, plus any leftovers from a hand-off whose URL never landed.
-            //
-            // Swept here rather than in `AppBootstrap.finishStartup` (where the Share-Extension sweep lives) because
-            // `ReadyShell` only exists once bootstrap is ready: an earlier sweep would consume the token before this
-            // view could turn it into Reader navigation, and putting the score on screen is the point of one-tap.
-            // With no token pending this still runs, so leftovers never pile up — but with `openAfter` false, since
-            // a plain launch should not yank the user into a score they asked for days ago.
-            guard let coordinator = bootstrap.incomingScoreCoordinator else { return }
-            let openAfter = bootstrap.consumePendingOpenScoreToken()?.1 ?? false
-            if openAfter { resetNavigationForIncomingURL() }
-            await runOpenScoreDrain(coordinator: coordinator, openAfter: openAfter)
-        }
-        .onChange(of: bootstrap.pendingOpenScoreToken) { _, newValue in
-            guard newValue != nil,
-                  let (_, openAfter) = bootstrap.consumePendingOpenScoreToken(),
-                  let coordinator = bootstrap.incomingScoreCoordinator else { return }
-            resetNavigationForIncomingURL()
-            Task { await runOpenScoreDrain(coordinator: coordinator, openAfter: openAfter) }
-        }
-        .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
-        .onChange(of: sidebarPath) { _, _ in saveNavSnapshot() }
-        .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
-        .onAppear {
-            // Seed the committed layout while active, before any backgrounding can spuriously flip the live value.
-            if committedSizeClass == nil { committedSizeClass = horizontalSizeClass }
-        }
-        .onChange(of: horizontalSizeClass) { _, new in
-            // Commit only while active: ignore the transient `.compact` iPadOS reports while backgrounding + resizing
-            // the scene for PiP, which would otherwise tear down the split view and the live PiP session.
-            if scenePhase == .active { committedSizeClass = new }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            // Catch up on a real size-class change that landed while away (e.g. Stage Manager resize while
-            // backgrounded).
-            if phase == .active { committedSizeClass = horizontalSizeClass }
-        }
-        .overlay {
-            if libraryVM.isImporting {
-                ImportLoadingHUD()
+            .task {
+                // Cold-launch cross-app hand-off: import whatever a sibling app staged in the shared container — the
+                // token `.onOpenURL` queued, plus any leftovers from a hand-off whose URL never landed.
+                //
+                // Swept here rather than in `AppBootstrap.finishStartup` (where the Share-Extension sweep lives)
+                // because `ReadyShell` only exists once bootstrap is ready: an earlier sweep would consume the
+                // token before this view could turn it into Reader navigation, and putting the score on screen is
+                // the point of one-tap.
+                // With no token pending this still runs, so leftovers never pile up — but with `openAfter` false, since
+                // a plain launch should not yank the user into a score they asked for days ago.
+                guard let coordinator = bootstrap.incomingScoreCoordinator else { return }
+                let openAfter = bootstrap.consumePendingOpenScoreToken()?.1 ?? false
+                if openAfter { resetNavigationForIncomingURL() }
+                await runOpenScoreDrain(coordinator: coordinator, openAfter: openAfter)
             }
-        }
-        .overlay(alignment: .top) {
-            if let message = drainBannerMessage {
-                DrainBannerView(message: message)
-                    .task {
-                        try? await Task.sleep(for: .seconds(2.5))
-                        drainBannerMessage = nil
-                    }
+            .onChange(of: bootstrap.pendingOpenScoreToken) { _, newValue in
+                guard newValue != nil,
+                      let (_, openAfter) = bootstrap.consumePendingOpenScoreToken(),
+                      let coordinator = bootstrap.incomingScoreCoordinator else { return }
+                resetNavigationForIncomingURL()
+                Task { await runOpenScoreDrain(coordinator: coordinator, openAfter: openAfter) }
             }
-        }
-        .animation(.easeInOut(duration: 0.15), value: libraryVM.isImporting)
-        .animation(.easeInOut(duration: 0.2), value: drainBannerMessage)
+            .onChange(of: compactPath) { _, _ in saveNavSnapshot() }
+            .onChange(of: sidebarPath) { _, _ in saveNavSnapshot() }
+            .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
+            .onAppear {
+                // Seed the committed layout while active, before any backgrounding can spuriously flip the live value.
+                if committedSizeClass == nil { committedSizeClass = horizontalSizeClass }
+            }
+            .onChange(of: horizontalSizeClass) { _, new in
+                // Commit only while active: ignore the transient `.compact` iPadOS reports while backgrounding +
+                // resizing the scene for PiP, which would otherwise tear down the split view and the live PiP
+                // session.
+                if scenePhase == .active { committedSizeClass = new }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Catch up on a real size-class change that landed while away (e.g. Stage Manager resize while
+                // backgrounded).
+                if phase == .active { committedSizeClass = horizontalSizeClass }
+            }
+            .overlay {
+                if libraryVM.isImporting {
+                    ImportLoadingHUD()
+                }
+            }
+            .overlay(alignment: .top) {
+                if let message = drainBannerMessage {
+                    DrainBannerView(message: message)
+                        .task {
+                            try? await Task.sleep(for: .seconds(2.5))
+                            drainBannerMessage = nil
+                        }
+                }
+            }
+            .animation(.easeInOut(duration: 0.15), value: libraryVM.isImporting)
+            .animation(.easeInOut(duration: 0.2), value: drainBannerMessage)
     }
 
     @MainActor
@@ -461,6 +470,7 @@ private struct ReadyShell: View {
                 openedFrom: playlistID != nil ? .playlist : .libraryAll,
                 onBack: onBack,
                 onToggleSidebar: onToggleSidebar,
+                onStatusBarHiddenChange: { readerHidesStatusBar = $0 },
                 editingHost: host,
                 editingChrome: chrome,
                 editingTopBar: topBar,

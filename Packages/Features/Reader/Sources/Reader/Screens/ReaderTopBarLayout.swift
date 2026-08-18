@@ -30,6 +30,18 @@ enum ReaderTopBarLayout {
     /// 20pt, an iPad's 24pt, nothing at all in landscape — and no cutout tier is drawn.
     static let minimumCutoutTierHeight: CGFloat = 44
 
+    /// How far the cutout tier's two controls sit in from the screen's edges, and how tall they are drawn.
+    ///
+    /// Both measured off a Photos screenshot at this exact raster (1206x2622, iPhone 16 Pro): its ✕ occupies
+    /// x 44…110pt and its 元に戻す x 293…357pt, so each is inset 45pt and 64–66pt wide; both are 26pt tall with their
+    /// centres at 31.8pt, i.e. centred in the 62pt band. The tier is not styled by eye — these are the numbers.
+    ///
+    /// The inset is far wider than the 16pt a normal row uses, and deliberately so: the controls have to clear the
+    /// cutout, whose width is not ours to know, and a generous margin is what keeps them clear of it on every model.
+    /// The controls' own drawn size (26pt tall, 64pt minimum wide) comes from the same measurement but lives with
+    /// the controls, in `EditorSessionBandMetrics` — Features don't import each other.
+    static let cutoutTierHorizontalInset: CGFloat = 45
+
     /// Whether this device, in this orientation, reserves enough at the top to put controls there.
     static func hasCutoutTier(topSafeAreaInset: CGFloat) -> Bool {
         topSafeAreaInset >= minimumCutoutTierHeight
