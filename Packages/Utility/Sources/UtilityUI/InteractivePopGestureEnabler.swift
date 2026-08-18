@@ -66,7 +66,18 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
             previousDelegate ?? (previousNavigationController as? UIGestureRecognizerDelegate)
         }
 
+        /// How many times `install` re-queues itself while another coordinator still holds the recognizer, and how
+        /// long it waits between attempts. The overlap this covers is one representable's teardown following
+        /// another's creation, which resolves within a runloop turn or two; the cap is what keeps a coordinator that
+        /// never tears down from turning this into an endless main-queue ping.
+        private static let installRetryLimit = 3
+        private static let installRetryDelay: DispatchTimeInterval = .milliseconds(50)
+
         func install(from controller: UIViewController) {
+            install(from: controller, attemptsRemaining: Self.installRetryLimit, delay: nil)
+        }
+
+        private func install(from controller: UIViewController, attemptsRemaining: Int, delay: DispatchTimeInterval?) {
             pendingInstall?.cancel()
             // Deferred: the controller has no parent chain on the first layout pass. `updateUIViewController`
             // re-triggers this on every re-render, so a render just before a pop can leave a block queued that would
@@ -74,14 +85,19 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
             // controller — `controller?.navigationController` still resolves in that window, which would silently
             // undo the restore. `restore()` cancels this work item, so a stale block is a no-op instead.
             let workItem = DispatchWorkItem { [weak self, weak controller] in
-                guard let self, let navigation = controller?.navigationController else { return }
+                guard let self, let controller, let navigation = controller.navigationController else { return }
                 navigationController = navigation
                 guard let recognizer = navigation.interactivePopGestureRecognizer else { return }
                 // Another coordinator (from an overlapping representable) is already installed — wait for IT to
                 // restore rather than taking over now, which would leave two coordinators each recording the other
-                // as `previousDelegate`. `updateUIViewController` re-runs this on every re-render, so installation
-                // simply happens on the next pass once the other coordinator has cleaned up after itself.
-                if let other = recognizer.delegate as? Coordinator, other !== self { return }
+                // as `previousDelegate`. Re-queue ourselves rather than simply returning: a screen whose content is
+                // static produces no further `updateUIViewController`, so a bare return would leave it permanently
+                // without the edge swipe this type exists to restore.
+                if let other = recognizer.delegate as? Coordinator, other !== self {
+                    guard attemptsRemaining > 0 else { return }
+                    install(from: controller, attemptsRemaining: attemptsRemaining - 1, delay: Self.installRetryDelay)
+                    return
+                }
                 if recognizer.delegate !== self {
                     if let navigationDelegate = recognizer.delegate as? UINavigationController {
                         previousNavigationController = navigationDelegate
@@ -95,7 +111,11 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
                 recognizer.isEnabled = true
             }
             pendingInstall = workItem
-            DispatchQueue.main.async(execute: workItem)
+            if let delay {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            } else {
+                DispatchQueue.main.async(execute: workItem)
+            }
         }
 
         func restore() {

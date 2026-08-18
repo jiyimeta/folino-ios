@@ -3,6 +3,7 @@ import Editor
 import Reader
 import SheetMusicUI
 import SwiftUI
+import UtilityUI
 
 /// Composition-root wrapper that mounts a ReaderRootScreen with the note-editing seam filled in: one
 /// ReaderEditingHost + one EditorViewModel per Reader instance, wired by closure so Reader and Editor stay mutually
@@ -74,9 +75,15 @@ struct EditableReaderScreen: View {
                 onNoteInputAnchorFrameChange: { editingHost.noteInputAnchorFrame = $0 },
             ))
         }, { [editingHost] _ in
+            // Glassed here rather than inside the button views: this is the only place they are drawn raw. Inside
+            // `EditorTopBarView` they sit in clusters that already carry `interactiveGlassCompat`, and a second
+            // layer there would double it. They need it for the same reason the control tier's do — on iOS 18 the
+            // compat modifier's backing is all that separates a bare glyph from the score behind it.
             ReaderEditingCutoutTierContent(
-                leading: AnyView(EditorDoneButton(onDone: { editingHost.requestExit() })),
-                trailing: AnyView(EditorRevertButton(viewModel: editorViewModel)),
+                leading: AnyView(
+                    EditorDoneButton(onDone: { editingHost.requestExit() }).interactiveGlassCompat(),
+                ),
+                trailing: AnyView(EditorRevertButton(viewModel: editorViewModel).interactiveGlassCompat()),
             )
         })
         .onAppear { wireOnce() }

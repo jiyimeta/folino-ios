@@ -61,10 +61,10 @@ public struct EditorTopBarView: View {
     }
 
     public var body: some View {
+        // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
+        // surface — see review Important 2.
         revertConfirmation(on: controlTierRow)
-            // Matches `ReaderTopBarControls`' shadow so the reading and editing strips read as the same physical
-            // surface — see review Important 2.
-                .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+            .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
     // MARK: - Control tier

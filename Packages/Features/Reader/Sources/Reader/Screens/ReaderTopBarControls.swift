@@ -80,7 +80,7 @@ struct ReaderTopBarControls: View {
             // `minLength: 0` is what lets `ViewThatFits` fold at all: a greedy spacer would make every candidate
             // report that it fits, and the fold would silently never trigger. Carried across from the old overlay.
             Spacer(minLength: 0)
-            // `layoutPriority(1)` guards against a real risk in this shape, so don't remove it as decoration.
+            // `layoutPriority(1)` pins an allocation this row depends on; it is not decoration.
             // `ViewThatFits` sits here as a SIBLING of the `Spacer` above (and of `inspectorGroup` below) rather
             // than wrapping the whole row the way the old overlay's did — that inversion is what lets the inspector
             // pair stay a stable sibling outside the ladder, so their popovers survive a refold (see the type's doc
@@ -93,6 +93,10 @@ struct ReaderTopBarControls: View {
             // before the `Spacer`" is cheap, matches the old overlay's outer-`ViewThatFits` intent, and removes any
             // dependence on that least-flexible-first tie-breaking continuing to favor `ViewThatFits` over `Spacer`
             // as this row's content changes.
+            // Four rungs, but not always four distinct widths: with no `onStartEditing` (a score the Reader cannot
+            // open an edit session for) the note-editing button is absent from every rung, so `.scoreActions` and
+            // `.noteEditing` measure identically. That is harmless — `ViewThatFits` takes the first candidate that
+            // fits either way — and gating the ladder's length on the closure would buy nothing but a branch.
             ViewThatFits(in: .horizontal) {
                 row(collapse: .expanded)
                 row(collapse: .scoreActions)
