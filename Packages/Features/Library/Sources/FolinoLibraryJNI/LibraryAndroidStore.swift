@@ -12,9 +12,9 @@ import UtilityCore // AnalyticsEvent (shared catalog type, for the analytics eve
 
 // SheetMusicMIDI (MidiRenderer/MidiWriter) is used directly rather than the umbrella `SheetMusic`, which
 // `@_exported import`s SheetMusicCore and would make `ScoreItemID` ambiguous with Domain's.
+import SheetMusicLoader // ScoreLoader.loadScore(bytes:sourceFilename:) / (contentsOf:) — the one format-dispatch
 import SheetMusicMIDI // MidiRenderer.render(score:), MidiWriter.write(_:)
-import SheetMusicMSCX // MSCZReader.parse(contentsOf:), MSCXParser.parse(_:), MSCZWriter, MSCXEncoderOptions
-import SheetMusicMusicXML // MusicXMLParser.parse(_:) / .parse(mxlData:)
+import SheetMusicMSCX // MSCZWriter, MSCXEncoderOptions (export only; reading goes through ScoreLoader)
 import SheetMusicPDF // PDFImporter.summaryUsingSwiftReader(pdfData:) -> PDFDocumentSummary?
 import Wirelet
 import WireletObservable
@@ -99,8 +99,8 @@ public final class LibraryAndroidStore {
     /// A PDF is stored as a fixed-layout document with no notation decoded here (iOS parity: the playable score is
     /// produced later, in the Reader, by the background OMR parse) — only page count + `/Title` are read, via the
     /// same Foundation-only `PDFImporter.summaryUsingSwiftReader` entry point Android's OMR path will reuse. Every
-    /// other pickable format still goes through the full `MSCZReader.parse`. The parse/name/persist body itself lives
-    /// in `SingleFileImport`, shared with the share / open-with path.
+    /// other pickable format is parsed by `ScoreLoader`, which picks the parser from the bytes. The
+    /// parse/name/persist body itself lives in `SingleFileImport`, shared with the share / open-with path.
     @WireletExpose
     public func importScore(_ path: String) -> AnalyticsEventWire {
         let url = URL(fileURLWithPath: path)
@@ -307,7 +307,7 @@ public final class LibraryAndroidStore {
         }
         let path = "\(store.scoresDirectoryPath())/\(record.localFileName)"
         let url = URL(fileURLWithPath: path)
-        let fileMeta = (try? MSCZReader.parse(contentsOf: url)).map { ScoreFileMetadata(score: $0) }
+        let fileMeta = (try? ScoreLoader.loadScore(contentsOf: url)).map { ScoreFileMetadata(score: $0) }
         let prefill = EditableScoreInfo.prefilled(
             title: record.title, subtitle: record.subtitle, composer: record.composer,
             arranger: record.arranger, lyricist: record.lyricist, copyright: record.copyright,
@@ -519,7 +519,7 @@ public final class LibraryAndroidStore {
         guard let record = store.loadAll().first(where: { $0.id == scoreId }) else { return [] }
         let path = "\(store.scoresDirectoryPath())/\(record.localFileName)"
         let original: ScoreShareFormat? = {
-            guard let score = try? MSCZReader.parse(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+            guard let score = try? ScoreLoader.loadScore(contentsOf: URL(fileURLWithPath: path)) else { return nil }
             return ScoreShareFormat.matching(for: score.source)
         }()
         return ScoreShareFormat.allOrdered.map {
@@ -539,7 +539,7 @@ public final class LibraryAndroidStore {
               let record = store.loadAll().first(where: { $0.id == scoreId }) else { return "" }
         let sourcePath = "\(store.scoresDirectoryPath())/\(record.localFileName)"
         let sourceURL = URL(fileURLWithPath: sourcePath)
-        guard let score = try? MSCZReader.parse(contentsOf: sourceURL) else { return "" }
+        guard let score = try? ScoreLoader.loadScore(contentsOf: sourceURL) else { return "" }
         let title = ScoreExportNaming.sanitize(title: record.title)
         let outPath = "\(outDir)/\(title).\(fmt.canonicalExtension)"
         let outURL = URL(fileURLWithPath: outPath)
@@ -1034,7 +1034,7 @@ enum SingleFileImportOutcome: Equatable {
 /// `SharedImportFileResult`. Everything in between — the per-format branch, the naming convention, the upsert — lives
 /// here so it exists exactly once. It used to exist twice and drifted: PDF support was added to the picker only, so
 /// once `application/pdf` reached the share intent-filters every shared PDF passed the acceptance gate and then died
-/// at `MSCZReader.parse`.
+/// at the parse. The format table itself went the same way twice over, and now lives once, in ssm's `ScoreLoader`.
 enum SingleFileImport {
     /// - Parameters:
     ///   - sourcePath: absolute path to the readable bytes (a cache-dir copy on both paths).
@@ -1064,40 +1064,28 @@ enum SingleFileImport {
             fields = ScorePresentation.displayFields(sourceFilename: displayFilename)
             format = .pdf
         } else {
-            // One branch per readable format, mirroring iOS's `LiveScoreFileGateway` — the same importers, in the
-            // same order, over the same `ScoreFormat`. This used to send everything non-PDF to `MSCZReader`, which
-            // opens a ZIP container, so every accepted format that is not a MuseScore container died at
-            // parse: a picked `.musicxml` or `.mscx` was copied into the cache and then reported as a generic
-            // "import failed". Nothing about the platform required that — ssm parses all of these on Android, and
-            // the Reader's own loader already sniffs the bytes rather than trusting the extension — it was only
-            // ever this function's missing branches.
+            // Parsing goes through ssm's one format-dispatch. This used to send everything non-PDF to `MSCZReader`,
+            // which opens a ZIP container, so every accepted format that is not a MuseScore container died at parse
+            // — a picked `.musicxml` or `.mscx` was copied into the cache and then reported as a generic "import
+            // failed". The first fix was a branch per format here, mirroring iOS's `LiveScoreFileGateway`; that
+            // worked, and made this the third place in the app spelling the same table out. The other two had
+            // already fallen behind it (the Editor's session and this file's own export paths still read every
+            // stored score as a MuseScore container), so the table moved to ssm and every caller now asks it.
             //
-            // `nil` (no extension folino claims) keeps the historical behaviour of trying the MuseScore container,
-            // since the acceptance gate upstream never lets an unknown extension through anyway.
+            // `detect` stays, for the FORMAT LABEL only — the stored file's extension is derived from it. So the
+            // extension the user picked decides how the file is filed, and the bytes decide how it is read; a file
+            // whose extension lies now imports instead of failing, and the Reader sniffs it back the same way.
+            //
+            // `nil` (no extension folino claims) keeps the historical label of a MuseScore container, since the
+            // acceptance gate upstream never lets an unknown extension through anyway.
             let detected = ScoreFormat.detect(filename: displayFilename) ?? .mscz
-            guard let data = try? Data(contentsOf: url) else { return .parseFailed }
-            let parsed: Score? = switch detected {
-            case .mscx:
-                try? MSCXParser.parse(data)
-            case .mscz:
-                try? MSCZReader.parse(data)
-            case .musicXML:
-                try? MusicXMLParser.parse(data)
-            case .mxl:
-                try? MusicXMLParser.parse(mxlData: data)
-            case .midi:
-                // Title falls back to the source filename when the SMF carries no Track-Name meta, exactly as the
-                // iOS gateway asks for it.
-                try? MidiImporter.parse(
-                    data,
-                    options: .init(),
-                    sourceFilename: url.deletingPathExtension().lastPathComponent,
-                )
-            case .pdf:
-                // Unreachable: handled by the branch above. Present to keep the switch exhaustive.
-                nil
-            }
-            guard let score = parsed else { return .parseFailed }
+            guard let data = try? Data(contentsOf: url),
+                  // The title fallback for an SMF with no Track-Name meta, exactly as the iOS gateway asks for it.
+                  let score = try? ScoreLoader.loadScore(
+                      bytes: data,
+                      sourceFilename: url.deletingPathExtension().lastPathComponent,
+                  )
+            else { return .parseFailed }
             // Shared Domain presenter — identical title/subtitle/composer rules as iOS.
             fields = ScorePresentation.displayFields(sourceFilename: displayFilename, score: score)
             // Keep the format the user actually picked rather than relabelling everything `.mscz`: the stored

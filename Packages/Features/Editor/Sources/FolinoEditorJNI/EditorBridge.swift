@@ -4,6 +4,7 @@ import Foundation
 import Observation
 import SheetMusicCore
 import SheetMusicEditWire
+import SheetMusicLoader // ScoreLoader.loadScore(contentsOf:) — the one format-dispatch
 import SheetMusicMSCX
 import WireletObservable
 
@@ -546,13 +547,22 @@ public final class EditorBridge {
         })
     }
 
-    /// Parses the score this session will edit. `MSCZReader.parse(contentsOf:)` — not a second format-dispatch
-    /// ladder — the same call `LibraryAndroidStore` runs every pickable MuseScore file through
-    /// (`LibraryAndroidStore.swift:309`, `:521`, `:1068`); Android only ever opens an edit session over a
-    /// `.mscx`/`.mscz` source (`EditorSessionCore.saveDestination`'s save-in-place branch), so there is no other
-    /// format to dispatch on here.
+    /// Parses the score this session will edit, through ssm's one format-dispatch.
+    ///
+    /// This used to call `MSCZReader.parse(contentsOf:)` directly, on the reasoning that Android only ever opens a
+    /// session over a `.mscx`/`.mscz` source. That reasoning was wrong twice over. `EditorSessionCore` handles every
+    /// format — `saveDestination` saves MusicXML/MXL/MIDI sources as a sibling `.mscz` — and once Android's import
+    /// accepted the same six formats iOS does, a `.musicxml` score reached here and `MSCZReader`, which opens a ZIP
+    /// container, could not read it. `beginSession` then returned `false`, which the Reader maps to
+    /// `UNAVAILABLE_NO_SCORE`, which by design shows no dialog: tapping "Edit notes" did nothing at all, with
+    /// nothing anywhere to say why.
+    ///
+    /// Sniffing is also what makes `beginSession`'s own invariant true rather than coincidental. That doc says both
+    /// sides "parse the same file with the same parser" — but the mirror reaches the score through
+    /// `ScoreHandle.load`, which sniffs, while this side trusted a container format. For `.mscz` the two agreed by
+    /// luck; now they agree by construction.
     private static func parseScore(atPath path: String) -> Score? {
-        try? MSCZReader.parse(contentsOf: URL(fileURLWithPath: path))
+        try? ScoreLoader.loadScore(contentsOf: URL(fileURLWithPath: path))
     }
 
     /// A deliberately partial library row, named so nobody mistakes it for a real one.

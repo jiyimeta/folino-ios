@@ -78,6 +78,11 @@ if isAndroid {
                 // The score this session edits is parsed and re-encoded inside THIS image: spec §3 — a `Score`
                 // cannot cross between the two `SheetMusicCore` copies in the process, only bytes can.
                 .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
+                // Which parser a score file belongs to is decided by ssm's one format-dispatch, not by a second
+                // spelling here. Static on purpose: it compiles into this `.so`'s own SheetMusicCore copy, which is
+                // exactly what the two-copies rule above requires — the Reader's `ScoreBridge` is a `.dynamic` `.so`
+                // and could not be linked without breaking it.
+                .product(name: "SheetMusicLoader", package: "swift-sheet-music"),
                 // The intent wire has exactly one declaration, in ssm, and both `.so`s link it (spec §5.4).
                 .product(name: "SheetMusicEditWire", package: "swift-sheet-music"),
                 .product(name: "SwiftJava", package: "swift-java"),

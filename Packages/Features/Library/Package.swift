@@ -54,6 +54,9 @@ if isAndroid {
                 .product(name: "SheetMusicMusicXML", package: "swift-sheet-music"),
                 .product(name: "SheetMusicMIDI", package: "swift-sheet-music"),
                 .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
+                // ssm's one format-dispatch, for every path here that reads a stored score file back without
+                // knowing which of the six formats it is.
+                .product(name: "SheetMusicLoader", package: "swift-sheet-music"),
             ],
             plugins: [
                 .plugin(name: "WireletObservableBridges", package: "swift-wirelet"),
