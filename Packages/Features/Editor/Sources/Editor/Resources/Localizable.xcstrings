@@ -137,40 +137,6 @@
         }
       }
     },
-    "editor.chrome.more": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "その他"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "더 보기"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更多"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更多"
-          }
-        }
-      }
-    },
     "editor.chrome.redo": {
       "localizations": {
         "en": {
@@ -269,6 +235,146 @@
           "stringUnit": {
             "state": "translated",
             "value": "撤銷"
+          }
+        }
+      }
+    },
+    "editor.commit.action": {
+      "comment": "Accessibility label for the checkmark that ends the editing session, keeping the changes.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完了"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
+    },
+    "editor.discard.action": {
+      "comment": "Accessibility label for the ✕ that throws away the current editing session's changes.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard Changes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を破棄"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경 사항 버리기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放弃更改"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放棄更改"
+          }
+        }
+      }
+    },
+    "editor.discard.confirm.action": {
+      "comment": "Destructive button that throws away the current editing session's changes.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard Changes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更内容を破棄"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경 사항 버리기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放弃更改"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放棄更改"
+          }
+        }
+      }
+    },
+    "editor.discard.confirm.message": {
+      "comment": "Body of the confirmation ✕ raises when the session has unsaved-in-spirit changes.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Are you sure you want to\ndiscard your changes?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を破棄しても\nよろしいですか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경 사항을\n버리시겠습니까?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定要放弃\n所做的更改吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確定要放棄\n所做的更改嗎？"
           }
         }
       }
@@ -1089,7 +1195,8 @@
         }
       }
     },
-    "editor.revert.confirm.action": {
+    "editor.revert.action.short": {
+      "comment": "Label on the revert control in the editing strip. Short on purpose — it sits beside the display cutout, where the full 'Revert to Original' does not fit. The full wording stays as the control's accessibility label.",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -1123,36 +1230,70 @@
         }
       }
     },
-    "editor.revert.confirm.body": {
+    "editor.revert.confirm.action": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every note change you made will be discarded. Your handwriting, tags and playback settings are kept."
+            "value": "Revert to Original"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "加えた音符の変更はすべて破棄されます。手書き・タグ・再生設定はそのまま残ります。"
+            "value": "オリジナルに戻す"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "지금까지 변경한 음표는 모두 취소됩니다. 손글씨, 태그, 재생 설정은 그대로 유지됩니다."
+            "value": "원본으로 되돌리기"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "您所做的所有音符更改都将被放弃。手写、标签和播放设置将保留。"
+            "value": "恢复到原始版本"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "您所做的所有音符變更都將被捨棄。手寫、標籤和播放設定將保留。"
+            "value": "還原至原始版本"
+          }
+        }
+      }
+    },
+    "editor.revert.confirm.body": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reverting to the original deletes every edit you have made to this score."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オリジナルに戻すと、この楽譜に加えた編集内容が全て削除されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원본으로 되돌리면 이 악보에 적용한 편집 내용이 모두 삭제됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复到原始版本会删除你对这份乐谱所做的全部编辑。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還原至原始版本會刪除你對這份樂譜所做的全部編輯。"
           }
         }
       }

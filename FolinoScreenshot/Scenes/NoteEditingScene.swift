@@ -98,8 +98,9 @@ struct NoteEditingScene: View {
             layout: FolinoScreenshotLayout.layout(for: idiom, subtitleBullet: true, innerStatusBarHeight: 0),
             idiom: idiom,
         ) {
-            // ReaderRootScreen puts its controls in a real `.toolbar`, so it needs an ancestor nav container to host
-            // them. The bar's own background is hidden, so the outer NavigationStack adds no doubled chrome.
+            // ReaderRootScreen draws its own top strip and hides the system navigation bar, so this NavigationStack
+            // contributes no chrome of its own — it's here only so `.restoresInteractivePopGesture()` has a
+            // `UINavigationController` ancestor to install its edge-swipe delegate on.
             NavigationStack {
                 EditableReaderScreen(
                     item: Fixture.items[0],
@@ -108,7 +109,7 @@ struct NoteEditingScene: View {
                     repository: repository,
                     originalStore: FixtureOriginalStore(),
                     playbackController: nil,
-                ) { host, chrome in
+                ) { host, chrome, topBar, cutoutTier in
                     ReaderRootScreen(
                         scoreItem: Fixture.items[0],
                         repository: repository,
@@ -121,6 +122,8 @@ struct NoteEditingScene: View {
                         scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                         editingHost: host,
                         editingChrome: chrome,
+                        editingTopBar: topBar,
+                        editingCutoutTier: cutoutTier,
                     )
                 }
             }

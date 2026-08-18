@@ -100,6 +100,21 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
     /// (Critical 2 review fix).
     var captureGate: CaptureGate?
 
+    /// Sidecar file names this fake pretends are already on disk — what a capture whose row update was lost leaves
+    /// behind. `adoptOrphanedOriginal` registers one of these without copying anything, as the live store does.
+    var orphanedOriginalFileNames: Set<String> = []
+
+    func adoptOrphanedOriginal(for item: ScoreItem) -> ScoreItem {
+        guard item.originalFileName == nil,
+              orphanedOriginalFileNames.contains(item.originalSidecarFileName)
+        else { return item }
+        return item.capturingOriginal(
+            fileName: item.originalSidecarFileName,
+            contentHash: "orphaned-hash",
+            provenance: .importTime,
+        )
+    }
+
     func captureOriginalIfNeeded(for item: ScoreItem) async throws -> ScoreItem {
         eventLog?.record("capture")
         captureCalls.append(item)

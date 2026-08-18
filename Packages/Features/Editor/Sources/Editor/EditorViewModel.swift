@@ -35,9 +35,39 @@ public final class EditorViewModel {
     /// `registerSystemUndo`'s own symmetric re-registration and drift the system stack from `ScoreEditor`'s real
     /// depth (Task 16 review fix).
     public private(set) var appliedEditCount = 0
+
+    /// How deep this session's undo stack is: incremented by `applyCommand` and `redo()`, decremented by `undo()`,
+    /// reset by `beginSession`. Distinct from `appliedEditCount`, which only ever counts up.
+    ///
+    /// Observed, and maintained here rather than read from `ScoreEditor.canUndo`, because the strip's session-end
+    /// control switches on it: a mutation inside `ScoreEditor` (a reference type from another module) notifies
+    /// nothing, so a view bound to `canUndo` only refreshes when something else in the same body pass happens to
+    /// change. This is what makes "the moment you change something, the control changes" true.
+    public private(set) var sessionEditDepth = 0
+
+    /// Whether this session has anything of its own to throw away — the difference between ✕ closing the session
+    /// and ✕ asking first.
+    public var sessionHasEdits: Bool {
+        sessionEditDepth > 0
+    }
+
     public var isSessionActive: Bool {
         editor != nil
     }
+
+    #if DEBUG
+    /// Puts a preview into the "this session changed something" state without running a real edit. Here rather than
+    /// beside the previews that use it because `sessionEditDepth`'s setter is private to this file.
+    func previewSeedSessionEdit() {
+        sessionEditDepth = 1
+    }
+
+    /// Marks the session as having something to write, for a test that needs a save to actually run without going
+    /// through a real edit command. `isDirty` is file-private, hence this.
+    func markDirtyForTesting() {
+        isDirty = true
+    }
+    #endif
 
     // Selection and caret (both rendered by the Reader through the seam — the selection as a tint on the item, the
     // caret as an insertion bar in front of a slot).
@@ -183,6 +213,16 @@ public final class EditorViewModel {
     public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
     /// Set when a revert failed, for the chrome to surface. Cleared at the start of each attempt.
     public internal(set) var revertError: String?
+    /// Drives the revert confirmation dialog. On the view model, not view-local `@State`, so `EditorRevertButton`
+    /// (cutout tier OR `EditorTopBarView`'s row) and the dialog (always on `EditorTopBarView`'s root) share it.
+    public var isConfirmingRevert = false
+    /// Drives the discard confirmation ✕ raises when the session has edits. Same reasoning as `isConfirmingRevert`:
+    /// the button and the dialog live in different tiers, so the flag cannot be view-local.
+    public var isConfirmingDiscard = false
+    /// `true` when THIS session's first save is what captured the original sidecar — i.e. before this session the
+    /// score had never been edited. Discarding such a session has to take the sidecar back out, or the score would
+    /// keep offering "revert to original" while being byte-identical to it.
+    @ObservationIgnored var capturedOriginalThisSession = false
 
     @ObservationIgnored let gateway: any ScoreFileGateway
     @ObservationIgnored let repository: any ScoreLibraryRepository
@@ -217,6 +257,11 @@ public final class EditorViewModel {
         editor = ScoreEditor(score: score)
         generation = 0
         appliedEditCount = 0
+        sessionEditDepth = 0
+        capturedOriginalThisSession = false
+        // Fire-and-forget: the strip's revert offer is derived from the row, and the row can be behind what is
+        // actually on disk. Nothing downstream waits on this — when it finds something, the control changes.
+        Task { await reconcileCapturedOriginal() }
         selection = .none
         selectedItem = nil
         caretItem = nil
@@ -236,6 +281,7 @@ public final class EditorViewModel {
         // Mirror applyCommand's do/catch contract: a swallowed engine failure must not fire a false
         // generation bump / onSelectionChanged / onScoreChanged (Task 3 review parity fix).
         do { try editor.undo() } catch { return }
+        sessionEditDepth = max(0, sessionEditDepth - 1)
         generation += 1
         rederiveSelection()
         onScoreChanged(editor.score)
@@ -243,9 +289,29 @@ public final class EditorViewModel {
         scheduleAutosave()
     }
 
+    /// Unwinds this session's whole undo stack at once, notifying the host a single time at the end.
+    ///
+    /// Lives here, next to `undo()`, because `sessionEditDepth`, `generation` and `rederiveSelection` are all
+    /// file-private to this type — and because the loop is the same operation as `undo()`, just without a stopping
+    /// point. `discardSessionEdits()` owns the rest of the story (the disk, the sidecar); this owns the score.
+    ///
+    /// One notification rather than one per step: the host re-lays the score out on every `onScoreChanged`, so a
+    /// long session would otherwise redraw the whole thing once per edit on the way back.
+    func unwindSessionEdits() {
+        guard let editor else { return }
+        while editor.canUndo {
+            do { try editor.undo() } catch { break }
+        }
+        sessionEditDepth = 0
+        generation += 1
+        rederiveSelection()
+        onScoreChanged(editor.score)
+    }
+
     public func redo() {
         guard let editor, editor.canRedo else { return }
         do { try editor.redo() } catch { return }
+        sessionEditDepth += 1
         generation += 1
         rederiveSelection()
         onScoreChanged(editor.score)
@@ -281,6 +347,7 @@ public final class EditorViewModel {
         }
         generation += 1
         appliedEditCount += 1
+        sessionEditDepth += 1
         rederiveSelection()
         onScoreChanged(editor.score)
         isDirty = true
@@ -304,94 +371,5 @@ public final class EditorViewModel {
         let repairs = MeasureAccidentals.renotationCommands(in: preview, changedFrom: score)
         guard !repairs.isEmpty else { return command }
         return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
-    }
-
-    /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
-    /// positional, so a stored selection can drift after any mutation — after every apply/undo/redo both are
-    /// recomputed against the current score. When no slot was touched (`lastAffectedLocation == nil`) they are
-    /// preserved rather than cleared.
-    ///
-    /// Which of the two followed the command depends on which one it was aimed at. The keys are split between them
-    /// (duration / tuplet write at the caret, ⌫ / ♯ / ♭ / tie edit the selection), so re-deriving both from the
-    /// affected slot would collapse the lead the caret holds during a run of input: a duration key would drag the
-    /// selection off the note just written, and ♯ would drag the caret back onto it, making the next letter overwrite
-    /// what was just sharpened. Whichever one wasn't aimed at keeps its own slot; when the two already share a slot —
-    /// the ordinary case, and every case before the first note of a run — both follow.
-    private func rederiveSelection() {
-        guard let editor, let location = editor.lastAffectedLocation else { return }
-        let score = editor.score
-        let affected = SelectionRederivation.item(
-            at: location, in: score, preferringNoteIndex: previousNoteIndex(at: location),
-        )
-        let selectionSlot = Self.slot(of: selectedItem)
-        let caretSlot = Self.slot(of: caretItem)
-        if caretSlot == location, selectionSlot != location {
-            place(selection: rederived(selectionSlot, in: score) ?? affected, caret: affected)
-        } else if selectionSlot == location, caretSlot != location {
-            place(selection: affected, caret: rederived(caretSlot, in: score) ?? affected)
-        } else {
-            select(affected)
-        }
-    }
-
-    /// Re-resolves a slot that the command did NOT target against the mutated score. `nil` when the slot was spliced
-    /// away (the caller then falls back to the affected location, so neither marker is left dangling).
-    private func rederived(_ slot: VoiceElementID?, in score: Score) -> SheetMusicCore.ScoreItemID? {
-        guard let slot else { return nil }
-        return SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
-    }
-
-    /// The voice slot an item occupies. Tuplet brackets (and clefs, which never reach the selection) don't name a
-    /// single slot, so they resolve to `nil`.
-    static func slot(of item: SheetMusicCore.ScoreItemID?) -> VoiceElementID? {
-        switch item {
-        case let .note(id): VoiceElementID(id)
-        case let .rest(id): VoiceElementID(id)
-        case .tuplet, .clef, .none: nil
-        }
-    }
-
-    /// The `noteIndexInChord` of the current selection when it is a `.note` anchored at exactly `location`,
-    /// so re-derivation can keep the caret on the same chord tone across edits that add/remove siblings.
-    private func previousNoteIndex(at location: VoiceElementID) -> Int? {
-        guard case let .note(noteID)? = selectedItem,
-              noteID.staff == location.staff,
-              noteID.measureIndex == location.measureIndex,
-              noteID.voiceIndex == location.voiceIndex,
-              noteID.elementIndex == location.elementIndex
-        else { return nil }
-        return noteID.noteIndexInChord
-    }
-
-    /// Picks `item` explicitly — caret and selection land together. Every path that names a target directly (tap,
-    /// ← / →, post-command re-derivation) goes through here; only note input deliberately splits the two, via
-    /// `place(selection:caret:)`. Internal (not private) so the ops extensions in sibling files can drive selection.
-    func select(_ item: SheetMusicCore.ScoreItemID?) {
-        place(selection: item, caret: item)
-    }
-
-    /// Sets selection and caret independently and notifies. The only caller that passes different values is note
-    /// input, which leaves the selection on the note it just wrote and moves the caret to the next slot.
-    func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
-        selection = item.map(ScoreSelection.single) ?? .none
-        selectedItem = item
-        caretItem = caret
-        armFromSelectionIfNeeded()
-        onSelectionChanged(selection, caret)
-    }
-
-    /// Arms the length keys from whatever was just picked, but ONLY while nothing is armed yet — which in practice
-    /// means the first note or rest touched in a session. A pad that opens with no length lit has no answer to "what
-    /// will the next note be", and making the first pick supply it beats making the user state it twice; after that
-    /// the armed length is the user's own choice and selecting other notes must not quietly overwrite it.
-    private func armFromSelectionIfNeeded() {
-        guard armedDuration == nil, let score, let slot = Self.slot(of: selectedItem),
-              case let .chord(chord)? = score[slot]
-        else { return }
-        // `.fraction` durations carry their dots (and any tuplet scaling) baked in; split them back into the base
-        // value a key can light plus the dot count the dot key can light.
-        let split = DurationInterpretation.split(chord.duration)
-        armedDuration = split.base
-        armedDots = split.dots
     }
 }

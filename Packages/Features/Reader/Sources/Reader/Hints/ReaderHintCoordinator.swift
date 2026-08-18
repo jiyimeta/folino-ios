@@ -33,8 +33,6 @@ final class ReaderHintCoordinator {
     @ObservationIgnored private var didOfferNotePadHintThisLaunch = false
     /// Pending "the transport just went compact" offer (see `scheduleTransportExpandHint`).
     @ObservationIgnored private var transportExpandOfferTask: Task<Void, Never>?
-    /// Pending re-measure of the navigation bar (see `scheduleBarRefresh`).
-    @ObservationIgnored private var barRefreshTask: Task<Void, Never>?
     /// Mirrored from the editing seam. Edit mode forces the transport compact and declines mode swipes, so the
     /// expand hint has to stay away for the duration — it would be teaching a gesture that currently does nothing.
     @ObservationIgnored private var isEditing = false
@@ -71,86 +69,6 @@ final class ReaderHintCoordinator {
         // The compact transport appearing IS the trigger for its own hint — on opening a Reader that is already
         // compact, and on the swipe (or bubble tap) that just shrank it.
         if isFirstReport, target == .transportCompact { scheduleTransportExpandHint() }
-    }
-
-    // MARK: - Bar-hosted controls
-
-    /// The bar-hosted controls currently on screen. They report their PRESENCE rather than their position, because a
-    /// navigation-bar item cannot measure itself (see `ReaderBarItemLocator`); the position comes from matching this
-    /// set against the bar's measured items.
-    private var barTargets: [ReaderHintTarget: ReaderBarSlot] = [:]
-    /// The Reader's own area in the window, which is how the right bar gets picked on iPad. Reported by the hint
-    /// overlay, which is the one part of this feature that lives in the Reader's own view tree.
-    private var readerRegion: CGRect = .zero
-
-    /// `slot: nil` withdraws the control — it has left the bar, so its hint goes with it.
-    func registerBarTarget(_ target: ReaderHintTarget, slot: ReaderBarSlot?) {
-        guard barTargets[target] != slot else { return }
-        barTargets[target] = slot
-        if slot == nil { clearAnchor(for: target) }
-        scheduleBarRefresh()
-    }
-
-    func setReaderRegion(_ region: CGRect) {
-        guard readerRegion != region else { return }
-        readerRegion = region
-        scheduleBarRefresh()
-    }
-
-    /// Matches the bar's measured items to the registered controls by counting in from each end.
-    ///
-    /// A control whose ordinal is past the end of what was measured — or one that would have to be the same item as a
-    /// control counted in from the other end — is left WITHOUT an anchor, which drops its hint entirely. Refusing to
-    /// answer is the right failure here: a caret pointing at the wrong button is worse than no bubble at all.
-    func refreshBarAnchors() {
-        guard !barTargets.isEmpty else { return }
-        guard let measured = ReaderBarItemLocator.itemFrames(servingRegionInWindow: readerRegion) else {
-            for target in barTargets.keys {
-                clearAnchor(for: target)
-            }
-            return
-        }
-
-        // Each end is walked outward-in from its own edge, nearest item first.
-        let leading = barTargets.compactMap { target, slot -> (ReaderHintTarget, Int)? in
-            if case let .leading(order) = slot { (target, order) } else { nil }
-        }.sorted { $0.1 < $1.1 }
-        let trailing = barTargets.compactMap { target, slot -> (ReaderHintTarget, Int)? in
-            if case let .trailing(order) = slot { (target, order) } else { nil }
-        }.sorted { $0.1 > $1.1 }
-
-        let items = measured.items
-        for (offset, entry) in leading.enumerated() {
-            assign(items, index: offset, reservedFromOtherEnd: trailing.count, to: entry.0)
-        }
-        for (offset, entry) in trailing.enumerated() {
-            assign(items, index: items.count - 1 - offset, reservedFromOtherEnd: leading.count, to: entry.0)
-        }
-    }
-
-    private func assign(_ items: [CGRect], index: Int, reservedFromOtherEnd: Int, to target: ReaderHintTarget) {
-        guard items.indices.contains(index), items.count > reservedFromOtherEnd else {
-            clearAnchor(for: target)
-            return
-        }
-        setAnchor(items[index], for: target)
-    }
-
-    /// Re-measures shortly after being asked, and again a few times after that.
-    ///
-    /// The cue to refresh is always something SwiftUI did — an item appearing, the Reader resizing — and the bar lays
-    /// itself out after that, sometimes over several frames while a glass platter settles or a push transition runs.
-    /// Rather than guess one delay, this samples a handful; the anchors are change-guarded, so a sample that finds
-    /// nothing new costs nothing.
-    private func scheduleBarRefresh() {
-        barRefreshTask?.cancel()
-        barRefreshTask = Task { [weak self] in
-            for delay in [0, 120, 320, 700, 1400] {
-                try? await Task.sleep(for: .milliseconds(delay))
-                guard !Task.isCancelled, let self else { return }
-                refreshBarAnchors()
-            }
-        }
     }
 
     /// Forgets a control that has left the screen, and takes any hint pointing at it down with it — a bubble whose

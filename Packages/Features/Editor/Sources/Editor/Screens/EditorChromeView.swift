@@ -5,11 +5,13 @@ import UtilityUI
 
 /// Full-screen editing chrome. The App injects this into the Reader seam (Task 15) so it floats over the live score.
 /// Layout:
-///  - the navigation bar: voice, the pad toggle, undo / redo / 完了 — see `EditorChromeView+Toolbar.swift`. The Reader
-///    empties its own toolbar for the session and this fills it, so the fixed controls sit IN the bar rather than in a
-///    second strip of chrome underneath it;
 ///  - the editing cluster — the reader's transport plus the `EditorPadView` pad — docked to the top or bottom edge
 ///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering.
+///
+/// The fixed controls — voice, the pad toggle, undo / redo / 完了 — and the revert confirmation used to live here too
+/// (as `ToolbarContent` filling the Reader's navigation bar). They now live in `EditorTopBarView`, drawn into the
+/// Reader's own top strip (Task 5) — the Reader's navigation bar is gone, so there is no bar left for a `.toolbar`
+/// here to fill.
 ///
 /// Regular width used to add a third piece: a palette card docked to the trailing edge, carrying a selection readout,
 /// the tie key and the `+3度` / `+8度` shortcuts. It is gone — it sat on the score permanently for keys the pad
@@ -21,21 +23,10 @@ import UtilityUI
 /// remains in the callout is ♯ / ♭ — see `EditorCalloutView` for why those two belong beside the note rather than in
 /// a row of keys aimed at the caret.
 public struct EditorChromeView: View {
-    /// Internal, not private: the toolbar items live in `EditorChromeView+Toolbar.swift`, and Swift's `private`
-    /// doesn't span files.
-    @Bindable var viewModel: EditorViewModel
+    @Bindable private var viewModel: EditorViewModel
     /// Room the reader's bottom transport occupies, so a bottom-docked pad parks above it instead of over it.
     private let bottomTransportClearance: CGFloat
-    /// Whether the score currently has annotations anchored to the notation, so the revert confirmation can warn
-    /// that they may shift. Internal, not private: `EditorChromeView+Revert.swift` reads it and is a different file.
-    let hasMusicalAnnotations: Bool
-    let onDone: () -> Void
     private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
-    /// Reports where the pad toggle sits among the chrome's LEADING bar items (and `nil` when the chrome goes away),
-    /// so the host can hang a coach mark off it. A position rather than a frame because a navigation-bar item cannot
-    /// measure itself — see `ReaderEditingHost.noteInputBarLeadingOrder`, which this feeds. Internal, not private: the
-    /// button it is reported from lives in `EditorChromeView+Toolbar.swift`.
-    let onNoteInputBarOrderChange: (Int?) -> Void
     @Environment(\.undoManager) private var undoManager
 
     /// Remembered across sessions: someone who moves the pad out of the way once means it for every score they open.
@@ -64,30 +55,20 @@ public struct EditorChromeView: View {
     ///
     /// Off by default: a score is opened to be read far more often than to be written into, and the callout alone
     /// covers reading-with-corrections. The pad is one tap away when you do want to write.
-    @AppStorage("editorPadVisible") var isPadVisible = false
+    @AppStorage("editorPadVisible") private var isPadVisible = false
 
     /// One-time "saved as .mscz" notice (Task 16, spec §11-2) — shown at most once per install.
     @AppStorage("editorSiblingMSCZNoticeShown") private var siblingMSCZNoticeShown = false
     @State private var showsSiblingNotice = false
 
-    /// Drives the revert confirmation dialog. Internal, not private: `EditorChromeView+Revert.swift` sets it and
-    /// binds to it, and is a different file.
-    @State var isConfirmingRevert = false
-
     public init(
         viewModel: EditorViewModel,
         bottomTransportClearance: CGFloat,
-        hasMusicalAnnotations: Bool = false,
-        onDone: @escaping () -> Void,
         onClusterInsetsChange: @escaping (_ top: CGFloat, _ bottom: CGFloat) -> Void = { _, _ in },
-        onNoteInputBarOrderChange: @escaping (Int?) -> Void = { _ in },
     ) {
         self.viewModel = viewModel
         self.bottomTransportClearance = bottomTransportClearance
-        self.hasMusicalAnnotations = hasMusicalAnnotations
-        self.onDone = onDone
         self.onClusterInsetsChange = onClusterInsetsChange
-        self.onNoteInputBarOrderChange = onNoteInputBarOrderChange
     }
 
     /// Moves the pad, animating the dock change and the drag offset's release together, then persists the choice.
@@ -100,12 +81,9 @@ public struct EditorChromeView: View {
     }
 
     public var body: some View {
-        revertConfirmation(on: chromeContent)
+        chromeContent
     }
 
-    /// The chrome itself, before the revert confirmation is layered on top. Split out so `body` reads as the single
-    /// `revertConfirmation(on:)` wrap the brief asks for, rather than burying that wrap under this view's own
-    /// modifier chain.
     private var chromeContent: some View {
         ZStack(alignment: .topTrailing) {
             navigationPill
@@ -120,10 +98,6 @@ public struct EditorChromeView: View {
 
             editingCluster
         }
-        // The fixed controls go INTO the Reader's navigation bar, which it leaves mounted and empty for the session.
-        // `.toolbar` resolves against the enclosing navigation container, not the immediate parent, so attaching it
-        // from inside the injected overlay is enough — the Reader never has to expose a `ToolbarContent` seam.
-        .toolbar { editingToolbar }
         // Task 16: bridges ScoreEditor's undo/redo stacks to the system UndoManager so three-finger swipe gestures
         // work. Triggers off `appliedEditCount` — NOT `generation` — because `generation` also bumps on undo/redo;
         // re-registering here on every undo/redo would double up with `registerSystemUndo`'s own symmetric

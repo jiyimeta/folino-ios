@@ -31,20 +31,13 @@ private func previewChromeScore() -> Score {
 
 private let previewStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-/// The chrome's fixed controls are `ToolbarItem`s now, so a preview has to stand it inside a navigation container the
-/// way the Reader does — outside one, `.toolbar` has no bar to fill and the row simply doesn't render.
+/// The fixed controls (voice, pad toggle, undo / redo / 完了, revert) live in `EditorTopBarView` now, drawn into the
+/// Reader's own top strip rather than a navigation bar this view fills — so unlike the old `ToolbarContent` version,
+/// this preview needs no navigation container to render in.
 @MainActor
 private func previewChromeHost(viewModel: EditorViewModel) -> some View {
-    NavigationStack {
-        EditorChromeView(
-            viewModel: viewModel,
-            bottomTransportClearance: 44,
-            onDone: {},
-        )
+    EditorChromeView(viewModel: viewModel, bottomTransportClearance: 44)
         .background(Color.gray.opacity(0.15))
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-    }
 }
 
 #Preview("chrome · compact / rest selected") {
@@ -63,22 +56,5 @@ private func previewChromeHost(viewModel: EditorViewModel) -> some View {
     return previewChromeHost(viewModel: previewChromeViewModel(select: noteItem))
         .frame(width: 1180, height: 820)
         .environment(\.horizontalSizeClass, .regular)
-}
-
-// Task 10 verification: the item has a captured original, so `canRevertToOriginal` is true and the `⋯` overflow
-// item (`EditorChromeView+Revert.swift`) should appear ahead of undo — without displacing undo / redo / 完了 into a
-// system overflow menu of their own.
-#Preview("chrome · revert available") {
-    let restItem = SheetMusicCore.ScoreItemID.rest(
-        RestID(staff: previewStaff, measureIndex: 0, voiceIndex: 0, elementIndex: 2),
-    )
-    let viewModel = previewChromeViewModel(select: restItem)
-    viewModel.scoreItem = viewModel.scoreItem.capturingOriginal(
-        fileName: "preview.original.mscx", contentHash: "preview-original", provenance: .importTime,
-    )
-    viewModel.hasCapturedOriginal = true
-    return previewChromeHost(viewModel: viewModel)
-        .frame(width: 390, height: 844)
-        .environment(\.horizontalSizeClass, .compact)
 }
 #endif

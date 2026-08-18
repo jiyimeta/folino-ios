@@ -7,10 +7,10 @@ import SwiftUI
 /// view's body.
 ///
 /// Read at the root, those cursors re-rendered `ReaderRootScreen.body` on every cursor tick during playback, which
-/// rebuilt the navigation toolbar (fresh `onShowPDFNotice` / `onStartEditing` closures each pass) and re-created its
-/// presented playback-inspector popover. That regeneration snapped the per-part program `Menu` back to the top whenever
-/// the user tried to scroll it mid-playback. Confining the cursor reads here lets only the score container re-render
-/// per tick; `ReaderToolbar` and its inspector popovers stay stable.
+/// rebuilt the top strip (fresh `onStartEditing` closures each pass) and re-created its presented playback-inspector
+/// popover. That regeneration snapped the per-part program `Menu` back to the top whenever the user tried to scroll
+/// it mid-playback. Confining the cursor reads here lets only the score container re-render per tick;
+/// `ReaderTopBarControls` and its inspector popovers stay stable.
 ///
 /// **Editing renders through this same view, not a parallel one.** Whether the reader is editing changes only the
 /// container's INPUTS — which score, and whether the display transforms apply. Branching to a separate editing view

@@ -14,14 +14,18 @@ struct EditorVoicePicker: View {
     var body: some View {
         Picker(selection: $viewModel.activeVoice) {
             ForEach(0 ..< Self.voiceCount, id: \.self) { index in
-                Text(verbatim: "\(index + 1)")
-                    .accessibilityLabel(Text(voiceLabel(index)))
+                // The full "Voice 1" wording, not a bare digit: a menu row has the width for it, and a column of
+                // lone numerals says nothing about what is being chosen.
+                Text(voiceLabel(index))
                     .tag(index)
             }
         } label: {
             Text("editor.voice.label", bundle: .module)
         }
-        .pickerStyle(.segmented)
+        // Inline inside the enclosing `Menu`, which is what makes this the system's own menu: one row per voice with
+        // a checkmark against the current one. It used to be `.segmented`, i.e. a segmented control transplanted
+        // into a menu — a shape iOS uses nowhere else, with four bare digits as its segments.
+        .pickerStyle(.inline)
     }
 
     private func voiceLabel(_ index: Int) -> String {

@@ -3,20 +3,31 @@ import Editor
 import Reader
 import SheetMusicUI
 import SwiftUI
+import UtilityUI
 
 /// Composition-root wrapper that mounts a ReaderRootScreen with the note-editing seam filled in: one
 /// ReaderEditingHost + one EditorViewModel per Reader instance, wired by closure so Reader and Editor stay mutually
 /// unaware (module-architecture Option 1). This is the ONLY place the Editor and Reader features meet.
 @MainActor
 struct EditableReaderScreen: View {
-    /// Builds the Editor feature's chrome overlay from the current seam context (score-info bar, keyboard, 完了).
+    /// Builds the Editor feature's chrome overlay from the current seam context (score-info bar, keyboard, 完了),
+    /// or its top-strip row (voice, pad toggle, undo / redo, and — where there is no cutout tier — 完了 / revert
+    /// too) — same context type, two different slots in the Reader's tree.
     typealias ChromeBuilder = (ReaderEditingChromeContext) -> AnyView
+    /// Builds the cutout tier's editing-session content (完了 leading, revert trailing) for the Reader's OWN
+    /// `ReaderCutoutTier` to draw — see `ReaderRootScreen.editingCutoutTier` and review Important 4. A distinct
+    /// return type from `ChromeBuilder` because `ReaderCutoutTier` needs the leading and trailing pieces kept apart,
+    /// not one combined, type-erased view.
+    typealias CutoutTierBuilder = (ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent
 
     @State private var editingHost = ReaderEditingHost()
     @State private var editorViewModel: EditorViewModel
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
-    private let readerBuilder: (ReaderEditingHost, @escaping ChromeBuilder) -> ReaderRootScreen
+    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is last.
+    private let readerBuilder: (
+        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
+    ) -> ReaderRootScreen
     /// Kept only so `wireOnce()` can re-read this instance's row before every edit session (Critical 1 review fix)
     /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
     /// live cache already carries whatever that Reader (or the Library, via the same shared repository) last wrote.
@@ -29,7 +40,9 @@ struct EditableReaderScreen: View {
         repository: any ScoreLibraryRepository,
         originalStore: any ScoreOriginalStore,
         playbackController: (any PlaybackController)?,
-        readerBuilder: @escaping (ReaderEditingHost, @escaping ChromeBuilder) -> ReaderRootScreen,
+        readerBuilder: @escaping (
+            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
+        ) -> ReaderRootScreen,
     ) {
         _editorViewModel = State(wrappedValue: EditorViewModel(
             scoreItem: item,
@@ -44,21 +57,42 @@ struct EditableReaderScreen: View {
     }
 
     var body: some View {
-        readerBuilder(editingHost) { context in
+        readerBuilder(editingHost, { [editingHost] context in
             AnyView(EditorChromeView(
                 viewModel: editorViewModel,
                 bottomTransportClearance: context.bottomTransportClearance,
-                hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
-                onDone: { [editingHost] in editingHost.requestExit() },
-                onClusterInsetsChange: { [editingHost] top, bottom in
+                onClusterInsetsChange: { top, bottom in
                     editingHost.editingChromeTopInset = top
                     editingHost.editingChromeBottomInset = bottom
                 },
-                onNoteInputBarOrderChange: { [editingHost] order in
-                    editingHost.noteInputBarLeadingOrder = order
-                },
             ))
-        }
+        }, { [editingHost] context in
+            AnyView(EditorTopBarView(
+                viewModel: editorViewModel,
+                hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
+                hasCutoutTier: context.hasCutoutTier,
+                onDone: { editingHost.requestExit() },
+                onNoteInputAnchorFrameChange: { editingHost.noteInputAnchorFrame = $0 },
+            ))
+        }, { [editingHost] _ in
+            // `inCutoutBand` rather than a glass modifier applied out here: each control carries exactly one surface
+            // of its own (完了 a glass pill, revert a filled red capsule), sized to the band. Wrapping them in glass
+            // from this call site drew a second, larger pill behind revert's red one — two stacked shapes for one
+            // control.
+            ReaderEditingCutoutTierContent(
+                leading: AnyView(EditorDiscardButton(
+                    viewModel: editorViewModel,
+                    onExit: { editingHost.requestExit() },
+                    inCutoutBand: true,
+                )),
+                trailing: AnyView(EditorSessionEndButton(
+                    viewModel: editorViewModel,
+                    onExit: { editingHost.requestExit() },
+                    hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
+                    inCutoutBand: true,
+                )),
+            )
+        })
         .onAppear { wireOnce() }
         // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go inert
         // while the cursor moves. Mirrored here because neither feature imports the other.

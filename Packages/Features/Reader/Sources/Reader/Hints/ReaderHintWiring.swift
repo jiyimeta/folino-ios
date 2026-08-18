@@ -37,10 +37,14 @@ struct ReaderHintWiring: ViewModifier {
             // `blocksOffer` here rather than inside the task is what makes the retry see current state — this closure
             // is rebuilt along with the modifier on every render.
             .onChange(of: blocksOffer) { _, _ in attemptOffer() }
-            // The note-input coach mark points at a button the Editor draws, so where it sits in the bar arrives
-            // through the seam rather than from a `readerHintBarAnchor` this feature could attach itself.
-            .onChange(of: editingHost?.noteInputBarLeadingOrder, initial: true) { _, order in
-                hints.registerBarTarget(.noteInputToggle, slot: order.map { .leading(order: $0) })
+            // The note-input coach mark points at a button the Editor draws, so its frame arrives through the seam
+            // rather than from a `readerHintAnchor` this feature could attach itself.
+            .onChange(of: editingHost?.noteInputAnchorFrame, initial: true) { _, frame in
+                if let frame {
+                    hints.setAnchor(frame, for: .noteInputToggle)
+                } else {
+                    hints.clearAnchor(for: .noteInputToggle)
+                }
             }
             // Entering edit mode always offers the pad hint (once per launch, until the pad has actually been used) —
             // independent of the rotation's own per-launch budget. Deferred a beat so the chrome has laid out and
@@ -89,7 +93,7 @@ struct ReaderHintWiring: ViewModifier {
 
     /// Waits until the Reader has settled, then marks the offer due and tries to spend it.
     ///
-    /// The wait is not cosmetic: hint selection asks the anchors which controls are on screen, and the toolbar only
+    /// The wait is not cosmetic: hint selection asks the anchors which controls are on screen, and the top bar only
     /// reports those after the score has loaded and the bar has laid out. Offering earlier would see an empty anchor
     /// set and silently pick nothing — so this waits for the first anchor (bounded, so a score that never loads
     /// doesn't spin), then lets the scene settle so the bubble doesn't land on the score's first paint.

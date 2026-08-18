@@ -94,6 +94,12 @@ extension EditorViewModel {
             )
             try await repository.saveScoreItem(newItem)
             scoreItem = newItem
+            // Remember that it was THIS session that first put a sidecar there — `discardSessionEdits()` has to take
+            // it back out again, or a score whose only edits were just thrown away would go on offering to revert to
+            // an original it is already identical to.
+            if !hasCapturedOriginal, newItem.canRevertToOriginal {
+                capturedOriginalThisSession = true
+            }
             hasCapturedOriginal = newItem.canRevertToOriginal
             if destination.isSiblingCopy {
                 didSaveAsSiblingMSCZ = true

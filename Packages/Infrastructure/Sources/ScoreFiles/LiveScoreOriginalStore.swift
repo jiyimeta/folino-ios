@@ -54,6 +54,41 @@ public struct LiveScoreOriginalStore: ScoreOriginalStore {
         }.value
     }
 
+    public func adoptOrphanedOriginal(for item: ScoreItem) async -> ScoreItem {
+        let scoresDirectory = scoresDirectory
+        return await Task.detached(priority: .userInitiated) {
+            let plan = OriginalCapture.plan(
+                for: item,
+                adoptableSourceFileName: Self.adoptableSourceFileName(for: item, in: scoresDirectory),
+            )
+            let fileName: String
+            let provenance: OriginalProvenance
+            switch plan {
+            case .none:
+                // Already recorded, or a file the editor could never overwrite. Either way, nothing orphaned.
+                return item
+            case let .adopt(name, adoptedProvenance):
+                fileName = name
+                provenance = adoptedProvenance
+            case let .copy(sidecarFileName, copyProvenance):
+                // The one difference from `captureOriginalIfNeeded`: it would copy here. This only registers a
+                // sidecar that a previous session already wrote, so a score that has never been edited is left
+                // exactly as it was.
+                fileName = sidecarFileName
+                provenance = copyProvenance
+            }
+            let url = scoresDirectory.appending(path: fileName)
+            guard FileManager.default.fileExists(atPath: url.path),
+                  let facts = try? Self.hashAndSize(of: url)
+            else { return item }
+            return item.capturingOriginal(
+                fileName: fileName,
+                contentHash: facts.contentHash,
+                provenance: provenance,
+            )
+        }.value
+    }
+
     /// The first candidate that is actually on disk — an untouched import file left beside an edited `.mscz`.
     private static func adoptableSourceFileName(for item: ScoreItem, in scoresDirectory: URL) -> String? {
         item.adoptableSourceFileNames.first {
