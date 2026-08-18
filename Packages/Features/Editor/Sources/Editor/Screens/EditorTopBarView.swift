@@ -63,7 +63,7 @@ public struct EditorTopBarView: View {
     public var body: some View {
         // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
         // surface — see review Important 2.
-        revertConfirmation(on: controlTierRow)
+        revertFailureAlert(on: controlTierRow)
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
@@ -72,28 +72,39 @@ public struct EditorTopBarView: View {
     @ViewBuilder
     private var controlTierRow: some View {
         if hasCutoutTier {
-            // 完了 and revert live in the cutout tier; four controls never risk running out of room, so no fold.
+            // ✕ and the session-end control live in the cutout tier; four controls never risk running out of room,
+            // so no fold.
             HStack(spacing: 12) {
-                leadingGroup
+                undoRedoGroup
                 Spacer(minLength: 0)
-                trailingGroup
+                voiceButton
+                padButton
             }
-        } else {
+        } else if viewModel.sessionEndMode == .revert {
             // `Spacer(minLength: 0)` inside `row(collapse:)` is what lets `ViewThatFits` fold at all — a greedy
             // spacer would make every candidate report that it fits, and the fold would silently never trigger.
             ViewThatFits(in: .horizontal) {
                 row(collapse: .expanded)
                 row(collapse: .folded)
             }
+        } else {
+            // Only `.revert` is wide enough for the fold to buy anything: in both checkmark states the session-end
+            // control is a 44pt glyph and `⋯` is another one, so `.folded` would measure the same as `.expanded` and
+            // `ViewThatFits` could never select it. A rung that cannot be selected is not a fold level.
+            row(collapse: .expanded)
         }
     }
 
-    /// One candidate row for `ViewThatFits`, used only where there is no cutout tier.
+    /// One candidate row for `ViewThatFits`, used only where there is no cutout tier — so this row carries ✕ and the
+    /// session-end control itself, which on a cutout device live in the band instead.
     private func row(collapse: Collapse) -> some View {
         HStack(spacing: 12) {
-            leadingGroup
+            EditorDiscardButton(viewModel: viewModel, onExit: onDone)
+                .interactiveGlassCompat()
+            undoRedoGroup
             Spacer(minLength: 0)
-            trailingGroup
+            voiceButton
+            padButton
             switch collapse {
             case .expanded:
                 endGroup
@@ -104,19 +115,9 @@ public struct EditorTopBarView: View {
         }
     }
 
-    /// Voice picker + pad toggle, sharing one glass pill — matches `ReaderTopBarControls`' per-cluster glass
-    /// treatment (review Important 2). Bare glyphs need something behind them to stay legible over arbitrary score
-    /// content; before this branch that came from the standard toolbar's own background.
-    private var leadingGroup: some View {
-        HStack(spacing: 0) {
-            voiceMenu
-            padToggleButton
-        }
-        .interactiveGlassCompat()
-    }
-
-    /// Undo + redo, sharing one glass pill.
-    private var trailingGroup: some View {
+    /// Undo + redo, sharing one glass pill, leading — the pairing is the point: they are one control's two
+    /// directions, and Photos puts the same pair in the same place.
+    private var undoRedoGroup: some View {
         HStack(spacing: 0) {
             undoButton
             redoButton
@@ -124,20 +125,28 @@ public struct EditorTopBarView: View {
         .interactiveGlassCompat()
     }
 
-    /// Revert (if available) + 完了, sharing one glass pill — the `.expanded` counterpart to `overflowMenu`, which
-    /// carries its own glass at its own call site since it's a single control, not a pair.
+    /// The voice picker and the pad toggle trail, and each carries its own pill rather than sharing one: they are
+    /// unrelated — which voice you are writing into, and whether the keyboard is up — and a shared surface said they
+    /// were a pair. Bare glyphs still need something behind them to stay legible over arbitrary score content
+    /// (review Important 2), so each gets glass of its own.
+    private var voiceButton: some View {
+        voiceMenu
+            .interactiveGlassCompat()
+    }
+
+    private var padButton: some View {
+        padToggleButton
+            .interactiveGlassCompat()
+    }
+
+    /// The session-end control — checkmark or revert, depending on `EditorViewModel.sessionEndMode`. One control,
+    /// three states; it carries its own surface and its own confirmation.
     private var endGroup: some View {
-        HStack(spacing: 0) {
-            // `EditorRevertButton` already self-guards on `canRevertToOriginal`, so this `if` is redundant for
-            // WIDTH (spacing is 0 either side of an empty conditional slot) — kept anyway so an absent revert
-            // doesn't leave a stray accessibility element in the glass pill when there's nothing to revert to (the
-            // common state early in a session).
-            if viewModel.canRevertToOriginal {
-                EditorRevertButton(viewModel: viewModel)
-            }
-            doneButton
-        }
-        .interactiveGlassCompat()
+        EditorSessionEndButton(
+            viewModel: viewModel,
+            onExit: onDone,
+            hasMusicalAnnotations: hasMusicalAnnotations,
+        )
     }
 
     /// Narrow-width stand-in for revert (if available) and 完了 once they've folded together.
@@ -160,12 +169,15 @@ public struct EditorTopBarView: View {
         Menu {
             EditorVoicePicker(viewModel: viewModel)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Image(systemName: "person.2")
                 Text(verbatim: "\(viewModel.activeVoice + 1)")
                     .fontWeight(.semibold)
             }
-            .frame(minWidth: 44, minHeight: 44)
+            // Padded rather than squeezed into a bare 44pt square: the icon and the numeral together are almost
+            // exactly 44pt wide, so a minimum-width frame put the glass hard against both of them.
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
         }
         .tint(.primary)
         .accessibilityLabel(Text("editor.voice.label", bundle: .module))
@@ -178,15 +190,19 @@ public struct EditorTopBarView: View {
             withAnimation(.snappy(duration: 0.28)) { isPadVisible.toggle() }
         } label: {
             Image("custom.music.note.badge.plus", bundle: .module)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 21, weight: .medium))
                 .foregroundStyle(isPadVisible ? Color(uiColor: .systemBackground) : Color.primary)
                 .offset(x: -1.5)
-                .frame(width: 30, height: 30)
+                // The disc is the active-state background and stays a fixed 32pt so the glyph never changes size
+                // between states; the 44pt frame around it is the control's own, so the pill matches its neighbours
+                // instead of shrink-wrapping a 30pt glyph.
+                .frame(width: 32, height: 32)
                 .background {
                     if isPadVisible {
                         Circle().fill(Color.primary)
                     }
                 }
+                .frame(width: 44, height: 44)
         }
         .tint(.primary)
         .accessibilityLabel(Text(
@@ -231,19 +247,7 @@ public struct EditorTopBarView: View {
             .frame(width: 44, height: 44)
     }
 
-    // MARK: - 完了 / revert
-
-    /// `EditorDoneButton` pinned to a `minWidth` comfortably above the 44pt icon it folds into — deliberately, NOT
-    /// left to the localized "Done"/"完了"/"완료" text's own intrinsic width. That text can render narrower than
-    /// 44pt in some locales, which would make `.folded` WIDER than `.expanded` in exactly the (common) case where
-    /// revert isn't available yet and 完了 is the only thing folding — the same dead-rung failure mode as review
-    /// Important 2, just hiding in a different corner. Pinning the wide form's minimum width above the folded
-    /// form's fixed width makes the saving positive by construction, not by hoping a given locale's text is long
-    /// enough.
-    private var doneButton: some View {
-        EditorDoneButton(onDone: onDone)
-            .frame(minWidth: 60, minHeight: 44)
-    }
+    // MARK: - Session end
 
     private var doneMenuRow: some View {
         Button(action: onDone) {
@@ -273,42 +277,14 @@ public struct EditorTopBarView: View {
         }
     }
 
-    /// The confirmation. Destructive and not undoable, so it names what goes and what stays, and adds the caveat for
-    /// an item whose recorded original predates the feature.
+    /// A revert that fails silently is worse than no confirmation at all: the popover closes either way, so
+    /// without this the user has no way to tell "reverted" apart from "the store threw and nothing happened".
+    /// `revertError` is cleared on dismiss so a later successful revert can't re-show a stale alert.
     ///
-    /// Attached to `controlTierRow` — this view's OWN root, not the specific `EditorRevertButton` that raised it.
-    /// The brief asked for the opposite (anchor to the button, for a precise iPad popover source), but that button
-    /// is mounted inside a `ViewThatFits` candidate (or, on a cutout-tier device, in the Reader's `ReaderCutoutTier`
-    /// entirely outside this view), and both can be torn down and remounted by a refold or a device rotation. A
-    /// dialog anchored to a view that disappears mid-interaction is a worse defect than an arrow pointing at the row
-    /// instead of the icon — this repo has already shipped that exact presentation-teardown bug once. Do not "fix"
-    /// this back to a per-button anchor without re-solving that problem first (review Important 3 ruling).
-    private func revertConfirmation(on content: some View) -> some View {
+    /// This one stays on the row rather than moving to the button with the confirmations: by the time it has
+    /// something to say the revert has already ended the session, so the control that raised it is gone.
+    private func revertFailureAlert(on content: some View) -> some View {
         content
-            .confirmationDialog(
-                Text(
-                    viewModel.revertsToConversionOutput
-                        ? "editor.revert.confirm.title.pdf" : "editor.revert.confirm.title",
-                    bundle: .module,
-                ),
-                isPresented: $viewModel.isConfirmingRevert,
-                titleVisibility: .visible,
-            ) {
-                Button(role: .destructive) {
-                    Task { await viewModel.revertToOriginal() }
-                } label: {
-                    Text("editor.revert.confirm.action", bundle: .module)
-                }
-                Button(role: .cancel) {} label: {
-                    Text("editor.revert.confirm.cancel", bundle: .module)
-                }
-            } message: {
-                Text(revertMessage)
-            }
-            // A revert that fails silently is worse than the dialog it replaced: the confirmation closes either way,
-            // so without this the user has no way to tell "reverted" apart from "the store threw and nothing
-            // happened". `revertError` is cleared on dismiss so a later successful revert can't re-show a stale
-            // alert.
             .alert(
                 Text("editor.revert.failed", bundle: .module),
                 isPresented: isRevertErrorPresented,
@@ -330,17 +306,5 @@ public struct EditorTopBarView: View {
                 if !isPresented { viewModel.revertError = nil }
             },
         )
-    }
-
-    private var revertMessage: String {
-        let warnings = viewModel.revertWarnings(hasMusicalAnnotations: hasMusicalAnnotations)
-        var lines = [String(localized: "editor.revert.confirm.body", bundle: .module)]
-        if warnings.contains(.musicalAnnotationsMayShift) {
-            lines.append(String(localized: "editor.revert.confirm.inkMayShift", bundle: .module))
-        }
-        if warnings.contains(.originalMayNotBeImportTime) {
-            lines.append(String(localized: "editor.revert.confirm.mayNotBeImport", bundle: .module))
-        }
-        return lines.joined(separator: "\n\n")
     }
 }

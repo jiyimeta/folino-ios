@@ -75,15 +75,22 @@ struct EditableReaderScreen: View {
                 onNoteInputAnchorFrameChange: { editingHost.noteInputAnchorFrame = $0 },
             ))
         }, { [editingHost] _ in
-            // Glassed here rather than inside the button views: this is the only place they are drawn raw. Inside
-            // `EditorTopBarView` they sit in clusters that already carry `interactiveGlassCompat`, and a second
-            // layer there would double it. They need it for the same reason the control tier's do — on iOS 18 the
-            // compat modifier's backing is all that separates a bare glyph from the score behind it.
+            // `inCutoutBand` rather than a glass modifier applied out here: each control carries exactly one surface
+            // of its own (完了 a glass pill, revert a filled red capsule), sized to the band. Wrapping them in glass
+            // from this call site drew a second, larger pill behind revert's red one — two stacked shapes for one
+            // control.
             ReaderEditingCutoutTierContent(
-                leading: AnyView(
-                    EditorDoneButton(onDone: { editingHost.requestExit() }).interactiveGlassCompat(),
-                ),
-                trailing: AnyView(EditorRevertButton(viewModel: editorViewModel).interactiveGlassCompat()),
+                leading: AnyView(EditorDiscardButton(
+                    viewModel: editorViewModel,
+                    onExit: { editingHost.requestExit() },
+                    inCutoutBand: true,
+                )),
+                trailing: AnyView(EditorSessionEndButton(
+                    viewModel: editorViewModel,
+                    onExit: { editingHost.requestExit() },
+                    hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
+                    inCutoutBand: true,
+                )),
             )
         })
         .onAppear { wireOnce() }

@@ -18,9 +18,21 @@ private func previewViewModel(canRevert: Bool) -> EditorViewModel {
     return viewModel
 }
 
-// With a cutout tier: 完了 and revert live there instead, so the control tier is a fixed 4-item row that never
-// folds.
-#Preview("Cutout-tier device · control tier only") {
+// With a cutout tier: ✕ and the session-end control live there instead, so the control tier is a fixed 4-item row
+// that never folds. Shown in both pad states — the toggle's active form is a filled disc, and whether that disc
+// still reads as filled once the glass around it is composited is exactly the thing to look at.
+#Preview("Cutout-tier device · pad off") {
+    UserDefaults.standard.set(false, forKey: "editorPadVisible")
+    return controlTier()
+}
+
+#Preview("Cutout-tier device · pad ON") {
+    UserDefaults.standard.set(true, forKey: "editorPadVisible")
+    return controlTier()
+}
+
+@MainActor
+private func controlTier() -> some View {
     EditorTopBarView(
         viewModel: previewViewModel(canRevert: true),
         hasMusicalAnnotations: false,
