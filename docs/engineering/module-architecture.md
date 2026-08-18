@@ -42,6 +42,34 @@ Pure constructor injection. No DI library (no swift-dependencies, Factory, Resol
 
 Ambient services (`Clock`, `UUIDProvider`, `DateProvider`, `Logger`) live as small Utility-layer protocols, also passed via `init`.
 
+## View Layout inside a Feature package — `Screens/` and `Views/`
+
+Inside `Features/<Name>/Sources/<Name>/`, SwiftUI views are split by whether they hold a view model. `Library` is the reference implementation.
+
+```
+Features/<Name>/Sources/<Name>/
+  <Name>.swift, <Name>Route.swift, <Name>ViewModel.swift   ← root: VM + module entry points
+  Screens/   ← holds the VM (@Bindable / @StateObject). Task launch, alert ↔ error wiring, sheet wiring
+    <Name>RootScreen.swift    ← public API, called from App
+  Views/     ← pure views taking Domain values + closures / @Binding only. Always ship a #Preview
+```
+
+- A pure view imports `Domain` and SwiftUI only — never Infrastructure, never a VM type. This is what makes preview-driven iteration possible without standing up Infrastructure.
+- To embed one view inside another (a detail screen containing a score list), open a `@ViewBuilder content: () -> Content` slot and pass the `Screen` in from the parent.
+- **Pure extraction is not mandatory.** When the binding to the VM is deep enough that going pure means a wall of closure parameters, put the whole file in `Screens/`. "Needs a VM → `Screens/`, doesn't → `Views/`" is the whole rule. Library went all the way to pure extraction; Reader's inspector, score containers and toolbar deliberately stayed in `Screens/`.
+- A sheet's pure view keeps the `XxxSheet` name; the `.sheet` modifier itself belongs to the parent Screen.
+- For a VM-dependent builder like `scoreRowMenu`, write a **same-named overload** — the pure one in `Views/`, the VM-taking one in `Screens/<Name>+<Feature>.swift`. Call sites don't change.
+- Use `git mv` so history follows the file.
+
+Applied to Library, Reader and Settings. Editor and ImportExport predate the convention — apply it as those packages grow.
+
+## Localization
+
+- Key shape is `module.feature.thing` (`library.score.delete.title`); collapse to two levels only when the context is unambiguous (`library.allScores`). This was chosen over flat two-level keys for the balance between scoping and greppability.
+- Shared action words (Cancel / OK / Done / Save / Delete / Add / Open / More / Select / Share… / Rename… / Create) live in `Packages/Utility/Sources/UtilityUI/Resources/Localizable.xcstrings` as `common.action.*`, read through the `L10n.Common.*` accessors.
+- In Feature and Domain packages, **`String(localized:)` needs `bundle: .module`** — omitting it silently resolves against the main bundle and falls back to the default value. With a format argument, keep key and value separate: `String(localized: "key", defaultValue: "Add \(n) items", bundle: .module)`. The App target reads `Bundle.main`, so `Text("app.foo")` needs no `bundle:`.
+- `Info.plist` localized strings are the exception — see Project Generation below.
+
 ## Engine Boundary — the `swift-sheet-music` rule
 
 The most important architectural decision in folino is **what goes upstream into `swift-sheet-music` versus what stays inside this repo.** Restated from `docs/product/feasibility.md`:

@@ -163,6 +163,10 @@ Folino is becoming cross-platform (iOS/iPadOS native; Android via `swift-wirelet
 
 - **Logic / behavior → match iOS exactly, and share the code.** Business logic, domain rules, and persistence semantics (soft-delete representation, file-naming conventions, import flow, the presentation/derivation that maps a score to its displayed fields) must behave identically on both platforms. If a piece of logic would otherwise be duplicated between the iOS and Android paths, refactor it into shared code (Domain, or a shared Android-gated Swift target) and have both platforms call it. Keep Android-specific code to the minimum that *can only* be implemented on Android: the JNI bridge types (`@WireletObservable` / `@WireletProvided` and their wire `@WireFormat` projections), the Kotlin/Room/SQLite persistence backend, Android file I/O (`filesDir`, `content://` document pickers), and the Compose UI. Never reimplement iOS logic a second time as a divergent Android code path — lift it and reuse it.
 
+  This holds for a few lines of pure arithmetic too — "it's too small to share" is not a reason. The one
+  thing that legitimately stays Kotlin-side is an input that **only exists on Android** (e.g. a raster
+  budget, which has no meaning against iOS's vector `drawPDFPage`).
+
 - **UI / UX placement → Android idioms are preferred.** Button placement, icons, copy/wording, navigation patterns, and screen transitions follow Android conventions (e.g. FAB for the primary action, swipe-to-dismiss + Snackbar undo, gear-icon Settings) rather than mirroring the iOS layout. The *content* shown stays at iOS parity; only the *presentation/placement* adapts to the platform.
 
 ### Recording a deliberate one-platform-first gap
@@ -199,6 +203,11 @@ Hyphenated soft breaks (`long-\nrunning`) join back into one word when the next 
 
 ## Project Constraints
 
+- **Internal feature names never appear in user-facing copy** — `Reader`, `Editor`, `Library`,
+  `ImportExport`, `Settings` are developer names that came from `Packages/Features/<Name>/` and mean nothing
+  to a user. This matters most in Japanese: write 「楽譜表示中は…」, not 「Reader 表示中は…」. English can
+  often keep `Reader`, but prefer "while viewing a score" when in doubt. Internal identifiers (xcstrings
+  keys, type names, schemes, bundle ids) stay as they are — this is about strings a user can read.
 - **App name is lowercase `folino` for users.** `Folino` is only for type names, the SwiftPM/Xcode scheme name, the project name, and the bundle ID prefix — strictly developer-facing. Anywhere a user can read the brand (Info.plist `CFBundleDisplayName`, navigation titles, alert titles, share-sheet display, marketing copy), it must be lowercase `folino`.
 - **Do not propose AudioKit (the third-party library)**. Folino uses AVFoundation directly via `swift-sheet-music`'s `SheetMusicAudio`.
 - **No GPL dependencies.** Hard constraint.
