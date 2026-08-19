@@ -37,6 +37,7 @@ struct AppShellView: View {
                     importer: importer,
                     gateway: gateway,
                     originalStore: originalStore,
+                    editHistoryStore: bootstrap.editHistoryStore,
                     shareService: shareService,
                     metadataReader: metadataReader,
                     vocalTunerHandoff: LiveVocalTunerHandoff(),
@@ -108,6 +109,7 @@ private struct ReadyShell: View {
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
     let originalStore: any ScoreOriginalStore
+    let editHistoryStore: any ScoreEditHistoryStore
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
     let vocalTunerHandoff: any VocalTunerHandoff
@@ -150,6 +152,7 @@ private struct ReadyShell: View {
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
         originalStore: any ScoreOriginalStore,
+        editHistoryStore: any ScoreEditHistoryStore,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
         vocalTunerHandoff: any VocalTunerHandoff,
@@ -162,6 +165,7 @@ private struct ReadyShell: View {
         self.importer = importer
         self.gateway = gateway
         self.originalStore = originalStore
+        self.editHistoryStore = editHistoryStore
         self.shareService = shareService
         self.metadataReader = metadataReader
         self.vocalTunerHandoff = vocalTunerHandoff
@@ -446,6 +450,7 @@ private struct ReadyShell: View {
             gateway: gateway,
             repository: repository,
             originalStore: originalStore,
+            historyStore: editHistoryStore,
             playbackController: bootstrap.playbackController,
         ) { host, chrome, topBar, cutoutTier in
             ReaderRootScreen(

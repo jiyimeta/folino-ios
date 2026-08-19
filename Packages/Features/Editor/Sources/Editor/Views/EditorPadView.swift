@@ -209,6 +209,7 @@ enum PreviewEditorFactory {
             gateway: NoopScoreFileGateway(),
             repository: NoopScoreLibraryRepository(),
             originalStore: NoopScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         if let armedDuration {

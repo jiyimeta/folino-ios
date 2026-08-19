@@ -108,6 +108,7 @@ struct NoteEditingScene: View {
                     gateway: FixtureGateway(),
                     repository: repository,
                     originalStore: FixtureOriginalStore(),
+                    historyStore: ProcessScoreEditHistoryStore(),
                     playbackController: nil,
                 ) { host, chrome, topBar, cutoutTier in
                     ReaderRootScreen(

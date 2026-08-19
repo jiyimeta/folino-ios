@@ -88,6 +88,7 @@ struct EditorViewModelPersistenceTests {
             gateway: gateway,
             repository: repository,
             originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -120,6 +121,7 @@ struct EditorViewModelPersistenceTests {
             gateway: gateway,
             repository: repository,
             originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -149,6 +151,7 @@ struct EditorViewModelPersistenceTests {
             gateway: gateway,
             repository: repository,
             originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -173,6 +176,7 @@ struct EditorViewModelPersistenceTests {
             gateway: gateway,
             repository: repository,
             originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -197,6 +201,7 @@ struct EditorViewModelPersistenceTests {
             gateway: gateway,
             repository: repository,
             originalStore: originalStore,
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -230,6 +235,7 @@ struct EditorViewModelPersistenceTests {
             gateway: gateway,
             repository: repository,
             originalStore: originalStore,
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -250,6 +256,7 @@ struct EditorViewModelPersistenceTests {
             gateway: FakeScoreFileGateway(),
             repository: FakeScoreLibraryRepository(),
             originalStore: originalStore,
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())

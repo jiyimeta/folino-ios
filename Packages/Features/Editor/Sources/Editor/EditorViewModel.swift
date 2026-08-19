@@ -213,6 +213,7 @@ public final class EditorViewModel {
     @ObservationIgnored let repository: any ScoreLibraryRepository
     @ObservationIgnored let playback: (any PlaybackController)?
     @ObservationIgnored let originalStore: any ScoreOriginalStore
+    @ObservationIgnored let historyStore: any ScoreEditHistoryStore
     /// Mirrors `scoreItem.canRevertToOriginal` as an OBSERVED property. `scoreItem` is `@ObservationIgnored`, so a
     /// toolbar reading it directly would not re-evaluate when the session's first autosave captures the original —
     /// the `⋯` item would not appear until the chrome happened to rebuild for some other reason.
@@ -227,6 +228,7 @@ public final class EditorViewModel {
         gateway: any ScoreFileGateway,
         repository: any ScoreLibraryRepository,
         originalStore: any ScoreOriginalStore,
+        historyStore: any ScoreEditHistoryStore,
         playback: (any PlaybackController)?,
     ) {
         self.scoreItem = scoreItem
@@ -234,12 +236,19 @@ public final class EditorViewModel {
         self.gateway = gateway
         self.repository = repository
         self.originalStore = originalStore
+        self.historyStore = historyStore
         self.playback = playback
         hasCapturedOriginal = scoreItem.canRevertToOriginal
     }
 
     public func beginSession(score: Score) {
-        session = ScoreEditSession(score: score)
+        // A retained session is adopted as-is: the hash matched the very bytes `score` was parsed from, so its
+        // `score` is value-equal to what the Reader just loaded. A miss — nothing retained, or the file rewritten
+        // out-of-band since the deposit (revert, re-import, version restore, PDF re-read) — starts fresh.
+        // `scoreItem.contentHash` is current here because the host re-seeds the row (`refreshRow`) before every
+        // `beginSession` (`EditableReaderScreen.wireOnce()`).
+        session = historyStore.session(for: scoreItem.id, contentHash: scoreItem.contentHash)
+            ?? ScoreEditSession(score: score)
         generation = 0
         appliedEditCount = 0
         sessionEditDepth = 0
@@ -255,10 +264,20 @@ public final class EditorViewModel {
         isAddToChordArmed = false
     }
 
-    /// Flushes any pending autosave (Task 10) and tears the session down.
+    /// Flushes any pending autosave, deposits the session for the next entry on this score, and drops it.
     public func endSession() async {
         await flushPendingSave()
+        depositSessionIfWorthKeeping()
         session = nil
+    }
+
+    /// Deposits the session — only when the flush left nothing unsaved (a failed final save discards the session,
+    /// exactly today's failure contract: a retained history must describe bytes that are actually on disk) and the
+    /// session has any history at all (an untouched session has nothing worth a slot). `scoreItem.contentHash` is
+    /// the digest of exactly the bytes `session.score` was last saved as, because `flushPendingSave()` ran first.
+    private func depositSessionIfWorthKeeping() {
+        guard let session, !isDirty, session.canUndo || session.canRedo else { return }
+        historyStore.retain(session, for: scoreItem.id, contentHash: scoreItem.contentHash)
     }
 
     public func undo() {

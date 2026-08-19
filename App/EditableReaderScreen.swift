@@ -39,6 +39,7 @@ struct EditableReaderScreen: View {
         gateway: any ScoreFileGateway,
         repository: any ScoreLibraryRepository,
         originalStore: any ScoreOriginalStore,
+        historyStore: any ScoreEditHistoryStore,
         playbackController: (any PlaybackController)?,
         readerBuilder: @escaping (
             ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
@@ -50,6 +51,7 @@ struct EditableReaderScreen: View {
             gateway: gateway,
             repository: repository,
             originalStore: originalStore,
+            historyStore: historyStore,
             playback: playbackController,
         ))
         self.repository = repository

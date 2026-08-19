@@ -15,6 +15,8 @@ final class FakeEventLog: @unchecked Sendable {
 final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     var savedCalls: [(Score, URL, ScoreFormat)] = []
     var eventLog: FakeEventLog?
+    /// When set, `saveScore` throws this instead of writing — exercises the Editor's failed-final-save path.
+    var saveError: Error?
 
     func detectFormat(fileName: String) -> ScoreFormat? {
         ScoreFormat.detect(filename: fileName)
@@ -29,6 +31,7 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     }
 
     func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
+        if let saveError { throw saveError }
         eventLog?.record("save")
         savedCalls.append((score, fileURL, format))
         // Write real bytes so callers that hash the saved file (Task 10's EditorFileFacts) see deterministic content.
@@ -173,5 +176,32 @@ actor CaptureGate {
             waiter.resume()
         }
         openWaiters = []
+    }
+}
+
+/// In-memory `ScoreEditHistoryStore` with the concrete store's checkout-and-hash-guard semantics, recording every
+/// call so tests can assert what the view model asked for. No LRU — the concrete owns that, in its own suite.
+@MainActor
+final class FakeScoreEditHistoryStore: ScoreEditHistoryStore {
+    private(set) var retained: [(id: ScoreItemID, contentHash: String, session: ScoreEditSession)] = []
+    private(set) var sessionRequests: [(id: ScoreItemID, contentHash: String)] = []
+    private(set) var invalidatedIDs: [ScoreItemID] = []
+
+    func session(for id: ScoreItemID, contentHash: String) -> ScoreEditSession? {
+        sessionRequests.append((id, contentHash))
+        guard let index = retained.firstIndex(where: { $0.id == id }) else { return nil }
+        let entry = retained.remove(at: index)
+        guard entry.contentHash == contentHash else { return nil }
+        return entry.session
+    }
+
+    func retain(_ session: ScoreEditSession, for id: ScoreItemID, contentHash: String) {
+        retained.removeAll { $0.id == id }
+        retained.append((id, contentHash, session))
+    }
+
+    func invalidate(_ id: ScoreItemID) {
+        invalidatedIDs.append(id)
+        retained.removeAll { $0.id == id }
     }
 }

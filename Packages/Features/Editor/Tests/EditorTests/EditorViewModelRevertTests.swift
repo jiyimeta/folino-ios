@@ -26,6 +26,7 @@ struct EditorViewModelRevertTests {
             gateway: gateway,
             repository: repository,
             originalStore: originalStore,
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
     }

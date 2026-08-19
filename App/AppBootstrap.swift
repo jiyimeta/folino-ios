@@ -43,6 +43,10 @@ final class AppBootstrap {
     /// Stateless PDF → playable-score parser (ssm OMR). Always available on Apple, no async setup, so
     /// it's a plain constant rather than a slot filled during `start()`.
     let pdfPlaybackParser = LivePDFPlaybackParser()
+    /// Process-lifetime store retaining each score's `ScoreEditSession` across Editor entries (cross-session
+    /// undo). A plain constant, like `pdfPlaybackParser`: no async setup, no failure mode, and it must exist
+    /// before the first Reader screen is built.
+    let editHistoryStore = ProcessScoreEditHistoryStore()
     /// Reads a PDF into notation and writes it as `.mscz`. Built once in `start()` over `pdfPlaybackParser` and the
     /// gateway, then handed to both the importer (convert on import) and every Reader session (convert a PDF imported
     /// before folino could read one, and re-read on request).
