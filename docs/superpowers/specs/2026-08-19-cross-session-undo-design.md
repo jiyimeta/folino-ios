@@ -111,9 +111,14 @@ ssm release:
   session; Folino stops holding one directly.
 
 **No ssm API addition is required** for either step. Two places where one
-looked plausible resolve host-side; see "Two host-side compensations". One
-optional addition is named under "Risks and open items" (redo of a discarded
-session), with the exact signature, in case review rejects the default.
+looked plausible resolve host-side; see "Two host-side compensations". A
+third place — redo of a discarded session — is named under "Risks and open
+items", with the exact signature it would have needed, for the case where
+review rejected the default reading. Review did reject that default (see the
+corrected "redo survives deposit" paragraph under "Existing code that must
+change"), and the addition still was not needed: ✕ is implemented entirely
+host-side, by suppressing the deposit rather than by trimming ssm's redo
+stack.
 
 ### Every `applyCommand` call site, and where it goes
 
@@ -499,9 +504,12 @@ including the cross-barline shape.
 - close and reopen a session on the same item → undo still works, and undoes
   the previous session's edit;
 - a changed `contentHash` between sessions → fresh session, no history;
-- ✕ / discard unwinds only this session's edits, leaves an earlier session's
-  edits intact and still undoable, and (signed depth) redoes back to session
-  start after a net-negative session;
+- ✕ / discard unwinds only this session's edits — (signed depth) redoing
+  forward to land on the session-open score when the undo reached below this
+  session's start, so an earlier session's edit is intact in the score — and
+  then ends **all** retained history for the score: `historyStore.invalidate`
+  fires, the exit's `endSession()` does not deposit, and the next
+  `beginSession()` on that score finds no undo at all;
 - LRU: a fourth deposit evicts the least-recent; `invalidate` empties the
   entry; checkout removes the entry (a second concurrent `session(for:)`
   returns nil);
@@ -546,6 +554,141 @@ including the cross-barline shape.
   an order-of-magnitude margin either way.
 - **`.writeNote` note-index divergence** (Step 1 risks) — settled by the new
   test either as "index 0 is correct" or as a narrow host-side branch.
+
+## Manual verification on device
+
+For a human on a physical device — no automated test reaches any of these. Do
+them roughly in this order: later items build on state the earlier ones leave
+behind (multiple retained sessions, etc.).
+
+1. **Headline flow — undo reaching back into a previous session.**
+   Open a score, edit one note, tap ✓ to end the session, immediately re-enter
+   editing on the same score. **Expect:** the undo button in the top bar is
+   live (not greyed out) on entry, before making any new edit; tapping it
+   undoes the previous session's edit; tapping redo brings it back; tap ✓
+   again and re-enter a third time — the edit (or its absence, depending
+   where you left it) is still there and undo/redo still reach across that
+   boundary too.
+   **Failure looks like:** undo is dead (greyed out) immediately after
+   re-entry — the deposit or the adopt didn't happen, i.e. `endSession()`
+   didn't retain, or `beginSession()` didn't find the entry (most likely a
+   `contentHash` mismatch that shouldn't be there, or the store never got
+   wired through `AppBootstrap` → `AppShellView` → `EditableReaderScreen` →
+   `EditorViewModel.init`).
+
+2. **`contentHash` guard — an out-of-band change drops history.**
+   End a session on a score with retained undo history (state from step 1).
+   Outside the app, change the file (or, if that's not convenient in this
+   build, use whatever path is easiest to force a re-import / version restore
+   / PDF re-read on that same score — anything that rewrites the row's
+   `contentHash`). Re-enter editing on that score. **Expect:** undo is dead —
+   a fresh session, no history, and no crash or stale-content flash.
+   **Failure looks like:** undo is live and undoing produces a score that
+   doesn't match what's on screen (the adopted session's `score` no longer
+   agrees with the bytes just loaded) — that's the hash guard silently not
+   firing, and the two would visibly diverge as soon as you look.
+
+3. **✕ is final — no undo, no redo, on re-entry.**
+   Edit a note, tap ✕, confirm the discard. Re-enter editing on the same
+   score. **Expect:** undo is dead AND redo is dead; the discarded edit is
+   gone from the score (matches what it was before this session) and there is
+   no way to bring it back via the top bar or the gesture.
+   **Failure looks like:** either button is live, or undo/redo brings the
+   discarded edit back — that's the pre-Task-9 spec behavior (redo survives
+   deposit) resurfacing, i.e. `didDiscardSession` isn't being set or isn't
+   gating the deposit, or `historyStore.invalidate` isn't being called.
+
+4. **Undo below session start, then ✕ — the session-end control turns yellow
+   and reverts correctly.**
+   Re-enter a session after a committed edit exists (so there's something to
+   undo into). Undo past the session's own start, into the earlier committed
+   edit. **Expect:** the session-end control (✓/revert) turns yellow/edited,
+   signaling this session has net-changed the score even though nothing new
+   was typed. Then tap that control to discard. **Expect:** the score returns
+   to exactly what it was when *this* session opened — the earlier edit is
+   back in place (the net-negative depth correctly redoes back to session
+   start rather than leaving the score at the undone-past-start position).
+   **Failure looks like:** the control stays looking "clean" after undoing
+   past session start (the signed-depth / `sessionHasEdits` check reads
+   `== 0` instead of `!= 0`), or discarding leaves the score at the wrong
+   point (the count-driven unwind redoes the wrong number of times, or in the
+   wrong direction, for a negative `sessionEditDepth`).
+
+5. **Three-finger-swipe system-undo gesture reaches an *adopted* session's
+   history.**
+   Re-enter a session that has adopted history from a previous session (state
+   from step 1 or step 4, before making any new edit in this fresh session).
+   Immediately perform the three-finger-swipe-left system-undo gesture (no
+   tap on the on-screen undo button first). **Expect:** it undoes the earlier
+   session's edit, exactly like tapping the top-bar undo button would.
+   **Failure looks like:** the gesture does nothing on first try (feels
+   unresponsive) but the top-bar undo button works fine — that's the Task 8
+   trampoline not being armed at session start when the adopted session
+   already `canUndo`; the gesture only starts working after the first *new*
+   edit in this session re-registers it normally. This is the one behavior in
+   this whole feature that no unit test can reach, so it's the highest-value
+   item on this list.
+
+6. **Revert to original ends history.**
+   On a score with edits (retained or live), use revert-to-original. Re-enter
+   editing on that score afterward. **Expect:** a fresh session, no undo
+   available at all.
+   **Failure looks like:** undo is live after revert and undoing produces
+   something other than the original — `revertToOriginal()`'s call to
+   `store.invalidate(scoreItem.id)` isn't firing, or isn't firing before the
+   next `beginSession()` reads the store.
+
+7. **A fourth score evicts the first (LRU cap 3).**
+   Pick four different scores (small ones for speed). For each, in order:
+   open, make one edit, tap ✓. After the fourth, re-enter editing on the
+   *first* score. **Expect:** no undo — its retained session was evicted when
+   the fourth was deposited.
+   **Failure looks like:** undo is still live on the first score after a
+   fourth deposit (cap isn't 3, or isn't being enforced), or — the opposite
+   mistake — undo is *also* gone on the second or third score (over-eager
+   eviction, or the checked-out/re-deposit bookkeeping is dropping entries it
+   shouldn't).
+
+8. **Memory warning sweeps deposited sessions, but not an open one.**
+   Edit-and-✓ one score (so it has a deposited session). Trigger Device ▸
+   Simulate Memory Warning (or the device-equivalent trigger the build under
+   test supports). Re-enter editing on that score. **Expect:** no undo — the
+   deposited entry was swept. Separately: open a *different* score for
+   editing, make an edit (session live, not yet ended), trigger the memory
+   warning while still inside that session, and confirm the open session is
+   unaffected — undo is still live for edits made in that still-open session,
+   and finishing it normally (✓) still deposits.
+   **Failure looks like:** the open session's own undo history is wiped by
+   the warning (the store reached into a session it doesn't own — it should
+   only ever touch its own `entries` array, never a checked-out session), or
+   conversely the deposited entry from the first score survives the warning
+   (the `NSObject` notification observer isn't wired, or
+   `handleMemoryWarning` isn't clearing `entries`).
+
+9. **iPad split-view double-open of the same score.**
+   On iPad, open the same score for editing in two separate split-view
+   windows. **Expect:** no crash; the second window's editor starts a fresh
+   session (since the store's `session(for:contentHash:)` checks the entry
+   out — only one owner at a time); the two windows do not share one mutable
+   stack, so edits in one don't silently appear or corrupt the other.
+   **Failure looks like:** a crash on the second open, or the second window
+   inexplicably shows edits made in the first (two `EditorViewModel`s holding
+   the same `ScoreEditSession` instance).
+
+10. **Editing feel unchanged — spot check on the whole Step 1 migration.**
+    On any score, run a normal write/delete/tie/tuplet session: type a few
+    notes, delete one (including at least one delete that empties a bar so
+    the full-measure-rest collapse fires), tie two notes together, create and
+    remove a tuplet, cross a barline with a long note. **Expect:** every one
+    of these feels exactly as it did before this design (this is the whole
+    point of Step 1's intent migration having a green gate) — correct
+    pitches, correct caret advancement, correct tie chains, no stutter or
+    visible glitch.
+    **Failure looks like:** anything subtly off that unit tests wouldn't
+    catch — e.g. caret landing one slot early/late after a cross-bar write
+    (item 3's compensation misfiring), or a chord's upper notehead
+    re-pitching the wrong note (item 5's `.writeNote`/`.setNotePitch` fork
+    misrouting).
 
 ## Implementation order
 
