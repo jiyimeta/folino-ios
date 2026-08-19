@@ -5,11 +5,14 @@ import SheetMusicLayout // DurationInterpretation: splits a written duration bac
 
 /// The pad's core operations — note input, delete, duration change — per spec §5.3.
 extension EditorViewModel {
-    /// Letter key C…B — writes at the CARET. Rest at the caret → `InputNote` (wrapped with `SetRestDuration` in a
-    /// `CompositeEditCommand` when a different duration is armed); note at the caret → `SetNotePitch`. Either way the
+    /// Letter key C…B — writes at the CARET. Rest at the caret → `.inputNote` (composited with a re-time when a
+    /// different duration is armed); note at the caret → a two-way fork: notehead 0 (or a length that crosses the
+    /// barline) takes `.writeNote`, which re-pitches AND re-times in one step, while a caret on an upper notehead
+    /// of an existing chord (added via ＋音, then typed over) takes a narrower `.setNotePitch` — composited with
+    /// `.setChordDuration` when a length is armed too, since `.setNotePitch` alone never re-times. Either way the
     /// pitch is the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedPitch`) nearest the previous
     /// note: the key signature's, unless an accidental earlier in the same measure has already respelled that staff
-    /// line. Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`AddNoteToChord`, Task 7),
+    /// line. Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`, Task 7),
     /// since what it means is "another note in the one I just wrote".
     ///
     /// Afterwards the selection lands on the note that was written and the caret moves on to the next timed element
@@ -32,10 +35,10 @@ extension EditorViewModel {
     }
 
     /// ⌫ — acts on the SELECTION (the note you last wrote or tapped, not the slot the caret is parked on).
-    /// Multi-note chord + `.note` selection → `RemoveNoteFromChord`; single-note chord or whole-element selection →
-    /// `DeleteVoiceElement` (same-duration rest, measure length invariant), or a full-measure rest when that delete
-    /// empties the measure (see `FullMeasureRestCollapse`); `.tuplet` selection → `RemoveTuplet`. Selection stays on
-    /// the affected slot (now a rest) via re-derivation.
+    /// Multi-note chord + `.note` selection → `.removeNoteFromChord`; single-note chord or whole-element selection →
+    /// `.delete` (same-duration rest, measure length invariant), or a full-measure rest when that delete empties the
+    /// measure (the engine's own full-measure-rest collapse); `.tuplet` selection → `.removeTuplet`. Selection stays
+    /// on the affected slot (now a rest) via re-derivation.
     public func deleteSelection() {
         guard let selectedItem, let score else { return }
         switch selectedItem {
@@ -108,8 +111,9 @@ extension EditorViewModel {
     }
 
     /// `.delete`: a plain delete leaves a same-duration rest; a delete that empties its bar collapses the voice-
-    /// measure to ONE measure rest (ssm's `FullMeasureRestCollapse`), reporting the collapsed rest as the affected
-    /// location — so re-derivation lands the selection there without the explicit `select` this method used to do.
+    /// measure to ONE measure rest (the engine's own full-measure-rest collapse), reporting the collapsed rest as
+    /// the affected location — so re-derivation lands the selection there without the explicit `select` this method
+    /// used to do.
     private func deleteElement(at location: VoiceElementID, in _: Score) {
         apply(.delete(at: location))
     }

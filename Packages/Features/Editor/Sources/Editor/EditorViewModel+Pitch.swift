@@ -24,14 +24,14 @@ extension EditorViewModel {
 
     /// Writes a pitch onto `noteID` AND onto every note it is tied to, as one undo step — `.setNotePitch` owns the
     /// chain walk now (ssm's `retuneCommand`), including "the accidental glyph belongs to the chain's head alone".
-    /// An untied note is a chain of one and plans back to the identical bare `SetNotePitch`.
+    /// An untied note is a chain of one and plans back to the identical bare `.setNotePitch`.
     private func retune(_ noteID: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
         let generationBeforeShift = generation
         apply(.setNotePitch(at: noteID, pitch: pitch, tpc: tpc, accidental: accidental))
         auditionSelectedNote(unlessStillAt: generationBeforeShift)
     }
 
-    /// ♭ ♮ ♯ (long-press 𝄫 𝄪) → `SetAccidental`. `nil` clears the glyph.
+    /// ♭ ♮ ♯ (long-press 𝄫 𝄪) → `.setAccidental`. `nil` clears the glyph.
     public func setAccidental(_ accidental: Accidental?) {
         guard case let .note(noteID)? = selectedItem else { return }
         let generationBeforeSet = generation

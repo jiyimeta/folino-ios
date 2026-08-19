@@ -91,9 +91,9 @@ extension EditorViewModel {
         } catch {
             revertError = String(localized: "editor.revert.failed.message", bundle: .module)
         }
-        // Drop the editor last: `canUndo` reads through it, so the toolbar goes inert only once the score on disk is
-        // actually the original.
-        editor = nil
+        // Drop the session last: `canUndo` reads through it, so the toolbar goes inert only once the score on disk
+        // is actually the original.
+        session = nil
         selection = .none
         selectedItem = nil
         caretItem = nil

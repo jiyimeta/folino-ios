@@ -49,10 +49,10 @@ extension EditorViewModel {
 
     /// Throws away everything this session did and puts the file back the way it was when the session opened.
     ///
-    /// "The way it was when the session opened" is exactly the bottom of `ScoreEditor`'s undo stack: `beginSession`
-    /// builds a fresh editor around the loaded score, so unwinding until it can undo no more lands on that score and
-    /// nowhere else. That is why this is not a byte snapshot — the stack already IS the snapshot, and keeping a
-    /// second copy of the file would be one more thing to get out of step.
+    /// "The way it was when the session opened" is exactly the bottom of `ScoreEditSession`'s undo stack:
+    /// `beginSession` builds a fresh session around the loaded score, so unwinding until it can undo no more lands
+    /// on that score and nowhere else. That is why this is not a byte snapshot — the stack already IS the snapshot,
+    /// and keeping a second copy of the file would be one more thing to get out of step.
     ///
     /// Autosave is the reason this has to touch the disk at all. By the time the user reaches for ✕ the debounce has
     /// very likely already written this session's edits, so rewinding memory is not enough: the restored score has to
@@ -63,7 +63,7 @@ extension EditorViewModel {
     /// Distinct from `revertToOriginal()`, and the two must not be confused: revert goes back to the bytes the score
     /// was imported with, discarding every session that ever ran. This goes back one session.
     public func discardSessionEdits() async {
-        guard let editor else { return }
+        guard session != nil else { return }
 
         // Nothing of this session's own is on disk or in memory, so there is nothing to unwind — and in particular
         // nothing that would justify rewriting the file.

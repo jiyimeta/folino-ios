@@ -3,9 +3,9 @@ import Foundation
 import SheetMusicCore
 
 /// Fire-and-forget pitch preview on note input and pitch change — spec §5.6. Called by the pad's mutating ops
-/// (`EditorViewModel+Input.swift`, `+Pitch.swift`, `+ChordTieTuplet.swift`) after `InputNote`, `SetNotePitch`
-/// (keys + drag), `SetAccidental`, `AddNoteToChord`, and interval adds. NOT called after delete / duration / tie /
-/// tuplet — those don't produce a "resulting pitch" worth sounding.
+/// (`EditorViewModel+Input.swift`, `+Pitch.swift`, `+ChordTieTuplet.swift`) after `.inputNote`,
+/// `.setNotePitch`/`.writeNote` (keys + drag), `.setAccidental`, `.addNoteToChord`, and interval adds. NOT called
+/// after delete / duration / tie / tuplet — those don't produce a "resulting pitch" worth sounding.
 extension EditorViewModel {
     /// Sounds `noteID` in the CURRENT edited score for 0.5 s through the injected `PlaybackController`. Nil-safe
     /// when no controller was injected or no session is active. Stores the spawned `Task` in `auditionTask` so
@@ -18,7 +18,7 @@ extension EditorViewModel {
     }
 
     /// Call-site helper for the pitch-changing ops: auditions the current `.note` selection, but only when
-    /// `applyCommand` actually mutated the score (`generation` advanced past `previousGeneration`). A refused edit
+    /// `apply` actually mutated the score (`generation` advanced past `previousGeneration`). A refused edit
     /// (e.g. an out-of-range shift) leaves nothing to sound.
     func auditionSelectedNote(unlessStillAt previousGeneration: Int) {
         guard generation != previousGeneration, case let .note(noteID)? = selectedItem else { return }

@@ -20,7 +20,7 @@ extension EditorViewModel {
         apply(.removeNoteFromChord(at: noteID))
     }
 
-    /// iPad +3度 / +8度 → `AddNoteToChord` with `IntervalPlanner`'s pitch.
+    /// iPad +3度 / +8度 → `.addNoteToChord` with `IntervalPlanner`'s pitch.
     public func addIntervalNote(_ interval: DiatonicInterval) {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
         let keySig = score.activeKey(at: noteID)
@@ -47,7 +47,7 @@ extension EditorViewModel {
         )
     }
 
-    /// Shared `AddNoteToChord` apply + select-the-added-note landing, used by both the chord-arm letter path and
+    /// Shared `.addNoteToChord` apply + select-the-added-note landing, used by both the chord-arm letter path and
     /// the iPad interval shortcuts. A refused add (duplicate pitch) leaves `generation` and selection untouched.
     /// Auditions the newly added note on success (spec §5.6).
     private func addNoteToChord(at noteID: NoteID, pitch: Int, tpc: Int, keySig: Int) {
@@ -89,8 +89,8 @@ extension EditorViewModel {
     /// location to the source note so re-derivation kept the selection there. Compensate with an explicit
     /// `select(.note(sourceID))` after a successful apply — the same post-apply explicit landing
     /// `addNoteToChord(at:pitch:tpc:keySig:)` already does. The source's own slot index is untouched by the append
-    /// (`SetRestDuration` re-splices what FOLLOWS the slot; a cross-bar plan rewrites from the next slot on), so
-    /// the captured id stays valid.
+    /// (`.setRestDuration`'s planning re-splices what FOLLOWS the slot; a cross-bar plan rewrites from the next slot
+    /// on), so the captured id stays valid.
     public func appendTiedNote() {
         guard case let .note(sourceID)? = selectedItem else { return }
         guard let intent = tieAppendIntent() else { return }
@@ -147,7 +147,7 @@ extension EditorViewModel {
         ])
     }
 
-    /// Adds the tie when absent (`SetTie` ... `sourceTieForward: 1, targetTieBack: 1`), removes it when present
+    /// Adds the tie when absent (`.setTie` ... `sourceTieForward: 1, targetTieBack: 1`), removes it when present
     /// (nil / nil) — reads the selected note's `tieForward` to decide. No-op when there's no tie target.
     public func toggleTie() {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID],
@@ -172,9 +172,9 @@ extension EditorViewModel {
     /// Whether `location` is one of a tuplet's members.
     ///
     /// Input asks this before it re-times a slot: the member lengths inside a tuplet are the tuplet's to decide, and
-    /// the engine refuses `SetRestDuration` / `SetChordDuration` there outright. Since input applies the armed length
-    /// and the note in ONE composite, that refusal used to take the note down with it — which is why nothing could be
-    /// written into a triplet after its first member.
+    /// the engine refuses `.setRestDuration` / `.setChordDuration` there outright. Since input applies the armed
+    /// length and the note in ONE composite, that refusal used to take the note down with it — which is why nothing
+    /// could be written into a triplet after its first member.
     func isInsideTuplet(_ location: VoiceElementID) -> Bool {
         guard let score, let staff = score[location.staff],
               staff.measures.indices.contains(location.measureIndex)
