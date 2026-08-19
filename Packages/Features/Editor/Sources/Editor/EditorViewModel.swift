@@ -14,6 +14,14 @@ public final class EditorViewModel {
     /// The engine session for one editing entry — `ScoreEditSession` plans each `EditIntent` into commands and owns
     /// both undo stacks. Internal: views read the derived `score` / `canUndo` / `canRedo`, never the session itself.
     var session: ScoreEditSession?
+
+    /// A value snapshot of the score this session opened on, taken by `beginSession` on BOTH the fresh and the
+    /// adopted path and dropped when the session ends — one `Score` copy per session.
+    ///
+    /// It exists because the undo/redo stacks are NOT a sufficient snapshot once history outlives a session:
+    /// `ScoreEditor.apply` clears the redo stack, so a session that undid below its own start and then typed a note
+    /// has nothing left to redo back with. See `unwindSessionEdits()`, which lands on this when its loops cannot.
+    @ObservationIgnored var sessionOpenScore: Score?
     /// The session's live score, or nil outside a session. Views and the Reader seam render THIS score while editing.
     ///
     /// The `generation` read is load-bearing, not decoration. `ScoreEditSession` is a plain class, so mutating the
@@ -29,7 +37,10 @@ public final class EditorViewModel {
 
     /// Bumped on every applied / undone / redone command. The Reader includes it in its layout task key so the
     /// score re-lays-out after edits that don't change the structural score signature.
-    public private(set) var generation = 0
+    ///
+    /// internal(set) for the same reason as the selection and arming state below: `unwindSessionEdits()` lives
+    /// beside the discard path it serves, and Swift's `private` does not span files.
+    public internal(set) var generation = 0
 
     /// Bumped ONLY by `apply`'s success path — never by `undo()`/`redo()`. Distinct from `generation` (which
     /// bumps on all three) because `EditorChromeView`'s system-undo bridge must re-register its `UndoManager`
@@ -46,7 +57,11 @@ public final class EditorViewModel {
     /// switches on it: a mutation inside `ScoreEditSession` (a reference type from another module) notifies
     /// nothing, so a view bound to `canUndo` only refreshes when something else in the same body pass happens to
     /// change. This is what makes "the moment you change something, the control changes" true.
-    public private(set) var sessionEditDepth = 0
+    ///
+    /// internal(set) for `unwindSessionEdits()`'s sake (see `generation`). Written by four places: the three that
+    /// move it one step (`apply`, `undo`, `redo`) and the unwind. None of them may zero it without having moved
+    /// the score with it — see the unwind.
+    public internal(set) var sessionEditDepth = 0
 
     /// Whether this session has anything of its own to throw away — the difference between ✕ closing the session
     /// and ✕ asking first. Signed: a session that net-UNDID earlier sessions' work (negative depth) has changed
@@ -61,7 +76,7 @@ public final class EditorViewModel {
 
     #if DEBUG
     /// Puts a preview into the "this session changed something" state without running a real edit. Here rather than
-    /// beside the previews that use it because `sessionEditDepth`'s setter is private to this file.
+    /// beside the previews that use it because `sessionEditDepth`'s setter is internal to this module.
     func previewSeedSessionEdit() {
         sessionEditDepth = 1
     }
@@ -70,6 +85,14 @@ public final class EditorViewModel {
     /// through a real edit command. `isDirty` is file-private, hence this.
     func markDirtyForTesting() {
         isDirty = true
+    }
+
+    /// Drops the session-open snapshot, leaving a session the unwind has no way to land — the one state
+    /// `unwindSessionEdits()`'s "never zero a depth the loops did not consume" branch exists for, and which no
+    /// production path can reach (`beginSession` always takes the snapshot). Lets a test prove the discard path
+    /// refuses to persist a score it failed to unwind.
+    func forgetSessionOpenScoreForTesting() {
+        sessionOpenScore = nil
     }
 
     /// Every intent handed to `apply(_:)`, in order, refused ones included — the seam the intent-construction tests
@@ -249,13 +272,22 @@ public final class EditorViewModel {
     }
 
     public func beginSession(score: Score) {
-        // A retained session is adopted as-is: the hash matched the very bytes `score` was parsed from, so its
-        // `score` is value-equal to what the Reader just loaded. A miss — nothing retained, or the file rewritten
-        // out-of-band since the deposit (revert, re-import, version restore, PDF re-read) — starts fresh.
-        // `scoreItem.contentHash` is current here because the host re-seeds the row (`refreshRow`) before every
-        // `beginSession` (`EditableReaderScreen.wireOnce()`).
-        session = historyStore.session(for: scoreItem.id, contentHash: scoreItem.contentHash)
-            ?? ScoreEditSession(score: score)
+        // A retained session is adopted as-is, and from that moment ITS score is the session's score — the `score:`
+        // argument is dropped. The hash guard only proves the FILE has not changed since the deposit; it says
+        // nothing about `parse(bytes) == session.score`, and the store is process-wide, so the two can legitimately
+        // be different objects (✓ out of a score, close the Reader, reopen it from the Library: the Reader parses
+        // from disk while this adopts the previous Reader's in-memory score). `onScoreChanged` below is what makes
+        // the host definitionally show the adopted score rather than discover the difference at the first undo.
+        //
+        // A miss — nothing retained, or the file rewritten out-of-band since the deposit (revert, re-import,
+        // version restore, PDF re-read) — starts fresh. `scoreItem.contentHash` is current here because the host
+        // re-seeds the row (`refreshRow`) before every `beginSession` (`EditableReaderScreen.wireOnce()`).
+        let adopted = historyStore.session(for: scoreItem.id, contentHash: scoreItem.contentHash)
+        session = adopted ?? ScoreEditSession(score: score)
+        // Both paths, because both need a way back: the fresh session's stack bottom would do, the adopted one's
+        // would not (it is the PREVIOUS session's start), and `unwindSessionEdits()` must not have to tell them
+        // apart.
+        sessionOpenScore = session?.score
         generation = 0
         appliedEditCount = 0
         sessionEditDepth = 0
@@ -270,21 +302,38 @@ public final class EditorViewModel {
         armedDuration = nil
         armedDots = 0
         isAddToChordArmed = false
+        // Only on the adopted path: a fresh session's score IS the argument the host just handed in, so telling it
+        // about its own score would cost a re-layout for nothing.
+        if let adopted {
+            onScoreChanged(adopted.score)
+        }
     }
 
     /// Flushes any pending autosave, deposits the session for the next entry on this score, and drops it.
+    ///
+    /// The ending session is captured up front and everything below acts on THAT object, never on a re-read of
+    /// `self.session`. The caller is fire-and-forget (`EditableReaderScreen`: `Task { await vm.endSession() }`) and
+    /// the flush is an unbounded await — a real gateway write plus a repository save — so a `beginSession` can
+    /// legitimately land in that window. Re-reading `self.session` afterwards would deposit the NEW, live session
+    /// into the store and then null it out, leaving a user who has just entered edit mode with a dead editor. The
+    /// identity check before the teardown is the other half: only the session this call is ending may be cleared,
+    /// which also makes a second `endSession()` a no-op rather than a second deposit. (The flush itself has to run
+    /// BEFORE the teardown, not after the capture — `performSave()` writes `self.score`, which is the session's.)
     public func endSession() async {
+        guard let ending = session else { return }
         await flushPendingSave()
-        depositSessionIfWorthKeeping()
+        depositIfWorthKeeping(ending)
+        guard session === ending else { return }
         session = nil
+        sessionOpenScore = nil
     }
 
     /// Deposits the session — only when the flush left nothing unsaved (a failed final save discards the session,
     /// exactly today's failure contract: a retained history must describe bytes that are actually on disk) and the
     /// session has any history at all (an untouched session has nothing worth a slot). `scoreItem.contentHash` is
     /// the digest of exactly the bytes `session.score` was last saved as, because `flushPendingSave()` ran first.
-    private func depositSessionIfWorthKeeping() {
-        guard let session, !didDiscardSession, !isDirty, session.canUndo || session.canRedo else { return }
+    private func depositIfWorthKeeping(_ session: ScoreEditSession) {
+        guard !didDiscardSession, !isDirty, session.canUndo || session.canRedo else { return }
         historyStore.retain(session, for: scoreItem.id, contentHash: scoreItem.contentHash)
     }
 
@@ -298,31 +347,6 @@ public final class EditorViewModel {
         onScoreChanged(session.score)
         isDirty = true
         scheduleAutosave()
-    }
-
-    /// Rewinds this session to the score it opened on, notifying the host a single time at the end.
-    ///
-    /// Count-driven, NOT `while canUndo`: with retained history the stack bottom no longer means "where this
-    /// session started" — an adopted session can undo below its own start, and walking `canUndo` to exhaustion
-    /// would silently discard PREVIOUS sessions' edits. `sessionEditDepth` is the signed net offset from session
-    /// start, so undoing it (or redoing its negation) lands exactly on the session-open score from either
-    /// direction. Store bookkeeping (invalidate, deposit suppression) lives in `discardSessionEdits()`, this
-    /// method's only production caller; this owns the score alone.
-    ///
-    /// One notification rather than one per step: the host re-lays the score out on every `onScoreChanged`, so a
-    /// long session would otherwise redraw the whole thing once per edit on the way back.
-    func unwindSessionEdits() {
-        guard let session else { return }
-        while sessionEditDepth > 0, session.undo() {
-            sessionEditDepth -= 1
-        }
-        while sessionEditDepth < 0, session.redo() {
-            sessionEditDepth += 1
-        }
-        sessionEditDepth = 0
-        generation += 1
-        rederiveSelection()
-        onScoreChanged(session.score)
     }
 
     public func redo() {

@@ -20,6 +20,7 @@ struct EditorCrossSessionUndoTests {
     private func makeViewModel(
         store: FakeScoreEditHistoryStore,
         gateway: FakeScoreFileGateway = FakeScoreFileGateway(),
+        originalStore: FakeScoreOriginalStore = FakeScoreOriginalStore(),
         directory: URL,
     ) -> EditorViewModel {
         EditorViewModel(
@@ -27,7 +28,7 @@ struct EditorCrossSessionUndoTests {
             scoresDirectory: directory,
             gateway: gateway,
             repository: FakeScoreLibraryRepository(),
-            originalStore: FakeScoreOriginalStore(),
+            originalStore: originalStore,
             historyStore: store,
             playback: nil,
         )
@@ -196,5 +197,143 @@ struct EditorCrossSessionUndoTests {
         // The file no longer relates to any retained history — dropped eagerly, not left for the lazy hash miss.
         #expect(store.invalidatedIDs == [vm.scoreItemID])
         #expect(store.retained.isEmpty)
+    }
+
+    // MARK: - Mixed directions, and two sessions overlapping in time (final-review fixes)
+
+    /// Commits one session of TWO edits and deposits it, returning the score the NEXT session will open on. Two,
+    /// not one, because the mixed-direction case needs room to undo below the session start and still have a step
+    /// left over once a new edit has consumed one.
+    private func seedTwoCommittedEdits(into vm: EditorViewModel) async throws -> Score {
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 2), pitch: 62, tpc: 16, duration: nil))
+        let edited = try #require(vm.score)
+        await vm.endSession()
+        return edited
+    }
+
+    /// Drives a session into the state the count-driven unwind cannot walk out of: two undos below the session
+    /// start, then a new edit — which `ScoreEditor.apply` pays for by clearing the redo stack the negative branch
+    /// of the unwind depends on.
+    private func undoBelowStartThenEdit(in vm: EditorViewModel, sessionOpen: Score) {
+        vm.beginSession(score: sessionOpen) // adopts the deposited two-edit history
+        vm.undo()
+        vm.undo()
+        #expect(vm.sessionEditDepth == -2)
+        #expect(vm.score == EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 3), pitch: 64, tpc: 18, duration: nil))
+        #expect(vm.sessionEditDepth == -1)
+        #expect(!vm.canRedo) // the way back the depth counts on is gone
+    }
+
+    @Test
+    func `discarding a session that undid below its start and then edited lands on the session-open score`(
+    ) async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let gateway = FakeScoreFileGateway()
+        let vm = makeViewModel(store: store, gateway: gateway, directory: dir)
+        let sessionOpen = try await seedTwoCommittedEdits(into: vm)
+
+        undoBelowStartThenEdit(in: vm, sessionOpen: sessionOpen)
+        await vm.discardSessionEdits()
+
+        // ✕ means ✕: the new note is gone AND the two rolled-back edits are back — this session's whole net effect,
+        // in both directions, undone.
+        #expect(vm.score == sessionOpen)
+        #expect(vm.sessionEditDepth == 0)
+        // …and the file says the same thing. Before the snapshot fallback this wrote the un-discarded score.
+        #expect(gateway.savedCalls.last?.0 == sessionOpen)
+    }
+
+    @Test func `a discard that cannot unwind writes nothing`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let gateway = FakeScoreFileGateway()
+        let vm = makeViewModel(store: store, gateway: gateway, directory: dir)
+        let sessionOpen = try await seedTwoCommittedEdits(into: vm)
+
+        undoBelowStartThenEdit(in: vm, sessionOpen: sessionOpen)
+        // The one state production cannot reach: a session with no way back at all. Whatever the reason, the
+        // response has to be to write nothing — a file still holding this session's edits is recoverable, a
+        // half-unwound score on disk is not.
+        vm.forgetSessionOpenScoreForTesting()
+        let savedBefore = gateway.savedCalls.count
+
+        await vm.discardSessionEdits()
+
+        #expect(vm.sessionEditDepth == -1) // never zeroed by loops that did not consume it
+        #expect(gateway.savedCalls.count == savedBefore)
+    }
+
+    @Test func `closing a session whose edits cancelled out still ends its retained history`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        vm.undo()
+        // Net zero, so ✕ asks nothing and has nothing to unwind — but the session is still carrying that edit as a
+        // redo, which is exactly what must not survive a ✕.
+        #expect(vm.sessionEditDepth == 0)
+        #expect(vm.canRedo)
+
+        await vm.discardSessionEdits()
+        #expect(store.invalidatedIDs == [vm.scoreItemID])
+        await vm.endSession()
+        #expect(store.retained.isEmpty)
+
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        #expect(!vm.canUndo)
+        #expect(!vm.canRedo)
+    }
+
+    @Test func `adopting a retained session tells the host which score it is now showing`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let deposited = try await seedTwoCommittedEdits(into: vm)
+
+        var announced: [Score] = []
+        vm.onScoreChanged = { announced.append($0) }
+        // The argument stands in for a Reader that parsed the file itself — a different value than the one the
+        // store is holding. The adopted session's score is the session's score from here on, so the host has to be
+        // told, rather than discovering it at the first undo.
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+
+        #expect(announced == [deposited])
+        #expect(vm.score == deposited)
+    }
+
+    @Test func `a session begun during the final flush is neither deposited nor wiped`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let originalStore = FakeScoreOriginalStore()
+        let gate = CaptureGate()
+        originalStore.captureGate = gate
+        let vm = makeViewModel(store: store, originalStore: originalStore, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        let ending = try #require(vm.session)
+
+        // `endSession()` is fire-and-forget in the App and its flush is a real file write, so the user can be back
+        // in edit mode before it returns.
+        let exit = Task { await vm.endSession() }
+        await gate.waitUntilEntered()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        let reopened = try #require(vm.session)
+        await gate.open()
+        await exit.value
+
+        #expect(vm.isSessionActive) // the editor the user is looking at is still alive
+        #expect(vm.session === reopened)
+        #expect(store.retained.count == 1)
+        #expect(store.retained.first?.session === ending) // the ENDING session was deposited, not the live one
     }
 }

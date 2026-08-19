@@ -28,6 +28,61 @@ extension EditorViewModel {
 }
 
 extension EditorViewModel {
+    /// Rewinds this session to the score it opened on, notifying the host a single time at the end.
+    ///
+    /// Score-only and store-agnostic: it touches neither `historyStore` nor the file, so it can be called on its
+    /// own. Store bookkeeping (invalidate, deposit suppression) belongs to `discardSessionEdits()` below, its only
+    /// production caller — it lives in this file to sit beside it, not because it shares its concerns.
+    ///
+    /// Count-driven, NOT `while canUndo`: with retained history the stack bottom no longer means "where this
+    /// session started" — an adopted session can undo below its own start, and walking `canUndo` to exhaustion
+    /// would silently discard PREVIOUS sessions' edits. `sessionEditDepth` is the signed net offset from session
+    /// start, so undoing it (or redoing its negation) lands exactly on the session-open score from either
+    /// direction.
+    ///
+    /// One notification rather than one per step: the host re-lays the score out on every `onScoreChanged`, so a
+    /// long session would otherwise redraw the whole thing once per edit on the way back.
+    ///
+    /// The loops are the fast path, not the whole answer. `ScoreEditor.apply` clears the redo stack on every
+    /// successful apply, so a session that undid below its own start and then typed a note has no redo left to walk
+    /// forward with, and no undo that would help either — the loops stall with the depth unconsumed. Landing on
+    /// `sessionOpenScore` is the fallback for exactly that, and it also answers the mixed run whose depth nets back
+    /// to zero (one undo into an earlier session, one new edit) over a score nowhere near where it started. The
+    /// cost is the earlier session's history, which the only production caller — the discard path — ends anyway.
+    ///
+    /// What must NOT happen is zeroing a depth the loops did not consume: that turns "the score is not at session
+    /// start" into a silent success, and the discard path then writes those bytes to disk (review Critical 1).
+    /// With no snapshot to land on, the residual depth is left standing as the signal that this failed.
+    func unwindSessionEdits() {
+        guard let session else { return }
+        while sessionEditDepth > 0, session.undo() {
+            sessionEditDepth -= 1
+        }
+        while sessionEditDepth < 0, session.redo() {
+            sessionEditDepth += 1
+        }
+        if let sessionOpenScore, sessionEditDepth != 0 || session.score != sessionOpenScore {
+            self.session = ScoreEditSession(score: sessionOpenScore)
+            sessionEditDepth = 0
+        }
+        generation += 1
+        rederiveSelection()
+        if let current = self.session {
+            onScoreChanged(current.score)
+        }
+    }
+
+    /// Whether the live score still is the one this session opened on — the state `sessionEditDepth` is only a
+    /// proxy for. Read by the discard path both to decide there is nothing to unwind and to refuse to write a score
+    /// the unwind failed to land. `false` with no session or no snapshot: not knowing is not the same as knowing it
+    /// matches.
+    var isAtSessionOpenScore: Bool {
+        guard let session, let sessionOpenScore else { return false }
+        return session.score == sessionOpenScore
+    }
+}
+
+extension EditorViewModel {
     /// Looks for an original that is on disk but missing from the row, and adopts it.
     ///
     /// Called when a session opens, because that is when the answer is needed: the strip offers revert on the
@@ -49,10 +104,12 @@ extension EditorViewModel {
 
     /// Throws away everything this session did and puts the file back the way it was when the session opened.
     ///
-    /// "The way it was when the session opened" is exactly the bottom of `ScoreEditSession`'s undo stack:
-    /// `beginSession` builds a fresh session around the loaded score, so unwinding until it can undo no more lands
-    /// on that score and nowhere else. That is why this is not a byte snapshot — the stack already IS the snapshot,
-    /// and keeping a second copy of the file would be one more thing to get out of step.
+    /// "The way it was when the session opened" used to be exactly the bottom of `ScoreEditSession`'s undo stack.
+    /// It is not, now that history outlives a session: an adopted session's stack bottom is where the PREVIOUS
+    /// session started, and its redo stack — the only way back for a session that undid below its own start — is
+    /// cleared by the next `apply`. So the walk back is `unwindSessionEdits()`'s job and it has two gears: the
+    /// signed step count while the stacks still hold what it needs, and `sessionOpenScore` (a value copy taken by
+    /// `beginSession`) when they don't.
     ///
     /// Autosave is the reason this has to touch the disk at all. By the time the user reaches for ✕ the debounce has
     /// very likely already written this session's edits, so rewinding memory is not enough: the restored score has to
@@ -65,9 +122,20 @@ extension EditorViewModel {
     public func discardSessionEdits() async {
         guard session != nil else { return }
 
+        // ✕ is final (controller ruling over the spec's redo-survives reading), and that has to be settled BEFORE
+        // the "nothing to unwind" exit below — a session that edited a note and undid it again is back at depth
+        // zero with both stacks full, and letting that one out without marking it would deposit a history whose
+        // redo replays exactly what ✕ threw away (review Minor 7). Unwinding via undo populates the redo stack the
+        // same way, so a ✕ ends ALL retained history for this score whatever route it took here: the deposit is
+        // suppressed and any retained entry dropped — the same contract as an app kill.
+        didDiscardSession = true
+        historyStore.invalidate(scoreItem.id)
+
         // Nothing of this session's own is on disk or in memory, so there is nothing to unwind — and in particular
-        // nothing that would justify rewriting the file.
-        guard sessionHasEdits else { return }
+        // nothing that would justify rewriting the file. `sessionEditDepth` alone cannot answer that: it is a signed
+        // count, and a mixed run (one undo into an earlier session, one new edit) nets to zero over a score that is
+        // nowhere near where the session opened. The snapshot is what actually knows.
+        guard sessionHasEdits || !isAtSessionOpenScore else { return }
 
         autosaveTask?.cancel()
         autosaveTask = nil
@@ -77,13 +145,10 @@ extension EditorViewModel {
 
         unwindSessionEdits()
 
-        // ✕ is final (controller ruling over the spec's redo-survives reading). The unwind above walked back via
-        // undo, populating the session's redo stack — a deposited session would let the NEXT session redo exactly
-        // what was just discarded, contradicting the "✕ discards the session" contract. So a ✕ ends ALL retained
-        // history for this score: the deposit is suppressed and any retained entry dropped — the same contract as
-        // an app kill. The file is correct either way; the flush below settles it.
-        didDiscardSession = true
-        historyStore.invalidate(scoreItem.id)
+        // Refuse to write a score the unwind could not land. With a snapshot to fall back on this cannot fail, and
+        // the guard is here for the case where it can — the file keeps this session's edits, which is recoverable,
+        // where writing a half-unwound score is not (review Critical 1).
+        guard sessionEditDepth == 0, isAtSessionOpenScore else { return }
 
         // Unconditionally dirty: whether or not the debounce got to run, the file is now either this session's edits
         // or the pre-session score, and only a write can settle which.

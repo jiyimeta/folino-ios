@@ -99,6 +99,7 @@ extension EditorViewModel {
         // Drop the session last: `canUndo` reads through it, so the toolbar goes inert only once the score on disk
         // is actually the original.
         session = nil
+        sessionOpenScore = nil
         selection = .none
         selectedItem = nil
         caretItem = nil
