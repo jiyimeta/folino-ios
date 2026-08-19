@@ -248,6 +248,25 @@ struct EditorCrossSessionUndoTests {
         #expect(gateway.savedCalls.last?.0 == sessionOpen)
     }
 
+    @Test func `a session that undid once and then edited once still reports edited`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let sessionOpen = try await seedOneCommittedEdit(into: vm)
+
+        vm.beginSession(score: sessionOpen)
+        vm.undo() // below this session's start, into the previous session's history
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 3), pitch: 64, tpc: 18, duration: nil))
+
+        // The step count is back where it started while the score is not — so the count cannot be what the ✕
+        // confirmation and the session-end control read, or the user loses that note without being asked.
+        #expect(vm.sessionEditDepth == 0)
+        #expect(vm.score != sessionOpen)
+        #expect(vm.sessionHasEdits)
+        #expect(vm.sessionEndMode == .commitEdited)
+    }
+
     @Test func `a discard that cannot unwind writes nothing`() async throws {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }

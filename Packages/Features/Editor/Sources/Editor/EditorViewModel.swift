@@ -54,7 +54,8 @@ public final class EditorViewModel {
     /// history makes that reachable — which is still a change to the score this session made.
     ///
     /// Observed, and maintained here rather than read from the session, because the strip's session-end control
-    /// switches on it: a mutation inside `ScoreEditSession` (a reference type from another module) notifies
+    /// switches on it (through `sessionHasEdits`, which uses it as its fast path and the session-open snapshot as
+    /// its authority): a mutation inside `ScoreEditSession` (a reference type from another module) notifies
     /// nothing, so a view bound to `canUndo` only refreshes when something else in the same body pass happens to
     /// change. This is what makes "the moment you change something, the control changes" true.
     ///
@@ -62,13 +63,6 @@ public final class EditorViewModel {
     /// move it one step (`apply`, `undo`, `redo`) and the unwind. None of them may zero it without having moved
     /// the score with it — see the unwind.
     public internal(set) var sessionEditDepth = 0
-
-    /// Whether this session has anything of its own to throw away — the difference between ✕ closing the session
-    /// and ✕ asking first. Signed: a session that net-UNDID earlier sessions' work (negative depth) has changed
-    /// the score too, and ✕ must offer to discard that as well.
-    public var sessionHasEdits: Bool {
-        sessionEditDepth != 0
-    }
 
     public var isSessionActive: Bool {
         session != nil

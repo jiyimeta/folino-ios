@@ -14,6 +14,25 @@ public enum EditorSessionEndMode {
 }
 
 extension EditorViewModel {
+    /// Whether this session has changed the score — the difference between ✕ closing the session and ✕ asking
+    /// first, and what turns the session-end control yellow.
+    ///
+    /// The question is about the SCORE, not about a step count. `sessionEditDepth != 0` is only a fast, always-safe
+    /// "yes": any non-zero net offset is a change, and the signed part matters because a session that net-UNDID an
+    /// earlier session's work (negative depth) has changed the score too. What it cannot answer is a mixed run that
+    /// nets back to zero — undo once into the previous session, then type a note — where the count says "untouched"
+    /// over a score that is nowhere near where the session opened. `isAtSessionOpenScore` is the authority there,
+    /// and reaching it costs one `Score` comparison.
+    ///
+    /// Order matters: the depth is tested first, so the deep compare only runs in the one case where the two can
+    /// disagree. Outside a session this is `false` — there is no session to have edits — which is what lets view
+    /// code read it unguarded.
+    public var sessionHasEdits: Bool {
+        guard isSessionActive else { return false }
+        if sessionEditDepth != 0 { return true }
+        return !isAtSessionOpenScore
+    }
+
     /// The session's whole status readout, in one value.
     ///
     /// This session's own edits win over the revert offer deliberately: while you are mid-edit the thing you want is
@@ -132,10 +151,10 @@ extension EditorViewModel {
         historyStore.invalidate(scoreItem.id)
 
         // Nothing of this session's own is on disk or in memory, so there is nothing to unwind — and in particular
-        // nothing that would justify rewriting the file. `sessionEditDepth` alone cannot answer that: it is a signed
-        // count, and a mixed run (one undo into an earlier session, one new edit) nets to zero over a score that is
-        // nowhere near where the session opened. The snapshot is what actually knows.
-        guard sessionHasEdits || !isAtSessionOpenScore else { return }
+        // nothing that would justify rewriting the file. One predicate, and deliberately the SAME one the ✕ button
+        // gates its confirmation on: what ✕ throws away and what ✕ asks about have to be the same question, or a
+        // session can be discarded without the user being asked (re-review Important 1).
+        guard sessionHasEdits else { return }
 
         autosaveTask?.cancel()
         autosaveTask = nil
